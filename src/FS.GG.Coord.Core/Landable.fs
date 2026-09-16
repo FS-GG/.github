@@ -15,20 +15,24 @@ module Landable =
     open Types
 
     type RunRow =
-        { Path: string
-          Event: string
-          HeadBranch: string
-          PrNumbers: int list
-          RunNumber: int
-          Status: string
-          Conclusion: string option
-          CheckSuiteId: int64 option }
+        {
+            Path: string
+            Event: string
+            HeadBranch: string
+            PrNumbers: int list
+            RunNumber: int
+            Status: string
+            Conclusion: string option
+            CheckSuiteId: int64 option
+        }
 
     type CheckRow =
-        { Name: string
-          CheckSuiteId: int64 option
-          Status: string
-          Conclusion: string option }
+        {
+            Name: string
+            CheckSuiteId: int64 option
+            Status: string
+            Conclusion: string option
+        }
 
     // A completed, non-successful subject that participates in the settled red verdict. The GitHub read
     // boundary binds these identities to the evaluated head SHA before presenting them to an operator.
@@ -92,8 +96,7 @@ module Landable =
 
         let live = runs |> List.filter (fun r -> not (replaced r))
 
-        let dead =
-            runs |> List.filter replaced |> List.choose (fun r -> r.CheckSuiteId)
+        let dead = runs |> List.filter replaced |> List.choose (fun r -> r.CheckSuiteId)
 
         live, dead
 
@@ -241,13 +244,19 @@ module Landable =
         else
             match advisory with
             | NoDerivation _ -> Blocking
-            | DerivedFrom requiredContexts -> if requiredContexts.Contains c.Name then Blocking else Advisory
+            | DerivedFrom requiredContexts ->
+                if requiredContexts.Contains c.Name then
+                    Blocking
+                else
+                    Advisory
 
     // A subject (run or check) is a FINDING unless it COMPLETED and concluded `success` or `skipped`.
     let private isPending (status: string) = status <> "completed"
 
     let private isBad (status: string) (conclusion: string option) =
-        status = "completed" && conclusion <> Some "success" && conclusion <> Some "skipped"
+        status = "completed"
+        && conclusion <> Some "success"
+        && conclusion <> Some "skipped"
 
     // A workflow run's `Gating` (#2400/#2454, closing #2379): a run is `Advisory` only when EVERY check-run
     // in its suite that is itself a FINDING — `isBad` or still `isPending` — is `Advisory`. A check-run that
@@ -283,7 +292,10 @@ module Landable =
             match liveChecksAll |> List.filter (fun c -> c.CheckSuiteId = Some suiteId) with
             | [] -> Blocking
             | ownChecks ->
-                match ownChecks |> List.filter (fun c -> isPending c.Status || isBad c.Status c.Conclusion) with
+                match
+                    ownChecks
+                    |> List.filter (fun c -> isPending c.Status || isBad c.Status c.Conclusion)
+                with
                 | [] -> Blocking
                 | findings ->
                     let allAdvisory =
@@ -332,20 +344,22 @@ module Landable =
         : Failure list =
         let scoredRuns, scoredChecks, _ = scoredSubjects advisory required runs checks
 
-        [ yield!
-              scoredRuns
-              |> List.choose (fun r ->
-                  if isBad r.Status r.Conclusion then
-                      Some(WorkflowRunFailure(r.Path, r.RunNumber, r.Conclusion))
-                  else
-                      None)
-          yield!
-              scoredChecks
-              |> List.choose (fun c ->
-                  if isBad c.Status c.Conclusion then
-                      Some(CheckRunFailure(c.Name, c.CheckSuiteId, c.Conclusion))
-                  else
-                      None) ]
+        [
+            yield!
+                scoredRuns
+                |> List.choose (fun r ->
+                    if isBad r.Status r.Conclusion then
+                        Some(WorkflowRunFailure(r.Path, r.RunNumber, r.Conclusion))
+                    else
+                        None)
+            yield!
+                scoredChecks
+                |> List.choose (fun c ->
+                    if isBad c.Status c.Conclusion then
+                        Some(CheckRunFailure(c.Name, c.CheckSuiteId, c.Conclusion))
+                    else
+                        None)
+        ]
 
     // The verdict AND the number of subjects it was scored over — runs plus check-runs, after the
     // superseded suites are dropped. `--wait` needs that count and the verdict is not enough: a `red` over
@@ -391,7 +405,8 @@ module Landable =
         // check set is permanently empty — the verdict must come from mergeability, before the checks.
         | Some false -> PrConflicted, 0
         | Some true ->
-            let scoredRuns, scoredChecks, liveChecksAll = scoredSubjects advisory required runs checks
+            let scoredRuns, scoredChecks, liveChecksAll =
+                scoredSubjects advisory required runs checks
 
             // Advisory checks (#2373/#2400, derived since #2517) are excluded from the bad/pending/total
             // rollup UNLESS the caller explicitly named them in `required` — an opt-in override, never a
@@ -408,7 +423,9 @@ module Landable =
 
             let bad =
                 (scoredRuns |> List.filter (fun r -> isBad r.Status r.Conclusion) |> List.length)
-                + (scoredChecks |> List.filter (fun c -> isBad c.Status c.Conclusion) |> List.length)
+                + (scoredChecks
+                   |> List.filter (fun c -> isBad c.Status c.Conclusion)
+                   |> List.length)
 
             let total = List.length scoredRuns + List.length scoredChecks
 

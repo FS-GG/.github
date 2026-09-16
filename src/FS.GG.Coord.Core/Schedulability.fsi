@@ -178,7 +178,8 @@ module Schedulability =
     /// `Set.empty` reproduces the pre-#2305 answer exactly: passing it is always safe, and it is what a
     /// caller with no filesystem to ask (a pure snapshot-only decision path) must pass, since it has no
     /// roster to hand — see the callers in `Program.fs`'s `lanes` command.
-    val schedulable: generated: Set<string> -> allowBacklog: bool -> inFlight: TouchSet list -> item: Item -> Schedulability
+    val schedulable:
+        generated: Set<string> -> allowBacklog: bool -> inFlight: TouchSet list -> item: Item -> Schedulability
 
     /// The verdict's WIRE KIND — the token the divergence log speaks and `facts` documents, spelled ONCE
     /// (#865).

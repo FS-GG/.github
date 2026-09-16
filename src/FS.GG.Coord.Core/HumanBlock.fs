@@ -27,7 +27,11 @@ module HumanBlock =
             Markdown.unfenced body
             |> List.choose (fun line ->
                 let m = declRe.Match line
-                if m.Success then classify (m.Groups.["rest"].Value) else None)
+
+                if m.Success then
+                    classify (m.Groups.["rest"].Value)
+                else
+                    None)
 
         // DECISION DOMINATES over ACTION when both are present: the stronger "a human must choose" must
         // never be weakened to "waiting on an action". Order the search, do not take the first line.

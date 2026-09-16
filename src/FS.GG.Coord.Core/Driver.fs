@@ -6,15 +6,17 @@ module Driver =
     open System.Text.Json
 
     type Housekeeping =
-        { HasHostIdentity: bool
-          StaleClaim: bool
-          EngineCurrent: bool
-          PendingWrites: int
-          ReconcileDryRunFresh: bool
-          ReconcileApplied: bool
-          ReconcileFresh: bool
-          TriageFresh: bool
-          CurrencyScoped: bool }
+        {
+            HasHostIdentity: bool
+            StaleClaim: bool
+            EngineCurrent: bool
+            PendingWrites: int
+            ReconcileDryRunFresh: bool
+            ReconcileApplied: bool
+            ReconcileFresh: bool
+            TriageFresh: bool
+            CurrencyScoped: bool
+        }
 
     type RuntimeRouteEvidence =
         | Meaningful of
@@ -25,11 +27,21 @@ module Driver =
         | NotMeaningful of reason: string
 
     type ReviewChain =
-        { MarkerValid: bool; Subject: string option; ClaimGeneration: string option; BaseSha: string option
-          CriticIdentity: string option; HeadSha: string option
-          Rounds: int list; RepairPhase: bool; ChecksGreen: bool; HostAccepted: bool
-          RuntimeRouteEvidence: RuntimeRouteEvidence option
-          DiffAuditRequired: bool; DiffAuditHead: string option }
+        {
+            MarkerValid: bool
+            Subject: string option
+            ClaimGeneration: string option
+            BaseSha: string option
+            CriticIdentity: string option
+            HeadSha: string option
+            Rounds: int list
+            RepairPhase: bool
+            ChecksGreen: bool
+            HostAccepted: bool
+            RuntimeRouteEvidence: RuntimeRouteEvidence option
+            DiffAuditRequired: bool
+            DiffAuditHead: string option
+        }
 
     type ReviewComment =
         { Id: int64; Url: string; Body: string }
@@ -42,41 +54,57 @@ module Driver =
             match root.TryGetProperty name with
             | true, value -> value
             | _ -> invalidArg name "required field is missing"
+
         let text (name: string) (root: JsonElement) =
             let value = required name root
-            if value.ValueKind <> JsonValueKind.String then invalidArg name "must be a string"
+
+            if value.ValueKind <> JsonValueKind.String then
+                invalidArg name "must be a string"
+
             value.GetString()
+
         let optionalText (name: string) (root: JsonElement) =
             match root.TryGetProperty name with
             | false, _ -> None
             | true, value when value.ValueKind = JsonValueKind.Null -> None
             | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
             | _ -> invalidArg name "must be a string or null"
+
         let texts (name: string) (root: JsonElement) =
             let value = required name root
-            if value.ValueKind <> JsonValueKind.Array then invalidArg name "must be an array"
+
+            if value.ValueKind <> JsonValueKind.Array then
+                invalidArg name "must be an array"
+
             value.EnumerateArray()
             |> Seq.map (fun entry ->
-                if entry.ValueKind <> JsonValueKind.String then invalidArg name "must contain strings"
+                if entry.ValueKind <> JsonValueKind.String then
+                    invalidArg name "must contain strings"
+
                 entry.GetString())
             |> List.ofSeq
+
         let number (name: string) (root: JsonElement) =
             match (required name root).TryGetInt32() with
             | true, value -> value
             | _ -> invalidArg name "must be a 32-bit integer"
+
         let optionalBool (name: string) (root: JsonElement) =
             match root.TryGetProperty name with
             | false, _ -> false
             | true, value when value.ValueKind = JsonValueKind.True -> true
             | true, value when value.ValueKind = JsonValueKind.False -> false
             | _ -> invalidArg name "must be a boolean"
+
         let optionalTexts (name: string) (root: JsonElement) =
             match root.TryGetProperty name with
             | false, _ -> []
             | true, value when value.ValueKind = JsonValueKind.Array ->
                 value.EnumerateArray()
                 |> Seq.map (fun entry ->
-                    if entry.ValueKind <> JsonValueKind.String then invalidArg name "must contain strings"
+                    if entry.ValueKind <> JsonValueKind.String then
+                        invalidArg name "must contain strings"
+
                     entry.GetString())
                 |> List.ofSeq
             | _ -> invalidArg name "must be an array"
@@ -90,48 +118,65 @@ module Driver =
                 | true, entry when entry.ValueKind = JsonValueKind.String -> entry.GetString()
                 | true, _ -> invalidArg $"%s{name}.%s{field}" "must be a string"
                 | _ -> invalidArg $"%s{name}.%s{field}" "required field is missing"
+
             match root.TryGetProperty name with
             | false, _ -> None
             | true, value when value.ValueKind = JsonValueKind.Null -> None
             | true, value when value.ValueKind = JsonValueKind.Object ->
-                Some
-                    ({ OriginalCritic = inner "originalCritic" value
-                       GrantedBy = inner "grantedBy" value
-                       GrantUrl = inner "grantUrl" value }: StructuredDecision.SuccessionGrant)
+                Some(
+                    {
+                        OriginalCritic = inner "originalCritic" value
+                        GrantedBy = inner "grantedBy" value
+                        GrantUrl = inner "grantUrl" value
+                    }
+                    : StructuredDecision.SuccessionGrant
+                )
             | _ -> invalidArg name "must be an object or null"
+
         let optionalRepairPhaseReceipt (name: string) (root: JsonElement) =
             let innerString (field: string) (value: JsonElement) =
                 match value.TryGetProperty field with
                 | true, entry when entry.ValueKind = JsonValueKind.String -> entry.GetString()
                 | true, _ -> invalidArg $"%s{name}.%s{field}" "must be a string"
                 | _ -> invalidArg $"%s{name}.%s{field}" "required field is missing"
+
             let innerInt (field: string) (value: JsonElement) =
                 match value.TryGetProperty field with
                 | true, entry when entry.ValueKind = JsonValueKind.Number -> entry.GetInt32()
                 | true, _ -> invalidArg $"%s{name}.%s{field}" "must be an integer"
                 | _ -> invalidArg $"%s{name}.%s{field}" "required field is missing"
+
             let innerInt64 (field: string) (value: JsonElement) =
                 match value.TryGetProperty field with
                 | true, entry when entry.ValueKind = JsonValueKind.Number -> entry.GetInt64()
                 | true, _ -> invalidArg $"%s{name}.%s{field}" "must be an integer"
                 | _ -> invalidArg $"%s{name}.%s{field}" "required field is missing"
+
             match root.TryGetProperty name with
             | false, _ -> None
             | true, value when value.ValueKind = JsonValueKind.Null -> None
             | true, value when value.ValueKind = JsonValueKind.Object ->
-                Some
-                    ({ ExhaustedPr = innerInt "exhaustedPr" value
-                       EscalationCommentId = innerInt64 "escalationCommentId" value
-                       NewClaimGeneration = innerString "newClaimGeneration" value
-                       NewBranchOrPr = innerString "newBranchOrPr" value
-                       NewImplementerIdentity = innerString "newImplementerIdentity" value
-                       NewCriticIdentity = innerString "newCriticIdentity" value
-                       CandidateHeadSha = innerString "candidateHeadSha" value }: StructuredDecision.RepairPhaseReceipt)
+                Some(
+                    {
+                        ExhaustedPr = innerInt "exhaustedPr" value
+                        EscalationCommentId = innerInt64 "escalationCommentId" value
+                        NewClaimGeneration = innerString "newClaimGeneration" value
+                        NewBranchOrPr = innerString "newBranchOrPr" value
+                        NewImplementerIdentity = innerString "newImplementerIdentity" value
+                        NewCriticIdentity = innerString "newCriticIdentity" value
+                        CandidateHeadSha = innerString "candidateHeadSha" value
+                    }
+                    : StructuredDecision.RepairPhaseReceipt
+                )
             | _ -> invalidArg name "must be an object or null"
+
         try
             use document = JsonDocument.Parse raw
             let root = document.RootElement
-            if root.ValueKind <> JsonValueKind.Object then invalidArg "record" "must be an object"
+
+            if root.ValueKind <> JsonValueKind.Object then
+                invalidArg "record" "must be an object"
+
             let kind =
                 match text "kind" root with
                 | "initial" -> StructuredDecision.Initial
@@ -140,37 +185,42 @@ module Driver =
                 | "repair-phase" -> StructuredDecision.RepairPhase
                 | "acceptance" -> StructuredDecision.Acceptance
                 | _ -> invalidArg "kind" "must be initial, confirmation, escalation, repair-phase, or acceptance"
+
             let verdict =
                 match text "verdict" root with
                 | "pass" -> StructuredDecision.Pass
                 | "changes-required" -> StructuredDecision.ChangesRequired
                 | "accepted" -> StructuredDecision.Accepted
                 | _ -> invalidArg "verdict" "must be pass, changes-required, or accepted"
+
             Ok
-                { Schema = text "schema" root
-                  Subject = text "subject" root
-                  Revision = number "revision" root
-                  PreviousDigest = optionalText "previousDigest" root
-                  HeadSha = text "headSha" root
-                  ClaimGeneration = optionalText "claimGeneration" root
-                  BaseSha = optionalText "baseSha" root
-                  Critic = text "critic" root
-                  Verdict = verdict
-                  AcceptedExceptions = texts "acceptedExceptions" root
-                  RouteApplicability = text "routeApplicability" root
-                  RouteEvidence = texts "routeEvidence" root
-                  PolicyVersion = text "policyVersion" root
-                  Kind = kind
-                  Round = number "round" root
-                  InitialReview = optionalText "initialReview" root
-                  PrecedingReview = optionalText "precedingReview" root
-                  DiffAuditRequired = optionalBool "diffAuditRequired" root
-                  DiffAuditReceipts = optionalTexts "diffAuditReceipts" root
-                  Succession = optionalSuccession "succession" root
-                  RepairPhaseReceipt = optionalRepairPhaseReceipt "repairPhaseReceipt" root
-                  Timestamp = text "timestamp" root
-                  Digest = text "digest" root }
-        with error -> Error error.Message
+                {
+                    Schema = text "schema" root
+                    Subject = text "subject" root
+                    Revision = number "revision" root
+                    PreviousDigest = optionalText "previousDigest" root
+                    HeadSha = text "headSha" root
+                    ClaimGeneration = optionalText "claimGeneration" root
+                    BaseSha = optionalText "baseSha" root
+                    Critic = text "critic" root
+                    Verdict = verdict
+                    AcceptedExceptions = texts "acceptedExceptions" root
+                    RouteApplicability = text "routeApplicability" root
+                    RouteEvidence = texts "routeEvidence" root
+                    PolicyVersion = text "policyVersion" root
+                    Kind = kind
+                    Round = number "round" root
+                    InitialReview = optionalText "initialReview" root
+                    PrecedingReview = optionalText "precedingReview" root
+                    DiffAuditRequired = optionalBool "diffAuditRequired" root
+                    DiffAuditReceipts = optionalTexts "diffAuditReceipts" root
+                    Succession = optionalSuccession "succession" root
+                    RepairPhaseReceipt = optionalRepairPhaseReceipt "repairPhaseReceipt" root
+                    Timestamp = text "timestamp" root
+                    Digest = text "digest" root
+                }
+        with error ->
+            Error error.Message
 
     let encodeStructuredReview (record: StructuredDecision.ReviewRecord) =
         let kind =
@@ -180,6 +230,7 @@ module Driver =
             | StructuredDecision.Escalation -> "escalation"
             | StructuredDecision.RepairPhase -> "repair-phase"
             | StructuredDecision.Acceptance -> "acceptance"
+
         let verdict =
             match record.Verdict with
             | StructuredDecision.Pass -> "pass"
@@ -192,31 +243,51 @@ module Driver =
         let succession =
             record.Succession
             |> Option.map (fun grant ->
-                {| originalCritic = grant.OriginalCritic
-                   grantedBy = grant.GrantedBy
-                   grantUrl = grant.GrantUrl |})
+                {|
+                    originalCritic = grant.OriginalCritic
+                    grantedBy = grant.GrantedBy
+                    grantUrl = grant.GrantUrl
+                |})
+
         let repairPhaseReceipt =
             record.RepairPhaseReceipt
             |> Option.map (fun receipt ->
-                {| exhaustedPr = receipt.ExhaustedPr
-                   escalationCommentId = receipt.EscalationCommentId
-                   newClaimGeneration = receipt.NewClaimGeneration
-                   newBranchOrPr = receipt.NewBranchOrPr
-                   newImplementerIdentity = receipt.NewImplementerIdentity
-                   newCriticIdentity = receipt.NewCriticIdentity
-                   candidateHeadSha = receipt.CandidateHeadSha |})
+                {|
+                    exhaustedPr = receipt.ExhaustedPr
+                    escalationCommentId = receipt.EscalationCommentId
+                    newClaimGeneration = receipt.NewClaimGeneration
+                    newBranchOrPr = receipt.NewBranchOrPr
+                    newImplementerIdentity = receipt.NewImplementerIdentity
+                    newCriticIdentity = receipt.NewCriticIdentity
+                    candidateHeadSha = receipt.CandidateHeadSha
+                |})
+
         JsonSerializer.Serialize
-            {| schema = record.Schema; subject = record.Subject; revision = record.Revision
-               previousDigest = record.PreviousDigest; headSha = record.HeadSha
-               claimGeneration = record.ClaimGeneration; baseSha = record.BaseSha; critic = record.Critic
-               verdict = verdict; acceptedExceptions = record.AcceptedExceptions
-               routeApplicability = record.RouteApplicability; routeEvidence = record.RouteEvidence
-               policyVersion = record.PolicyVersion; kind = kind; round = record.Round
-               initialReview = record.InitialReview; precedingReview = record.PrecedingReview
-               diffAuditRequired = record.DiffAuditRequired; diffAuditReceipts = record.DiffAuditReceipts
-               succession = succession
-               repairPhaseReceipt = repairPhaseReceipt
-               timestamp = record.Timestamp; digest = record.Digest |}
+            {|
+                schema = record.Schema
+                subject = record.Subject
+                revision = record.Revision
+                previousDigest = record.PreviousDigest
+                headSha = record.HeadSha
+                claimGeneration = record.ClaimGeneration
+                baseSha = record.BaseSha
+                critic = record.Critic
+                verdict = verdict
+                acceptedExceptions = record.AcceptedExceptions
+                routeApplicability = record.RouteApplicability
+                routeEvidence = record.RouteEvidence
+                policyVersion = record.PolicyVersion
+                kind = kind
+                round = record.Round
+                initialReview = record.InitialReview
+                precedingReview = record.PrecedingReview
+                diffAuditRequired = record.DiffAuditRequired
+                diffAuditReceipts = record.DiffAuditReceipts
+                succession = succession
+                repairPhaseReceipt = repairPhaseReceipt
+                timestamp = record.Timestamp
+                digest = record.Digest
+            |}
 
     let private structuredReviewLedger (comments: ReviewComment list) =
         let marked =
@@ -231,8 +302,7 @@ module Driver =
             Error [ "structured review ledger is missing" ]
         else
             let decoded =
-                marked
-                |> List.map (fun (comment, raw) -> comment, decodeStructuredReview raw)
+                marked |> List.map (fun (comment, raw) -> comment, decodeStructuredReview raw)
 
             let errors =
                 decoded
@@ -256,22 +326,24 @@ module Driver =
                 |> Result.map (fun _ -> subject, pairs)
 
     type ReviewPhaseFacts =
-        { StructuredErrors: string list
-          InitialCount: int
-          InitialPresent: bool
-          InitialHeadSha: string option
-          InitialVerdict: string option
-          CriticIdentity: string option
-          ConfirmationCount: int
-          LatestVerdict: string option
-          LatestVerdictNearMissHints: string list
-          LatestReviewedHeadSha: string option
-          LatestReviewUrl: string option
-          EscalationPresent: bool
-          RepairPhasePresent: bool
-          RepairPhaseReceipt: StructuredDecision.RepairPhaseReceipt option
-          AcceptanceCount: int
-          AcceptancePresent: bool }
+        {
+            StructuredErrors: string list
+            InitialCount: int
+            InitialPresent: bool
+            InitialHeadSha: string option
+            InitialVerdict: string option
+            CriticIdentity: string option
+            ConfirmationCount: int
+            LatestVerdict: string option
+            LatestVerdictNearMissHints: string list
+            LatestReviewedHeadSha: string option
+            LatestReviewUrl: string option
+            EscalationPresent: bool
+            RepairPhasePresent: bool
+            RepairPhaseReceipt: StructuredDecision.RepairPhaseReceipt option
+            AcceptanceCount: int
+            AcceptancePresent: bool
+        }
 
     // A `critic:` value that is the bare, undifferentiated agent-type string every critic dispatched at
     // one route shares — `fsgg-critic-normal`, or any future `fsgg-critic-<route>` — rather than a
@@ -290,93 +362,107 @@ module Driver =
 
     let reviewPhaseFacts (comments: ReviewComment list) : ReviewPhaseFacts =
         if List.isEmpty comments then
-            { StructuredErrors = []
-              InitialCount = 0
-              InitialPresent = false
-              InitialHeadSha = None
-              InitialVerdict = None
-              CriticIdentity = None
-              ConfirmationCount = 0
-              LatestVerdict = None
-              LatestVerdictNearMissHints = []
-              LatestReviewedHeadSha = None
-              LatestReviewUrl = None
-              EscalationPresent = false
-              RepairPhasePresent = false
-              RepairPhaseReceipt = None
-              AcceptanceCount = 0
-              AcceptancePresent = false }
+            {
+                StructuredErrors = []
+                InitialCount = 0
+                InitialPresent = false
+                InitialHeadSha = None
+                InitialVerdict = None
+                CriticIdentity = None
+                ConfirmationCount = 0
+                LatestVerdict = None
+                LatestVerdictNearMissHints = []
+                LatestReviewedHeadSha = None
+                LatestReviewUrl = None
+                EscalationPresent = false
+                RepairPhasePresent = false
+                RepairPhaseReceipt = None
+                AcceptanceCount = 0
+                AcceptancePresent = false
+            }
         else
             match structuredReviewLedger comments with
             | Error errors ->
-                { StructuredErrors = errors
-                  InitialCount = 0
-                  InitialPresent = false
-                  InitialHeadSha = None
-                  InitialVerdict = None
-                  CriticIdentity = None
-                  ConfirmationCount = 0
-                  LatestVerdict = None
-                  LatestVerdictNearMissHints = []
-                  LatestReviewedHeadSha = None
-                  LatestReviewUrl = None
-                  EscalationPresent = false
-                  RepairPhasePresent = false
-                  RepairPhaseReceipt = None
-                  AcceptanceCount = 0
-                  AcceptancePresent = false }
+                {
+                    StructuredErrors = errors
+                    InitialCount = 0
+                    InitialPresent = false
+                    InitialHeadSha = None
+                    InitialVerdict = None
+                    CriticIdentity = None
+                    ConfirmationCount = 0
+                    LatestVerdict = None
+                    LatestVerdictNearMissHints = []
+                    LatestReviewedHeadSha = None
+                    LatestReviewUrl = None
+                    EscalationPresent = false
+                    RepairPhasePresent = false
+                    RepairPhaseReceipt = None
+                    AcceptanceCount = 0
+                    AcceptancePresent = false
+                }
             | Ok(_, pairs) ->
-                let ofKind kind = pairs |> List.filter (fun (_, record) -> record.Kind = kind)
+                let ofKind kind =
+                    pairs |> List.filter (fun (_, record) -> record.Kind = kind)
+
                 let initials = ofKind StructuredDecision.Initial
                 let confirmations = ofKind StructuredDecision.Confirmation
                 let acceptances = ofKind StructuredDecision.Acceptance
                 let initial = initials |> List.tryLast
                 let latestReview = confirmations |> List.tryLast |> Option.orElse initial
-                let verdictName = function
+
+                let verdictName =
+                    function
                     | StructuredDecision.Pass -> "pass"
                     | StructuredDecision.ChangesRequired -> "changes-required"
                     | StructuredDecision.Accepted -> "accepted"
 
-                { StructuredErrors = []
-                  InitialCount = List.length initials
-                  InitialPresent = not (List.isEmpty initials)
-                  InitialHeadSha = initial |> Option.map (snd >> _.HeadSha)
-                  InitialVerdict = initial |> Option.map (snd >> _.Verdict >> verdictName)
-                  // The critic IN FORCE, not the one that opened the generation (.github#2662). The seat
-                  // changes hands at a validated succession grant, so the last record's critic is the
-                  // identity a further grant must name as its outgoing critic and the identity whose
-                  // pass is being carried. For every ledger without a grant the two are the SAME string:
-                  // `validateReviewLedger`'s unwidened conjunct forces every non-initial record in a
-                  // generation to bind the generation's critic, and `reviewPhaseFacts` is only ever
-                  // reached on a ledger that validated. So this is a correction for the case succession
-                  // newly makes reachable, never a change to any answer the engine already gave.
-                  CriticIdentity = pairs |> List.tryLast |> Option.map (snd >> _.Critic)
-                  ConfirmationCount = List.length confirmations
-                  LatestVerdict = latestReview |> Option.map (snd >> _.Verdict >> verdictName)
-                  LatestVerdictNearMissHints = []
-                  LatestReviewedHeadSha = latestReview |> Option.map (snd >> _.HeadSha)
-                  LatestReviewUrl = latestReview |> Option.map (fst >> _.Url)
-                  EscalationPresent = ofKind StructuredDecision.Escalation |> List.isEmpty |> not
-                  RepairPhasePresent = ofKind StructuredDecision.RepairPhase |> List.isEmpty |> not
-                  RepairPhaseReceipt =
-                      ofKind StructuredDecision.RepairPhase
-                      |> List.tryExactlyOne
-                      |> Option.bind (snd >> _.RepairPhaseReceipt)
-                  AcceptanceCount = List.length acceptances
-                  AcceptancePresent = not (List.isEmpty acceptances) }
+                {
+                    StructuredErrors = []
+                    InitialCount = List.length initials
+                    InitialPresent = not (List.isEmpty initials)
+                    InitialHeadSha = initial |> Option.map (snd >> _.HeadSha)
+                    InitialVerdict = initial |> Option.map (snd >> _.Verdict >> verdictName)
+                    // The critic IN FORCE, not the one that opened the generation (.github#2662). The seat
+                    // changes hands at a validated succession grant, so the last record's critic is the
+                    // identity a further grant must name as its outgoing critic and the identity whose
+                    // pass is being carried. For every ledger without a grant the two are the SAME string:
+                    // `validateReviewLedger`'s unwidened conjunct forces every non-initial record in a
+                    // generation to bind the generation's critic, and `reviewPhaseFacts` is only ever
+                    // reached on a ledger that validated. So this is a correction for the case succession
+                    // newly makes reachable, never a change to any answer the engine already gave.
+                    CriticIdentity = pairs |> List.tryLast |> Option.map (snd >> _.Critic)
+                    ConfirmationCount = List.length confirmations
+                    LatestVerdict = latestReview |> Option.map (snd >> _.Verdict >> verdictName)
+                    LatestVerdictNearMissHints = []
+                    LatestReviewedHeadSha = latestReview |> Option.map (snd >> _.HeadSha)
+                    LatestReviewUrl = latestReview |> Option.map (fst >> _.Url)
+                    EscalationPresent = ofKind StructuredDecision.Escalation |> List.isEmpty |> not
+                    RepairPhasePresent = ofKind StructuredDecision.RepairPhase |> List.isEmpty |> not
+                    RepairPhaseReceipt =
+                        ofKind StructuredDecision.RepairPhase
+                        |> List.tryExactlyOne
+                        |> Option.bind (snd >> _.RepairPhaseReceipt)
+                    AcceptanceCount = List.length acceptances
+                    AcceptancePresent = not (List.isEmpty acceptances)
+                }
 
     type ChainRetirement =
-        { InitialReviewUrl: string
-          InitialReviewCommentId: int64
-          AcceptedHead: string
-          AcceptanceCommentId: int64 }
+        {
+            InitialReviewUrl: string
+            InitialReviewCommentId: int64
+            AcceptedHead: string
+            AcceptanceCommentId: int64
+        }
 
     type LiveReviewComments =
-        { Live: ReviewComment list
-          Retired: ChainRetirement list
-          Diagnostics: string list
-          StructuredSubject: string option
-          StructuredErrors: string list }
+        {
+            Live: ReviewComment list
+            Retired: ChainRetirement list
+            Diagnostics: string list
+            StructuredSubject: string option
+            StructuredErrors: string list
+        }
 
     // Partition a PR's review comments into the chain that BINDS the current head and the chains that a
     // host acceptance already settled at a head the PR has moved off (.github#2527).
@@ -416,36 +502,50 @@ module Driver =
     // carries one chain, which is every PR the protocol was already able to describe.
     let liveReviewComments (currentHead: string) (comments: ReviewComment list) : LiveReviewComments =
         let structuredPresent =
-            comments |> List.exists (fun comment -> comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal))
+            comments
+            |> List.exists (fun comment ->
+                comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal))
 
         if not structuredPresent then
-            { Live = []
-              Retired = []
-              Diagnostics = []
-              StructuredSubject = None
-              StructuredErrors = [] }
+            {
+                Live = []
+                Retired = []
+                Diagnostics = []
+                StructuredSubject = None
+                StructuredErrors = []
+            }
         else
             match structuredReviewLedger comments with
             | Error errors ->
-                { Live = []
-                  Retired = []
-                  Diagnostics = []
-                  StructuredSubject = None
-                  StructuredErrors = errors }
+                {
+                    Live = []
+                    Retired = []
+                    Diagnostics = []
+                    StructuredSubject = None
+                    StructuredErrors = errors
+                }
             | Ok(subject, pairs) ->
                 let indexed = pairs |> List.indexed
+
                 let initialIndexes =
                     indexed
                     |> List.choose (fun (index, (_, record)) ->
-                        if record.Kind = StructuredDecision.Initial then Some index else None)
+                        if record.Kind = StructuredDecision.Initial then
+                            Some index
+                        else
+                            None)
 
                 let generation start finish = pairs[start .. finish - 1]
+
                 let generations =
                     initialIndexes
                     |> List.mapi (fun index start ->
                         let finish =
-                            if index + 1 < initialIndexes.Length then initialIndexes[index + 1]
-                            else pairs.Length
+                            if index + 1 < initialIndexes.Length then
+                                initialIndexes[index + 1]
+                            else
+                                pairs.Length
+
                         generation start finish)
 
                 let retired =
@@ -456,27 +556,33 @@ module Driver =
                         |> List.take (generations.Length - 1)
                         |> List.choose (fun entries ->
                             let initialComment, _ = entries.Head
+
                             entries
                             |> List.tryFind (fun (_, record) -> record.Kind = StructuredDecision.Acceptance)
                             |> Option.bind (fun (acceptanceComment, acceptance) ->
-                                if acceptance.HeadSha = currentHead then None
+                                if acceptance.HeadSha = currentHead then
+                                    None
                                 else
                                     Some
-                                        { InitialReviewUrl = initialComment.Url
-                                          InitialReviewCommentId = initialComment.Id
-                                          AcceptedHead = acceptance.HeadSha
-                                          AcceptanceCommentId = acceptanceComment.Id }))
+                                        {
+                                            InitialReviewUrl = initialComment.Url
+                                            InitialReviewCommentId = initialComment.Id
+                                            AcceptedHead = acceptance.HeadSha
+                                            AcceptanceCommentId = acceptanceComment.Id
+                                        }))
 
                 let live =
                     match generations with
                     | [] -> []
                     | values -> values |> List.last |> List.map fst
 
-                { Live = live
-                  Retired = retired
-                  Diagnostics = []
-                  StructuredSubject = Some subject
-                  StructuredErrors = [] }
+                {
+                    Live = live
+                    Retired = retired
+                    Diagnostics = []
+                    StructuredSubject = Some subject
+                    StructuredErrors = []
+                }
 
     let private parseStructuredComments
         (trustedFacts: (bool * SemanticDiff.TrustedAudit option) option)
@@ -489,15 +595,34 @@ module Driver =
                 pairs
                 |> List.indexed
                 |> List.choose (fun (index, (_, record)) ->
-                    if record.Kind = StructuredDecision.Initial then Some index else None)
+                    if record.Kind = StructuredDecision.Initial then
+                        Some index
+                    else
+                        None)
                 |> List.tryLast
                 |> Option.map (fun start -> pairs[start..])
                 |> Option.defaultValue pairs
-            let initial = generation |> List.tryFind (fun (_, record) -> record.Kind = StructuredDecision.Initial)
-            let confirmations = generation |> List.filter (fun (_, record) -> record.Kind = StructuredDecision.Confirmation)
-            let escalations = generation |> List.filter (fun (_, record) -> record.Kind = StructuredDecision.Escalation)
-            let repairs = generation |> List.filter (fun (_, record) -> record.Kind = StructuredDecision.RepairPhase)
-            let acceptances = generation |> List.filter (fun (_, record) -> record.Kind = StructuredDecision.Acceptance)
+
+            let initial =
+                generation
+                |> List.tryFind (fun (_, record) -> record.Kind = StructuredDecision.Initial)
+
+            let confirmations =
+                generation
+                |> List.filter (fun (_, record) -> record.Kind = StructuredDecision.Confirmation)
+
+            let escalations =
+                generation
+                |> List.filter (fun (_, record) -> record.Kind = StructuredDecision.Escalation)
+
+            let repairs =
+                generation
+                |> List.filter (fun (_, record) -> record.Kind = StructuredDecision.RepairPhase)
+
+            let acceptances =
+                generation
+                |> List.filter (fun (_, record) -> record.Kind = StructuredDecision.Acceptance)
+
             let errors = ResizeArray<string>()
 
             let routeEvidence (record: StructuredDecision.ReviewRecord) =
@@ -509,14 +634,20 @@ module Driver =
 
             match initial, acceptances with
             | Some(initialComment, first), [ (acceptanceComment, accepted) ] ->
-                let latestComment, latest = confirmations |> List.tryLast |> Option.defaultValue (initialComment, first)
+                let latestComment, latest =
+                    confirmations |> List.tryLast |> Option.defaultValue (initialComment, first)
+
                 let repairPhase = not (List.isEmpty repairs)
+
                 let ceiling =
-                    if repairPhase then Protocol.reviewPolicy.RepairPhaseMaxRounds
-                    else Protocol.reviewPolicy.MaxAutomatedRepairRounds
+                    if repairPhase then
+                        Protocol.reviewPolicy.RepairPhaseMaxRounds
+                    else
+                        Protocol.reviewPolicy.MaxAutomatedRepairRounds
 
                 if isGenericCriticIdentity first.Critic then
                     errors.Add "review critic identity must be minted and distinguishing"
+
                 if latest.Verdict <> StructuredDecision.Pass then
                     errors.Add "the latest structured critic decision must have verdict pass"
                 // A passing successor confirmation closes review; it does not request another
@@ -524,18 +655,25 @@ module Driver =
                 // head, so the ceiling must consult the verdict rather than reject on length alone.
                 if confirmations.Length > ceiling && latest.Verdict <> StructuredDecision.Pass then
                     errors.Add "review confirmation round ceiling exceeded"
+
                 if not (List.isEmpty escalations) && not repairPhase then
                     errors.Add "structured escalation requires a structured repair-phase record"
+
                 if String.IsNullOrWhiteSpace initialComment.Url then
                     errors.Add "the initial structured review comment URL is missing"
+
                 if String.IsNullOrWhiteSpace latestComment.Url then
                     errors.Add "the latest structured review comment URL is missing"
+
                 if accepted.HeadSha <> latest.HeadSha then
                     errors.Add "acceptance is not bound to the latest reviewed head"
+
                 if accepted.InitialReview <> Some initialComment.Url then
                     errors.Add "acceptance is not bound to the initial structured review comment URL"
+
                 if accepted.PrecedingReview <> Some latestComment.Url then
                     errors.Add "acceptance is not bound to the latest structured review comment URL"
+
                 if acceptanceComment.Id <= latestComment.Id then
                     errors.Add "host acceptance must follow the latest structured review record"
 
@@ -548,6 +686,7 @@ module Driver =
                         errors.Add "a required typed diff-audit receipt was not submitted"
                     else
                         let parsed = accepted.DiffAuditReceipts |> List.map SemanticDiff.ofBase64
+
                         if parsed |> List.exists Result.isError then
                             errors.Add "a submitted typed diff-audit receipt is malformed"
                         else
@@ -610,11 +749,18 @@ module Driver =
                                             && expected.NewToken = receipt.NewToken
                                             && expected.DeclaredPaths = receipt.DeclaredPaths)
                                     with
-                                    | Some expected when SemanticDiff.validateAgainst expected receipt |> List.isEmpty -> ()
-                                    | _ -> errors.Add "a submitted typed diff-audit receipt is stale or does not match live delivery facts"
+                                    | Some expected when SemanticDiff.validateAgainst expected receipt |> List.isEmpty ->
+                                        ()
+                                    | _ ->
+                                        errors.Add
+                                            "a submitted typed diff-audit receipt is stale or does not match live delivery facts"
 
-                                let accounted = submitted |> List.collect _.Occurrences |> List.map _.Id |> Set.ofList
-                                let uncovered = trusted.Discovered |> List.filter (fun item -> not (accounted.Contains item.Id))
+                                let accounted =
+                                    submitted |> List.collect _.Occurrences |> List.map _.Id |> Set.ofList
+
+                                let uncovered =
+                                    trusted.Discovered |> List.filter (fun item -> not (accounted.Contains item.Id))
+
                                 if not (List.isEmpty uncovered) then
                                     errors.Add
                                         $"the submitted typed diff-audit receipts account for %d{trusted.Discovered.Length - uncovered.Length} of %d{trusted.Discovered.Length} discovered occurrences"
@@ -624,37 +770,48 @@ module Driver =
                     // ceiling and driver event projection. Count verdicts that actually sent work back
                     // to the implementer; a `pass` is review completion, not another repair round.
                     let repairRounds =
-                        (if first.Verdict = StructuredDecision.ChangesRequired then 1 else 0)
+                        (if first.Verdict = StructuredDecision.ChangesRequired then
+                             1
+                         else
+                             0)
                         + (confirmations
                            |> List.filter (fun (_, record) -> record.Verdict = StructuredDecision.ChangesRequired)
                            |> List.length)
+
                     let rounds = [ 1 .. max 1 repairRounds ]
                     // The critic IN FORCE at the end of the live generation (.github#2662) — the one whose
                     // pass the host accepted — rather than the generation's opening record. Identical to
                     // `first.Critic` on every grant-free ledger, for the reason `reviewPhaseFacts` states.
                     let generationCritic =
-                        generation |> List.tryLast |> Option.map (snd >> _.Critic) |> Option.defaultValue first.Critic
+                        generation
+                        |> List.tryLast
+                        |> Option.map (snd >> _.Critic)
+                        |> Option.defaultValue first.Critic
+
                     Ok
-                        { MarkerValid = true
-                          Subject = Some accepted.Subject
-                          ClaimGeneration = accepted.ClaimGeneration
-                          BaseSha = accepted.BaseSha
-                          CriticIdentity = Some generationCritic
-                          HeadSha = Some latest.HeadSha
-                          Rounds = rounds
-                          RepairPhase = repairPhase
-                          ChecksGreen = false
-                          HostAccepted = true
-                          RuntimeRouteEvidence = routeEvidence latest
-                          DiffAuditRequired = effectiveAuditRequired
-                          DiffAuditHead = auditHead }
+                        {
+                            MarkerValid = true
+                            Subject = Some accepted.Subject
+                            ClaimGeneration = accepted.ClaimGeneration
+                            BaseSha = accepted.BaseSha
+                            CriticIdentity = Some generationCritic
+                            HeadSha = Some latest.HeadSha
+                            Rounds = rounds
+                            RepairPhase = repairPhase
+                            ChecksGreen = false
+                            HostAccepted = true
+                            RuntimeRouteEvidence = routeEvidence latest
+                            DiffAuditRequired = effectiveAuditRequired
+                            DiffAuditHead = auditHead
+                        }
                 else
                     Error(List.ofSeq errors)
             | None, _ -> Error [ "exactly one structured initial review record is required" ]
             | _, [] -> Error [ "exactly one structured acceptance record is required" ]
             | _, _ -> Error [ "exactly one structured acceptance record is required" ]
 
-    let private parseNormalized trusted comments = parseStructuredComments trusted comments
+    let private parseNormalized trusted comments =
+        parseStructuredComments trusted comments
 
     let parseReviewComments comments = parseNormalized None comments
 
@@ -662,7 +819,14 @@ module Driver =
         // The single-receipt spelling stays available: one receipt whose own recomputation IS the whole
         // discovered population, which is the shape every pre-round-2 caller meant.
         parseNormalized
-            (Some(true, Some { Expected = [ trustedAudit ]; Discovered = trustedAudit.Occurrences }))
+            (Some(
+                true,
+                Some
+                    {
+                        Expected = [ trustedAudit ]
+                        Discovered = trustedAudit.Occurrences
+                    }
+            ))
             comments
 
     let parseReviewCommentsWithFacts mechanicallyRequired trustedAudit comments =
@@ -670,26 +834,35 @@ module Driver =
 
     let parseEffectiveReviewComments currentHead comments =
         let live = liveReviewComments currentHead comments
-        if not (List.isEmpty live.StructuredErrors) then Error live.StructuredErrors
-        else parseReviewComments comments
+
+        if not (List.isEmpty live.StructuredErrors) then
+            Error live.StructuredErrors
+        else
+            parseReviewComments comments
 
     type Receipt =
-        { ObservedAt: int64
-          SourceSha: string
-          Complete: bool
-          Review: ReviewChain option }
+        {
+            ObservedAt: int64
+            SourceSha: string
+            Complete: bool
+            Review: ReviewChain option
+        }
 
     type WorkerReturn =
-        { ClaimLive: bool
-          ReviewReady: bool
-          ParkedOrDone: bool }
+        {
+            ClaimLive: bool
+            ReviewReady: bool
+            ParkedOrDone: bool
+        }
 
     type PlanningObservation =
-        { Kind: string
-          ObservedAt: int64
-          SourceSha: string
-          Outcome: string
-          ReceiptId: string }
+        {
+            Kind: string
+            ObservedAt: int64
+            SourceSha: string
+            Outcome: string
+            ReceiptId: string
+        }
 
     type ContentDisposition =
         | NotReusable
@@ -702,24 +875,28 @@ module Driver =
         | EvidencePath of string
 
     type ContentDispositionReceipt =
-        { SourceFinding: string
-          Disposition: ContentDisposition
-          ConsumerPaths: string list
-          DecisionMaker: string
-          Rationale: string
-          Evidence: ContentEvidence option
-          ObservedAt: int64
-          SourceSha: string
-          ReceiptId: string }
+        {
+            SourceFinding: string
+            Disposition: ContentDisposition
+            ConsumerPaths: string list
+            DecisionMaker: string
+            Rationale: string
+            Evidence: ContentEvidence option
+            ObservedAt: int64
+            SourceSha: string
+            ReceiptId: string
+        }
 
     type PlanningReceipt =
-        { ObservedAt: int64
-          SourceSha: string
-          Complete: bool
-          ConsolidationApproved: bool
-          Observations: PlanningObservation list
-          ContentIntakes: string list
-          ContentDispositions: ContentDispositionReceipt list }
+        {
+            ObservedAt: int64
+            SourceSha: string
+            Complete: bool
+            ConsolidationApproved: bool
+            Observations: PlanningObservation list
+            ContentIntakes: string list
+            ContentDispositions: ContentDispositionReceipt list
+        }
 
     let observationReceiptId kind observedAt sourceSha outcome =
         $"%s{kind}\n%d{observedAt}\n%s{sourceSha}\n%s{outcome}"
@@ -728,7 +905,16 @@ module Driver =
         |> System.Convert.ToHexString
         |> fun value -> value.ToLowerInvariant()
 
-    let contentDispositionReceiptId sourceFinding disposition (consumerPaths: string list) decisionMaker rationale evidence (observedAt: int64) sourceSha =
+    let contentDispositionReceiptId
+        sourceFinding
+        disposition
+        (consumerPaths: string list)
+        decisionMaker
+        rationale
+        evidence
+        (observedAt: int64)
+        sourceSha
+        =
         let kind =
             match disposition with
             | NotReusable -> "not-reusable"
@@ -742,7 +928,16 @@ module Driver =
             | Some(EvidencePath value) -> "path:" + value
             | None -> ""
 
-        [ sourceFinding; kind; String.concat "\u001f" consumerPaths; decisionMaker; rationale; evidenceText; string observedAt; sourceSha ]
+        [
+            sourceFinding
+            kind
+            String.concat "\u001f" consumerPaths
+            decisionMaker
+            rationale
+            evidenceText
+            string observedAt
+            sourceSha
+        ]
         |> String.concat "\n"
         |> System.Text.Encoding.UTF8.GetBytes
         |> System.Security.Cryptography.SHA256.HashData
@@ -751,6 +946,7 @@ module Driver =
 
     let planningReceiptFresh now maxAgeSeconds sourceSha receipt =
         let expected = Protocol.ledgerPolicy.RequiredObservations
+
         let observationValid (kind, outcome) =
             receipt.Observations
             |> List.filter (fun observation -> observation.Kind = kind)
@@ -760,29 +956,36 @@ module Driver =
                     && observation.SourceSha = sourceSha
                     && now >= observation.ObservedAt
                     && now - observation.ObservedAt <= maxAgeSeconds
-                    && observation.ReceiptId = observationReceiptId
-                        observation.Kind
-                        observation.ObservedAt
-                        observation.SourceSha
-                        observation.Outcome
+                    && observation.ReceiptId =
+                        observationReceiptId
+                            observation.Kind
+                            observation.ObservedAt
+                            observation.SourceSha
+                            observation.Outcome
                 | _ -> false
 
-        let nonEmpty value = not (System.String.IsNullOrWhiteSpace value)
+        let nonEmpty value =
+            not (System.String.IsNullOrWhiteSpace value)
+
         let skillPath (path: string) =
             (path.StartsWith ".agents/skills/" || path.StartsWith ".claude/skills/")
             && path.EndsWith ".md"
+
         let executablePath (path: string) =
             path.StartsWith "tests/"
             || path.Contains "/fixtures/"
             || path.EndsWith ".fsx"
             || path.EndsWith ".sh"
             || path.EndsWith ".py"
+
         let evidencePathValid (value: string) =
             let separator = value.LastIndexOf ':'
+
             if separator <= 0 || separator = value.Length - 1 then
                 false
             else
                 let path, line = value.Substring(0, separator), value.Substring(separator + 1)
+
                 match System.Int32.TryParse line with
                 | true, positiveLine ->
                     nonEmpty path
@@ -791,20 +994,30 @@ module Driver =
                     && not (path.Contains "..")
                     && positiveLine > 0
                 | false, _ -> false
+
         let evidenceUrlValid (value: string) =
             match System.Uri.TryCreate(value, System.UriKind.Absolute) with
-            | true, uri -> (uri.Scheme = System.Uri.UriSchemeHttp || uri.Scheme = System.Uri.UriSchemeHttps) && nonEmpty uri.Host
+            | true, uri ->
+                (uri.Scheme = System.Uri.UriSchemeHttp || uri.Scheme = System.Uri.UriSchemeHttps)
+                && nonEmpty uri.Host
             | false, _ -> false
-        let evidenceValid = function
+
+        let evidenceValid =
+            function
             | Some(EvidenceUrl value) -> evidenceUrlValid value
             | Some(EvidencePath value) -> evidencePathValid value
             | None -> false
+
         let dispositionValid disposition =
             let consumerPaths = disposition.ConsumerPaths
             let pathsAreConcrete = consumerPaths |> List.forall nonEmpty
+
             let consumerShapeValid =
                 match disposition.Disposition with
-                | NotReusable -> List.isEmpty consumerPaths && nonEmpty disposition.Rationale && evidenceValid disposition.Evidence
+                | NotReusable ->
+                    List.isEmpty consumerPaths
+                    && nonEmpty disposition.Rationale
+                    && evidenceValid disposition.Evidence
                 | Skill -> pathsAreConcrete && (consumerPaths |> List.exists skillPath)
                 | ExampleFixture -> pathsAreConcrete && (consumerPaths |> List.exists executablePath)
                 | SkillAndExampleFixture ->
@@ -818,21 +1031,25 @@ module Driver =
             && now >= disposition.ObservedAt
             && now - disposition.ObservedAt <= maxAgeSeconds
             && consumerShapeValid
-            && disposition.ReceiptId = contentDispositionReceiptId
-                disposition.SourceFinding
-                disposition.Disposition
-                disposition.ConsumerPaths
-                disposition.DecisionMaker
-                disposition.Rationale
-                disposition.Evidence
-                disposition.ObservedAt
-                disposition.SourceSha
+            && disposition.ReceiptId =
+                contentDispositionReceiptId
+                    disposition.SourceFinding
+                    disposition.Disposition
+                    disposition.ConsumerPaths
+                    disposition.DecisionMaker
+                    disposition.Rationale
+                    disposition.Evidence
+                    disposition.ObservedAt
+                    disposition.SourceSha
 
         let inventoryValid =
             receipt.ContentIntakes |> List.forall nonEmpty
             && (receipt.ContentIntakes |> Set.ofList |> Set.count) = List.length receipt.ContentIntakes
-            && (receipt.ContentDispositions |> List.map (fun disposition -> disposition.SourceFinding) |> Set.ofList)
-                = (receipt.ContentIntakes |> Set.ofList)
+            && (receipt.ContentDispositions
+                |> List.map (fun disposition -> disposition.SourceFinding)
+                |> Set.ofList)
+                =
+                (receipt.ContentIntakes |> Set.ofList)
             && List.length receipt.ContentDispositions = List.length receipt.ContentIntakes
 
         receipt.Complete
@@ -877,30 +1094,32 @@ module Driver =
     // `receiptFresh` cannot drift from it, and a later reword of any message cannot silently
     // reintroduce the conflation the way a string match in a second file would.
     let private reviewChainProblems maxRounds chain =
-        [ if not chain.MarkerValid then
-              true, "review marker is missing or invalid"
-          if Option.isNone chain.CriticIdentity then
-              true, "critic identity is missing"
-          if Option.isNone chain.HeadSha then
-              true, "review head SHA is missing"
-          if List.isEmpty chain.Rounds || chain.Rounds <> [ 1 .. List.length chain.Rounds ] then
-              true, "review rounds are not ordered from one"
-          if List.length chain.Rounds > maxRounds then
-              true, "review round ceiling exceeded"
-          if Option.isNone chain.RuntimeRouteEvidence then
-              true, "runtime-route applicability evidence is missing"
-          if chain.DiffAuditRequired && chain.DiffAuditHead <> chain.HeadSha then
-              true, "required diff-audit receipt is missing, stale, or unresolved"
-          // The ONLY liveness clause. Everything above is a fact about what the critic and host durably
-          // wrote; this one is a fact about a CI run that has not reported yet.
-          if not chain.ChecksGreen then
-              false, "review checks are not green"
-          // STRUCTURAL, deliberately: "no host acceptance marker is present" is a completeness fact
-          // about the durable evidence, not about a check run. `Review.acceptanceOutcome` is only
-          // reached when an acceptance IS present, so this clause can never fire on the path
-          // .github#2549 introduces; tagging it structural is therefore both correct and inert there.
-          if not chain.HostAccepted then
-              true, "host acceptance is missing" ]
+        [
+            if not chain.MarkerValid then
+                true, "review marker is missing or invalid"
+            if Option.isNone chain.CriticIdentity then
+                true, "critic identity is missing"
+            if Option.isNone chain.HeadSha then
+                true, "review head SHA is missing"
+            if List.isEmpty chain.Rounds || chain.Rounds <> [ 1 .. List.length chain.Rounds ] then
+                true, "review rounds are not ordered from one"
+            if List.length chain.Rounds > maxRounds then
+                true, "review round ceiling exceeded"
+            if Option.isNone chain.RuntimeRouteEvidence then
+                true, "runtime-route applicability evidence is missing"
+            if chain.DiffAuditRequired && chain.DiffAuditHead <> chain.HeadSha then
+                true, "required diff-audit receipt is missing, stale, or unresolved"
+            // The ONLY liveness clause. Everything above is a fact about what the critic and host durably
+            // wrote; this one is a fact about a CI run that has not reported yet.
+            if not chain.ChecksGreen then
+                false, "review checks are not green"
+            // STRUCTURAL, deliberately: "no host acceptance marker is present" is a completeness fact
+            // about the durable evidence, not about a check run. `Review.acceptanceOutcome` is only
+            // reached when an acceptance IS present, so this clause can never fire on the path
+            // .github#2549 introduces; tagging it structural is therefore both correct and inert there.
+            if not chain.HostAccepted then
+                true, "host acceptance is missing"
+        ]
 
     let validateReviewChain maxRounds chain =
         reviewChainProblems maxRounds chain |> List.map snd
@@ -911,9 +1130,17 @@ module Driver =
 
     let receiptFresh now maxAgeSeconds (receipt: Receipt) =
         let confirmationCeiling chain =
-            if chain.RepairPhase then Protocol.reviewPolicy.RepairPhaseMaxRounds
-            else Protocol.reviewPolicy.MaxAutomatedRepairRounds
-        receipt.Complete && not (System.String.IsNullOrWhiteSpace receipt.SourceSha) && (receipt.Review |> Option.exists (fun chain -> validateReviewChain (confirmationCeiling chain) chain |> List.isEmpty)) && now >= receipt.ObservedAt && now - receipt.ObservedAt <= maxAgeSeconds
+            if chain.RepairPhase then
+                Protocol.reviewPolicy.RepairPhaseMaxRounds
+            else
+                Protocol.reviewPolicy.MaxAutomatedRepairRounds
+
+        receipt.Complete
+        && not (System.String.IsNullOrWhiteSpace receipt.SourceSha)
+        && (receipt.Review
+            |> Option.exists (fun chain -> validateReviewChain (confirmationCeiling chain) chain |> List.isEmpty))
+        && now >= receipt.ObservedAt
+        && now - receipt.ObservedAt <= maxAgeSeconds
 
     let nextAction model activeItems consolidationApproved housekeeping workerReturns =
         if not housekeeping.HasHostIdentity then

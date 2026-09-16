@@ -37,27 +37,59 @@ module VerifyPathsClosingKeywordTests =
 
         Fake.Recorder(fun (req: Request) ->
             if req.Path.EndsWith "issues/42/comments" then
-                Ok { Status = 200; Body = comments; ETag = None; NextLink = None; Headers = Map.empty }
+                Ok
+                    {
+                        Status = 200
+                        Body = comments
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             elif req.Path.EndsWith "pulls/900/files" then
-                Ok { Status = 200; Body = files; ETag = None; NextLink = None; Headers = Map.empty }
+                Ok
+                    {
+                        Status = 200
+                        Body = files
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             elif req.Path.EndsWith "pulls/900" then
-                Ok { Status = 200; Body = prBody; ETag = None; NextLink = None; Headers = Map.empty }
+                Ok
+                    {
+                        Status = 200
+                        Body = prBody
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             elif req.Path.EndsWith "issues/42" then
-                Ok { Status = 200; Body = issueBody; ETag = None; NextLink = None; Headers = Map.empty }
+                Ok
+                    {
+                        Status = 200
+                        Body = issueBody
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             else
                 Error(Errors.NotFound $"unexpected read for this fixture: %s{req.Path}"))
 
     let private context (transport: Fake.Recorder) : Kernel.Context =
-        { Transport = transport
-          Owner = "FS-GG"
-          Title = "Coordination"
-          DefaultRepo = Some ".github"
-          ChoreLocks = [] }
+        {
+            Transport = transport
+            Owner = "FS-GG"
+            Title = "Coordination"
+            DefaultRepo = Some ".github"
+            ChoreLocks = []
+        }
 
     /// Drive `LiveHandlers.verifyPaths` and capture (exit code, stdout) — same cache-isolation licence as
     /// `LandableNotOpenTests.runLandable`.
     let private runVerifyPaths (transport: Fake.Recorder) (args: string list) : int * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2107-" + Guid.NewGuid().ToString "n")
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-2107-" + Guid.NewGuid().ToString "n")
+
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let stdout = Console.Out
         use captured = new StringWriter()
@@ -84,6 +116,7 @@ module VerifyPathsClosingKeywordTests =
                     ignore
                     (context transport)
                     opts
+
             Console.Out.Flush()
             code, captured.ToString()
         finally
@@ -104,6 +137,7 @@ module VerifyPathsClosingKeywordTests =
             """{"number":900,"body":"Closes #42","head":{"ref":"item/42-x"},"base":{"ref":"main"}}"""
 
         let lockOnly = """[{"filename":"registry/repos.lock"}]"""
+
         let code, out =
             runVerifyPaths (serving prBody issueBody lockOnly) [ "verify-paths"; "--pr"; "900"; "--repo"; ".github" ]
 

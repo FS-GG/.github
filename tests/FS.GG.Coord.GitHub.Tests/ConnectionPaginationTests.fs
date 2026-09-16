@@ -33,11 +33,13 @@ module private Fixtures =
 
     let private ok (body: string) =
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None
-              Headers = Map.empty }
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            }
 
     /// A transport that answers every request with one canned body. Safe only where the read under test
     /// makes exactly one call, or where every call legitimately gets the same answer.
@@ -55,11 +57,13 @@ module private Fixtures =
                 ok (queue.Dequeue()))
 
     let board =
-        { Number = 12
-          Id = "PVT_coord"
-          Owner = "FS-GG"
-          Title = "Coordination"
-          Fields = Map.ofList [ "Status", { Id = "PVTSSF_status"; Type = Text } ] }
+        {
+            Number = 12
+            Id = "PVT_coord"
+            Owner = "FS-GG"
+            Title = "Coordination"
+            Fields = Map.ofList [ "Status", { Id = "PVTSSF_status"; Type = Text } ]
+        }
 
     // ---- project list (the `pageInfo` remedy) ----------------------------------------------------
 
@@ -67,14 +71,17 @@ module private Fixtures =
     let otherProject (n: int) =
         $"""{{"number":{n},"title":"Other {n}","id":"PVT_o{n}"}}"""
 
-    let coordinationProject = """{"number":12,"title":"Coordination","id":"PVT_coord"}"""
+    let coordinationProject =
+        """{"number":12,"title":"Coordination","id":"PVT_coord"}"""
 
     let projectPage (nodes: string list) (pageInfo: string) =
         let joined = String.concat "," nodes
         $"""{{"data":{{"organization":{{"projectsV2":{{"pageInfo":{pageInfo},"nodes":[{joined}]}}}}}}}}"""
 
     let lastPage = """{"hasNextPage":false,"endCursor":null}"""
-    let moreAt (cursor: string) = $"""{{"hasNextPage":true,"endCursor":"{cursor}"}}"""
+
+    let moreAt (cursor: string) =
+        $"""{{"hasNextPage":true,"endCursor":"{cursor}"}}"""
 
     /// A FULL first window of projects, none of them ours — the shape the old code answered `NotFound` on.
     let fiftyOtherProjects = [ for i in 1..50 -> otherProject i ]
@@ -111,9 +118,13 @@ module private Fixtures =
         $"""{{"project":{{"number":{projectNumber}}},"fieldValueByName":{{"text":"{text}"}}}}"""
 
     /// Twenty items, none of them on OUR board — a full `first: 20` window that answers nothing.
-    let twentyForeignItems = [ for i in 1..20 -> itemIdNode (100 + i) $"PVTI_foreign{i}" ]
+    let twentyForeignItems =
+        [ for i in 1..20 -> itemIdNode (100 + i) $"PVTI_foreign{i}" ]
+
     let twentyForeignStatuses = [ for i in 1..20 -> statusNode (100 + i) "Ready" ]
-    let twentyForeignBlockedBy = [ for i in 1..20 -> blockedByNode (100 + i) "FS-GG/.github#1" ]
+
+    let twentyForeignBlockedBy =
+        [ for i in 1..20 -> blockedByNode (100 + i) "FS-GG/.github#1" ]
 
     // ---- closing issue references ----------------------------------------------------------------
 
@@ -141,9 +152,11 @@ let ``.github#2535 bootstrap FINDS a board that is not on the first page of proj
     // does MORE, not merely that it refuses more honestly.
     let transport =
         scripted
-            [ projectPage fiftyOtherProjects (moreAt "Y3Vyc29yOjUw")
-              projectPage [ coordinationProject ] lastPage
-              fieldsPage [ fieldNode 1 ] (total 1) ]
+            [
+                projectPage fiftyOtherProjects (moreAt "Y3Vyc29yOjUw")
+                projectPage [ coordinationProject ] lastPage
+                fieldsPage [ fieldNode 1 ] (total 1)
+            ]
 
     match bootstrap transport "FS-GG" "Coordination" with
     | Ok resolved ->
@@ -157,9 +170,11 @@ let ``M2 bootstrap completes the connection even when the board is on the first 
     // the apparent hit. The complete-read boundary therefore drains before returning the board.
     let transport =
         scripted
-            [ projectPage [ coordinationProject ] (moreAt "Y3Vyc29yOjE")
-              projectPage [] lastPage
-              fieldsPage [ fieldNode 1 ] (total 1) ]
+            [
+                projectPage [ coordinationProject ] (moreAt "Y3Vyc29yOjE")
+                projectPage [] lastPage
+                fieldsPage [ fieldNode 1 ] (total 1)
+            ]
 
     match bootstrap transport "FS-GG" "Coordination" with
     | Ok resolved ->
@@ -177,7 +192,8 @@ let ``.github#2535 a project list with another page but no cursor REFUSES - it i
 
     match bootstrap transport "FS-GG" "Coordination" with
     | Error(Malformed(_, detail)) -> Assert.Contains("no usable cursor", detail)
-    | Error(NotFound _) -> failwith "a walk that could not continue reported the board ABSENT — this is the whole of .github#2535"
+    | Error(NotFound _) ->
+        failwith "a walk that could not continue reported the board ABSENT — this is the whole of .github#2535"
     | other -> failwith $"an uncontinuable walk is a failed read — got %A{other}"
 
 [<Fact>]
@@ -187,7 +203,9 @@ let ``.github#2535 a project list with NO pageInfo REFUSES rather than answering
     // used to be unrepresentable here because nothing asked for one.
     // A full `first: 50` window has no independent short-page proof, so pageInfo is mandatory here.
     let nodes = String.concat "," fiftyOtherProjects
-    let transport = serving $"""{{"data":{{"organization":{{"projectsV2":{{"nodes":[%s{nodes}]}}}}}}}}"""
+
+    let transport =
+        serving $"""{{"data":{{"organization":{{"projectsV2":{{"nodes":[%s{nodes}]}}}}}}}}"""
 
     match bootstrap transport "FS-GG" "Coordination" with
     | Error(Malformed(_, detail)) -> Assert.Contains("`pageInfo` is missing", detail)
@@ -215,8 +233,10 @@ let ``.github#2535 a TRUNCATED field map is refused rather than cached`` () =
     // misleading error, on a correct request, that no amount of retrying could clear.
     let transport =
         scripted
-            [ projectPage [ coordinationProject ] lastPage
-              fieldsPage [ for i in 1..50 -> fieldNode i ] (total 60) ]
+            [
+                projectPage [ coordinationProject ] lastPage
+                fieldsPage [ for i in 1..50 -> fieldNode i ] (total 60)
+            ]
 
     match bootstrap transport "FS-GG" "Coordination" with
     | Error(Malformed(_, detail)) ->
@@ -233,8 +253,10 @@ let ``.github#2535 a FULL field window with no totalCount is refused`` () =
     // complete set of 50 and a truncated set of 500 are the same bytes, so this is a FAILED READ.
     let transport =
         scripted
-            [ projectPage [ coordinationProject ] lastPage
-              fieldsPage [ for i in 1..50 -> fieldNode i ] noTotal ]
+            [
+                projectPage [ coordinationProject ] lastPage
+                fieldsPage [ for i in 1..50 -> fieldNode i ] noTotal
+            ]
 
     match bootstrap transport "FS-GG" "Coordination" with
     | Error(Malformed(_, detail)) -> Assert.Contains("filled its `first: 50` window", detail)
@@ -248,8 +270,10 @@ let ``.github#2535 a COMPLETE field map still bootstraps, and a SHORT window nee
     // pre-existing corpus — whose fixtures predate `totalCount` entirely — testing what it always tested.
     let withTotal =
         scripted
-            [ projectPage [ coordinationProject ] lastPage
-              fieldsPage [ fieldNode 1; fieldNode 2 ] (total 2) ]
+            [
+                projectPage [ coordinationProject ] lastPage
+                fieldsPage [ fieldNode 1; fieldNode 2 ] (total 2)
+            ]
 
     match bootstrap withTotal "FS-GG" "Coordination" with
     | Ok resolved -> Assert.Equal(2, Map.count resolved.Fields)
@@ -257,8 +281,10 @@ let ``.github#2535 a COMPLETE field map still bootstraps, and a SHORT window nee
 
     let withoutTotal =
         scripted
-            [ projectPage [ coordinationProject ] lastPage
-              fieldsPage [ fieldNode 1; fieldNode 2 ] noTotal ]
+            [
+                projectPage [ coordinationProject ] lastPage
+                fieldsPage [ fieldNode 1; fieldNode 2 ] noTotal
+            ]
 
     match bootstrap withoutTotal "FS-GG" "Coordination" with
     | Ok resolved -> Assert.Equal(2, Map.count resolved.Fields)
@@ -296,7 +322,8 @@ let ``.github#2535 a FULL projectItems window with no totalCount is NEVER 'not o
 let ``.github#2535 'not on the board' is still reachable - from a MEASURED read`` () =
     // THE ANSWER `item-add` IS ENTITLED TO. A short window, cleanly read, that does not contain our board:
     // the issue is genuinely not on it. The repair must leave this reachable, or `add` stops working.
-    let transport = serving (projectItemsPage [ itemIdNode 999 "PVTI_elsewhere" ] (total 1))
+    let transport =
+        serving (projectItemsPage [ itemIdNode 999 "PVTI_elsewhere" ] (total 1))
 
     match itemId transport board "FS-GG" ".github" 2535 with
     | Ok None -> ()
@@ -334,7 +361,9 @@ let ``.github#2535 itemStatus still reads a measured absence and a real column``
     | Ok None -> ()
     | other -> failwith $"a measured absence is still an absence — got %A{other}"
 
-    match itemStatus (serving (projectItemsPage [ statusNode 12 "In progress" ] (total 1))) board "FS-GG" ".github" 2535 with
+    match
+        itemStatus (serving (projectItemsPage [ statusNode 12 "In progress" ] (total 1))) board "FS-GG" ".github" 2535
+    with
     | Ok(Some status) -> Assert.Equal(FS.GG.Coord.Types.BoardStatus.InProgress, status)
     | other -> failwith $"a real column must still be read — got %A{other}"
 
@@ -349,12 +378,19 @@ let ``.github#2535 a TRUNCATED itemBlockedBy read is not 'nothing recorded'`` ()
 
 [<Fact>]
 let ``.github#2535 itemBlockedBy still reads a measured absence and a real edge`` () =
-    match itemBlockedBy (serving (projectItemsPage [ blockedByNode 999 "x" ] (total 1))) board "FS-GG" ".github" 2535 with
+    match
+        itemBlockedBy (serving (projectItemsPage [ blockedByNode 999 "x" ] (total 1))) board "FS-GG" ".github" 2535
+    with
     | Ok None -> ()
     | other -> failwith $"a measured absence is still an absence — got %A{other}"
 
     match
-        itemBlockedBy (serving (projectItemsPage [ blockedByNode 12 "FS-GG/.github#2534" ] (total 1))) board "FS-GG" ".github" 2535
+        itemBlockedBy
+            (serving (projectItemsPage [ blockedByNode 12 "FS-GG/.github#2534" ] (total 1)))
+            board
+            "FS-GG"
+            ".github"
+            2535
     with
     | Ok(Some text) -> Assert.Equal("FS-GG/.github#2534", text)
     | other -> failwith $"a real edge must still be read — got %A{other}"
@@ -407,7 +443,10 @@ module private Sources =
         let rec walk (d: DirectoryInfo) =
             if isNull (box d) then
                 failwith "walked past the filesystem root without finding a .git — cannot locate the layer's sources"
-            elif File.Exists(Path.Combine(d.FullName, ".git")) || Directory.Exists(Path.Combine(d.FullName, ".git")) then
+            elif
+                File.Exists(Path.Combine(d.FullName, ".git"))
+                || Directory.Exists(Path.Combine(d.FullName, ".git"))
+            then
                 d.FullName
             else
                 walk d.Parent
@@ -428,7 +467,12 @@ module private Sources =
     /// The value of a `[<Literal>]` window beside it.
     let literal (text: string) (name: string) =
         let m = Regex.Match(text, @"let private " + Regex.Escape name + @"\s*=\s*(\d+)")
-        Assert.True(m.Success, $"the window literal `{name}` is gone — the guard below no longer has a value to agree with")
+
+        Assert.True(
+            m.Success,
+            $"the window literal `{name}` is gone — the guard below no longer has a value to agree with"
+        )
+
         int m.Groups[1].Value
 
 [<Fact>]
@@ -459,11 +503,26 @@ let ``.github#2535 the connection windows in the documents agree with the guards
     // .github#2561 extends the same agreement gate to Done.facts's four whole-set reads. Keep each
     // separately named: their deliberately different windows are part of the decision, not coincidence.
     Assert.Equal<int list>([ 10 ], Sources.windowsOf doneText "closedByPullRequestsReferences")
-    Assert.Equal(Sources.literal doneText "ClosedByPullRequestsWindow", List.head (Sources.windowsOf doneText "closedByPullRequestsReferences"))
+
+    Assert.Equal(
+        Sources.literal doneText "ClosedByPullRequestsWindow",
+        List.head (Sources.windowsOf doneText "closedByPullRequestsReferences")
+    )
+
     Assert.Equal<int list>([ 10 ], Sources.windowsOf doneText "closingIssuesReferences")
-    Assert.Equal(Sources.literal doneText "ClosingIssuesWindow", List.head (Sources.windowsOf doneText "closingIssuesReferences"))
+
+    Assert.Equal(
+        Sources.literal doneText "ClosingIssuesWindow",
+        List.head (Sources.windowsOf doneText "closingIssuesReferences")
+    )
+
     Assert.Equal<int list>([ 5 ], Sources.windowsOf doneText "associatedPullRequests")
-    Assert.Equal(Sources.literal doneText "AssociatedPullRequestsWindow", List.head (Sources.windowsOf doneText "associatedPullRequests"))
+
+    Assert.Equal(
+        Sources.literal doneText "AssociatedPullRequestsWindow",
+        List.head (Sources.windowsOf doneText "associatedPullRequests")
+    )
+
     Assert.Equal<int list>([ 20 ], Sources.windowsOf doneText "projectItems")
     Assert.Equal(Sources.literal doneText "ProjectItemsWindow", List.head (Sources.windowsOf doneText "projectItems"))
 
@@ -485,12 +544,14 @@ let ``.github#2535 the window-agreement gate FIRES on a document and guard that 
     let drifted =
         String.concat
             "\n"
-            [ "module Board ="
-              "    [<Literal>]"
-              "    let private ItemIdDoc ="
-              "        \"query { projectItems(first: 100) { totalCount nodes { id } } }\""
-              "    [<Literal>]"
-              "    let private ProjectItemsWindow = 20" ]
+            [
+                "module Board ="
+                "    [<Literal>]"
+                "    let private ItemIdDoc ="
+                "        \"query { projectItems(first: 100) { totalCount nodes { id } } }\""
+                "    [<Literal>]"
+                "    let private ProjectItemsWindow = 20"
+            ]
 
     Assert.Equal<int list>([ 100 ], Sources.windowsOf drifted "projectItems")
     Assert.Equal(20, Sources.literal drifted "ProjectItemsWindow")

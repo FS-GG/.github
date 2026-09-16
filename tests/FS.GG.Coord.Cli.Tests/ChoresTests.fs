@@ -41,10 +41,13 @@ let private scripted (responses: IoResult<Response> list) =
 
 let private ok (body: string) =
     Ok
-        { Status = 200
-          Body = body
-          ETag = None
-          NextLink = None; Headers = Map.empty }
+        {
+            Status = 200
+            Body = body
+            ETag = None
+            NextLink = None
+            Headers = Map.empty
+        }
 
 let private marker (id: int) (worker: string) =
     let body = $"<!-- fsgg:claim worker=%s{worker} lease=10 -->"
@@ -58,9 +61,11 @@ let private comments (ms: string list) = "[" + String.concat "," ms + "]"
 let private unreachable = scripted []
 
 let private ref' n =
-    { Owner = "FS-GG"
-      Repo = ".github"
-      Number = n }
+    {
+        Owner = "FS-GG"
+        Repo = ".github"
+        Number = n
+    }
 
 /// `.github` is the ONE repo with a chore lock today (#1033) — `Options.choreLockRef` says so, and these
 /// tests read that rather than restating it, so a repo that gains or loses a lock cannot leave a fixture
@@ -68,38 +73,63 @@ let private ref' n =
 let private lockRef = ref' 1033
 
 let private item n status state blockers claim =
-    { Ref = ref' n
-      PathRepo = ".github"
-      Status = status
-      State = state
-      TouchSet = Declared [ Matchable "src/" ]
-      Blockers = blockers
-      Claim = claim
-      ItemPr = None
-      ItemPrUnreadable = false
-      HumanBlock = None
-      Predicate = None
-      Class = None
-      Kind = None
-      BoardClass = None
-      BoardKind = None
-      CommentCount = None
-      DeliveryRoute = DeliveryRoute.Current { Schema = DeliveryRoute.Schema; Subject = "test"; SubjectRevision = "test"; Route = Some DeliveryRoute.Lightweight; Agent = "test"; Timestamp = "2026-01-01T00:00:00Z"; ReasonCodes = [ "test" ]; Rationale = "test"; DeclaredImpacts = [ "test" ]; ObservedFacts = [ "test" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
-      Severity = Unset
-      Phase = None
-      AgeDays = None }
+    {
+        Ref = ref' n
+        PathRepo = ".github"
+        Status = status
+        State = state
+        TouchSet = Declared [ Matchable "src/" ]
+        Blockers = blockers
+        Claim = claim
+        ItemPr = None
+        ItemPrUnreadable = false
+        HumanBlock = None
+        Predicate = None
+        Class = None
+        Kind = None
+        BoardClass = None
+        BoardKind = None
+        CommentCount = None
+        DeliveryRoute =
+            DeliveryRoute.Current
+                {
+                    Schema = DeliveryRoute.Schema
+                    Subject = "test"
+                    SubjectRevision = "test"
+                    Route = Some DeliveryRoute.Lightweight
+                    Agent = "test"
+                    Timestamp = "2026-01-01T00:00:00Z"
+                    ReasonCodes = [ "test" ]
+                    Rationale = "test"
+                    DeclaredImpacts = [ "test" ]
+                    ObservedFacts = [ "test" ]
+                    SddWorkId = None
+                    SpecHome = None
+                    RequiredGates = []
+                }
+        Severity = Unset
+        Phase = None
+        AgeDays = None
+    }
 
 let private blocker n state =
-    { Ref = Some(ref' n)
-      Raw = $".github#%d{n}"
-      State = state }
+    {
+        Ref = Some(ref' n)
+        Raw = $".github#%d{n}"
+        State = state
+    }
 
 /// The board that produced this item: `.github#733` sat `Blocked` behind `#979` for 3 minutes short of
 /// forever, because #979 CLOSED and nothing re-asks a blocker when its blocker closes. That is the exact
 /// condition `BLOCKER-CLEARED` names, and it is why the wiring is worth having: the rule was written,
 /// tested, and unreachable while the item it would have freed sat invisible to every scheduler path.
 let private blockerClearedBoard =
-    [ { item 733 Ready Open [] None with Class = Some Hardening; BoardClass = None } ]
+    [
+        { item 733 Ready Open [] None with
+            Class = Some Hardening
+            BoardClass = None
+        }
+    ]
 
 [<Fact>]
 let ``an idle worker on a board with a cleared blocker is offered the chore, and HOLDS the lock`` () =
@@ -122,18 +152,22 @@ let ``a worker holding a live claim is offered NOTHING, and no lock is attempted
     // CONDITION 3: never mid-claim. A worker with a live lease and a live touch-set must not be handed an
     // unbounded side-quest — and the refusal must be free, since a fleet at work is the common case.
     let held =
-        [ item
-              733
-              Blocked
-              Open
-              [ blocker 979 BlockerClosed ]
-              (Some(
-                  { Worker = me
-                    Session = None
-                    AgeSeconds = 60
-                    PreviousStatus = Some Ready },
-                  LeaseHeld
-              )) ]
+        [
+            item
+                733
+                Blocked
+                Open
+                [ blocker 979 BlockerClosed ]
+                (Some(
+                    {
+                        Worker = me
+                        Session = None
+                        AgeSeconds = 60
+                        PreviousStatus = Some Ready
+                    },
+                    LeaseHeld
+                ))
+        ]
 
     Assert.Equal(None, Chores.offer unreachable Chore.AtNext me itsMe None [] "FS-GG" ".github" (Chore.Whole held))
 
@@ -153,23 +187,39 @@ let ``a repo with no chore lock offers nothing, and never asks the network`` () 
     // (#266). All SEVEN FS-GG repos have a lock as of #1087, so the honest stand-in for "no lock" is now a
     // repo the map does not know at all — not a receiver (those all resolve). `choreLockRef` returns `None`,
     // and `offer` refuses before touching the network (`unreachable` proves it: any transport call throws).
-    let unrostered = blockerClearedBoard |> List.map (fun i -> { i with Ref = { i.Ref with Repo = "FS.GG.Nonexistent" } })
+    let unrostered =
+        blockerClearedBoard
+        |> List.map (fun i ->
+            { i with
+                Ref =
+                    { i.Ref with
+                        Repo = "FS.GG.Nonexistent"
+                    }
+            })
 
-    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me itsMe None [] "FS-GG" "FS.GG.Nonexistent" (Chore.Whole unrostered))
+    Assert.Equal(
+        None,
+        Chores.offer unreachable Chore.AtNext me itsMe None [] "FS-GG" "FS.GG.Nonexistent" (Chore.Whole unrostered)
+    )
 
 /// The same cleared-blocker condition, on a row belonging to a DIFFERENT repo. The org board is one board
 /// for seven repos, so this is what a bare `next` (no `--repo`, hence `Scan.scope None`) actually hands us.
 let private otherRepoBoard =
-    [ { item 733 Ready Open [] None with
-          Ref =
-            { Owner = "FS-GG"
-              Repo = "FS.GG.Rendering"
-              Number = 640 }
-          Class = Some Hardening
-          Kind = None
-          BoardKind = None
-          CommentCount = None
-          BoardClass = None } ]
+    [
+        { item 733 Ready Open [] None with
+            Ref =
+                {
+                    Owner = "FS-GG"
+                    Repo = "FS.GG.Rendering"
+                    Number = 640
+                }
+            Class = Some Hardening
+            Kind = None
+            BoardKind = None
+            CommentCount = None
+            BoardClass = None
+        }
+    ]
 
 [<Fact>]
 let ``a chore is NEVER offered under another repo's lock — the subject and the lock must name one repo`` () =
@@ -178,7 +228,10 @@ let ``a chore is NEVER offered under another repo's lock — the subject and the
     // repos' locks could each be handed the same chore, which is condition 1 defeated by the mechanism meant
     // to enforce it. `unreachable`: the rows are dropped before the lock is ever reached, so this costs
     // nothing on a board whose chores all belong to somebody else.
-    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me itsMe None [] "FS-GG" ".github" (Chore.Whole otherRepoBoard))
+    Assert.Equal(
+        None,
+        Chores.offer unreachable Chore.AtNext me itsMe None [] "FS-GG" ".github" (Chore.Whole otherRepoBoard)
+    )
 
 [<Fact>]
 let ``a worker mid-item in ANOTHER repo is not idle — idleness is asked of the WHOLE board`` () =
@@ -187,17 +240,27 @@ let ``a worker mid-item in ANOTHER repo is not idle — idleness is asked of the
     // chore going begging. Scoping the IDLENESS question to `.github` would not see the Rendering claim and
     // would hand a side-quest to somebody mid-item with a live touch-set — the one thing condition 3 forbids.
     let busyElsewhere =
-        { item 640 InProgress Open [] (Some(
-              { Worker = me
-                Session = None
-                AgeSeconds = 60
-                PreviousStatus = Some Ready },
-              LeaseHeld
-          )) with
+        { item
+              640
+              InProgress
+              Open
+              []
+              (Some(
+                  {
+                      Worker = me
+                      Session = None
+                      AgeSeconds = 60
+                      PreviousStatus = Some Ready
+                  },
+                  LeaseHeld
+              )) with
             Ref =
-              { Owner = "FS-GG"
-                Repo = "FS.GG.Rendering"
-                Number = 640 } }
+                {
+                    Owner = "FS-GG"
+                    Repo = "FS.GG.Rendering"
+                    Number = 640
+                }
+        }
 
     let board = busyElsewhere :: blockerClearedBoard
 
@@ -211,7 +274,18 @@ let ``a cross-repo board still yields THIS repo's chore, under THIS repo's lock`
     let transport =
         scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" ]) ]
 
-    match Chores.offer transport Chore.AtNext me itsMe None [] "FS-GG" ".github" (Chore.Whole(otherRepoBoard @ blockerClearedBoard)) with
+    match
+        Chores.offer
+            transport
+            Chore.AtNext
+            me
+            itsMe
+            None
+            []
+            "FS-GG"
+            ".github"
+            (Chore.Whole(otherRepoBoard @ blockerClearedBoard))
+    with
     | None -> failwith "expected the .github chore: a foreign row must not suppress this repo's own"
     | Some(chore, got) ->
         Assert.Equal(ref' 733, chore.Subject)
@@ -240,12 +314,17 @@ let ``losing the lock race offers nothing — the rival is draining this repo, a
     // INHERITS the refusal rather than second-guessing it, and returns the same `None` as a clean board.
     let transport =
         scripted
-            [ ok "[]"
-              ok """{"id":902}""" // ours
-              ok (comments [ marker 901 "kite-461"; marker 902 "vole-418" ]) // they got there first
-              ok "" ] // so we withdraw
+            [
+                ok "[]"
+                ok """{"id":902}""" // ours
+                ok (comments [ marker 901 "kite-461"; marker 902 "vole-418" ]) // they got there first
+                ok ""
+            ] // so we withdraw
 
-    Assert.Equal(None, Chores.offer transport Chore.AtNext me itsMe None [] "FS-GG" ".github" (Chore.Whole blockerClearedBoard))
+    Assert.Equal(
+        None,
+        Chores.offer transport Chore.AtNext me itsMe None [] "FS-GG" ".github" (Chore.Whole blockerClearedBoard)
+    )
 
 // ---- #1086: a FILTERED board is refused, and refused for FREE ------------------------------------------
 //
@@ -263,7 +342,10 @@ let ``#1086: a FILTERED board offers nothing, and spends NOTHING finding that ou
     //
     // The board carries a REAL chore, so the refusal is the FILTERING talking rather than an empty queue —
     // see the control leg below, which offers on exactly these rows.
-    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me itsMe None [] "FS-GG" ".github" (Chore.Filtered blockerClearedBoard))
+    Assert.Equal(
+        None,
+        Chores.offer unreachable Chore.AtNext me itsMe None [] "FS-GG" ".github" (Chore.Filtered blockerClearedBoard)
+    )
 
 [<Fact>]
 let ``#1086: the SAME rows offer when the board is WHOLE — the refusal above is the scope, not the rows`` () =
@@ -299,29 +381,33 @@ let ``#1086: the SAME rows offer when the board is WHOLE — the refusal above i
 // other leg in this file) structurally cannot check, because a hand-built `Item` has already been TOLD what
 // its `BoardClass` is.
 
-let private classedBody = "Paths: src/FS.GG.Coord.Cli/Client.fs\n\nClass: hardening\n"
+let private classedBody =
+    "Paths: src/FS.GG.Coord.Cli/Client.fs\n\nClass: hardening\n"
 
 /// A scan row for `.github#1524` — the item eight offers named — with the `Class` COLUMN under our control.
 let private classRow (boardClass: ItemClass option) : Scan.Row =
-    { Ref = ref' 1524
-      Title = "an item whose body declares a class"
-      Status = Ready
-      BlockedByRaw = ""
-      State = Open
-      IsPullRequest = false
-      PathRepo = ".github"
-      BoardClass = boardClass
-      BoardKind = None
-      CommentCount = None
-      Severity = Unset
-      Phase = None
-      CreatedAt = None
-      SweptBody = None
-      NodeId = None }
+    {
+        Ref = ref' 1524
+        Title = "an item whose body declares a class"
+        Status = Ready
+        BlockedByRaw = ""
+        State = Open
+        IsPullRequest = false
+        PathRepo = ".github"
+        BoardClass = boardClass
+        BoardKind = None
+        CommentCount = None
+        Severity = Unset
+        Phase = None
+        CreatedAt = None
+        SweptBody = None
+        NodeId = None
+    }
 
 /// The scan's OWN document for those rows, written by the engine's writer rather than by this test.
 let private snapshotOf (rows: Scan.Row list) =
-    let body = classedBody.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n")
+    let body =
+        classedBody.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n")
 
     let transport =
         Fake.Recorder(fun req ->
@@ -417,7 +503,8 @@ let private boardRowJson (classColumn: string option) =
 /// The `.github` board, served live: the `Class` column is read from `column` at the moment of each request,
 /// so a test can WRITE the column between two reads and see which read the engine actually made.
 let private boardWorld (column: unit -> string option) =
-    let body = classedBody.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n")
+    let body =
+        classedBody.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n")
 
     Fake.Recorder(fun (req: Request) ->
         let path = req.Path.Trim '/'
@@ -427,9 +514,11 @@ let private boardWorld (column: unit -> string option) =
             match req.Body with
             | Query(document, _) ->
                 if document.Contains "projectsV2" then
-                    ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    ok
+                        """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                 elif document.Contains "fields(first" then
-                    ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]},{"id":"PVTSSF_class","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"opt_hardening","name":"hardening"}]}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    ok
+                        """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]},{"id":"PVTSSF_class","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"opt_hardening","name":"hardening"}]}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                 elif document.Contains "items(first" then
                     ok
                         $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{boardRowJson (column ())}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
@@ -467,11 +556,13 @@ let private withCache (f: unit -> 'a) : 'a =
             ()
 
 let private context (transport: Fake.Recorder) : Kernel.Context =
-    { Transport = transport
-      Owner = "FS-GG"
-      Title = "Coordination"
-      DefaultRepo = Some ".github"
-      ChoreLocks = [] }
+    {
+        Transport = transport
+        Owner = "FS-GG"
+        Title = "Coordination"
+        DefaultRepo = Some ".github"
+        ChoreLocks = []
+    }
 
 let private optionsOf (args: string list) : Options.Options =
     match Options.parse args with
@@ -528,11 +619,16 @@ let ``#1679: a Class column written AFTER the cached scan is SEEN — the offer 
             // #1679's measured cost is a worker handed a written instruction to perform a board write that
             // is already done, and a PER-REPO CHORE LOCK taken to serialise it against every other worker in
             // that repo. A green here says the decline never reached the network, so no lock was taken.
-            Assert.Equal(None, Chores.offer unreachable Chore.AfterDone me itsMe None [] "FS-GG" ".github" (Chore.Whole [ item ]))
+            Assert.Equal(
+                None,
+                Chores.offer unreachable Chore.AfterDone me itsMe None [] "FS-GG" ".github" (Chore.Whole [ item ])
+            )
         | other -> failwith $"expected the one board row — got %A{other}")
 
 [<Fact>]
-let ``#1679: a column that genuinely lags is STILL offered through the fresh read — the fix is freshness, not removal`` () =
+let ``#1679: a column that genuinely lags is STILL offered through the fresh read — the fix is freshness, not removal``
+    ()
+    =
     // THE CONTROL, and the leg above is worth nothing without it: that assertion would pass just as well
     // against an offer mechanism deleted outright, or against a `wholeBoard` that had stopped returning a
     // board at all. Same fixture, same warm cache, ONE difference — no write lands — and the chore arrives.
@@ -551,8 +647,11 @@ let ``#1679: a column that genuinely lags is STILL offered through the fresh rea
             let transport' =
                 scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" ]) ]
 
-            match Chores.offer transport' Chore.AfterDone me itsMe None [] "FS-GG" ".github" (Chore.Whole [ item ]) with
-            | None -> failwith "a genuinely lagging Class column must still be offered — the fix is freshness, not removal"
+            match
+                Chores.offer transport' Chore.AfterDone me itsMe None [] "FS-GG" ".github" (Chore.Whole [ item ])
+            with
+            | None ->
+                failwith "a genuinely lagging Class column must still be offered — the fix is freshness, not removal"
             | Some(chore, got) ->
                 Assert.Equal(ref' 1524, chore.Subject)
                 Assert.Equal(lockRef, got)
@@ -569,7 +668,10 @@ let private reconcileIds (transport: Fake.Recorder) : string list =
     let out =
         try
             System.Console.SetOut captured
-            Client.reconcile (context transport) (optionsOf [ "reconcile"; "--json" ]) |> ignore
+
+            Client.reconcile (context transport) (optionsOf [ "reconcile"; "--json" ])
+            |> ignore
+
             System.Console.Out.Flush()
             captured.ToString()
         finally
@@ -614,13 +716,11 @@ let ``#1679: reconcile and the offer path reach the SAME verdict for the same it
         // THE OFFER PATH FIRST, AND THE ORDER IS LOAD-BEARING. A fresh read REWRITES the shared cache
         // (`Scan.scanFresh` → `putScan`), so running `reconcile` first would hand the offer path a cache
         // holding the CURRENT board — and the comparison would pass under the defect it exists to catch.
-        let offered =
-            offerPathBoard transport |> Chore.derive |> List.map (fun c -> c.Id)
+        let offered = offerPathBoard transport |> Chore.derive |> List.map (fun c -> c.Id)
 
         let reconciled = reconcileIds transport
 
-        let expectedIds =
-            if expected = "" then [] else [ expected ]
+        let expectedIds = if expected = "" then [] else [ expected ]
 
         // The verdicts agree...
         Assert.Equal<string list>(reconciled, offered)
@@ -669,7 +769,8 @@ let private closedDoneRowJson (boardClass: string option) =
 /// needs to override one endpoint (the refusal leg below) can compose it rather than try to call one
 /// `Recorder` from inside another, which `IGitHubTransport` does not offer as a function application.
 let private closedDoneBoardRoute (boardClass: string option) (bodyReads: int ref) : Request -> IoResult<Response> =
-    let body = classedBody.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n")
+    let body =
+        classedBody.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n")
 
     fun (req: Request) ->
         let path = req.Path.Trim '/'
@@ -679,9 +780,11 @@ let private closedDoneBoardRoute (boardClass: string option) (bodyReads: int ref
             match req.Body with
             | Query(document, _) ->
                 if document.Contains "projectsV2" then
-                    ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    ok
+                        """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                 elif document.Contains "fields(first" then
-                    ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_done","name":"Done"}]},{"id":"PVTSSF_class","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"opt_hardening","name":"hardening"}]}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    ok
+                        """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_done","name":"Done"}]},{"id":"PVTSSF_class","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"opt_hardening","name":"hardening"}]}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                 elif document.Contains "items(first" then
                     ok
                         $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{closedDoneRowJson boardClass}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
@@ -787,14 +890,17 @@ let private claimedParkedRow (humanBlock: HumanBlock option) =
           Open
           []
           (Some(
-              { Worker = them
-                Session = None
-                AgeSeconds = 60
-                PreviousStatus = Some Ready },
+              {
+                  Worker = them
+                  Session = None
+                  AgeSeconds = 60
+                  PreviousStatus = Some Ready
+              },
               LeaseHeld
           )) with
         ItemPr = Some 1911
-        HumanBlock = humanBlock }
+        HumanBlock = humanBlock
+    }
 
 [<Fact>]
 let ``claimed rows never reach a second lifecycle reducer regardless of prose facts`` () =

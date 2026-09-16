@@ -7,7 +7,8 @@ module TouchSet =
     open Types
 
     // A `Paths:` line: up to three leading spaces, either case.
-    let private declRe = Regex(@"^ {0,3}[Pp]aths:\s*(?<rest>.*)$", RegexOptions.Compiled)
+    let private declRe =
+        Regex(@"^ {0,3}[Pp]aths:\s*(?<rest>.*)$", RegexOptions.Compiled)
 
     let sentinelToken (token: string) : string option =
         match token.Trim().ToLowerInvariant() with
@@ -17,7 +18,8 @@ module TouchSet =
 
     let isSentinel (token: string) = (sentinelToken token).IsSome
 
-    let isFlagShaped (token: string) = token.Trim().StartsWith("-", StringComparison.Ordinal)
+    let isFlagShaped (token: string) =
+        token.Trim().StartsWith("-", StringComparison.Ordinal)
 
     // Lines OUTSIDE any fenced code block. A `Paths:` line inside a fence is a QUOTATION of the
     // grammar, not a use of it (#277) — and the protocol docs quote it constantly.
@@ -38,39 +40,47 @@ module TouchSet =
         // conflict-free with everything (#863, and #273's fail-open through the parser built to end it).
         if isSentinel token then
             Unmatchable token
-        else
+        else if
 
-        // A FLAG IS NEVER A PATH (#1507). `widen <ref> --paths <tokens> --json` swallowed `--json` into the
-        // touch-set, and THIS is the check that let the corrupt token reach the issue body: `--json` carries
-        // no glob metacharacter, so the wildcard test below called it `Matchable` and `Writes.validate` — the
-        // one gate between a bad token and the PATCH — had nothing to object to.
-        //
-        // That is worse than the unmatchable case, not milder than it. An `Unmatchable` token is at least
-        // REFUSED at the write and, if already written, makes `take` exit 3 rather than schedule; a
-        // path-shaped token that matches no file is #273's fail-open exactly — it reserves nothing, so it is
-        // DISJOINT from every other worker's touch-set, and the item schedules while the files its author
-        // meant to reserve are invisible to everyone. The reported symptom was a `DISJOINT` line that read
-        // like success.
-        //
-        // The parser stops `--paths` at the first flag-shaped token, so this arm should now be unreachable
-        // from `widen`/`set-paths`. It stays because a declaration also arrives by HAND — anyone may type a
-        // `Paths:` line into an issue body — and because "the parser is careful" is the assumption the
-        // original defect was built on.
-        if isFlagShaped token then
+            // A FLAG IS NEVER A PATH (#1507). `widen <ref> --paths <tokens> --json` swallowed `--json` into the
+            // touch-set, and THIS is the check that let the corrupt token reach the issue body: `--json` carries
+            // no glob metacharacter, so the wildcard test below called it `Matchable` and `Writes.validate` — the
+            // one gate between a bad token and the PATCH — had nothing to object to.
+            //
+            // That is worse than the unmatchable case, not milder than it. An `Unmatchable` token is at least
+            // REFUSED at the write and, if already written, makes `take` exit 3 rather than schedule; a
+            // path-shaped token that matches no file is #273's fail-open exactly — it reserves nothing, so it is
+            // DISJOINT from every other worker's touch-set, and the item schedules while the files its author
+            // meant to reserve are invisible to everyone. The reported symptom was a `DISJOINT` line that read
+            // like success.
+            //
+            // The parser stops `--paths` at the first flag-shaped token, so this arm should now be unreachable
+            // from `widen`/`set-paths`. It stays because a declaration also arrives by HAND — anyone may type a
+            // `Paths:` line into an issue body — and because "the parser is careful" is the assumption the
+            // original defect was built on.
+            isFlagShaped token
+        then
             Unmatchable token
         else
 
-        // Strip the ONE sanctioned wildcard — a TRAILING `/**`, `/*`, or a trailing `/` — then ask
-        // whether any glob metacharacter survives. If one does, the token can match no file.
-        let stem =
-            if token.EndsWith("/**", StringComparison.Ordinal) then token.Substring(0, token.Length - 3)
-            elif token.EndsWith("/*", StringComparison.Ordinal) then token.Substring(0, token.Length - 2)
-            elif token.EndsWith("/", StringComparison.Ordinal) then token.Substring(0, token.Length - 1)
-            else token
+            // Strip the ONE sanctioned wildcard — a TRAILING `/**`, `/*`, or a trailing `/` — then ask
+            // whether any glob metacharacter survives. If one does, the token can match no file.
+            let stem =
+                if token.EndsWith("/**", StringComparison.Ordinal) then
+                    token.Substring(0, token.Length - 3)
+                elif token.EndsWith("/*", StringComparison.Ordinal) then
+                    token.Substring(0, token.Length - 2)
+                elif token.EndsWith("/", StringComparison.Ordinal) then
+                    token.Substring(0, token.Length - 1)
+                else
+                    token
 
-        if stem = "" then Unmatchable token
-        elif stem.IndexOfAny([| '*'; '?'; '['; ']' |]) >= 0 then Unmatchable token
-        else Matchable token
+            if stem = "" then
+                Unmatchable token
+            elif stem.IndexOfAny([| '*'; '?'; '['; ']' |]) >= 0 then
+                Unmatchable token
+            else
+                Matchable token
 
     let parse (body: string) : TouchSet =
         let declarations =
@@ -182,9 +192,12 @@ module TouchSet =
         | bad, _ -> AllUnmatchable bad
 
     let stem (t: string) =
-        if t.EndsWith("/**", StringComparison.Ordinal) then t.Substring(0, t.Length - 3)
-        elif t.EndsWith("/*", StringComparison.Ordinal) then t.Substring(0, t.Length - 2)
-        else t.TrimEnd('/')
+        if t.EndsWith("/**", StringComparison.Ordinal) then
+            t.Substring(0, t.Length - 3)
+        elif t.EndsWith("/*", StringComparison.Ordinal) then
+            t.Substring(0, t.Length - 2)
+        else
+            t.TrimEnd('/')
 
     let tokensOverlap (a: string) (b: string) : bool =
         let x = stem a
@@ -212,13 +225,23 @@ module TouchSet =
     let strictlyContains (outer: TouchSet) (inner: TouchSet) : bool =
         let liveTokens =
             function
-            | Declared tokens -> tokens |> List.choose (function Matchable t -> Some(Matchable t) | Unmatchable _ -> None)
+            | Declared tokens ->
+                tokens
+                |> List.choose (function
+                    | Matchable t -> Some(Matchable t)
+                    | Unmatchable _ -> None)
             | _ -> []
 
         let outside = liveTokens outer
         let inside = liveTokens inner
-        let tokenStem = function Matchable t -> stem t | Unmatchable _ -> ""
-        let coveredBy tokens token = tokens |> List.exists (fun covering -> covers covering (tokenStem token))
+
+        let tokenStem =
+            function
+            | Matchable t -> stem t
+            | Unmatchable _ -> ""
+
+        let coveredBy tokens token =
+            tokens |> List.exists (fun covering -> covers covering (tokenStem token))
 
         not (List.isEmpty inside)
         && (inside |> List.forall (coveredBy outside))
@@ -239,10 +262,12 @@ module TouchSet =
                     | Matchable t -> t
                     | Unmatchable t -> t)
 
-        [ for x in tokensOf a do
-              for y in tokensOf b do
-                  if tokensOverlap x y then
-                      yield (x, y) ]
+        [
+            for x in tokensOf a do
+                for y in tokensOf b do
+                    if tokensOverlap x y then
+                        yield (x, y)
+        ]
 
     let scopedConflicts
         (leftOwner: string)
@@ -252,8 +277,10 @@ module TouchSet =
         (left: TouchSet)
         (right: TouchSet)
         : (string * string) list =
-        if String.Equals(leftOwner, rightOwner, StringComparison.OrdinalIgnoreCase)
-           && String.Equals(leftRepo, rightRepo, StringComparison.OrdinalIgnoreCase) then
+        if
+            String.Equals(leftOwner, rightOwner, StringComparison.OrdinalIgnoreCase)
+            && String.Equals(leftRepo, rightRepo, StringComparison.OrdinalIgnoreCase)
+        then
             conflicts left right
         else
             []

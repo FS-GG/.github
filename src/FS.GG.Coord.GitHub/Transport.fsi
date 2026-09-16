@@ -68,55 +68,59 @@ module Transport =
         | Query of document: string * variables: (string * Var) list
 
     type Request =
-        { Method: string
-          /// Relative to the API base — `repos/{o}/{r}/issues/{n}/comments`, or `graphql`.
-          Path: string
-          Query: (string * string) list
-          Body: Payload
-          /// Which meter this spends. Stated by the CALLER, never inferred from the path, because `Free`
-          /// is a decision about billing and it must be visible where the call is made.
-          Budget: Budget
-          /// The conditional-request header. `None` means the request is UNCONDITIONAL — and for the
-          /// lock, that is mandatory, not an optimisation: a 304 serving a body captured before a claim
-          /// was posted would report `comments: 0` and hide a live marker. **A lock may never be read
-          /// from a cache**, so it is never sent with an ETag.
-          IfNoneMatch: string option
-          /// What this request is ABOUT, for diagnostics — `FS-GG/FS.GG.SDD#42`, `the board scan`. It
-          /// travels with the request so an error can name its subject rather than its payload.
-          Subject: string }
+        {
+            Method: string
+            /// Relative to the API base — `repos/{o}/{r}/issues/{n}/comments`, or `graphql`.
+            Path: string
+            Query: (string * string) list
+            Body: Payload
+            /// Which meter this spends. Stated by the CALLER, never inferred from the path, because `Free`
+            /// is a decision about billing and it must be visible where the call is made.
+            Budget: Budget
+            /// The conditional-request header. `None` means the request is UNCONDITIONAL — and for the
+            /// lock, that is mandatory, not an optimisation: a 304 serving a body captured before a claim
+            /// was posted would report `comments: 0` and hide a live marker. **A lock may never be read
+            /// from a cache**, so it is never sent with an ETag.
+            IfNoneMatch: string option
+            /// What this request is ABOUT, for diagnostics — `FS-GG/FS.GG.SDD#42`, `the board scan`. It
+            /// travels with the request so an error can name its subject rather than its payload.
+            Subject: string
+        }
 
     type Response =
-        { Status: int
-          Body: string
-          /// Headers from the response that actually served this resource. Header names preserve the
-          /// transport's received spelling; callers use the case-insensitive `header` accessor below.
-          ///
-          /// Rate-limit telemetry must PREFER these over a later `/rate_limit` summary: these headers
-          /// describe the request GitHub just billed or refused, and the summary can lag it.
-          Headers: Map<string, string>
-          /// The response's validator, for a conditional re-read.
-          ///
-          /// **`None` WHENEVER `Body` IS A MERGE, AND THAT IS A GUARANTEE THIS TYPE MAKES.** An ETag belongs
-          /// to the request that returned it — page ONE — and `Send` merges the pages below it. A validator
-          /// that outlived its page would revalidate a whole collection against its first page: a set that
-          /// grows a page while page one stays byte-identical answers 304, the merge never runs, and the
-          /// caller is handed a one-page body for a two-page set. That is #461 — a partial read wearing a
-          /// complete one's clothes — and downstream it decides whether to merge.
-          ///
-          /// It is dropped HERE, at the only layer that knows a merge happened, rather than guarded at each
-          /// caller. A caller cannot see how many requests its read cost, so a rule asking it to reason about
-          /// that is a rule it will get wrong once and silently. Compare `Cache.defer`, which takes the
-          /// `IoError` that licenses a deferral so a caller CANNOT queue a write without holding one: the
-          /// type is what stops it being rewritten.
-          ///
-          /// A single-page response still carries its ETag. Whether that page may be MEMOISED is a further
-          /// question this cannot answer — see `Reads.memoisable`, which also demands headroom.
-          ETag: string option
-          /// The `Link: rel="next"` URL, when the server paginated. Following it is the adapter's job —
-          /// the bash client passed `--paginate` to `gh` and the corpus asserts the scan is paginated,
-          /// because *a lock has no 100-issue limit* and a truncated first page is a claim scan that
-          /// silently cannot see half the markers.
-          NextLink: string option }
+        {
+            Status: int
+            Body: string
+            /// Headers from the response that actually served this resource. Header names preserve the
+            /// transport's received spelling; callers use the case-insensitive `header` accessor below.
+            ///
+            /// Rate-limit telemetry must PREFER these over a later `/rate_limit` summary: these headers
+            /// describe the request GitHub just billed or refused, and the summary can lag it.
+            Headers: Map<string, string>
+            /// The response's validator, for a conditional re-read.
+            ///
+            /// **`None` WHENEVER `Body` IS A MERGE, AND THAT IS A GUARANTEE THIS TYPE MAKES.** An ETag belongs
+            /// to the request that returned it — page ONE — and `Send` merges the pages below it. A validator
+            /// that outlived its page would revalidate a whole collection against its first page: a set that
+            /// grows a page while page one stays byte-identical answers 304, the merge never runs, and the
+            /// caller is handed a one-page body for a two-page set. That is #461 — a partial read wearing a
+            /// complete one's clothes — and downstream it decides whether to merge.
+            ///
+            /// It is dropped HERE, at the only layer that knows a merge happened, rather than guarded at each
+            /// caller. A caller cannot see how many requests its read cost, so a rule asking it to reason about
+            /// that is a rule it will get wrong once and silently. Compare `Cache.defer`, which takes the
+            /// `IoError` that licenses a deferral so a caller CANNOT queue a write without holding one: the
+            /// type is what stops it being rewritten.
+            ///
+            /// A single-page response still carries its ETag. Whether that page may be MEMOISED is a further
+            /// question this cannot answer — see `Reads.memoisable`, which also demands headroom.
+            ETag: string option
+            /// The `Link: rel="next"` URL, when the server paginated. Following it is the adapter's job —
+            /// the bash client passed `--paginate` to `gh` and the corpus asserts the scan is paginated,
+            /// because *a lock has no 100-issue limit* and a truncated first page is a claim scan that
+            /// silently cannot see half the markers.
+            NextLink: string option
+        }
 
     /// Read one response header case-insensitively. `None` means the response did not carry it; callers
     /// must not infer a rate-limit resource or reset instant when GitHub did not send one.

@@ -12,6 +12,7 @@ module IntakeCliTests =
         File.WriteAllText(path, json)
         let old = Console.Out
         use writer = new StringWriter()
+
         try
             Console.SetOut(writer)
             let opts = Options.parse [ "intake"; action; path ] |> Result.defaultWith failwith
@@ -21,7 +22,8 @@ module IntakeCliTests =
             Console.SetOut(old)
             File.Delete(path)
 
-    let private valid = """{"schema":"fsgg.coord.intake/v1","id":"intake-42","owner":"FS-GG","repository":".github","title":"t","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Backlog","backlogReason":"not-yet-actionable","disposition":"create"}"""
+    let private valid =
+        """{"schema":"fsgg.coord.intake/v1","id":"intake-42","owner":"FS-GG","repository":".github","title":"t","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Backlog","backlogReason":"not-yet-actionable","disposition":"create"}"""
 
     [<Fact>]
     let ``#2134 intake validate is tokenless when both token variables are absent`` () =
@@ -31,6 +33,7 @@ module IntakeCliTests =
         let oldToken = Environment.GetEnvironmentVariable "GITHUB_TOKEN"
         let oldGhToken = Environment.GetEnvironmentVariable "GH_TOKEN"
         use writer = new StringWriter()
+
         try
             Environment.SetEnvironmentVariable("GITHUB_TOKEN", null)
             Environment.SetEnvironmentVariable("GH_TOKEN", null)
@@ -47,7 +50,9 @@ module IntakeCliTests =
 
     [<Fact>]
     let ``#2134 public validate refuses a nonexistent live path without a token`` () =
-        let invalid = valid.Replace("src/FS.GG.Coord.Core", "definitely/not/a/live/path-2134")
+        let invalid =
+            valid.Replace("src/FS.GG.Coord.Core", "definitely/not/a/live/path-2134")
+
         let code, output = invokePure invalid "validate"
         Assert.Equal(ExitCode.toInt ExitCode.Error, code)
         Assert.Contains("do not exist", output)
@@ -67,6 +72,7 @@ module IntakeCliTests =
         let previousGhToken = Environment.GetEnvironmentVariable "GH_TOKEN"
         let old = Console.Error
         use writer = new StringWriter()
+
         try
             Environment.SetEnvironmentVariable("GITHUB_TOKEN", null)
             Environment.SetEnvironmentVariable("GH_TOKEN", null)

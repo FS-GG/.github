@@ -21,11 +21,13 @@ module Snapshot =
     type Error = Json.Error
 
     type Candidate =
-        { Item: Item
-          BashPaths: string list option
-          /// The registry-predicate ASSERTION this item's body declares (ADR-0050 call-site B), or `None`.
-          /// The PURE id/field/value triple; the offer path resolves it to `Item.Predicate` (.github#1213).
-          DeclaredPredicate: RegistryPredicate.Assertion option }
+        {
+            Item: Item
+            BashPaths: string list option
+            /// The registry-predicate ASSERTION this item's body declares (ADR-0050 call-site B), or `None`.
+            /// The PURE id/field/value triple; the offer path resolves it to `Item.Predicate` (.github#1213).
+            DeclaredPredicate: RegistryPredicate.Assertion option
+        }
 
     /// The claim lease, in minutes. It is CONFIGURABLE in the client (`FSGG_CLAIM_LEASE_MIN`, default
     /// 120), so the engine may not assume it — a repo that shortened its lease and an engine that hard-
@@ -33,11 +35,13 @@ module Snapshot =
     let DefaultLeaseMinutes = 120
 
     type Request =
-        { AllowBacklog: bool
-          Limit: int option
-          LeaseMinutes: int
-          InFlight: Batch.Reservation list
-          Candidates: Candidate list }
+        {
+            AllowBacklog: bool
+            Limit: int option
+            LeaseMinutes: int
+            InFlight: Batch.Reservation list
+            Candidates: Candidate list
+        }
 
     // ---- the domain vocabulary ---------------------------------------------------------------------
     // Every mapping below is TOTAL and CLOSED. An unrecognised value is refused, never coerced: if the
@@ -78,9 +82,11 @@ module Snapshot =
         match stringField path "owner" el, stringField path "repo" el, intField path "number" el with
         | Ok owner, Ok repo, Ok number ->
             Ok
-                { Owner = owner
-                  Repo = repo
-                  Number = number }
+                {
+                    Owner = owner
+                    Repo = repo
+                    Number = number
+                }
         | a, b, c ->
             [ a |> Result.map ignore; b |> Result.map ignore; c |> Result.map ignore ]
             |> collect
@@ -98,8 +104,7 @@ module Snapshot =
     /// So: take the ref if it is there, keep the raw text always, and let the STATE carry the meaning.
     let private blocker (path: string) (el: JsonElement) : Result<Blocker, Error list> =
         let state =
-            stringField path "state" el
-            |> Result.bind (blockerState $"%s{path}.state")
+            stringField path "state" el |> Result.bind (blockerState $"%s{path}.state")
 
         let raw =
             match optProp "raw" el with
@@ -128,9 +133,11 @@ module Snapshot =
             // that something was declared and we cannot read it — which is `BlockerUnparseable`'s whole
             // point, and it is emphatically not "nothing is blocking".
             Ok
-                { Ref = parsedRef
-                  Raw = display
-                  State = s }
+                {
+                    Ref = parsedRef
+                    Raw = display
+                    State = s
+                }
         | a, b ->
             [ a |> Result.map ignore; b |> Result.map ignore ]
             |> collect
@@ -182,18 +189,22 @@ module Snapshot =
         match worker, age, sessionR, prevR, live with
         | Ok w, Ok a, Ok s, Ok p, Ok l ->
             Ok(
-                { Worker = w
-                  Session = s
-                  AgeSeconds = a
-                  PreviousStatus = p },
+                {
+                    Worker = w
+                    Session = s
+                    AgeSeconds = a
+                    PreviousStatus = p
+                },
                 l
             )
         | w, a, s, p, l ->
-            [ w |> Result.map ignore
-              a |> Result.map ignore
-              s |> Result.map ignore
-              p |> Result.map ignore
-              l |> Result.map ignore ]
+            [
+                w |> Result.map ignore
+                a |> Result.map ignore
+                s |> Result.map ignore
+                p |> Result.map ignore
+                l |> Result.map ignore
+            ]
             |> collect
             |> Result.map (fun _ -> Unchecked.defaultof<Claim * Liveness>)
 
@@ -210,13 +221,10 @@ module Snapshot =
                 match el.TryGetProperty "status" with
                 | true, _ -> Ok NoStatus // present and explicitly null
                 | _ -> err $"%s{path}.status" "required field is missing (use null for 'no Status')"
-            | Some v ->
-                asString $"%s{path}.status" v
-                |> Result.bind (boardStatus $"%s{path}.status")
+            | Some v -> asString $"%s{path}.status" v |> Result.bind (boardStatus $"%s{path}.status")
 
         let state =
-            stringField path "state" el
-            |> Result.bind (issueState $"%s{path}.state")
+            stringField path "state" el |> Result.bind (issueState $"%s{path}.state")
 
         // THE ENGINE PARSES THE BODY ITSELF. This is the whole reason the raw body is on the wire: the
         // touch-set grammar is its own family of incidents (#273, #277, #435, #496), and a shadow that
@@ -316,9 +324,7 @@ module Snapshot =
             | Some v ->
                 asArray $"%s{path}.blockers" v
                 |> Result.bind (fun els ->
-                    els
-                    |> List.mapi (fun j b -> blocker $"%s{path}.blockers[%d{j}]" b)
-                    |> collect)
+                    els |> List.mapi (fun j b -> blocker $"%s{path}.blockers[%d{j}]" b) |> collect)
 
         let claimR =
             match optProp "claim" el with
@@ -331,9 +337,7 @@ module Snapshot =
             | Some v ->
                 asArray $"%s{path}.bashPaths" v
                 |> Result.bind (fun els ->
-                    els
-                    |> List.mapi (fun j t -> asString $"%s{path}.bashPaths[%d{j}]" t)
-                    |> collect)
+                    els |> List.mapi (fun j t -> asString $"%s{path}.bashPaths[%d{j}]" t) |> collect)
                 |> Result.map Some
 
         // #651 — the open `item/<n>-*` PR the scan found on a MARKERLESS item. Absent for the common case
@@ -348,71 +352,92 @@ module Snapshot =
             | None -> Ok false
             | Some v -> asBool $"%s{path}.itemPrUnreadable" v
 
-        match r, status, state, touchSet, blockers, claimR, bashPaths, itemPr, itemPrUnreadable, humanBlock, declaredPredicate, itemClass, itemKind with
+        match
+            r,
+            status,
+            state,
+            touchSet,
+            blockers,
+            claimR,
+            bashPaths,
+            itemPr,
+            itemPrUnreadable,
+            humanBlock,
+            declaredPredicate,
+            itemClass,
+            itemKind
+        with
         | Ok r, Ok st, Ok state, Ok ts, Ok bl, Ok cl, Ok bp, Ok ip, Ok ipu, Ok hb, Ok dp, Ok ic, Ok ik ->
             Ok
-                { Item =
-                    { Ref = r
-                      PathRepo = r.Repo
-                      Status = st
-                      State = state
-                      TouchSet = ts
-                      Blockers = bl
-                      Claim = cl
-                      ItemPr = ip
-                      ItemPrUnreadable = ipu
-                      HumanBlock = hb
-                      // The registry predicate VERDICT is RESOLVED impurely — it needs the owning producer's
-                      // manifest off disk — so it is never set here: `parse` is pure (ADR-0050 call-site B,
-                      // .github#1203). `None` is the ungated common case; the offer path resolves it from the
-                      // `DeclaredPredicate` assertion below (`Client.enrichPredicates`, .github#1213), and a
-                      // context that never resolves one (a plain `parse`, a receiver) flips as today.
-                      Predicate = None
-                      Class = ic
-                      // The board's `Class` COLUMN is not on this document and is never inferred from the
-                      // body: it is what the scan OBSERVED, resolved at the impure edge like `Predicate`
-                      // (.github#1588). `None` here means "this parser did not look", and the projection
-                      // chore reads it as a disagreement — so a context that never enriches writes the
-                      // column it already holds, an idempotent write, rather than suppressing a real one.
-                      BoardClass = None
-                      Kind = ik
-                      // The board's `Kind` COLUMN is not on this document, on `BoardClass`'s exact terms:
-                      // it is what the scan OBSERVED, and this parser is pure. `None` means "this parser
-                      // did not look", which derives a projection chore that writes the column the row
-                      // already holds — one idempotent write — rather than suppressing a real one.
-                      BoardKind = None
-                      // Register depth is a SCAN fact (a GraphQL `comments { totalCount }`), not a
-                      // document one. `None` is "this reader did not look", never "no comments".
-                      CommentCount = None
-                      DeliveryRoute = DeliveryRoute.Unreadable [ "delivery-route receipt was not observed in this snapshot" ]
-                      // Severity is a board-column fact and this pure snapshot does not carry it.
-                      Severity = Unset
-                      // The board's `Phase` COLUMN and the issue's `createdAt` are not on this document
-                      // either, and for `BoardClass`'s exact reason: both are SCAN facts, and this parser
-                      // is pure (.github#1598). `Client.enrichBoardFacts` joins them on the offer path.
-                      //
-                      // `None` here is what makes a bare `decide --snapshot` rank on blocking-count alone
-                      // — `Rank`'s documented no-priority-data case, which orders by issue number exactly
-                      // as this engine did before #1598. A snapshot-only context therefore loses priority,
-                      // never correctness, and never invents a phase it did not read.
-                      Phase = None
-                      AgeDays = None }
-                  BashPaths = bp
-                  DeclaredPredicate = dp }
+                {
+                    Item =
+                        {
+                            Ref = r
+                            PathRepo = r.Repo
+                            Status = st
+                            State = state
+                            TouchSet = ts
+                            Blockers = bl
+                            Claim = cl
+                            ItemPr = ip
+                            ItemPrUnreadable = ipu
+                            HumanBlock = hb
+                            // The registry predicate VERDICT is RESOLVED impurely — it needs the owning producer's
+                            // manifest off disk — so it is never set here: `parse` is pure (ADR-0050 call-site B,
+                            // .github#1203). `None` is the ungated common case; the offer path resolves it from the
+                            // `DeclaredPredicate` assertion below (`Client.enrichPredicates`, .github#1213), and a
+                            // context that never resolves one (a plain `parse`, a receiver) flips as today.
+                            Predicate = None
+                            Class = ic
+                            // The board's `Class` COLUMN is not on this document and is never inferred from the
+                            // body: it is what the scan OBSERVED, resolved at the impure edge like `Predicate`
+                            // (.github#1588). `None` here means "this parser did not look", and the projection
+                            // chore reads it as a disagreement — so a context that never enriches writes the
+                            // column it already holds, an idempotent write, rather than suppressing a real one.
+                            BoardClass = None
+                            Kind = ik
+                            // The board's `Kind` COLUMN is not on this document, on `BoardClass`'s exact terms:
+                            // it is what the scan OBSERVED, and this parser is pure. `None` means "this parser
+                            // did not look", which derives a projection chore that writes the column the row
+                            // already holds — one idempotent write — rather than suppressing a real one.
+                            BoardKind = None
+                            // Register depth is a SCAN fact (a GraphQL `comments { totalCount }`), not a
+                            // document one. `None` is "this reader did not look", never "no comments".
+                            CommentCount = None
+                            DeliveryRoute =
+                                DeliveryRoute.Unreadable [ "delivery-route receipt was not observed in this snapshot" ]
+                            // Severity is a board-column fact and this pure snapshot does not carry it.
+                            Severity = Unset
+                            // The board's `Phase` COLUMN and the issue's `createdAt` are not on this document
+                            // either, and for `BoardClass`'s exact reason: both are SCAN facts, and this parser
+                            // is pure (.github#1598). `Client.enrichBoardFacts` joins them on the offer path.
+                            //
+                            // `None` here is what makes a bare `decide --snapshot` rank on blocking-count alone
+                            // — `Rank`'s documented no-priority-data case, which orders by issue number exactly
+                            // as this engine did before #1598. A snapshot-only context therefore loses priority,
+                            // never correctness, and never invents a phase it did not read.
+                            Phase = None
+                            AgeDays = None
+                        }
+                    BashPaths = bp
+                    DeclaredPredicate = dp
+                }
         | a, b, c, d, e, f, g, h, i, j, k, l, m ->
-            [ a |> Result.map ignore
-              b |> Result.map ignore
-              c |> Result.map ignore
-              d |> Result.map ignore
-              e |> Result.map ignore
-              f |> Result.map ignore
-              g |> Result.map ignore
-              h |> Result.map ignore
-              i |> Result.map ignore
-              j |> Result.map ignore
-              k |> Result.map ignore
-              l |> Result.map ignore
-              m |> Result.map ignore ]
+            [
+                a |> Result.map ignore
+                b |> Result.map ignore
+                c |> Result.map ignore
+                d |> Result.map ignore
+                e |> Result.map ignore
+                f |> Result.map ignore
+                g |> Result.map ignore
+                h |> Result.map ignore
+                i |> Result.map ignore
+                j |> Result.map ignore
+                k |> Result.map ignore
+                l |> Result.map ignore
+                m |> Result.map ignore
+            ]
             |> collect
             |> Result.map (fun _ -> Unchecked.defaultof<Candidate>)
 
@@ -433,10 +458,12 @@ module Snapshot =
                 match w, r, age, livePr with
                 | Ok w, Ok r, Ok a, Ok pr -> Ok(Batch.LiveClaim(w, r, a, pr))
                 | a, b, c, d ->
-                    [ a |> Result.map ignore
-                      b |> Result.map ignore
-                      c |> Result.map ignore
-                      d |> Result.map ignore ]
+                    [
+                        a |> Result.map ignore
+                        b |> Result.map ignore
+                        c |> Result.map ignore
+                        d |> Result.map ignore
+                    ]
                     |> collect
                     |> Result.map (fun _ -> Batch.UnknownHolder)
             | "batch-member" -> refOf path el |> Result.map Batch.BatchMember
@@ -465,10 +492,7 @@ module Snapshot =
             | None ->
                 prop path "paths" el
                 |> Result.bind (asArray $"%s{path}.paths")
-                |> Result.bind (fun els ->
-                    els
-                    |> List.mapi (fun j t -> asString $"%s{path}.paths[%d{j}]" t)
-                    |> collect)
+                |> Result.bind (fun els -> els |> List.mapi (fun j t -> asString $"%s{path}.paths[%d{j}]" t) |> collect)
                 |> Result.map (fun tokens ->
                     match tokens with
                     | [] -> Undeclared
@@ -479,15 +503,19 @@ module Snapshot =
         match owner, repo, paths, h with
         | Ok o, Ok rp, Ok p, Ok h ->
             Ok
-                { Owner = o
-                  Repo = rp
-                  Paths = p
-                  Holder = h }
+                {
+                    Owner = o
+                    Repo = rp
+                    Paths = p
+                    Holder = h
+                }
         | a, b, c, d ->
-            [ a |> Result.map ignore
-              b |> Result.map ignore
-              c |> Result.map ignore
-              d |> Result.map ignore ]
+            [
+                a |> Result.map ignore
+                b |> Result.map ignore
+                c |> Result.map ignore
+                d |> Result.map ignore
+            ]
             |> collect
             |> Result.map (fun _ -> Unchecked.defaultof<Batch.Reservation>)
 
@@ -502,78 +530,86 @@ module Snapshot =
         | Error e -> Error e
         | Ok doc ->
 
-        use doc = doc
-        let root = doc.RootElement
+            use doc = doc
+            let root = doc.RootElement
 
-        if root.ValueKind <> JsonValueKind.Object then
-            err "$" $"expected an object, got %A{root.ValueKind}"
-        else
+            if root.ValueKind <> JsonValueKind.Object then
+                err "$" $"expected an object, got %A{root.ValueKind}"
+            else
 
-        // The schema tag is a REFUSAL, not decoration. A shim that outlives its engine — or an engine
-        // that outlives its shim — must fail loudly rather than decide from a shape it half-recognises.
-        let schema =
-            stringField "$" "schema" root
-            |> Result.bind (fun s ->
-                if s = SnapshotSchema then
-                    Ok s
-                else
-                    err "$.schema" $"unsupported snapshot schema '%s{s}' (this engine speaks '%s{SnapshotSchema}')")
+                // The schema tag is a REFUSAL, not decoration. A shim that outlives its engine — or an engine
+                // that outlives its shim — must fail loudly rather than decide from a shape it half-recognises.
+                let schema =
+                    stringField "$" "schema" root
+                    |> Result.bind (fun s ->
+                        if s = SnapshotSchema then
+                            Ok s
+                        else
+                            err
+                                "$.schema"
+                                $"unsupported snapshot schema '%s{s}' (this engine speaks '%s{SnapshotSchema}')")
 
-        let allowBacklog =
-            prop "$" "allowBacklog" root |> Result.bind (asBool "$.allowBacklog")
+                let allowBacklog =
+                    prop "$" "allowBacklog" root |> Result.bind (asBool "$.allowBacklog")
 
-        let limit =
-            match optProp "limit" root with
-            | None -> Ok None
-            | Some v ->
-                asInt "$.limit" v
-                // `batch -n 0` is bash's "unlimited", and it must not read as "choose nothing".
-                |> Result.map (fun n -> if n > 0 then Some n else None)
+                let limit =
+                    match optProp "limit" root with
+                    | None -> Ok None
+                    | Some v ->
+                        asInt "$.limit" v
+                        // `batch -n 0` is bash's "unlimited", and it must not read as "choose nothing".
+                        |> Result.map (fun n -> if n > 0 then Some n else None)
 
-        // OPTIONAL, and defaulted — an older shim that does not send it still gets the documented 120,
-        // which is what it was silently assuming anyway. A NON-POSITIVE lease is refused rather than
-        // coerced: "every claim is instantly reapable" is never what anyone meant, and it would turn the
-        // whole lock into a no-op on a typo.
-        let leaseMinutes =
-            match optProp "leaseMinutes" root with
-            | None -> Ok DefaultLeaseMinutes
-            | Some v ->
-                asInt "$.leaseMinutes" v
-                |> Result.bind (fun n ->
-                    if n > 0 then
-                        Ok n
-                    else
-                        err "$.leaseMinutes" $"a lease of %d{n} minute(s) would make every claim instantly reapable")
+                // OPTIONAL, and defaulted — an older shim that does not send it still gets the documented 120,
+                // which is what it was silently assuming anyway. A NON-POSITIVE lease is refused rather than
+                // coerced: "every claim is instantly reapable" is never what anyone meant, and it would turn the
+                // whole lock into a no-op on a typo.
+                let leaseMinutes =
+                    match optProp "leaseMinutes" root with
+                    | None -> Ok DefaultLeaseMinutes
+                    | Some v ->
+                        asInt "$.leaseMinutes" v
+                        |> Result.bind (fun n ->
+                            if n > 0 then
+                                Ok n
+                            else
+                                err
+                                    "$.leaseMinutes"
+                                    $"a lease of %d{n} minute(s) would make every claim instantly reapable")
 
-        let inFlight =
-            match optProp "inFlight" root with
-            | None -> Ok []
-            | Some v ->
-                asArray "$.inFlight" v
-                |> Result.bind (fun els -> els |> List.mapi reservation |> collect)
+                let inFlight =
+                    match optProp "inFlight" root with
+                    | None -> Ok []
+                    | Some v ->
+                        asArray "$.inFlight" v
+                        |> Result.bind (fun els -> els |> List.mapi reservation |> collect)
 
-        let candidates =
-            prop "$" "items" root
-            |> Result.bind (asArray "$.items")
-            |> Result.bind (fun els -> els |> List.mapi candidate |> collect)
+                let candidates =
+                    prop "$" "items" root
+                    |> Result.bind (asArray "$.items")
+                    |> Result.bind (fun els -> els |> List.mapi candidate |> collect)
 
-        match schema, allowBacklog, limit, leaseMinutes, inFlight, candidates with
-        | Ok _, Ok ab, Ok lim, Ok lease, Ok inf, Ok cands ->
-            Ok
-                { AllowBacklog = ab
-                  Limit = lim
-                  LeaseMinutes = lease
-                  InFlight = inf
-                  Candidates = cands }
-        | a, b, c, d, e, f ->
-            [ a |> Result.map ignore
-              b |> Result.map ignore
-              c |> Result.map ignore
-              d |> Result.map ignore
-              e |> Result.map ignore
-              f |> Result.map ignore ]
-            |> collect
-            |> Result.map (fun _ -> Unchecked.defaultof<Request>)
+                match schema, allowBacklog, limit, leaseMinutes, inFlight, candidates with
+                | Ok _, Ok ab, Ok lim, Ok lease, Ok inf, Ok cands ->
+                    Ok
+                        {
+                            AllowBacklog = ab
+                            Limit = lim
+                            LeaseMinutes = lease
+                            InFlight = inf
+                            Candidates = cands
+                        }
+                | a, b, c, d, e, f ->
+                    [
+                        a |> Result.map ignore
+                        b |> Result.map ignore
+                        c |> Result.map ignore
+                        d |> Result.map ignore
+                        e |> Result.map ignore
+                        f |> Result.map ignore
+                    ]
+                    |> collect
+                    |> Result.map (fun _ -> Unchecked.defaultof<Request>)
 
     // ================================================================================================
     // WRITING. The verdict TOKEN is the contract — the prose is not.
@@ -616,6 +652,7 @@ module Snapshot =
             match livePr with
             | Some pr -> w.WriteNumber("livePr", pr)
             | None -> ()
+
             writeRef w item
         | Batch.BatchMember item ->
             w.WriteString("kind", "batch-member")
@@ -829,7 +866,9 @@ module Snapshot =
 
     let renderFacts (document: Protocol.FactSection list) : string =
         use stream = new MemoryStream()
-        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = true, SkipValidation = false))
+
+        use w =
+            new Utf8JsonWriter(stream, JsonWriterOptions(Indented = true, SkipValidation = false))
 
         w.WriteStartObject()
         w.WriteString("schema", Protocol.factsSchema)
@@ -997,8 +1036,14 @@ module Snapshot =
             policy.ReceiptFields |> List.iter w.WriteStringValue
             w.WriteEndArray()
             w.WriteStartArray("requiredObservations")
-            policy.RequiredObservations |> List.iter (fun (kind, outcome) ->
-                w.WriteStartObject(); w.WriteString("kind", kind); w.WriteString("outcome", outcome); w.WriteEndObject())
+
+            policy.RequiredObservations
+            |> List.iter (fun (kind, outcome) ->
+                w.WriteStartObject()
+                w.WriteString("kind", kind)
+                w.WriteString("outcome", outcome)
+                w.WriteEndObject())
+
             w.WriteEndArray()
             w.WriteEndObject()
 
@@ -1131,17 +1176,29 @@ module Snapshot =
                 // already have one.
                 w.WriteString("reason", "body-unreadable")
                 w.WriteBoolean("chore", false)
-                w.WriteString("detail", $"its body could not be READ, so its touch-set is unknown — not absent ({reason}). Retry; do not declare one for it.")
+
+                w.WriteString(
+                    "detail",
+                    $"its body could not be READ, so its touch-set is unknown — not absent ({reason}). Retry; do not declare one for it."
+                )
 
             | Lanes.NoTouchSet _ ->
                 w.WriteString("reason", "no-touch-set")
                 w.WriteBoolean("chore", true)
-                w.WriteString("detail", "no `Paths:` line at all — somebody forgot. Real work, and nobody can pick it up.")
+
+                w.WriteString(
+                    "detail",
+                    "no `Paths:` line at all — somebody forgot. Real work, and nobody can pick it up."
+                )
 
             | Lanes.DeliberatelyNone _ ->
                 w.WriteString("reason", "declared-none")
                 w.WriteBoolean("chore", false)
-                w.WriteString("detail", "`Paths: none` — an epic or a decision. Unschedulable BY DESIGN. Do NOT propose a touch-set.")
+
+                w.WriteString(
+                    "detail",
+                    "`Paths: none` — an epic or a decision. Unschedulable BY DESIGN. Do NOT propose a touch-set."
+                )
 
             | Lanes.UnusableTokens(_, tokens) ->
                 w.WriteString("reason", "unusable-tokens")

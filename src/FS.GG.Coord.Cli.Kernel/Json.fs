@@ -6,7 +6,8 @@ module Json =
 
     type Error = { Path: string; Message: string }
 
-    let err path message = Error [ { Path = path; Message = message } ]
+    let err path message =
+        Error [ { Path = path; Message = message } ]
 
     let prop (path: string) (name: string) (el: JsonElement) : Result<JsonElement, Error list> =
         match el.TryGetProperty name with
@@ -53,20 +54,16 @@ module Json =
     let collect (results: Result<'a, Error list> list) : Result<'a list, Error list> =
         let errors =
             results
-            |> List.collect (
-                function
+            |> List.collect (function
                 | Error e -> e
-                | Ok _ -> []
-            )
+                | Ok _ -> [])
 
         if List.isEmpty errors then
             Ok(
                 results
-                |> List.choose (
-                    function
+                |> List.choose (function
                     | Ok v -> Some v
-                    | Error _ -> None
-                )
+                    | Error _ -> None)
             )
         else
             Error errors

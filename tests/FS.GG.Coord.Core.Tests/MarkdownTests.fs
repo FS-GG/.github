@@ -8,8 +8,7 @@ open FS.GG.Coord
 // suite, which is why it survived from #277 to #965. #864's cure with #864's discipline: the rule is asked
 // in one place, and the cases that used to be answered differently are pinned here.
 
-let private text body =
-    Markdown.unfenced body
+let private text body = Markdown.unfenced body
 
 // ---- what opens and closes a fence ----------------------------------------------------------------
 
@@ -18,11 +17,13 @@ let ``a line inside a fence is Code; the markers are structure; everything else 
     let body = "before\n```\nquoted\n```\nafter"
 
     Assert.Equal<(string * Markdown.LineKind) list>(
-        [ "before", Markdown.Text
-          "```", Markdown.FenceMarker
-          "quoted", Markdown.Code
-          "```", Markdown.FenceMarker
-          "after", Markdown.Text ],
+        [
+            "before", Markdown.Text
+            "```", Markdown.FenceMarker
+            "quoted", Markdown.Code
+            "```", Markdown.FenceMarker
+            "after", Markdown.Text
+        ],
         Markdown.classify body
     )
 
@@ -80,7 +81,10 @@ let ``a closer carries no info string - a marker with one is content`` () =
 let ``a backtick run whose info string contains a backtick is NOT a fence`` () =
     // Inventing a fence LOSES declarations; missing one merely quotes them. This is the fail-open
     // direction, so it is the one that gets the extra rule.
-    Assert.Equal<string list>([ "```#5``` is the ref"; "Paths: src/real/**" ], text "```#5``` is the ref\nPaths: src/real/**")
+    Assert.Equal<string list>(
+        [ "```#5``` is the ref"; "Paths: src/real/**" ],
+        text "```#5``` is the ref\nPaths: src/real/**"
+    )
 
 [<Fact>]
 let ``the tilde spelling has no info-string rule`` () =

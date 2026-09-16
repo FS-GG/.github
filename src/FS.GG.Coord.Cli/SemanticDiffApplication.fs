@@ -110,8 +110,10 @@ module SemanticDiffApplication =
                                                     match Map.tryFind row.Id suppliedById with
                                                     | Some supplied ->
                                                         { row with
-                                                            Disposition = supplied.Disposition }
-                                                    | None -> row) }
+                                                            Disposition = supplied.Disposition
+                                                        }
+                                                    | None -> row)
+                                        }
                         | _ -> Ok inventoried
 
                     match resolved with

@@ -20,16 +20,21 @@ open FS.GG.Coord.Cli
 module DoneStderrTests =
 
     let private ref =
-        { Owner = "FS-GG"
-          Repo = ".github"
-          Number = 9001 }
+        {
+            Owner = "FS-GG"
+            Repo = ".github"
+            Number = 9001
+        }
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None; Headers = Map.empty }
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            }
 
     /// The board `bootstrapCached` needs — just enough for it to resolve a `Status` field. A fresh
     /// `FSGG_COORD_CACHE` per test (same licence as `ForceStealTests`) means nothing carries over between
@@ -97,22 +102,38 @@ module DoneStderrTests =
 
     let private typedCompletionReceipt =
         let completionFacts: FS.GG.Coord.Delivery.CompletionFacts =
-            { HeadSha = "head"
-              Merged = true
-              MergeReachable = true
-              PostMergeVerification =
-                FS.GG.Coord.Delivery.Verified
-                    { MergeSha = "e605d37b0f9ad73b2e2483ff6cb6024550ab117c"; DefaultBranch = "main"
-                      Runs =
-                        [ { Id = 2905L; Attempt = 1; Workflow = "CI"; Event = "push"; Branch = "main"
-                            Sha = "e605d37b0f9ad73b2e2483ff6cb6024550ab117c"; Status = "completed"; Conclusion = "success"; Url = "https://run/2905" } ] }
-              IssueClosed = true
-              BoardDone = false
-              ClaimReleased = false
-              PendingWrites = 0
-              CleanupEligible = false
-              ObligationsDeclared = true
-              Obligations = [] }
+            {
+                HeadSha = "head"
+                Merged = true
+                MergeReachable = true
+                PostMergeVerification =
+                    FS.GG.Coord.Delivery.Verified
+                        {
+                            MergeSha = "e605d37b0f9ad73b2e2483ff6cb6024550ab117c"
+                            DefaultBranch = "main"
+                            Runs =
+                                [
+                                    {
+                                        Id = 2905L
+                                        Attempt = 1
+                                        Workflow = "CI"
+                                        Event = "push"
+                                        Branch = "main"
+                                        Sha = "e605d37b0f9ad73b2e2483ff6cb6024550ab117c"
+                                        Status = "completed"
+                                        Conclusion = "success"
+                                        Url = "https://run/2905"
+                                    }
+                                ]
+                        }
+                IssueClosed = true
+                BoardDone = false
+                ClaimReleased = false
+                PendingWrites = 0
+                CleanupEligible = false
+                ObligationsDeclared = true
+                Obligations = []
+            }
 
         FS.GG.Coord.Delivery.createCompletionReceipt
             ref.Canonical
@@ -126,7 +147,9 @@ module DoneStderrTests =
         |> FS.GG.Coord.Delivery.encodeCompletionReceipt
 
     let private completionComments =
-        "[{\"body\":" + System.Text.Json.JsonSerializer.Serialize typedCompletionReceipt + "}]"
+        "[{\"body\":"
+        + System.Text.Json.JsonSerializer.Serialize typedCompletionReceipt
+        + "}]"
 
     let mutable private serveTypedCompletionAuthority = true
 
@@ -144,7 +167,8 @@ module DoneStderrTests =
                 | Query(document, _) when document.Contains "comments(last:" ->
                     // `Writes.verifyHeld`'s marker scan — nobody holds this fixture's item, so an empty
                     // thread answers it and `doneCmd` takes the `DoesNotHold` branch quietly.
-                    ok """{"data":{"repository":{"issue":{"comments":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    ok
+                        """{"data":{"repository":{"issue":{"comments":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                 | Query(document, _) when document.Contains "closedByPullRequestsReferences" -> ok factsAnswer
                 | Query(document, _) ->
                     match boardAnswer document with
@@ -154,11 +178,19 @@ module DoneStderrTests =
                         // same licence as `ForceStealTests`: the write under test is the stdout/stderr
                         // split, not the board projection, and `boardWriteNote`'s failure path is silent to
                         // the exit code (.github#2444 does not touch that behaviour).
-                        Error(Errors.NotFound "the fixture serves no board WRITE — done's stdout/stderr split is what is under test")
+                        Error(
+                            Errors.NotFound
+                                "the fixture serves no board WRITE — done's stdout/stderr split is what is under test"
+                        )
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "GET", p when p.EndsWith "issues/9001/comments" ->
-                ok (if serveTypedCompletionAuthority then completionComments else "[]")
+                ok (
+                    if serveTypedCompletionAuthority then
+                        completionComments
+                    else
+                        "[]"
+                )
             | "POST", p when p.EndsWith "issues/9001/comments" ->
                 match req.Body with
                 | Json payload ->
@@ -170,12 +202,14 @@ module DoneStderrTests =
                 | _ -> Error(Errors.NotFound "a comment POST with no JSON body")
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
-    let private context : Kernel.Context =
-        { Transport = world
-          Owner = "FS-GG"
-          Title = "Coordination"
-          DefaultRepo = Some ".github"
-          ChoreLocks = [] }
+    let private context: Kernel.Context =
+        {
+            Transport = world
+            Owner = "FS-GG"
+            Title = "Coordination"
+            DefaultRepo = Some ".github"
+            ChoreLocks = []
+        }
 
     /// Drive `FS.GG.Coord.Cli.Lifecycle.LiveHandlers.doneCmd (fun _ _ _ -> ())` end to end, capturing stdout and stderr SEPARATELY — the two streams
     /// `.github#2444` is about — against a throwaway cache/queue root, same licence as
@@ -183,7 +217,9 @@ module DoneStderrTests =
     /// cross-class parallelism, so pointing the process-global `FSGG_COORD_CACHE` somewhere private per
     /// call is safe.
     let private runDone (withTypedAuthority: bool) : int * string * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2444-" + Guid.NewGuid().ToString "n")
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-2444-" + Guid.NewGuid().ToString "n")
+
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
         let stdout = Console.Out
@@ -204,7 +240,9 @@ module DoneStderrTests =
                 | Ok o -> o
                 | Error e -> failwithf "the fixture's own argv did not parse: %s" e
 
-            let code = FS.GG.Coord.Cli.Lifecycle.LiveHandlers.doneCmd (fun _ _ _ -> ()) context opts
+            let code =
+                FS.GG.Coord.Cli.Lifecycle.LiveHandlers.doneCmd (fun _ _ _ -> ()) context opts
+
             Console.Out.Flush()
             Console.Error.Flush()
             code, capturedOut.ToString(), capturedErr.ToString()

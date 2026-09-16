@@ -9,20 +9,25 @@ module SkillProgressiveDisclosureTests =
 
     let private repoRoot =
         let rec up (d: DirectoryInfo) =
-            if isNull (box d) then failwith "repository root not found"
-            elif Directory.Exists(Path.Combine(d.FullName, ".claude", "skills")) then d.FullName
-            else up d.Parent
+            if isNull (box d) then
+                failwith "repository root not found"
+            elif Directory.Exists(Path.Combine(d.FullName, ".claude", "skills")) then
+                d.FullName
+            else
+                up d.Parent
 
         up (DirectoryInfo AppContext.BaseDirectory)
 
     let private skills =
-        [ "check-board"
-          "pnext-item"
-          "intra-repo-parallel-work"
-          "cross-repo-coordination"
-          "drive-board"
-          "work-board"
-          "work-roadmap" ]
+        [
+            "check-board"
+            "pnext-item"
+            "intra-repo-parallel-work"
+            "cross-repo-coordination"
+            "drive-board"
+            "work-board"
+            "work-roadmap"
+        ]
 
     let private skillPath root skill =
         Path.Combine(repoRoot, root, "skills", skill)
@@ -42,7 +47,9 @@ module SkillProgressiveDisclosureTests =
         for skill in skills do
             let body = File.ReadAllText(Path.Combine(skillPath ".claude" skill, "SKILL.md"))
             let lines = body.Split('\n').Length
-            let words = body.Split([| ' '; '\t'; '\r'; '\n' |], StringSplitOptions.RemoveEmptyEntries).Length
+
+            let words =
+                body.Split([| ' '; '\t'; '\r'; '\n' |], StringSplitOptions.RemoveEmptyEntries).Length
 
             Assert.True(lines < 500, $"{skill}/SKILL.md has {lines} lines; the hard limit is below 500")
             Assert.True(words < 5000, $"{skill}/SKILL.md has {words} words; the triggered-body target is below 5000")
@@ -73,7 +80,13 @@ module SkillProgressiveDisclosureTests =
 
     [<Fact>]
     let ``generated protocol facts live in routed references not triggered bodies`` () =
-        for skill in [ "check-board"; "pnext-item"; "intra-repo-parallel-work"; "cross-repo-coordination" ] do
+        for skill in
+            [
+                "check-board"
+                "pnext-item"
+                "intra-repo-parallel-work"
+                "cross-repo-coordination"
+            ] do
             let body = body skill
             Assert.DoesNotContain("BEGIN GENERATED:", body)
 
@@ -99,7 +112,10 @@ module SkillProgressiveDisclosureTests =
                     let target = Path.GetFullPath(hit.Groups.[1].Value, Path.GetDirectoryName file)
                     // `fs-gg-sdd-lifecycle` is supplied by the SDD consumer rather than authored in this
                     // repository; every repo-local route must resolve in the source tree.
-                    let externallyMaterialized = target.Contains($"{Path.DirectorySeparatorChar}fs-gg-sdd-lifecycle{Path.DirectorySeparatorChar}")
+                    let externallyMaterialized =
+                        target.Contains(
+                            $"{Path.DirectorySeparatorChar}fs-gg-sdd-lifecycle{Path.DirectorySeparatorChar}"
+                        )
 
                     Assert.True(
                         externallyMaterialized || File.Exists target,

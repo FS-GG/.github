@@ -17,7 +17,8 @@ module Chore =
         | CorrectionInReview
         | CorrectionBlocked
 
-    let completionCorrectionStatus = function
+    let completionCorrectionStatus =
+        function
         | CorrectionInReview -> InReview
         | CorrectionBlocked -> Blocked
 
@@ -42,7 +43,8 @@ module Chore =
             match this with
             | StaleClaim _ -> None
             | LifecycleProjectionLag destination -> Some("Status", statusWireName destination)
-            | PrematureCompletion destination -> Some("Status", destination |> completionCorrectionStatus |> statusWireName)
+            | PrematureCompletion destination ->
+                Some("Status", destination |> completionCorrectionStatus |> statusWireName)
             | CompletionProjection -> Some("Status", statusWireName Done)
             | ClassProjectionLag declared -> Some("Class", itemClassWireName declared)
             // IN CORE, beside its sibling, never in `Client.fs` — the field mapping lives here precisely
@@ -107,8 +109,7 @@ module Chore =
     // `LifecycleProjection`, exposed through `lifecycleProjection` below.
     let private choresFor (item: Item) =
         match item.Claim with
-        | Some(claim, LeaseExpiredNoPr) ->
-            [ Chore(item.Ref, StaleClaim claim.Worker, Involved) ]
+        | Some(claim, LeaseExpiredNoPr) -> [ Chore(item.Ref, StaleClaim claim.Worker, Involved) ]
         | Some _ -> []
         | None ->
             // BOTH projections, from one pass. `Kind` is derived exactly as `Class` is — declared but not
@@ -133,8 +134,10 @@ module Chore =
     let derive items = items |> List.collect choresFor
 
     let lifecycleProjection (item: Item) destination =
-        if item.Status = destination || destination = NoStatus then None
-        else Some(Chore(item.Ref, LifecycleProjectionLag destination, Quick))
+        if item.Status = destination || destination = NoStatus then
+            None
+        else
+            Some(Chore(item.Ref, LifecycleProjectionLag destination, Quick))
 
     let prematureCompletion (item: Item) destination =
         match destination with
@@ -143,8 +146,10 @@ module Chore =
         | _ -> None
 
     let completionProjection (item: Item) =
-        if item.State = Closed && item.Status = Done then None
-        else Some(Chore(item.Ref, CompletionProjection, Quick))
+        if item.State = Closed && item.Status = Done then
+            None
+        else
+            Some(Chore(item.Ref, CompletionProjection, Quick))
 
     let private rank (chore: Chore) =
         match chore.Kind with

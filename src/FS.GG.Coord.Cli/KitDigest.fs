@@ -67,7 +67,12 @@ module KitDigest =
     /// we could not read) — `Kit.staleSources` reads that as "not here", never a staleness.
     let private kitDigestOf (root: string) (src: string) : string option =
         let path0 = Path.Combine(root, src)
-        let path = if Directory.Exists path0 then Path.Combine(path0, "SKILL.md") else path0
+
+        let path =
+            if Directory.Exists path0 then
+                Path.Combine(path0, "SKILL.md")
+            else
+                path0
 
         if File.Exists path then
             try
@@ -94,7 +99,10 @@ module KitDigest =
         let source = trim src
         let lane = roots |> List.map trim
 
-        match lane |> List.tryFind (fun root -> source.StartsWith(root + "/", StringComparison.Ordinal)) with
+        match
+            lane
+            |> List.tryFind (fun root -> source.StartsWith(root + "/", StringComparison.Ordinal))
+        with
         | None -> []
         | Some sourceRoot ->
             let name = source.Substring(sourceRoot.Length + 1)
@@ -141,7 +149,8 @@ module KitDigest =
         |> List.collect (fun (_want, src) -> skillCopies kitSkillRoots src)
         |> List.choose (fun (source, mirror) ->
             // The mirror's ROOT, not the skill's own directory: `.agents/skills` for `.agents/skills/x`.
-            let mirrorRoot = Path.GetDirectoryName(mirror.Replace('/', Path.DirectorySeparatorChar))
+            let mirrorRoot =
+                Path.GetDirectoryName(mirror.Replace('/', Path.DirectorySeparatorChar))
 
             match readBytes (skillMd source) with
             | None -> None // the kit's source is not in this tree — "not here", never a divergence
@@ -196,7 +205,9 @@ module KitDigest =
                 | [] -> ()
                 | stale ->
                     eprint ""
-                    eprint "fsgg-coord-engine: KIT DIGEST — a content-addressed kit source is STALE in `registry/repos.lock`:"
+
+                    eprint
+                        "fsgg-coord-engine: KIT DIGEST — a content-addressed kit source is STALE in `registry/repos.lock`:"
 
                     for s in stale do
                         eprint $"  %s{s}"
@@ -290,13 +301,16 @@ module KitDigest =
                         || declared
                            |> List.exists (fun token -> TouchSet.tokensOverlap token (source + "/SKILL.md"))
 
-                    let relock, republish = sources |> List.partition (fun (source, kind) -> isDigestTarget source kind)
+                    let relock, republish =
+                        sources |> List.partition (fun (source, kind) -> isDigestTarget source kind)
 
                     match sources with
                     | [] -> ()
                     | _ ->
                         eprint ""
-                        eprint "fsgg-coord-engine: KIT DIGEST — the touch-set you just claimed names a content-addressed kit source:"
+
+                        eprint
+                            "fsgg-coord-engine: KIT DIGEST — the touch-set you just claimed names a content-addressed kit source:"
 
                         for s, _ in sources do
                             eprint $"  %s{s}"
@@ -304,7 +318,8 @@ module KitDigest =
                         match relock with
                         | [] -> ()
                         | _ ->
-                            eprint "These declared files are digest targets, so `registry/repos.lock` goes stale and `repos-registry-selftest` reds `main`:"
+                            eprint
+                                "These declared files are digest targets, so `registry/repos.lock` goes stale and `repos-registry-selftest` reds `main`:"
 
                             for source, kind in relock do
                                 let target = if kind = "skill" then source + "/SKILL.md" else source
@@ -312,19 +327,27 @@ module KitDigest =
 
                             eprint "Before you open the PR:"
                             eprint "  scripts/repos.sh relock"
-                            eprint "Then name `registry/repos.lock` as EXPECTED DRIFT in the PR — do NOT reserve it in the"
-                            eprint "touch-set. It is a GENERATED, CI-GATED artifact, so a collision in it is a REBASE, not a"
+
+                            eprint
+                                "Then name `registry/repos.lock` as EXPECTED DRIFT in the PR — do NOT reserve it in the"
+
+                            eprint
+                                "touch-set. It is a GENERATED, CI-GATED artifact, so a collision in it is a REBASE, not a"
+
                             eprint "decision (#309). Reserving it is the three-worker deadlock #527 removed (#428)."
 
                         match republish with
                         | [] -> ()
                         | _ ->
-                            eprint "These skill-directory files do NOT change `registry/repos.lock` (only `SKILL.md` is digested):"
+                            eprint
+                                "These skill-directory files do NOT change `registry/repos.lock` (only `SKILL.md` is digested):"
 
                             for source, _ in republish do
                                 eprint $"  %s{source}"
 
-                            eprint "Their packed kit manifest still changes: bump `FS.GG.Kit`'s `<Version>` and republish before merging;"
+                            eprint
+                                "Their packed kit manifest still changes: bump `FS.GG.Kit`'s `<Version>` and republish before merging;"
+
                             eprint "`kit-published-coherence` reds `main` until the changed kit is published."
 
                         eprint "If you only READ it, ignore this — and give the path back (`widen`), so it stops"

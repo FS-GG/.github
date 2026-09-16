@@ -7,7 +7,8 @@ module HandlerRegistration =
     type Handler = Context -> Options.Options -> int
 
     val commands: Options.Command list
+
     val validate:
         allCommands: Options.Command list ->
         registrations: (Options.Command * 'handler) list ->
-        Result<Map<Options.Command, 'handler>, string list>
+            Result<Map<Options.Command, 'handler>, string list>

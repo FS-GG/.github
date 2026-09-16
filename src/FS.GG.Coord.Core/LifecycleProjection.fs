@@ -6,18 +6,27 @@ open FS.GG.Coord.Types
 
 module LifecycleProjection =
     type Fact<'a> = { ObservedAt: int64; Value: 'a }
-    type PullRequest = { Number: int; Open: bool; ReviewOrCiActive: bool }
-    type Delivery = { Outstanding: bool; DoneStamped: bool }
-    type Observation =
-        { Claim: Fact<(Claim * Liveness) option>
-          PullRequest: Fact<PullRequest option>
-          Blockers: Fact<Blocker list>
-          Delivery: Fact<Delivery>
-          Issue: Fact<IssueState> }
 
-    type IntentRecord =
-        { Revision: int64
-          Reason: string }
+    type PullRequest =
+        {
+            Number: int
+            Open: bool
+            ReviewOrCiActive: bool
+        }
+
+    type Delivery =
+        { Outstanding: bool; DoneStamped: bool }
+
+    type Observation =
+        {
+            Claim: Fact<(Claim * Liveness) option>
+            PullRequest: Fact<PullRequest option>
+            Blockers: Fact<Blocker list>
+            Delivery: Fact<Delivery>
+            Issue: Fact<IssueState>
+        }
+
+    type IntentRecord = { Revision: int64; Reason: string }
 
     type SchedulingIntent =
         | Auto
@@ -25,12 +34,12 @@ module LifecycleProjection =
         | HumanPark of HumanBlock * IntentRecord
         | Deferred of reason: string * until: int64 option * revision: int64
 
-    let isHumanPark = function
+    let isHumanPark =
+        function
         | HumanPark _ -> true
         | _ -> false
 
-    type PolicyVersion =
-        | IntentStatusV1
+    type PolicyVersion = | IntentStatusV1
 
     type Result =
         | Project of status: BoardStatus * observedAt: int64
@@ -38,9 +47,11 @@ module LifecycleProjection =
         | Exempt of kind: ItemKind
 
     type Watermark =
-        { ObservedAt: int64
-          Status: BoardStatus
-          Intent: SchedulingIntent }
+        {
+            ObservedAt: int64
+            Status: BoardStatus
+            Intent: SchedulingIntent
+        }
 
     // The comment-shaped receipt is deliberately small and append-only.  Project fields can be
     // deferred and later repaired; this receipt is the durable ordering fact which says which
@@ -56,10 +67,12 @@ module LifecycleProjection =
     let watermarkMarker watermark =
         let intentName, revision, until, reason = intentWireName watermark.Intent
         let untilText = until |> Option.map string |> Option.defaultValue "none"
+
         let reasonText =
             match Uri.EscapeDataString reason with
             | "" -> "-"
             | value -> value
+
         $"<!-- fsgg:lifecycle-watermark v=2 observedAt=%d{watermark.ObservedAt} status=%s{statusWireName watermark.Status} intent=%s{intentName} revision=%d{revision} until=%s{untilText} reason=%s{reasonText} -->"
 
     // ANCHORED, NOT SUBSTRING (round-1 review repair, .github#2264 PR #2271). `body.IndexOf(marker)`
@@ -83,7 +96,8 @@ module LifecycleProjection =
         )
 
     let tryWatermark (comments: string list) =
-        let status = function
+        let status =
+            function
             | "Backlog" -> Some BoardStatus.Backlog
             | "Ready" -> Some BoardStatus.Ready
             | "In progress" -> Some BoardStatus.InProgress
@@ -98,14 +112,23 @@ module LifecycleProjection =
                 | false, _ -> None
                 | true, revision ->
                     let rawReason = matched.Groups.["reason"].Value
-                    if not (Regex.IsMatch(rawReason, @"^(?:[^%]|%[0-9A-Fa-f]{2})+$")) then None
+
+                    if not (Regex.IsMatch(rawReason, @"^(?:[^%]|%[0-9A-Fa-f]{2})+$")) then
+                        None
                     else
-                        let reason = if rawReason = "-" then "" else Uri.UnescapeDataString rawReason
+                        let reason =
+                            if rawReason = "-" then
+                                ""
+                            else
+                                Uri.UnescapeDataString rawReason
+
                         match matched.Groups.["intent"].Value with
                         | "auto" -> Some Auto
                         | "backlog" -> Some(Backlog { Revision = revision; Reason = reason })
-                        | "human-decision" -> Some(HumanPark(AwaitingHumanDecision, { Revision = revision; Reason = reason }))
-                        | "human-action" -> Some(HumanPark(AwaitingHumanAction, { Revision = revision; Reason = reason }))
+                        | "human-decision" ->
+                            Some(HumanPark(AwaitingHumanDecision, { Revision = revision; Reason = reason }))
+                        | "human-action" ->
+                            Some(HumanPark(AwaitingHumanAction, { Revision = revision; Reason = reason }))
                         | "deferred" ->
                             match matched.Groups.["until"].Value with
                             | "none" -> Some(Deferred(reason, None, revision))
@@ -114,18 +137,30 @@ module LifecycleProjection =
                                 | true, until -> Some(Deferred(reason, Some until, revision))
                                 | _ -> None
                         | _ -> None
-            with :? UriFormatException -> None
+            with :? UriFormatException ->
+                None
 
         comments
         |> List.choose (fun body ->
             let trimmed = body.Trim()
             let current = intentWatermarkLine.Match trimmed
+
             if current.Success then
-                match Int64.TryParse(current.Groups.["observedAt"].Value), status current.Groups.["status"].Value, parseIntent current with
+                match
+                    Int64.TryParse(current.Groups.["observedAt"].Value),
+                    status current.Groups.["status"].Value,
+                    parseIntent current
+                with
                 | (true, observedAt), Some value, Some intent ->
-                    Some { ObservedAt = observedAt; Status = value; Intent = intent }
+                    Some
+                        {
+                            ObservedAt = observedAt
+                            Status = value
+                            Intent = intent
+                        }
                 | _ -> None
-            else None)
+            else
+                None)
         |> List.sortByDescending (fun receipt -> receipt.ObservedAt)
         |> List.tryHead
 
@@ -180,7 +215,14 @@ module LifecycleProjection =
         let intent =
             match status with
             | BoardStatus.Ready -> Some Auto
-            | BoardStatus.Backlog -> Some(SchedulingIntent.Backlog { Revision = observedAt; Reason = reason })
+            | BoardStatus.Backlog ->
+                Some(
+                    SchedulingIntent.Backlog
+                        {
+                            Revision = observedAt
+                            Reason = reason
+                        }
+                )
             | BoardStatus.Blocked
             | BoardStatus.InProgress
             | BoardStatus.InReview
@@ -189,22 +231,35 @@ module LifecycleProjection =
 
         intent
         |> Option.map (fun intent ->
-            { ObservedAt = observedAt
-              Status = status
-              Intent = intent })
+            {
+                ObservedAt = observedAt
+                Status = status
+                Intent = intent
+            })
 
     let private latest observation =
-        [ observation.Claim.ObservedAt; observation.PullRequest.ObservedAt; observation.Blockers.ObservedAt
-          observation.Delivery.ObservedAt; observation.Issue.ObservedAt ]
+        [
+            observation.Claim.ObservedAt
+            observation.PullRequest.ObservedAt
+            observation.Blockers.ObservedAt
+            observation.Delivery.ObservedAt
+            observation.Issue.ObservedAt
+        ]
         |> List.max
 
     let private coherent observation timestamp =
-        [ observation.Claim.ObservedAt; observation.PullRequest.ObservedAt; observation.Blockers.ObservedAt
-          observation.Delivery.ObservedAt; observation.Issue.ObservedAt ]
+        [
+            observation.Claim.ObservedAt
+            observation.PullRequest.ObservedAt
+            observation.Blockers.ObservedAt
+            observation.Delivery.ObservedAt
+            observation.Issue.ObservedAt
+        ]
         |> List.forall ((=) timestamp)
 
     let private projectWithIntent intent observation =
         let observedAt = latest observation
+
         if not (coherent observation observedAt) then
             Withheld "lifecycle facts have different observation timestamps"
         elif observation.Delivery.Value.DoneStamped && observation.Issue.Value = Closed then
@@ -219,15 +274,35 @@ module LifecycleProjection =
         // human question which parked the item.  A real blocker naturally projects the same column.
         elif isHumanPark intent then
             Project(BoardStatus.Blocked, observedAt)
-        elif observation.Blockers.Value |> List.exists (fun blocker -> blocker.State <> BlockerClosed && blocker.State <> BlockerMerged) then
+        elif
+            observation.Blockers.Value
+            |> List.exists (fun blocker -> blocker.State <> BlockerClosed && blocker.State <> BlockerMerged)
+        then
             Project(BoardStatus.Blocked, observedAt)
         elif observation.Delivery.Value.Outstanding then
             Project(BoardStatus.InReview, observedAt)
-        elif observation.PullRequest.Value |> Option.exists (fun pr -> pr.Open || pr.ReviewOrCiActive) then
+        elif
+            observation.PullRequest.Value
+            |> Option.exists (fun pr -> pr.Open || pr.ReviewOrCiActive)
+        then
             Project(BoardStatus.InReview, observedAt)
-        elif observation.Claim.Value |> Option.exists (fun (_, liveness) -> match liveness with LeaseHeld | LeaseExpiredPrOpen _ | LeaseExpiredBranchPushed -> true | _ -> false) then
+        elif
+            observation.Claim.Value
+            |> Option.exists (fun (_, liveness) ->
+                match liveness with
+                | LeaseHeld
+                | LeaseExpiredPrOpen _
+                | LeaseExpiredBranchPushed -> true
+                | _ -> false)
+        then
             Project(BoardStatus.InProgress, observedAt)
-        elif observation.Claim.Value |> Option.exists (fun (_, liveness) -> match liveness with LivenessUnknown -> true | _ -> false) then
+        elif
+            observation.Claim.Value
+            |> Option.exists (fun (_, liveness) ->
+                match liveness with
+                | LivenessUnknown -> true
+                | _ -> false)
+        then
             Withheld "claim liveness could not be observed"
         else
             match intent with

@@ -44,7 +44,8 @@ type private Server() =
     /// assertion surface: what did the adapter actually PUT ON THE WIRE?
     let seen = List<string * string * string option * string>()
 
-    let mutable handler: (HttpListenerRequest -> HttpListenerResponse -> unit) = fun _ _ -> ()
+    let mutable handler: (HttpListenerRequest -> HttpListenerResponse -> unit) =
+        fun _ _ -> ()
 
     do
         listener.Prefixes.Add prefix
@@ -83,8 +84,7 @@ type private Server() =
     member _.Base = prefix.TrimEnd('/')
     member _.Port = port
 
-    member _.Requests =
-        lock seen (fun () -> List.ofSeq seen)
+    member _.Requests = lock seen (fun () -> List.ofSeq seen)
 
     member _.On(f) = handler <- f
 
@@ -109,26 +109,35 @@ type private Server() =
                 ()
 
 let private get (path: string) =
-    { Method = "GET"
-      Path = path
-      Query = []
-      Body = NoBody
-      Budget = Rest
-      IfNoneMatch = None
-      Subject = path }
+    {
+        Method = "GET"
+        Path = path
+        Query = []
+        Body = NoBody
+        Budget = Rest
+        IfNoneMatch = None
+        Subject = path
+    }
 
 [<Fact>]
 let ``UTEL-04A single-page transport does not paginate and rejects oversized bodies`` () =
     use server = new Server()
+
     server.On(fun req res ->
         if req.Url.AbsolutePath.EndsWith("oversize") then
             server.Json res 200 (String('x', 4 * 1024 * 1024 + 1)) []
-        else server.Json res 200 "{}" [ "Link", $"<%s{server.Base}/repos/o/r/page2>; rel=\"next\"" ])
+        else
+            server.Json res 200 "{}" [ "Link", $"<%s{server.Base}/repos/o/r/page2>; rel=\"next\"" ])
+
     use transport = new HttpTransport(server.Base, "t")
     let single = transport :> ISinglePageGitHubTransport
+
     match single.SendSingle(get "repos/o/r/one") with
-    | Ok response -> Assert.Equal("{}", response.Body); Assert.Single(server.Requests) |> ignore
+    | Ok response ->
+        Assert.Equal("{}", response.Body)
+        Assert.Single(server.Requests) |> ignore
     | Error error -> failwithf "%A" error
+
     match single.SendSingle(get "repos/o/r/oversize") with
     | Error(Malformed(_, detail)) -> Assert.Contains("4 MiB", detail)
     | result -> failwithf "expected bounded rejection, got %A" result
@@ -152,7 +161,10 @@ let ``the adapter FOLLOWS Link rel=next and CONCATENATES the pages`` () =
                 res
                 200
                 """[{"number":1},{"number":2}]"""
-                [ "Link", $"<%s{server.Base}/repos/o/r/issues?page=2>; rel=\"next\", <%s{server.Base}/x>; rel=\"last\"" ])
+                [
+                    "Link",
+                    $"<%s{server.Base}/repos/o/r/issues?page=2>; rel=\"next\", <%s{server.Base}/x>; rel=\"last\""
+                ])
 
     use transport = new HttpTransport(server.Base, "t")
     let t = transport :> IGitHubTransport
@@ -177,11 +189,7 @@ let ``#2905 the adapter also paginates GitHub wrapper collections without losing
 
     server.On(fun req res ->
         if req.Url.PathAndQuery.Contains "page=2" then
-            server.Json
-                res
-                200
-                """{"total_count":2,"workflow_runs":[{"id":2,"conclusion":"failure"}]}"""
-                []
+            server.Json res 200 """{"total_count":2,"workflow_runs":[{"id":2,"conclusion":"failure"}]}""" []
         else
             server.Json
                 res
@@ -208,13 +216,19 @@ let ``#2308 markerScan keeps a stale claim found only on REST page two`` () =
 
     server.On(fun req res ->
         if req.Url.PathAndQuery.Contains "page=2" then
-            server.Json res 200 $"""[{{"id":7,"body":"<!-- fsgg:claim worker=page-two-holder lease=120 -->","updated_at":"%s{old}"}}]""" []
+            server.Json
+                res
+                200
+                $"""[{{"id":7,"body":"<!-- fsgg:claim worker=page-two-holder lease=120 -->","updated_at":"%s{old}"}}]"""
+                []
         else
             server.Json
                 res
                 200
                 "[]"
-                [ "Link", $"<%s{server.Base}/repos/FS-GG/FS.GG.SDD/issues/42/comments?page=2>; rel=\"next\"" ])
+                [
+                    "Link", $"<%s{server.Base}/repos/FS-GG/FS.GG.SDD/issues/42/comments?page=2>; rel=\"next\""
+                ])
 
     use transport = new HttpTransport(server.Base, "t")
 
@@ -244,8 +258,11 @@ let ``a MERGED response carries NO ETag - page one's validator dies at the merge
                 res
                 200
                 """[{"number":1},{"number":2}]"""
-                [ "ETag", "W/\"page-one\""
-                  "Link", $"<%s{server.Base}/repos/o/r/issues?page=2>; rel=\"next\", <%s{server.Base}/x>; rel=\"last\"" ])
+                [
+                    "ETag", "W/\"page-one\""
+                    "Link",
+                    $"<%s{server.Base}/repos/o/r/issues?page=2>; rel=\"next\", <%s{server.Base}/x>; rel=\"last\""
+                ])
 
     use transport = new HttpTransport(server.Base, "t")
     let t = transport :> IGitHubTransport
@@ -295,7 +312,8 @@ let ``a page that is NOT a JSON array refuses - it is never silently truncated t
 
     match t.Send(get "repos/o/r/issues") with
     | Error(Malformed _) -> ()
-    | Ok r -> failwith $"a broken second page must refuse, not truncate to page one — got a body of %d{r.Body.Length} bytes"
+    | Ok r ->
+        failwith $"a broken second page must refuse, not truncate to page one — got a body of %d{r.Body.Length} bytes"
     | other -> failwith $"expected Malformed — got %A{other}"
 
 [<Fact>]
@@ -332,15 +350,19 @@ let ``If-None-Match is SENT when given, and a 304 comes back as a SUCCESS with a
     | Error e -> failwith $"the first read must succeed — got %A{e}"
 
     // Second: conditional.
-    match t.Send { get "repos/o/r/issues" with IfNoneMatch = Some "\"etag-v1\"" } with
+    match
+        t.Send
+            { get "repos/o/r/issues" with
+                IfNoneMatch = Some "\"etag-v1\""
+            }
+    with
     | Ok r ->
         Assert.Equal(304, r.Status)
         Assert.Equal("", r.Body)
     | Error e -> failwith $"a 304 is a SUCCESS, not a failure — got %A{e}"
 
     // And the header really went on the wire.
-    let conditional =
-        server.Requests |> List.filter (fun (_, _, inm, _) -> inm.IsSome)
+    let conditional = server.Requests |> List.filter (fun (_, _, inm, _) -> inm.IsSome)
 
     Assert.Equal(1, List.length conditional)
 
@@ -353,7 +375,9 @@ let ``a request with NO IfNoneMatch sends NO validator - which is what the LOCK 
     server.On(fun _ res -> server.Json res 200 "[]" [])
 
     use transport = new HttpTransport(server.Base, "t")
-    Reads.markerScan (transport :> IGitHubTransport) "FS-GG" "FS.GG.SDD" 42 |> ignore
+
+    Reads.markerScan (transport :> IGitHubTransport) "FS-GG" "FS.GG.SDD" 42
+    |> ignore
 
     match server.Requests with
     | [ (_, path, inm, _) ] ->
@@ -383,7 +407,8 @@ let ``a GraphQL variable is serialised WITH ITS TYPE - a number is a number, not
                 Query(
                     "mutation($n: Float!, $id: ID!) { x(a: $n, b: $id) { y } }",
                     [ "n", VNumber 42.0; "id", VId "PVTSSF_status" ]
-                ) }
+                )
+        }
     |> ignore
 
     match server.Requests with
@@ -417,7 +442,8 @@ let ``a GraphQL document with NO variables omits the variables object entirely``
         { get "graphql" with
             Method = "POST"
             Budget = GraphQl
-            Body = Query("mutation { f0: update(input: {}) { id } }", []) }
+            Body = Query("mutation { f0: update(input: {}) { id } }", [])
+        }
     |> ignore
 
     match server.Requests with
@@ -537,13 +563,15 @@ let ``#2418 a GraphQL response's rateLimit cost is ACCUMULATED by the real adapt
     let t = transport :> IGitHubTransport
 
     let query =
-        { Method = "POST"
-          Path = "graphql"
-          Query = []
-          Body = Query("query { rateLimit { cost remaining } }", [])
-          Budget = GraphQl
-          IfNoneMatch = None
-          Subject = "meter" }
+        {
+            Method = "POST"
+            Path = "graphql"
+            Query = []
+            Body = Query("query { rateLimit { cost remaining } }", [])
+            Budget = GraphQl
+            IfNoneMatch = None
+            Subject = "meter"
+        }
 
     match t.Send query with
     | Ok _ ->

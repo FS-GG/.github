@@ -12,13 +12,15 @@ module Rank =
     let private unphased = 9
 
     type Rank =
-        { Escalated: bool
-          Blocking: int
-          Severity: Severity
-          Class: ItemClass option
-          Phase: Phase option
-          AgeDays: int option
-          Number: int }
+        {
+            Escalated: bool
+            Blocking: int
+            Severity: Severity
+            Class: ItemClass option
+            Phase: Phase option
+            AgeDays: int option
+            Number: int
+        }
 
     // DEFECT, then HARDENING, then DECISION, then unclassed.
     //
@@ -80,16 +82,18 @@ module Rank =
         | _ -> false
 
     let ofItem (counts: Map<Ref, int>) (item: Item) : Rank =
-        { Escalated = isEscalated item.Status item.AgeDays
-          Blocking = counts |> Map.tryFind item.Ref |> Option.defaultValue 0
-          Severity = item.Severity
-          Class =
-            match item.Class with
-            | Some c -> Some c
-            | None -> item.BoardClass
-          Phase = item.Phase
-          AgeDays = item.AgeDays
-          Number = item.Ref.Number }
+        {
+            Escalated = isEscalated item.Status item.AgeDays
+            Blocking = counts |> Map.tryFind item.Ref |> Option.defaultValue 0
+            Severity = item.Severity
+            Class =
+                match item.Class with
+                | Some c -> Some c
+                | None -> item.BoardClass
+            Phase = item.Phase
+            AgeDays = item.AgeDays
+            Number = item.Ref.Number
+        }
 
     let ofItemsWith (counts: Map<Ref, int>) (items: Item list) : (Item * Rank) list =
         items |> List.map (fun i -> i, ofItem counts i)

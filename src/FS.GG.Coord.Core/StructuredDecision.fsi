@@ -12,26 +12,37 @@ module StructuredDecision =
     val PolicyVersion: string = "structured-decisions/1"
 
     type RouteRecord =
-        { Schema: string
-          Subject: string
-          Revision: int
-          PreviousDigest: string option
-          Scope: string list
-          Dependencies: string list
-          TouchSet: string list
-          PolicyVersion: string
-          Route: DeliveryRoute.Route option
-          Agent: string
-          Timestamp: string
-          ReasonCodes: string list
-          Rationale: string
-          SddWorkId: string option
-          SpecHome: string option
-          RequiredGates: string list
-          Digest: string }
+        {
+            Schema: string
+            Subject: string
+            Revision: int
+            PreviousDigest: string option
+            Scope: string list
+            Dependencies: string list
+            TouchSet: string list
+            PolicyVersion: string
+            Route: DeliveryRoute.Route option
+            Agent: string
+            Timestamp: string
+            ReasonCodes: string list
+            Rationale: string
+            SddWorkId: string option
+            SpecHome: string option
+            RequiredGates: string list
+            Digest: string
+        }
 
-    type ReviewKind = Initial | Confirmation | Escalation | RepairPhase | Acceptance
-    type ReviewVerdict = Pass | ChangesRequired | Accepted
+    type ReviewKind =
+        | Initial
+        | Confirmation
+        | Escalation
+        | RepairPhase
+        | Acceptance
+
+    type ReviewVerdict =
+        | Pass
+        | ChangesRequired
+        | Accepted
 
     /// The legacy host-granted transfer of a live review generation's critic seat, written INTO the record the
     /// successor appends (.github#2662). New repaired-head queues use ordinary fresh successors plus
@@ -51,50 +62,56 @@ module StructuredDecision =
     /// never resolves it — a pure validator does not acquire a network dependency, and no reader should
     /// infer an authenticity that was never checked.
     type SuccessionGrant =
-        { OriginalCritic: string
-          GrantedBy: string
-          GrantUrl: string }
+        {
+            OriginalCritic: string
+            GrantedBy: string
+            GrantUrl: string
+        }
 
     type RepairPhaseReceipt =
-        { ExhaustedPr: int
-          EscalationCommentId: int64
-          NewClaimGeneration: string
-          NewBranchOrPr: string
-          NewImplementerIdentity: string
-          NewCriticIdentity: string
-          CandidateHeadSha: string }
+        {
+            ExhaustedPr: int
+            EscalationCommentId: int64
+            NewClaimGeneration: string
+            NewBranchOrPr: string
+            NewImplementerIdentity: string
+            NewCriticIdentity: string
+            CandidateHeadSha: string
+        }
 
     type ReviewRecord =
-        { Schema: string
-          Subject: string
-          Revision: int
-          PreviousDigest: string option
-          HeadSha: string
-          ClaimGeneration: string option
-          BaseSha: string option
-          Critic: string
-          Verdict: ReviewVerdict
-          AcceptedExceptions: string list
-          RouteApplicability: string
-          RouteEvidence: string list
-          PolicyVersion: string
-          Kind: ReviewKind
-          Round: int
-          InitialReview: string option
-          PrecedingReview: string option
-          DiffAuditRequired: bool
-          DiffAuditReceipts: string list
-          /// Absent on every ordinary record. Present only where a granted successor critic takes over a
-          /// live generation, and then it contributes to `reviewDigest` — so an engine that predates the
-          /// field fails CLOSED on a succession record (digest mismatch) instead of silently dropping the
-          /// grant and applying the unwidened continuity rule to a record that no longer satisfies it.
-          Succession: SuccessionGrant option
-          /// The live, seven-field provenance receipt for the one fresh repair phase. Historical v2
-          /// records may omit it; the production writer refuses to author a new repair-phase record
-          /// without it.
-          RepairPhaseReceipt: RepairPhaseReceipt option
-          Timestamp: string
-          Digest: string }
+        {
+            Schema: string
+            Subject: string
+            Revision: int
+            PreviousDigest: string option
+            HeadSha: string
+            ClaimGeneration: string option
+            BaseSha: string option
+            Critic: string
+            Verdict: ReviewVerdict
+            AcceptedExceptions: string list
+            RouteApplicability: string
+            RouteEvidence: string list
+            PolicyVersion: string
+            Kind: ReviewKind
+            Round: int
+            InitialReview: string option
+            PrecedingReview: string option
+            DiffAuditRequired: bool
+            DiffAuditReceipts: string list
+            /// Absent on every ordinary record. Present only where a granted successor critic takes over a
+            /// live generation, and then it contributes to `reviewDigest` — so an engine that predates the
+            /// field fails CLOSED on a succession record (digest mismatch) instead of silently dropping the
+            /// grant and applying the unwidened continuity rule to a record that no longer satisfies it.
+            Succession: SuccessionGrant option
+            /// The live, seven-field provenance receipt for the one fresh repair phase. Historical v2
+            /// records may omit it; the production writer refuses to author a new repair-phase record
+            /// without it.
+            RepairPhaseReceipt: RepairPhaseReceipt option
+            Timestamp: string
+            Digest: string
+        }
 
     /// A `critic:` value that is the bare, undifferentiated agent-type string every critic dispatched at
     /// one route shares — `fsgg-critic-normal`, or any future `fsgg-critic-<route>` — rather than a

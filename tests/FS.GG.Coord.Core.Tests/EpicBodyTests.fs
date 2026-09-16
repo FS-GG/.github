@@ -37,7 +37,12 @@ let ``all four ref spellings canonicalize to owner/repo#n against the epic's rep
         "- [ ] #7 bare\n- [x] FS-GG/FS.GG.Rendering#8 qualified\n- [ ] https://github.com/FS-GG/FS.GG.Audio/issues/9 a url\n- [ ] FS.GG.Game#6 repo-qualified"
 
     Assert.Equal<string list>(
-        [ "FS-GG/FS.GG.Audio#9"; "FS-GG/FS.GG.Game#6"; "FS-GG/FS.GG.Rendering#8"; "FS-GG/FS.GG.SDD#7" ],
+        [
+            "FS-GG/FS.GG.Audio#9"
+            "FS-GG/FS.GG.Game#6"
+            "FS-GG/FS.GG.Rendering#8"
+            "FS-GG/FS.GG.SDD#7"
+        ],
         refs body
     )
 
@@ -46,7 +51,9 @@ let ``a repo#n child carries its repo, not the epic's - it must NOT fall through
     // #1153: `FS.GG.SDD#8` used to match no alternative but the bare `#n` it contains, dropping the
     // `FS.GG.SDD` qualifier as prose and resolving against the EPIC's repo. In a `.github` epic that is
     // `.github#8` — a real, usually-closed row — so the rollup checked the wrong issue's state.
-    let dotGithub body = EpicBody.childRefs "FS-GG" ".github" body
+    let dotGithub body =
+        EpicBody.childRefs "FS-GG" ".github" body
+
     Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#8" ], dotGithub "- [ ] FS.GG.SDD#8 the child")
     // And the owner-less form still defers its OWNER to the epic's, exactly as a bare `#n` would.
     Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#8" ], refs "- [ ] FS.GG.SDD#8 the child")
@@ -54,7 +61,10 @@ let ``a repo#n child carries its repo, not the epic's - it must NOT fall through
 [<Fact>]
 let ``the result is deduplicated and sorted - the set is stable and diffable`` () =
     // Sorted so the diff against the graph is order-independent; deduped so a repeat is one child.
-    Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#5"; "FS-GG/FS.GG.SDD#9" ], refs "- [ ] #9 a\n- [x] #5 b\n- [ ] #9 again")
+    Assert.Equal<string list>(
+        [ "FS-GG/FS.GG.SDD#5"; "FS-GG/FS.GG.SDD#9" ],
+        refs "- [ ] #9 a\n- [x] #5 b\n- [ ] #9 again"
+    )
 
 [<Fact>]
 let ``an empty or null body declares nothing`` () =
@@ -65,7 +75,8 @@ let ``an empty or null body declares nothing`` () =
 let ``a task line inside a fenced code block declares nothing - a quote is a mention`` () =
     // #965's own first draft quoted #672's acceptance line in a fence to DEMONSTRATE this bug, and thereby
     // declared #561 as a child of the issue reporting it. A doc that quotes a parser's input is parsed.
-    let body = "This is what #672 carries today:\n\n```\n- [ ] #561's three steps land in their gated order.\n```\n\n- [ ] #900 the only real child"
+    let body =
+        "This is what #672 carries today:\n\n```\n- [ ] #561's three steps land in their gated order.\n```\n\n- [ ] #900 the only real child"
 
     Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#900" ], refs body)
 
@@ -92,7 +103,9 @@ let ``a fence is closed only by its OWN character, at least as long as the opene
     Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#2" ], refs shortRun)
 
     // A closer carries no info string; a run with one is still content.
-    let infoOnCloser = "```\n``` not a closer\n- [ ] #1 still quoted\n```\n- [ ] #2 real"
+    let infoOnCloser =
+        "```\n``` not a closer\n- [ ] #1 still quoted\n```\n- [ ] #2 real"
+
     Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#2" ], refs infoOnCloser)
 
 [<Fact>]
@@ -135,7 +148,9 @@ let ``a task line naming no issue is KEPT as un-delegated acceptance, not droppe
 let ``an epic whose every acceptance line is a child ref has NO un-delegated acceptance`` () =
     // The state the rule drives every epic toward: the graph IS the acceptance, so the rollup is sound by
     // construction rather than by checking. This is the case that must stay silent, or the rule is noise.
-    let body = "- [ ] #10 the first\n- [x] #11 the second\n\nProse about the epic, mentioning #12."
+    let body =
+        "- [ ] #10 the first\n- [x] #11 the second\n\nProse about the epic, mentioning #12."
+
     Assert.Equal<string list>([], EpicBody.undelegatedAcceptance body)
 
 [<Fact>]
@@ -160,7 +175,8 @@ let ``a QUOTED ref-less task line declares nothing and is un-delegated acceptanc
 let ``un-delegated lines come back in BODY order, not sorted`` () =
     // A human has to find each line to fix it. `childRefs` sorts because a ref set is diffed; these are
     // prose, and re-ordering them would scramble the document the reader is about to edit.
-    let body = "- [ ] zebra last in the body\n- [ ] alpha second\n- [ ] #10 a real child"
+    let body =
+        "- [ ] zebra last in the body\n- [ ] alpha second\n- [ ] #10 a real child"
 
     Assert.Equal<string list>(
         [ "- [ ] zebra last in the body"; "- [ ] alpha second" ],

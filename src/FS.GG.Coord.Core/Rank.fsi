@@ -51,20 +51,22 @@ module Rank =
     /// One candidate's derived priority. Every field is an OBSERVATION, so the record can be printed as
     /// the reason for its own position (`explain`) rather than as an opaque score.
     type Rank =
-        { /// `Ready`, and old enough that the queue is starving it. Sorts above every other term.
-          Escalated: bool
-          /// Open items whose still-holding `Blocked by` names this one. More is earlier.
-          Blocking: int
-          /// The board's explicit severity. Critical first; `Unset` last.
-          Severity: Severity
-          /// The item's class — its own text first, the board column as fallback. `None` sorts last.
-          Class: ItemClass option
-          /// The board's `Phase` column. `None` sorts after every phase.
-          Phase: Phase option
-          /// Whole days since the issue was created. `None` sorts as if brand new, never as starved.
-          AgeDays: int option
-          /// The issue number — the determinism term, and the entire pre-#1598 ordering.
-          Number: int }
+        {
+            /// `Ready`, and old enough that the queue is starving it. Sorts above every other term.
+            Escalated: bool
+            /// Open items whose still-holding `Blocked by` names this one. More is earlier.
+            Blocking: int
+            /// The board's explicit severity. Critical first; `Unset` last.
+            Severity: Severity
+            /// The item's class — its own text first, the board column as fallback. `None` sorts last.
+            Class: ItemClass option
+            /// The board's `Phase` column. `None` sorts after every phase.
+            Phase: Phase option
+            /// Whole days since the issue was created. `None` sorts as if brand new, never as starved.
+            AgeDays: int option
+            /// The issue number — the determinism term, and the entire pre-#1598 ordering.
+            Number: int
+        }
 
     /// The lexicographic sort key. LOWER IS EARLIER.
     ///

@@ -8,8 +8,7 @@ module Kind =
     // A `Kind:` line: up to three leading spaces, either case — the SAME shape as `TouchSet`'s `Paths:`,
     // `Class`'s `Class:` and `HumanBlock`'s `Blocked on:`, because #1103 decided one grammar for
     // body-line sentinels and a fourth spelling would be the drift ADR-0045 exists to prevent.
-    let private declRe =
-        Regex(@"^ {0,3}[Kk]ind:\s*(?<rest>.*)$", RegexOptions.Compiled)
+    let private declRe = Regex(@"^ {0,3}[Kk]ind:\s*(?<rest>.*)$", RegexOptions.Compiled)
 
     // The recognised values, normalised for case and surrounding space. `itemKindOfWireName` IS the
     // parse, derived from the renderer, so the vocabulary is spelled exactly once (#1012).
@@ -54,9 +53,12 @@ module Kind =
         // Among the three STANDING kinds there is no safety ordering to make — none of them is more
         // exempt than another — so they are searched in the union's own declaration order, which
         // `legalKinds` also produces, rather than in an order this function invents.
-        if declared |> List.contains Work then Some Work
-        elif List.isEmpty declared then None
-        else legalKinds |> List.tryFind (fun k -> declared |> List.contains k)
+        if declared |> List.contains Work then
+            Some Work
+        elif List.isEmpty declared then
+            None
+        else
+            legalKinds |> List.tryFind (fun k -> declared |> List.contains k)
 
     let govern (declared: ItemKind option) : ItemKind = declared |> Option.defaultValue Work
 

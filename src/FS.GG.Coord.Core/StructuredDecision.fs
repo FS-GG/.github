@@ -16,43 +16,92 @@ module StructuredDecision =
     let PolicyVersion = "structured-decisions/1"
 
     type RouteRecord =
-        { Schema: string; Subject: string; Revision: int; PreviousDigest: string option
-          Scope: string list; Dependencies: string list; TouchSet: string list; PolicyVersion: string
-          Route: DeliveryRoute.Route option; Agent: string; Timestamp: string; ReasonCodes: string list
-          Rationale: string; SddWorkId: string option; SpecHome: string option; RequiredGates: string list
-          Digest: string }
+        {
+            Schema: string
+            Subject: string
+            Revision: int
+            PreviousDigest: string option
+            Scope: string list
+            Dependencies: string list
+            TouchSet: string list
+            PolicyVersion: string
+            Route: DeliveryRoute.Route option
+            Agent: string
+            Timestamp: string
+            ReasonCodes: string list
+            Rationale: string
+            SddWorkId: string option
+            SpecHome: string option
+            RequiredGates: string list
+            Digest: string
+        }
 
-    type ReviewKind = Initial | Confirmation | Escalation | RepairPhase | Acceptance
-    type ReviewVerdict = Pass | ChangesRequired | Accepted
+    type ReviewKind =
+        | Initial
+        | Confirmation
+        | Escalation
+        | RepairPhase
+        | Acceptance
+
+    type ReviewVerdict =
+        | Pass
+        | ChangesRequired
+        | Accepted
 
     type SuccessionGrant =
-        { OriginalCritic: string
-          GrantedBy: string
-          GrantUrl: string }
+        {
+            OriginalCritic: string
+            GrantedBy: string
+            GrantUrl: string
+        }
 
     type RepairPhaseReceipt =
-        { ExhaustedPr: int
-          EscalationCommentId: int64
-          NewClaimGeneration: string
-          NewBranchOrPr: string
-          NewImplementerIdentity: string
-          NewCriticIdentity: string
-          CandidateHeadSha: string }
+        {
+            ExhaustedPr: int
+            EscalationCommentId: int64
+            NewClaimGeneration: string
+            NewBranchOrPr: string
+            NewImplementerIdentity: string
+            NewCriticIdentity: string
+            CandidateHeadSha: string
+        }
 
     type ReviewRecord =
-        { Schema: string; Subject: string; Revision: int; PreviousDigest: string option
-          HeadSha: string; ClaimGeneration: string option; BaseSha: string option
-          Critic: string; Verdict: ReviewVerdict; AcceptedExceptions: string list
-          RouteApplicability: string; RouteEvidence: string list; PolicyVersion: string
-          Kind: ReviewKind; Round: int; InitialReview: string option
-          PrecedingReview: string option; DiffAuditRequired: bool; DiffAuditReceipts: string list
-          Succession: SuccessionGrant option
-          RepairPhaseReceipt: RepairPhaseReceipt option
-          Timestamp: string; Digest: string }
+        {
+            Schema: string
+            Subject: string
+            Revision: int
+            PreviousDigest: string option
+            HeadSha: string
+            ClaimGeneration: string option
+            BaseSha: string option
+            Critic: string
+            Verdict: ReviewVerdict
+            AcceptedExceptions: string list
+            RouteApplicability: string
+            RouteEvidence: string list
+            PolicyVersion: string
+            Kind: ReviewKind
+            Round: int
+            InitialReview: string option
+            PrecedingReview: string option
+            DiffAuditRequired: bool
+            DiffAuditReceipts: string list
+            Succession: SuccessionGrant option
+            RepairPhaseReceipt: RepairPhaseReceipt option
+            Timestamp: string
+            Digest: string
+        }
 
-    let private frame (value: string) = $"%d{Encoding.UTF8.GetByteCount value}:%s{value}"
-    let private scalar value = value |> Option.defaultValue "" |> frame
-    let private strings values = values |> List.map frame |> String.concat ""
+    let private frame (value: string) =
+        $"%d{Encoding.UTF8.GetByteCount value}:%s{value}"
+
+    let private scalar value =
+        value |> Option.defaultValue "" |> frame
+
+    let private strings values =
+        values |> List.map frame |> String.concat ""
+
     let private digest fields =
         fields
         |> String.concat "|"
@@ -61,25 +110,46 @@ module StructuredDecision =
         |> Convert.ToHexString
         |> _.ToLowerInvariant()
 
-    let private routeName = function
+    let private routeName =
+        function
         | Some DeliveryRoute.Lightweight -> "lightweight"
         | Some DeliveryRoute.SddRequired -> "sdd-required"
         | None -> ""
 
     let routeDigest (record: RouteRecord) =
         digest
-            [ frame record.Schema; frame record.Subject; string record.Revision; scalar record.PreviousDigest
-              strings record.Scope; strings record.Dependencies; strings record.TouchSet; frame record.PolicyVersion
-              frame (routeName record.Route); frame record.Agent; frame record.Timestamp; strings record.ReasonCodes
-              frame record.Rationale; scalar record.SddWorkId; scalar record.SpecHome; strings record.RequiredGates ]
+            [
+                frame record.Schema
+                frame record.Subject
+                string record.Revision
+                scalar record.PreviousDigest
+                strings record.Scope
+                strings record.Dependencies
+                strings record.TouchSet
+                frame record.PolicyVersion
+                frame (routeName record.Route)
+                frame record.Agent
+                frame record.Timestamp
+                strings record.ReasonCodes
+                frame record.Rationale
+                scalar record.SddWorkId
+                scalar record.SpecHome
+                strings record.RequiredGates
+            ]
 
-    let private kindName = function
+    let private kindName =
+        function
         | Initial -> "initial"
         | Confirmation -> "confirmation"
         | Escalation -> "escalation"
         | RepairPhase -> "repair-phase"
         | Acceptance -> "acceptance"
-    let private verdictName = function Pass -> "pass" | ChangesRequired -> "changes-required" | Accepted -> "accepted"
+
+    let private verdictName =
+        function
+        | Pass -> "pass"
+        | ChangesRequired -> "changes-required"
+        | Accepted -> "accepted"
 
     // APPENDED, and only when a grant is present (.github#2662). `digest` joins its fields with `|`, so
     // contributing NOTHING for an absent grant leaves the joined string — and therefore the digest —
@@ -97,37 +167,62 @@ module StructuredDecision =
         function
         | None -> []
         | Some receipt ->
-            [ string receipt.ExhaustedPr
-              string receipt.EscalationCommentId
-              frame receipt.NewClaimGeneration
-              frame receipt.NewBranchOrPr
-              frame receipt.NewImplementerIdentity
-              frame receipt.NewCriticIdentity
-              frame receipt.CandidateHeadSha ]
+            [
+                string receipt.ExhaustedPr
+                string receipt.EscalationCommentId
+                frame receipt.NewClaimGeneration
+                frame receipt.NewBranchOrPr
+                frame receipt.NewImplementerIdentity
+                frame receipt.NewCriticIdentity
+                frame receipt.CandidateHeadSha
+            ]
 
     let reviewDigest (record: ReviewRecord) =
-        digest
-            ([ frame record.Schema; frame record.Subject; string record.Revision; scalar record.PreviousDigest
-               frame record.HeadSha; frame record.Critic; frame (verdictName record.Verdict)
-               strings record.AcceptedExceptions; frame record.RouteApplicability; strings record.RouteEvidence
-               frame record.PolicyVersion; frame (kindName record.Kind)
-               string record.Round; scalar record.InitialReview; scalar record.PrecedingReview
-               string record.DiffAuditRequired; strings record.DiffAuditReceipts; frame record.Timestamp ]
-             @ successionFields record.Succession
-             @ repairPhaseReceiptFields record.RepairPhaseReceipt
-             @ (match record.ClaimGeneration, record.BaseSha with
-                | None, None -> []
-                | claim, baseSha -> [ scalar claim; scalar baseSha ]))
+        digest (
+            [
+                frame record.Schema
+                frame record.Subject
+                string record.Revision
+                scalar record.PreviousDigest
+                frame record.HeadSha
+                frame record.Critic
+                frame (verdictName record.Verdict)
+                strings record.AcceptedExceptions
+                frame record.RouteApplicability
+                strings record.RouteEvidence
+                frame record.PolicyVersion
+                frame (kindName record.Kind)
+                string record.Round
+                scalar record.InitialReview
+                scalar record.PrecedingReview
+                string record.DiffAuditRequired
+                strings record.DiffAuditReceipts
+                frame record.Timestamp
+            ]
+            @ successionFields record.Succession
+            @ repairPhaseReceiptFields record.RepairPhaseReceipt
+            @ (match record.ClaimGeneration, record.BaseSha with
+               | None, None -> []
+               | claim, baseSha -> [ scalar claim; scalar baseSha ])
+        )
 
-    let private blank field value = if String.IsNullOrWhiteSpace value then [ $"%s{field} is required" ] else []
+    let private blank field value =
+        if String.IsNullOrWhiteSpace value then
+            [ $"%s{field} is required" ]
+        else
+            []
+
     let private values field items =
         if List.isEmpty items || items |> List.exists String.IsNullOrWhiteSpace then
             [ $"%s{field} must contain one or more non-empty values" ]
-        else []
+        else
+            []
+
     let private timestamp (value: string) =
         match DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind) with
         | true, _ -> []
         | _ -> [ "timestamp must be an ISO-8601 instant" ]
+
     let private sha (value: string) =
         value.Length = 40 && value |> Seq.forall Uri.IsHexDigit
 
@@ -144,228 +239,365 @@ module StructuredDecision =
         records
         |> List.mapi (fun index record ->
             let expectedRevision = index + 1
-            let expectedPrevious = if index = 0 then None else Some(getDigest records[index - 1])
-            [ if getRevision record <> expectedRevision then
-                  yield $"revision must be contiguous and append-only: expected %d{expectedRevision}"
-              if getPrevious record <> expectedPrevious then
-                  yield $"revision %d{expectedRevision} previousDigest does not bind the preceding record"
-              if getDigest record <> calculate record then
-                  yield $"revision %d{expectedRevision} digest does not match its structured inputs" ])
+
+            let expectedPrevious =
+                if index = 0 then
+                    None
+                else
+                    Some(getDigest records[index - 1])
+
+            [
+                if getRevision record <> expectedRevision then
+                    yield $"revision must be contiguous and append-only: expected %d{expectedRevision}"
+                if getPrevious record <> expectedPrevious then
+                    yield $"revision %d{expectedRevision} previousDigest does not bind the preceding record"
+                if getDigest record <> calculate record then
+                    yield $"revision %d{expectedRevision} digest does not match its structured inputs"
+            ])
         |> List.concat
 
     let validateRouteLedger (expectedSubject: string) (records: RouteRecord list) =
         let errors =
-            [ if List.isEmpty records then yield "structured route ledger is empty"
-              for record in records do
-                  if record.Schema <> RouteSchema then yield $"schema must be '%s{RouteSchema}'"
-                  if record.Subject <> expectedSubject then yield "subject does not match the routed item"
-                  if record.PolicyVersion <> PolicyVersion then yield $"policyVersion must be '%s{PolicyVersion}'"
-                  yield! blank "agent" record.Agent
-                  yield! blank "timestamp" record.Timestamp
-                  yield! timestamp record.Timestamp
-                  yield! values "scope" record.Scope
-                  yield! values "dependencies" record.Dependencies
-                  yield! values "touchSet" record.TouchSet
-                  yield! values "reasonCodes" record.ReasonCodes
-                  yield! blank "rationale" record.Rationale
-                  let receipt : DeliveryRoute.Receipt =
-                      { Schema = DeliveryRoute.Schema; Subject = record.Subject; SubjectRevision = record.Digest
-                        Route = record.Route; Agent = record.Agent; Timestamp = record.Timestamp
-                        ReasonCodes = record.ReasonCodes; Rationale = record.Rationale
-                        DeclaredImpacts = [ "structured-scope" ]; ObservedFacts = [ "structured-dependencies" ]
-                        SddWorkId = record.SddWorkId; SpecHome = record.SpecHome; RequiredGates = record.RequiredGates }
-                  match DeliveryRoute.validate record.Subject record.Digest receipt with
-                  | Ok _ -> ()
-                  | Error routeErrors -> yield! routeErrors
-              yield! chainErrors (fun (record: RouteRecord) -> record.Revision) _.PreviousDigest _.Digest routeDigest records ]
-        if List.isEmpty errors then Ok(List.last records) else Error errors
+            [
+                if List.isEmpty records then
+                    yield "structured route ledger is empty"
+                for record in records do
+                    if record.Schema <> RouteSchema then
+                        yield $"schema must be '%s{RouteSchema}'"
+
+                    if record.Subject <> expectedSubject then
+                        yield "subject does not match the routed item"
+
+                    if record.PolicyVersion <> PolicyVersion then
+                        yield $"policyVersion must be '%s{PolicyVersion}'"
+
+                    yield! blank "agent" record.Agent
+                    yield! blank "timestamp" record.Timestamp
+                    yield! timestamp record.Timestamp
+                    yield! values "scope" record.Scope
+                    yield! values "dependencies" record.Dependencies
+                    yield! values "touchSet" record.TouchSet
+                    yield! values "reasonCodes" record.ReasonCodes
+                    yield! blank "rationale" record.Rationale
+
+                    let receipt: DeliveryRoute.Receipt =
+                        {
+                            Schema = DeliveryRoute.Schema
+                            Subject = record.Subject
+                            SubjectRevision = record.Digest
+                            Route = record.Route
+                            Agent = record.Agent
+                            Timestamp = record.Timestamp
+                            ReasonCodes = record.ReasonCodes
+                            Rationale = record.Rationale
+                            DeclaredImpacts = [ "structured-scope" ]
+                            ObservedFacts = [ "structured-dependencies" ]
+                            SddWorkId = record.SddWorkId
+                            SpecHome = record.SpecHome
+                            RequiredGates = record.RequiredGates
+                        }
+
+                    match DeliveryRoute.validate record.Subject record.Digest receipt with
+                    | Ok _ -> ()
+                    | Error routeErrors -> yield! routeErrors
+                yield!
+                    chainErrors
+                        (fun (record: RouteRecord) -> record.Revision)
+                        _.PreviousDigest
+                        _.Digest
+                        routeDigest
+                        records
+            ]
+
+        if List.isEmpty errors then
+            Ok(List.last records)
+        else
+            Error errors
 
     let validateReviewLedger (expectedSubject: string) (records: ReviewRecord list) =
         let mutable generationCritic: string option = None
         let mutable expectedConfirmationRound = 0
+
         let errors =
-            [ if List.isEmpty records then yield "structured review ledger is empty"
-              match records with
-              | first :: _ when first.Kind <> Initial -> yield "structured review ledger must begin with an initial record"
-              | _ -> ()
-              for index, record in records |> List.indexed do
-                  let preceding = if index = 0 then None else Some records[index - 1]
-                  match record.Kind, preceding with
-                  | Initial, None ->
-                      generationCritic <- Some record.Critic
-                      expectedConfirmationRound <- 0
-                  | Initial, Some prior when prior.Kind = Acceptance ->
-                      generationCritic <- Some record.Critic
-                      expectedConfirmationRound <- 0
-                      if prior.HeadSha = record.HeadSha then
-                          yield "a new review generation requires head movement after host acceptance"
-                  | Initial, Some _ ->
-                      // THE ANSWER TRAVELS WITH THE REFUSAL (.github#2694 acceptance 4). This is the exact
-                      // string, and the exact moment, at which a wedged critic is standing: they have just
-                      // tried to append a second `initial` to escape a generation that cannot be accepted.
-                      // Saying only "not allowed" leaves them to rediscover the route under time pressure,
-                      // which on 2026-08-15 cost PR #2682 a whole digest-chained review chain before the
-                      // successor PR #2692 was reached by trial. So the refusal names the route.
-                      yield
-                          "a new initial review is allowed only after host acceptance — a REFUSED generation "
-                          + "gains no fresh-initial escape, because retirement applies only to an ACCEPTED one, "
-                          + "at this head and after the head moves. For a generation that is genuinely terminal "
-                          + "(the ordinary and repair-phase confirmation ceilings exhausted), the answer is a "
-                          + "SUCCESSOR PULL REQUEST: open a fresh, separately scoped pull request and close this "
-                          + "one unmerged with its records preserved — never a second initial record here."
-                  | (Confirmation | Escalation | RepairPhase | Acceptance), Some prior when prior.Kind = Acceptance ->
-                      yield "host acceptance may be followed only by a new initial review generation"
-                  | Confirmation, _ ->
-                      expectedConfirmationRound <- expectedConfirmationRound + 1
-                      if record.Round <> expectedConfirmationRound then
-                          yield $"confirmation round must be contiguous within its generation: expected %d{expectedConfirmationRound}"
-                  | (Escalation | RepairPhase | Acceptance), _ -> ()
-                  | _, _ -> ()
+            [
+                if List.isEmpty records then
+                    yield "structured review ledger is empty"
+                match records with
+                | first :: _ when first.Kind <> Initial ->
+                    yield "structured review ledger must begin with an initial record"
+                | _ -> ()
+                for index, record in records |> List.indexed do
+                    let preceding = if index = 0 then None else Some records[index - 1]
 
-                  // CRITIC GENERATION CONTINUITY (.github#2756). A confirmation after a
-                  // changes-required record is an ordinary fresh-successor boundary: the successor
-                  // inherits the finding and chain linkage, but none of the predecessor's clearances,
-                  // and therefore authors a complete confirmation verdict. The durable ReviewWait
-                  // marker is the queue/lifetime authority; the append-only review record is the
-                  // completion authority. Historical explicit succession grants remain valid.
-                  //
-                  // The no-grant arm is textually and behaviourally what it has always been, including its
-                  // message: an identity change nobody granted is refused exactly as before, which is the
-                  // property this change must not weaken and the reason the pre-existing differing-critic
-                  // test passes unmodified.
-                  //
-                  // The grant arm exists because `.github#2417` taught the DECISION layer that a chain
-                  // whose critic despawned can be handed to a successor, and never taught the LEDGER — so
-                  // a granted successor could review and then had no honest shape to record in. It applies
-                  // to `Confirmation`, `Escalation` and `RepairPhase` alike: the rule below is keyed on
-                  // `Kind <> Initial`, so exempting `Confirmation` alone would leave a successor able to
-                  // pass a chain but unable to escalate one into the repair phase, which was measured on a
-                  // live chain rather than inferred.
-                  //
-                  // Admitting REBINDS `generationCritic`, and that is the whole mechanism: every later
-                  // record in the generation — including the host's `acceptance` — then binds the
-                  // successor through this same unchanged conjunct, and a second grant (a successor can
-                  // itself despawn) must name the successor as ITS outgoing critic.
-                  let successionErrors =
-                      match record.Succession with
-                      | None ->
-                          let ordinarySuccessor =
-                              record.Kind = Confirmation
-                              && (preceding |> Option.exists (fun prior -> prior.Verdict = ChangesRequired))
-                          [ if record.Kind <> Initial && generationCritic <> Some record.Critic && not ordinarySuccessor then
-                                yield "every record in one review generation must bind the same critic" ]
-                      | Some grant ->
-                          [ match record.Kind with
-                            | Initial | Acceptance ->
-                                // An initial binds its own generation critic outright and has nothing to
-                                // succeed; an acceptance is the host's record and by then the seat has
-                                // already changed hands. Neither is a succession.
-                                yield "a critic-succession grant belongs to a confirmation, escalation, or repair-phase record"
-                            | Confirmation | Escalation | RepairPhase ->
-                                if generationCritic = Some record.Critic then
-                                    // Succession is an exception to a rule. A record that does not trip
-                                    // that rule has no exception to claim, and a decorative grant would
-                                    // assert a provenance no reader could tell from a real one.
-                                    yield "a critic-succession grant requires a record that changes the generation's critic"
-                                elif generationCritic <> Some grant.OriginalCritic then
-                                    yield "a critic-succession grant must name the generation's current critic as its outgoing critic"
-                                elif String.IsNullOrWhiteSpace grant.GrantedBy then
-                                    yield "a critic-succession grant must name the granting identity"
-                                elif String.IsNullOrWhiteSpace grant.GrantUrl then
-                                    yield "a critic-succession grant must name the grant's URL"
-                                elif isGenericCriticIdentity grant.OriginalCritic
-                                     || isGenericCriticIdentity record.Critic
-                                     || isGenericCriticIdentity grant.GrantedBy then
-                                    // .github#2451 in the successor slot: a bare `fsgg-critic-<route>`
-                                    // string is shared by every critic ever dispatched at that route, so
-                                    // it witnesses nothing about which instance reviewed.
-                                    yield "a critic-succession grant must bind minted, distinguishing identities" ]
+                    match record.Kind, preceding with
+                    | Initial, None ->
+                        generationCritic <- Some record.Critic
+                        expectedConfirmationRound <- 0
+                    | Initial, Some prior when prior.Kind = Acceptance ->
+                        generationCritic <- Some record.Critic
+                        expectedConfirmationRound <- 0
 
-                  yield! successionErrors
+                        if prior.HeadSha = record.HeadSha then
+                            yield "a new review generation requires head movement after host acceptance"
+                    | Initial, Some _ ->
+                        // THE ANSWER TRAVELS WITH THE REFUSAL (.github#2694 acceptance 4). This is the exact
+                        // string, and the exact moment, at which a wedged critic is standing: they have just
+                        // tried to append a second `initial` to escape a generation that cannot be accepted.
+                        // Saying only "not allowed" leaves them to rediscover the route under time pressure,
+                        // which on 2026-08-15 cost PR #2682 a whole digest-chained review chain before the
+                        // successor PR #2692 was reached by trial. So the refusal names the route.
+                        yield
+                            "a new initial review is allowed only after host acceptance — a REFUSED generation "
+                            + "gains no fresh-initial escape, because retirement applies only to an ACCEPTED one, "
+                            + "at this head and after the head moves. For a generation that is genuinely terminal "
+                            + "(the ordinary and repair-phase confirmation ceilings exhausted), the answer is a "
+                            + "SUCCESSOR PULL REQUEST: open a fresh, separately scoped pull request and close this "
+                            + "one unmerged with its records preserved — never a second initial record here."
+                    | (Confirmation | Escalation | RepairPhase | Acceptance), Some prior when prior.Kind = Acceptance ->
+                        yield "host acceptance may be followed only by a new initial review generation"
+                    | Confirmation, _ ->
+                        expectedConfirmationRound <- expectedConfirmationRound + 1
 
-                  let ordinarySuccessor =
-                      record.Succession.IsNone
-                      && record.Kind = Confirmation
-                      && generationCritic <> Some record.Critic
-                      && (preceding |> Option.exists (fun prior -> prior.Verdict = ChangesRequired))
+                        if record.Round <> expectedConfirmationRound then
+                            yield
+                                $"confirmation round must be contiguous within its generation: expected %d{expectedConfirmationRound}"
+                    | (Escalation | RepairPhase | Acceptance), _ -> ()
+                    | _, _ -> ()
 
-                  if (record.Succession.IsSome || ordinarySuccessor) && List.isEmpty successionErrors then
-                      generationCritic <- Some record.Critic
-              for record in records do
-                  if record.Schema <> ReviewSchema then yield $"schema must be '%s{ReviewSchema}'"
-                  if record.Subject <> expectedSubject then yield "subject does not match the pull request"
-                  if record.PolicyVersion <> PolicyVersion then yield $"policyVersion must be '%s{PolicyVersion}'"
-                  yield! blank "headSha" record.HeadSha
-                  if not (sha record.HeadSha) then yield "headSha must be an exact 40-hex commit SHA"
-                  if record.Kind = Acceptance then
-                      // `None,None` is the historical v2 shape. It remains parseable so an accepted old
-                      // generation can retire cleanly, but it grants no landing authority: the live
-                      // consumers require both values. Every newly written acceptance gets both from
-                      // `review record`; partial or malformed bindings are never a legacy shape.
-                      match record.ClaimGeneration, record.BaseSha with
-                      | None, None -> ()
-                      | Some claim, Some baseSha ->
-                          if String.IsNullOrWhiteSpace claim then yield "acceptance claimGeneration must not be blank"
-                          if not (sha baseSha) then yield "acceptance baseSha must be an exact 40-hex commit SHA"
-                      | _ -> yield "acceptance claimGeneration and baseSha must be supplied together"
-                  elif record.ClaimGeneration.IsSome || record.BaseSha.IsSome then
-                      yield "claimGeneration and baseSha belong to the acceptance record"
-                  yield! blank "critic" record.Critic
-                  if record.RouteApplicability <> "meaningful" && record.RouteApplicability <> "not-meaningful" then
-                      yield "routeApplicability must be meaningful or not-meaningful"
-                  if record.RouteApplicability = "meaningful" && List.length record.RouteEvidence <> 4 then
-                      yield "meaningful route evidence must contain exactly four ordered entries: built artifact, executed command, compared routes, and observed result"
-                  if record.RouteApplicability = "not-meaningful" && List.length record.RouteEvidence <> 1 then
-                      yield "not-meaningful route evidence must contain exactly one reason"
-                  yield! blank "timestamp" record.Timestamp
-                  yield! timestamp record.Timestamp
-                  if record.Revision < 1 then yield "revision must be positive"
-                  match record.Kind, record.Verdict with
-                  | Acceptance, Accepted -> ()
-                  | Acceptance, _ -> yield "acceptance records must carry verdict accepted"
-                  | (Initial | Confirmation), (Pass | ChangesRequired) -> ()
-                  | (Escalation | RepairPhase), ChangesRequired -> ()
-                  | _ -> yield "review records must carry pass or changes-required"
-                  if record.Kind = Initial && record.Round <> 0 then yield "initial review round must be zero"
-                  if record.Kind = Confirmation && record.Round < 1 then yield "confirmation round must be positive"
-                  if record.Kind = Initial && (record.InitialReview.IsSome || record.PrecedingReview.IsSome) then
-                      yield "initial review records cannot carry review back-references"
-                  if record.Kind <> Initial && record.InitialReview |> Option.exists String.IsNullOrWhiteSpace then
-                      yield "initialReview must be non-empty when present"
-                  if record.Kind <> Initial && record.InitialReview.IsNone then
-                      yield "non-initial review records must bind the initial review"
-                  if record.Kind <> Initial && record.PrecedingReview.IsNone then
-                      yield "non-initial review records must bind the preceding review"
-                  if record.Kind = Acceptance && not (List.isEmpty record.AcceptedExceptions) then
-                      yield "accepted exceptions belong to critic review records, not host acceptance"
-                  if record.Kind <> Initial && record.DiffAuditRequired then
-                      yield "diffAuditRequired belongs to the initial review record"
-                  if record.Kind <> Acceptance && not (List.isEmpty record.DiffAuditReceipts) then
-                      yield "diffAuditReceipts belong to the acceptance record"
-                  match record.Kind, record.RepairPhaseReceipt with
-                  | RepairPhase, Some receipt ->
-                      if receipt.ExhaustedPr <= 0 then yield "repairPhaseReceipt.exhaustedPr must be positive"
-                      if receipt.EscalationCommentId <= 0L then yield "repairPhaseReceipt.escalationCommentId must be positive"
-                      yield! blank "repairPhaseReceipt.newClaimGeneration" receipt.NewClaimGeneration
-                      yield! blank "repairPhaseReceipt.newBranchOrPr" receipt.NewBranchOrPr
-                      yield! blank "repairPhaseReceipt.newImplementerIdentity" receipt.NewImplementerIdentity
-                      yield! blank "repairPhaseReceipt.newCriticIdentity" receipt.NewCriticIdentity
-                      yield! blank "repairPhaseReceipt.candidateHeadSha" receipt.CandidateHeadSha
-                      if not (sha receipt.CandidateHeadSha) then
-                          yield "repairPhaseReceipt.candidateHeadSha must be an exact 40-hex commit SHA"
-                  | RepairPhase, None -> () // legacy v2 records remain readable; the live writer requires the receipt.
-                  | _, Some _ -> yield "repairPhaseReceipt belongs to a repair-phase record"
-                  | _, None -> ()
-                  if record.DiffAuditReceipts |> List.exists String.IsNullOrWhiteSpace then
-                      yield "diffAuditReceipts must contain only non-empty encoded receipts"
-                  if record.AcceptedExceptions |> List.exists String.IsNullOrWhiteSpace then
-                      yield "acceptedExceptions must contain only non-empty identifiers"
-              yield! chainErrors (fun (record: ReviewRecord) -> record.Revision) _.PreviousDigest _.Digest reviewDigest records ]
+                    // CRITIC GENERATION CONTINUITY (.github#2756). A confirmation after a
+                    // changes-required record is an ordinary fresh-successor boundary: the successor
+                    // inherits the finding and chain linkage, but none of the predecessor's clearances,
+                    // and therefore authors a complete confirmation verdict. The durable ReviewWait
+                    // marker is the queue/lifetime authority; the append-only review record is the
+                    // completion authority. Historical explicit succession grants remain valid.
+                    //
+                    // The no-grant arm is textually and behaviourally what it has always been, including its
+                    // message: an identity change nobody granted is refused exactly as before, which is the
+                    // property this change must not weaken and the reason the pre-existing differing-critic
+                    // test passes unmodified.
+                    //
+                    // The grant arm exists because `.github#2417` taught the DECISION layer that a chain
+                    // whose critic despawned can be handed to a successor, and never taught the LEDGER — so
+                    // a granted successor could review and then had no honest shape to record in. It applies
+                    // to `Confirmation`, `Escalation` and `RepairPhase` alike: the rule below is keyed on
+                    // `Kind <> Initial`, so exempting `Confirmation` alone would leave a successor able to
+                    // pass a chain but unable to escalate one into the repair phase, which was measured on a
+                    // live chain rather than inferred.
+                    //
+                    // Admitting REBINDS `generationCritic`, and that is the whole mechanism: every later
+                    // record in the generation — including the host's `acceptance` — then binds the
+                    // successor through this same unchanged conjunct, and a second grant (a successor can
+                    // itself despawn) must name the successor as ITS outgoing critic.
+                    let successionErrors =
+                        match record.Succession with
+                        | None ->
+                            let ordinarySuccessor =
+                                record.Kind = Confirmation
+                                && (preceding |> Option.exists (fun prior -> prior.Verdict = ChangesRequired))
+
+                            [
+                                if
+                                    record.Kind <> Initial
+                                    && generationCritic <> Some record.Critic
+                                    && not ordinarySuccessor
+                                then
+                                    yield "every record in one review generation must bind the same critic"
+                            ]
+                        | Some grant ->
+                            [
+                                match record.Kind with
+                                | Initial
+                                | Acceptance ->
+                                    // An initial binds its own generation critic outright and has nothing to
+                                    // succeed; an acceptance is the host's record and by then the seat has
+                                    // already changed hands. Neither is a succession.
+                                    yield
+                                        "a critic-succession grant belongs to a confirmation, escalation, or repair-phase record"
+                                | Confirmation
+                                | Escalation
+                                | RepairPhase ->
+                                    if generationCritic = Some record.Critic then
+                                        // Succession is an exception to a rule. A record that does not trip
+                                        // that rule has no exception to claim, and a decorative grant would
+                                        // assert a provenance no reader could tell from a real one.
+                                        yield
+                                            "a critic-succession grant requires a record that changes the generation's critic"
+                                    elif generationCritic <> Some grant.OriginalCritic then
+                                        yield
+                                            "a critic-succession grant must name the generation's current critic as its outgoing critic"
+                                    elif String.IsNullOrWhiteSpace grant.GrantedBy then
+                                        yield "a critic-succession grant must name the granting identity"
+                                    elif String.IsNullOrWhiteSpace grant.GrantUrl then
+                                        yield "a critic-succession grant must name the grant's URL"
+                                    elif
+                                        isGenericCriticIdentity grant.OriginalCritic
+                                        || isGenericCriticIdentity record.Critic
+                                        || isGenericCriticIdentity grant.GrantedBy
+                                    then
+                                        // .github#2451 in the successor slot: a bare `fsgg-critic-<route>`
+                                        // string is shared by every critic ever dispatched at that route, so
+                                        // it witnesses nothing about which instance reviewed.
+                                        yield "a critic-succession grant must bind minted, distinguishing identities"
+                            ]
+
+                    yield! successionErrors
+
+                    let ordinarySuccessor =
+                        record.Succession.IsNone
+                        && record.Kind = Confirmation
+                        && generationCritic <> Some record.Critic
+                        && (preceding |> Option.exists (fun prior -> prior.Verdict = ChangesRequired))
+
+                    if (record.Succession.IsSome || ordinarySuccessor) && List.isEmpty successionErrors then
+                        generationCritic <- Some record.Critic
+                for record in records do
+                    if record.Schema <> ReviewSchema then
+                        yield $"schema must be '%s{ReviewSchema}'"
+
+                    if record.Subject <> expectedSubject then
+                        yield "subject does not match the pull request"
+
+                    if record.PolicyVersion <> PolicyVersion then
+                        yield $"policyVersion must be '%s{PolicyVersion}'"
+
+                    yield! blank "headSha" record.HeadSha
+
+                    if not (sha record.HeadSha) then
+                        yield "headSha must be an exact 40-hex commit SHA"
+
+                    if record.Kind = Acceptance then
+                        // `None,None` is the historical v2 shape. It remains parseable so an accepted old
+                        // generation can retire cleanly, but it grants no landing authority: the live
+                        // consumers require both values. Every newly written acceptance gets both from
+                        // `review record`; partial or malformed bindings are never a legacy shape.
+                        match record.ClaimGeneration, record.BaseSha with
+                        | None, None -> ()
+                        | Some claim, Some baseSha ->
+                            if String.IsNullOrWhiteSpace claim then
+                                yield "acceptance claimGeneration must not be blank"
+
+                            if not (sha baseSha) then
+                                yield "acceptance baseSha must be an exact 40-hex commit SHA"
+                        | _ -> yield "acceptance claimGeneration and baseSha must be supplied together"
+                    elif record.ClaimGeneration.IsSome || record.BaseSha.IsSome then
+                        yield "claimGeneration and baseSha belong to the acceptance record"
+
+                    yield! blank "critic" record.Critic
+
+                    if
+                        record.RouteApplicability <> "meaningful"
+                        && record.RouteApplicability <> "not-meaningful"
+                    then
+                        yield "routeApplicability must be meaningful or not-meaningful"
+
+                    if
+                        record.RouteApplicability = "meaningful"
+                        && List.length record.RouteEvidence <> 4
+                    then
+                        yield
+                            "meaningful route evidence must contain exactly four ordered entries: built artifact, executed command, compared routes, and observed result"
+
+                    if
+                        record.RouteApplicability = "not-meaningful"
+                        && List.length record.RouteEvidence <> 1
+                    then
+                        yield "not-meaningful route evidence must contain exactly one reason"
+
+                    yield! blank "timestamp" record.Timestamp
+                    yield! timestamp record.Timestamp
+
+                    if record.Revision < 1 then
+                        yield "revision must be positive"
+
+                    match record.Kind, record.Verdict with
+                    | Acceptance, Accepted -> ()
+                    | Acceptance, _ -> yield "acceptance records must carry verdict accepted"
+                    | (Initial | Confirmation), (Pass | ChangesRequired) -> ()
+                    | (Escalation | RepairPhase), ChangesRequired -> ()
+                    | _ -> yield "review records must carry pass or changes-required"
+
+                    if record.Kind = Initial && record.Round <> 0 then
+                        yield "initial review round must be zero"
+
+                    if record.Kind = Confirmation && record.Round < 1 then
+                        yield "confirmation round must be positive"
+
+                    if
+                        record.Kind = Initial
+                        && (record.InitialReview.IsSome || record.PrecedingReview.IsSome)
+                    then
+                        yield "initial review records cannot carry review back-references"
+
+                    if
+                        record.Kind <> Initial
+                        && record.InitialReview |> Option.exists String.IsNullOrWhiteSpace
+                    then
+                        yield "initialReview must be non-empty when present"
+
+                    if record.Kind <> Initial && record.InitialReview.IsNone then
+                        yield "non-initial review records must bind the initial review"
+
+                    if record.Kind <> Initial && record.PrecedingReview.IsNone then
+                        yield "non-initial review records must bind the preceding review"
+
+                    if record.Kind = Acceptance && not (List.isEmpty record.AcceptedExceptions) then
+                        yield "accepted exceptions belong to critic review records, not host acceptance"
+
+                    if record.Kind <> Initial && record.DiffAuditRequired then
+                        yield "diffAuditRequired belongs to the initial review record"
+
+                    if record.Kind <> Acceptance && not (List.isEmpty record.DiffAuditReceipts) then
+                        yield "diffAuditReceipts belong to the acceptance record"
+
+                    match record.Kind, record.RepairPhaseReceipt with
+                    | RepairPhase, Some receipt ->
+                        if receipt.ExhaustedPr <= 0 then
+                            yield "repairPhaseReceipt.exhaustedPr must be positive"
+
+                        if receipt.EscalationCommentId <= 0L then
+                            yield "repairPhaseReceipt.escalationCommentId must be positive"
+
+                        yield! blank "repairPhaseReceipt.newClaimGeneration" receipt.NewClaimGeneration
+                        yield! blank "repairPhaseReceipt.newBranchOrPr" receipt.NewBranchOrPr
+                        yield! blank "repairPhaseReceipt.newImplementerIdentity" receipt.NewImplementerIdentity
+                        yield! blank "repairPhaseReceipt.newCriticIdentity" receipt.NewCriticIdentity
+                        yield! blank "repairPhaseReceipt.candidateHeadSha" receipt.CandidateHeadSha
+
+                        if not (sha receipt.CandidateHeadSha) then
+                            yield "repairPhaseReceipt.candidateHeadSha must be an exact 40-hex commit SHA"
+                    | RepairPhase, None -> () // legacy v2 records remain readable; the live writer requires the receipt.
+                    | _, Some _ -> yield "repairPhaseReceipt belongs to a repair-phase record"
+                    | _, None -> ()
+
+                    if record.DiffAuditReceipts |> List.exists String.IsNullOrWhiteSpace then
+                        yield "diffAuditReceipts must contain only non-empty encoded receipts"
+
+                    if record.AcceptedExceptions |> List.exists String.IsNullOrWhiteSpace then
+                        yield "acceptedExceptions must contain only non-empty identifiers"
+                yield!
+                    chainErrors
+                        (fun (record: ReviewRecord) -> record.Revision)
+                        _.PreviousDigest
+                        _.Digest
+                        reviewDigest
+                        records
+            ]
+
         if List.isEmpty errors then Ok records else Error errors
 
     let toEffectiveRoute (record: RouteRecord) : DeliveryRoute.Receipt =
-        { Schema = DeliveryRoute.Schema; Subject = record.Subject; SubjectRevision = record.Digest
-          Route = record.Route; Agent = record.Agent; Timestamp = record.Timestamp
-          ReasonCodes = record.ReasonCodes; Rationale = record.Rationale
-          DeclaredImpacts = [ "structured-scope" ]; ObservedFacts = [ "structured-dependencies" ]
-          SddWorkId = record.SddWorkId; SpecHome = record.SpecHome; RequiredGates = record.RequiredGates }
+        {
+            Schema = DeliveryRoute.Schema
+            Subject = record.Subject
+            SubjectRevision = record.Digest
+            Route = record.Route
+            Agent = record.Agent
+            Timestamp = record.Timestamp
+            ReasonCodes = record.ReasonCodes
+            Rationale = record.Rationale
+            DeclaredImpacts = [ "structured-scope" ]
+            ObservedFacts = [ "structured-dependencies" ]
+            SddWorkId = record.SddWorkId
+            SpecHome = record.SpecHome
+            RequiredGates = record.RequiredGates
+        }

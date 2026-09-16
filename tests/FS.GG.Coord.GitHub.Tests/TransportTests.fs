@@ -8,28 +8,35 @@ open FS.GG.Coord.GitHub.Transport
 /// A response that succeeded, with a body.
 let ok (body: string) =
     Ok
-        { Status = 200
-          Body = body
-          ETag = None
-          NextLink = None; Headers = Map.empty }
+        {
+            Status = 200
+            Body = body
+            ETag = None
+            NextLink = None
+            Headers = Map.empty
+        }
 
 let request path budget =
-    { Method = "GET"
-      Path = path
-      Query = []
-      Body = NoBody
-      Budget = budget
-      IfNoneMatch = None
-      Subject = path }
+    {
+        Method = "GET"
+        Path = path
+        Query = []
+        Body = NoBody
+        Budget = budget
+        IfNoneMatch = None
+        Subject = path
+    }
 
 [<Fact>]
 let ``response header lookup is case-insensitive for GitHub rate-limit headers`` () =
     let response =
-        { Status = 403
-          Body = "rate limited"
-          Headers = Map.ofList [ "x-ratelimit-resource", "core"; "x-ratelimit-reset", "1893456000" ]
-          ETag = None
-          NextLink = None }
+        {
+            Status = 403
+            Body = "rate limited"
+            Headers = Map.ofList [ "x-ratelimit-resource", "core"; "x-ratelimit-reset", "1893456000" ]
+            ETag = None
+            NextLink = None
+        }
 
     Assert.Equal(Some "core", Transport.header "X-RateLimit-Resource" response)
     Assert.Equal(Some "1893456000", Transport.header "X-RateLimit-Reset" response)
@@ -56,8 +63,7 @@ let ``a FAILED call still counts - you were charged for it`` () =
     // The `gh` stub increments its counter BEFORE it injects its 403, and it is right to: a call that came
     // back rate-limited is a call you made and were billed for. Counting only successes would report a
     // budget you did not spend — and the one thing a meter exists to do is tell you what you spent.
-    let recorder =
-        Fake.Recorder(fun _ -> Error(RateLimited(UnknownBudget, None)))
+    let recorder = Fake.Recorder(fun _ -> Error(RateLimited(UnknownBudget, None)))
 
     let transport = recorder :> IGitHubTransport
 
@@ -101,11 +107,14 @@ let ``the log names a SINGLE_SELECT write in the gh stub's grammar`` () =
             Body =
                 Query(
                     "mutation { updateProjectV2ItemFieldValue(input: {...}) { clientMutationId } }",
-                    [ "itemId", VId "PVTI_coord123"
-                      "projectId", VId "PVT_coord"
-                      "fieldId", VId "PVTSSF_phase"
-                      "optionId", VId "opt_p2" ]
-                ) }
+                    [
+                        "itemId", VId "PVTI_coord123"
+                        "projectId", VId "PVT_coord"
+                        "fieldId", VId "PVTSSF_phase"
+                        "optionId", VId "opt_p2"
+                    ]
+                )
+        }
     |> ignore
 
     Assert.True(recorder.Logged "--single-select-option-id opt_p2")
@@ -127,10 +136,13 @@ let ``an EMPTY value is --clear, never --text with an empty string`` () =
             Body =
                 Query(
                     "mutation { clearProjectV2ItemFieldValue(input: {...}) { clientMutationId } }",
-                    [ "itemId", VId "PVTI_coord123"
-                      "projectId", VId "PVT_coord"
-                      "fieldId", VId "PVTSSF_blocked" ]
-                ) }
+                    [
+                        "itemId", VId "PVTI_coord123"
+                        "projectId", VId "PVT_coord"
+                        "fieldId", VId "PVTSSF_blocked"
+                    ]
+                )
+        }
     |> ignore
 
     Assert.True(recorder.Logged "--clear")
@@ -146,7 +158,8 @@ let ``the aliased batch document is logged whole - one document, aliases in orde
 
     transport.Send
         { request "graphql" GraphQl with
-            Body = Query(document, []) }
+            Body = Query(document, [])
+        }
     |> ignore
 
     Assert.True(recorder.Logged "batch-mutation mutation {")
@@ -172,21 +185,25 @@ let ``the comment verbs are the stub's verbs - post, delete, patch, list`` () =
     let recorder = Fake.Recorder(fun _ -> ok "[]")
     let transport = recorder :> IGitHubTransport
 
-    transport.Send(request "repos/FS-GG/FS.GG.SDD/issues/70/comments" Rest) |> ignore
+    transport.Send(request "repos/FS-GG/FS.GG.SDD/issues/70/comments" Rest)
+    |> ignore
 
     transport.Send
         { request "repos/FS-GG/FS.GG.SDD/issues/70/comments" Rest with
-            Method = "POST" }
+            Method = "POST"
+        }
     |> ignore
 
     transport.Send
         { request "repos/FS-GG/FS.GG.SDD/issues/comments/901" Rest with
-            Method = "DELETE" }
+            Method = "DELETE"
+        }
     |> ignore
 
     transport.Send
         { request "repos/FS-GG/FS.GG.SDD/issues/comments/901" Rest with
-            Method = "PATCH" }
+            Method = "PATCH"
+        }
     |> ignore
 
     Assert.True(recorder.Logged "comment-list FS-GG/FS.GG.SDD 70")
@@ -204,7 +221,8 @@ let ``#418 the assignee goes over REST - it is never a GraphQL issue-edit`` () =
 
     transport.Send
         { request "repos/FS-GG/FS.GG.SDD/issues/70/assignees" Rest with
-            Method = "POST" }
+            Method = "POST"
+        }
     |> ignore
 
     Assert.True(recorder.Logged "assignee-post FS-GG/FS.GG.SDD 70")
@@ -234,7 +252,8 @@ let ``#507 the child's id is sent as a JSON NUMBER, not a string`` () =
     transport.Send
         { request "repos/FS-GG/FS.GG.SDD/issues/42/sub_issues" Rest with
             Method = "POST"
-            Body = Json """{"sub_issue_id":1047}""" }
+            Body = Json """{"sub_issue_id":1047}"""
+        }
     |> ignore
 
     Assert.True(recorder.Logged "sub-issue-add FS-GG/FS.GG.SDD 42 -F sub_issue_id=1047")

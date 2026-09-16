@@ -22,31 +22,53 @@ open FS.GG.Coord.Lanes
 module LanesTests =
 
     let private refIn owner repo n : Ref =
-        { Owner = owner; Repo = repo; Number = n }
+        {
+            Owner = owner
+            Repo = repo
+            Number = n
+        }
 
     let private ref n = refIn "FS-GG" "FS.GG.SDD" n
 
     let private itemAt r paths : Item =
-        { Ref = r
-          PathRepo = r.Repo
-          Status = Ready
-          State = Open
-          TouchSet = Declared(paths |> List.map Matchable)
-          Blockers = []
-          Claim = None
-          ItemPr = None
-          ItemPrUnreadable = false
-          HumanBlock = None
-          Predicate = None
-          Class = None
-          Kind = None
-          BoardKind = None
-          CommentCount = None
-          BoardClass = None
-          DeliveryRoute = DeliveryRoute.Current { Schema = DeliveryRoute.Schema; Subject = "test"; SubjectRevision = "test"; Route = Some DeliveryRoute.Lightweight; Agent = "test"; Timestamp = "2026-01-01T00:00:00Z"; ReasonCodes = [ "test" ]; Rationale = "test"; DeclaredImpacts = [ "test" ]; ObservedFacts = [ "test" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
-          Severity = Unset
-          Phase = None
-          AgeDays = None }
+        {
+            Ref = r
+            PathRepo = r.Repo
+            Status = Ready
+            State = Open
+            TouchSet = Declared(paths |> List.map Matchable)
+            Blockers = []
+            Claim = None
+            ItemPr = None
+            ItemPrUnreadable = false
+            HumanBlock = None
+            Predicate = None
+            Class = None
+            Kind = None
+            BoardKind = None
+            CommentCount = None
+            BoardClass = None
+            DeliveryRoute =
+                DeliveryRoute.Current
+                    {
+                        Schema = DeliveryRoute.Schema
+                        Subject = "test"
+                        SubjectRevision = "test"
+                        Route = Some DeliveryRoute.Lightweight
+                        Agent = "test"
+                        Timestamp = "2026-01-01T00:00:00Z"
+                        ReasonCodes = [ "test" ]
+                        Rationale = "test"
+                        DeclaredImpacts = [ "test" ]
+                        ObservedFacts = [ "test" ]
+                        SddWorkId = None
+                        SpecHome = None
+                        RequiredGates = []
+                    }
+            Severity = Unset
+            Phase = None
+            AgeDays = None
+        }
 
     let private item n paths = itemAt (ref n) paths
 
@@ -56,17 +78,21 @@ module LanesTests =
         { it with
             Claim =
                 Some(
-                    { Worker = WorkerId w
-                      Session = None
-                      AgeSeconds = 10
-                      PreviousStatus = Some Ready },
+                    {
+                        Worker = WorkerId w
+                        Session = None
+                        AgeSeconds = 10
+                        PreviousStatus = Some Ready
+                    },
                     LeaseHeld
-                ) }
+                )
+        }
 
     let private always (_: Item) = true
 
     let private laneOf (p: Partition) (n: int) =
-        p.Lanes |> List.find (fun l -> l.Items |> List.exists (fun i -> i.Ref.Number = n))
+        p.Lanes
+        |> List.find (fun l -> l.Items |> List.exists (fun i -> i.Ref.Number = n))
 
     // ---- the core property ---------------------------------------------------------------------
 
@@ -120,8 +146,10 @@ module LanesTests =
         let b =
             item
                 2248
-                [ ".claude/skills/pnext-item/references/independent-review.md"
-                  "registry/driver-skill-manifest.json" ]
+                [
+                    ".claude/skills/pnext-item/references/independent-review.md"
+                    "registry/driver-skill-manifest.json"
+                ]
 
         // WITHOUT the roster, today's pre-repair-1 defect: one lane (this is the regression the gate-
         // inversion below re-proves — see the repair report's mutation).
@@ -134,7 +162,9 @@ module LanesTests =
         Assert.Equal(2, List.length (free always aware))
 
     [<Fact>]
-    let ``#2305 negative control — a directory-prefix claim over the generated artifact's parent still glues the lane (#309 trap)`` () =
+    let ``#2305 negative control — a directory-prefix claim over the generated artifact's parent still glues the lane (#309 trap)``
+        ()
+        =
         // ADR-0044's own caution, reproduced at the LANE level: declaring the generated file's PARENT
         // directory is a real claim over everything under it, generated or not (the `#309` test above).
         // `excludeGenerated` requires an EXACT stem match on BOTH sides — a directory prefix on one side
@@ -173,19 +203,32 @@ module LanesTests =
     [<Fact>]
     let ``a lane never spans repos`` () =
         let p =
-            partition Set.empty
-                [ itemAt (refIn "FS-GG" "FS.GG.SDD" 1) [ "src/" ]
-                  itemAt (refIn "FS-GG" "FS.GG.Game" 2) [ "src/" ] ]
+            partition
+                Set.empty
+                [
+                    itemAt (refIn "FS-GG" "FS.GG.SDD" 1) [ "src/" ]
+                    itemAt (refIn "FS-GG" "FS.GG.Game" 2) [ "src/" ]
+                ]
 
         for lane in p.Lanes do
-            let repos = lane.Items |> List.map (fun i -> (i.Ref.Owner, i.Ref.Repo)) |> List.distinct
+            let repos =
+                lane.Items |> List.map (fun i -> (i.Ref.Owner, i.Ref.Repo)) |> List.distinct
+
             Assert.Equal(1, List.length repos)
 
     [<Fact>]
     let ``#1732 paths use their declared repo scope, not the issue host repo`` () =
         let host = refIn "FS-GG" ".github" 0
-        let audio = { itemAt { host with Number = 1 } [ "scripts/skill-view" ] with PathRepo = "FS.GG.Audio" }
-        let github = { itemAt { host with Number = 2 } [ "scripts/skill-view" ] with PathRepo = ".github" }
+
+        let audio =
+            { itemAt { host with Number = 1 } [ "scripts/skill-view" ] with
+                PathRepo = "FS.GG.Audio"
+            }
+
+        let github =
+            { itemAt { host with Number = 2 } [ "scripts/skill-view" ] with
+                PathRepo = ".github"
+            }
 
         let p = partition Set.empty [ audio; github ]
 
@@ -205,7 +248,12 @@ module LanesTests =
         // this red (`Assert.Equal(2, ...)` observed against the reverted source before this fix;
         // restored and reconfirmed green here).
         let host = refIn "FS-GG" "FS.GG.SDD" 0
-        let sentinel = { itemAt { host with Number = 1 } [ "scripts/foo" ] with PathRepo = "cross-repo" }
+
+        let sentinel =
+            { itemAt { host with Number = 1 } [ "scripts/foo" ] with
+                PathRepo = "cross-repo"
+            }
+
         let rostered = itemAt { host with Number = 2 } [ "scripts/foo" ]
 
         let p = partition Set.empty [ sentinel; rostered ]
@@ -218,8 +266,15 @@ module LanesTests =
         // The fallback is "behave like an absent scope and use the item's OWN hosting repo" — not
         // "every cross-repo item shares one lane." Two items that both carry the sentinel but host in
         // different repos must stay disjoint, or the fix would trade one erasure for another.
-        let a = { itemAt (refIn "FS-GG" "FS.GG.SDD" 1) [ "scripts/foo" ] with PathRepo = "cross-repo" }
-        let b = { itemAt (refIn "FS-GG" "FS.GG.Game" 2) [ "scripts/foo" ] with PathRepo = "cross-repo" }
+        let a =
+            { itemAt (refIn "FS-GG" "FS.GG.SDD" 1) [ "scripts/foo" ] with
+                PathRepo = "cross-repo"
+            }
+
+        let b =
+            { itemAt (refIn "FS-GG" "FS.GG.Game" 2) [ "scripts/foo" ] with
+                PathRepo = "cross-repo"
+            }
 
         let p = partition Set.empty [ a; b ]
 
@@ -237,8 +292,15 @@ module LanesTests =
         // Gate-inversion evidence: reverting `pathRepoOf` to the pre-fix bare `item.PathRepo` (so
         // `"sir"` and `"S.I.R."` compare as two different strings) turns this red — observed by hand
         // against a scratch revert before this fix; restored and reconfirmed green here.
-        let a = { itemAt (refIn "FS-GG" "S.I.R." 1) [ "scripts/foo" ] with PathRepo = "sir" }
-        let b = { itemAt (refIn "FS-GG" "S.I.R." 2) [ "scripts/foo" ] with PathRepo = "S.I.R." }
+        let a =
+            { itemAt (refIn "FS-GG" "S.I.R." 1) [ "scripts/foo" ] with
+                PathRepo = "sir"
+            }
+
+        let b =
+            { itemAt (refIn "FS-GG" "S.I.R." 2) [ "scripts/foo" ] with
+                PathRepo = "S.I.R."
+            }
 
         let p = partition Set.empty [ a; b ]
 
@@ -278,11 +340,14 @@ module LanesTests =
         let chokepoint = item 1 [ "scripts/" ]
 
         let p =
-            partition Set.empty
-                [ chokepoint
-                  item 2 [ "scripts/a" ]
-                  item 3 [ "scripts/b" ]
-                  item 4 [ "scripts/c" ] ]
+            partition
+                Set.empty
+                [
+                    chokepoint
+                    item 2 [ "scripts/a" ]
+                    item 3 [ "scripts/b" ]
+                    item 4 [ "scripts/c" ]
+                ]
 
         Assert.Equal(1, List.length p.Lanes)
         Assert.Equal(1, List.length (free always p)) // four items of work, ONE worker
@@ -314,8 +379,7 @@ module LanesTests =
         // The dangerous one. It LOOKS declared, so it passes a glance — but it reserves nothing, so it
         // would read as disjoint from every other worker: the lock succeeding under exactly the
         // conditions it exists to prevent. A lane of one would advertise it as safe, startable work.
-        let broken =
-            item 1 [] |> withTouchSet (Declared [ Unmatchable "**/foo" ])
+        let broken = item 1 [] |> withTouchSet (Declared [ Unmatchable "**/foo" ])
 
         let p = partition Set.empty [ broken; item 2 [ "src/B/" ] ]
 
@@ -372,20 +436,24 @@ module LanesTests =
         // reason that is not the touch-set — a lock, a blocker, a column — are not `partition`'s
         // business: those items are laned and simply not startable yet.)
         let shapes =
-            [ "every token live", Declared [ Matchable "src/A/" ], true
-              "every token dead", Declared [ Unmatchable "**/x" ], false
-              "SOME tokens dead — the #864 case", Declared [ Matchable "src/A/"; Unmatchable "**/x" ], false
-              "some tokens dead, dead one first", Declared [ Unmatchable "**/x"; Matchable "src/A/" ], false
-              "no declaration", Undeclared, false
-              "the `none` sentinel", DeclaredNone, false
-              "body never read", Unreadable "boom", false ]
+            [
+                "every token live", Declared [ Matchable "src/A/" ], true
+                "every token dead", Declared [ Unmatchable "**/x" ], false
+                "SOME tokens dead — the #864 case", Declared [ Matchable "src/A/"; Unmatchable "**/x" ], false
+                "some tokens dead, dead one first", Declared [ Unmatchable "**/x"; Matchable "src/A/" ], false
+                "no declaration", Undeclared, false
+                "the `none` sentinel", DeclaredNone, false
+                "body never read", Unreadable "boom", false
+            ]
 
         for name, ts, expectedLanable in shapes do
             let it = item 1 [] |> withTouchSet ts
             let p = partition Set.empty [ it ]
 
             let laned = p.Lanes |> List.collect (fun l -> l.Items) |> List.isEmpty |> not
-            let startable = Schedulability.schedulable Set.empty false [] it = Schedulability.Startable
+
+            let startable =
+                Schedulability.schedulable Set.empty false [] it = Schedulability.Startable
 
             // THE RULE ITSELF is the third party to the agreement (#945). `lint` was a THIRD copy of
             // this question for as long as `Usability` lacked the every/some distinction it renders —
@@ -433,7 +501,8 @@ module LanesTests =
         let a = partition Set.empty items
         let b = partition Set.empty (List.rev items)
 
-        let ids p = p.Lanes |> List.map (fun l -> l.Id.Number)
+        let ids p =
+            p.Lanes |> List.map (fun l -> l.Id.Number)
 
         Assert.Equal<int list>(ids a, ids b)
         Assert.Equal<int list>([ 2; 9 ], ids a) // the lane containing 2 and 5 is named 2
@@ -454,10 +523,12 @@ module LanesTests =
         // This is `scripts/fsgg-coord` in real life (#428) — and until now the only way to find out
         // WHICH token was doing it was to read forty issue bodies and guess.
         let items =
-            [ item 1 [ "scripts/coord"; "src/A/" ]
-              item 2 [ "scripts/coord"; "src/B/" ]
-              item 3 [ "scripts/coord"; "src/C/" ]
-              item 4 [ "scripts/coord"; "src/D/" ] ]
+            [
+                item 1 [ "scripts/coord"; "src/A/" ]
+                item 2 [ "scripts/coord"; "src/B/" ]
+                item 3 [ "scripts/coord"; "src/C/" ]
+                item 4 [ "scripts/coord"; "src/D/" ]
+            ]
 
         let p = partition Set.empty items
         Assert.Equal(1, List.length p.Lanes)
@@ -491,11 +562,11 @@ module LanesTests =
 
     [<Fact>]
     let ``the ranking is DETERMINISTIC — two workers agree on which token to attack`` () =
-        let items =
-            [ item 1 [ "a/"; "z/" ]; item 2 [ "a/"; "y/" ]; item 3 [ "a/" ] ]
+        let items = [ item 1 [ "a/"; "z/" ]; item 2 [ "a/"; "y/" ]; item 3 [ "a/" ] ]
 
         let tokensOf its =
-            (glue (List.head (partition Set.empty its).Lanes)) |> List.map (fun g -> g.Token)
+            (glue (List.head (partition Set.empty its).Lanes))
+            |> List.map (fun g -> g.Token)
 
         Assert.Equal<string list>(tokensOf items, tokensOf (List.rev items))
 

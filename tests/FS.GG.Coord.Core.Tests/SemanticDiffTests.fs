@@ -61,13 +61,15 @@ module SemanticDiffTests =
     [<Fact>]
     let ``one file with six quoted occurrences is classified from occurrences not changed-file count`` () =
         let before =
-            [ "let oldName = 1"
-              "let a = \"oldName\""
-              "let b = \"oldName\""
-              "let c = \"oldName\""
-              "let d = \"oldName\""
-              "let e = \"oldName\""
-              "let f = \"oldName\"" ]
+            [
+                "let oldName = 1"
+                "let a = \"oldName\""
+                "let b = \"oldName\""
+                "let c = \"oldName\""
+                "let d = \"oldName\""
+                "let e = \"oldName\""
+                "let f = \"oldName\""
+            ]
             |> String.concat "\n"
 
         let after = before.Replace("oldName", "newName")
@@ -109,7 +111,12 @@ module SemanticDiffTests =
 
         // `let oldName = 1` is an identifier-only rename with no quoted text: correctly not an occurrence.
         Assert.Equal<string list>(
-            [ "// newName"; "let m = \"newName\""; "let e = \"\\\"newName\\\"\""; "let i = $\"{newName}\"" ],
+            [
+                "// newName"
+                "let m = \"newName\""
+                "let e = \"\\\"newName\\\"\""
+                "let i = $\"{newName}\""
+            ],
             occurrences |> List.map _.After
         )
 
@@ -124,8 +131,10 @@ module SemanticDiffTests =
     [<Fact>]
     let ``discovery is deterministic and spans several files and renames`` () =
         let files =
-            [ "src/A.fs", "let a = \"alpha\"", "let a = \"beta\""
-              "src/B.fs", "let b = \"gamma\"", "let b = \"delta\"" ]
+            [
+                "src/A.fs", "let a = \"alpha\"", "let a = \"beta\""
+                "src/B.fs", "let b = \"gamma\"", "let b = \"delta\""
+            ]
 
         let pairs = discoverRenames files
         Assert.Equal<(string * string) list>([ "alpha", "beta"; "gamma", "delta" ], pairs)
@@ -167,8 +176,14 @@ module SemanticDiffTests =
 
         let manifestAfter =
             manifestBefore
-                .Replace("cc4761b067f2a36a39351b5d260797d2bc364e15afccc24201b6cb1581bb0c7b", "11476d307256a659e77e7dfa83b906434d3accfa3056728f3cff8c1ca19c6c27")
-                .Replace("3e73eb76410db4f3900c215cd5f1ecc80beb7ac0329b010f675997be59e0323f", "f7e1d7841bb6a0a52e3069631148a7d6d2ddaf7be89c2504641a8f7c168b57fe")
+                .Replace(
+                    "cc4761b067f2a36a39351b5d260797d2bc364e15afccc24201b6cb1581bb0c7b",
+                    "11476d307256a659e77e7dfa83b906434d3accfa3056728f3cff8c1ca19c6c27"
+                )
+                .Replace(
+                    "3e73eb76410db4f3900c215cd5f1ecc80beb7ac0329b010f675997be59e0323f",
+                    "f7e1d7841bb6a0a52e3069631148a7d6d2ddaf7be89c2504641a8f7c168b57fe"
+                )
 
         Assert.Empty(discoveredOccurrences [ "registry/manifest.json", manifestBefore, manifestAfter ])
 
@@ -187,22 +202,32 @@ module SemanticDiffTests =
         //    `Some` added near the bottom. They share a skeleton, so whole-file pairing called them the
         //    rename `else` -> `Some` at confidence 90, three times over.
         let spread prefix suffix =
-            [ yield "let head () ="
-              yield "    if ready then"
-              yield "        run ()"
-              yield prefix
-              yield! [ for index in 1..40 -> $"    let filler%d{index} = %d{index}" ]
-              yield "let tail () ="
-              yield "    match probe () with"
-              yield suffix ]
+            [
+                yield "let head () ="
+                yield "    if ready then"
+                yield "        run ()"
+                yield prefix
+                yield! [ for index in 1..40 -> $"    let filler%d{index} = %d{index}" ]
+                yield "let tail () ="
+                yield "    match probe () with"
+                yield suffix
+            ]
             |> String.concat "\n"
 
-        Assert.Empty(discoverRenames [ "tests/Suite.fs", spread "        else" "    | _ -> ()", spread "        skip ()" "    | _ -> Some" ])
+        Assert.Empty(
+            discoverRenames
+                [
+                    "tests/Suite.fs", spread "        else" "    | _ -> ()", spread "        skip ()" "    | _ -> Some"
+                ]
+        )
 
         // The repair must not have bought this by blinding discovery: a genuine quoted rename in a
         // re-indented file is still found, and still inventoried.
-        let genuineBefore = "let f () =\n    let a = \"oldName\"\n    let b = \"oldName\"\n    a + b"
-        let genuineAfter = "let f () =\n  if extra then\n    let a = \"newName\"\n    let b = \"newName\"\n    a + b\n  else empty"
+        let genuineBefore =
+            "let f () =\n    let a = \"oldName\"\n    let b = \"oldName\"\n    a + b"
+
+        let genuineAfter =
+            "let f () =\n  if extra then\n    let a = \"newName\"\n    let b = \"newName\"\n    a + b\n  else empty"
 
         Assert.Equal<(string * string) list>(
             [ "oldName", "newName" ],
@@ -227,7 +252,8 @@ module SemanticDiffTests =
 
         let complete =
             { occurrence with
-                Disposition = IntendedContractChange }
+                Disposition = IntendedContractChange
+            }
 
         Assert.Empty(validate "base" "head" (receipt "base" "head" [ complete ]))
         Assert.NotEmpty(validate "other" "head" (receipt "base" "head" [ complete ]))
@@ -242,7 +268,8 @@ module SemanticDiffTests =
 
         let complete =
             { occurrence with
-                Disposition = IntendedContractChange }
+                Disposition = IntendedContractChange
+            }
 
         let source = receipt "base" "head" [ complete ]
         let encoded = source |> toBase64

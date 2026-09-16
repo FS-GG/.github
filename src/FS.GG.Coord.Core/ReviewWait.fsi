@@ -7,16 +7,20 @@ module ReviewWait =
     [<Literal>]
     val Marker: string = "<!-- fsgg:review-wait/v1 -->"
 
-    type Kind = InitialReview | RepairConfirmation
+    type Kind =
+        | InitialReview
+        | RepairConfirmation
 
     type WaitReceipt =
-        { Item: string
-          ClaimGeneration: string
-          ReviewGeneration: string
-          Kind: Kind
-          EnteredAt: DateTimeOffset
-          ExpiresAt: DateTimeOffset
-          EvidenceRef: string }
+        {
+            Item: string
+            ClaimGeneration: string
+            ReviewGeneration: string
+            Kind: Kind
+            EnteredAt: DateTimeOffset
+            ExpiresAt: DateTimeOffset
+            EvidenceRef: string
+        }
 
     type Transition =
         | Enter of WaitReceipt
@@ -37,9 +41,11 @@ module ReviewWait =
     val generationToken: head: string -> kind: Kind -> round: int -> string
     val encode: Transition -> string
     val tryDecode: string -> Result<Transition option, string>
+
     val project:
         item: string ->
         currentClaimGeneration: string option ->
         prOpen: bool ->
         now: DateTimeOffset ->
-        events: Transition list -> State
+        events: Transition list ->
+            State

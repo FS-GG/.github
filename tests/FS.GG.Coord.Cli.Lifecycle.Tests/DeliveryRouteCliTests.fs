@@ -34,14 +34,18 @@ module DeliveryRouteCliTests =
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None
-              Headers = Map.empty }
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            }
 
     let private hashHex (text: string) =
-        SHA256.HashData(Encoding.UTF8.GetBytes text) |> Convert.ToHexString |> _.ToLowerInvariant()
+        SHA256.HashData(Encoding.UTF8.GetBytes text)
+        |> Convert.ToHexString
+        |> _.ToLowerInvariant()
 
     /// Mirrors `Client.volatileDeclarationLine`/`deliveryRouteSubject` (.github#2392): a `Paths:`,
     /// `Class:`, `Blocked on:`, or `Blocked by:` line — up to three leading spaces, either case, OUTSIDE
@@ -52,13 +56,21 @@ module DeliveryRouteCliTests =
     /// for what a real caller gets back from `delivery-route show` after this fix, not a second decision
     /// about the grammar.
     let private volatileDeclarationLine =
-        Text.RegularExpressions.Regex(@"^ {0,3}([Pp]aths|[Cc]lass|[Bb]locked [Oo]n|[Bb]locked [Bb]y):.*$", Text.RegularExpressions.RegexOptions.Compiled)
+        Text.RegularExpressions.Regex(
+            @"^ {0,3}([Pp]aths|[Cc]lass|[Bb]locked [Oo]n|[Bb]locked [Bb]y):.*$",
+            Text.RegularExpressions.RegexOptions.Compiled
+        )
 
     let private canonicalSubject (body: string) =
         Markdown.classify body
         |> List.choose (fun (line, kind) ->
-            if kind = Markdown.Text && (volatileDeclarationLine.IsMatch line || String.IsNullOrWhiteSpace line) then None
-            else Some line)
+            if
+                kind = Markdown.Text
+                && (volatileDeclarationLine.IsMatch line || String.IsNullOrWhiteSpace line)
+            then
+                None
+            else
+                Some line)
         |> String.concat "\n"
 
     /// The CURRENT (.github#2392) `subjectRevision` scheme — what `delivery-route show` reports and
@@ -72,40 +84,102 @@ module DeliveryRouteCliTests =
     let private StructuredRouteMarker = "<!-- fsgg:route-decision/v2 -->"
 
     let private sddRequiredRecord workId =
-        let draft : StructuredDecision.RouteRecord =
-            { Schema = StructuredDecision.RouteSchema; Subject = "FS-GG/FS.GG.SDD#42"; Revision = 1
-              PreviousDigest = None; Scope = [ "fixture route scope" ]; Dependencies = [ "none" ]
-              TouchSet = [ "src/Thing.fs" ]; PolicyVersion = StructuredDecision.PolicyVersion
-              Route = Some DeliveryRoute.SddRequired; Agent = "fixture-2298"; Timestamp = "2026-01-01T00:00:00Z"
-              ReasonCodes = [ "fixture" ]; Rationale = "fixture structured route for #2298"
-              SddWorkId = Some workId; SpecHome = Some $"work/%s{workId}/spec.md"
-              RequiredGates = [ "implementationReady"; "analyze"; "verify"; "ship" ]; Digest = "" }
-        let record = { draft with Digest = StructuredDecision.routeDigest draft }
+        let draft: StructuredDecision.RouteRecord =
+            {
+                Schema = StructuredDecision.RouteSchema
+                Subject = "FS-GG/FS.GG.SDD#42"
+                Revision = 1
+                PreviousDigest = None
+                Scope = [ "fixture route scope" ]
+                Dependencies = [ "none" ]
+                TouchSet = [ "src/Thing.fs" ]
+                PolicyVersion = StructuredDecision.PolicyVersion
+                Route = Some DeliveryRoute.SddRequired
+                Agent = "fixture-2298"
+                Timestamp = "2026-01-01T00:00:00Z"
+                ReasonCodes = [ "fixture" ]
+                Rationale = "fixture structured route for #2298"
+                SddWorkId = Some workId
+                SpecHome = Some $"work/%s{workId}/spec.md"
+                RequiredGates = [ "implementationReady"; "analyze"; "verify"; "ship" ]
+                Digest = ""
+            }
+
+        let record =
+            { draft with
+                Digest = StructuredDecision.routeDigest draft
+            }
+
         JsonSerializer.Serialize
-            {| schema = record.Schema; subject = record.Subject; revision = record.Revision
-               previousDigest = record.PreviousDigest; scope = record.Scope; dependencies = record.Dependencies
-               touchSet = record.TouchSet; policyVersion = record.PolicyVersion; route = "sdd-required"
-               agent = record.Agent; timestamp = record.Timestamp; reasonCodes = record.ReasonCodes
-               rationale = record.Rationale; sddWorkId = record.SddWorkId; specHome = record.SpecHome
-               requiredGates = record.RequiredGates; digest = record.Digest |}
+            {|
+                schema = record.Schema
+                subject = record.Subject
+                revision = record.Revision
+                previousDigest = record.PreviousDigest
+                scope = record.Scope
+                dependencies = record.Dependencies
+                touchSet = record.TouchSet
+                policyVersion = record.PolicyVersion
+                route = "sdd-required"
+                agent = record.Agent
+                timestamp = record.Timestamp
+                reasonCodes = record.ReasonCodes
+                rationale = record.Rationale
+                sddWorkId = record.SddWorkId
+                specHome = record.SpecHome
+                requiredGates = record.RequiredGates
+                digest = record.Digest
+            |}
 
     let private lightweightRecord revision previous =
-        let draft : StructuredDecision.RouteRecord =
-            { Schema = StructuredDecision.RouteSchema; Subject = "FS-GG/FS.GG.SDD#42"; Revision = revision
-              PreviousDigest = previous; Scope = [ "fixture route scope" ]; Dependencies = [ "none" ]
-              TouchSet = [ "src/Thing.fs" ]; PolicyVersion = StructuredDecision.PolicyVersion
-              Route = Some DeliveryRoute.Lightweight; Agent = "fixture-2298"; Timestamp = "2026-01-01T00:00:00Z"
-              ReasonCodes = [ "fixture" ]; Rationale = "fixture structured route"
-              SddWorkId = None; SpecHome = None; RequiredGates = []; Digest = "" }
-        let record = { draft with Digest = StructuredDecision.routeDigest draft }
+        let draft: StructuredDecision.RouteRecord =
+            {
+                Schema = StructuredDecision.RouteSchema
+                Subject = "FS-GG/FS.GG.SDD#42"
+                Revision = revision
+                PreviousDigest = previous
+                Scope = [ "fixture route scope" ]
+                Dependencies = [ "none" ]
+                TouchSet = [ "src/Thing.fs" ]
+                PolicyVersion = StructuredDecision.PolicyVersion
+                Route = Some DeliveryRoute.Lightweight
+                Agent = "fixture-2298"
+                Timestamp = "2026-01-01T00:00:00Z"
+                ReasonCodes = [ "fixture" ]
+                Rationale = "fixture structured route"
+                SddWorkId = None
+                SpecHome = None
+                RequiredGates = []
+                Digest = ""
+            }
+
+        let record =
+            { draft with
+                Digest = StructuredDecision.routeDigest draft
+            }
+
         let json =
             JsonSerializer.Serialize
-                {| schema = record.Schema; subject = record.Subject; revision = record.Revision
-                   previousDigest = record.PreviousDigest; scope = record.Scope; dependencies = record.Dependencies
-                   touchSet = record.TouchSet; policyVersion = record.PolicyVersion; route = "lightweight"
-                   agent = record.Agent; timestamp = record.Timestamp; reasonCodes = record.ReasonCodes
-                   rationale = record.Rationale; sddWorkId = record.SddWorkId; specHome = record.SpecHome
-                   requiredGates = record.RequiredGates; digest = record.Digest |}
+                {|
+                    schema = record.Schema
+                    subject = record.Subject
+                    revision = record.Revision
+                    previousDigest = record.PreviousDigest
+                    scope = record.Scope
+                    dependencies = record.Dependencies
+                    touchSet = record.TouchSet
+                    policyVersion = record.PolicyVersion
+                    route = "lightweight"
+                    agent = record.Agent
+                    timestamp = record.Timestamp
+                    reasonCodes = record.ReasonCodes
+                    rationale = record.Rationale
+                    sddWorkId = record.SddWorkId
+                    specHome = record.SpecHome
+                    requiredGates = record.RequiredGates
+                    digest = record.Digest
+                |}
+
         record, json
 
     /// A `lightweight` receipt bound to the given `subjectRevision` — the field `claim`'s refusal turns
@@ -114,18 +188,22 @@ module DeliveryRouteCliTests =
     /// through `JsonSerializer` rather than hand-escaped string interpolation, so a marker's embedded
     /// `\n` and quotes cannot corrupt the fixture's own JSON.
     type private Thread(initial: string list) =
-        let comments = ResizeArray<int64 * string>(initial |> List.mapi (fun i b -> int64 (7000 + i), b))
+        let comments =
+            ResizeArray<int64 * string>(initial |> List.mapi (fun i b -> int64 (7000 + i), b))
+
         let mutable nextId = 9000L
 
         member _.Json() =
             comments
             |> Seq.map (fun (id, body) ->
-                {| id = id
-                   html_url = $"https://example.invalid/comments/%d{id}"
-                   body = body
-                   user = {| login = "EHotwagner" |}
-                   created_at = "2026-01-01T00:00:00Z"
-                   updated_at = "2026-01-01T00:00:00Z" |})
+                {|
+                    id = id
+                    html_url = $"https://example.invalid/comments/%d{id}"
+                    body = body
+                    user = {| login = "EHotwagner" |}
+                    created_at = "2026-01-01T00:00:00Z"
+                    updated_at = "2026-01-01T00:00:00Z"
+                |})
             |> List.ofSeq
             |> JsonSerializer.Serialize
 
@@ -137,59 +215,68 @@ module DeliveryRouteCliTests =
         member _.Bodies = comments |> Seq.map snd |> List.ofSeq
 
     let private world (thread: Thread) =
-        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-            let path = req.Path.Trim '/'
+        Fake.Recorder(
+            StructuredFixtures.withIntake
+            <| fun (req: Request) ->
+                let path = req.Path.Trim '/'
 
-            match req.Method, path with
-            // .github#2300 repair 2: `requireCurrentDeliveryRoute`/`deliveryRouteFact` now search for
-            // the marker over a BOUNDED GraphQL call (`Reads.recentCommentBodies`), not the REST
-            // `commentBodies` this fixture answered before. Served from the SAME live `thread` the REST
-            // arm below reads, truncated to the requested `last` window — exactly the "last N, in Relay
-            // order" contract the real GraphQL connection has, so a fixture growth of `thread` (e.g. via
-            // `record`'s own `POST .../comments` append) is visible to both arms identically.
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, variables) when document.Contains "comments(last:" ->
-                    let lastVar =
-                        variables
-                        |> List.tryFind (fun (k, _) -> k = "last")
-                        |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
-
-                    match lastVar with
-                    | Some last ->
-                        let recent =
-                            thread.Bodies
-                            |> List.rev
-                            |> List.truncate last
-                            |> List.rev
-                            |> List.map (fun body -> {| body = body |})
-                            |> JsonSerializer.Serialize
-
-                        let payload =
-                            "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
-                            + recent
-                            + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
-
-                        ok payload
-                    | None -> Error(Errors.NotFound "the recent-comments query is missing a `last` variable")
-                | _ -> Error(Errors.NotFound "this fixture answers only the recent-comments GraphQL query")
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok (JsonSerializer.Serialize {| number = 42; body = issueBodyText |})
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json())
-            | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
-                let body =
+                match req.Method, path with
+                // .github#2300 repair 2: `requireCurrentDeliveryRoute`/`deliveryRouteFact` now search for
+                // the marker over a BOUNDED GraphQL call (`Reads.recentCommentBodies`), not the REST
+                // `commentBodies` this fixture answered before. Served from the SAME live `thread` the REST
+                // arm below reads, truncated to the requested `last` window — exactly the "last N, in Relay
+                // order" contract the real GraphQL connection has, so a fixture growth of `thread` (e.g. via
+                // `record`'s own `POST .../comments` append) is visible to both arms identically.
+                | "POST", "graphql" ->
                     match req.Body with
-                    | Json payload -> JsonDocument.Parse(payload).RootElement.GetProperty("body").GetString()
-                    | _ -> ""
+                    | Query(document, variables) when document.Contains "comments(last:" ->
+                        let lastVar =
+                            variables
+                            |> List.tryFind (fun (k, _) -> k = "last")
+                            |> Option.bind (fun (_, v) ->
+                                match v with
+                                | VNumber n -> Some(int n)
+                                | _ -> None)
 
-                ok (sprintf """{"id":%d}""" (thread.Add body))
-            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+                        match lastVar with
+                        | Some last ->
+                            let recent =
+                                thread.Bodies
+                                |> List.rev
+                                |> List.truncate last
+                                |> List.rev
+                                |> List.map (fun body -> {| body = body |})
+                                |> JsonSerializer.Serialize
+
+                            let payload =
+                                "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                                + recent
+                                + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+
+                            ok payload
+                        | None -> Error(Errors.NotFound "the recent-comments query is missing a `last` variable")
+                    | _ -> Error(Errors.NotFound "this fixture answers only the recent-comments GraphQL query")
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" ->
+                    ok (JsonSerializer.Serialize {| number = 42; body = issueBodyText |})
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json())
+                | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
+                    let body =
+                        match req.Body with
+                        | Json payload -> JsonDocument.Parse(payload).RootElement.GetProperty("body").GetString()
+                        | _ -> ""
+
+                    ok (sprintf """{"id":%d}""" (thread.Add body))
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+        )
 
     let private context (transport: Fake.Recorder) : Kernel.Context =
-        { Transport = transport
-          Owner = "FS-GG"
-          Title = "Coordination"
-          DefaultRepo = Some "FS.GG.SDD"
-          ChoreLocks = [] }
+        {
+            Transport = transport
+            Owner = "FS-GG"
+            Title = "Coordination"
+            DefaultRepo = Some "FS.GG.SDD"
+            ChoreLocks = []
+        }
 
     /// Every leg pins `FSGG_COORD_SDD_ROOT` to a fixture-owned directory, explicitly — never `None`, or
     /// `sddEvidenceErrors`' upward directory search could walk out of a throwaway temp dir and find this
@@ -216,7 +303,9 @@ module DeliveryRouteCliTests =
             Environment.SetEnvironmentVariable("FSGG_COORD_SDD_ROOT", previousRoot)
 
     let private tempSddRoot () =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2298-" + Guid.NewGuid().ToString "n")
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-2298-" + Guid.NewGuid().ToString "n")
+
         Directory.CreateDirectory dir |> ignore
         dir
 
@@ -242,7 +331,8 @@ module DeliveryRouteCliTests =
             let path = Path.Combine(root, "receipt.json")
             File.WriteAllText(path, sddRequiredRecord "no-package-2298")
 
-            let code, out = runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
+            let code, out =
+                runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
 
             Assert.Equal(0, code)
             // .github#2583: `record` now writes a derived locator marker BETWEEN the route marker and
@@ -250,13 +340,20 @@ module DeliveryRouteCliTests =
             // assertion has always been about; `ConsolidationTaxTests` owns the locator's own contract.
             // This fixture's body is a single `Paths:` line, so its subject is EMPTY and the marker
             // carries no locators — the degenerate shape, pinned here on purpose.
-            Assert.Equal<string list>([ StructuredRouteMarker + "\n" + (sddRequiredRecord "no-package-2298") ], thread.Bodies)
+            Assert.Equal<string list>(
+                [ StructuredRouteMarker + "\n" + (sddRequiredRecord "no-package-2298") ],
+                thread.Bodies
+            )
 
             let result = JsonDocument.Parse(out.Trim()).RootElement
             Assert.Equal("recorded", result.GetProperty("kind").GetString())
             Assert.False(result.GetProperty("sddPackageReady").GetBoolean())
 
-            let notes = result.GetProperty("sddPackageNotes").EnumerateArray() |> Seq.map (fun v -> v.GetString()) |> List.ofSeq
+            let notes =
+                result.GetProperty("sddPackageNotes").EnumerateArray()
+                |> Seq.map (fun v -> v.GetString())
+                |> List.ofSeq
+
             Assert.Contains(notes, fun (n: string) -> n.Contains "sdd spec does not exist")
         finally
             Directory.Delete(root, true)
@@ -272,7 +369,8 @@ module DeliveryRouteCliTests =
             let path = Path.Combine(root, "receipt.json")
             File.WriteAllText(path, sddRequiredRecord "not-ready-2298")
 
-            let code, out = runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
+            let code, out =
+                runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
 
             Assert.Equal(0, code)
             Assert.Equal(1, thread.Bodies.Length)
@@ -281,7 +379,11 @@ module DeliveryRouteCliTests =
             Assert.Equal("recorded", result.GetProperty("kind").GetString())
             Assert.False(result.GetProperty("sddPackageReady").GetBoolean())
 
-            let notes = result.GetProperty("sddPackageNotes").EnumerateArray() |> Seq.map (fun v -> v.GetString()) |> List.ofSeq
+            let notes =
+                result.GetProperty("sddPackageNotes").EnumerateArray()
+                |> Seq.map (fun v -> v.GetString())
+                |> List.ofSeq
+
             Assert.Contains(notes, fun (n: string) -> n.Contains "not implementationReady")
         finally
             Directory.Delete(root, true)
@@ -297,7 +399,8 @@ module DeliveryRouteCliTests =
             let path = Path.Combine(root, "receipt.json")
             File.WriteAllText(path, sddRequiredRecord "substituted-2298")
 
-            let code, out = runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
+            let code, out =
+                runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
 
             Assert.Equal(0, code)
             Assert.Equal(1, thread.Bodies.Length)
@@ -305,13 +408,19 @@ module DeliveryRouteCliTests =
             let result = JsonDocument.Parse(out.Trim()).RootElement
             Assert.False(result.GetProperty("sddPackageReady").GetBoolean())
 
-            let notes = result.GetProperty("sddPackageNotes").EnumerateArray() |> Seq.map (fun v -> v.GetString()) |> List.ofSeq
+            let notes =
+                result.GetProperty("sddPackageNotes").EnumerateArray()
+                |> Seq.map (fun v -> v.GetString())
+                |> List.ofSeq
+
             Assert.Contains(notes, fun (n: string) -> n.Contains "workId does not match")
         finally
             Directory.Delete(root, true)
 
     [<Fact>]
-    let ``#2298 record and show both report a ready SDD package as ready, once its analysis is implementationReady`` () =
+    let ``#2298 record and show both report a ready SDD package as ready, once its analysis is implementationReady``
+        ()
+        =
         let root = tempSddRoot ()
 
         try
@@ -321,11 +430,15 @@ module DeliveryRouteCliTests =
             let path = Path.Combine(root, "receipt.json")
             File.WriteAllText(path, sddRequiredRecord "ready-2298")
 
-            let recordCode, recordOut = runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
+            let recordCode, recordOut =
+                runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
+
             Assert.Equal(0, recordCode)
             Assert.True(JsonDocument.Parse(recordOut.Trim()).RootElement.GetProperty("sddPackageReady").GetBoolean())
 
-            let showCode, showOut = runRoute transport root [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
+            let showCode, showOut =
+                runRoute transport root [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
+
             Assert.Equal(0, showCode)
 
             let shown = JsonDocument.Parse(showOut.Trim()).RootElement
@@ -340,7 +453,9 @@ module DeliveryRouteCliTests =
         let root = tempSddRoot ()
 
         try
-            let thread = Thread [ StructuredRouteMarker + "\n" + (sddRequiredRecord "shown-missing-2298") ]
+            let thread =
+                Thread [ StructuredRouteMarker + "\n" + (sddRequiredRecord "shown-missing-2298") ]
+
             let transport = world thread
 
             let code, out = runRoute transport root [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
@@ -371,7 +486,9 @@ module DeliveryRouteCliTests =
             Directory.Delete(root, true)
 
     [<Fact>]
-    let ``#2298 an incomplete route receipt still refuses record with zero writes — SDD leniency never widens this`` () =
+    let ``#2298 an incomplete route receipt still refuses record with zero writes — SDD leniency never widens this``
+        ()
+        =
         let root = tempSddRoot ()
 
         try
@@ -385,7 +502,8 @@ module DeliveryRouteCliTests =
             let path = Path.Combine(root, "malformed.json")
             File.WriteAllText(path, malformed)
 
-            let code, _ = runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
+            let code, _ =
+                runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
 
             Assert.NotEqual(0, code)
             Assert.Empty(thread.Bodies)
@@ -417,13 +535,23 @@ module DeliveryRouteCliTests =
     /// be pinned, or this process's derived id depends on whatever harness ran the test. Mirrors
     /// `ForceStealTests.sessionVars`/`runClaim` exactly, for the same reason.
     let private sessionVars =
-        [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
+        [
+            "CLAUDE_CODE_SESSION_ID"
+            "OPENCODE_SESSION_ID"
+            "FSGG_AGENT_SESSION_ID"
+            "FSGG_WORKER"
+        ]
 
     let private runClaim (transport: Fake.Recorder) (args: string list) : int * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2298-claim-" + Guid.NewGuid().ToString "n")
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-2298-claim-" + Guid.NewGuid().ToString "n")
+
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
-        let previousSessions = sessionVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+
+        let previousSessions =
+            sessionVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+
         let stdout = Console.Out
         use captured = new StringWriter()
 
@@ -458,7 +586,8 @@ module DeliveryRouteCliTests =
             with _ ->
                 ()
 
-    let private claimArgs = [ "claim"; "FS.GG.SDD#42"; "--worker"; "vole-2298"; "--json" ]
+    let private claimArgs =
+        [ "claim"; "FS.GG.SDD#42"; "--worker"; "vole-2298"; "--json" ]
 
     /// THE DISCRIMINATOR ITSELF (.github#2300 repair 2, correcting a first attempt the host caught).
     ///
@@ -477,10 +606,12 @@ module DeliveryRouteCliTests =
     /// is a stronger, more literal restatement of "refusal happens before the board bootstrap" than a
     /// bare count ever was: it catches a bootstrap call appearing ANYWHERE, in ANY position, of ANY kind.
     let private refusedBeforeBootstrap: string list =
-        [ "graphql FS-GG/FS.GG.SDD repository policy"
-          "graphql FS-GG/FS.GG.SDD#42 intake identity"
-          "get FS-GG/FS.GG.SDD collaborators/maintainer/permission"
-          "comment-list FS-GG/FS.GG.SDD 42" ]
+        [
+            "graphql FS-GG/FS.GG.SDD repository policy"
+            "graphql FS-GG/FS.GG.SDD#42 intake identity"
+            "get FS-GG/FS.GG.SDD collaborators/maintainer/permission"
+            "comment-list FS-GG/FS.GG.SDD 42"
+        ]
 
     [<Fact>]
     let ``#2298 claim refuses with zero writes when NO delivery-route receipt exists`` () =
@@ -516,7 +647,14 @@ module DeliveryRouteCliTests =
         // structured-ledger leg above: an undecodable comment fails closed, so
         // `List.tryPick` treats it as absent and `decide` reports `Stale ["...receipt is missing"]`,
         // identically to no comment existing at all — a distinct INPUT, the same swallowed OUTPUT.
-        let thread = Thread [ StructuredRouteMarker + "\n" + """{"schema":"fsgg.coord.route-decision/v2","subject":"not even the right shape"}""" ]
+        let thread =
+            Thread
+                [
+                    StructuredRouteMarker
+                    + "\n"
+                    + """{"schema":"fsgg.coord.route-decision/v2","subject":"not even the right shape"}"""
+                ]
+
         let transport = world thread
 
         let code, out = runClaim transport claimArgs
@@ -540,67 +678,85 @@ module DeliveryRouteCliTests =
     // reads the body from a mutable cell instead.
 
     let private worldWithBody (body: string ref) (thread: Thread) =
-        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-            let path = req.Path.Trim '/'
+        Fake.Recorder(
+            StructuredFixtures.withIntake
+            <| fun (req: Request) ->
+                let path = req.Path.Trim '/'
 
-            match req.Method, path with
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, variables) when document.Contains "comments(last:" ->
-                    let lastVar =
-                        variables
-                        |> List.tryFind (fun (k, _) -> k = "last")
-                        |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
-
-                    match lastVar with
-                    | Some last ->
-                        let recent =
-                            thread.Bodies
-                            |> List.rev
-                            |> List.truncate last
-                            |> List.rev
-                            |> List.map (fun b -> {| body = b |})
-                            |> JsonSerializer.Serialize
-
-                        let payload =
-                            "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
-                            + recent
-                            + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
-
-                        ok payload
-                    | None -> Error(Errors.NotFound "the recent-comments query is missing a `last` variable")
-                | _ -> Error(Errors.NotFound "this fixture answers only the recent-comments GraphQL query")
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok (JsonSerializer.Serialize {| number = 42; body = body.Value |})
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json())
-            | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
-                let b =
+                match req.Method, path with
+                | "POST", "graphql" ->
                     match req.Body with
-                    | Json payload -> JsonDocument.Parse(payload).RootElement.GetProperty("body").GetString()
-                    | _ -> ""
+                    | Query(document, variables) when document.Contains "comments(last:" ->
+                        let lastVar =
+                            variables
+                            |> List.tryFind (fun (k, _) -> k = "last")
+                            |> Option.bind (fun (_, v) ->
+                                match v with
+                                | VNumber n -> Some(int n)
+                                | _ -> None)
 
-                ok (sprintf """{"id":%d}""" (thread.Add b))
-            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+                        match lastVar with
+                        | Some last ->
+                            let recent =
+                                thread.Bodies
+                                |> List.rev
+                                |> List.truncate last
+                                |> List.rev
+                                |> List.map (fun b -> {| body = b |})
+                                |> JsonSerializer.Serialize
+
+                            let payload =
+                                "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                                + recent
+                                + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+
+                            ok payload
+                        | None -> Error(Errors.NotFound "the recent-comments query is missing a `last` variable")
+                    | _ -> Error(Errors.NotFound "this fixture answers only the recent-comments GraphQL query")
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" ->
+                    ok (JsonSerializer.Serialize {| number = 42; body = body.Value |})
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json())
+                | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
+                    let b =
+                        match req.Body with
+                        | Json payload -> JsonDocument.Parse(payload).RootElement.GetProperty("body").GetString()
+                        | _ -> ""
+
+                    ok (sprintf """{"id":%d}""" (thread.Add b))
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+        )
 
     let private baseBody =
         "A defect in the widget renderer causes flicker on every resize.\n\nPaths: src/Widget.fs\nClass: defect\n"
 
     let private showIsCurrent (transport: Fake.Recorder) (root: string) =
         let code, out = runRoute transport root [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
-        code = 0 && JsonDocument.Parse(out.Trim()).RootElement.GetProperty("kind").GetString() = "current"
+
+        code = 0
+        && JsonDocument.Parse(out.Trim()).RootElement.GetProperty("kind").GetString() = "current"
 
     [<Fact>]
     let ``M4 v2 route ledger reads revision one beyond the recent-comment window`` () =
         let root = tempSddRoot ()
+
         try
             let first, firstJson = lightweightRecord 1 None
             let _, secondJson = lightweightRecord 2 (Some first.Digest)
+
             let comments =
-                [ yield StructuredRouteMarker + "\n" + firstJson
-                  for index in 1..100 do yield $"narrative comment %d{index}"
-                  yield StructuredRouteMarker + "\n" + secondJson ]
+                [
+                    yield StructuredRouteMarker + "\n" + firstJson
+                    for index in 1..100 do
+                        yield $"narrative comment %d{index}"
+                    yield StructuredRouteMarker + "\n" + secondJson
+                ]
+
             let thread = Thread comments
             let transport = world thread
-            let code, output = runRoute transport root [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
+
+            let code, output =
+                runRoute transport root [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
+
             Assert.Equal(0, code)
             Assert.Equal(2, JsonDocument.Parse(output.Trim()).RootElement.GetProperty("revision").GetInt32())
         finally
@@ -609,22 +765,37 @@ module DeliveryRouteCliTests =
     [<Fact>]
     let ``M4 a wholly buried v2 route ledger remains authoritative and appends safely`` () =
         let root = tempSddRoot ()
+
         try
             let first, firstJson = lightweightRecord 1 None
             let _, secondJson = lightweightRecord 2 (Some first.Digest)
+
             let comments =
-                [ yield StructuredRouteMarker + "\n" + firstJson
-                  for index in 1..100 do yield $"narrative comment %d{index}" ]
+                [
+                    yield StructuredRouteMarker + "\n" + firstJson
+                    for index in 1..100 do
+                        yield $"narrative comment %d{index}"
+                ]
+
             let thread = Thread comments
             let transport = world thread
             let path = Path.Combine(root, "revision-2.json")
             File.WriteAllText(path, secondJson)
-            let beforeCode, beforeOutput = runRoute transport root [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
+
+            let beforeCode, beforeOutput =
+                runRoute transport root [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
+
             Assert.Equal(0, beforeCode)
             Assert.Equal(1, JsonDocument.Parse(beforeOutput.Trim()).RootElement.GetProperty("revision").GetInt32())
-            let recordCode, _ = runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
+
+            let recordCode, _ =
+                runRoute transport root [ "delivery-route"; "record"; "FS.GG.SDD#42"; path ]
+
             Assert.Equal(0, recordCode)
-            let showCode, output = runRoute transport root [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
+
+            let showCode, output =
+                runRoute transport root [ "delivery-route"; "show"; "FS.GG.SDD#42" ]
+
             Assert.Equal(0, showCode)
             Assert.Equal(2, JsonDocument.Parse(output.Trim()).RootElement.GetProperty("revision").GetInt32())
         finally

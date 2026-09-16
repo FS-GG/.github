@@ -88,9 +88,13 @@ let derive (fx: JsonElement) =
             { Root = r; Id = id; Body = body })
 
     let expected: SkillMirror.ExpectedSkill list =
-        [ { Id = id
-            Scope = scopeOf (fx.GetProperty("scope").GetString())
-            Sha256 = fx.GetProperty("sha256").GetString() } ]
+        [
+            {
+                Id = id
+                Scope = scopeOf (fx.GetProperty("scope").GetString())
+                Sha256 = fx.GetProperty("sha256").GetString()
+            }
+        ]
 
     match SkillMirror.verify roots expected actual with
     | [] -> (([]: string list), false, ([]: string list))
@@ -109,7 +113,10 @@ let derive (fx: JsonElement) =
 // the library's actual contract instead of a re-implementation of the shells' half of it.
 let decodeBody (base64Bytes: string) =
     use stream = new MemoryStream(Convert.FromBase64String base64Bytes)
-    use reader = new StreamReader(stream, Text.Encoding.UTF8, detectEncodingFromByteOrderMarks = true)
+
+    use reader =
+        new StreamReader(stream, Text.Encoding.UTF8, detectEncodingFromByteOrderMarks = true)
+
     reader.ReadToEnd()
 
 let digestVectors =
@@ -124,7 +131,9 @@ let sourceDigest (path: string) =
     |> String.concat ""
 
 let quote (s: string) = JsonSerializer.Serialize(s)
-let arr (xs: string list) = "[" + (xs |> List.map quote |> String.concat ", ") + "]"
+
+let arr (xs: string list) =
+    "[" + (xs |> List.map quote |> String.concat ", ") + "]"
 
 let block (missing, divergent, mismatch) =
     sprintf
@@ -182,7 +191,9 @@ if List.isEmpty digestVectors then
 for fx in digestVectors do
     let name = fx.GetProperty("name").GetString()
     let declared = fx.GetProperty("digest").GetString()
-    let measured = SkillMirror.sha256 (decodeBody (fx.GetProperty("bytesBase64").GetString()))
+
+    let measured =
+        SkillMirror.sha256 (decodeBody (fx.GetProperty("bytesBase64").GetString()))
 
     if declared <> measured then
         disagreements <- disagreements + 1
@@ -197,18 +208,18 @@ for fx in digestVectors do
 // CRLF/LF equality that IS #1547's decision. Requiring both stops either property being lost to a
 // well-meaning tidy-up of the vector list.
 let distinctDigests =
-    digestVectors |> List.map (fun fx -> fx.GetProperty("digest").GetString()) |> List.distinct
+    digestVectors
+    |> List.map (fun fx -> fx.GetProperty("digest").GetString())
+    |> List.distinct
 
 if not (List.isEmpty digestVectors) then
     if List.length distinctDigests < 2 then
-        eprintfn
-            "DISAGREES  every digestVector shares one digest — an implementation ignoring its input would pass."
+        eprintfn "DISAGREES  every digestVector shares one digest — an implementation ignoring its input would pass."
 
         disagreements <- disagreements + 1
 
     if List.length distinctDigests = List.length digestVectors then
-        eprintfn
-            "DISAGREES  no two digestVectors share a digest — nothing pins the CRLF/LF equality #1547 decided."
+        eprintfn "DISAGREES  no two digestVectors share a digest — nothing pins the CRLF/LF equality #1547 decided."
 
         disagreements <- disagreements + 1
 
@@ -216,8 +227,12 @@ if not (List.isEmpty digestVectors) then
 // recording a derivation that did not happen.
 let srcPath = Path.Combine(libDir, "SkillMirror.fs")
 let got = sourceDigest srcPath
-let declared = doc.RootElement.GetProperty("derivedFrom").GetProperty("skillMirrorFsSha256").GetString()
-let declaredFiles = doc.RootElement.GetProperty("derivedFrom").GetProperty("libraryFiles")
+
+let declared =
+    doc.RootElement.GetProperty("derivedFrom").GetProperty("skillMirrorFsSha256").GetString()
+
+let declaredFiles =
+    doc.RootElement.GetProperty("derivedFrom").GetProperty("libraryFiles")
 
 printfn ""
 printfn "library source:   %s" srcPath
@@ -226,11 +241,14 @@ printfn "sha256 in table:  %s" declared
 
 if got <> declared then
     disagreements <- disagreements + 1
-    eprintfn "DISAGREES  derivedFrom.skillMirrorFsSha256 is stale — this table was derived from a DIFFERENT library revision."
+
+    eprintfn
+        "DISAGREES  derivedFrom.skillMirrorFsSha256 is stale — this table was derived from a DIFFERENT library revision."
 
 for file in [ "Schemas.fs"; "SkillMirror.fs" ] do
     let path = Path.Combine(libDir, file)
     let expected = declaredFiles.GetProperty($"src/FS.GG.Contracts/{file}").GetString()
+
     if sourceDigest path <> expected then
         disagreements <- disagreements + 1
         eprintfn "DISAGREES  derivedFrom.libraryFiles[%s] is stale." file
@@ -267,4 +285,5 @@ printfn
     (List.length fixtures)
     (List.length digestVectors)
     disagreements
+
 exit (if disagreements = 0 then 0 else 1)

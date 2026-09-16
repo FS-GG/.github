@@ -55,7 +55,9 @@ let ``#277 a FENCED Class line is a QUOTATION and declares nothing`` () =
     // The rule every body-line parser in this engine shares, and the one a new module gets wrong for free
     // if it does not ask `Markdown.unfenced`. The ADR and the schema doc both quote this grammar in fenced
     // blocks; so will every follow-up issue explaining it.
-    let body = "How to declare it:\n\n```\nClass: defect\n```\n\nNothing is declared here."
+    let body =
+        "How to declare it:\n\n```\nClass: defect\n```\n\nNothing is declared here."
+
     Assert.Equal(None, Class.fromBody body)
 
 [<Fact>]

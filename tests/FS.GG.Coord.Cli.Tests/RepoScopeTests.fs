@@ -132,9 +132,11 @@ module RepoScopeTests =
     [<InlineData("FS-GG/.github")>]
     let ``.github's chore lock resolves to the closed lock issue`` (repo: string) =
         let expected: FS.GG.Coord.Types.Ref =
-            { Owner = "FS-GG"
-              Repo = ".github"
-              Number = 1033 }
+            {
+                Owner = "FS-GG"
+                Repo = ".github"
+                Number = 1033
+            }
 
         Assert.Equal(Some expected, Options.choreLockRef [] "FS-GG" repo)
 
@@ -158,9 +160,11 @@ module RepoScopeTests =
         (repo: string, canonicalRepo: string, number: int)
         =
         let expected: FS.GG.Coord.Types.Ref =
-            { Owner = "FS-GG"
-              Repo = canonicalRepo
-              Number = number }
+            {
+                Owner = "FS-GG"
+                Repo = canonicalRepo
+                Number = number
+            }
 
         Assert.Equal(Some expected, Options.choreLockRef [] "FS-GG" repo)
 
@@ -196,9 +200,11 @@ module RepoScopeTests =
     [<InlineData("Fs-Gg")>]
     let ``the lock ref is canonical however the owner was spelled`` (owner: string) =
         let expected: FS.GG.Coord.Types.Ref =
-            { Owner = "FS-GG"
-              Repo = ".github"
-              Number = 1033 }
+            {
+                Owner = "FS-GG"
+                Repo = ".github"
+                Number = 1033
+            }
 
         Assert.Equal(Some expected, Options.choreLockRef [] owner ".github")
 

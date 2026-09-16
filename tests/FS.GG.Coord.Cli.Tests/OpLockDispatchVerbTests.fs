@@ -48,11 +48,13 @@ let private dispatchOp = "dispatch:coordination-kit"
 
 let private ok (body: string) =
     Ok
-        { Status = 200
-          Body = body
-          ETag = None
-          NextLink = None
-          Headers = Map.empty }
+        {
+            Status = 200
+            Body = body
+            ETag = None
+            NextLink = None
+            Headers = Map.empty
+        }
 
 let private scripted (responses: IoResult<Response> list) =
     let queue = System.Collections.Generic.Queue<IoResult<Response>>(responses)
@@ -82,11 +84,13 @@ let private staleMarker (id: int) (worker: string) =
 let private comments (ms: string list) = "[" + String.concat "," ms + "]"
 
 let private contextOn (transport: IGitHubTransport) : Kernel.Context =
-    { Transport = transport
-      Owner = "FS-GG"
-      Title = "Coordination"
-      DefaultRepo = Some ".github"
-      ChoreLocks = [] }
+    {
+        Transport = transport
+        Owner = "FS-GG"
+        Title = "Coordination"
+        DefaultRepo = Some ".github"
+        ChoreLocks = []
+    }
 
 /// Walk up to the repository root, anchored on a file only the root has — `OpLockTests`' idiom, so both
 /// files find the tree the same way whatever directory the runner starts in.
@@ -110,7 +114,9 @@ let private root = repoRoot (Directory.GetCurrentDirectory())
 /// private per call is safe — the same licence `DoneStderrTests.runDone` and `ForceStealTests.runClaim`
 /// take.
 let private runOpLock (transport: IGitHubTransport) (argv: string list) : int * string * string =
-    let dir = Path.Combine(Path.GetTempPath(), "fsgg-2312-" + Guid.NewGuid().ToString "n")
+    let dir =
+        Path.Combine(Path.GetTempPath(), "fsgg-2312-" + Guid.NewGuid().ToString "n")
+
     let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
     let previousWorker = Environment.GetEnvironmentVariable "FSGG_WORKER"
     let stdout = Console.Out
@@ -292,7 +298,8 @@ let ``both op-lock commands are BOARD WRITES in the engine and in the shim's par
     // READ THROUGH `command-contract`, which is the projection §3b actually consumes, rather than through
     // the private `WriteSurface` union: a row that classified correctly internally and rendered wrongly
     // would still leave the shim comparing against the wrong answer.
-    let contract = System.Text.Json.JsonDocument.Parse(Options.renderCommandContract ()).RootElement
+    let contract =
+        System.Text.Json.JsonDocument.Parse(Options.renderCommandContract ()).RootElement
 
     let writesOf (name: string) =
         contract.GetProperty("commands").EnumerateArray()
@@ -312,17 +319,16 @@ let ``both op-lock commands are BOARD WRITES in the engine and in the shim's par
     let writesLine = Regex.Match(guards, @"(?m)^BOARD_WRITES=""([^""]*)""$")
     Assert.True(writesLine.Success, "scripts/fsgg-coord-guards.sh no longer declares a literal BOARD_WRITES set")
 
-    let classified = writesLine.Groups.[1].Value.Split(' ') |> Array.map (fun s -> s.Trim())
+    let classified =
+        writesLine.Groups.[1].Value.Split(' ') |> Array.map (fun s -> s.Trim())
+
     Assert.Contains("op-lock", classified)
 
 // ---- Acquire: the production path, end to end -------------------------------------------------------
 
 /// The three calls the CAS makes to win a free lock: read, post, re-read.
 let private winsTheLock () =
-    scripted
-        [ ok "[]"
-          ok """{"id":901}"""
-          ok (comments [ marker 901 "finch-6929" ]) ]
+    scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "finch-6929" ]) ]
 
 [<Fact>]
 let ``op-lock acquire takes the grant and prints the broker's whole input tuple`` () =
@@ -396,9 +402,7 @@ let ``an unrostered receiver REFUSES with exit 1 and spends no network call`` ()
     let transport = unreachable ()
 
     let code, _, err =
-        runOpLock
-            transport
-            [ "op-lock"; "acquire"; item; generation; "FS-GG/FS.GG.NotARepo"; dispatchOp ]
+        runOpLock transport [ "op-lock"; "acquire"; item; generation; "FS-GG/FS.GG.NotARepo"; dispatchOp ]
 
     Assert.Equal(1, code)
     Assert.Contains("refusing to dispatch unfenced", err)
@@ -441,9 +445,7 @@ let ``the dispatch prefix is DERIVED from Operation.wire, so a non-dispatch oper
     let transport = unreachable ()
 
     let code, _, err =
-        runOpLock
-            transport
-            [ "op-lock"; "acquire"; item; generation; receiver; "merge" ]
+        runOpLock transport [ "op-lock"; "acquire"; item; generation; receiver; "merge" ]
 
     Assert.Equal(1, code)
     Assert.Contains(Operation.wire (Operation.Dispatch ""), err)
@@ -467,11 +469,10 @@ let ``op-lock release drops OUR grant, through verifyHeld rather than lowest id`
     // SUBSTITUTING ONE FOR THE OTHER IS A DEFECT" — reaching the one verb where getting it wrong deletes
     // something.
     let transport =
-        scripted
-            [ ok (comments [ staleMarker 700 "kite-461"; marker 901 "finch-6929" ])
-              ok "" ]
+        scripted [ ok (comments [ staleMarker 700 "kite-461"; marker 901 "finch-6929" ]); ok "" ]
 
-    let code, out, err = runOpLock transport [ "op-lock"; "release"; receiver; "--json" ]
+    let code, out, err =
+        runOpLock transport [ "op-lock"; "release"; receiver; "--json" ]
 
     Assert.True(0 = code, $"release did not succeed (exit %d{code}); stderr was: %s{err}")
 
@@ -497,22 +498,28 @@ let ``op-lock release drops OUR grant, through verifyHeld rather than lowest id`
     // the two rules in disagreement. If `lowestId` and the CAS winner agreed on this input, every
     // assertion above would hold for a handler wired to either one.
     let scanned: Reads.Marker list =
-        [ { Id = 700L
-            Worker = them
-            Session = None
-            AgeSeconds = 3600
-            PreviousStatus = None
-            PathRepo = None
-            AgentContract = None
-            Raw = "" }
-          { Id = 901L
-            Worker = me
-            Session = None
-            AgeSeconds = 1
-            PreviousStatus = None
-            PathRepo = None
-            AgentContract = None
-            Raw = "" } ]
+        [
+            {
+                Id = 700L
+                Worker = them
+                Session = None
+                AgeSeconds = 3600
+                PreviousStatus = None
+                PathRepo = None
+                AgentContract = None
+                Raw = ""
+            }
+            {
+                Id = 901L
+                Worker = me
+                Session = None
+                AgeSeconds = 1
+                PreviousStatus = None
+                PathRepo = None
+                AgentContract = None
+                Raw = ""
+            }
+        ]
 
     Assert.Equal(Some 700L, Reads.lowestId scanned |> Option.map (fun m -> m.Id))
     Assert.Equal(Some 901L, Reads.winner Client.OpLock.LeaseMinutes scanned |> Option.map (fun m -> m.Id))
@@ -555,16 +562,27 @@ let ``FSGG_COORD_OP_LOCKS reaches opLockRef's extra parameter, and is NOT the ch
         let injected = Client.OpLock.roster ()
 
         Assert.Equal<Ref list>(
-            [ { Owner = "acme"
-                Repo = "Product.X"
-                Number = 42 } ],
+            [
+                {
+                    Owner = "acme"
+                    Repo = "Product.X"
+                    Number = 42
+                }
+            ],
             injected
         )
 
         // TWO SUBJECTS, TWO VARIABLES. Sharing one would make a chore drain and a dispatch operation
         // serialise against each other — "two questions answered in one colour" (design §4.1) — and a
         // tenant repointing one lock would silently repoint the other.
-        Assert.DoesNotContain({ Owner = "acme"; Repo = "Product.Y"; Number = 77 }, injected)
+        Assert.DoesNotContain(
+            {
+                Owner = "acme"
+                Repo = "Product.Y"
+                Number = 77
+            },
+            injected
+        )
 
         // And it resolves through the lookup the acquire path uses, under a foreign owner, which is the
         // whole point of an injected roster.
@@ -579,12 +597,14 @@ let ``the NotHeld refusal describes itself and is distinct from every other arm`
     // executor took this receiver while I was dispatching" need opposite responses, and a caller that
     // cannot tell them apart will retry the wrong one.
     let lines =
-        [ Client.OpLock.NoLockRef("FS-GG", "FS.GG.NotARepo")
-          Client.OpLock.HeldByAnother them
-          Client.OpLock.Twin(SessionId "other-session")
-          Client.OpLock.Impersonates(me, them)
-          Client.OpLock.NotHeld("FS-GG", "FS.GG.Net")
-          Client.OpLock.Undetermined "the re-read failed" ]
+        [
+            Client.OpLock.NoLockRef("FS-GG", "FS.GG.NotARepo")
+            Client.OpLock.HeldByAnother them
+            Client.OpLock.Twin(SessionId "other-session")
+            Client.OpLock.Impersonates(me, them)
+            Client.OpLock.NotHeld("FS-GG", "FS.GG.Net")
+            Client.OpLock.Undetermined "the re-read failed"
+        ]
         |> List.map Client.OpLock.describe
 
     for line in lines do

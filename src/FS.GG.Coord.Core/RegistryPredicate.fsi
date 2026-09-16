@@ -27,10 +27,12 @@ module RegistryPredicate =
     /// off its inline flow-mapping. `Fields` carries every `key: value` pair (including `owner`/`source`
     /// again, for uniformity); `Owner`/`Source` are lifted out because the manifest lookup keys on them.
     type Row =
-        { Id: string
-          Owner: string option
-          Source: string option
-          Fields: Map<string, string> }
+        {
+            Id: string
+            Owner: string option
+            Source: string option
+            Fields: Map<string, string>
+        }
 
     /// What the OWNING producer's manifest says about a given `(id, field)` — resolved by the Cli's
     /// impure edge and handed in. The three cases are the three the ADR's verdict distinguishes.
@@ -47,9 +49,11 @@ module RegistryPredicate =
     /// A machine-readable assertion: the `id`/`field`/`value` triple a `cross-repo:request` carries in
     /// the issue form. Structured by construction so the claim is not parsed out of prose (#683).
     type Assertion =
-        { Id: string
-          Field: string
-          Value: string }
+        {
+            Id: string
+            Field: string
+            Value: string
+        }
 
     /// The oracle's three-valued verdict (ADR-0050). There is no `bool` here: "I could not tell" is a
     /// first-class answer that never advances and never refutes.

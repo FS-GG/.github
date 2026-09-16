@@ -25,8 +25,7 @@ module Markdown =
     // fence GitHub does not, and then swallow every line below it: a `Paths:` line that IS a live
     // declaration would parse as quoted, and the item would never schedule. That is the fail-open
     // direction — inventing a fence LOSES declarations — and it is the one this module exists to refuse.
-    let private fenceLine =
-        Regex(@"^ {0,3}(`{3,}|~{3,})(.*)$", RegexOptions.Compiled)
+    let private fenceLine = Regex(@"^ {0,3}(`{3,}|~{3,})(.*)$", RegexOptions.Compiled)
 
     // Does `line` CLOSE a fence opened with a run of `ch` of length `len`?
     //
@@ -70,8 +69,7 @@ module Markdown =
     // Walk the body once, carrying the open fence. Every answer this module gives is a fold over this, so
     // there is exactly one traversal to be wrong about.
     let private walk (body: string) =
-        let lines =
-            (if isNull body then "" else body).Replace("\r\n", "\n").Split('\n')
+        let lines = (if isNull body then "" else body).Replace("\r\n", "\n").Split('\n')
 
         let mutable fence = None
         let acc = ResizeArray<string * LineKind>(lines.Length)

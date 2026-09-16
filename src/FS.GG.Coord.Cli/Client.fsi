@@ -32,18 +32,18 @@ namespace FS.GG.Coord.Cli
 ///     `say`, `roomOpen`, `context`, `bootstrapCmd`, `fieldId`, `optionId`, `itemIdCmd`, `flushCmd`
 ///     (each a verb `run` dispatches to itself). They are absent from this file and are now private.
 ///     `OpLock.LeaseMinutes` and `OpLock.release` went the same way.
-    ///   * 77 remained at that measurement point. The extraction programme (.github#2725–#2729) consumes
-    ///     that baseline; Lifecycle now owns the delivery/review/route/verify/followup command family and
-    ///     `Program.fs` reaches Client only for the residual composition seams.
+///   * 77 remained at that measurement point. The extraction programme (.github#2725–#2729) consumes
+///     that baseline; Lifecycle now owns the delivery/review/route/verify/followup command family and
+///     `Program.fs` reaches Client only for the residual composition seams.
 ///
 /// So this module's command contract is four functions wide. Everything else exported below is either a
 /// testability seam or an explicit production-composition dependency; none is a command dispatcher. Each
 /// marks a place where behaviour remains welded to Client while its owning family is registered outside it.
 /// The consumer-by-consumer table is in the pull request that added this file.
 ///
-    /// `.github#2727` makes completion, scan, generated-path collection, and the shared context boundary
-    /// explicit Lifecycle composition dependencies. The family owns dispatch; Client supplies only the
-    /// residual operations that have not yet moved.
+/// `.github#2727` makes completion, scan, generated-path collection, and the shared context boundary
+/// explicit Lifecycle composition dependencies. The family owns dispatch; Client supplies only the
+/// residual operations that have not yet moved.
 module Client =
 
     /// lint's BAD-TOUCH-SET sentence for a declaration `TouchSet.usability` has judged, or `None` when
@@ -56,8 +56,7 @@ module Client =
     /// and arrives as an argument; only the WORDS are lint's. Taking `Usability` rather than a touch-set
     /// is what makes that true by construction: there is no threshold left in here to get wrong, and the
     /// test can drive every case the core can produce.
-    val badTouchSetDetail:
-      (string -> FS.GG.Coord.TouchSet.Usability -> string option)
+    val badTouchSetDetail: (string -> FS.GG.Coord.TouchSet.Usability -> string option)
 
     /// `lint`'s BLOCKED-NO-REASON sentence for one row, or `None` when the row is coherent. An ALIAS of
     /// `LintApplication.blockedNoReasonVerdict`; the rule itself is stated once, there.
@@ -72,12 +71,10 @@ module Client =
     /// bind the SAME function. That is #945's rule for every lint rule in this module: the VERDICT is computed
     /// once and arrives as an argument; only the WORDS are lint's.
     val blockedNoReasonVerdict:
-      (FS.GG.Coord.Types.IssueState ->
-         FS.GG.Coord.Types.BoardStatus -> string -> string -> string option)
+        (FS.GG.Coord.Types.IssueState -> FS.GG.Coord.Types.BoardStatus -> string -> string -> string option)
 
     /// Compatibility seam for the body/field dependency-projection lint verdict.
-    val blockedByBodyProjectionVerdict:
-      (string -> string -> string -> string -> string option)
+    val blockedByBodyProjectionVerdict: (string -> string -> string -> string -> string option)
 
     /// `lint`'s HUMAN-PARK-RESOLVED sentence for one row, or `None`. An ALIAS of
     /// `LintApplication.humanParkResolvedVerdict`.
@@ -93,9 +90,11 @@ module Client =
     /// reader (and `reconcile`'s BLOCKER-CLEARED chore) can tell this state apart from a row that is genuinely
     /// ready to move.
     val humanParkResolvedVerdict:
-      (FS.GG.Coord.Types.IssueState ->
-         FS.GG.Coord.Types.BoardStatus ->
-         FS.GG.Coord.Types.Blocker list -> string -> string option)
+        (FS.GG.Coord.Types.IssueState
+                -> FS.GG.Coord.Types.BoardStatus
+                -> FS.GG.Coord.Types.Blocker list
+                -> string
+                -> string option)
 
     /// One sentence per row that sits on a `Blocked by` CYCLE — a ring of rows each blocked by the next, which
     /// can never become startable by itself. An ALIAS of `LintApplication.blockerCycleVerdicts`.
@@ -107,13 +106,11 @@ module Client =
     ///
     /// `[]` means no cycle, and it is an honest empty: a graph the caller could not read never reaches here.
     val blockerCycleVerdicts:
-      ((FS.GG.Coord.Types.Ref * FS.GG.Coord.Types.Blocker list) list ->
-         (FS.GG.Coord.Types.Ref * string) list)
+        ((FS.GG.Coord.Types.Ref * FS.GG.Coord.Types.Blocker list) list -> (FS.GG.Coord.Types.Ref * string) list)
 
     /// lint's CLASS verdict (`CLASS-INVALID` / `CLASS-UNSET` / nothing), on `badTouchSetDetail`'s terms:
     /// module-level so a test can drive every shape the grammar can produce (.github#1651).
-    val classVerdict:
-      (string -> string -> string -> (string * string) option)
+    val classVerdict: (string -> string -> string -> (string * string) option)
 
     /// The out-of-vocabulary-`Class:` refusal `add` renders before it boards a row (.github#1651 AC1).
     val outOfVocabularyClass: (string -> string option)
@@ -123,16 +120,16 @@ module Client =
     /// work from every later board view.  It instead names the lane-of-one while the filer can still
     /// narrow or sequence the pair (#1843).
     val filingLaneOfOne:
-      candidate: FS.GG.Coord.Types.Ref ->
+        candidate: FS.GG.Coord.Types.Ref ->
         paths: FS.GG.Coord.Types.TouchSet ->
-        items: FS.GG.Coord.Types.Item list -> FS.GG.Coord.Types.Ref list
+        items: FS.GG.Coord.Types.Item list ->
+            FS.GG.Coord.Types.Ref list
 
     /// Decode the current SDD analysis fact for the named work — the errors in one `sdd readiness` JSON
     /// document, or `[]`. The route boundary owns this one interpretation so a `workId` substitution and an
     /// unready analysis cannot be accepted on one command path while another merely checks that JSON was
     /// present. An unreadable document is an ERROR in the returned list, never a silent `[]`.
-    val sddReadinessEvidenceErrors:
-      workId: string -> raw: string -> string list
+    val sddReadinessEvidenceErrors: workId: string -> raw: string -> string list
 
     /// Exposed for the command-boundary test: this is the sole filesystem-backed SDD proof surfaced by
     /// route reads and route recording, so the test can pin both the current and missing-work inversions.
@@ -144,8 +141,7 @@ module Client =
     /// already carry a package, because the only actor positioned to author that package — a CLAIMED
     /// WORKER, inside a worktree, via `fsgg-sdd` — could never get claimed to do so. So this is REPORTED
     /// (by `record` and `show`) and never refuses.
-    val sddEvidenceErrors:
-      receipt: FS.GG.Coord.DeliveryRoute.Receipt -> string list
+    val sddEvidenceErrors: receipt: FS.GG.Coord.DeliveryRoute.Receipt -> string list
 
     /// THE WHOLE BOARD'S BLOCKING COUNTS, from the scan rows the offer path already holds (.github#1628).
     ///
@@ -182,15 +178,15 @@ module Client =
     /// `Rank.blockingCountsOf` credits only edges that carry a ref. An off-board ref that IS credited
     /// names a node no candidate can be, so its entry is never read.
     /// Compatibility forward for existing callers; the board-fact seam lives in BoardFactsApplication.
-    val boardBlockingCounts:
-      (FS.GG.Coord.GitHub.Scan.Row list -> Map<FS.GG.Coord.Types.Ref,int>)
+    val boardBlockingCounts: (FS.GG.Coord.GitHub.Scan.Row list -> Map<FS.GG.Coord.Types.Ref, int>)
 
     /// Pure snapshot projection retained for offline diagnostics. Live board commands use
     /// `renderLiveDecision`, which always reads the mandatory route ledger immediately before scheduling.
     val renderDecision:
-      opts: Options.Options ->
+        opts: Options.Options ->
         rows: FS.GG.Coord.GitHub.Scan.Row list ->
-        doc: string -> Result<FS.GG.Coord.Batch.BatchResult,int>
+        doc: string ->
+            Result<FS.GG.Coord.Batch.BatchResult, int>
 
     /// `batch`'s implementer-slot projection over the very snapshot it scheduled from (.github#2678).
     ///
@@ -203,8 +199,7 @@ module Client =
     ///
     /// Public because a projection nobody could call is a projection nobody could pin AGAINST the other
     /// two readings of the same board, which is the disagreement this item is about.
-    val slotOccupancyOf:
-      doc: string -> Result<FS.GG.Coord.Batch.SlotOccupancy,string>
+    val slotOccupancyOf: doc: string -> Result<FS.GG.Coord.Batch.SlotOccupancy, string>
 
     /// `batch` — every item schedulable in parallel right now; `next` uncapped, and the READ half of that pair.
     ///
@@ -224,13 +219,12 @@ module Client =
     /// test coverage"). `reviewByPr`/`mergedFactsByRef` are pre-computed by the caller from the SAME
     /// live reads `driver`'s existing planning path already performs.
     val candidateToItemFacts:
-      reviewByPr: Map<int,FS.GG.Coord.Driver.ReviewChain> ->
-        mergedFactsByRef: Map<string,
-                              (int * bool *
-                               FS.GG.Coord.Delivery.Obligation list)> ->
+        reviewByPr: Map<int, FS.GG.Coord.Driver.ReviewChain> ->
+        mergedFactsByRef: Map<string, (int * bool * FS.GG.Coord.Delivery.Obligation list)> ->
         now: int64 ->
         sourceSha: string ->
-        candidate: Snapshot.Candidate -> FS.GG.Coord.DriverEvents.ItemFacts
+        candidate: Snapshot.Candidate ->
+            FS.GG.Coord.DriverEvents.ItemFacts
 
     /// Read the durable `driver --events` cursor (.github#2135). No `--cursor` and a `--cursor` path
     /// that has never been written both read as an empty cursor — a legitimate first run. A path that
@@ -247,8 +241,7 @@ module Client =
     /// an existing directory and threw uncaught — a caller input error misreported as an internal
     /// engine defect, plus a leaked temp file on the crash. Checked BEFORE `File.Exists` so it is
     /// refused before either kind of "absent" reasoning is reached.
-    val readEventsCursor:
-      path: string option -> Result<FS.GG.Coord.DriverEvents.Cursor,string>
+    val readEventsCursor: path: string option -> Result<FS.GG.Coord.DriverEvents.Cursor, string>
 
     /// Persist the cursor ATOMICALLY (.github#2135 repair round 1, finding 2's second half). A bare
     /// `File.WriteAllText` truncates the target before writing the new bytes — a process killed
@@ -258,14 +251,11 @@ module Client =
     /// file or nothing at that path — never a half-written one. `File.Move` with `overwrite: true` is
     /// a single filesystem rename on the common case (temp and target on the same volume), which is
     /// guaranteed by placing the temp file beside its target rather than under a system temp root.
-    val writeEventsCursorAtomic:
-      path: string -> cursor: FS.GG.Coord.DriverEvents.Cursor -> unit
+    val writeEventsCursorAtomic: path: string -> cursor: FS.GG.Coord.DriverEvents.Cursor -> unit
 
     /// The `fsgg.coord.driver-events/1` JSON projection (.github#2135) — named so it is directly
     /// testable against a hand-built `DriverEvents.Projection` without a live board scan.
-    val renderEventsJson:
-      sourceSha: string ->
-        projection: FS.GG.Coord.DriverEvents.Projection -> string
+    val renderEventsJson: sourceSha: string -> projection: FS.GG.Coord.DriverEvents.Projection -> string
 
     /// Live inspection derives occupancy from the same board snapshot as `batch`, never caller input.
     val driver: ctx: Kernel.Context -> opts: Options.Options -> int
@@ -278,39 +268,39 @@ module Client =
     /// Project classified paths through the one shared authorization rule. Both live `delivery` and
     /// `verify-paths` call this function with their corresponding projection tag.
     val projectPathVerdict:
-      projection: PathVerdictProjection ->
-      classifications: FS.GG.Coord.Delivery.PathClassification list -> bool
+        projection: PathVerdictProjection -> classifications: FS.GG.Coord.Delivery.PathClassification list -> bool
 
     /// Compatibility projection over the shared typed path classifier. Live delivery and `verify-paths`
     /// additionally supply the current route-qualified SDD-package authority.
-    val deliveryPathsVerified:
-      touchSet: FS.GG.Coord.Types.TouchSet -> files: string list -> bool
+    val deliveryPathsVerified: touchSet: FS.GG.Coord.Types.TouchSet -> files: string list -> bool
 
     /// Run one family-owned live handler through the client's shared context, repo-defaulting, and
     /// bare-reference boundary. Command families register the handler itself; this seam supplies IO only.
-    val executeWithContext:
-      handler: (Kernel.Context -> Options.Options -> int) -> opts: Options.Options -> int
+    val executeWithContext: handler: (Kernel.Context -> Options.Options -> int) -> opts: Options.Options -> int
 
     /// Explicit dependencies of the Lifecycle delivery/verify handlers. They are exposed so Program can
     /// compose the family handlers directly instead of routing those commands back through `Client.run`.
     val scanAndDecide:
-      ctx: Kernel.Context ->
+        ctx: Kernel.Context ->
         opts: Options.Options ->
         intent: FS.GG.Coord.GitHub.Cache.ReadIntent ->
-        Result<FS.GG.Coord.GitHub.Scan.Row list * string * FS.GG.Coord.GitHub.Scan.Receipt, FS.GG.Coord.GitHub.Errors.IoError>
+            Result<
+                FS.GG.Coord.GitHub.Scan.Row list * string * FS.GG.Coord.GitHub.Scan.Receipt,
+                FS.GG.Coord.GitHub.Errors.IoError
+             >
 
-    val offerChoreAfterDone:
-      ctx: Kernel.Context -> opts: Options.Options -> ref: FS.GG.Coord.Types.Ref -> unit
+    val offerChoreAfterDone: ctx: Kernel.Context -> opts: Options.Options -> ref: FS.GG.Coord.Types.Ref -> unit
 
     val generatedPaths: root: string -> Set<string>
 
     /// Classify changed paths against the declared touch-set plus current generated-path and
     /// route-qualified SDD authorities. Delivery and verify-paths share this exact function.
     val classifyDeliveryPaths:
-      ctx: Kernel.Context ->
+        ctx: Kernel.Context ->
         issue: FS.GG.Coord.Types.Ref ->
         touchSet: FS.GG.Coord.Types.TouchSet ->
-        files: string list -> FS.GG.Coord.Delivery.PathClassification list
+        files: string list ->
+            FS.GG.Coord.Delivery.PathClassification list
 
     /// THE OFFER PATH'S BOARD — the scan's bytes AND the scan's rows, joined the way `reconcile` joins them
     /// (.github#1649).
@@ -357,9 +347,7 @@ module Client =
     /// NOT PRIVATE, deliberately, on `badTouchSetDetail`'s terms: this join IS the correctness argument, and
     /// a defect whose entire content was "one call site skipped it" must be assertable by a test rather than
     /// re-argued in a comment. `ChoresTests` drives it from the REAL `Scan.snapshot` bytes.
-    val offerBoardOf:
-      rows: FS.GG.Coord.GitHub.Scan.Row list ->
-        doc: string -> FS.GG.Coord.Chore.Board option
+    val offerBoardOf: rows: FS.GG.Coord.GitHub.Scan.Row list -> doc: string -> FS.GG.Coord.Chore.Board option
 
     /// THE OFFER PATH'S BOARD READ — the ONE door to `offerBoardOf`, and the place its FRESHNESS is decided.
     ///
@@ -394,9 +382,7 @@ module Client =
     /// argument, and a defect whose entire content was "one call site named the wrong intent" must be
     /// assertable by a test rather than re-argued in a comment. `ChoresTests` drives THIS function over a
     /// warm cache, so a mutation back to `Scheduling` reds a leg instead of passing one.
-    val wholeBoard:
-      ctx: Kernel.Context ->
-        opts: Options.Options -> FS.GG.Coord.Chore.Board option
+    val wholeBoard: ctx: Kernel.Context -> opts: Options.Options -> FS.GG.Coord.Chore.Board option
 
     /// `next` — the single next schedulable item: the ref alone on stdout, every reason on stderr.
     ///
@@ -485,9 +471,10 @@ module Client =
     /// body — a fact it could not read is a refusal, never a pass. `set-field --batch` cannot use this
     /// as-is; that is what `requireCoherentParkIfBlockedForBatch` below exists for.
     val requireCoherentParkIfBlocked:
-      ctx: Kernel.Context ->
+        ctx: Kernel.Context ->
         ref: FS.GG.Coord.Types.Ref ->
-        requested: FS.GG.Coord.Types.BoardStatus option -> Result<unit,int>
+        requested: FS.GG.Coord.Types.BoardStatus option ->
+            Result<unit, int>
 
     /// #581 — collect expired claims whose WORK is dead, and REFUSE any whose work is alive.
     ///
@@ -600,11 +587,11 @@ module Client =
     /// pair in this batch defers to the live-read gate, so a batch that never touches `Blocked by` behaves
     /// exactly as it did before this issue.
     val requireCoherentParkIfBlockedForBatch:
-      ctx: Kernel.Context ->
+        ctx: Kernel.Context ->
         ref: FS.GG.Coord.Types.Ref ->
         requested: FS.GG.Coord.Types.BoardStatus option ->
         pendingBlockedBy: FS.GG.Coord.GitHub.Board.FieldWrite option ->
-        Result<unit,int>
+            Result<unit, int>
 
     /// `release` — drop the lock, restoring the column it overwrote.
     ///
@@ -695,39 +682,49 @@ module Client =
 
     /// A durable wait edge bound to both current claim generations and the exact shared reservations.
     type OverlapWaitReceipt =
-        { Waiter: FS.GG.Coord.Types.Ref
-          WaiterGeneration: string
-          Predecessor: FS.GG.Coord.Types.Ref
-          PredecessorGeneration: string
-          SharedTokens: string list
-          Host: string
-          Digest: string }
+        {
+            Waiter: FS.GG.Coord.Types.Ref
+            WaiterGeneration: string
+            Predecessor: FS.GG.Coord.Types.Ref
+            PredecessorGeneration: string
+            SharedTokens: string list
+            Host: string
+            Digest: string
+        }
 
     type OverlapClaimFact =
-        { Item: FS.GG.Coord.Types.Ref
-          Generation: string
-          Live: bool }
+        {
+            Item: FS.GG.Coord.Types.Ref
+            Generation: string
+            Live: bool
+        }
 
     type OverlapRelation =
-        { Left: FS.GG.Coord.Types.Ref
-          Right: FS.GG.Coord.Types.Ref
-          SharedTokens: string list }
+        {
+            Left: FS.GG.Coord.Types.Ref
+            Right: FS.GG.Coord.Types.Ref
+            SharedTokens: string list
+        }
 
     type MutualOverlapSnapshot =
-        { Readable: bool
-          Claims: OverlapClaimFact list
-          Relations: OverlapRelation list
-          Waits: OverlapWaitReceipt list
-          DurableDependencies: (FS.GG.Coord.Types.Ref * FS.GG.Coord.Types.Ref) list
-          RelatedRoomCycleDigests: string list }
+        {
+            Readable: bool
+            Claims: OverlapClaimFact list
+            Relations: OverlapRelation list
+            Waits: OverlapWaitReceipt list
+            DurableDependencies: (FS.GG.Coord.Types.Ref * FS.GG.Coord.Types.Ref) list
+            RelatedRoomCycleDigests: string list
+        }
 
     type MutualOverlapCycle =
-        { First: FS.GG.Coord.Types.Ref
-          Second: FS.GG.Coord.Types.Ref
-          FirstGeneration: string
-          SecondGeneration: string
-          SharedTokens: string list
-          Digest: string }
+        {
+            First: FS.GG.Coord.Types.Ref
+            Second: FS.GG.Coord.Types.Ref
+            FirstGeneration: string
+            SecondGeneration: string
+            SharedTokens: string list
+            Digest: string
+        }
 
     type MutualOverlapVerdict =
         | NoMutualOverlapCycle
@@ -735,53 +732,63 @@ module Client =
         | MutualOverlapRefused of reason: string
 
     type OverlapPrecedenceReceipt =
-        { CycleDigest: string
-          Revision: int
-          PreviousDigest: string option
-          Winner: FS.GG.Coord.Types.Ref
-          Loser: FS.GG.Coord.Types.Ref
-          Host: string
-          Reason: string option
-          Digest: string }
+        {
+            CycleDigest: string
+            Revision: int
+            PreviousDigest: string option
+            Winner: FS.GG.Coord.Types.Ref
+            Loser: FS.GG.Coord.Types.Ref
+            Host: string
+            Reason: string option
+            Digest: string
+        }
 
     type LoserResumeFacts =
-        { WinnerLanded: bool
-          LoserClaimGenerationCurrent: bool
-          FetchedWinnerBase: bool
-          RebasedHead: bool
-          OverlapClear: bool
-          ExplicitlyRewidened: bool
-          ReviewRequired: bool
-          ExactHeadReviewed: bool }
+        {
+            WinnerLanded: bool
+            LoserClaimGenerationCurrent: bool
+            FetchedWinnerBase: bool
+            RebasedHead: bool
+            OverlapClear: bool
+            ExplicitlyRewidened: bool
+            ReviewRequired: bool
+            ExactHeadReviewed: bool
+        }
 
     /// The checked-in Coordination-board issue that owns the singleton orchestrator lease domain.
     [<Literal>]
     val boardOrchestratorAuthority: string = "FS-GG/.github#2801"
 
     type BoardOrchestratorLease =
-        { Board: string
-          HolderRepo: string
-          Holder: string
-          Generation: int64
-          ExpiresAtUnix: int64
-          CommentId: int64
-          Digest: string }
+        {
+            Board: string
+            HolderRepo: string
+            Holder: string
+            Generation: int64
+            ExpiresAtUnix: int64
+            CommentId: int64
+            Digest: string
+        }
 
     type BoardOrchestratorRequest =
-        { Board: string
-          RequestingRepo: string
-          RequestKey: string
-          CoordinationRef: FS.GG.Coord.Types.Ref
-          LeaseGeneration: int64
-          CommentId: int64
-          Digest: string }
+        {
+            Board: string
+            RequestingRepo: string
+            RequestKey: string
+            CoordinationRef: FS.GG.Coord.Types.Ref
+            LeaseGeneration: int64
+            CommentId: int64
+            Digest: string
+        }
 
     type BoardOrchestratorSnapshot =
-        { Readable: bool
-          NowUnix: int64
-          Board: string
-          Leases: BoardOrchestratorLease list
-          Requests: BoardOrchestratorRequest list }
+        {
+            Readable: bool
+            NowUnix: int64
+            Board: string
+            Leases: BoardOrchestratorLease list
+            Requests: BoardOrchestratorRequest list
+        }
 
     type BoardOrchestratorDecision =
         | RouteRequestTo of BoardOrchestratorLease
@@ -792,11 +799,16 @@ module Client =
     val waitReceiptDigest: receipt: OverlapWaitReceipt -> string
     val detectMutualOverlap: snapshot: MutualOverlapSnapshot -> MutualOverlapVerdict
     val precedenceReceiptDigest: receipt: OverlapPrecedenceReceipt -> string
-    val validateOverlapPrecedence: cycle: MutualOverlapCycle -> receipts: OverlapPrecedenceReceipt list -> Result<OverlapPrecedenceReceipt, string>
+
+    val validateOverlapPrecedence:
+        cycle: MutualOverlapCycle -> receipts: OverlapPrecedenceReceipt list -> Result<OverlapPrecedenceReceipt, string>
+
     val validateLoserResume: facts: LoserResumeFacts -> string list
     val boardOrchestratorLeaseDigest: lease: BoardOrchestratorLease -> string
     val boardOrchestratorRequestDigest: request: BoardOrchestratorRequest -> string
-    val decideBoardOrchestrator: requesterRepo: string -> holder: string -> snapshot: BoardOrchestratorSnapshot -> BoardOrchestratorDecision
+
+    val decideBoardOrchestrator:
+        requesterRepo: string -> holder: string -> snapshot: BoardOrchestratorSnapshot -> BoardOrchestratorDecision
 
     /// #353 — DOES THIS ITEM'S TOUCH-SET COLLIDE WITH ANOTHER'S, and NOTHING outside its own repo counts.
     ///
@@ -905,9 +917,7 @@ module Client =
             | Twin of theirs: FS.GG.Coord.Types.SessionId
 
             /// WE ASKED TO ACT AS A WORKER WE ARE NOT (#1646).
-            | Impersonates of
-              derived: FS.GG.Coord.Types.WorkerId *
-              named: FS.GG.Coord.Types.WorkerId
+            | Impersonates of derived: FS.GG.Coord.Types.WorkerId * named: FS.GG.Coord.Types.WorkerId
 
             /// WE DO NOT HOLD THIS RECEIVER'S LOCK — the RELEASE path's arm, and it has no acquire-path
             /// counterpart because acquiring is how you come to hold one. Distinct from `HeldByAnother`,
@@ -938,14 +948,14 @@ module Client =
         /// thing this lock exists to prevent. Forcing it would put two executors on one receiver, and that
         /// is the incident, not the remedy.
         val acquire:
-          transport: FS.GG.Coord.GitHub.Transport.IGitHubTransport ->
+            transport: FS.GG.Coord.GitHub.Transport.IGitHubTransport ->
             worker: FS.GG.Coord.Types.WorkerId ->
             self: FS.GG.Coord.GitHub.Writes.SelfIdentity ->
             session: FS.GG.Coord.Types.SessionId option ->
             extra: FS.GG.Coord.Types.Ref list ->
             owner: string ->
             receiver: string ->
-            Result<FS.GG.Coord.GitHub.Writes.Held,Refusal>
+                Result<FS.GG.Coord.GitHub.Writes.Held, Refusal>
 
         /// TEN MINUTES, matching the chore lock's, and for the same argument. This bounds how long a DEAD
         /// executor stalls one receiver's dispatch queue — not how long a live one may take, because a live
@@ -965,14 +975,14 @@ module Client =
         /// selecting the marker by lowest id and deleting it would delete whichever marker happened to be
         /// first, which under a shared worker id is #550.
         val held:
-          transport: FS.GG.Coord.GitHub.Transport.IGitHubTransport ->
+            transport: FS.GG.Coord.GitHub.Transport.IGitHubTransport ->
             worker: FS.GG.Coord.Types.WorkerId ->
             self: FS.GG.Coord.GitHub.Writes.SelfIdentity ->
             session: FS.GG.Coord.Types.SessionId option ->
             extra: FS.GG.Coord.Types.Ref list ->
             owner: string ->
             receiver: string ->
-            Result<FS.GG.Coord.GitHub.Writes.Held,Refusal>
+                Result<FS.GG.Coord.GitHub.Writes.Held, Refusal>
 
         /// RELEASE the operation lock. Takes the capability, exactly as every other release does, so a
         /// marker nobody holds cannot be dropped by naming it.
@@ -982,9 +992,9 @@ module Client =
         /// could have reached it even by trying. Exporting it is part of giving the lock a release half at
         /// all.
         val release:
-          transport: FS.GG.Coord.GitHub.Transport.IGitHubTransport ->
+            transport: FS.GG.Coord.GitHub.Transport.IGitHubTransport ->
             held: FS.GG.Coord.GitHub.Writes.Held ->
-            FS.GG.Coord.GitHub.Errors.IoResult<unit>
+                FS.GG.Coord.GitHub.Errors.IoResult<unit>
 
         /// The per-deployment op-lock roster, read from `FSGG_COORD_OP_LOCKS` — what makes `opLockRef`'s
         /// `extra` parameter reachable from production at all. A SEPARATE variable from
@@ -1107,11 +1117,12 @@ module Client =
     /// names, that the gate is noise and you merge anyway. `--strict` is for the caller who wants to be stopped
     /// by one.
     val epicVerdict:
-      (FS.GG.Coord.Types.IssueState ->
-         FS.GG.Coord.Types.BoardStatus ->
-         string ->
-         FS.GG.Coord.GitHub.Reads.SubIssueSet ->
-         string list -> LintApplication.EpicFinding list)
+        (FS.GG.Coord.Types.IssueState
+                -> FS.GG.Coord.Types.BoardStatus
+                -> string
+                -> FS.GG.Coord.GitHub.Reads.SubIssueSet
+                -> string list
+                -> LintApplication.EpicFinding list)
 
     /// `lint` — the judgement half of the board's health read, and the half `reconcile --apply` deliberately
     /// will not touch.
@@ -1153,5 +1164,4 @@ module Client =
     /// Returns the process exit code. A PURE command routed here by mistake is a `failwith`, not a verdict —
     /// this door is for IO commands and the mistake is a defect in the caller, not a condition to report.
     val run:
-      boardOpsHandlers: Map<Options.Command, BoardOps.HandlerRegistration.Handler> ->
-      opts: Options.Options -> int
+        boardOpsHandlers: Map<Options.Command, BoardOps.HandlerRegistration.Handler> -> opts: Options.Options -> int

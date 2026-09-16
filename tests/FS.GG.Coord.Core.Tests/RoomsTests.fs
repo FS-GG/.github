@@ -37,15 +37,14 @@ module RoomsTests =
     [<Fact>]
     let ``one line may list several rooms — every ref is read, not the first`` () =
         // The departure from `Paths:`/`childRefs`: a room line is additive, so BOTH refs are kept.
-        Assert.Equal<string list>(
-            [ "FS-GG/.github#12"; "FS-GG/.github#13" ],
-            shorts (parse "x\n\nRooms: #12, #13"))
+        Assert.Equal<string list>([ "FS-GG/.github#12"; "FS-GG/.github#13" ], shorts (parse "x\n\nRooms: #12, #13"))
 
     [<Fact>]
     let ``several Rooms lines UNION — a follow-up adds its own and keeps the room alive (ADR-0051 §4)`` () =
         Assert.Equal<string list>(
             [ "FS-GG/.github#12"; "FS-GG/.github#13" ],
-            shorts (parse "x\n\nRooms: #12\n\nRooms: #13"))
+            shorts (parse "x\n\nRooms: #12\n\nRooms: #13")
+        )
 
     [<Fact>]
     let ``duplicate refs across lines collapse`` () =
@@ -57,11 +56,14 @@ module RoomsTests =
             "Rooms: #8 FS.GG.SDD#8 FS-GG/FS.GG.Rendering#12 https://github.com/FS-GG/FS.GG.Audio/issues/9"
 
         Assert.Equal<string list>(
-            [ "FS-GG/.github#8"
-              "FS-GG/FS.GG.Audio#9"
-              "FS-GG/FS.GG.Rendering#12"
-              "FS-GG/FS.GG.SDD#8" ],
-            shorts (parse body))
+            [
+                "FS-GG/.github#8"
+                "FS-GG/FS.GG.Audio#9"
+                "FS-GG/FS.GG.Rendering#12"
+                "FS-GG/FS.GG.SDD#8"
+            ],
+            shorts (parse body)
+        )
 
     [<Fact>]
     let ``a repo#n carries its repo, owner defaults`` () =

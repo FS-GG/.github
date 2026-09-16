@@ -17,8 +17,10 @@ module ServerTests =
     let private workspaceId = "workspace-alpha"
 
     let private asset (contentType: string) (content: string) =
-        { ContentType = contentType
-          Content = Encoding.UTF8.GetBytes content }
+        {
+            ContentType = contentType
+            Content = Encoding.UTF8.GetBytes content
+        }
 
     let private baseOptions snapshotProvider =
         TelemetryDashboardServer.defaultOptions
@@ -48,9 +50,17 @@ module ServerTests =
     let private sharedAssetOptions () =
         let assets route =
             DashboardAssets.tryGetLocal route
-            |> Option.map (fun asset -> { ContentType=asset.ContentType; Content=asset.Bytes })
-        let snapshot = """{"schema":"fsgg.telemetry.private-dashboard/1","workspaceId":"workspace-alpha","observedAt":null,"revision":1,"operational":{"pendingBatches":0,"appliedReceipts":1,"rejectedReceipts":0,"consistency":"complete"},"items":[{"id":"local-item","state":{"outcome":"complete","population":"complete"},"usage":{"total":1},"runtime":{"terminal":1,"admitted":1},"coverage":{"populationCoverage":"complete","ciInventory":"complete"}}]}"""
-        TelemetryDashboardServer.defaultOptions workspaceId assets (fun _ _ -> Task.FromResult(Ok(Encoding.UTF8.GetBytes snapshot)))
+            |> Option.map (fun asset ->
+                {
+                    ContentType = asset.ContentType
+                    Content = asset.Bytes
+                })
+
+        let snapshot =
+            """{"schema":"fsgg.telemetry.private-dashboard/1","workspaceId":"workspace-alpha","observedAt":null,"revision":1,"operational":{"pendingBatches":0,"appliedReceipts":1,"rejectedReceipts":0,"consistency":"complete"},"items":[{"id":"local-item","state":{"outcome":"complete","population":"complete"},"usage":{"total":1},"runtime":{"terminal":1,"admitted":1},"coverage":{"populationCoverage":"complete","ciInventory":"complete"}}]}"""
+
+        TelemetryDashboardServer.defaultOptions workspaceId assets (fun _ _ ->
+            Task.FromResult(Ok(Encoding.UTF8.GetBytes snapshot)))
 
     let private start options =
         task {
@@ -92,7 +102,7 @@ module ServerTests =
 
         request
 
-    let private emptyPost (server: RunningTelemetryDashboardServer) (path:string) =
+    let private emptyPost (server: RunningTelemetryDashboardServer) (path: string) =
         let request = new HttpRequestMessage(HttpMethod.Post, Uri(server.Origin, path))
         request.Headers.Add("Origin", server.Origin.GetLeftPart(UriPartial.Authority))
         request
@@ -126,7 +136,11 @@ module ServerTests =
             use! sessionResponse = http.SendAsync sessionRequest
             Assert.Equal(HttpStatusCode.OK, sessionResponse.StatusCode)
             let! session = sessionResponse.Content.ReadAsStringAsync()
-            Assert.Equal("{\"schema\":\"fsgg.telemetry.browser-session/1\",\"workspaces\":[\"workspace-alpha\"]}", session)
+
+            Assert.Equal(
+                "{\"schema\":\"fsgg.telemetry.browser-session/1\",\"workspaces\":[\"workspace-alpha\"]}",
+                session
+            )
 
             use! replay = http.GetAsync(server.BootstrapUrl)
             Assert.Equal(HttpStatusCode.NotFound, replay.StatusCode)
@@ -192,7 +206,8 @@ module ServerTests =
         task {
             let options =
                 { immediateOptions () with
-                    MaxRequestBodyBytes = 32 }
+                    MaxRequestBodyBytes = 32
+                }
 
             use! server = start options
             let http, handler = client ()
@@ -299,7 +314,8 @@ module ServerTests =
 
             let boundedHeaders =
                 { immediateOptions () with
-                    MaxHeaderBytes = 64 }
+                    MaxHeaderBytes = 64
+                }
 
             use! boundedServer = start boundedHeaders
             let boundedHost = $"127.0.0.1:{boundedServer.Origin.Port}"
@@ -323,7 +339,8 @@ module ServerTests =
                 { immediateOptions () with
                     BootstrapLifetime = TimeSpan.FromMilliseconds 40.0
                     SessionIdleTimeout = TimeSpan.FromMilliseconds 50.0
-                    SessionAbsoluteTimeout = TimeSpan.FromMilliseconds 120.0 }
+                    SessionAbsoluteTimeout = TimeSpan.FromMilliseconds 120.0
+                }
 
             use! expiredBootstrapServer = start expiring
             do! Task.Delay 80
@@ -345,7 +362,8 @@ module ServerTests =
             let absoluteOptions =
                 { immediateOptions () with
                     SessionIdleTimeout = TimeSpan.FromMilliseconds 100.0
-                    SessionAbsoluteTimeout = TimeSpan.FromMilliseconds 220.0 }
+                    SessionAbsoluteTimeout = TimeSpan.FromMilliseconds 220.0
+                }
 
             use! absoluteServer = start absoluteOptions
             let absoluteHttp, absoluteHandler = client ()
@@ -394,7 +412,8 @@ module ServerTests =
                       providerStarted.TrySetResult() |> ignore
                       providerRelease.Task) with
                     MaxConcurrentQueries = 1
-                    SnapshotTimeout = TimeSpan.FromMilliseconds 60.0 }
+                    SnapshotTimeout = TimeSpan.FromMilliseconds 60.0
+                }
 
             use! server = start options
             let http, handler = client ()
@@ -435,7 +454,8 @@ module ServerTests =
                       Task.FromResult(Ok(Encoding.UTF8.GetBytes "{}"))) with
                     MaxConcurrentQueries = 1
                     SnapshotTimeout = TimeSpan.FromMilliseconds 100.0
-                    RequestTimeout = TimeSpan.FromSeconds 1.0 }
+                    RequestTimeout = TimeSpan.FromSeconds 1.0
+                }
 
             use! server = start options
             let http, handler = client ()
@@ -485,7 +505,8 @@ module ServerTests =
                       providerStarted.TrySetResult() |> ignore
                       providerRelease.Task) with
                     SnapshotTimeout = TimeSpan.FromSeconds 2.0
-                    ShutdownTimeout = TimeSpan.FromMilliseconds 100.0 }
+                    ShutdownTimeout = TimeSpan.FromMilliseconds 100.0
+                }
 
             use! server = start options
             let http, handler = client ()
@@ -519,7 +540,8 @@ module ServerTests =
             let options =
                 { immediateOptions () with
                     MaxConcurrentRequests = 1
-                    RequestTimeout = TimeSpan.FromMilliseconds 250.0 }
+                    RequestTimeout = TimeSpan.FromMilliseconds 250.0
+                }
 
             use! server = start options
             let http, handler = client ()
@@ -552,7 +574,8 @@ module ServerTests =
                 { immediateOptions () with
                     MaxConcurrentRequests = 1
                     RequestTimeout = TimeSpan.FromSeconds 5.0
-                    ShutdownTimeout = TimeSpan.FromMilliseconds 200.0 }
+                    ShutdownTimeout = TimeSpan.FromMilliseconds 200.0
+                }
 
             use! shutdownServer = start shutdownOptions
             let shutdownHttp, shutdownHandler = client ()
@@ -634,7 +657,10 @@ module ServerTests =
     let ``shared local UI explains one-use logout without exposing the host login`` () =
         task {
             use! server = start (sharedAssetOptions ())
-            let projectDirectory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../.."))
+
+            let projectDirectory =
+                Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../.."))
+
             let startInfo = ProcessStartInfo("node")
             startInfo.WorkingDirectory <- projectDirectory
             startInfo.RedirectStandardOutput <- true
@@ -643,14 +669,18 @@ module ServerTests =
             startInfo.ArgumentList.Add(server.BootstrapUrl.AbsoluteUri)
             startInfo.ArgumentList.Add(workspaceId)
             startInfo.ArgumentList.Add("local-item")
-            use browserJourney = new Process(StartInfo=startInfo)
+            use browserJourney = new Process(StartInfo = startInfo)
             Assert.True(browserJourney.Start())
-            let outputTask=browserJourney.StandardOutput.ReadToEndAsync()
-            let errorTask=browserJourney.StandardError.ReadToEndAsync()
+            let outputTask = browserJourney.StandardOutput.ReadToEndAsync()
+            let errorTask = browserJourney.StandardError.ReadToEndAsync()
             do! browserJourney.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds 20.)
-            let! output=outputTask
-            let! error=errorTask
-            Assert.True(browserJourney.ExitCode=0,$"Chromium shared UI failed with exit {browserJourney.ExitCode}. stdout: {output} stderr: {error}")
+            let! output = outputTask
+            let! error = errorTask
+
+            Assert.True(
+                browserJourney.ExitCode = 0,
+                $"Chromium shared UI failed with exit {browserJourney.ExitCode}. stdout: {output} stderr: {error}"
+            )
         }
 
     [<Fact>]
@@ -659,9 +689,14 @@ module ServerTests =
             let options =
                 { sharedAssetOptions () with
                     SessionIdleTimeout = TimeSpan.FromMilliseconds 150.0
-                    SessionAbsoluteTimeout = TimeSpan.FromMilliseconds 300.0 }
+                    SessionAbsoluteTimeout = TimeSpan.FromMilliseconds 300.0
+                }
+
             use! server = start options
-            let projectDirectory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../.."))
+
+            let projectDirectory =
+                Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../.."))
+
             let startInfo = ProcessStartInfo("node")
             startInfo.WorkingDirectory <- projectDirectory
             startInfo.RedirectStandardOutput <- true
@@ -671,14 +706,18 @@ module ServerTests =
             startInfo.ArgumentList.Add(workspaceId)
             startInfo.ArgumentList.Add("local-item")
             startInfo.ArgumentList.Add("expire")
-            use browserJourney = new Process(StartInfo=startInfo)
+            use browserJourney = new Process(StartInfo = startInfo)
             Assert.True(browserJourney.Start())
-            let outputTask=browserJourney.StandardOutput.ReadToEndAsync()
-            let errorTask=browserJourney.StandardError.ReadToEndAsync()
+            let outputTask = browserJourney.StandardOutput.ReadToEndAsync()
+            let errorTask = browserJourney.StandardError.ReadToEndAsync()
             do! browserJourney.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds 20.)
-            let! output=outputTask
-            let! error=errorTask
-            Assert.True(browserJourney.ExitCode=0,$"Chromium shared UI failed with exit {browserJourney.ExitCode}. stdout: {output} stderr: {error}")
+            let! output = outputTask
+            let! error = errorTask
+
+            Assert.True(
+                browserJourney.ExitCode = 0,
+                $"Chromium shared UI failed with exit {browserJourney.ExitCode}. stdout: {output} stderr: {error}"
+            )
         }
 
     [<Fact>]
@@ -688,7 +727,8 @@ module ServerTests =
                 { immediateOptions () with
                     WorkspaceId = ""
                     MaxSessions = 0
-                    BindAttempts = 100 }
+                    BindAttempts = 100
+                }
 
             let! result = TelemetryDashboardServer.start invalid CancellationToken.None
 
@@ -719,7 +759,9 @@ module ServerTests =
 
             use alreadyCancelled = new CancellationTokenSource()
             alreadyCancelled.Cancel()
-            let! cancelledResult = TelemetryDashboardServer.start (immediateOptions ()) alreadyCancelled.Token
+
+            let! cancelledResult =
+                TelemetryDashboardServer.start (immediateOptions ()) alreadyCancelled.Token
 
             match cancelledResult with
             | Ok unexpected ->

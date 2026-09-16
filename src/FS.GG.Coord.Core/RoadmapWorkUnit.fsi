@@ -19,132 +19,162 @@ module RoadmapWorkUnit =
     [<Literal>]
     val EvidenceIndexSchema: string = "fsgg.roadmap-unit.evidence-index/1"
 
-    type UnitState = Accepted | Unchecked
+    type UnitState =
+        | Accepted
+        | Unchecked
 
     type CatalogRow =
-        { UnitId: string
-          Title: string
-          State: UnitState
-          Prerequisite: string option
-          Gates: string list
-          EvidenceObligations: string list
-          ContractSha256: string }
+        {
+            UnitId: string
+            Title: string
+            State: UnitState
+            Prerequisite: string option
+            Gates: string list
+            EvidenceObligations: string list
+            ContractSha256: string
+        }
 
     type RoadmapRow =
-        { UnitId: string
-          Title: string
-          Prerequisite: string option
-          Gates: string list }
+        {
+            UnitId: string
+            Title: string
+            Prerequisite: string option
+            Gates: string list
+        }
 
     type AuthorityPin =
-        { RoadmapRevision: string
-          RoadmapDigest: string
-          CatalogDigest: string
-          Issue: string }
+        {
+            RoadmapRevision: string
+            RoadmapDigest: string
+            CatalogDigest: string
+            Issue: string
+        }
 
     type Registration =
-        { Id: string
-          Kind: string
-          Draft: Intake.Draft }
+        {
+            Id: string
+            Kind: string
+            Draft: Intake.Draft
+        }
 
     type PreparationInput =
-        { Schema: string
-          RoadmapRevision: string
-          RoadmapSourceDigest: string
-          CatalogSourceDigest: string
-          Catalog: CatalogRow list
-          RoadmapRow: RoadmapRow
-          AuthorityIssue: string
-          SddWorkId: string
-          RegistrationOwner: string
-          RegistrationRepository: string
-          RegistrationPaths: string list }
+        {
+            Schema: string
+            RoadmapRevision: string
+            RoadmapSourceDigest: string
+            CatalogSourceDigest: string
+            Catalog: CatalogRow list
+            RoadmapRow: RoadmapRow
+            AuthorityIssue: string
+            SddWorkId: string
+            RegistrationOwner: string
+            RegistrationRepository: string
+            RegistrationPaths: string list
+        }
 
     type PreparationRequest =
-        { Schema: string
-          RoadmapRevision: string
-          AuthorityIssue: string
-          SddWorkId: string
-          RegistrationOwner: string
-          RegistrationRepository: string
-          RegistrationPaths: string list }
+        {
+            Schema: string
+            RoadmapRevision: string
+            AuthorityIssue: string
+            SddWorkId: string
+            RegistrationOwner: string
+            RegistrationRepository: string
+            RegistrationPaths: string list
+        }
 
     type PreparationPlan =
-        { Schema: string
-          Unit: CatalogRow
-          AcceptedPrerequisite: string
-          Authority: AuthorityPin
-          SddWorkId: string
-          Registrations: Registration list
-          GateRegistrations: string list
-          EvidenceObligations: string list
-          Digest: string }
+        {
+            Schema: string
+            Unit: CatalogRow
+            AcceptedPrerequisite: string
+            Authority: AuthorityPin
+            SddWorkId: string
+            Registrations: Registration list
+            GateRegistrations: string list
+            EvidenceObligations: string list
+            Digest: string
+        }
 
     type AppliedRegistration =
-        { Id: string
-          Kind: string
-          DraftSha256: string
-          Issue: string
-          IssueUrl: string }
+        {
+            Id: string
+            Kind: string
+            DraftSha256: string
+            Issue: string
+            IssueUrl: string
+        }
 
     type PreparationApplication =
-        { Schema: string
-          UnitId: string
-          PlanDigest: string
-          Registrations: AppliedRegistration list
-          Digest: string }
+        {
+            Schema: string
+            UnitId: string
+            PlanDigest: string
+            Registrations: AppliedRegistration list
+            Digest: string
+        }
 
     type SddObservation =
-        { Stage: string
-          SubjectRevision: string
-          ArtifactJson: string }
+        {
+            Stage: string
+            SubjectRevision: string
+            ArtifactJson: string
+        }
 
     type RevisionIdentities =
-        { ImplementationPullRequest: int
-          ImplementationCandidate: string
-          ImplementationMerge: string
-          AcceptancePullRequest: int
-          AcceptanceCandidate: string
-          AcceptanceMerge: string
-          ProtectedMain: string }
+        {
+            ImplementationPullRequest: int
+            ImplementationCandidate: string
+            ImplementationMerge: string
+            AcceptancePullRequest: int
+            AcceptanceCandidate: string
+            AcceptanceMerge: string
+            ProtectedMain: string
+        }
 
     type RevisionBinding =
-        { Schema: string
-          Repository: string
-          Candidate: string
-          Merge: string
-          CandidateTree: string
-          MergeTree: string
-          CommandSha256: string
-          ExitCode: int
-          Digest: string }
+        {
+            Schema: string
+            Repository: string
+            Candidate: string
+            Merge: string
+            CandidateTree: string
+            MergeTree: string
+            CommandSha256: string
+            ExitCode: int
+            Digest: string
+        }
 
     type AcceptanceInput =
-        { Schema: string
-          Plan: PreparationPlan
-          PreparationApplication: PreparationApplication
-          Qualification: Qualification.Accepted
-          LifecycleRunId: string
-          LifecycleUnitId: string
-          LifecycleLog: string
-          RequiredLifecyclePhases: string list
-          LifecycleUsageReceipts: string list
-          LifecycleHistoryReport: string
-          ReviewEvidence: string
-          StructuredReviewEvidence: string
-          ReviewCycleId: string
-          ReviewReceipt: string
-          SddWorkId: string
-          SddObservations: SddObservation list
-          Identities: RevisionIdentities
-          ImplementationBinding: RevisionBinding
-          AcceptanceBinding: RevisionBinding
-          AcceptedAt: string }
+        {
+            Schema: string
+            Plan: PreparationPlan
+            PreparationApplication: PreparationApplication
+            Qualification: Qualification.Accepted
+            LifecycleRunId: string
+            LifecycleUnitId: string
+            LifecycleLog: string
+            RequiredLifecyclePhases: string list
+            LifecycleUsageReceipts: string list
+            LifecycleHistoryReport: string
+            ReviewEvidence: string
+            StructuredReviewEvidence: string
+            ReviewCycleId: string
+            ReviewReceipt: string
+            SddWorkId: string
+            SddObservations: SddObservation list
+            Identities: RevisionIdentities
+            ImplementationBinding: RevisionBinding
+            AcceptanceBinding: RevisionBinding
+            AcceptedAt: string
+        }
 
     type EvidenceEntry =
-        { Name: string
-          Sha256: string
-          Source: string }
+        {
+            Name: string
+            Sha256: string
+            Source: string
+        }
 
     /// A caller-authored acceptance envelope whose internal relationships are coherent. This is not
     /// authority and cannot be rendered as an accepted receipt.
@@ -180,14 +210,32 @@ module RoadmapWorkUnit =
 
     val inspectPreparation: PreparationInput -> Result<PreparationPlan, Finding list>
     val parsePreparationRequest: bytes: byte array -> Result<PreparationRequest, string list>
-    val compilePreparation: roadmapBytes: byte array -> catalogBytes: byte array -> PreparationRequest -> Result<PreparationPlan, Finding list>
+
+    val compilePreparation:
+        roadmapBytes: byte array ->
+        catalogBytes: byte array ->
+        PreparationRequest ->
+            Result<PreparationPlan, Finding list>
+
     val canonicalPlan: PreparationPlan -> string
     val canonicalIntakeDraft: Registration -> string
-    val sealPreparationApplication: plan: PreparationPlan -> registrations: AppliedRegistration list -> Result<PreparationApplication, Finding list>
+
+    val sealPreparationApplication:
+        plan: PreparationPlan -> registrations: AppliedRegistration list -> Result<PreparationApplication, Finding list>
+
     val canonicalPreparationApplication: PreparationApplication -> string
     val parsePreparationApplication: bytes: byte array -> Result<PreparationApplication, string list>
     val canonicalRevisionCommand: repository: string -> candidate: string -> merge: string -> string
-    val sealRevisionBinding: repository: string -> candidate: string -> merge: string -> candidateTree: string -> mergeTree: string -> exitCode: int -> RevisionBinding
+
+    val sealRevisionBinding:
+        repository: string ->
+        candidate: string ->
+        merge: string ->
+        candidateTree: string ->
+        mergeTree: string ->
+        exitCode: int ->
+            RevisionBinding
+
     val canonicalRevisionBinding: RevisionBinding -> string
     val parseRevisionBinding: bytes: byte array -> Result<RevisionBinding, string list>
     val parsePreparationInput: bytes: byte array -> Result<PreparationInput, string list>
@@ -203,5 +251,8 @@ module RoadmapWorkUnit =
     val internal sealObservedAcceptance: ObservedAcceptance -> Accepted
     val internal acceptedDigest: Accepted -> string
     val internal acceptedBundle: Accepted -> string
-    val internal verifyObservedAcceptance: expected: ObservedAcceptance -> bundle: byte array -> Result<Accepted, Finding list>
+
+    val internal verifyObservedAcceptance:
+        expected: ObservedAcceptance -> bundle: byte array -> Result<Accepted, Finding list>
+
     val internal acceptedReceipt: Accepted -> byte array

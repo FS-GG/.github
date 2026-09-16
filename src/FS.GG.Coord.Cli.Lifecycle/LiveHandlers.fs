@@ -20,7 +20,10 @@ module LiveHandlers =
     /// Preserve the parser's exact malformed-chain diagnostic at the live delivery boundary.  Keeping
     /// this small adapter named and directly testable prevents a future `Result.toOption` from turning
     /// an attempted-but-invalid review into the distinct fact that no review was posted.
-    let deliveryReviewEvidence (landable: bool) (comments: Driver.ReviewComment list) : Driver.ReviewChain option * string option =
+    let deliveryReviewEvidence
+        (landable: bool)
+        (comments: Driver.ReviewComment list)
+        : Driver.ReviewChain option * string option =
         match Driver.parseReviewComments comments with
         | Ok parsed -> Some { parsed with ChecksGreen = landable }, None
         | Error errors -> None, Some(String.concat "; " errors)
@@ -39,10 +42,22 @@ module LiveHandlers =
     /// undeclared), withholds trust rather than granting it: `true`, the same "stay in review" answer a
     /// genuinely outstanding obligation gives. Only a HEAD that reads AND parses AND is fully verified
     /// clears it.
-    let outstandingObligations (headFact: Errors.IoResult<string>) (commentsFact: Errors.IoResult<Reads.CommentBody list>) : bool =
+    let outstandingObligations
+        (headFact: Errors.IoResult<string>)
+        (commentsFact: Errors.IoResult<Reads.CommentBody list>)
+        : bool =
         match headFact, commentsFact with
         | Ok head, Ok comments ->
-            let comments = comments |> List.map (fun c -> ({ Id = c.Id; Url = c.Url; Body = c.Body }: Driver.ReviewComment))
+            let comments =
+                comments
+                |> List.map (fun c ->
+                    ({
+                        Id = c.Id
+                        Url = c.Url
+                        Body = c.Body
+                    }
+                    : Driver.ReviewComment))
+
             match DeliveryApplication.obligationsFromComments head comments with
             | Ok obligations -> obligations |> List.exists (fun o -> not o.Verified)
             | Error _ -> true
@@ -146,13 +161,22 @@ module LiveHandlers =
     // `delivery` call — one marker in, one marker out. There is no cutover, no dual-shape acceptance
     // and no rebinding campaign, because the only marker reader that is a required status context
     // accepts both shapes (see `authorizationMarker`).
-    let rebindAuthorization (body: string) (item: string) (gen: string) (opkey: string) (grant: string) (head: string) : AuthorizationRebind =
+    let rebindAuthorization
+        (body: string)
+        (item: string)
+        (gen: string)
+        (opkey: string)
+        (grant: string)
+        (head: string)
+        : AuthorizationRebind =
         let desired = authorizationMarker item gen opkey grant head
         let matches = authorizationMarkerPattern.Matches body
+
         if matches.Count = 1 && matches.[0].Value.Trim() = desired then
             AuthorizationCurrent
         else
             let stripped = authorizationMarkerPattern.Replace(body, "").TrimEnd()
+
             if String.IsNullOrWhiteSpace stripped then
                 AuthorizationRebound desired
             else
@@ -176,14 +200,17 @@ module LiveHandlers =
     let private lowestElection (elections: DeliveryApplication.Election list) : DeliveryApplication.Election option =
         elections
         |> List.map (fun election ->
-            ({ Id = election.Id
-               Worker = WorkerId ""
-               Session = None
-               AgeSeconds = -1
-               PreviousStatus = None
-               PathRepo = None
-               AgentContract = None
-               Raw = "" }: Reads.Marker))
+            ({
+                Id = election.Id
+                Worker = WorkerId ""
+                Session = None
+                AgeSeconds = -1
+                PreviousStatus = None
+                PathRepo = None
+                AgentContract = None
+                Raw = ""
+            }
+            : Reads.Marker))
         |> Reads.lowestId
         |> Option.bind (fun winner -> elections |> List.tryFind (fun election -> election.Id = winner.Id))
 
@@ -209,12 +236,7 @@ module LiveHandlers =
     // case §6.3 names, and a failed read must not be able to masquerade as a legitimate answer
     // (`#266`). Nothing is made worse by refusing — the previous marker, if any, is left exactly as
     // it was, and `delivery` is safe to re-run.
-    let electionGrounding
-        (ctx: Context)
-        (target: Ref)
-        (gen: string)
-        (pr: int)
-        : Errors.IoResult<string * string> =
+    let electionGrounding (ctx: Context) (target: Ref) (gen: string) (pr: int) : Errors.IoResult<string * string> =
         let receiver = $"%s{target.Owner}/%s{target.Repo}"
 
         // `Operation.compose` is slice 1's key (`.github#2311`), and it is CALLED rather than
@@ -239,7 +261,12 @@ module LiveHandlers =
                 let owned =
                     comments
                     |> List.map (fun comment ->
-                        ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                        ({
+                            Id = comment.Id
+                            Url = comment.Url
+                            Body = comment.Body
+                        }
+                        : Driver.ReviewComment))
                     |> DeliveryApplication.electionsFromComments
                     |> DeliveryApplication.electionsOwnedBy opkey pr
 
@@ -329,13 +356,15 @@ module LiveHandlers =
                             o.ToJsonString()
 
                         let request: Request =
-                            { Method = "PATCH"
-                              Path = $"repos/%s{target.Owner}/%s{target.Repo}/pulls/%d{prNumber}"
-                              Query = []
-                              Body = Transport.Json payload
-                              Budget = Rest
-                              IfNoneMatch = None
-                              Subject = target.Short }
+                            {
+                                Method = "PATCH"
+                                Path = $"repos/%s{target.Owner}/%s{target.Repo}/pulls/%d{prNumber}"
+                                Query = []
+                                Body = Transport.Json payload
+                                Budget = Rest
+                                IfNoneMatch = None
+                                Subject = target.Short
+                            }
 
                         ctx.Transport.Send request |> Result.map ignore))
         | _ -> Ok()
@@ -354,22 +383,27 @@ module LiveHandlers =
         if acceptedBase = liveBase then
             Ok None
         else
-            match Reads.compareCommitPaths ctx.Transport ctx.Owner repoName acceptedBase liveBase,
-                  Reads.compareCommitPaths ctx.Transport ctx.Owner repoName acceptedBase liveHead with
+            match
+                Reads.compareCommitPaths ctx.Transport ctx.Owner repoName acceptedBase liveBase,
+                Reads.compareCommitPaths ctx.Transport ctx.Owner repoName acceptedBase liveHead
+            with
             | Error error, _
-            | _, Error error ->
-                Error $"the semantic-delta equivalence proof is unreadable (%s{Errors.explain error})"
+            | _, Error error -> Error $"the semantic-delta equivalence proof is unreadable (%s{Errors.explain error})"
             | Ok baseAdvance, Ok candidate ->
                 let forwardOnly =
                     baseAdvance.Complete
                     && baseAdvance.Status = "ahead"
                     && baseAdvance.MergeBase = acceptedBase
                     && baseAdvance.AheadBy > 0
+
                 let candidateBound =
                     candidate.Complete
                     && (candidate.Status = "ahead" || candidate.Status = "identical")
                     && candidate.MergeBase = acceptedBase
-                let overlap = Set.intersect (Set.ofList baseAdvance.Paths) (Set.ofList candidate.Paths) |> Set.toList
+
+                let overlap =
+                    Set.intersect (Set.ofList baseAdvance.Paths) (Set.ofList candidate.Paths)
+                    |> Set.toList
 
                 if not baseAdvance.Complete || not candidate.Complete then
                     Error "GitHub's comparison reached its 300-file cap, so path-disjointness is unverifiable"
@@ -388,14 +422,19 @@ module LiveHandlers =
                     // second live-tip read is the narrow fail-closed fence available before merge.
                     match Reads.prBaseTipSha ctx.Transport ctx.Owner repoName pr with
                     | Error error ->
-                        Error $"the effective base could not be re-read after equivalence proof (%s{Errors.explain error})"
+                        Error
+                            $"the effective base could not be re-read after equivalence proof (%s{Errors.explain error})"
                     | Ok confirmedBase when confirmedBase <> liveBase ->
-                        Error $"the effective base moved again to `%s{confirmedBase}` while equivalence was being proved"
+                        Error
+                            $"the effective base moved again to `%s{confirmedBase}` while equivalence was being proved"
                     | Ok _ ->
                         let evidence: DeliveryApplication.BaseAdvanceEvidence =
-                            { AcceptedBaseSha = acceptedBase
-                              CurrentBaseSha = liveBase
-                              HeadSha = liveHead }
+                            {
+                                AcceptedBaseSha = acceptedBase
+                                CurrentBaseSha = liveBase
+                                HeadSha = liveHead
+                            }
+
                         Ok(Some evidence)
 
     /// Read a claimed item's delivery facts again immediately before producing the next lifecycle action.
@@ -420,7 +459,13 @@ module LiveHandlers =
                 ExitError
             | Ok target ->
                 let candidate =
-                    scanAndDecide ctx { opts with Repo = Some target.Repo; Limit = None } Cache.Scheduling
+                    scanAndDecide
+                        ctx
+                        { opts with
+                            Repo = Some target.Repo
+                            Limit = None
+                        }
+                        Cache.Scheduling
                     |> Result.mapError Errors.explain
                     |> Result.bind (fun (_, doc, _) ->
                         Snapshot.parse doc
@@ -438,7 +483,9 @@ module LiveHandlers =
                     eprint $"fsgg-coord-engine: delivery cannot establish board facts: %s{message}"
                     ExitError
                 | Ok candidate ->
-                    let terminalBoardState = candidate.Item.Status = Done && candidate.Item.State = Closed
+                    let terminalBoardState =
+                        candidate.Item.Status = Done && candidate.Item.State = Closed
+
                     let liveClaim =
                         Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
                         |> Result.bind (Reads.requireCompleteMarkerScan target.Short)
@@ -447,9 +494,18 @@ module LiveHandlers =
                                 Reads.prAlive ctx.Transport target.Owner target.Repo target.Number)
                             |> Result.bind (function
                                 | Some marker when marker.Worker.Value = w.Id -> Ok(Some marker)
-                                | Some marker -> Error(Errors.Malformed(target.Short, $"live claim belongs to worker '%s{marker.Worker.Value}', not '%s{w.Id}'"))
+                                | Some marker ->
+                                    Error(
+                                        Errors.Malformed(
+                                            target.Short,
+                                            $"live claim belongs to worker '%s{marker.Worker.Value}', not '%s{w.Id}'"
+                                        )
+                                    )
                                 | None when terminalBoardState -> Ok None
-                                | None -> Error(Errors.Malformed(target.Short, "no live claim marker can authorize delivery"))))
+                                | None ->
+                                    Error(
+                                        Errors.Malformed(target.Short, "no live claim marker can authorize delivery")
+                                    )))
 
                     match liveClaim, Cache.pending () with
                     | Error error, _ -> fail error
@@ -478,47 +534,117 @@ module LiveHandlers =
                             | Declared tokens ->
                                 Delivery.Known(
                                     tokens
-                                    |> List.map (function | Matchable value | Unmatchable value -> value)
+                                    |> List.map (function
+                                        | Matchable value
+                                        | Unmatchable value -> value)
                                 )
                             | DeclaredChore -> Delivery.Known [ "any" ]
                             | TouchSet.DeclaredNone -> Delivery.DeclaredNone
                             | TouchSet.Undeclared -> Delivery.Undeclared
                             | Unreadable reason -> Delivery.Unread reason
 
-                        let branchAndPr: Result<string * int option * string * bool * bool * bool * Driver.ReviewChain option * string option * bool * bool * bool * Delivery.Obligation list * Delivery.PostMergeVerification, Errors.IoError> =
+                        let branchAndPr
+                            : Result<
+                                  string *
+                                  int option *
+                                  string *
+                                  bool *
+                                  bool *
+                                  bool *
+                                  Driver.ReviewChain option *
+                                  string option *
+                                  bool *
+                                  bool *
+                                  bool *
+                                  Delivery.Obligation list *
+                                  Delivery.PostMergeVerification,
+                                  Errors.IoError
+                               > =
                             match opts.Pr with
-                            | None -> Ok(Directory.GetCurrentDirectory(), None, "", false, false, false, None, None, false, false, false, [], Delivery.NotObserved)
+                            | None ->
+                                Ok(
+                                    Directory.GetCurrentDirectory(),
+                                    None,
+                                    "",
+                                    false,
+                                    false,
+                                    false,
+                                    None,
+                                    None,
+                                    false,
+                                    false,
+                                    false,
+                                    [],
+                                    Delivery.NotObserved
+                                )
                             | Some pr ->
-                                match Reads.prHeadRef ctx.Transport target.Owner target.Repo pr,
-                                      Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
-                                      Reads.prLandable ctx.Transport target.Owner target.Repo pr,
-                                      Reads.prClosingRef ctx.Transport target.Owner target.Repo pr,
-                                      Reads.prFiles ctx.Transport target.Owner target.Repo pr,
-                                      Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
+                                match
+                                    Reads.prHeadRef ctx.Transport target.Owner target.Repo pr,
+                                    Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
+                                    Reads.prLandable ctx.Transport target.Owner target.Repo pr,
+                                    Reads.prClosingRef ctx.Transport target.Owner target.Repo pr,
+                                    Reads.prFiles ctx.Transport target.Owner target.Repo pr,
+                                    Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr
+                                with
                                 | Ok branch, Ok head, landable, Ok closing, Ok files, Ok comments ->
                                     let review, reviewProblem =
                                         comments
-                                        |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                        |> List.map (fun comment ->
+                                            ({
+                                                Id = comment.Id
+                                                Url = comment.Url
+                                                Body = comment.Body
+                                            }
+                                            : Driver.ReviewComment))
                                         |> deliveryReviewEvidence (landable = PrGreen)
-                                    let itemBranchCanonical = branch.StartsWith($"item/%d{target.Number}-", StringComparison.Ordinal)
+
+                                    let itemBranchCanonical =
+                                        branch.StartsWith($"item/%d{target.Number}-", StringComparison.Ordinal)
+
                                     let linkageCanonical = closing |> Option.exists ((=) target)
+
                                     let pathsVerified =
-                                        deliveryPathClassifier ctx target deliveryTouchSet files
-                                        |> projectPathVerdict
+                                        deliveryPathClassifier ctx target deliveryTouchSet files |> projectPathVerdict
+
                                     let reviewComments =
                                         comments
-                                        |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                        |> List.map (fun comment ->
+                                            ({
+                                                Id = comment.Id
+                                                Url = comment.Url
+                                                Body = comment.Body
+                                            }
+                                            : Driver.ReviewComment))
+
                                     let obligations = DeliveryApplication.obligationsFromComments head reviewComments
                                     let obligationsDeclared = Result.isOk obligations
                                     let obligations = obligations |> Result.defaultValue []
+
                                     let postMergeVerification =
                                         if landable = PrMerged then
-                                            match Reads.postMergeVerification ctx.Transport target.Owner target.Repo pr with
+                                            match
+                                                Reads.postMergeVerification ctx.Transport target.Owner target.Repo pr
+                                            with
                                             | Ok verification -> verification
                                             | Error error -> Delivery.Unreadable(Errors.explain error)
                                         else
                                             Delivery.NotObserved
-                                    Ok(branch, Some pr, head, itemBranchCanonical, linkageCanonical, pathsVerified, review, reviewProblem, (landable = PrGreen), (landable = PrMerged), obligationsDeclared, obligations, postMergeVerification)
+
+                                    Ok(
+                                        branch,
+                                        Some pr,
+                                        head,
+                                        itemBranchCanonical,
+                                        linkageCanonical,
+                                        pathsVerified,
+                                        review,
+                                        reviewProblem,
+                                        (landable = PrGreen),
+                                        (landable = PrMerged),
+                                        obligationsDeclared,
+                                        obligations,
+                                        postMergeVerification
+                                    )
                                 | Error error, _, _, _, _, _
                                 | _, Error error, _, _, _, _
                                 | _, _, _, Error error, _, _
@@ -539,50 +665,104 @@ module LiveHandlers =
                         // `--apply` invocation.
                         let branchAndPr =
                             branchAndPr
-                            |> Result.bind (fun (branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations, postMergeVerification) ->
-                                ensureAuthorization ctx target marker pr head merged
-                                |> Result.map (fun () ->
-                                    (branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations, postMergeVerification)))
+                            |> Result.bind
+                                (fun
+                                    (branch,
+                                     pr,
+                                     head,
+                                     itemBranchCanonical,
+                                     closingLinkageCanonical,
+                                     pathsVerified,
+                                     review,
+                                     reviewProblem,
+                                     landable,
+                                     merged,
+                                     obligationsDeclared,
+                                     obligations,
+                                     postMergeVerification) ->
+                                    ensureAuthorization ctx target marker pr head merged
+                                    |> Result.map (fun () ->
+                                        (branch,
+                                         pr,
+                                         head,
+                                         itemBranchCanonical,
+                                         closingLinkageCanonical,
+                                         pathsVerified,
+                                         review,
+                                         reviewProblem,
+                                         landable,
+                                         merged,
+                                         obligationsDeclared,
+                                         obligations,
+                                         postMergeVerification)))
 
                         match branchAndPr with
                         | Error error -> fail error
-                        | Ok(branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations, postMergeVerification) ->
+                        | Ok(branch,
+                             pr,
+                             head,
+                             itemBranchCanonical,
+                             closingLinkageCanonical,
+                             pathsVerified,
+                             review,
+                             reviewProblem,
+                             landable,
+                             merged,
+                             obligationsDeclared,
+                             obligations,
+                             postMergeVerification) ->
                             let facts: Delivery.Snapshot =
-                                { Freshness =
-                                    { ItemRef = target.Short
-                                      ClaimGeneration = marker |> Option.map (fun held -> string held.Id) |> Option.defaultValue "released"
-                                      Executor = marker |> Option.map (fun held -> held.Worker.Value) |> Option.defaultValue w.Id
-                                      Branch = branch
-                                      Worktree = Directory.GetCurrentDirectory()
-                                      PullRequest = pr
-                                      HeadSha = if pr.IsSome then head else "unpublished"
-                                      DeclaredPaths = declaredPaths
-                                      BoardState = statusWireName candidate.Item.Status }
-                                  ItemBranchCanonical = if pr.IsSome then itemBranchCanonical else true
-                                  ClosingLinkageCanonical = if pr.IsSome then closingLinkageCanonical else false
-                                  PathsVerified = if pr.IsSome then pathsVerified else false
-                                  InReview = pr.IsSome
-                                  Review = review
-                                  ReviewProblem = reviewProblem
-                                  Landable = landable
-                                  Merged = merged
-                                  // `done` independently verifies GitHub's merged closing record before it
-                                  // closes or stamps anything.  This only permits routing to that transaction;
-                                  // it never authorizes a write by itself.
-                                  MergeReachable = merged
-                                  IssueClosed = candidate.Item.State = Closed
-                                  BoardDone = candidate.Item.Status = Done
-                                  ClaimReleased = marker.IsNone
-                                  PendingWrites = List.length pending
-                                  CleanupEligible = terminalBoardState && marker.IsNone && List.isEmpty pending
-                                  ObligationsDeclared = obligationsDeclared
-                                  Obligations = obligations
-                                  ParkedReason = None }
+                                {
+                                    Freshness =
+                                        {
+                                            ItemRef = target.Short
+                                            ClaimGeneration =
+                                                marker
+                                                |> Option.map (fun held -> string held.Id)
+                                                |> Option.defaultValue "released"
+                                            Executor =
+                                                marker
+                                                |> Option.map (fun held -> held.Worker.Value)
+                                                |> Option.defaultValue w.Id
+                                            Branch = branch
+                                            Worktree = Directory.GetCurrentDirectory()
+                                            PullRequest = pr
+                                            HeadSha = if pr.IsSome then head else "unpublished"
+                                            DeclaredPaths = declaredPaths
+                                            BoardState = statusWireName candidate.Item.Status
+                                        }
+                                    ItemBranchCanonical = if pr.IsSome then itemBranchCanonical else true
+                                    ClosingLinkageCanonical = if pr.IsSome then closingLinkageCanonical else false
+                                    PathsVerified = if pr.IsSome then pathsVerified else false
+                                    InReview = pr.IsSome
+                                    Review = review
+                                    ReviewProblem = reviewProblem
+                                    Landable = landable
+                                    Merged = merged
+                                    // `done` independently verifies GitHub's merged closing record before it
+                                    // closes or stamps anything.  This only permits routing to that transaction;
+                                    // it never authorizes a write by itself.
+                                    MergeReachable = merged
+                                    IssueClosed = candidate.Item.State = Closed
+                                    BoardDone = candidate.Item.Status = Done
+                                    ClaimReleased = marker.IsNone
+                                    PendingWrites = List.length pending
+                                    CleanupEligible = terminalBoardState && marker.IsNone && List.isEmpty pending
+                                    ObligationsDeclared = obligationsDeclared
+                                    Obligations = obligations
+                                    ParkedReason = None
+                                }
+
                             let completionDecision =
                                 facts
                                 |> Delivery.completionFactsWithPostMergeVerification postMergeVerification
                                 |> Delivery.decideCompletion
-                            match Delivery.inspectWithPostMergeVerification postMergeVerification facts, completionDecision, opts.Apply with
+
+                            match
+                                Delivery.inspectWithPostMergeVerification postMergeVerification facts,
+                                completionDecision,
+                                opts.Apply
+                            with
                             | Delivery.Next transition, _, true when transition.Action = Delivery.GuardedLand ->
                                 // A delivery receipt authorizes only the exact claim generation that was
                                 // inspected.  Re-read the winning marker immediately before the REST
@@ -595,10 +775,13 @@ module LiveHandlers =
                                         match Reads.winner opts.LeaseMinutes markers with
                                         | Some held when held.Worker.Value = w.Id -> Some(string held.Id)
                                         | _ -> None)
-                                match currentClaimGeneration,
-                                      Reads.prHeadSha ctx.Transport target.Owner target.Repo pr.Value,
-                                      Reads.prBaseTipSha ctx.Transport target.Owner target.Repo pr.Value,
-                                      OperationalGraphQl.repositoryPolicy ctx.Transport target.Owner target.Repo with
+
+                                match
+                                    currentClaimGeneration,
+                                    Reads.prHeadSha ctx.Transport target.Owner target.Repo pr.Value,
+                                    Reads.prBaseTipSha ctx.Transport target.Owner target.Repo pr.Value,
+                                    OperationalGraphQl.repositoryPolicy ctx.Transport target.Owner target.Repo
+                                with
                                 | Error error, _, _, _
                                 | _, Error error, _, _
                                 | _, _, Error error, _
@@ -611,7 +794,13 @@ module LiveHandlers =
                                     // status move, or claim release.
                                     let currentAuthority =
                                         match
-                                            scanAndDecide ctx { opts with Repo = Some target.Repo; Limit = None } Cache.Scheduling,
+                                            scanAndDecide
+                                                ctx
+                                                { opts with
+                                                    Repo = Some target.Repo
+                                                    Limit = None
+                                                }
+                                                Cache.Scheduling,
                                             Reads.prClosingRef ctx.Transport target.Owner target.Repo pr.Value,
                                             Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr.Value
                                         with
@@ -625,38 +814,74 @@ module LiveHandlers =
                                                     target.Short,
                                                     errors
                                                     |> List.map (fun error -> $"%s{error.Path}: %s{error.Message}")
-                                                    |> String.concat "; "))
+                                                    |> String.concat "; "
+                                                ))
                                             |> Result.bind (fun currentSnapshot ->
-                                                match currentSnapshot.Candidates |> List.tryFind (fun item -> item.Item.Ref = target) with
-                                                | None -> Error(Errors.Malformed(target.Short, "item disappeared from the fresh board scan before guarded landing"))
+                                                match
+                                                    currentSnapshot.Candidates
+                                                    |> List.tryFind (fun item -> item.Item.Ref = target)
+                                                with
+                                                | None ->
+                                                    Error(
+                                                        Errors.Malformed(
+                                                            target.Short,
+                                                            "item disappeared from the fresh board scan before guarded landing"
+                                                        )
+                                                    )
                                                 | Some currentCandidate ->
                                                     let reviewComments =
                                                         currentComments
-                                                        |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
-                                                    let currentObligations = DeliveryApplication.obligationsFromComments currentHead reviewComments
+                                                        |> List.map (fun comment ->
+                                                            ({
+                                                                Id = comment.Id
+                                                                Url = comment.Url
+                                                                Body = comment.Body
+                                                            }
+                                                            : Driver.ReviewComment))
+
+                                                    let currentObligations =
+                                                        DeliveryApplication.obligationsFromComments
+                                                            currentHead
+                                                            reviewComments
+
                                                     Ok
                                                         { facts with
                                                             Freshness =
                                                                 { facts.Freshness with
                                                                     HeadSha = currentHead
-                                                                    BoardState = statusWireName currentCandidate.Item.Status }
-                                                            ClosingLinkageCanonical = currentClosing |> Option.exists ((=) target)
+                                                                    BoardState =
+                                                                        statusWireName currentCandidate.Item.Status
+                                                                }
+                                                            ClosingLinkageCanonical =
+                                                                currentClosing |> Option.exists ((=) target)
                                                             IssueClosed = currentCandidate.Item.State = Closed
                                                             BoardDone = currentCandidate.Item.Status = Done
                                                             ClaimReleased = generation.IsNone
                                                             ObligationsDeclared = Result.isOk currentObligations
-                                                            Obligations = currentObligations |> Result.defaultValue [] })
+                                                            Obligations = currentObligations |> Result.defaultValue []
+                                                        })
 
                                     match currentAuthority, facts.Review |> Option.bind _.BaseSha with
                                     | Error error, _ -> fail error
                                     | _, None ->
-                                        eprint "fsgg-coord-engine: delivery --apply is refused: delivery accepted review carries no effective base SHA; GitHub merge was not attempted"
+                                        eprint
+                                            "fsgg-coord-engine: delivery --apply is refused: delivery accepted review carries no effective base SHA; GitHub merge was not attempted"
+
                                         ExitNoVerdict
                                     | Ok currentAuthority, Some acceptedBase ->
-                                        match authorizeBaseAdvance ctx target.Repo pr.Value acceptedBase currentHead currentBase with
+                                        match
+                                            authorizeBaseAdvance
+                                                ctx
+                                                target.Repo
+                                                pr.Value
+                                                acceptedBase
+                                                currentHead
+                                                currentBase
+                                        with
                                         | Error reason ->
                                             eprint
                                                 $"fsgg-coord-engine: delivery --apply is refused: delivery effective base changed after acceptance: %s{reason}; GitHub merge was not attempted"
+
                                             ExitNoVerdict
                                         | Ok baseAdvanceEvidence ->
                                             match
@@ -671,26 +896,40 @@ module LiveHandlers =
                                                     baseAdvanceEvidence
                                                     repositoryPolicy
                                                     (fun mergeMethod ->
-                                                        Writes.mergeAtHead ctx.Transport target pr.Value head mergeMethod)
+                                                        Writes.mergeAtHead
+                                                            ctx.Transport
+                                                            target
+                                                            pr.Value
+                                                            head
+                                                            mergeMethod)
                                             with
                                             | Error reason ->
                                                 eprint $"fsgg-coord-engine: delivery --apply is refused: %s{reason}"
                                                 ExitNoVerdict
                                             | Ok receipt ->
-                                                eprint $"fsgg-coord-engine: guarded landing receipt: head=%s{receipt.HeadSha} base=%s{receipt.BaseSha}"
+                                                eprint
+                                                    $"fsgg-coord-engine: guarded landing receipt: head=%s{receipt.HeadSha} base=%s{receipt.BaseSha}"
+
                                                 match receipt.Result with
                                                 | Error error -> fail error
                                                 | Ok false ->
-                                                    eprint "fsgg-coord-engine: delivery merge was refused because the PR is no longer at the inspected head. Re-inspect before attempting another action."
+                                                    eprint
+                                                        "fsgg-coord-engine: delivery merge was refused because the PR is no longer at the inspected head. Re-inspect before attempting another action."
+
                                                     ExitNoVerdict
                                                 | Ok true ->
                                                     match opts.Render with
                                                     | Json ->
-                                                        printfn "{\"schema\":\"fsgg.coord.delivery/1\",\"verdict\":\"applied\",\"action\":\"guardedLand\",\"freshnessToken\":\"%s\",\"actionKey\":\"%s\"}" transition.FreshnessToken transition.ActionKey
+                                                        printfn
+                                                            "{\"schema\":\"fsgg.coord.delivery/1\",\"verdict\":\"applied\",\"action\":\"guardedLand\",\"freshnessToken\":\"%s\",\"actionKey\":\"%s\"}"
+                                                            transition.FreshnessToken
+                                                            transition.ActionKey
                                                     | Text -> printfn "merged %s at the inspected head" target.Short
+
                                                     ExitGreen
-                            | Delivery.Next transition, Delivery.CompletionDecision.ProjectCompletion, true
-                                when transition.Action = Delivery.Complete ->
+                            | Delivery.Next transition, Delivery.CompletionDecision.ProjectCompletion, true when
+                                transition.Action = Delivery.Complete
+                                ->
                                 // Delegate the coupled close / board-Done / own-claim-release sequence to
                                 // the existing `done` transaction.  Its `Done.verify` re-reads the merged
                                 // closer and refuses a stale or unrelated PR before any write.
@@ -699,17 +938,27 @@ module LiveHandlers =
                                         facts
                                         transition
                                         ctx
-                                        { opts with Args = [ target.Canonical ]; Pr = pr; Apply = false }
-                                if code <> ExitGreen then code
+                                        { opts with
+                                            Args = [ target.Canonical ]
+                                            Pr = pr
+                                            Apply = false
+                                        }
+
+                                if code <> ExitGreen then
+                                    code
                                 else
                                     match Cache.pending () with
                                     | Ok [] -> ExitGreen
                                     | Ok pending ->
-                                        eprint $"fsgg-coord-engine: delivery completion left %d{List.length pending} queued board write(s); run `flush` and re-inspect before cleanup."
+                                        eprint
+                                            $"fsgg-coord-engine: delivery completion left %d{List.length pending} queued board write(s); run `flush` and re-inspect before cleanup."
+
                                         ExitNoVerdict
                                     | Error error -> fail error
                             | Delivery.Next transition, _, true ->
-                                eprint $"fsgg-coord-engine: delivery --apply is refused: the sole fresh action is %A{transition.Action}, not guarded landing."
+                                eprint
+                                    $"fsgg-coord-engine: delivery --apply is refused: the sole fresh action is %A{transition.Action}, not guarded landing."
+
                                 ExitNoVerdict
                             | _ -> DeliveryApplication.renderWithPostMergeVerification opts postMergeVerification facts
 
@@ -736,7 +985,9 @@ module LiveHandlers =
             | Ok target ->
                 match opts.Pr with
                 | None ->
-                    eprint "fsgg-coord-engine: review: --pr is required (there is no review protocol before a PR exists)."
+                    eprint
+                        "fsgg-coord-engine: review: --pr is required (there is no review protocol before a PR exists)."
+
                     ExitError
                 | Some pr ->
                     let liveClaim =
@@ -747,18 +998,32 @@ module LiveHandlers =
                                 Reads.prAlive ctx.Transport target.Owner target.Repo target.Number)
                             |> Result.bind (function
                                 | Some marker -> Ok marker
-                                | None -> Error(Errors.Malformed(target.Short, "no live claim marker can authorize a review inspection"))))
+                                | None ->
+                                    Error(
+                                        Errors.Malformed(
+                                            target.Short,
+                                            "no live claim marker can authorize a review inspection"
+                                        )
+                                    )))
 
                     match liveClaim with
                     | Error error -> fail error
                     | Ok marker ->
-                        match Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
-                              Reads.prLandable ctx.Transport target.Owner target.Repo pr,
-                              Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
+                        match
+                            Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
+                            Reads.prLandable ctx.Transport target.Owner target.Repo pr,
+                            Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr
+                        with
                         | Ok head, checks, Ok comments ->
                             let reviewComments =
                                 comments
-                                |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                |> List.map (fun comment ->
+                                    ({
+                                        Id = comment.Id
+                                        Url = comment.Url
+                                        Body = comment.Body
+                                    }
+                                    : Driver.ReviewComment))
 
                             // Derived, not asserted: a live `repair-phase` marker in the comment thread is
                             // the same structural fact `Driver.reviewPhaseFacts` already exposes, so the
@@ -766,36 +1031,63 @@ module LiveHandlers =
                             let phaseFacts = Driver.reviewPhaseFacts reviewComments
 
                             let binding: Review.Binding =
-                                { ItemRef = target.Canonical
-                                  Pr = pr
-                                  HeadSha = head
-                                  ClaimGeneration = string marker.Id
-                                  ImplementerIdentity = marker.Worker.Value
-                                  Phase = if phaseFacts.RepairPhasePresent then Review.Repair else Review.Ordinary
-                                  Round = 1 }
+                                {
+                                    ItemRef = target.Canonical
+                                    Pr = pr
+                                    HeadSha = head
+                                    ClaimGeneration = string marker.Id
+                                    ImplementerIdentity = marker.Worker.Value
+                                    Phase =
+                                        if phaseFacts.RepairPhasePresent then
+                                            Review.Repair
+                                        else
+                                            Review.Ordinary
+                                    Round = 1
+                                }
 
                             let facts: Review.Facts =
-                                { Comments = reviewComments
-                                  Checks = checks
-                                  // The production writer validates this seven-field receipt against the
-                                  // exhausted predecessor PR and the current claim/branch/head before it
-                                  // can enter the structured ledger. Reuse that durable fact here instead
-                                  // of dropping it at the live adapter boundary.
-                                  RepairPhaseGranted = phaseFacts.RepairPhaseReceipt
-                                  RepairRouteAvailable = true
-                                  DiffAuditTrusted = None }
+                                {
+                                    Comments = reviewComments
+                                    Checks = checks
+                                    // The production writer validates this seven-field receipt against the
+                                    // exhausted predecessor PR and the current claim/branch/head before it
+                                    // can enter the structured ledger. Reuse that durable fact here instead
+                                    // of dropping it at the live adapter boundary.
+                                    RepairPhaseGranted = phaseFacts.RepairPhaseReceipt
+                                    RepairRouteAvailable = true
+                                    DiffAuditTrusted = None
+                                }
 
                             let waitResults =
                                 comments
                                 |> List.sortBy _.Id
                                 |> List.map (fun comment -> ReviewWait.tryDecode comment.Body)
-                            let waitErrors = waitResults |> List.choose (function Error error -> Some error | _ -> None)
-                            let waitEvents = waitResults |> List.choose (function Ok (Some event) -> Some event | _ -> None)
+
+                            let waitErrors =
+                                waitResults
+                                |> List.choose (function
+                                    | Error error -> Some error
+                                    | _ -> None)
+
+                            let waitEvents =
+                                waitResults
+                                |> List.choose (function
+                                    | Ok(Some event) -> Some event
+                                    | _ -> None)
+
                             let prOpen = checks <> Types.PrMerged && checks <> Types.PrClosed
+
                             let waitState =
                                 if List.isEmpty waitErrors then
-                                    ReviewWait.project target.Canonical (Some(string marker.Id)) prOpen DateTimeOffset.UtcNow waitEvents
-                                else ReviewWait.Invalid waitErrors
+                                    ReviewWait.project
+                                        target.Canonical
+                                        (Some(string marker.Id))
+                                        prOpen
+                                        DateTimeOffset.UtcNow
+                                        waitEvents
+                                else
+                                    ReviewWait.Invalid waitErrors
+
                             ReviewApplication.renderWithWait opts binding facts waitState
                         | Error error, _, _
                         | _, _, Error error -> fail error
@@ -807,8 +1099,7 @@ module LiveHandlers =
     // revalidate that generation before any tree mutation (.github#2756).
     let private reviewRecordGeneration (record: StructuredDecision.ReviewRecord) =
         match record.Kind with
-        | StructuredDecision.Initial ->
-            Some(ReviewWait.generationToken record.HeadSha ReviewWait.InitialReview 0)
+        | StructuredDecision.Initial -> Some(ReviewWait.generationToken record.HeadSha ReviewWait.InitialReview 0)
         | StructuredDecision.Confirmation
         | StructuredDecision.Escalation
         | StructuredDecision.RepairPhase ->
@@ -818,9 +1109,11 @@ module LiveHandlers =
     let private isCanonicalReviewGeneration (generation: string) =
         let initialSuffix = ":initial-review:0"
         let confirmationPrefix = ":repair-confirmation:"
+
         let hasCanonicalHead =
             generation.Length >= 40
             && (generation.Substring(0, 40) |> Seq.forall Uri.IsHexDigit)
+
         hasCanonicalHead
         && ((generation.Length = 40 + initialSuffix.Length
              && generation.EndsWith(initialSuffix, StringComparison.Ordinal))
@@ -836,15 +1129,20 @@ module LiveHandlers =
         : Result<string, string> =
         match candidates with
         | [] ->
-            Error($"completion requires the structured review-decision record for generation '%s{generation}', but no such record is present")
+            Error(
+                $"completion requires the structured review-decision record for generation '%s{generation}', but no such record is present"
+            )
         | candidates ->
             let normalized = evidence.Trim()
+
             let identifies (comment: Reads.CommentBody, record: StructuredDecision.ReviewRecord) =
                 let digest = record.Digest
+
                 normalized = comment.Url
                 || normalized = string comment.Id
                 || normalized.Equals(digest, StringComparison.OrdinalIgnoreCase)
                 || normalized.Equals($"sha256:%s{digest}", StringComparison.OrdinalIgnoreCase)
+
             match candidates |> List.filter identifies with
             | [ requiredComment, _ ] -> Ok requiredComment.Url
             | [] ->
@@ -856,13 +1154,17 @@ module LiveHandlers =
                     )
                 | matches ->
                     let urls = matches |> List.map (fst >> _.Url) |> String.concat ", "
+
                     Error(
                         $"completion evidenceRef does not identify one structured review-decision record in generation "
                         + $"'%s{generation}'; candidates: %s{urls}; supplied reference '%s{evidence}'"
                     )
             | matches ->
                 let urls = matches |> List.map (fst >> _.Url) |> String.concat ", "
-                Error($"completion evidence is ambiguous: the supplied reference '%s{evidence}' matches multiple structured review-decision records in generation '%s{generation}': %s{urls}")
+
+                Error(
+                    $"completion evidence is ambiguous: the supplied reference '%s{evidence}' matches multiple structured review-decision records in generation '%s{generation}': %s{urls}"
+                )
 
     let private normalizeCompletionEvidence
         (comments: Reads.CommentBody list)
@@ -879,11 +1181,21 @@ module LiveHandlers =
                 comments
                 |> List.choose (fun comment ->
                     if comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal) then
-                        Some(comment, Driver.decodeStructuredReview (comment.Body.Substring(StructuredReviewMarker.Length).Trim()))
-                    else None)
+                        Some(
+                            comment,
+                            Driver.decodeStructuredReview (
+                                comment.Body.Substring(StructuredReviewMarker.Length).Trim()
+                            )
+                        )
+                    else
+                        None)
+
             let malformed =
                 decoded
-                |> List.choose (function _, Error reason -> Some reason | _ -> None)
+                |> List.choose (function
+                    | _, Error reason -> Some reason
+                    | _ -> None)
+
             if not (List.isEmpty malformed) then
                 let detail = String.concat "; " malformed
                 Error($"the structured review ledger is malformed: %s{detail}")
@@ -894,6 +1206,7 @@ module LiveHandlers =
                         | comment, Ok record when reviewRecordGeneration record = Some receipt.ReviewGeneration ->
                             Some(comment, record)
                         | _ -> None)
+
                 selectCompletionEvidence receipt.ReviewGeneration evidence expected
 
     let private appendReviewWait
@@ -903,45 +1216,70 @@ module LiveHandlers =
         (pr: int)
         (requestedEvent: ReviewWait.Transition)
         : int =
-        match Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
-              |> Result.bind (Reads.requireCompleteMarkerScan target.Short),
-              Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
+        match
+            Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
+            |> Result.bind (Reads.requireCompleteMarkerScan target.Short),
+            Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr
+        with
         | Error error, _
         | _, Error error -> fail error
         | Ok markers, Ok comments ->
             match Reads.winner opts.LeaseMinutes markers with
-            | None -> eprint "fsgg-coord-engine: review wait: no current claim generation can authorize this write."; ExitNoVerdict
+            | None ->
+                eprint "fsgg-coord-engine: review wait: no current claim generation can authorize this write."
+                ExitNoVerdict
             | Some claim ->
                 let ordered = comments |> List.sortBy _.Id
                 let parsed = ordered |> List.map (fun comment -> ReviewWait.tryDecode comment.Body)
-                let parseErrors = parsed |> List.choose (function Error error -> Some error | _ -> None)
-                let prior = parsed |> List.choose (function Ok (Some prior) -> Some prior | _ -> None)
+
+                let parseErrors =
+                    parsed
+                    |> List.choose (function
+                        | Error error -> Some error
+                        | _ -> None)
+
+                let prior =
+                    parsed
+                    |> List.choose (function
+                        | Ok(Some prior) -> Some prior
+                        | _ -> None)
+
                 let terminalGenerations =
                     prior
                     |> List.choose (function
-                        | ReviewWait.Complete (generation, _, _)
-                        | ReviewWait.Cancel (generation, _, _)
-                        | ReviewWait.Timeout (generation, _, _) -> Some generation
+                        | ReviewWait.Complete(generation, _, _)
+                        | ReviewWait.Cancel(generation, _, _)
+                        | ReviewWait.Timeout(generation, _, _) -> Some generation
                         | _ -> None)
                     |> Set.ofList
+
                 let unconsumedEntries =
                     prior
-                    |> List.choose (function ReviewWait.Enter receipt -> Some receipt | _ -> None)
+                    |> List.choose (function
+                        | ReviewWait.Enter receipt -> Some receipt
+                        | _ -> None)
                     |> List.filter (fun receipt -> not (Set.contains receipt.ReviewGeneration terminalGenerations))
+
                 let entryFor generation =
                     prior
-                    |> List.tryPick (function ReviewWait.Enter old when old.ReviewGeneration = generation -> Some old | _ -> None)
+                    |> List.tryPick (function
+                        | ReviewWait.Enter old when old.ReviewGeneration = generation -> Some old
+                        | _ -> None)
+
                 let normalizedEvent =
                     match requestedEvent with
-                    | ReviewWait.Complete (generation, at, evidence) ->
+                    | ReviewWait.Complete(generation, at, evidence) ->
                         match entryFor generation with
                         | None -> Ok requestedEvent
                         | Some receipt ->
                             normalizeCompletionEvidence comments receipt evidence
                             |> Result.map (fun normalized -> ReviewWait.Complete(generation, at, normalized))
                     | _ -> Ok requestedEvent
+
                 match normalizedEvent with
-                | Error reason -> eprint $"fsgg-coord-engine: review wait: refused: %s{reason}"; ExitNoVerdict
+                | Error reason ->
+                    eprint $"fsgg-coord-engine: review wait: refused: %s{reason}"
+                    ExitNoVerdict
                 | Ok event ->
                     let permitted =
                         if not (List.isEmpty parseErrors) then
@@ -951,46 +1289,80 @@ module LiveHandlers =
                             match event with
                             | ReviewWait.Enter receipt ->
                                 let now = DateTimeOffset.UtcNow
-                                if receipt.Item <> target.Canonical then Error "receipt item does not match the requested item"
-                                elif receipt.ClaimGeneration <> string claim.Id then Error "receipt claimGeneration is not current"
-                                elif receipt.EnteredAt > now.AddMinutes 5.0 then Error "enteredAt is implausibly in the future"
-                                elif receipt.ExpiresAt <= now then Error "receipt is already expired"
-                                elif prior |> List.exists (function ReviewWait.Enter old when old.ReviewGeneration = receipt.ReviewGeneration -> true | _ -> false) then Error "reviewGeneration already has an entry receipt"
-                                elif not (List.isEmpty unconsumedEntries) then Error "a preceding reviewGeneration is still unconsumed"
-                                else Ok ()
-                            | ReviewWait.Complete (generation, at, _)
-                            | ReviewWait.Cancel (generation, at, _)
-                            | ReviewWait.Timeout (generation, at, _) ->
+
+                                if receipt.Item <> target.Canonical then
+                                    Error "receipt item does not match the requested item"
+                                elif receipt.ClaimGeneration <> string claim.Id then
+                                    Error "receipt claimGeneration is not current"
+                                elif receipt.EnteredAt > now.AddMinutes 5.0 then
+                                    Error "enteredAt is implausibly in the future"
+                                elif receipt.ExpiresAt <= now then
+                                    Error "receipt is already expired"
+                                elif
+                                    prior
+                                    |> List.exists (function
+                                        | ReviewWait.Enter old when old.ReviewGeneration = receipt.ReviewGeneration ->
+                                            true
+                                        | _ -> false)
+                                then
+                                    Error "reviewGeneration already has an entry receipt"
+                                elif not (List.isEmpty unconsumedEntries) then
+                                    Error "a preceding reviewGeneration is still unconsumed"
+                                else
+                                    Ok()
+                            | ReviewWait.Complete(generation, at, _)
+                            | ReviewWait.Cancel(generation, at, _)
+                            | ReviewWait.Timeout(generation, at, _) ->
                                 let entry = entryFor generation
+
                                 if entry.IsNone then
                                     Error "transition has no durable entry receipt for this reviewGeneration"
-                                elif prior |> List.exists (function
-                                    | ReviewWait.Complete (old, _, _)
-                                    | ReviewWait.Cancel (old, _, _)
-                                    | ReviewWait.Timeout (old, _, _) -> old = generation
-                                    | _ -> false) then
+                                elif
+                                    prior
+                                    |> List.exists (function
+                                        | ReviewWait.Complete(old, _, _)
+                                        | ReviewWait.Cancel(old, _, _)
+                                        | ReviewWait.Timeout(old, _, _) -> old = generation
+                                        | _ -> false)
+                                then
                                     Error "reviewGeneration already has a terminal transition"
                                 else
                                     let receipt = entry.Value
                                     let now = DateTimeOffset.UtcNow
+
                                     match event with
-                                    | _ when receipt.ClaimGeneration <> string claim.Id -> Error "entry receipt claimGeneration is not current"
-                                    | ReviewWait.Complete _ when at > now.AddMinutes 5.0 -> Error "completion timestamp is implausibly in the future"
-                                    | ReviewWait.Complete _ when at < receipt.EnteredAt -> Error "completion predates queue entry"
-                                    | ReviewWait.Complete _ when at > receipt.ExpiresAt -> Error "completion is after bounded review wait expiry"
-                                    | ReviewWait.Complete _ when now >= receipt.ExpiresAt -> Error "completion was not durable before bounded review wait expiry"
-                                    | ReviewWait.Cancel _ when at > now.AddMinutes 5.0 -> Error "cancellation timestamp is implausibly in the future"
-                                    | ReviewWait.Cancel _ when at < receipt.EnteredAt -> Error "cancellation predates queue entry"
-                                    | ReviewWait.Cancel _ when now >= receipt.ExpiresAt -> Error "cancellation was not durable before bounded review wait expiry"
-                                    | ReviewWait.Timeout _ when at > now.AddMinutes 5.0 -> Error "timeout timestamp is implausibly in the future"
-                                    | ReviewWait.Timeout _ when at < receipt.ExpiresAt -> Error "timeout predates expiresAt"
-                                    | ReviewWait.Timeout _ when now < receipt.ExpiresAt -> Error "timeout cannot be made durable before expiresAt"
-                                    | _ -> Ok ()
+                                    | _ when receipt.ClaimGeneration <> string claim.Id ->
+                                        Error "entry receipt claimGeneration is not current"
+                                    | ReviewWait.Complete _ when at > now.AddMinutes 5.0 ->
+                                        Error "completion timestamp is implausibly in the future"
+                                    | ReviewWait.Complete _ when at < receipt.EnteredAt ->
+                                        Error "completion predates queue entry"
+                                    | ReviewWait.Complete _ when at > receipt.ExpiresAt ->
+                                        Error "completion is after bounded review wait expiry"
+                                    | ReviewWait.Complete _ when now >= receipt.ExpiresAt ->
+                                        Error "completion was not durable before bounded review wait expiry"
+                                    | ReviewWait.Cancel _ when at > now.AddMinutes 5.0 ->
+                                        Error "cancellation timestamp is implausibly in the future"
+                                    | ReviewWait.Cancel _ when at < receipt.EnteredAt ->
+                                        Error "cancellation predates queue entry"
+                                    | ReviewWait.Cancel _ when now >= receipt.ExpiresAt ->
+                                        Error "cancellation was not durable before bounded review wait expiry"
+                                    | ReviewWait.Timeout _ when at > now.AddMinutes 5.0 ->
+                                        Error "timeout timestamp is implausibly in the future"
+                                    | ReviewWait.Timeout _ when at < receipt.ExpiresAt ->
+                                        Error "timeout predates expiresAt"
+                                    | ReviewWait.Timeout _ when now < receipt.ExpiresAt ->
+                                        Error "timeout cannot be made durable before expiresAt"
+                                    | _ -> Ok()
+
                     match permitted with
-                    | Error reason -> eprint $"fsgg-coord-engine: review wait: refused: %s{reason}"; ExitNoVerdict
-                    | Ok () ->
+                    | Error reason ->
+                        eprint $"fsgg-coord-engine: review wait: refused: %s{reason}"
+                        ExitNoVerdict
+                    | Ok() ->
                         let markerBody = ReviewWait.encode event
                         let prTarget = { target with Number = pr }
+
                         match Writes.postIssueComment ctx.Transport prTarget markerBody with
                         | Error error -> fail error
                         | Ok commentId ->
@@ -1001,79 +1373,155 @@ module LiveHandlers =
                                     current
                                     |> List.sortBy _.Id
                                     |> List.map (fun comment -> ReviewWait.tryDecode comment.Body)
-                                let currentErrors = currentParsed |> List.choose (function Error error -> Some error | _ -> None)
-                                let currentEvents = currentParsed |> List.choose (function Ok (Some transition) -> Some transition | _ -> None)
+
+                                let currentErrors =
+                                    currentParsed
+                                    |> List.choose (function
+                                        | Error error -> Some error
+                                        | _ -> None)
+
+                                let currentEvents =
+                                    currentParsed
+                                    |> List.choose (function
+                                        | Ok(Some transition) -> Some transition
+                                        | _ -> None)
+
                                 let state =
                                     if List.isEmpty currentErrors then
-                                        ReviewWait.project target.Canonical (Some(string claim.Id)) true DateTimeOffset.UtcNow currentEvents
-                                    else ReviewWait.Invalid currentErrors
+                                        ReviewWait.project
+                                            target.Canonical
+                                            (Some(string claim.Id))
+                                            true
+                                            DateTimeOffset.UtcNow
+                                            currentEvents
+                                    else
+                                        ReviewWait.Invalid currentErrors
+
                                 let ownsWinner =
                                     match event, state with
                                     | ReviewWait.Enter expected, ReviewWait.Waiting actual
-                                    | ReviewWait.Enter expected, ReviewWait.Completed (actual, _)
-                                    | ReviewWait.Enter expected, ReviewWait.Cancelled (actual, _)
-                                    | ReviewWait.Enter expected, ReviewWait.Recoverable (actual, _) -> expected = actual
-                                    | ReviewWait.Complete (generation, _, evidence), ReviewWait.Completed (actual, winner) -> generation = actual.ReviewGeneration && evidence = winner
-                                    | ReviewWait.Cancel (generation, _, evidence), ReviewWait.Cancelled (actual, winner) -> generation = actual.ReviewGeneration && evidence = winner
-                                    | ReviewWait.Timeout (generation, _, evidence), ReviewWait.Recoverable (actual, winner) -> generation = actual.ReviewGeneration && evidence = winner
+                                    | ReviewWait.Enter expected, ReviewWait.Completed(actual, _)
+                                    | ReviewWait.Enter expected, ReviewWait.Cancelled(actual, _)
+                                    | ReviewWait.Enter expected, ReviewWait.Recoverable(actual, _) -> expected = actual
+                                    | ReviewWait.Complete(generation, _, evidence), ReviewWait.Completed(actual, winner) ->
+                                        generation = actual.ReviewGeneration && evidence = winner
+                                    | ReviewWait.Cancel(generation, _, evidence), ReviewWait.Cancelled(actual, winner) ->
+                                        generation = actual.ReviewGeneration && evidence = winner
+                                    | ReviewWait.Timeout(generation, _, evidence),
+                                      ReviewWait.Recoverable(actual, winner) ->
+                                        generation = actual.ReviewGeneration && evidence = winner
                                     | _ -> false
+
                                 if not ownsWinner then
-                                    eprint "fsgg-coord-engine: review wait: the posted event lost a concurrent durable transition race; re-read review state."
+                                    eprint
+                                        "fsgg-coord-engine: review wait: the posted event lost a concurrent durable transition race; re-read review state."
+
                                     ExitNoVerdict
                                 else
-                                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.review-wait-result/v1"; item = target.Canonical; pr = pr; commentId = commentId |})
+                                    printfn
+                                        "%s"
+                                        (JsonSerializer.Serialize
+                                            {|
+                                                schema = "fsgg.coord.review-wait-result/v1"
+                                                item = target.Canonical
+                                                pr = pr
+                                                commentId = commentId
+                                            |})
+
                                     ExitGreen
 
     let private recordReviewWait (ctx: Context) (opts: Options) (rawRef: string) (path: string) : int =
         match parseRef ctx rawRef, opts.Pr with
-        | Error message, _ -> eprint $"fsgg-coord-engine: review wait: %s{message}"; ExitError
-        | _, None -> eprint "fsgg-coord-engine: review wait: --pr is required."; ExitError
+        | Error message, _ ->
+            eprint $"fsgg-coord-engine: review wait: %s{message}"
+            ExitError
+        | _, None ->
+            eprint "fsgg-coord-engine: review wait: --pr is required."
+            ExitError
         | Ok target, Some pr ->
             try
                 let raw = File.ReadAllText path
-                let markerBody = if raw.StartsWith(ReviewWait.Marker, StringComparison.Ordinal) then raw else ReviewWait.Marker + "\n" + raw
+
+                let markerBody =
+                    if raw.StartsWith(ReviewWait.Marker, StringComparison.Ordinal) then
+                        raw
+                    else
+                        ReviewWait.Marker + "\n" + raw
+
                 match ReviewWait.tryDecode markerBody with
-                | Error reason -> eprint $"fsgg-coord-engine: review wait: malformed event: %s{reason}"; ExitError
-                | Ok None -> eprint "fsgg-coord-engine: review wait: the draft is not a review-wait event."; ExitError
-                | Ok (Some event) -> appendReviewWait ctx opts target pr event
-            with error -> eprint $"fsgg-coord-engine: review wait: %s{error.Message}"; ExitError
+                | Error reason ->
+                    eprint $"fsgg-coord-engine: review wait: malformed event: %s{reason}"
+                    ExitError
+                | Ok None ->
+                    eprint "fsgg-coord-engine: review wait: the draft is not a review-wait event."
+                    ExitError
+                | Ok(Some event) -> appendReviewWait ctx opts target pr event
+            with error ->
+                eprint $"fsgg-coord-engine: review wait: %s{error.Message}"
+                ExitError
 
     let private enterReviewWait (ctx: Context) (opts: Options) (rawRef: string) : int =
         match parseRef ctx rawRef, opts.Pr with
-        | Error message, _ -> eprint $"fsgg-coord-engine: review wait enter: %s{message}"; ExitError
-        | _, None -> eprint "fsgg-coord-engine: review wait enter: --pr is required."; ExitError
+        | Error message, _ ->
+            eprint $"fsgg-coord-engine: review wait enter: %s{message}"
+            ExitError
+        | _, None ->
+            eprint "fsgg-coord-engine: review wait enter: --pr is required."
+            ExitError
         | Ok target, Some pr ->
-            match Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
-                  |> Result.bind (Reads.requireCompleteMarkerScan target.Short),
-                  Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
-                  Reads.prLandable ctx.Transport target.Owner target.Repo pr,
-                  Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
+            match
+                Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
+                |> Result.bind (Reads.requireCompleteMarkerScan target.Short),
+                Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
+                Reads.prLandable ctx.Transport target.Owner target.Repo pr,
+                Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr
+            with
             | Error error, _, _, _
             | _, Error error, _, _
             | _, _, _, Error error -> fail error
             | Ok markers, Ok head, checks, Ok comments ->
                 match Reads.winner opts.LeaseMinutes markers with
-                | None -> eprint "fsgg-coord-engine: review wait enter: no current claim generation can authorize this write."; ExitNoVerdict
+                | None ->
+                    eprint "fsgg-coord-engine: review wait enter: no current claim generation can authorize this write."
+                    ExitNoVerdict
                 | Some claim ->
                     let reviewComments =
                         comments
-                        |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                        |> List.map (fun comment ->
+                            ({
+                                Id = comment.Id
+                                Url = comment.Url
+                                Body = comment.Body
+                            }
+                            : Driver.ReviewComment))
+
                     let phaseFacts = Driver.reviewPhaseFacts reviewComments
                     let round = phaseFacts.ConfirmationCount + 1
+
                     let binding: Review.Binding =
-                        { ItemRef = target.Canonical
-                          Pr = pr
-                          HeadSha = head
-                          ClaimGeneration = string claim.Id
-                          ImplementerIdentity = claim.Worker.Value
-                          Phase = if phaseFacts.RepairPhasePresent then Review.Repair else Review.Ordinary
-                          Round = round }
+                        {
+                            ItemRef = target.Canonical
+                            Pr = pr
+                            HeadSha = head
+                            ClaimGeneration = string claim.Id
+                            ImplementerIdentity = claim.Worker.Value
+                            Phase =
+                                if phaseFacts.RepairPhasePresent then
+                                    Review.Repair
+                                else
+                                    Review.Ordinary
+                            Round = round
+                        }
+
                     let facts: Review.Facts =
-                        { Comments = reviewComments
-                          Checks = checks
-                          RepairPhaseGranted = phaseFacts.RepairPhaseReceipt
-                          RepairRouteAvailable = true
-                          DiffAuditTrusted = None }
+                        {
+                            Comments = reviewComments
+                            Checks = checks
+                            RepairPhaseGranted = phaseFacts.RepairPhaseReceipt
+                            RepairRouteAvailable = true
+                            DiffAuditTrusted = None
+                        }
+
                     match Review.inspect binding facts None None with
                     | Error reasons ->
                         let detail = String.concat "; " reasons
@@ -1087,23 +1535,30 @@ module LiveHandlers =
                             | Review.DispatchSuccessor _, Review.RepairPhaseActive nextRound ->
                                 Ok(ReviewWait.RepairConfirmation, nextRound)
                             | _ -> Error "the current review state does not authorize a critic dispatch"
+
                         match authority with
-                        | Error reason -> eprint $"fsgg-coord-engine: review wait enter: refused: %s{reason}"; ExitNoVerdict
+                        | Error reason ->
+                            eprint $"fsgg-coord-engine: review wait enter: refused: %s{reason}"
+                            ExitNoVerdict
                         | Ok(kind, requiredRound) ->
                             // Durable terminal events are commonly authored at whole-second precision.
                             // Emit the entry on the same precision so an immediate completion/cancel at
                             // the current second cannot appear to predate an entry by sub-second ticks.
                             let observed = DateTimeOffset.UtcNow
                             let now = observed.AddTicks(-(observed.Ticks % TimeSpan.TicksPerSecond))
+
                             let event =
                                 ReviewWait.Enter
-                                    { Item = target.Canonical
-                                      ClaimGeneration = string claim.Id
-                                      ReviewGeneration = ReviewWait.generationToken head kind requiredRound
-                                      Kind = kind
-                                      EnteredAt = now
-                                      ExpiresAt = now.AddHours 4.0
-                                      EvidenceRef = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}" }
+                                    {
+                                        Item = target.Canonical
+                                        ClaimGeneration = string claim.Id
+                                        ReviewGeneration = ReviewWait.generationToken head kind requiredRound
+                                        Kind = kind
+                                        EnteredAt = now
+                                        ExpiresAt = now.AddHours 4.0
+                                        EvidenceRef = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}"
+                                    }
+
                             appendReviewWait ctx opts target pr event
 
     let private authorizeReviewRecordWait
@@ -1114,8 +1569,10 @@ module LiveHandlers =
         (comments: Reads.CommentBody list)
         (draft: StructuredDecision.ReviewRecord)
         =
-        match Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
-              |> Result.bind (Reads.requireCompleteMarkerScan target.Short) with
+        match
+            Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
+            |> Result.bind (Reads.requireCompleteMarkerScan target.Short)
+        with
         | Error error -> Error(sprintf "the current claim generation could not be read: %A" error)
         | Ok markers ->
             match Reads.winner opts.LeaseMinutes markers with
@@ -1125,12 +1582,25 @@ module LiveHandlers =
                     comments
                     |> List.sortBy _.Id
                     |> List.map (fun comment -> ReviewWait.tryDecode comment.Body)
-                let parseErrors = parsed |> List.choose (function Error error -> Some error | _ -> None)
-                let events = parsed |> List.choose (function Ok (Some event) -> Some event | _ -> None)
+
+                let parseErrors =
+                    parsed
+                    |> List.choose (function
+                        | Error error -> Some error
+                        | _ -> None)
+
+                let events =
+                    parsed
+                    |> List.choose (function
+                        | Ok(Some event) -> Some event
+                        | _ -> None)
+
                 let state =
                     if List.isEmpty parseErrors then
                         ReviewWait.project target.Canonical (Some(string claim.Id)) true DateTimeOffset.UtcNow events
-                    else ReviewWait.Invalid parseErrors
+                    else
+                        ReviewWait.Invalid parseErrors
+
                 let generationMatches kind round (receipt: ReviewWait.WaitReceipt) =
                     receipt.Kind = kind
                     && receipt.ReviewGeneration = ReviewWait.generationToken draft.HeadSha kind round
@@ -1138,111 +1608,178 @@ module LiveHandlers =
                 let authorizeRepairPhaseEntry () =
                     match draft.RepairPhaseReceipt with
                     | None -> Error "a repair-phase record requires the seven-field repairPhaseReceipt"
-                    | Some entry when entry.ExhaustedPr = pr -> Error "repairPhaseReceipt.exhaustedPr must name the closed predecessor PR"
-                    | Some entry when entry.NewClaimGeneration <> string claim.Id -> Error "repairPhaseReceipt.newClaimGeneration is not current"
-                    | Some entry when entry.NewImplementerIdentity <> claim.Worker.Value -> Error "repairPhaseReceipt.newImplementerIdentity is not the current claimant"
-                    | Some entry when entry.NewCriticIdentity <> draft.Critic -> Error "repairPhaseReceipt.newCriticIdentity does not match the repair-phase critic"
-                    | Some entry when entry.CandidateHeadSha <> draft.HeadSha -> Error "repairPhaseReceipt.candidateHeadSha does not match the repair-phase record head"
+                    | Some entry when entry.ExhaustedPr = pr ->
+                        Error "repairPhaseReceipt.exhaustedPr must name the closed predecessor PR"
+                    | Some entry when entry.NewClaimGeneration <> string claim.Id ->
+                        Error "repairPhaseReceipt.newClaimGeneration is not current"
+                    | Some entry when entry.NewImplementerIdentity <> claim.Worker.Value ->
+                        Error "repairPhaseReceipt.newImplementerIdentity is not the current claimant"
+                    | Some entry when entry.NewCriticIdentity <> draft.Critic ->
+                        Error "repairPhaseReceipt.newCriticIdentity does not match the repair-phase critic"
+                    | Some entry when entry.CandidateHeadSha <> draft.HeadSha ->
+                        Error "repairPhaseReceipt.candidateHeadSha does not match the repair-phase record head"
                     | Some entry ->
-                        match Reads.prHeadRef ctx.Transport target.Owner target.Repo pr,
-                              Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
-                              Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo entry.ExhaustedPr with
+                        match
+                            Reads.prHeadRef ctx.Transport target.Owner target.Repo pr,
+                            Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
+                            Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo entry.ExhaustedPr
+                        with
                         | Error error, _, _
                         | _, Error error, _
-                        | _, _, Error error -> Error(sprintf "repair-phase entry provenance could not be read: %A" error)
+                        | _, _, Error error ->
+                            Error(sprintf "repair-phase entry provenance could not be read: %A" error)
                         | Ok branch, Ok head, Ok exhaustedComments ->
                             let prBinding = string pr
+
                             let branchOrPrMatches =
                                 entry.NewBranchOrPr = branch
                                 || entry.NewBranchOrPr = prBinding
                                 || entry.NewBranchOrPr = $"#%d{pr}"
                                 || entry.NewBranchOrPr = $"pr/%d{pr}"
+
                             if not branchOrPrMatches then
                                 Error "repairPhaseReceipt.newBranchOrPr does not match the current branch or PR"
                             elif head <> entry.CandidateHeadSha then
                                 Error "repairPhaseReceipt.candidateHeadSha is stale for the current PR"
                             elif claim.Id <= entry.EscalationCommentId then
-                                Error "repairPhaseReceipt.newClaimGeneration must be newer than the exhausted escalation comment"
-                            elif Reads.prLandable ctx.Transport target.Owner target.Repo entry.ExhaustedPr <> Types.PrClosed then
+                                Error
+                                    "repairPhaseReceipt.newClaimGeneration must be newer than the exhausted escalation comment"
+                            elif
+                                Reads.prLandable ctx.Transport target.Owner target.Repo entry.ExhaustedPr
+                                <> Types.PrClosed
+                            then
                                 Error "repairPhaseReceipt.exhaustedPr must be closed without merging"
                             else
                                 let reviewComments =
                                     exhaustedComments
-                                    |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                    |> List.map (fun comment ->
+                                        ({
+                                            Id = comment.Id
+                                            Url = comment.Url
+                                            Body = comment.Body
+                                        }
+                                        : Driver.ReviewComment))
+
                                 let phaseFacts = Driver.reviewPhaseFacts reviewComments
+
                                 let exactEscalation =
                                     exhaustedComments
                                     |> List.tryFind (fun comment -> comment.Id = entry.EscalationCommentId)
                                     |> Option.bind (fun comment ->
-                                        if comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal) then
-                                            Driver.decodeStructuredReview (comment.Body.Substring(StructuredReviewMarker.Length).Trim())
+                                        if
+                                            comment.Body.StartsWith(
+                                                StructuredReviewMarker + "\n",
+                                                StringComparison.Ordinal
+                                            )
+                                        then
+                                            Driver.decodeStructuredReview (
+                                                comment.Body.Substring(StructuredReviewMarker.Length).Trim()
+                                            )
                                             |> Result.toOption
-                                        else None)
+                                        else
+                                            None)
+
                                 match phaseFacts.StructuredErrors, exactEscalation with
                                 | errors, _ when not (List.isEmpty errors) ->
                                     let detail = String.concat "; " errors
                                     Error($"the exhausted repair-phase provenance ledger is invalid: %s{detail}")
-                                | _, Some escalation
-                                    when escalation.Kind = StructuredDecision.Escalation
-                                         && escalation.Subject = $"%s{target.Canonical}/pr/%d{entry.ExhaustedPr}" -> Ok ()
-                                | _ -> Error "repairPhaseReceipt.escalationCommentId does not name the exhausted PR's structured escalation record"
+                                | _, Some escalation when
+                                    escalation.Kind = StructuredDecision.Escalation
+                                    && escalation.Subject = $"%s{target.Canonical}/pr/%d{entry.ExhaustedPr}"
+                                    ->
+                                    Ok()
+                                | _ ->
+                                    Error
+                                        "repairPhaseReceipt.escalationCommentId does not name the exhausted PR's structured escalation record"
 
                 let authorizeExhaustedClaimTurnover (receipt: ReviewWait.WaitReceipt) evidence =
                     let expectedSubject = $"%s{target.Canonical}/pr/%d{pr}"
                     let ordered = comments |> List.sortBy _.Id
+
                     let structured =
                         ordered
                         |> List.choose (fun comment ->
                             if comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal) then
-                                Some(comment, Driver.decodeStructuredReview (comment.Body.Substring(StructuredReviewMarker.Length).Trim()))
-                            else None)
+                                Some(
+                                    comment,
+                                    Driver.decodeStructuredReview (
+                                        comment.Body.Substring(StructuredReviewMarker.Length).Trim()
+                                    )
+                                )
+                            else
+                                None)
+
                     let decodeErrors =
                         structured
-                        |> List.choose (fun (_, decoded) -> match decoded with Error error -> Some error | Ok _ -> None)
+                        |> List.choose (fun (_, decoded) ->
+                            match decoded with
+                            | Error error -> Some error
+                            | Ok _ -> None)
+
                     let pairs =
                         structured
                         |> List.choose (fun (comment, decoded) ->
                             decoded |> Result.toOption |> Option.map (fun record -> comment, record))
+
                     let records = pairs |> List.map snd
+
                     let generationPairs =
                         pairs
                         |> List.indexed
                         |> List.choose (fun (index, (_, record)) ->
-                            if record.Kind = StructuredDecision.Initial then Some index else None)
+                            if record.Kind = StructuredDecision.Initial then
+                                Some index
+                            else
+                                None)
                         |> List.tryLast
                         |> Option.map (fun start -> pairs[start..])
                         |> Option.defaultValue []
+
                     let legacyMarker = "<!-- fsgg:independent-review-escalation:v1 -->"
-                    let lines (body: string) = body.Replace("\r\n", "\n").Split '\n' |> Array.toList
+
+                    let lines (body: string) =
+                        body.Replace("\r\n", "\n").Split '\n' |> Array.toList
+
                     let legacyComments =
                         ordered
                         |> List.filter (fun comment -> lines comment.Body |> List.tryHead = Some legacyMarker)
+
                     let legacyMarkerCount =
                         ordered
-                        |> List.sumBy (fun comment -> lines comment.Body |> List.filter ((=) legacyMarker) |> List.length)
+                        |> List.sumBy (fun comment ->
+                            lines comment.Body |> List.filter ((=) legacyMarker) |> List.length)
+
                     let legacyFieldValues name body =
                         let prefix = name + ": "
+
                         lines body
                         |> List.choose (fun line ->
                             if line.StartsWith(prefix, StringComparison.Ordinal) then
                                 Some(line.Substring(prefix.Length).Trim())
-                            else None)
-                    let legacyField name body = legacyFieldValues name body |> List.tryExactlyOne
+                            else
+                                None)
+
+                    let legacyField name body =
+                        legacyFieldValues name body |> List.tryExactlyOne
+
                     let completionIds =
                         ordered
                         |> List.choose (fun comment ->
                             match ReviewWait.tryDecode comment.Body with
-                            | Ok (Some (ReviewWait.Complete (generation, _, completedEvidence)))
-                                when generation = receipt.ReviewGeneration && completedEvidence = evidence -> Some comment.Id
+                            | Ok(Some(ReviewWait.Complete(generation, _, completedEvidence))) when
+                                generation = receipt.ReviewGeneration && completedEvidence = evidence
+                                ->
+                                Some comment.Id
                             | _ -> None)
+
                     let terminalIds =
                         ordered
                         |> List.choose (fun comment ->
                             match ReviewWait.tryDecode comment.Body with
-                            | Ok (Some (ReviewWait.Complete (generation, _, _)))
-                            | Ok (Some (ReviewWait.Cancel (generation, _, _)))
-                            | Ok (Some (ReviewWait.Timeout (generation, _, _)))
-                                when generation = receipt.ReviewGeneration -> Some comment.Id
+                            | Ok(Some(ReviewWait.Complete(generation, _, _)))
+                            | Ok(Some(ReviewWait.Cancel(generation, _, _)))
+                            | Ok(Some(ReviewWait.Timeout(generation, _, _))) when generation = receipt.ReviewGeneration ->
+                                Some comment.Id
                             | _ -> None)
 
                     match StructuredDecision.validateReviewLedger expectedSubject records with
@@ -1255,21 +1792,29 @@ module LiveHandlers =
                     | Ok _ ->
                         let generation =
                             match generationPairs with
-                            | initial :: confirmations when List.length confirmations >= Protocol.reviewPolicy.MaxAutomatedRepairRounds ->
+                            | initial :: confirmations when
+                                List.length confirmations >= Protocol.reviewPolicy.MaxAutomatedRepairRounds
+                                ->
                                 Some(initial, confirmations, confirmations[0], confirmations[1], confirmations[2])
                             | _ -> None
+
                         match generation, legacyComments, completionIds, terminalIds with
-                        | Some((initialComment, initial), confirmationPairs, (roundOneComment, roundOne), (roundTwoComment, roundTwo), (roundThreeComment, roundThree)),
+                        | Some((initialComment, initial),
+                               confirmationPairs,
+                               (roundOneComment, roundOne),
+                               (roundTwoComment, roundTwo),
+                               (roundThreeComment, roundThree)),
                           [ legacy ],
                           [ completedCommentId ],
                           [ terminalCommentId ] when completedCommentId = terminalCommentId ->
                             let terminalComment, terminal = List.last confirmationPairs
+
                             let expectedKinds =
-                                initial.Kind = StructuredDecision.Initial && initial.Round = 0
+                                initial.Kind = StructuredDecision.Initial
+                                && initial.Round = 0
                                 && (confirmationPairs
                                     |> List.mapi (fun index (_, record) ->
-                                        record.Kind = StructuredDecision.Confirmation
-                                        && record.Round = index + 1)
+                                        record.Kind = StructuredDecision.Confirmation && record.Round = index + 1)
                                     |> List.forall id)
                             // `.github#2807`: repairs advance the pull-request head. The structured-ledger
                             // validator above already exact-binds every record to its own 40-hex head and
@@ -1281,27 +1826,39 @@ module LiveHandlers =
                             let reviewComments =
                                 ordered
                                 |> List.map (fun comment ->
-                                    ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                    ({
+                                        Id = comment.Id
+                                        Url = comment.Url
+                                        Body = comment.Body
+                                    }
+                                    : Driver.ReviewComment))
+
                             let terminalChecks =
                                 if terminal.Verdict = StructuredDecision.Pass then
                                     Reads.prLandable ctx.Transport target.Owner target.Repo pr
                                 else
                                     Types.PrUnknown
+
                             let terminalDecision =
                                 Review.decideOrdinaryExhaustion
-                                    { Phase = Review.Ordinary
-                                      HeadSha = draft.HeadSha
-                                      CurrentClaimGeneration = string claim.Id
-                                      Checks = terminalChecks
-                                      Comments = reviewComments
-                                      WaitState = Some state }
+                                    {
+                                        Phase = Review.Ordinary
+                                        HeadSha = draft.HeadSha
+                                        CurrentClaimGeneration = string claim.Id
+                                        Checks = terminalChecks
+                                        Comments = reviewComments
+                                        WaitState = Some state
+                                    }
+
                             let legacyBody = legacy.Body
                             let terminalBindings = legacyFieldValues "terminal-confirmation" legacyBody
+
                             let terminalBindingMatches =
                                 if terminal.Round = Protocol.reviewPolicy.MaxAutomatedRepairRounds then
                                     List.isEmpty terminalBindings
                                 else
                                     terminalBindings = [ terminalComment.Url ]
+
                             let legacyMatches =
                                 legacyMarkerCount = 1
                                 && legacy.Id > completedCommentId
@@ -1313,6 +1870,7 @@ module LiveHandlers =
                                 && terminalBindingMatches
                                 && legacyField "critic" legacyBody = Some terminal.Critic
                                 && legacyField "verdict" legacyBody = Some "ordinary-chain-exhausted"
+
                             let exactDraft =
                                 draft.Round = terminal.Round
                                 && draft.Verdict = StructuredDecision.ChangesRequired
@@ -1322,74 +1880,121 @@ module LiveHandlers =
                                 && draft.PrecedingReview = Some terminalComment.Url
                                 && draft.Critic = terminal.Critic
                                 && draft.Succession.IsNone
-                            let exactWait =
-                                receipt.Item = target.Canonical
-                                && evidence = terminalComment.Url
+
+                            let exactWait = receipt.Item = target.Canonical && evidence = terminalComment.Url
                             let freshClaim = claim.Id > legacy.Id
+
                             match Reads.prHeadSha ctx.Transport target.Owner target.Repo pr with
                             | Error error -> Error($"the exhausted pull request head could not be read: %A{error}")
                             | Ok liveHead when liveHead <> draft.HeadSha ->
-                                Error($"the escalation head is stale: draft %s{draft.HeadSha}, pull request %s{liveHead}")
-                            | Ok _ when not expectedKinds -> Error "ordinary exhaustion requires an initial plus contiguous confirmation rounds including 1, 2, and 3"
-                            | Ok _ when terminalDecision <> Review.OrdinaryExhaustionDecision.CompletedOrdinaryExhaustion ->
-                                Error "the validated terminal confirmation is not classified as completed ordinary exhaustion"
-                            | Ok _ when not legacyMatches -> Error "legacy ordinary-exhaustion evidence is missing, duplicated, stale, or malformed"
-                            | Ok _ when not exactDraft -> Error "the escalation draft does not bind the exact exhausted head, round, digest, critic, and backlinks"
-                            | Ok _ when not exactWait -> Error "the completed wait does not bind the exact old-claim terminal ordinary generation"
-                            | Ok _ when not freshClaim -> Error "the current claimant is not a fresh post-exhaustion claim generation"
-                            | Ok _ -> Ok ()
-                        | _ -> Error "ordinary exhaustion requires one exact contiguous generation, one completed terminal wait, and one legacy escalation"
+                                Error(
+                                    $"the escalation head is stale: draft %s{draft.HeadSha}, pull request %s{liveHead}"
+                                )
+                            | Ok _ when not expectedKinds ->
+                                Error
+                                    "ordinary exhaustion requires an initial plus contiguous confirmation rounds including 1, 2, and 3"
+                            | Ok _ when
+                                terminalDecision
+                                <> Review.OrdinaryExhaustionDecision.CompletedOrdinaryExhaustion
+                                ->
+                                Error
+                                    "the validated terminal confirmation is not classified as completed ordinary exhaustion"
+                            | Ok _ when not legacyMatches ->
+                                Error "legacy ordinary-exhaustion evidence is missing, duplicated, stale, or malformed"
+                            | Ok _ when not exactDraft ->
+                                Error
+                                    "the escalation draft does not bind the exact exhausted head, round, digest, critic, and backlinks"
+                            | Ok _ when not exactWait ->
+                                Error
+                                    "the completed wait does not bind the exact old-claim terminal ordinary generation"
+                            | Ok _ when not freshClaim ->
+                                Error "the current claimant is not a fresh post-exhaustion claim generation"
+                            | Ok _ -> Ok()
+                        | _ ->
+                            Error
+                                "ordinary exhaustion requires one exact contiguous generation, one completed terminal wait, and one legacy escalation"
+
                 match draft.Kind, state with
-                | StructuredDecision.Escalation, ReviewWait.Completed (receipt, evidence) ->
+                | StructuredDecision.Escalation, ReviewWait.Completed(receipt, evidence) ->
                     authorizeExhaustedClaimTurnover receipt evidence
-                | StructuredDecision.Acceptance, ReviewWait.Completed (receipt, evidence)
-                    when receipt.ClaimGeneration = string claim.Id && draft.PrecedingReview = Some evidence -> Ok ()
+                | StructuredDecision.Acceptance, ReviewWait.Completed(receipt, evidence) when
+                    receipt.ClaimGeneration = string claim.Id
+                    && draft.PrecedingReview = Some evidence
+                    ->
+                    Ok()
                 | StructuredDecision.Acceptance, _ ->
-                    Error "host acceptance requires the immediately preceding critic record's durable review wait to be completed"
-                | StructuredDecision.Initial, ReviewWait.Waiting receipt
-                    when generationMatches ReviewWait.InitialReview 0 receipt -> Ok ()
-                | StructuredDecision.RepairPhase, ReviewWait.Waiting receipt
-                    when generationMatches ReviewWait.RepairConfirmation draft.Round receipt ->
+                    Error
+                        "host acceptance requires the immediately preceding critic record's durable review wait to be completed"
+                | StructuredDecision.Initial, ReviewWait.Waiting receipt when
+                    generationMatches ReviewWait.InitialReview 0 receipt
+                    ->
+                    Ok()
+                | StructuredDecision.RepairPhase, ReviewWait.Waiting receipt when
+                    generationMatches ReviewWait.RepairConfirmation draft.Round receipt
+                    ->
                     authorizeRepairPhaseEntry ()
-                | (StructuredDecision.Confirmation | StructuredDecision.Escalation),
-                  ReviewWait.Waiting receipt
-                    when generationMatches ReviewWait.RepairConfirmation draft.Round receipt -> Ok ()
+                | (StructuredDecision.Confirmation | StructuredDecision.Escalation), ReviewWait.Waiting receipt when
+                    generationMatches ReviewWait.RepairConfirmation draft.Round receipt
+                    ->
+                    Ok()
                 | _, ReviewWait.Invalid errors ->
                     let detail = String.concat "; " errors
                     Error($"the review-wait ledger is invalid: %s{detail}")
-                | _, ReviewWait.Recoverable (_, reason) -> Error($"the review-wait ledger is recoverable, not authoritative: %s{reason}")
+                | _, ReviewWait.Recoverable(_, reason) ->
+                    Error($"the review-wait ledger is recoverable, not authoritative: %s{reason}")
                 | _, ReviewWait.Waiting receipt ->
-                    Error($"waiting receipt generation/kind does not authorize this review record: %s{receipt.ReviewGeneration} / %A{receipt.Kind}")
+                    Error(
+                        $"waiting receipt generation/kind does not authorize this review record: %s{receipt.ReviewGeneration} / %A{receipt.Kind}"
+                    )
                 | _, _ -> Error "a matching durable review-wait entry is required before a critic record"
 
     let private recordReview (ctx: Context) (opts: Options) (rawRef: string) (path: string) : int =
         match parseRef ctx rawRef, opts.Pr with
-        | Error message, _ -> eprint $"fsgg-coord-engine: review record: %s{message}"; ExitError
-        | _, None -> eprint "fsgg-coord-engine: review record: --pr is required."; ExitError
+        | Error message, _ ->
+            eprint $"fsgg-coord-engine: review record: %s{message}"
+            ExitError
+        | _, None ->
+            eprint "fsgg-coord-engine: review record: --pr is required."
+            ExitError
         | Ok target, Some pr ->
             try
                 let raw = File.ReadAllText path
                 let mutable waitRefusal = None
-                match Driver.decodeStructuredReview raw,
-                      Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
+
+                match
+                    Driver.decodeStructuredReview raw,
+                    Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr
+                with
                 | Error reason, _ ->
                     eprint $"fsgg-coord-engine: review record: only structured v2 drafts may be written: %s{reason}"
                     ExitError
                 | _, Error error -> fail error
-                | Ok draft, Ok comments
-                    when
-                        (authorizeReviewRecordWait ctx opts target pr comments draft
-                         |> Result.mapError (fun reason -> waitRefusal <- Some reason)
-                         |> Result.isOk) ->
+                | Ok draft, Ok comments when
+                    (authorizeReviewRecordWait ctx opts target pr comments draft
+                     |> Result.mapError (fun reason -> waitRefusal <- Some reason)
+                     |> Result.isOk)
+                    ->
                     let expectedSubject = $"%s{target.Canonical}/pr/%d{pr}"
+
                     let marked =
                         comments
                         |> List.choose (fun comment ->
                             if comment.Body.StartsWith(StructuredReviewMarker + "\n", StringComparison.Ordinal) then
                                 Some(comment, comment.Body.Substring(StructuredReviewMarker.Length).Trim())
-                            else None)
-                    let decoded = marked |> List.map (fun (comment, payload) -> comment, Driver.decodeStructuredReview payload)
-                    let decodeErrors = decoded |> List.choose (fun (_, result) -> match result with Error error -> Some error | Ok _ -> None)
+                            else
+                                None)
+
+                    let decoded =
+                        marked
+                        |> List.map (fun (comment, payload) -> comment, Driver.decodeStructuredReview payload)
+
+                    let decodeErrors =
+                        decoded
+                        |> List.choose (fun (_, result) ->
+                            match result with
+                            | Error error -> Some error
+                            | Ok _ -> None)
+
                     if not (List.isEmpty decodeErrors) then
                         let detail = String.concat "; " decodeErrors
                         eprint $"fsgg-coord-engine: review record: existing structured ledger is unreadable: %s{detail}"
@@ -1399,14 +2004,22 @@ module LiveHandlers =
                             decoded
                             |> List.choose (fun (comment, result) ->
                                 result |> Result.toOption |> Option.map (fun record -> comment, record))
+
                         let existing = pairs |> List.map snd
+
                         let existingValidation =
-                            if List.isEmpty existing then Ok []
-                            else StructuredDecision.validateReviewLedger expectedSubject existing
+                            if List.isEmpty existing then
+                                Ok []
+                            else
+                                StructuredDecision.validateReviewLedger expectedSubject existing
+
                         match existingValidation with
                         | Error errors ->
                             let detail = String.concat "; " errors
-                            eprint $"fsgg-coord-engine: review record: existing structured ledger is invalid: %s{detail}"
+
+                            eprint
+                                $"fsgg-coord-engine: review record: existing structured ledger is invalid: %s{detail}"
+
                             ExitError
                         | Ok _ when draft.Subject <> expectedSubject ->
                             eprint $"fsgg-coord-engine: review record: subject must be '%s{expectedSubject}'."
@@ -1416,21 +2029,36 @@ module LiveHandlers =
                                 pairs
                                 |> List.rev
                                 |> List.tryPick (fun (comment, record) ->
-                                    if record.Kind = StructuredDecision.Initial then Some comment.Url else None)
-                            let precedingUrl = pairs |> List.tryLast |> Option.map (fun (comment, _) -> comment.Url)
+                                    if record.Kind = StructuredDecision.Initial then
+                                        Some comment.Url
+                                    else
+                                        None)
+
+                            let precedingUrl =
+                                pairs |> List.tryLast |> Option.map (fun (comment, _) -> comment.Url)
+
                             let backlinkErrors =
                                 match draft.Kind with
                                 | StructuredDecision.Initial ->
-                                    [ if draft.InitialReview.IsSome then yield "initial review records cannot name initialReview"
-                                      if draft.PrecedingReview.IsSome then yield "initial review records cannot name precedingReview" ]
+                                    [
+                                        if draft.InitialReview.IsSome then
+                                            yield "initial review records cannot name initialReview"
+                                        if draft.PrecedingReview.IsSome then
+                                            yield "initial review records cannot name precedingReview"
+                                    ]
                                 | StructuredDecision.Confirmation
                                 | StructuredDecision.Escalation
                                 | StructuredDecision.RepairPhase
                                 | StructuredDecision.Acceptance ->
-                                    [ if draft.InitialReview <> latestInitialUrl then
-                                          yield "initialReview must equal the actual current generation's initial comment URL"
-                                      if draft.PrecedingReview <> precedingUrl then
-                                          yield "precedingReview must equal the actual immediately preceding structured comment URL" ]
+                                    [
+                                        if draft.InitialReview <> latestInitialUrl then
+                                            yield
+                                                "initialReview must equal the actual current generation's initial comment URL"
+                                        if draft.PrecedingReview <> precedingUrl then
+                                            yield
+                                                "precedingReview must equal the actual immediately preceding structured comment URL"
+                                    ]
+
                             if not (List.isEmpty backlinkErrors) then
                                 let detail = String.concat "; " backlinkErrors
                                 eprint $"fsgg-coord-engine: review record: %s{detail}"
@@ -1445,15 +2073,28 @@ module LiveHandlers =
                                     if draft.Kind <> StructuredDecision.Acceptance then
                                         Ok(None, None)
                                     else
-                                        match Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
-                                              |> Result.bind (Reads.requireCompleteMarkerScan target.Short),
-                                              Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
-                                              Reads.prBaseTipSha ctx.Transport target.Owner target.Repo pr with
+                                        match
+                                            Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
+                                            |> Result.bind (Reads.requireCompleteMarkerScan target.Short),
+                                            Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
+                                            Reads.prBaseTipSha ctx.Transport target.Owner target.Repo pr
+                                        with
                                         | Ok markers, Ok liveHead, Ok liveBase ->
                                             match Reads.winner opts.LeaseMinutes markers with
-                                            | None -> Error(Errors.Malformed(target.Short, "host acceptance requires a live claim generation"))
+                                            | None ->
+                                                Error(
+                                                    Errors.Malformed(
+                                                        target.Short,
+                                                        "host acceptance requires a live claim generation"
+                                                    )
+                                                )
                                             | Some held when liveHead <> draft.HeadSha ->
-                                                Error(Errors.Malformed(target.Short, $"host acceptance draft names head %s{draft.HeadSha}, but PR #%d{pr} is at %s{liveHead}"))
+                                                Error(
+                                                    Errors.Malformed(
+                                                        target.Short,
+                                                        $"host acceptance draft names head %s{draft.HeadSha}, but PR #%d{pr} is at %s{liveHead}"
+                                                    )
+                                                )
                                             | Some held -> Ok(Some(string held.Id), Some liveBase)
                                         | Error error, _, _
                                         | _, Error error, _
@@ -1468,44 +2109,99 @@ module LiveHandlers =
                                             PreviousDigest = previous
                                             ClaimGeneration = claimGeneration
                                             BaseSha = baseSha
-                                            Digest = "" }
-                                    let candidate = { unsigned with Digest = StructuredDecision.reviewDigest unsigned }
-                                    match StructuredDecision.validateReviewLedger expectedSubject (existing @ [ candidate ]) with
+                                            Digest = ""
+                                        }
+
+                                    let candidate =
+                                        { unsigned with
+                                            Digest = StructuredDecision.reviewDigest unsigned
+                                        }
+
+                                    match
+                                        StructuredDecision.validateReviewLedger
+                                            expectedSubject
+                                            (existing @ [ candidate ])
+                                    with
                                     | Error errors ->
                                         let detail = String.concat "; " errors
                                         eprint $"fsgg-coord-engine: review record: %s{detail}"
                                         ExitError
                                     | Ok _ ->
-                                        let body = StructuredReviewMarker + "\n" + Driver.encodeStructuredReview candidate
-                                        let pendingUrl = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}#issuecomment-pending"
+                                        let body =
+                                            StructuredReviewMarker + "\n" + Driver.encodeStructuredReview candidate
+
+                                        let pendingUrl =
+                                            $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}#issuecomment-pending"
+
                                         let pendingId = comments |> List.map _.Id |> List.fold max 0L |> (+) 1L
+
                                         let projected =
                                             comments
-                                            |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                            |> List.map (fun comment ->
+                                                ({
+                                                    Id = comment.Id
+                                                    Url = comment.Url
+                                                    Body = comment.Body
+                                                }
+                                                : Driver.ReviewComment))
+
                                         let effectiveValidation =
-                                            if candidate.Kind <> StructuredDecision.Acceptance then Ok None
+                                            if candidate.Kind <> StructuredDecision.Acceptance then
+                                                Ok None
                                             else
-                                                Driver.parseEffectiveReviewComments candidate.HeadSha
-                                                    (projected @ [ { Id = pendingId; Url = pendingUrl; Body = body } ])
+                                                Driver.parseEffectiveReviewComments
+                                                    candidate.HeadSha
+                                                    (projected
+                                                     @ [
+                                                         {
+                                                             Id = pendingId
+                                                             Url = pendingUrl
+                                                             Body = body
+                                                         }
+                                                     ])
                                                 |> Result.map Some
+
                                         match effectiveValidation with
                                         | Error errors ->
                                             let detail = String.concat "; " errors
-                                            eprint $"fsgg-coord-engine: review record: resulting accepted chain is invalid: %s{detail}"
+
+                                            eprint
+                                                $"fsgg-coord-engine: review record: resulting accepted chain is invalid: %s{detail}"
+
                                             ExitError
                                         | Ok _ ->
                                             let prTarget = { target with Number = pr }
+
                                             match Writes.postIssueComment ctx.Transport prTarget body with
                                             | Error error -> fail error
                                             | Ok commentId ->
-                                                let commentUrl = $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}#issuecomment-%d{commentId}"
-                                                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.review-record-result/v2"; subject = expectedSubject; revision = candidate.Revision; digest = candidate.Digest; commentId = commentId; commentUrl = commentUrl; effectiveChainValidated = (candidate.Kind = StructuredDecision.Acceptance) |})
+                                                let commentUrl =
+                                                    $"https://github.com/%s{target.Owner}/%s{target.Repo}/pull/%d{pr}#issuecomment-%d{commentId}"
+
+                                                printfn
+                                                    "%s"
+                                                    (JsonSerializer.Serialize
+                                                        {|
+                                                            schema = "fsgg.coord.review-record-result/v2"
+                                                            subject = expectedSubject
+                                                            revision = candidate.Revision
+                                                            digest = candidate.Digest
+                                                            commentId = commentId
+                                                            commentUrl = commentUrl
+                                                            effectiveChainValidated =
+                                                                (candidate.Kind = StructuredDecision.Acceptance)
+                                                        |})
+
                                                 ExitGreen
                 | Ok _, Ok _ ->
-                    let detail = waitRefusal |> Option.defaultValue "durable review-wait authorization failed"
+                    let detail =
+                        waitRefusal |> Option.defaultValue "durable review-wait authorization failed"
+
                     eprint $"fsgg-coord-engine: review record: refused: %s{detail}"
                     ExitNoVerdict
-            with error -> eprint $"fsgg-coord-engine: review record: %s{error.Message}"; ExitError
+            with error ->
+                eprint $"fsgg-coord-engine: review record: %s{error.Message}"
+                ExitError
 
     let review (ctx: Context) (opts: Options) : int =
         match opts.Args with
@@ -1570,81 +2266,111 @@ module LiveHandlers =
     let private reviewAcceptedUnmet (ctx: Context) (leaseMinutes: int) (repoName: string) (pr: int) : Reads.Unmet list =
         match Reads.prHeadSha ctx.Transport ctx.Owner repoName pr with
         | Error _ ->
-            [ Reads.Asserted
-                  $"PR #%d{pr}'s current head SHA could not be read, so the host review-acceptance marker (`%s{reviewAcceptedRequireToken}`) cannot be bound to it" ]
+            [
+                Reads.Asserted
+                    $"PR #%d{pr}'s current head SHA could not be read, so the host review-acceptance marker (`%s{reviewAcceptedRequireToken}`) cannot be bound to it"
+            ]
         | Ok liveHead ->
             match Reads.commentsWithIdentity ctx.Transport ctx.Owner repoName pr with
             | Error _ ->
-                [ Reads.Asserted
-                      $"PR #%d{pr}'s comments could not be read, so the host review-acceptance marker (`%s{reviewAcceptedRequireToken}`) cannot be found" ]
+                [
+                    Reads.Asserted
+                        $"PR #%d{pr}'s comments could not be read, so the host review-acceptance marker (`%s{reviewAcceptedRequireToken}`) cannot be found"
+                ]
             | Ok comments ->
                 let reviewComments =
                     comments
-                    |> List.map (fun c -> ({ Id = c.Id; Url = c.Url; Body = c.Body }: Driver.ReviewComment))
+                    |> List.map (fun c ->
+                        ({
+                            Id = c.Id
+                            Url = c.Url
+                            Body = c.Body
+                        }
+                        : Driver.ReviewComment))
 
                 match Driver.parseReviewComments reviewComments with
                 | Error _ ->
-                    [ Reads.Asserted
-                          $"PR #%d{pr} carries no valid host review-acceptance marker (`%s{reviewAcceptedRequireToken}`) — the review chain is absent, incomplete, or malformed; enter the bounded critic queue with `scripts/fsgg-coord review wait`, then append its completed decision with `scripts/fsgg-coord review record`" ]
+                    [
+                        Reads.Asserted
+                            $"PR #%d{pr} carries no valid host review-acceptance marker (`%s{reviewAcceptedRequireToken}`) — the review chain is absent, incomplete, or malformed; enter the bounded critic queue with `scripts/fsgg-coord review wait`, then append its completed decision with `scripts/fsgg-coord review record`"
+                    ]
                 | Ok chain ->
                     let problems = ResizeArray<Reads.Unmet>()
+
                     match chain.HeadSha with
                     | Some acceptedHead when acceptedHead = liveHead -> ()
                     | Some staleHead ->
                         problems.Add(
                             Reads.Asserted
-                                $"PR #%d{pr}'s host review-acceptance marker is bound to head `%s{staleHead}`, not the current head `%s{liveHead}` — a stale-sha marker is treated as ABSENT, never as satisfaction")
+                                $"PR #%d{pr}'s host review-acceptance marker is bound to head `%s{staleHead}`, not the current head `%s{liveHead}` — a stale-sha marker is treated as ABSENT, never as satisfaction"
+                        )
                     | None ->
                         problems.Add(
                             Reads.Asserted
-                                $"PR #%d{pr}'s host review-acceptance marker did not resolve to a bound head SHA")
+                                $"PR #%d{pr}'s host review-acceptance marker did not resolve to a bound head SHA"
+                        )
 
                     let suffix = $"/pr/%d{pr}"
+
                     let boundItem =
                         chain.Subject
                         |> Option.bind (fun subject ->
                             if subject.EndsWith(suffix, StringComparison.Ordinal) then
-                                subject.Substring(0, subject.Length - suffix.Length) |> parseRef ctx |> Result.toOption
-                            else None)
+                                subject.Substring(0, subject.Length - suffix.Length)
+                                |> parseRef ctx
+                                |> Result.toOption
+                            else
+                                None)
 
                     match boundItem with
                     | None ->
                         problems.Add(
                             Reads.Asserted
-                                $"PR #%d{pr}'s host review-acceptance receipt does not bind this pull request to a readable coordination item")
+                                $"PR #%d{pr}'s host review-acceptance receipt does not bind this pull request to a readable coordination item"
+                        )
                     | Some item when item.Owner <> ctx.Owner || item.Repo <> repoName ->
                         problems.Add(
                             Reads.Asserted
-                                $"PR #%d{pr}'s host review-acceptance receipt is bound to `%s{item.Canonical}`, not `%s{ctx.Owner}/%s{repoName}`")
+                                $"PR #%d{pr}'s host review-acceptance receipt is bound to `%s{item.Canonical}`, not `%s{ctx.Owner}/%s{repoName}`"
+                        )
                     | Some item ->
-                        match Reads.markerScan ctx.Transport item.Owner item.Repo item.Number
-                              |> Result.bind (Reads.requireCompleteMarkerScan item.Short) with
+                        match
+                            Reads.markerScan ctx.Transport item.Owner item.Repo item.Number
+                            |> Result.bind (Reads.requireCompleteMarkerScan item.Short)
+                        with
                         | Error _ ->
                             problems.Add(
                                 Reads.Asserted
-                                    $"PR #%d{pr}'s bound item `%s{item.Canonical}` has no readable current claim generation")
+                                    $"PR #%d{pr}'s bound item `%s{item.Canonical}` has no readable current claim generation"
+                            )
                         | Ok markers ->
                             let actualGeneration =
                                 Reads.winner leaseMinutes markers |> Option.map (fun marker -> string marker.Id)
+
                             if chain.ClaimGeneration <> actualGeneration then
                                 let expectedGeneration = chain.ClaimGeneration |> Option.defaultValue "absent"
                                 let liveGeneration = actualGeneration |> Option.defaultValue "released"
+
                                 problems.Add(
                                     Reads.Asserted
-                                        $"PR #%d{pr}'s host review-acceptance receipt is bound to claim generation `%s{expectedGeneration}`, not the current generation `%s{liveGeneration}`")
+                                        $"PR #%d{pr}'s host review-acceptance receipt is bound to claim generation `%s{expectedGeneration}`, not the current generation `%s{liveGeneration}`"
+                                )
 
                     match Reads.prBaseTipSha ctx.Transport ctx.Owner repoName pr with
                     | Error _ ->
                         problems.Add(
                             Reads.Asserted
-                                $"PR #%d{pr}'s effective base SHA could not be read, so review acceptance cannot be authorized")
+                                $"PR #%d{pr}'s effective base SHA could not be read, so review acceptance cannot be authorized"
+                        )
                     | Ok liveBase when chain.BaseSha = Some liveBase -> ()
                     | Ok liveBase ->
                         let expectedBase = chain.BaseSha |> Option.defaultValue "absent"
+
                         let stale reason =
                             problems.Add(
                                 Reads.Asserted
-                                    $"PR #%d{pr}'s host review-acceptance receipt cannot survive base movement from `%s{expectedBase}` to `%s{liveBase}`: %s{reason}; rebase or revalidate the merged tree")
+                                    $"PR #%d{pr}'s host review-acceptance receipt cannot survive base movement from `%s{expectedBase}` to `%s{liveBase}`: %s{reason}; rebase or revalidate the merged tree"
+                            )
 
                         match chain.BaseSha with
                         | None -> stale "the acceptance carries no effective base SHA"
@@ -1685,12 +2411,18 @@ module LiveHandlers =
                     // NOT a check-run/workflow-run name for `Reads.prLandableRequire` to look for (it would
                     // never report and this PR would poll forever for the wrong reason) — it is handled
                     // below, after CI has settled, by `reviewAcceptedUnmet`.
-                    let explicitlyRequireReview = opts.Require |> List.contains reviewAcceptedRequireToken
+                    let explicitlyRequireReview =
+                        opts.Require |> List.contains reviewAcceptedRequireToken
+
                     let registryCoherenceExemption =
                         not explicitlyRequireReview
                         && (opts.Require |> List.contains registryCoherenceRequireToken)
+
                     let requireReviewAccepted = not registryCoherenceExemption
-                    let required = opts.Require |> List.filter (fun r -> r <> reviewAcceptedRequireToken)
+
+                    let required =
+                        opts.Require |> List.filter (fun r -> r <> reviewAcceptedRequireToken)
+
                     let expected = opts.Sha
 
                     let read () =
@@ -1717,8 +2449,10 @@ module LiveHandlers =
                             let rec poll (i: int) (prev: int) : PrState * Reads.Unmet list =
                                 let v, n, missing = read ()
 
-                                if Landable.settled v n prev then v, missing
-                                elif i >= tries then v, missing
+                                if Landable.settled v n prev then
+                                    v, missing
+                                elif i >= tries then
+                                    v, missing
                                 else
                                     if interval > 0 then
                                         System.Threading.Thread.Sleep(interval * 1000)
@@ -1737,17 +2471,22 @@ module LiveHandlers =
                         if requireReviewAccepted && state = PrGreen then
                             eprint
                                 $"fsgg-coord-engine: landable: evaluated the host review-acceptance assertion (`%s{reviewAcceptedRequireToken}`) for PR #%d{pr}."
+
                             reviewAcceptedUnmet ctx opts.LeaseMinutes repoName pr
                         else
                             if registryCoherenceExemption && state = PrGreen then
                                 eprint
                                     $"fsgg-coord-engine: landable: host review-acceptance assertion (`%s{reviewAcceptedRequireToken}`) EXEMPTED for PR #%d{pr} by the explicit `%s{registryCoherenceRequireToken}` unattended-caller gate."
+
                             []
 
                     let missing = missing @ reviewUnmet
 
                     let state =
-                        if state = PrGreen && not (List.isEmpty reviewUnmet) then PrPending else state
+                        if state = PrGreen && not (List.isEmpty reviewUnmet) then
+                            PrPending
+                        else
+                            state
 
                     printfn "%s" (Landable.name state)
 
@@ -1815,12 +2554,14 @@ module LiveHandlers =
                     if state = PrRed then
                         for headSha, path, runNumber, conclusion in redWorkflowRuns do
                             let outcome = defaultArg conclusion "no conclusion"
+
                             eprint
                                 $"fsgg-coord-engine: landable: PR #%d{pr} is red on head `%s{headSha}` — workflow run `%s{path}` (#%d{runNumber}) concluded `%s{outcome}`."
 
                         for headSha, name, checkSuiteId, conclusion in redCheckRuns do
                             let outcome = defaultArg conclusion "no conclusion"
                             let suite = checkSuiteId |> Option.map string |> Option.defaultValue "absent"
+
                             eprint
                                 $"fsgg-coord-engine: landable: PR #%d{pr} is red on head `%s{headSha}` — check-run `%s{name}` (suite `%s{suite}`) concluded `%s{outcome}`."
 
@@ -1896,6 +2637,7 @@ module LiveHandlers =
                     | PrMerged
                     | PrClosed -> ExitNotOpen
                     | PrUnknown -> ExitNoVerdict
+
     let private runDone
         (completionAuthority: (Delivery.Snapshot * Delivery.Transition) option)
         (offerChoreAfterDone: Context -> Options -> Ref -> unit)
@@ -1926,7 +2668,7 @@ module LiveHandlers =
                             | Some _, Open ->
                                 match Reads.commentBodies ctx.Transport ref.Owner ref.Repo ref.Number with
                                 | Error error ->
-                                    failwith(
+                                    failwith (
                                         "delivery completion could not read its correction evidence: "
                                         + Errors.explain error
                                     )
@@ -1934,42 +2676,55 @@ module LiveHandlers =
                                     match Done.completionCorrectionStateFor ref comments with
                                     | Done.VerifiedCompletionCorrection _ -> { facts with State = Closed }
                                     | Done.InvalidCompletionCorrection errors ->
-                                        failwith(
+                                        failwith (
                                             "delivery completion found invalid correction evidence: "
                                             + String.concat "; " errors
                                         )
                                     | Done.NoCompletionCorrection -> facts
                             | _ -> facts
+
                         let verdict = Done.verify opts.Pr opts.Evidence factsForVerdict
+
                         let verdict =
                             match completionAuthority, verdict with
                             | None, Green(Done.ClosedByPullRequest(actualPr, mergeSha, _, _)) ->
                                 match Reads.commentBodies ctx.Transport ref.Owner ref.Repo ref.Number with
                                 | Error error ->
                                     Red
-                                        [ "standalone done could not read typed completion authority: "
-                                          + Errors.explain error ]
+                                        [
+                                            "standalone done could not read typed completion authority: "
+                                            + Errors.explain error
+                                        ]
                                 | Ok comments ->
                                     match Done.receiptStateFor ref comments with
-                                    | Done.VerifiedCompletionReceipt receipt
-                                        when receipt.PullRequest = actualPr && receipt.MergeSha = mergeSha ->
+                                    | Done.VerifiedCompletionReceipt receipt when
+                                        receipt.PullRequest = actualPr && receipt.MergeSha = mergeSha
+                                        ->
                                         verdict
                                     | Done.VerifiedCompletionReceipt receipt ->
                                         Red
-                                            [ $"standalone done found typed completion authority for PR #%d{receipt.PullRequest} @ %s{receipt.MergeSha}, not the verified closer PR #%d{actualPr} @ %s{mergeSha}" ]
+                                            [
+                                                $"standalone done found typed completion authority for PR #%d{receipt.PullRequest} @ %s{receipt.MergeSha}, not the verified closer PR #%d{actualPr} @ %s{mergeSha}"
+                                            ]
                                     | Done.LegacyReceipt ->
                                         Red
-                                            [ "legacy done evidence is not completion authority; run delivery --pr <pr> --flip --apply to verify the exact merge and mint a typed receipt" ]
+                                            [
+                                                "legacy done evidence is not completion authority; run delivery --pr <pr> --flip --apply to verify the exact merge and mint a typed receipt"
+                                            ]
                                     | Done.NoReceipt ->
                                         Red
-                                            [ "standalone done cannot mint completion authority; run delivery --pr <pr> --flip --apply first" ]
+                                            [
+                                                "standalone done cannot mint completion authority; run delivery --pr <pr> --flip --apply first"
+                                            ]
                                     | Done.InvalidCompletionReceipt errors ->
-                                        Red
-                                            [ "typed completion authority is invalid: " + String.concat "; " errors ]
+                                        Red [ "typed completion authority is invalid: " + String.concat "; " errors ]
                             | None, Green _ ->
                                 Red
-                                    [ "standalone done requires typed pull-request completion authority; non-PR completion cannot be projected terminal" ]
+                                    [
+                                        "standalone done requires typed pull-request completion authority; non-PR completion cannot be projected terminal"
+                                    ]
                             | _ -> verdict
+
                         printfn "%s" (Done.render ref verdict)
 
                         // .github#2444 — `.github#2427`'s own acceptance criterion, and #733's precedent
@@ -1990,11 +2745,13 @@ module LiveHandlers =
                             // passed-over-foreign-closer note for provenance even though stdout no longer
                             // does (.github#2444).
                             match completionAuthority, closure with
-                            | Some(authorityFacts, authorityTransition), Done.ClosedByPullRequest(actualPr, mergeSha, _, _)
-                                when authorityFacts.Freshness.PullRequest = Some actualPr ->
+                            | Some(authorityFacts, authorityTransition),
+                              Done.ClosedByPullRequest(actualPr, mergeSha, _, _) when
+                                authorityFacts.Freshness.PullRequest = Some actualPr
+                                ->
                                 match Reads.commentBodies ctx.Transport ref.Owner ref.Repo ref.Number with
                                 | Error error ->
-                                    failwith(
+                                    failwith (
                                         "delivery completion could not establish self-host replay authority: "
                                         + Errors.explain error
                                     )
@@ -2003,14 +2760,15 @@ module LiveHandlers =
                                     | SelfHost.NoBootstrap
                                     | SelfHost.VerifiedReplay _ -> ()
                                     | SelfHost.ReplayRequired bootstrap ->
-                                        failwith(
+                                        failwith (
                                             $"delivery completion is blocked until the shared engine records post-merge replay for self-host bootstrap %s{bootstrap.Digest}"
                                         )
                                     | SelfHost.InvalidReplay errors ->
-                                        failwith(
+                                        failwith (
                                             "delivery completion found invalid self-host replay evidence: "
                                             + String.concat "; " errors
                                         )
+
                                 match
                                     Delivery.advanceWithPostMergeVerification
                                         authorityTransition.PostMergeVerification
@@ -2032,32 +2790,33 @@ module LiveHandlers =
                                                 authorityFacts)
                                     with
                                     | Error errors ->
-                                        failwith(
+                                        failwith (
                                             "delivery completion receipt was refused after merge verification: "
                                             + String.concat "; " errors
                                         )
                                     | Ok receipt ->
                                         match Writes.deliveryCompletionReceipt ctx.Transport ref receipt with
-                                        | Ok () ->
+                                        | Ok() ->
                                             if facts.State = Open then
                                                 match Writes.closeIssueCompleted ctx.Transport ref with
-                                                | Ok () -> ()
+                                                | Ok() -> ()
                                                 | Error error ->
-                                                    failwith(
+                                                    failwith (
                                                         "delivery completion receipt landed but issue closure could not be freshly verified: "
                                                         + Errors.explain error
                                                     )
                                         | Error error ->
-                                            failwith(
+                                            failwith (
                                                 "verified delivery completion could not append its receipt: "
                                                 + Errors.explain error
                                             )
                                 | decision ->
-                                    failwithf "delivery completion transition changed after merge verification: %A" decision
+                                    failwithf
+                                        "delivery completion transition changed after merge verification: %A"
+                                        decision
                             | Some _, Done.ClosedByPullRequest(actualPr, _, _, _) ->
                                 failwithf "delivery completion pull request changed after inspection: %A" actualPr
-                            | Some _, _ ->
-                                failwith "delivery completion requires a verified pull-request merge"
+                            | Some _, _ -> failwith "delivery completion requires a verified pull-request merge"
                             | None, _ ->
                                 // Standalone `done` is now a replay-only projection over a matching typed
                                 // completion receipt. The admission above makes this branch write-free.
@@ -2067,7 +2826,15 @@ module LiveHandlers =
                             // outcome was `|> ignore`d directly under the "reports the note" comment, so a
                             // `Deferred` (queued, nothing auto-replays it) printed green with no flush remedy
                             // and the board silently drifted un-stamped. Surface it, keeping the verdict green.
-                            Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set "Done") w.Id
+                            Board.boardWrite
+                                ctx.Transport
+                                board
+                                ref.Owner
+                                ref.Repo
+                                ref.Number
+                                "Status"
+                                (Board.Set "Done")
+                                w.Id
                             |> boardWriteNote ref "Status" "Done"
 
                             // --flip: roll the parent up. Whether this child DISCHARGES its parent is a fact
@@ -2086,7 +2853,8 @@ module LiveHandlers =
                                 | Some parent ->
                                     match Done.rollUp ctx.Transport board w.Id parent discharge with
                                     | Error e ->
-                                        eprint $"fsgg-coord-engine: the stamp is GREEN, but the roll-up to %s{parent.Short} did not complete: %s{Errors.explain e}"
+                                        eprint
+                                            $"fsgg-coord-engine: the stamp is GREEN, but the roll-up to %s{parent.Short} did not complete: %s{Errors.explain e}"
                                     | Ok results ->
                                         for r in results do
                                             match r with
@@ -2149,7 +2917,9 @@ module LiveHandlers =
                                                 if not stillReferenced then
                                                     match Writes.closeRoom ctx.Transport room with
                                                     | Ok() ->
-                                                        printfn "  ⋄ %s closed — every referenced item is done (ADR-0051)" room.Short
+                                                        printfn
+                                                            "  ⋄ %s closed — every referenced item is done (ADR-0051)"
+                                                            room.Short
                                                     | Error e ->
                                                         eprint
                                                             $"fsgg-coord-engine: the stamp is GREEN, but room %s{room.Short} could not be closed: %s{Errors.explain e}"
@@ -2170,7 +2940,15 @@ module LiveHandlers =
                             // "only your own" rule is the capability type, not a forgettable `if`. And unlike
                             // the `release` command, we do NOT restore the column: the item is Done, and Done
                             // is what stands.
-                            match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref with
+                            match
+                                Writes.verifyHeld
+                                    ctx.Transport
+                                    opts.LeaseMinutes
+                                    (WorkerId w.Id)
+                                    (selfOf w)
+                                    (sessionOf w)
+                                    ref
+                            with
                             | Ok(Writes.Holds held) ->
                                 match Writes.release ctx.Transport held with
                                 | Ok _ -> ()
@@ -2241,10 +3019,11 @@ module LiveHandlers =
                                             (WorkerId w.Id)
                                             $"deferred after completing %s{ref.Short}: this worker's follow-up queue still contains this open item. Drain it sequentially, or explicitly abandon it with a reason before this worker ends."
                                     with
-                                    | Ok () -> ()
+                                    | Ok() -> ()
                                     | Error e ->
                                         recorded <- false
                                         followupsDisposed <- false
+
                                         eprint
                                             $"fsgg-coord-engine: could not durably record the follow-up disposition for %s{owed.Short}: %s{Errors.explain e}. The queue was NOT rewritten; retry `done` or record an explicit disposition before ending worker %s{w.Id}."
 
@@ -2254,11 +3033,14 @@ module LiveHandlers =
                             | Followups.Unreadable why
                             | Followups.Refused why ->
                                 followupsDisposed <- false
+
                                 eprint
                                     $"fsgg-coord-engine: %s{why} The done stamp stands, but do not treat this as an empty queue. Retry `scripts/fsgg-coord followup list` before ending this worker."
                             | other ->
                                 followupsDisposed <- false
-                                eprint $"fsgg-coord-engine: unexpected follow-up audit result %A{other}; the queue was not rewritten."
+
+                                eprint
+                                    $"fsgg-coord-engine: unexpected follow-up audit result %A{other}; the queue was not rewritten."
 
                             // #733/§4.6 — THE OTHER SAFE POINT, and the one the fleet actually reaches.
                             //
@@ -2285,11 +3067,7 @@ module LiveHandlers =
                                 // has no readable/durable disposition.
                                 ExitRed
 
-    let doneCmd
-        (offerChoreAfterDone: Context -> Options -> Ref -> unit)
-        (ctx: Context)
-        (opts: Options)
-        : int =
+    let doneCmd (offerChoreAfterDone: Context -> Options -> Ref -> unit) (ctx: Context) (opts: Options) : int =
         runDone None offerChoreAfterDone ctx opts
 
     let completeDelivery
@@ -2318,13 +3096,21 @@ module LiveHandlers =
         try
             use document = JsonDocument.Parse raw
             let root = document.RootElement
-            [ match root.TryGetProperty "workId" with
-              | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = workId -> ()
-              | _ -> yield $"sdd readiness workId does not match '%s{workId}'"
-              match root.TryGetProperty "status" with
-              | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = "implementationReady" -> ()
-              | _ -> yield "sdd readiness status is not implementationReady" ]
-        with error -> [ $"sdd readiness evidence is unreadable: %s{error.Message}" ]
+
+            [
+                match root.TryGetProperty "workId" with
+                | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = workId -> ()
+                | _ -> yield $"sdd readiness workId does not match '%s{workId}'"
+                match root.TryGetProperty "status" with
+                | true, value when
+                    value.ValueKind = JsonValueKind.String
+                    && value.GetString() = "implementationReady"
+                    ->
+                    ()
+                | _ -> yield "sdd readiness status is not implementationReady"
+            ]
+        with error ->
+            [ $"sdd readiness evidence is unreadable: %s{error.Message}" ]
 
     /// Exposed for the command-boundary test: this is the sole filesystem-backed SDD proof surfaced by
     /// route reads and route recording, so the test can pin both the current and missing-work inversions.
@@ -2345,15 +3131,23 @@ module LiveHandlers =
                 match env "FSGG_COORD_SDD_ROOT" "" with
                 | "" -> findRoot (DirectoryInfo(Directory.GetCurrentDirectory()))
                 | value -> Some value
-            let atRoot relative = root |> Option.map (fun value -> Path.Combine(value, relative)) |> Option.defaultValue relative
+
+            let atRoot relative =
+                root
+                |> Option.map (fun value -> Path.Combine(value, relative))
+                |> Option.defaultValue relative
+
             let specPath = atRoot specHome
             let readiness = atRoot (Path.Combine("readiness", workId, "analysis.json"))
-            [ if not (File.Exists specPath) then
-                  yield $"sdd spec does not exist: %s{specHome}"
-              if not (File.Exists readiness) then
-                  yield $"sdd readiness evidence does not exist: %s{readiness}"
-              elif File.Exists readiness then
-                  yield! sddReadinessEvidenceErrors workId (File.ReadAllText readiness) ]
+
+            [
+                if not (File.Exists specPath) then
+                    yield $"sdd spec does not exist: %s{specHome}"
+                if not (File.Exists readiness) then
+                    yield $"sdd readiness evidence does not exist: %s{readiness}"
+                elif File.Exists readiness then
+                    yield! sddReadinessEvidenceErrors workId (File.ReadAllText readiness)
+            ]
         | _ -> []
 
     /// Structured decisions are append-only ledgers, so every effective read must see revision 1 and
@@ -2382,24 +3176,33 @@ module LiveHandlers =
             |> List.choose (fun comment ->
                 if comment.StartsWith(StructuredRouteMarker + "\n", StringComparison.Ordinal) then
                     Some(comment.Substring(StructuredRouteMarker.Length).Trim())
-                else None)
+                else
+                    None)
 
-        if List.isEmpty marked then Ok None
+        if List.isEmpty marked then
+            Ok None
         else
             let decoded = marked |> List.map DeliveryRouteApplication.decodeStructured
-            let failures = decoded |> List.choose (function Error error -> Some error | Ok _ -> None)
-            if not (List.isEmpty failures) then Error failures
+
+            let failures =
+                decoded
+                |> List.choose (function
+                    | Error error -> Some error
+                    | Ok _ -> None)
+
+            if not (List.isEmpty failures) then
+                Error failures
             else
                 let records = decoded |> List.choose Result.toOption
-                StructuredDecision.validateRouteLedger subject records |> Result.map (fun latest -> Some(records, latest))
+
+                StructuredDecision.validateRouteLedger subject records
+                |> Result.map (fun latest -> Some(records, latest))
 
     let routeEvidence (subject: string) (comments: string list) : DeliveryRoute.Verdict =
         match structuredRouteLedger subject comments with
         | Error errors -> DeliveryRoute.Stale errors
-        | Ok(Some(_, latest)) ->
-            DeliveryRoute.Current(StructuredDecision.toEffectiveRoute latest)
-        | Ok None ->
-            DeliveryRoute.Stale [ "structured route ledger is missing" ]
+        | Ok(Some(_, latest)) -> DeliveryRoute.Current(StructuredDecision.toEffectiveRoute latest)
+        | Ok None -> DeliveryRoute.Stale [ "structured route ledger is missing" ]
 
     /// The route decision is an impure receipt: both the source item and its append-only receipt ledger
     /// are read immediately before the pure scheduler sees the item.  An unreadable read stays typed as
@@ -2425,7 +3228,9 @@ module LiveHandlers =
             | DeliveryRoute.Current route -> Ok route
             | DeliveryRoute.Stale reasons
             | DeliveryRoute.Unreadable reasons ->
-                Error(Errors.Malformed(target.Canonical, "delivery route is not current: " + String.concat "; " reasons))
+                Error(
+                    Errors.Malformed(target.Canonical, "delivery route is not current: " + String.concat "; " reasons)
+                )
     // ---- .github#2324: the sdd-required route's own mandatory output is subtracted against -------------
 
     /// The package directories the item this PR implements is OBLIGED to produce, as `PathToken`s ready
@@ -2496,433 +3301,510 @@ module LiveHandlers =
                 ExitError
             | Ok issueRef ->
 
-            // The repo the PR is in: `--repo` (a registry short-id / owner/repo / literal name, reduced the
-            // way every worker command reduces it — case 13's resolve_repo), else the `--issue`'s repo (the
-            // issue decides when no `--repo` is given), else #430's git-remote default — the repo of the
-            // checkout you are standing in, read FREE and offline from `git config remote.origin.url`, the
-            // same signal `next`/`take`/`batch`/`who` scope to (#480). Deliberately NOT `gh repo view`
-            // (bash's fallback): repo resolution must never spend GraphQL, so an exhausted budget can never
-            // be dressed up as "not inside a checkout" — the exact fail this whole command guards against.
-            // With no remote either, there is no subject to check, so it refuses (an earned verdict, since
-            // `git config` failing is not a rate limit dressed up as one).
-            let repo =
-                match opts.Repo with
-                | Some r -> Ok(resolveRepo r)
-                | None ->
-                    match issueRef with
-                    | Some ir -> Ok ir.Repo
+                // The repo the PR is in: `--repo` (a registry short-id / owner/repo / literal name, reduced the
+                // way every worker command reduces it — case 13's resolve_repo), else the `--issue`'s repo (the
+                // issue decides when no `--repo` is given), else #430's git-remote default — the repo of the
+                // checkout you are standing in, read FREE and offline from `git config remote.origin.url`, the
+                // same signal `next`/`take`/`batch`/`who` scope to (#480). Deliberately NOT `gh repo view`
+                // (bash's fallback): repo resolution must never spend GraphQL, so an exhausted budget can never
+                // be dressed up as "not inside a checkout" — the exact fail this whole command guards against.
+                // With no remote either, there is no subject to check, so it refuses (an earned verdict, since
+                // `git config` failing is not a rate limit dressed up as one).
+                let repo =
+                    match opts.Repo with
+                    | Some r -> Ok(resolveRepo r)
                     | None ->
-                        match gitRemoteRepo () with
-                        | Some slug -> Ok(resolveRepo slug)
+                        match issueRef with
+                        | Some ir -> Ok ir.Repo
                         | None ->
+                            match gitRemoteRepo () with
+                            | Some slug -> Ok(resolveRepo slug)
+                            | None ->
+                                eprint
+                                    "fsgg-coord-engine: verify-paths is not inside a GitHub checkout (no git remote), and neither --repo nor --issue names the repo the PR is in. Name it with --repo FS-GG/<repo>, or the issue with --issue <ref>."
+
+                                Result.Error ExitError
+
+                match repo with
+                | Result.Error rc -> rc
+                | Ok repo ->
+
+                    // .github#2107 — the org's own board shorthand `<repo>#<n>` (RefParsing's OWN 'short' form,
+                    // the one `take`/`claim`/`widen`/every recipe teaches) is NOT GitHub's closing-keyword
+                    // grammar: it wants a bare `#<n>` for a same-repo issue, or `owner/repo#<n>` for a cross-repo
+                    // one. Written next to a closing verb it renders as plain text — GitHub never links it, the
+                    // merge never closes the issue, and there is no repair once the PR has merged (editing the
+                    // body does not replay the close). Checked HERE, independently of the touch-set verdict below,
+                    // because this is the one moment fixing it is free — the PR is still open.
+                    //
+                    // A prBody READ FAILURE never contaminates the touch-set verdict: this is an ADDITIONAL check
+                    // bolted onto an existing command, and a network hiccup on this one extra call must not turn an
+                    // otherwise-healthy touch-set run red.
+                    let closingFindings =
+                        match Reads.prBody ctx.Transport owner repo pr with
+                        | Error e ->
                             eprint
-                                "fsgg-coord-engine: verify-paths is not inside a GitHub checkout (no git remote), and neither --repo nor --issue names the repo the PR is in. Name it with --repo FS-GG/<repo>, or the issue with --issue <ref>."
+                                $"fsgg-coord-engine: verify-paths: could not read PR #%d{pr}'s body to check for board-shorthand closing keywords (%s{Errors.explain e}) — skipping that check."
 
-                            Result.Error ExitError
+                            []
+                        | Ok body -> RefParsing.boardShorthandCloses body
 
-            match repo with
-            | Result.Error rc -> rc
-            | Ok repo ->
-
-            // .github#2107 — the org's own board shorthand `<repo>#<n>` (RefParsing's OWN 'short' form,
-            // the one `take`/`claim`/`widen`/every recipe teaches) is NOT GitHub's closing-keyword
-            // grammar: it wants a bare `#<n>` for a same-repo issue, or `owner/repo#<n>` for a cross-repo
-            // one. Written next to a closing verb it renders as plain text — GitHub never links it, the
-            // merge never closes the issue, and there is no repair once the PR has merged (editing the
-            // body does not replay the close). Checked HERE, independently of the touch-set verdict below,
-            // because this is the one moment fixing it is free — the PR is still open.
-            //
-            // A prBody READ FAILURE never contaminates the touch-set verdict: this is an ADDITIONAL check
-            // bolted onto an existing command, and a network hiccup on this one extra call must not turn an
-            // otherwise-healthy touch-set run red.
-            let closingFindings =
-                match Reads.prBody ctx.Transport owner repo pr with
-                | Error e ->
-                    eprint
-                        $"fsgg-coord-engine: verify-paths: could not read PR #%d{pr}'s body to check for board-shorthand closing keywords (%s{Errors.explain e}) — skipping that check."
-
-                    []
-                | Ok body -> RefParsing.boardShorthandCloses body
-
-            // Applied to every leaf that would otherwise report GREEN or RED: a closing-keyword defect is
-            // worth failing on even when the touch-set itself is clean, or when there is no touch-set to
-            // check at all. Left UNCHANGED on every other code (NO-VERDICT, ERROR, the straddle refusal) —
-            // those already mean "no confident verdict was reached", and this is not the check that gets to
-            // override that.
-            let combine (rc: int) : int =
-                if List.isEmpty closingFindings || not (rc = ExitGreen || rc = ExitRed) then
-                    rc
-                else
-                    printfn
-                        "FSGG-CLOSES DEFECT — PR #%d's body writes a closing keyword next to the board's OWN '<repo>#<n>' shorthand, which GitHub's closing-keyword grammar does not parse:"
-                        pr
-
-                    for f in closingFindings do
-                        printfn "    `%s`" f.Matched
-
-                        printfn
-                            "      GitHub will NOT close %s from this. Use a bare '#%s' (same-repo) or 'owner/repo#%s' (cross-repo)."
-                            f.Ref
-                            f.Number
-                            f.Number
-
-                    eprint
-                        "  Fix the PR body now — this is unrecoverable once the PR is merged (editing a merged PR's body does not replay the close, .github#2107)."
-
-                    ExitRed
-
-            // #479: `--repo` and `--issue` naming DIFFERENT repos is a straddle — a touch-set in one repo
-            // says nothing about the files changed in the other, and printing a verdict on the wrong subject
-            // is the exact fail-open this command exists to prevent (#266). It fails CLOSED both by default
-            // AND under --warn: --warn downgrades a real DRIFT to advisory, but it cannot license a verdict on
-            // a subject that was never compared. (Only reachable when BOTH flags are present — with `--repo`
-            // absent, `repo` IS the issue's repo and they agree by construction.)
-            match issueRef with
-            | Some ir when opts.Repo.IsSome && not (String.Equals(ir.Repo, repo, StringComparison.OrdinalIgnoreCase)) ->
-                // No FSGG-PATHS verdict — the touch-set drift gate greps stdout for one, and a straddle
-                // produces none; it exits non-zero and the gate reads that as the failure it is.
-                eprint (
-                    sprintf
-                        "fsgg-coord-engine: verify-paths refuses to straddle a repo boundary — PR #%d in %s/%s vs the touch-set of %s/%s#%d, in another repo. The touch-set was NOT checked (a touch-set there says nothing about the files changed here). Name the PR's own issue with --issue, or drop --issue to resolve it from the branch."
-                        pr
-                        owner
-                        repo
-                        ir.Owner
-                        ir.Repo
-                        ir.Number
-                )
-
-                ExitNoVerdict
-            | _ ->
-
-            // The issue a PR implements: an explicit `--issue` (which bypasses the head-ref read entirely —
-            // #322, an unreadable head ref must not drag down a run that named its issue), else its
-            // `item/<n>-*` branch, else what it declares it closes.
-            let resolveIssue () : Result<Ref option, Errors.IoError> =
-                match issueRef with
-                | Some ir -> Ok(Some ir)
-                | None ->
-                    match Reads.prHeadRef ctx.Transport owner repo pr with
-                    | Error e -> Result.Error e
-                    | Ok head ->
-                        let m = Text.RegularExpressions.Regex.Match(head, @"^item/(\d+)-")
-
-                        if m.Success then
-                            Ok(Some { Owner = owner; Repo = repo; Number = int m.Groups.[1].Value })
+                    // Applied to every leaf that would otherwise report GREEN or RED: a closing-keyword defect is
+                    // worth failing on even when the touch-set itself is clean, or when there is no touch-set to
+                    // check at all. Left UNCHANGED on every other code (NO-VERDICT, ERROR, the straddle refusal) —
+                    // those already mean "no confident verdict was reached", and this is not the check that gets to
+                    // override that.
+                    let combine (rc: int) : int =
+                        if List.isEmpty closingFindings || not (rc = ExitGreen || rc = ExitRed) then
+                            rc
                         else
-                            // Not an item branch — ask what it closes.
-                            Reads.prClosingRef ctx.Transport owner repo pr
+                            printfn
+                                "FSGG-CLOSES DEFECT — PR #%d's body writes a closing keyword next to the board's OWN '<repo>#<n>' shorthand, which GitHub's closing-keyword grammar does not parse:"
+                                pr
 
-            match resolveIssue () with
-            | Error e -> fail e
-            | Ok None ->
-                // Can't tell which issue this PR implements. SKIP — not a verdict, and green: a PR that
-                // implements no tracked item has no touch-set to drift from.
-                printfn
-                    "FSGG-PATHS SKIP — cannot tell which issue PR #%d implements (branch is not item/<n>-…, and it closes no issue)."
-                    pr
+                            for f in closingFindings do
+                                printfn "    `%s`" f.Matched
 
-                combine ExitGreen
-            | Ok(Some issue) ->
-                // Repo-relative touch-sets: a PR in repo A that closes an issue in repo B cannot be checked
-                // against B's paths — those say nothing about A's files (#353).
-                if not (String.Equals(issue.Repo, repo, StringComparison.OrdinalIgnoreCase)) then
-                    printfn
-                        "FSGG-PATHS SKIP — PR #%d is in %s/%s but implements %s/%s#%d, in another repo — a touch-set there says nothing about the files changed here."
-                        pr
-                        owner
-                        repo
-                        issue.Owner
-                        issue.Repo
-                        issue.Number
+                                printfn
+                                    "      GitHub will NOT close %s from this. Use a bare '#%s' (same-repo) or 'owner/repo#%s' (cross-repo)."
+                                    f.Ref
+                                    f.Number
+                                    f.Number
 
-                    combine ExitGreen
-                else
+                            eprint
+                                "  Fix the PR body now — this is unrecoverable once the PR is merged (editing a merged PR's body does not replay the close, .github#2107)."
 
-                match Reads.issueBody ctx.Transport issue.Owner issue.Repo issue.Number with
-                | Error e -> fail e
-                | Ok body ->
-                    match TouchSet.parse body with
-                    | Undeclared
-                    | DeclaredNone
-                    // `Paths: any` reserves nothing and permits any file, so there is no boundary a PR
-                    // could stray outside of — nothing to verify against (#1103 leg 8).
-                    | DeclaredChore ->
-                        printfn "FSGG-PATHS SKIP — %s declares no 'Paths:' touch-set; nothing to verify against." issue.Short
-                        combine ExitGreen
-                    | Unreadable reason ->
-                        // Should not happen (we just read the body), but the type demands it be handled, and
-                        // "I could not read the body" is an error, never a SKIP.
-                        eprint $"fsgg-coord-engine: could not read %s{issue.Short}'s touch-set: %s{reason}"
-                        ExitError
-                    | Declared tokens ->
-                        let unmatchable =
-                            tokens
-                            |> List.choose (function
-                                | Unmatchable u -> Some u
-                                | Matchable _ -> None)
+                            ExitRed
 
-                        if List.length unmatchable = List.length tokens then
-                            // EVERY token is unmatchable — the declaration reserves nothing (#273). That is
-                            // INVALID, not "everything drifts": the touch-set is the broken thing.
-                            let bad = String.Join(", ", unmatchable)
-                            printfn "FSGG-PATHS INVALID — %s declares only unmatchable tokens: %s" issue.Short bad
-                            eprint $"  %s{Schedulability.TouchSetGrammar}"
-                            combine (if opts.Warn then ExitGreen else ExitRed)
-                        else
+                    // #479: `--repo` and `--issue` naming DIFFERENT repos is a straddle — a touch-set in one repo
+                    // says nothing about the files changed in the other, and printing a verdict on the wrong subject
+                    // is the exact fail-open this command exists to prevent (#266). It fails CLOSED both by default
+                    // AND under --warn: --warn downgrades a real DRIFT to advisory, but it cannot license a verdict on
+                    // a subject that was never compared. (Only reachable when BOTH flags are present — with `--repo`
+                    // absent, `repo` IS the issue's repo and they agree by construction.)
+                    match issueRef with
+                    | Some ir when
+                        opts.Repo.IsSome
+                        && not (String.Equals(ir.Repo, repo, StringComparison.OrdinalIgnoreCase))
+                        ->
+                        // No FSGG-PATHS verdict — the touch-set drift gate greps stdout for one, and a straddle
+                        // produces none; it exits non-zero and the gate reads that as the failure it is.
+                        eprint (
+                            sprintf
+                                "fsgg-coord-engine: verify-paths refuses to straddle a repo boundary — PR #%d in %s/%s vs the touch-set of %s/%s#%d, in another repo. The touch-set was NOT checked (a touch-set there says nothing about the files changed here). Name the PR's own issue with --issue, or drop --issue to resolve it from the branch."
+                                pr
+                                owner
+                                repo
+                                ir.Owner
+                                ir.Repo
+                                ir.Number
+                        )
 
-                        match Reads.prFiles ctx.Transport owner repo pr with
+                        ExitNoVerdict
+                    | _ ->
+
+                        // The issue a PR implements: an explicit `--issue` (which bypasses the head-ref read entirely —
+                        // #322, an unreadable head ref must not drag down a run that named its issue), else its
+                        // `item/<n>-*` branch, else what it declares it closes.
+                        let resolveIssue () : Result<Ref option, Errors.IoError> =
+                            match issueRef with
+                            | Some ir -> Ok(Some ir)
+                            | None ->
+                                match Reads.prHeadRef ctx.Transport owner repo pr with
+                                | Error e -> Result.Error e
+                                | Ok head ->
+                                    let m = Text.RegularExpressions.Regex.Match(head, @"^item/(\d+)-")
+
+                                    if m.Success then
+                                        Ok(
+                                            Some
+                                                {
+                                                    Owner = owner
+                                                    Repo = repo
+                                                    Number = int m.Groups.[1].Value
+                                                }
+                                        )
+                                    else
+                                        // Not an item branch — ask what it closes.
+                                        Reads.prClosingRef ctx.Transport owner repo pr
+
+                        match resolveIssue () with
                         | Error e -> fail e
-                        | Ok files ->
-                            let classifications = deliveryPathClassifier ctx issue (Declared tokens) files
+                        | Ok None ->
+                            // Can't tell which issue this PR implements. SKIP — not a verdict, and green: a PR that
+                            // implements no tracked item has no touch-set to drift from.
+                            printfn
+                                "FSGG-PATHS SKIP — cannot tell which issue PR #%d implements (branch is not item/<n>-…, and it closes no issue)."
+                                pr
 
-                            // #498/ADR-0044: the generated, CI-gated artifacts this PR REGENERATED are drift
-                            // by the letter of the touch-set and are not a finding — §1 forbids declaring
-                            // them, so reporting them is the gate firing on its own instruction.
-                            //
-                            // SUBTRACT ONLY WHEN THE CHECKOUT IS THE PR'S OWN REPO. `verify-paths --pr N
-                            // --repo <other>` is a legal call, and the local generators say NOTHING about
-                            // another repo's artifacts: subtracting this repo's set there would suppress real
-                            // drift in a repo we never asked. That is the fail-open this change exists to
-                            // avoid, reached from the one direction the roster cannot see. Owner included —
-                            // `otherorg/.github` is not `FS-GG/.github`, and only the slug knows that.
-                            // ASK ONLY WHEN THERE IS DRIFT TO SUBTRACT FROM. Not merely to save the three
-                            // generator forks on the commonest verdict — the reason is the DIAGNOSTIC. A
-                            // failing `generated-paths` reports that nothing was subtracted "so a regenerated
-                            // artifact will be reported as drift below"; on a PR with no drift, that sentence
-                            // is FALSE and it lands in the sticky comment of a GREEN PR (the workflow merges
-                            // our stderr into the file it publishes). A gate that cries wolf on the happy path
-                            // teaches one lesson — that its output is noise — and the next warning will be
-                            // real (#698). With no drift there is nothing to subtract and nothing to say.
-                            //
-                            // .github#2324 shares this guard and this reason. The route receipt read is a
-                            // bounded GraphQL call, and its own fail-closed diagnostic ("NOTHING is
-                            // subtracted … so it will be reported as drift below") is FALSE on a PR with no
-                            // drift — the same sentence in the same sticky comment on the same green PR.
-                            // Both authorities hang off the classifier's one preliminary all-declared
-                            // verdict, so neither can be re-armed independently on the happy path.
-                            let pathsWith admission =
-                                classifications
-                                |> List.choose (fun classification ->
-                                    if classification.Admission = admission then Some classification.Path else None)
+                            combine ExitGreen
+                        | Ok(Some issue) ->
+                            // Repo-relative touch-sets: a PR in repo A that closes an issue in repo B cannot be checked
+                            // against B's paths — those say nothing about A's files (#353).
+                            if not (String.Equals(issue.Repo, repo, StringComparison.OrdinalIgnoreCase)) then
+                                printfn
+                                    "FSGG-PATHS SKIP — PR #%d is in %s/%s but implements %s/%s#%d, in another repo — a touch-set there says nothing about the files changed here."
+                                    pr
+                                    owner
+                                    repo
+                                    issue.Owner
+                                    issue.Repo
+                                    issue.Number
 
-                            let sddPackage = pathsWith Delivery.MandatorySddPath
-                            let regenerated = pathsWith Delivery.GeneratedPath
-                            let undeclared =
-                                classifications
-                                |> List.choose (fun classification ->
-                                    match classification.Admission with
-                                    | Delivery.UndeclaredAuthoredPath
-                                    | Delivery.UnknownPath -> Some classification.Path
-                                    | _ -> None)
-
-                            // BEFORE THE VERDICT, SO IT FIRES ON `OK` TOO — and `OK` is the case that needs it.
-                            // The kit obligation is about what the PR CHANGED, not what it declared: a PR that
-                            // edits a kit source and never relocks reds `main` whether or not it drifted, so an
-                            // `OK` verdict must not read as "safe to merge" (#469). That is exactly #509's
-                            // complaint — the worker's own pre-merge check is green while `main` is about to go
-                            // red — and it is the reason bash armed this here (`kit_digest_warn "$changed" "PR
-                            // #$pr"`). THE PORT DROPPED IT: the D-phase swap carried the `widen` call site over
-                            // and left this one behind, so the warning stopped firing on the one command §5
-                            // tells every worker to run. A gate that silently stops running is #266's whole
-                            // shape, which is why it is restored here rather than left to the merge.
-                            digestWarn ()
-
-                            // The regenerated set is reported on BOTH verdicts and decides NEITHER — it is
-                            // context, not a finding. Printed after the verdict line so the first line of
-                            // output stays the answer, and named `regenerated (expected)` so a reader can
-                            // tell at a glance which list they are being asked to act on.
-                            let reportRegenerated () =
-                                if not (List.isEmpty regenerated) then
-                                    printfn "  regenerated (expected) — generated + CI-gated, so not declarable (ADR-0044):"
-
-                                    for f in regenerated do
-                                        printfn "    %s" f
-
-                            // .github#2324 — REPORTED, NEVER SILENTLY SUBTRACTED, and on BOTH verdicts for
-                            // the same reason `regenerated` is: an invisible subtraction is indistinguishable
-                            // from a gate that stopped looking. Naming the bucket and its reason is what lets
-                            // a reviewer check the exemption instead of trusting it.
-                            let reportSddPackage () =
-                                if not (List.isEmpty sddPackage) then
-                                    printfn
-                                        "  sdd package (expected) — mandatory output of %s's sdd-required delivery route, so not required in Paths: (.github#2324):"
-                                        issue.Short
-
-                                    for f in sddPackage do
-                                        printfn "    %s" f
-
-                            if projectPathVerdict classifications then
-                                printfn "FSGG-PATHS OK — PR #%d stays inside the touch-set declared by %s." pr issue.Short
-                                reportRegenerated ()
-                                reportSddPackage ()
                                 combine ExitGreen
                             else
-                                printfn "FSGG-PATHS DRIFT — PR #%d changes files outside the touch-set declared by %s:" pr issue.Short
 
-                                printfn "  undeclared (review):"
+                                match Reads.issueBody ctx.Transport issue.Owner issue.Repo issue.Number with
+                                | Error e -> fail e
+                                | Ok body ->
+                                    match TouchSet.parse body with
+                                    | Undeclared
+                                    | DeclaredNone
+                                    // `Paths: any` reserves nothing and permits any file, so there is no boundary a PR
+                                    // could stray outside of — nothing to verify against (#1103 leg 8).
+                                    | DeclaredChore ->
+                                        printfn
+                                            "FSGG-PATHS SKIP — %s declares no 'Paths:' touch-set; nothing to verify against."
+                                            issue.Short
 
-                                for f in undeclared do
-                                    printfn "    %s" f
+                                        combine ExitGreen
+                                    | Unreadable reason ->
+                                        // Should not happen (we just read the body), but the type demands it be handled, and
+                                        // "I could not read the body" is an error, never a SKIP.
+                                        eprint
+                                            $"fsgg-coord-engine: could not read %s{issue.Short}'s touch-set: %s{reason}"
 
-                                reportRegenerated ()
-                                reportSddPackage ()
-                                eprint "  Widen the touch-set (scripts/fsgg-coord widen), or split the PR."
-                                combine (if opts.Warn then ExitGreen else ExitRed)
+                                        ExitError
+                                    | Declared tokens ->
+                                        let unmatchable =
+                                            tokens
+                                            |> List.choose (function
+                                                | Unmatchable u -> Some u
+                                                | Matchable _ -> None)
+
+                                        if List.length unmatchable = List.length tokens then
+                                            // EVERY token is unmatchable — the declaration reserves nothing (#273). That is
+                                            // INVALID, not "everything drifts": the touch-set is the broken thing.
+                                            let bad = String.Join(", ", unmatchable)
+
+                                            printfn
+                                                "FSGG-PATHS INVALID — %s declares only unmatchable tokens: %s"
+                                                issue.Short
+                                                bad
+
+                                            eprint $"  %s{Schedulability.TouchSetGrammar}"
+                                            combine (if opts.Warn then ExitGreen else ExitRed)
+                                        else
+
+                                            match Reads.prFiles ctx.Transport owner repo pr with
+                                            | Error e -> fail e
+                                            | Ok files ->
+                                                let classifications =
+                                                    deliveryPathClassifier ctx issue (Declared tokens) files
+
+                                                // #498/ADR-0044: the generated, CI-gated artifacts this PR REGENERATED are drift
+                                                // by the letter of the touch-set and are not a finding — §1 forbids declaring
+                                                // them, so reporting them is the gate firing on its own instruction.
+                                                //
+                                                // SUBTRACT ONLY WHEN THE CHECKOUT IS THE PR'S OWN REPO. `verify-paths --pr N
+                                                // --repo <other>` is a legal call, and the local generators say NOTHING about
+                                                // another repo's artifacts: subtracting this repo's set there would suppress real
+                                                // drift in a repo we never asked. That is the fail-open this change exists to
+                                                // avoid, reached from the one direction the roster cannot see. Owner included —
+                                                // `otherorg/.github` is not `FS-GG/.github`, and only the slug knows that.
+                                                // ASK ONLY WHEN THERE IS DRIFT TO SUBTRACT FROM. Not merely to save the three
+                                                // generator forks on the commonest verdict — the reason is the DIAGNOSTIC. A
+                                                // failing `generated-paths` reports that nothing was subtracted "so a regenerated
+                                                // artifact will be reported as drift below"; on a PR with no drift, that sentence
+                                                // is FALSE and it lands in the sticky comment of a GREEN PR (the workflow merges
+                                                // our stderr into the file it publishes). A gate that cries wolf on the happy path
+                                                // teaches one lesson — that its output is noise — and the next warning will be
+                                                // real (#698). With no drift there is nothing to subtract and nothing to say.
+                                                //
+                                                // .github#2324 shares this guard and this reason. The route receipt read is a
+                                                // bounded GraphQL call, and its own fail-closed diagnostic ("NOTHING is
+                                                // subtracted … so it will be reported as drift below") is FALSE on a PR with no
+                                                // drift — the same sentence in the same sticky comment on the same green PR.
+                                                // Both authorities hang off the classifier's one preliminary all-declared
+                                                // verdict, so neither can be re-armed independently on the happy path.
+                                                let pathsWith admission =
+                                                    classifications
+                                                    |> List.choose (fun classification ->
+                                                        if classification.Admission = admission then
+                                                            Some classification.Path
+                                                        else
+                                                            None)
+
+                                                let sddPackage = pathsWith Delivery.MandatorySddPath
+                                                let regenerated = pathsWith Delivery.GeneratedPath
+
+                                                let undeclared =
+                                                    classifications
+                                                    |> List.choose (fun classification ->
+                                                        match classification.Admission with
+                                                        | Delivery.UndeclaredAuthoredPath
+                                                        | Delivery.UnknownPath -> Some classification.Path
+                                                        | _ -> None)
+
+                                                // BEFORE THE VERDICT, SO IT FIRES ON `OK` TOO — and `OK` is the case that needs it.
+                                                // The kit obligation is about what the PR CHANGED, not what it declared: a PR that
+                                                // edits a kit source and never relocks reds `main` whether or not it drifted, so an
+                                                // `OK` verdict must not read as "safe to merge" (#469). That is exactly #509's
+                                                // complaint — the worker's own pre-merge check is green while `main` is about to go
+                                                // red — and it is the reason bash armed this here (`kit_digest_warn "$changed" "PR
+                                                // #$pr"`). THE PORT DROPPED IT: the D-phase swap carried the `widen` call site over
+                                                // and left this one behind, so the warning stopped firing on the one command §5
+                                                // tells every worker to run. A gate that silently stops running is #266's whole
+                                                // shape, which is why it is restored here rather than left to the merge.
+                                                digestWarn ()
+
+                                                // The regenerated set is reported on BOTH verdicts and decides NEITHER — it is
+                                                // context, not a finding. Printed after the verdict line so the first line of
+                                                // output stays the answer, and named `regenerated (expected)` so a reader can
+                                                // tell at a glance which list they are being asked to act on.
+                                                let reportRegenerated () =
+                                                    if not (List.isEmpty regenerated) then
+                                                        printfn
+                                                            "  regenerated (expected) — generated + CI-gated, so not declarable (ADR-0044):"
+
+                                                        for f in regenerated do
+                                                            printfn "    %s" f
+
+                                                // .github#2324 — REPORTED, NEVER SILENTLY SUBTRACTED, and on BOTH verdicts for
+                                                // the same reason `regenerated` is: an invisible subtraction is indistinguishable
+                                                // from a gate that stopped looking. Naming the bucket and its reason is what lets
+                                                // a reviewer check the exemption instead of trusting it.
+                                                let reportSddPackage () =
+                                                    if not (List.isEmpty sddPackage) then
+                                                        printfn
+                                                            "  sdd package (expected) — mandatory output of %s's sdd-required delivery route, so not required in Paths: (.github#2324):"
+                                                            issue.Short
+
+                                                        for f in sddPackage do
+                                                            printfn "    %s" f
+
+                                                if projectPathVerdict classifications then
+                                                    printfn
+                                                        "FSGG-PATHS OK — PR #%d stays inside the touch-set declared by %s."
+                                                        pr
+                                                        issue.Short
+
+                                                    reportRegenerated ()
+                                                    reportSddPackage ()
+                                                    combine ExitGreen
+                                                else
+                                                    printfn
+                                                        "FSGG-PATHS DRIFT — PR #%d changes files outside the touch-set declared by %s:"
+                                                        pr
+                                                        issue.Short
+
+                                                    printfn "  undeclared (review):"
+
+                                                    for f in undeclared do
+                                                        printfn "    %s" f
+
+                                                    reportRegenerated ()
+                                                    reportSddPackage ()
+
+                                                    eprint
+                                                        "  Widen the touch-set (scripts/fsgg-coord widen), or split the PR."
+
+                                                    combine (if opts.Warn then ExitGreen else ExitRed)
 
     /// `followup audit` is intentionally a read-only reconciliation PREVIEW. A queue's mtime is a
     /// candidate selector, not evidence that its worker died: each queued issue is re-read from GitHub,
     /// then its marker scan is required to be complete before we say it has no live claim.
     let followupAudit (ctx: Context) (opts: Options) : int =
-            let local = Followups.audit DateTimeOffset.UtcNow
-            let mutable failed = not (List.isEmpty local.Unreadable)
+        let local = Followups.audit DateTimeOffset.UtcNow
+        let mutable failed = not (List.isEmpty local.Unreadable)
 
-            for (worker, why) in local.Unreadable do
-                eprint $"UNREADABLE-QUEUE: worker %s{worker}: %s{why}"
+        for (worker, why) in local.Unreadable do
+            eprint $"UNREADABLE-QUEUE: worker %s{worker}: %s{why}"
 
-            let repos =
-                (local.Stale @ local.Fresh)
-                |> List.collect (fun q -> q.Refs)
-                |> List.map (fun r -> r.Owner, r.Repo)
-                |> Set.ofList
+        let repos =
+            (local.Stale @ local.Fresh)
+            |> List.collect (fun q -> q.Refs)
+            |> List.map (fun r -> r.Owner, r.Repo)
+            |> Set.ofList
 
-            // `openIssues` is a convenient per-repo candidate read, but absence from it is not a state:
-            // it can also be an off-board row, a PR, or a visibility mismatch. The fresh board scan owns
-            // the issue-state authority, and anything it cannot name remains UNKNOWN.
-            let boardRows =
-                Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
-                |> Result.bind (fun board -> Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number)
+        // `openIssues` is a convenient per-repo candidate read, but absence from it is not a state:
+        // it can also be an off-board row, a PR, or a visibility mismatch. The fresh board scan owns
+        // the issue-state authority, and anything it cannot name remains UNKNOWN.
+        let boardRows =
+            Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
+            |> Result.bind (fun board -> Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number)
 
-            // AC1 is about the QUEUE OWNER, not merely the owed issue. Mirror `who`'s A ∪ B sweep: board
-            // In-progress rows (A) union every open issue in every board repository (B). B is what finds
-            // an off-board claim after a failed status flip; every list and marker read must complete.
-            let liveClaims =
-                boardRows
-                |> Result.bind (fun rows ->
-                    let boardRepos =
-                        rows
-                        |> List.filter (fun row -> not row.IsPullRequest)
-                        |> List.map (fun row -> row.Ref.Owner, row.Ref.Repo)
-                        |> Set.ofList
+        // AC1 is about the QUEUE OWNER, not merely the owed issue. Mirror `who`'s A ∪ B sweep: board
+        // In-progress rows (A) union every open issue in every board repository (B). B is what finds
+        // an off-board claim after a failed status flip; every list and marker read must complete.
+        let liveClaims =
+            boardRows
+            |> Result.bind (fun rows ->
+                let boardRepos =
+                    rows
+                    |> List.filter (fun row -> not row.IsPullRequest)
+                    |> List.map (fun row -> row.Ref.Owner, row.Ref.Repo)
+                    |> Set.ofList
 
-                    let allRepos = Set.union boardRepos repos
+                let allRepos = Set.union boardRepos repos
 
-                    let candidates =
-                        allRepos
-                        |> Seq.fold (fun state (owner, repo) ->
+                let candidates =
+                    allRepos
+                    |> Seq.fold
+                        (fun state (owner, repo) ->
                             state
                             |> Result.bind (fun refs ->
                                 Reads.openIssues ctx.Transport owner repo
                                 |> Result.map (fun issues ->
                                     issues
-                                    |> List.map (fun issue -> { Owner = owner; Repo = repo; Number = issue.Number })
-                                    |> List.append refs))) (Ok [])
-                        |> Result.map (fun openRefs ->
-                            let inProgress =
-                                rows
-                                |> List.filter (fun row -> not row.IsPullRequest && row.Status = BoardStatus.InProgress)
-                                |> List.map (fun row -> row.Ref)
+                                    |> List.map (fun issue ->
+                                        {
+                                            Owner = owner
+                                            Repo = repo
+                                            Number = issue.Number
+                                        })
+                                    |> List.append refs)))
+                        (Ok [])
+                    |> Result.map (fun openRefs ->
+                        let inProgress =
+                            rows
+                            |> List.filter (fun row -> not row.IsPullRequest && row.Status = BoardStatus.InProgress)
+                            |> List.map (fun row -> row.Ref)
 
-                            Set.union (Set.ofList openRefs) (Set.ofList inProgress) |> Set.toList)
+                        Set.union (Set.ofList openRefs) (Set.ofList inProgress) |> Set.toList)
 
-                    candidates
-                    |> Result.bind (List.fold (fun state (row: Ref) ->
-                        state
-                        |> Result.bind (fun claims ->
-                            Reads.markerScan ctx.Transport row.Owner row.Repo row.Number
-                            |> Result.bind (Reads.requireCompleteMarkerScan row.Short)
-                            |> Result.map (fun markers ->
-                                match Reads.winner opts.LeaseMinutes markers with
-                                | Some marker -> (marker.Worker, row) :: claims
-                                | None -> claims))) (Ok [])))
+                candidates
+                |> Result.bind (
+                    List.fold
+                        (fun state (row: Ref) ->
+                            state
+                            |> Result.bind (fun claims ->
+                                Reads.markerScan ctx.Transport row.Owner row.Repo row.Number
+                                |> Result.bind (Reads.requireCompleteMarkerScan row.Short)
+                                |> Result.map (fun markers ->
+                                    match Reads.winner opts.LeaseMinutes markers with
+                                    | Some marker -> (marker.Worker, row) :: claims
+                                    | None -> claims)))
+                        (Ok [])
+                ))
 
-            let mutable closedByWorker: Map<string, Ref list> = Map.empty
+        let mutable closedByWorker: Map<string, Ref list> = Map.empty
 
-            let reportQueue (label: string) (queue: Followups.AuditedQueue) =
-                let ownerIsLive =
-                    match liveClaims with
+        let reportQueue (label: string) (queue: Followups.AuditedQueue) =
+            let ownerIsLive =
+                match liveClaims with
+                | Error e ->
+                    failed <- true
+
+                    eprint
+                        $"UNKNOWN: worker %s{queue.Worker}: complete fleet claim scan failed: %s{Errors.explain e}. Queue retained."
+
+                    Error()
+                | Ok claims -> Ok(claims |> List.tryFind (fun (worker, _) -> worker.Value = queue.Worker))
+
+            let abandonedOwner =
+                match label, ownerIsLive with
+                | "ABANDONED", Ok None -> true
+                | _ -> false
+
+            for (owed: Ref) in queue.Refs do
+                match Reads.issueState ctx.Transport owed.Owner owed.Repo owed.Number with
+                | Error e ->
+                    failed <- true
+
+                    eprint
+                        $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: could not read authoritative issue state: %s{Errors.explain e}. Queue retained."
+                | Ok IssueState.Closed ->
+                    if abandonedOwner then
+                        closedByWorker <-
+                            closedByWorker
+                            |> Map.change queue.Worker (fun prior -> Some(owed :: Option.defaultValue [] prior))
+
+                    eprint
+                        $"CLOSED: worker %s{queue.Worker}, %s{owed.Short}; eligible for reconciliation, but queue retained (preview)."
+                | Ok IssueState.Open ->
+                    match
+                        Reads.markerScan ctx.Transport owed.Owner owed.Repo owed.Number
+                        |> Result.bind (Reads.requireCompleteMarkerScan owed.Short)
+                    with
                     | Error e ->
                         failed <- true
-                        eprint $"UNKNOWN: worker %s{queue.Worker}: complete fleet claim scan failed: %s{Errors.explain e}. Queue retained."
-                        Error ()
-                    | Ok claims ->
-                        Ok(claims |> List.tryFind (fun (worker, _) -> worker.Value = queue.Worker))
 
-                let abandonedOwner =
-                    match label, ownerIsLive with
-                    | "ABANDONED", Ok None -> true
-                    | _ -> false
+                        eprint
+                            $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: claim scan incomplete: %s{Errors.explain e}. Queue retained."
+                    | Ok markers ->
+                        match Reads.winner opts.LeaseMinutes markers with
+                        | Some marker ->
+                            if abandonedOwner then
+                                closedByWorker <-
+                                    closedByWorker
+                                    |> Map.change queue.Worker (fun prior -> Some(owed :: Option.defaultValue [] prior))
 
-                for (owed: Ref) in queue.Refs do
-                    match Reads.issueState ctx.Transport owed.Owner owed.Repo owed.Number with
-                    | Error e ->
-                        failed <- true
-                        eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: could not read authoritative issue state: %s{Errors.explain e}. Queue retained."
-                    | Ok IssueState.Closed ->
-                        if abandonedOwner then
-                            closedByWorker <-
-                                closedByWorker
-                                |> Map.change queue.Worker (fun prior -> Some(owed :: Option.defaultValue [] prior))
-                        eprint $"CLOSED: worker %s{queue.Worker}, %s{owed.Short}; eligible for reconciliation, but queue retained (preview)."
-                    | Ok IssueState.Open ->
-                            match
-                                Reads.markerScan ctx.Transport owed.Owner owed.Repo owed.Number
-                                |> Result.bind (Reads.requireCompleteMarkerScan owed.Short)
-                            with
-                            | Error e ->
-                                failed <- true
-                                eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: claim scan incomplete: %s{Errors.explain e}. Queue retained."
-                            | Ok markers ->
-                                match Reads.winner opts.LeaseMinutes markers with
-                                | Some marker ->
-                                    if abandonedOwner then
-                                        closedByWorker <-
-                                            closedByWorker
-                                            |> Map.change queue.Worker (fun prior -> Some(owed :: Option.defaultValue [] prior))
-                                    eprint $"LIVE-CLAIM: worker %s{queue.Worker}, %s{owed.Short} is open and claimed by %s{marker.Worker.Value}; queue retained."
-                                | None ->
-                                    match ownerIsLive with
-                                    | Ok(Some(_, held)) ->
-                                        eprint $"ACTIVE-WORKER: worker %s{queue.Worker} holds %s{held.Short}; %s{owed.Short} is open and unclaimed. Queue retained."
-                                    | Ok None ->
-                                        if abandonedOwner then
-                                            closedByWorker <-
-                                                closedByWorker
-                                                |> Map.change queue.Worker (fun prior -> Some(owed :: Option.defaultValue [] prior))
-                                        eprint $"%s{label}: worker %s{queue.Worker} holds no live claim; %s{owed.Short} is open and unclaimed. Queue retained pending durable disposition."
-                                    | Error () ->
-                                        eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: owner liveness is unreadable. Queue retained."
+                            eprint
+                                $"LIVE-CLAIM: worker %s{queue.Worker}, %s{owed.Short} is open and claimed by %s{marker.Worker.Value}; queue retained."
+                        | None ->
+                            match ownerIsLive with
+                            | Ok(Some(_, held)) ->
+                                eprint
+                                    $"ACTIVE-WORKER: worker %s{queue.Worker} holds %s{held.Short}; %s{owed.Short} is open and unclaimed. Queue retained."
+                            | Ok None ->
+                                if abandonedOwner then
+                                    closedByWorker <-
+                                        closedByWorker
+                                        |> Map.change queue.Worker (fun prior ->
+                                            Some(owed :: Option.defaultValue [] prior))
 
-            for queue in local.Stale do reportQueue "ABANDONED" queue
-            for queue in local.Fresh do reportQueue "ACTIVE" queue
+                                eprint
+                                    $"%s{label}: worker %s{queue.Worker} holds no live claim; %s{owed.Short} is open and unclaimed. Queue retained pending durable disposition."
+                            | Error() ->
+                                eprint
+                                    $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: owner liveness is unreadable. Queue retained."
 
-            // The apply phase is deliberately after ALL reads: an unknown anywhere keeps every queue
-            // intact. For each abandoned ref (open is re-surfaced, closed is cleared), comment first; only a fully acknowledged batch may rewrite its
-            // worker's queue. A failed comment therefore leaves the original promise recoverable.
-            if opts.Apply && not failed then
-                for KeyValue(workerId, refs) in closedByWorker do
-                    match Identity.resolve (Some workerId) with
-                    | Error why ->
-                        failed <- true
-                        eprint $"UNKNOWN: cannot resolve queued worker %s{workerId}: %s{why}. Queue retained."
-                    | Ok worker ->
-                        let mutable durable = true
-                        for owed in refs do
-                            match Writes.followupDisposition ctx.Transport owed (WorkerId worker.Id) "reconciled from an abandoned worker queue: this issue has been re-surfaced for the board; the durable queue promise is now cleared." with
-                            | Ok () -> ()
-                            | Error e ->
-                                durable <- false
-                                failed <- true
-                                eprint $"UNKNOWN: could not record disposition for %s{owed.Short}: %s{Errors.explain e}. Queue retained."
+        for queue in local.Stale do
+            reportQueue "ABANDONED" queue
 
-                        if durable then
-                            match Followups.remove worker (Set.ofList refs) with
-                            | Ok removed -> eprint $"RECONCILED: worker %s{worker.Id}, removed %d{removed} re-surfaced follow-up(s)."
-                            | Error why ->
-                                failed <- true
-                                eprint $"UNKNOWN: dispositions landed but queue %s{worker.Id} could not be rewritten: %s{why}. Queue retained."
+        for queue in local.Fresh do
+            reportQueue "ACTIVE" queue
 
-            if failed then ExitRed else ExitGreen
+        // The apply phase is deliberately after ALL reads: an unknown anywhere keeps every queue
+        // intact. For each abandoned ref (open is re-surfaced, closed is cleared), comment first; only a fully acknowledged batch may rewrite its
+        // worker's queue. A failed comment therefore leaves the original promise recoverable.
+        if opts.Apply && not failed then
+            for KeyValue(workerId, refs) in closedByWorker do
+                match Identity.resolve (Some workerId) with
+                | Error why ->
+                    failed <- true
+                    eprint $"UNKNOWN: cannot resolve queued worker %s{workerId}: %s{why}. Queue retained."
+                | Ok worker ->
+                    let mutable durable = true
+
+                    for owed in refs do
+                        match
+                            Writes.followupDisposition
+                                ctx.Transport
+                                owed
+                                (WorkerId worker.Id)
+                                "reconciled from an abandoned worker queue: this issue has been re-surfaced for the board; the durable queue promise is now cleared."
+                        with
+                        | Ok() -> ()
+                        | Error e ->
+                            durable <- false
+                            failed <- true
+
+                            eprint
+                                $"UNKNOWN: could not record disposition for %s{owed.Short}: %s{Errors.explain e}. Queue retained."
+
+                    if durable then
+                        match Followups.remove worker (Set.ofList refs) with
+                        | Ok removed ->
+                            eprint $"RECONCILED: worker %s{worker.Id}, removed %d{removed} re-surfaced follow-up(s)."
+                        | Error why ->
+                            failed <- true
+
+                            eprint
+                                $"UNKNOWN: dispositions landed but queue %s{worker.Id} could not be rewritten: %s{why}. Queue retained."
+
+        if failed then ExitRed else ExitGreen
 
     /// Read the full evidence pair from GitHub.  The issue body is the source-bound subject and comments
     /// are the append-only receipt ledger: a failure in either direction is not a missing decision.
@@ -2939,6 +3821,7 @@ module LiveHandlers =
                     match structuredRouteLedger target.Canonical comments with
                     | Ok(Some(_, current)) -> Some current
                     | _ -> None
+
                 Ok(valid, structuredCurrent)
             | DeliveryRoute.Stale errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
             | DeliveryRoute.Unreadable errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
@@ -2947,10 +3830,13 @@ module LiveHandlers =
     /// against a scripted transport, the same way `Client.claim` already is by `ForceStealTests`.
     let deliveryRouteCmd (ctx: Context) (opts: Options) : int =
         let target arg = parseRef ctx arg
+
         match opts.Args with
         | [ "show"; arg ] ->
             match target arg with
-            | Error message -> eprint $"fsgg-coord-engine: delivery-route: %s{message}"; ExitError
+            | Error message ->
+                eprint $"fsgg-coord-engine: delivery-route: %s{message}"
+                ExitError
             | Ok ref ->
                 match deliveryRouteFact ctx ref with
                 | Error error -> fail error
@@ -2965,26 +3851,57 @@ module LiveHandlers =
                     // (and postable, below) before that worker exists.
                     let sddNotes = sddEvidenceErrors receipt
                     let revision = structuredCurrent |> Option.map _.Revision
-                    let digest = structuredCurrent |> Option.map _.Digest |> Option.defaultValue receipt.SubjectRevision
-                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v2"; kind = "current"; subject = receipt.Subject; decisionRevision = revision; revision = revision; digest = digest; route = route; reasonCodes = receipt.ReasonCodes; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
+
+                    let digest =
+                        structuredCurrent
+                        |> Option.map _.Digest
+                        |> Option.defaultValue receipt.SubjectRevision
+
+                    printfn
+                        "%s"
+                        (JsonSerializer.Serialize
+                            {|
+                                schema = "fsgg.coord.delivery-route-result/v2"
+                                kind = "current"
+                                subject = receipt.Subject
+                                decisionRevision = revision
+                                revision = revision
+                                digest = digest
+                                route = route
+                                reasonCodes = receipt.ReasonCodes
+                                sddPackageReady = List.isEmpty sddNotes
+                                sddPackageNotes = sddNotes
+                            |})
+
                     ExitGreen
         | [ "record"; arg; path ] ->
             match target arg with
-            | Error message -> eprint $"fsgg-coord-engine: delivery-route: %s{message}"; ExitError
+            | Error message ->
+                eprint $"fsgg-coord-engine: delivery-route: %s{message}"
+                ExitError
             | Ok ref ->
                 try
                     let raw = File.ReadAllText path
-                    match completeDeliveryRouteComments ctx ref,
-                          DeliveryRouteApplication.decodeStructured raw with
+
+                    match completeDeliveryRouteComments ctx ref, DeliveryRouteApplication.decodeStructured raw with
                     | Error error, _ -> fail error
-                    | _, Error reason -> eprint $"fsgg-coord-engine: delivery-route: only structured v2 records may be written: %s{reason}"; ExitError
+                    | _, Error reason ->
+                        eprint
+                            $"fsgg-coord-engine: delivery-route: only structured v2 records may be written: %s{reason}"
+
+                        ExitError
                     | Ok comments, Ok candidate ->
                         let existing =
                             match structuredRouteLedger ref.Canonical comments with
                             | Ok(Some(records, _)) -> Ok records
                             | Ok None -> Ok []
                             | Error errors -> Error errors
-                        match existing |> Result.bind (fun records -> StructuredDecision.validateRouteLedger ref.Canonical (records @ [ candidate ])) with
+
+                        match
+                            existing
+                            |> Result.bind (fun records ->
+                                StructuredDecision.validateRouteLedger ref.Canonical (records @ [ candidate ]))
+                        with
                         | Error errors ->
                             let detail = String.concat "; " errors
                             eprint $"fsgg-coord-engine: delivery-route: %s{detail}"
@@ -3002,14 +3919,36 @@ module LiveHandlers =
                             // refuses the write. The claimed worker owns completing it, before touching
                             // the item's declared `Paths:` (see `.claude/skills/pnext-item` step 1).
                             let sddNotes = sddEvidenceErrors valid
+
                             if not (List.isEmpty sddNotes) then
                                 let detail = String.concat "; " sddNotes
-                                eprint $"fsgg-coord-engine: delivery-route: recording sdd-required ahead of its SDD package (%s{detail}) — the claimed worker owns producing it before touching Paths."
+
+                                eprint
+                                    $"fsgg-coord-engine: delivery-route: recording sdd-required ahead of its SDD package (%s{detail}) — the claimed worker owns producing it before touching Paths."
+
                             let marker = StructuredRouteMarker + "\n" + raw.Trim()
+
                             match Writes.postIssueComment ctx.Transport ref marker with
                             | Error error -> fail error
                             | Ok commentId ->
-                                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v2"; kind = "recorded"; subject = valid.Subject; decisionRevision = validRecord.Revision; digest = validRecord.Digest; commentId = commentId; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
+                                printfn
+                                    "%s"
+                                    (JsonSerializer.Serialize
+                                        {|
+                                            schema = "fsgg.coord.delivery-route-result/v2"
+                                            kind = "recorded"
+                                            subject = valid.Subject
+                                            decisionRevision = validRecord.Revision
+                                            digest = validRecord.Digest
+                                            commentId = commentId
+                                            sddPackageReady = List.isEmpty sddNotes
+                                            sddPackageNotes = sddNotes
+                                        |})
+
                                 ExitGreen
-                with error -> eprint $"fsgg-coord-engine: delivery-route: %s{error.Message}"; ExitError
-        | _ -> eprint "fsgg-coord-engine: delivery-route: usage delivery-route <show REF|record REF receipt.json>"; ExitError
+                with error ->
+                    eprint $"fsgg-coord-engine: delivery-route: %s{error.Message}"
+                    ExitError
+        | _ ->
+            eprint "fsgg-coord-engine: delivery-route: usage delivery-route <show REF|record REF receipt.json>"
+            ExitError

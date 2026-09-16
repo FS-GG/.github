@@ -7,41 +7,51 @@ module SelfHost =
         | RelocatedDecisionBoundary
 
     type Evidence =
-        { Build: string
-          Unit: string
-          FocusedProductionRoute: string
-          Provenance: string
-          Inversion: string }
+        {
+            Build: string
+            Unit: string
+            FocusedProductionRoute: string
+            Provenance: string
+            Inversion: string
+        }
 
     type HostAcceptance =
-        { Actor: string
-          AcceptedAt: System.DateTimeOffset }
+        {
+            Actor: string
+            AcceptedAt: System.DateTimeOffset
+        }
 
     type SelfHostBootstrapReceipt =
-        { BaseSha: string
-          CandidateHeadSha: string
-          CandidateBinarySha256: string
-          CandidateVersion: string
-          SharedRefusal: string
-          SnapshotSha256: string
-          Reason: BootstrapReason
-          Evidence: Evidence
-          CandidateDecisionKey: string
-          CandidateActionKey: string
-          HostAcceptance: HostAcceptance
-          Digest: string }
+        {
+            BaseSha: string
+            CandidateHeadSha: string
+            CandidateBinarySha256: string
+            CandidateVersion: string
+            SharedRefusal: string
+            SnapshotSha256: string
+            Reason: BootstrapReason
+            Evidence: Evidence
+            CandidateDecisionKey: string
+            CandidateActionKey: string
+            HostAcceptance: HostAcceptance
+            Digest: string
+        }
 
     type Replay =
-        { DecisionKey: string
-          ActionKey: string }
+        {
+            DecisionKey: string
+            ActionKey: string
+        }
 
     type SelfHostReplayReceipt =
-        { BootstrapDigest: string
-          SnapshotSha256: string
-          DecisionKey: string
-          ActionKey: string
-          ReplayedAt: System.DateTimeOffset
-          Digest: string }
+        {
+            BootstrapDigest: string
+            SnapshotSha256: string
+            DecisionKey: string
+            ActionKey: string
+            ReplayedAt: System.DateTimeOffset
+            Digest: string
+        }
 
     type ReplayState =
         | NoBootstrap

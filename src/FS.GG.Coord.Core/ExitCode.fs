@@ -35,22 +35,10 @@ module ExitCode =
     // to be the reason a loop stopped. This is the same ordering `Protocol.takeExitCodes` renders, and
     // the completeness test pins the two to the same SET.
     let takeCodes: ExitCode list =
-        [ Green
-          NoneStartable
-          Contended
-          Rate
-          Red
-          Error
-          Defect ]
+        [ Green; NoneStartable; Contended; Rate; Red; Error; Defect ]
 
     // Ordered as a poll loop meets it: green, then the one retryable code, then the ways to stop.
     // `NotOpen` sits with the ways to stop — it is terminal, and #1680 is precisely that it used to be
     // reported as the retryable one.
     let landableCodes: ExitCode list =
-        [ Green
-          Pending
-          Red
-          NotOpen
-          NoVerdict
-          Error
-          Defect ]
+        [ Green; Pending; Red; NotOpen; NoVerdict; Error; Defect ]

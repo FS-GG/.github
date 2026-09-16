@@ -19,9 +19,23 @@ namespace FS.GG.Coord.GitHub
 /// API, and EVERYTHING ELSE goes on REST — above all the lock. **A lock may never live on the budget that
 /// dies first** (ADR-0034 §3, re-ratified by ADR-0040 C4).
 module Reads =
-    val collaboratorPermission: transport: Transport.IGitHubTransport -> owner: string -> repo: string -> login: string -> expectedAuthorId: string -> Errors.IoResult<string>
+    val collaboratorPermission:
+        transport: Transport.IGitHubTransport ->
+        owner: string ->
+        repo: string ->
+        login: string ->
+        expectedAuthorId: string ->
+            Errors.IoResult<string>
 
-    type DuplicateCandidate = { Number: int; State: string; Title: string; Body: string; IsPullRequest: bool }
+    type DuplicateCandidate =
+        {
+            Number: int
+            State: string
+            Title: string
+            Body: string
+            IsPullRequest: bool
+        }
+
     /// Complete, uncached all-state inventory for intake. Unlike `issues`, pull requests remain
     /// candidates.
     ///
@@ -47,7 +61,11 @@ module Reads =
     /// because GitHub does not emit that shape: it derives `Link` from a count and never advertises an
     /// empty successor. The residual window is a `<=`-one-page repository whose set shrinks mid-read, or a
     /// proxied endpoint. See `Reads.fs` for the measurements.
-    val duplicateCandidates: transport: Transport.IGitHubTransport -> owner: string -> repo: string -> Errors.IoResult<DuplicateCandidate list>
+    val duplicateCandidates:
+        transport: Transport.IGitHubTransport ->
+        owner: string ->
+        repo: string ->
+            Errors.IoResult<DuplicateCandidate list>
 
     open FS.GG.Coord
     open FS.GG.Coord.Types
@@ -176,7 +194,12 @@ module Reads =
     /// result as `Unreadable`/`Stale`, which REFUSES rather than guesses — the safe direction, at the
     /// cost of a real but recoverable stall for a row whose comment volume has outrun the window.
     val recentCommentBodies:
-        transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> limit: int -> IoResult<string list>
+        transport: IGitHubTransport ->
+        owner: string ->
+        repo: string ->
+        number: int ->
+        limit: int ->
+            IoResult<string list>
 
     /// Require `MarkerScan.Unreadable` to be empty, returning the complete marker list or a malformed-read
     /// error that names every unclassifiable comment.
@@ -235,11 +258,13 @@ module Reads =
 
     /// A worker-to-worker message parsed off an issue comment — the `say` / `inbox` channel.
     type Message =
-        { Id: int64
-          From: string
-          To: string
-          At: string
-          Text: string }
+        {
+            Id: int64
+            From: string
+            To: string
+            At: string
+            Text: string
+        }
 
     /// The `fsgg:msg` messages on an issue, in comment-id order (lowest first).
     ///
@@ -351,7 +376,11 @@ module Reads =
     val rateLimit: transport: IGitHubTransport -> IoResult<RateLimitSnapshot>
 
     /// One recorded edit to an issue/PR's BODY, from GraphQL's `userContentEdits` connection.
-    type ContentEdit = { EditedAt: System.DateTimeOffset; EditorLogin: string option }
+    type ContentEdit =
+        {
+            EditedAt: System.DateTimeOffset
+            EditorLogin: string option
+        }
 
     /// The provenance answer to "has this issue/PR body changed since X": the TOTAL edit count kept
     /// apart from the visible nodes, exactly like `SubIssueSet` — the connection is capped at 100, so a
@@ -414,11 +443,13 @@ module Reads =
     /// Exact, edit-aware comment facts for authority ledgers. Unlike the display-oriented comment
     /// reader, these timestamps let consumers reject edited evidence.
     type AuthorityComment =
-        { Id: int64
-          Url: string
-          Body: string
-          CreatedAt: string
-          UpdatedAt: string }
+        {
+            Id: int64
+            Url: string
+            Body: string
+            CreatedAt: string
+            UpdatedAt: string
+        }
 
     val authorityComments:
         transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<AuthorityComment list>
@@ -427,19 +458,23 @@ module Reads =
     val commitTreeSha: transport: IGitHubTransport -> owner: string -> repo: string -> sha: string -> IoResult<string>
 
     type CommitComparison =
-        { Status: string
-          MergeBase: string
-          AheadBy: int
-          Files: (string * string) list }
+        {
+            Status: string
+            MergeBase: string
+            AheadBy: int
+            Files: (string * string) list
+        }
 
     /// Complete changed-path evidence for a commit comparison. `Paths` includes both names of every
     /// rename; `Complete` is false at GitHub's 300-file comparison cap.
     type CommitPathComparison =
-        { Status: string
-          MergeBase: string
-          AheadBy: int
-          Paths: string list
-          Complete: bool }
+        {
+            Status: string
+            MergeBase: string
+            AheadBy: int
+            Paths: string list
+            Complete: bool
+        }
 
     /// Read the exact GitHub comparison used to prove that a reviewed implementation commit is an
     /// ancestor of the final evidence-bearing candidate and to inventory that final delta.

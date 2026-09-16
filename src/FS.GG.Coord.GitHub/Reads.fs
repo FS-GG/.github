@@ -10,17 +10,26 @@ module Reads =
     open Errors
     open Transport
 
-    type DuplicateCandidate = { Number: int; State: string; Title: string; Body: string; IsPullRequest: bool }
+    type DuplicateCandidate =
+        {
+            Number: int
+            State: string
+            Title: string
+            Body: string
+            IsPullRequest: bool
+        }
 
     type Marker =
-        { Id: int64
-          Worker: WorkerId
-          Session: SessionId option
-          AgeSeconds: int
-          PreviousStatus: BoardStatus option
-          PathRepo: string option
-          AgentContract: string option
-          Raw: string }
+        {
+            Id: int64
+            Worker: WorkerId
+            Session: SessionId option
+            AgeSeconds: int
+            PreviousStatus: BoardStatus option
+            PathRepo: string option
+            AgentContract: string option
+            Raw: string
+        }
 
     // THE MARKER READ, WITH ITS OWN COMPLETENESS ATTACHED (.github#1668).
     //
@@ -57,9 +66,18 @@ module Reads =
 
     let collaboratorPermission (transport: IGitHubTransport) owner repo login expectedAuthorId =
         let subject = $"%s{owner}/%s{repo} permission for %s{login}"
+
         let request =
-            { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/collaborators/%s{Uri.EscapeDataString login}/permission"; Query = []
-              Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/collaborators/%s{Uri.EscapeDataString login}/permission"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
+
         match transport.Send request with
         | Error error -> Error error
         | Ok response ->
@@ -67,14 +85,21 @@ module Reads =
             | Error error -> Error error
             | Ok document ->
                 use document = document
+
                 try
                     let root = document.RootElement
                     let permission = root.GetProperty("permission").GetString()
                     let observedAuthorId = root.GetProperty("user").GetProperty("node_id").GetString()
-                    if String.IsNullOrWhiteSpace permission || not(String.Equals(observedAuthorId,expectedAuthorId,StringComparison.Ordinal)) then
+
+                    if
+                        String.IsNullOrWhiteSpace permission
+                        || not (String.Equals(observedAuthorId, expectedAuthorId, StringComparison.Ordinal))
+                    then
                         Error(Malformed(subject, "permission or immutable author identity was missing/mismatched"))
-                    else Ok permission
-                with _ -> Error(Malformed(subject, "permission or immutable author identity was missing"))
+                    else
+                        Ok permission
+                with _ ->
+                    Error(Malformed(subject, "permission or immutable author identity was missing"))
 
 
     // The envelope itself is owned by `GraphQl`; consumers never see raw `data`/`errors`.
@@ -141,12 +166,7 @@ module Reads =
     //
     // It lives in `Reads` because `Board` compiles after it and calls it, and because two copies of a
     // completeness check is exactly the drift this item is about.
-    let connectionComplete
-        (subject: string)
-        (what: string)
-        (window: int)
-        (connection: JsonElement)
-        : IoResult<unit> =
+    let connectionComplete (subject: string) (what: string) (window: int) (connection: JsonElement) : IoResult<unit> =
         // `TryGetProperty` THROWS on anything that is not an object rather than answering `false`
         // (`.github#2418`), and this function is called from inside `try/with :? KeyNotFoundException`
         // blocks that would not catch it. Guard first, and fail closed.
@@ -159,55 +179,55 @@ module Reads =
             )
         else
 
-        let returned =
-            match connection.TryGetProperty "nodes" with
-            | true, nodes when nodes.ValueKind = JsonValueKind.Array -> Some(nodes.GetArrayLength())
-            | _ -> None
-
-        let available =
-            match connection.TryGetProperty "totalCount" with
-            | true, total when total.ValueKind = JsonValueKind.Number ->
-                match total.TryGetInt32() with
-                | true, value -> Some value
+            let returned =
+                match connection.TryGetProperty "nodes" with
+                | true, nodes when nodes.ValueKind = JsonValueKind.Array -> Some(nodes.GetArrayLength())
                 | _ -> None
-            | _ -> None
 
-        match returned with
-        // NO `nodes` AT ALL is not an empty connection — it is a shape we did not read. Nothing downstream
-        // may enumerate it, and nothing may conclude an absence from it.
-        | None ->
-            Error(
-                Malformed(
-                    subject,
-                    $"%s{what} carries no readable `nodes` array, so its completeness cannot be established — this is a FAILED READ, never an absence"
+            let available =
+                match connection.TryGetProperty "totalCount" with
+                | true, total when total.ValueKind = JsonValueKind.Number ->
+                    match total.TryGetInt32() with
+                    | true, value -> Some value
+                    | _ -> None
+                | _ -> None
+
+            match returned with
+            // NO `nodes` AT ALL is not an empty connection — it is a shape we did not read. Nothing downstream
+            // may enumerate it, and nothing may conclude an absence from it.
+            | None ->
+                Error(
+                    Malformed(
+                        subject,
+                        $"%s{what} carries no readable `nodes` array, so its completeness cannot be established — this is a FAILED READ, never an absence"
+                    )
                 )
-            )
 
-        | Some returned ->
+            | Some returned ->
 
-        match available with
-        // THE ANSWER, WHEN THE CONNECTION GAVE US ONE. `totalCount` is authoritative in both directions:
-        // larger than the window means truncated, equal-or-smaller means measured and complete.
-        | Some available when available > returned ->
-            Error(
-                Malformed(
-                    subject,
-                    $"%s{what} reports %d{available} entries and returned only %d{returned} — the `first: %d{window}` window hid the rest, and a TRUNCATED read may not be spent as a measured absence"
-                )
-            )
-        | Some _ -> Ok()
+                match available with
+                // THE ANSWER, WHEN THE CONNECTION GAVE US ONE. `totalCount` is authoritative in both directions:
+                // larger than the window means truncated, equal-or-smaller means measured and complete.
+                | Some available when available > returned ->
+                    Error(
+                        Malformed(
+                            subject,
+                            $"%s{what} reports %d{available} entries and returned only %d{returned} — the `first: %d{window}` window hid the rest, and a TRUNCATED read may not be spent as a measured absence"
+                        )
+                    )
+                | Some _ -> Ok()
 
-        // NO READABLE `totalCount`. A SHORT page is still proof: `first: N` returns `min(N, available)`, so
-        // fewer than N back means the window had nothing left to hide. A FULL page proves nothing at all,
-        // and is refused.
-        | None when returned >= window ->
-            Error(
-                Malformed(
-                    subject,
-                    $"%s{what} filled its `first: %d{window}` window exactly and carries no readable `totalCount` — so a complete set of %d{window} cannot be told from a truncated one, and this is a FAILED READ, never an absence"
-                )
-            )
-        | None -> Ok()
+                // NO READABLE `totalCount`. A SHORT page is still proof: `first: N` returns `min(N, available)`, so
+                // fewer than N back means the window had nothing left to hide. A FULL page proves nothing at all,
+                // and is refused.
+                | None when returned >= window ->
+                    Error(
+                        Malformed(
+                            subject,
+                            $"%s{what} filled its `first: %d{window}` window exactly and carries no readable `totalCount` — so a complete set of %d{window} cannot be told from a truncated one, and this is a FAILED READ, never an absence"
+                        )
+                    )
+                | None -> Ok()
 
     // The `per_page` every collection read in this module asks for.
     //
@@ -334,13 +354,15 @@ module Reads =
             if qs = "" then path else $"%s{path}?%s{qs}"
 
         let request =
-            { Method = "GET"
-              Path = path
-              Query = query
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = Cache.getETag cacheKey
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = path
+                Query = query
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = Cache.getETag cacheKey
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -499,14 +521,16 @@ module Reads =
                     | None -> -1
 
                 IsMarker
-                    { Id = id
-                      Worker = worker
-                      Session = session
-                      AgeSeconds = ageSeconds
-                      PreviousStatus = previousStatus
-                      PathRepo = pathRepo
-                      AgentContract = agentContract
-                      Raw = body }
+                    {
+                        Id = id
+                        Worker = worker
+                        Session = session
+                        AgeSeconds = ageSeconds
+                        PreviousStatus = previousStatus
+                        PathRepo = pathRepo
+                        AgentContract = agentContract
+                        Raw = body
+                    }
 
     let isStale (leaseMinutes: int) (marker: Marker) =
         marker.AgeSeconds >= 0 && marker.AgeSeconds > leaseMinutes * 60
@@ -566,16 +590,18 @@ module Reads =
         let subject = $"%s{owner}/%s{repo}#%d{number}"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
-              Query = [ "per_page", "100" ]
-              Body = NoBody
-              Budget = Rest
-              // NEVER CONDITIONAL. A 304 could serve a body captured before the marker was posted, and it
-              // would report zero comments over a live lock. **A lock may never be read from a cache** —
-              // going direct means there is no ETag to be stale.
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
+                Query = [ "per_page", "100" ]
+                Body = NoBody
+                Budget = Rest
+                // NEVER CONDITIONAL. A 304 could serve a body captured before the marker was posted, and it
+                // would report zero comments over a live lock. **A lock may never be read from a cache** —
+                // going direct means there is no ETag to be stale.
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -620,8 +646,10 @@ module Reads =
                             | NotAMarker -> None)
 
                     Ok
-                        { Markers = found
-                          Unreadable = unreadable }
+                        {
+                            Markers = found
+                            Unreadable = unreadable
+                        }
 
     // REQUIRE A COMPLETE LOCK READ before a caller decides or writes from it (.github#1896).
     //
@@ -651,11 +679,13 @@ module Reads =
     // ---- worker-to-worker messages (the `say` / `inbox` channel) ----------------------------------
 
     type Message =
-        { Id: int64
-          From: string
-          To: string
-          At: string
-          Text: string }
+        {
+            Id: int64
+            From: string
+            To: string
+            At: string
+            Text: string
+        }
 
     // ANCHORED, exactly like `markerRe`. Un-anchor it and a `say` message whose TEXT merely quotes a
     // message marker would be delivered as though it were one — the same forgery `markerRe` refuses.
@@ -701,11 +731,13 @@ module Reads =
                         noHeader.TrimEnd()
 
                     Some
-                        { Id = id
-                          From = m.Groups.["f"].Value
-                          To = m.Groups.["t"].Value
-                          At = (str comment "created_at" |> Option.defaultValue "")
-                          Text = text }
+                        {
+                            Id = id
+                            From = m.Groups.["f"].Value
+                            To = m.Groups.["t"].Value
+                            At = (str comment "created_at" |> Option.defaultValue "")
+                            Text = text
+                        }
 
     // The worker-to-worker messages on an issue, in comment-id order (lowest first).
     //
@@ -718,13 +750,15 @@ module Reads =
         let subject = $"%s{owner}/%s{repo}#%d{number} messages"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
-              Query = [ "per_page", "100" ]
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
+                Query = [ "per_page", "100" ]
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -752,13 +786,15 @@ module Reads =
         let subject = $"%s{owner}/%s{repo}#%d{number} comments"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
-              Query = [ "per_page", "100" ]
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
+                Query = [ "per_page", "100" ]
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -776,9 +812,11 @@ module Reads =
                         match c.TryGetProperty "id", str c "html_url", str c "body" with
                         | (true, id), Some url, Some body when id.ValueKind = JsonValueKind.Number ->
                             Ok
-                                { Id = id.GetInt64()
-                                  Url = url
-                                  Body = body }
+                                {
+                                    Id = id.GetInt64()
+                                    Url = url
+                                    Body = body
+                                }
                         | _ -> Error(Malformed(subject, "a comment has no readable id, html_url, and body")))
                     |> Seq.fold
                         (fun state next -> Result.bind (fun xs -> Result.map (fun x -> x :: xs) next) state)
@@ -786,13 +824,28 @@ module Reads =
                     |> Result.map List.rev
 
     type AuthorityComment =
-        { Id: int64; Url: string; Body: string; CreatedAt: string; UpdatedAt: string }
+        {
+            Id: int64
+            Url: string
+            Body: string
+            CreatedAt: string
+            UpdatedAt: string
+        }
 
     let authorityComments (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =
         let subject = $"%s{owner}/%s{repo}#%d{number} authority comments"
+
         let request =
-            { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
-              Query = [ "per_page", "100" ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
+                Query = [ "per_page", "100" ]
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
+
         match transport.Send request with
         | Error error -> Error error
         | Ok response ->
@@ -800,22 +853,57 @@ module Reads =
             | Error error -> Error error
             | Ok document ->
                 use document = document
-                if document.RootElement.ValueKind <> JsonValueKind.Array then Error(Malformed(subject, "the comments response is not a JSON array"))
+
+                if document.RootElement.ValueKind <> JsonValueKind.Array then
+                    Error(Malformed(subject, "the comments response is not a JSON array"))
                 else
                     document.RootElement.EnumerateArray()
                     |> Seq.map (fun comment ->
-                        match comment.TryGetProperty "id", str comment "html_url", str comment "body", str comment "created_at", str comment "updated_at" with
-                        | (true, id), Some url, Some body, Some createdAt, Some updatedAt when id.ValueKind = JsonValueKind.Number ->
-                            Ok { Id = id.GetInt64(); Url = url; Body = body; CreatedAt = createdAt; UpdatedAt = updatedAt }
-                        | _ -> Error(Malformed(subject, "an authority comment lacks id, html_url, body, created_at, or updated_at")))
-                    |> Seq.fold (fun state next -> Result.bind (fun values -> Result.map (fun value -> value :: values) next) state) (Ok [])
+                        match
+                            comment.TryGetProperty "id",
+                            str comment "html_url",
+                            str comment "body",
+                            str comment "created_at",
+                            str comment "updated_at"
+                        with
+                        | (true, id), Some url, Some body, Some createdAt, Some updatedAt when
+                            id.ValueKind = JsonValueKind.Number
+                            ->
+                            Ok
+                                {
+                                    Id = id.GetInt64()
+                                    Url = url
+                                    Body = body
+                                    CreatedAt = createdAt
+                                    UpdatedAt = updatedAt
+                                }
+                        | _ ->
+                            Error(
+                                Malformed(
+                                    subject,
+                                    "an authority comment lacks id, html_url, body, created_at, or updated_at"
+                                )
+                            ))
+                    |> Seq.fold
+                        (fun state next ->
+                            Result.bind (fun values -> Result.map (fun value -> value :: values) next) state)
+                        (Ok [])
                     |> Result.map List.rev
 
     let commitTreeSha (transport: IGitHubTransport) (owner: string) (repo: string) (sha: string) =
         let subject = $"%s{owner}/%s{repo} commit %s{sha} tree"
+
         let request =
-            { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/git/commits/%s{sha}"
-              Query = []; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/git/commits/%s{sha}"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
+
         match transport.Send request with
         | Error error -> Error error
         | Ok response ->
@@ -823,29 +911,51 @@ module Reads =
             | Error error -> Error error
             | Ok document ->
                 use document = document
+
                 match document.RootElement.TryGetProperty "tree" with
                 | true, tree when tree.ValueKind = JsonValueKind.Object ->
-                    match str tree "sha" with Some value when not (String.IsNullOrWhiteSpace value) -> Ok value | _ -> Error(Malformed(subject, "commit tree has no sha"))
+                    match str tree "sha" with
+                    | Some value when not (String.IsNullOrWhiteSpace value) -> Ok value
+                    | _ -> Error(Malformed(subject, "commit tree has no sha"))
                 | _ -> Error(Malformed(subject, "commit has no tree object"))
 
     type CommitComparison =
-        { Status: string
-          MergeBase: string
-          AheadBy: int
-          Files: (string * string) list }
+        {
+            Status: string
+            MergeBase: string
+            AheadBy: int
+            Files: (string * string) list
+        }
 
     type CommitPathComparison =
-        { Status: string
-          MergeBase: string
-          AheadBy: int
-          Paths: string list
-          Complete: bool }
+        {
+            Status: string
+            MergeBase: string
+            AheadBy: int
+            Paths: string list
+            Complete: bool
+        }
 
-    let compareCommits (transport: IGitHubTransport) (owner: string) (repo: string) (ancestor: string) (descendant: string) =
+    let compareCommits
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (ancestor: string)
+        (descendant: string)
+        =
         let subject = $"%s{owner}/%s{repo} comparison %s{ancestor}...%s{descendant}"
+
         let request =
-            { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/compare/%s{ancestor}...%s{descendant}"
-              Query = []; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/compare/%s{ancestor}...%s{descendant}"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
+
         match transport.Send request with
         | Error error -> Error error
         | Ok response ->
@@ -854,9 +964,17 @@ module Reads =
             | Ok document ->
                 use document = document
                 let root = document.RootElement
-                match str root "status", root.TryGetProperty "merge_base_commit", root.TryGetProperty "ahead_by", root.TryGetProperty "files" with
-                | Some status, (true, mergeBase), (true, aheadBy), (true, files)
-                    when mergeBase.ValueKind = JsonValueKind.Object && files.ValueKind = JsonValueKind.Array ->
+
+                match
+                    str root "status",
+                    root.TryGetProperty "merge_base_commit",
+                    root.TryGetProperty "ahead_by",
+                    root.TryGetProperty "files"
+                with
+                | Some status, (true, mergeBase), (true, aheadBy), (true, files) when
+                    mergeBase.ValueKind = JsonValueKind.Object
+                    && files.ValueKind = JsonValueKind.Array
+                    ->
                     match str mergeBase "sha", aheadBy.TryGetInt32() with
                     | None, _ -> Error(Malformed(subject, "comparison merge base has no sha"))
                     | _, (false, _) -> Error(Malformed(subject, "comparison ahead_by is not an integer"))
@@ -866,14 +984,23 @@ module Reads =
                         |> Seq.fold
                             (fun state next ->
                                 match state, next with
-                                | Ok values, (Some filename, Some status)
-                                    when not (String.IsNullOrWhiteSpace filename) && not (String.IsNullOrWhiteSpace status) ->
+                                | Ok values, (Some filename, Some status) when
+                                    not (String.IsNullOrWhiteSpace filename)
+                                    && not (String.IsNullOrWhiteSpace status)
+                                    ->
                                     Ok((filename, status) :: values)
                                 | Ok _, _ -> Error(Malformed(subject, "comparison file has no filename or status"))
                                 | error, _ -> error)
                             (Ok [])
-                        |> Result.map (fun values -> { Status = status; MergeBase = mergeBaseSha; AheadBy = aheadBy; Files = List.rev values })
-                | _ -> Error(Malformed(subject, "comparison has no status, merge_base_commit, ahead_by, or files array"))
+                        |> Result.map (fun values ->
+                            {
+                                Status = status
+                                MergeBase = mergeBaseSha
+                                AheadBy = aheadBy
+                                Files = List.rev values
+                            })
+                | _ ->
+                    Error(Malformed(subject, "comparison has no status, merge_base_commit, ahead_by, or files array"))
 
     // GitHub's compare endpoint returns at most 300 changed files for the whole comparison.  The
     // ordinary comparison above predates a consumer that needs to prove ABSENCE from that set, so it
@@ -881,11 +1008,26 @@ module Reads =
     // both sides of a rename: either omission would let a base-side rename hide an overlap with the
     // reviewed candidate.  Exactly 300 is refused by the caller because it is indistinguishable from a
     // truncated response; fewer than 300 is the API's complete-file-set guarantee.
-    let compareCommitPaths (transport: IGitHubTransport) (owner: string) (repo: string) (ancestor: string) (descendant: string) =
+    let compareCommitPaths
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (ancestor: string)
+        (descendant: string)
+        =
         let subject = $"%s{owner}/%s{repo} path comparison %s{ancestor}...%s{descendant}"
+
         let request =
-            { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/compare/%s{ancestor}...%s{descendant}"
-              Query = []; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/compare/%s{ancestor}...%s{descendant}"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
+
         match transport.Send request with
         | Error error -> Error error
         | Ok response ->
@@ -894,52 +1036,78 @@ module Reads =
             | Ok document ->
                 use document = document
                 let root = document.RootElement
-                match str root "status", root.TryGetProperty "merge_base_commit", root.TryGetProperty "ahead_by", root.TryGetProperty "files" with
-                | Some status, (true, mergeBase), (true, aheadBy), (true, files)
-                    when mergeBase.ValueKind = JsonValueKind.Object && files.ValueKind = JsonValueKind.Array ->
+
+                match
+                    str root "status",
+                    root.TryGetProperty "merge_base_commit",
+                    root.TryGetProperty "ahead_by",
+                    root.TryGetProperty "files"
+                with
+                | Some status, (true, mergeBase), (true, aheadBy), (true, files) when
+                    mergeBase.ValueKind = JsonValueKind.Object
+                    && files.ValueKind = JsonValueKind.Array
+                    ->
                     match str mergeBase "sha", aheadBy.TryGetInt32() with
                     | None, _ -> Error(Malformed(subject, "comparison merge base has no sha"))
                     | _, (false, _) -> Error(Malformed(subject, "comparison ahead_by is not an integer"))
                     | Some mergeBaseSha, (true, aheadBy) ->
                         let rows = files.EnumerateArray() |> Seq.toList
+
                         rows
                         |> List.map (fun file ->
                             match str file "filename", str file "status" with
-                            | Some filename, Some fileStatus
-                                when not (String.IsNullOrWhiteSpace filename) && not (String.IsNullOrWhiteSpace fileStatus) ->
+                            | Some filename, Some fileStatus when
+                                not (String.IsNullOrWhiteSpace filename)
+                                && not (String.IsNullOrWhiteSpace fileStatus)
+                                ->
                                 let previous =
                                     if fileStatus = "renamed" then
                                         match str file "previous_filename" with
-                                        | Some value when not (String.IsNullOrWhiteSpace value) -> Ok [ filename; value ]
-                                        | _ -> Error(Malformed(subject, $"renamed comparison file `%s{filename}` has no previous_filename"))
-                                    else Ok [ filename ]
+                                        | Some value when not (String.IsNullOrWhiteSpace value) ->
+                                            Ok [ filename; value ]
+                                        | _ ->
+                                            Error(
+                                                Malformed(
+                                                    subject,
+                                                    $"renamed comparison file `%s{filename}` has no previous_filename"
+                                                )
+                                            )
+                                    else
+                                        Ok [ filename ]
+
                                 previous
                             | _ -> Error(Malformed(subject, "comparison file has no filename or status")))
                         |> List.fold
                             (fun state next ->
                                 match state, next with
                                 | Ok values, Ok paths -> Ok(paths @ values)
-                                | Error error, _ | _, Error error -> Error error)
+                                | Error error, _
+                                | _, Error error -> Error error)
                             (Ok [])
                         |> Result.map (fun paths ->
-                            { Status = status
-                              MergeBase = mergeBaseSha
-                              AheadBy = aheadBy
-                              Paths = paths |> List.distinct |> List.sort
-                              Complete = rows.Length < 300 })
-                | _ -> Error(Malformed(subject, "comparison has no status, merge_base_commit, ahead_by, or files array"))
+                            {
+                                Status = status
+                                MergeBase = mergeBaseSha
+                                AheadBy = aheadBy
+                                Paths = paths |> List.distinct |> List.sort
+                                Complete = rows.Length < 300
+                            })
+                | _ ->
+                    Error(Malformed(subject, "comparison has no status, merge_base_commit, ahead_by, or files array"))
 
     let commentBodies (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =
         let subject = $"%s{owner}/%s{repo}#%d{number} comments"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
-              Query = [ "per_page", "100" ]
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
+                Query = [ "per_page", "100" ]
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -990,24 +1158,34 @@ module Reads =
     // missing and the item is refused — safe (never schedules on a receipt this call could not see), but
     // a real usability cost or a stale-looking row for that one, comment-heavy issue. That trade is
     // deliberate: the alternative is the unbounded read this repair exists to remove.
-    let recentCommentBodies (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) (limit: int) : IoResult<string list> =
+    let recentCommentBodies
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        (limit: int)
+        : IoResult<string list> =
         let subject = $"%s{owner}/%s{repo}#%d{number} recent comments (last %d{limit})"
 
         let request =
-            { Method = "POST"
-              Path = "graphql"
-              Query = []
-              Body =
-                Transport.Query(
-                    RecentCommentsDoc,
-                    [ "owner", Transport.VString owner
-                      "repo", Transport.VString repo
-                      "number", Transport.VNumber(double number)
-                      "last", Transport.VNumber(double limit) ]
-                )
-              Budget = GraphQl
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "POST"
+                Path = "graphql"
+                Query = []
+                Body =
+                    Transport.Query(
+                        RecentCommentsDoc,
+                        [
+                            "owner", Transport.VString owner
+                            "repo", Transport.VString repo
+                            "number", Transport.VNumber(double number)
+                            "last", Transport.VNumber(double limit)
+                        ]
+                    )
+                Budget = GraphQl
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1021,35 +1199,35 @@ module Reads =
                 | Error e -> Error e
                 | Ok data ->
 
-                try
-                    let nodes =
-                        data
-                            .GetProperty("repository")
-                            .GetProperty("issue")
-                            .GetProperty("comments")
-                            .GetProperty("nodes")
+                    try
+                        let nodes =
+                            data
+                                .GetProperty("repository")
+                                .GetProperty("issue")
+                                .GetProperty("comments")
+                                .GetProperty("nodes")
 
-                    nodes.EnumerateArray()
-                    |> Seq.map (fun c ->
-                        match str c "body" with
-                        | Some body -> Ok body
-                        | None -> Error(Malformed(subject, "a comment has no readable body")))
-                    |> Seq.fold
-                        (fun state next -> Result.bind (fun xs -> Result.map (fun x -> x :: xs) next) state)
-                        (Ok [])
-                    |> Result.map List.rev
-                with
-                | :? System.Collections.Generic.KeyNotFoundException
-                | :? System.NullReferenceException
-                // A PRESENT-BUT-NULL node — `data.repository` is `null` for a ref GraphQL cannot resolve
-                // (e.g. a noncanonical owner/repo spelling), and the same shape reaches `issue`,
-                // `comments`, or a `null` element inside `nodes` itself. `GetProperty`/`TryGetProperty`
-                // both throw `InvalidOperationException` — not `NullReferenceException` — when called on a
-                // `Null`-kind element, because the element itself is a real (non-missing) JSON value that is
-                // simply the wrong shape. A MISSING property is caught above; this is the null one
-                // (.github#2365). Without this case the exception escapes the typed read entirely.
-                | :? System.InvalidOperationException ->
-                    Error(Malformed(subject, "the recent-comments response is missing `repository.issue.comments`"))
+                        nodes.EnumerateArray()
+                        |> Seq.map (fun c ->
+                            match str c "body" with
+                            | Some body -> Ok body
+                            | None -> Error(Malformed(subject, "a comment has no readable body")))
+                        |> Seq.fold
+                            (fun state next -> Result.bind (fun xs -> Result.map (fun x -> x :: xs) next) state)
+                            (Ok [])
+                        |> Result.map List.rev
+                    with
+                    | :? System.Collections.Generic.KeyNotFoundException
+                    | :? System.NullReferenceException
+                    // A PRESENT-BUT-NULL node — `data.repository` is `null` for a ref GraphQL cannot resolve
+                    // (e.g. a noncanonical owner/repo spelling), and the same shape reaches `issue`,
+                    // `comments`, or a `null` element inside `nodes` itself. `GetProperty`/`TryGetProperty`
+                    // both throw `InvalidOperationException` — not `NullReferenceException` — when called on a
+                    // `Null`-kind element, because the element itself is a real (non-missing) JSON value that is
+                    // simply the wrong shape. A MISSING property is caught above; this is the null one
+                    // (.github#2365). Without this case the exception escapes the typed read entirely.
+                    | :? System.InvalidOperationException ->
+                        Error(Malformed(subject, "the recent-comments response is missing `repository.issue.comments`"))
 
     // ---- the issue body ---------------------------------------------------------------------------
 
@@ -1058,13 +1236,15 @@ module Reads =
         let subject = $"%s{owner}/%s{repo}#%d{number}"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}"
-              Query = []
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1092,13 +1272,15 @@ module Reads =
         let subject = $"%s{owner}/%s{repo}#%d{number} state"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}"
-              Query = []
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1129,16 +1311,18 @@ module Reads =
         let subject = $"%s{owner}/%s{repo}#%d{number}"
 
         let request =
-            { Method = "GET"
-              // A PR IS AN ISSUE IN REST. This one endpoint serves both kinds and carries
-              // `pull_request.merged_at` — so one cheap call answers "is it closed?" AND "was it merged?",
-              // and it does it on the budget that is still alive when GraphQL is not.
-              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}"
-              Query = []
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                // A PR IS AN ISSUE IN REST. This one endpoint serves both kinds and carries
+                // `pull_request.merged_at` — so one cheap call answers "is it closed?" AND "was it merged?",
+                // and it does it on the budget that is still alive when GraphQL is not.
+                Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error(NotFound _) ->
@@ -1213,16 +1397,18 @@ module Reads =
         let subject = $"%s{owner}/%s{repo} pushed item/%d{number}-* branches"
 
         let request =
-            { Method = "GET"
-              // matching-refs returns EVERY ref under the prefix (an empty array when none), so this asks
-              // "does any `item/<n>-*` branch exist?" in one REST call, without guessing the slug. REST —
-              // the budget the claim lock lives on — and paid only on the reap/who proof-of-life path.
-              Path = $"repos/%s{owner}/%s{repo}/git/matching-refs/heads/item/%d{number}-"
-              Query = []
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                // matching-refs returns EVERY ref under the prefix (an empty array when none), so this asks
+                // "does any `item/<n>-*` branch exist?" in one REST call, without guessing the slug. REST —
+                // the budget the claim lock lives on — and paid only on the reap/who proof-of-life path.
+                Path = $"repos/%s{owner}/%s{repo}/git/matching-refs/heads/item/%d{number}-"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1243,13 +1429,15 @@ module Reads =
         let subject = $"%s{owner}/%s{repo} open PRs for item #%d{number}"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/pulls"
-              Query = [ "state", "open"; "per_page", "100" ]
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/pulls"
+                Query = [ "state", "open"; "per_page", "100" ]
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error(RateLimited _ as e) ->
@@ -1309,13 +1497,15 @@ module Reads =
         let subject = $"%s{owner}/%s{repo}#%d{number}"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}"
-              Query = []
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1334,13 +1524,15 @@ module Reads =
         let subject = $"%s{owner}/%s{repo}#%d{number} sub-issues"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/sub_issues"
-              Query = [ "per_page", "100" ]
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/sub_issues"
+                Query = [ "per_page", "100" ]
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1377,19 +1569,23 @@ module Reads =
         let subject = $"%s{owner}/%s{repo}#%d{number} sub-issue graph"
 
         let request =
-            { Method = "POST"
-              Path = "graphql"
-              Query = []
-              Body =
-                Transport.Query(
-                    SubIssuesDoc,
-                    [ "owner", Transport.VString owner
-                      "repo", Transport.VString repo
-                      "number", Transport.VNumber(double number) ]
-                )
-              Budget = GraphQl
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "POST"
+                Path = "graphql"
+                Query = []
+                Body =
+                    Transport.Query(
+                        SubIssuesDoc,
+                        [
+                            "owner", Transport.VString owner
+                            "repo", Transport.VString repo
+                            "number", Transport.VNumber(double number)
+                        ]
+                    )
+                Budget = GraphQl
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1403,66 +1599,69 @@ module Reads =
                 | Error e -> Error e
                 | Ok data ->
 
-                try
-                    let subIssuesNode =
-                        data
-                            .GetProperty("repository")
-                            .GetProperty("issue")
-                            .GetProperty("subIssues")
+                    try
+                        let subIssuesNode =
+                            data.GetProperty("repository").GetProperty("issue").GetProperty("subIssues")
 
-                    let total = subIssuesNode.GetProperty("totalCount").GetInt32()
+                        let total = subIssuesNode.GetProperty("totalCount").GetInt32()
 
-                    let children =
-                        subIssuesNode.GetProperty("nodes").EnumerateArray()
-                        |> Seq.choose (fun n ->
-                            let nwo =
-                                match n.TryGetProperty "repository" with
-                                | true, r when r.ValueKind = JsonValueKind.Object -> str r "nameWithOwner"
-                                | _ -> None
+                        let children =
+                            subIssuesNode.GetProperty("nodes").EnumerateArray()
+                            |> Seq.choose (fun n ->
+                                let nwo =
+                                    match n.TryGetProperty "repository" with
+                                    | true, r when r.ValueKind = JsonValueKind.Object -> str r "nameWithOwner"
+                                    | _ -> None
 
-                            let num =
-                                match n.TryGetProperty "number" with
-                                | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
-                                | _ -> None
+                                let num =
+                                    match n.TryGetProperty "number" with
+                                    | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                                    | _ -> None
 
-                            let isOpen =
-                                match n.TryGetProperty "state" with
-                                // GraphQL issue state is upper-case OPEN/CLOSED. Anything that is not
-                                // exactly CLOSED is treated as still open — the conservative direction, so a
-                                // rollup never flips over a child it could not read as closed.
-                                | true, s when s.ValueKind = JsonValueKind.String -> s.GetString() <> "CLOSED"
-                                | _ -> true
+                                let isOpen =
+                                    match n.TryGetProperty "state" with
+                                    // GraphQL issue state is upper-case OPEN/CLOSED. Anything that is not
+                                    // exactly CLOSED is treated as still open — the conservative direction, so a
+                                    // rollup never flips over a child it could not read as closed.
+                                    | true, s when s.ValueKind = JsonValueKind.String -> s.GetString() <> "CLOSED"
+                                    | _ -> true
 
-                            match nwo, num with
-                            | Some nwo, Some num ->
-                                Some
-                                    { Ref = $"%s{nwo}#%d{num}"
-                                      Open = isOpen }
-                            | _ -> None)
-                        |> List.ofSeq
+                                match nwo, num with
+                                | Some nwo, Some num ->
+                                    Some
+                                        {
+                                            Ref = $"%s{nwo}#%d{num}"
+                                            Open = isOpen
+                                        }
+                                | _ -> None)
+                            |> List.ofSeq
 
-                    Ok { Total = total; Children = children }
-                with
-                | :? System.Collections.Generic.KeyNotFoundException
-                | :? System.NullReferenceException
-                // Same present-but-null case as `recentCommentBodies` (.github#2365): a `null`
-                // `data.repository` (or `.issue`) throws `InvalidOperationException` from `GetProperty`,
-                // not `NullReferenceException`.
-                | :? System.InvalidOperationException ->
-                    Error(Malformed(subject, "the sub-issue graph response is missing `repository.issue.subIssues`"))
+                        Ok { Total = total; Children = children }
+                    with
+                    | :? System.Collections.Generic.KeyNotFoundException
+                    | :? System.NullReferenceException
+                    // Same present-but-null case as `recentCommentBodies` (.github#2365): a `null`
+                    // `data.repository` (or `.issue`) throws `InvalidOperationException` from `GetProperty`,
+                    // not `NullReferenceException`.
+                    | :? System.InvalidOperationException ->
+                        Error(
+                            Malformed(subject, "the sub-issue graph response is missing `repository.issue.subIssues`")
+                        )
 
     let refIsPullRequest (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<bool> =
 
         let subject = $"%s{owner}/%s{repo}#%d{number} (pull-request probe)"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}"
-              Query = []
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1482,16 +1681,18 @@ module Reads =
 
     let rateLimit (transport: IGitHubTransport) : IoResult<RateLimitSnapshot> =
         let request =
-            { Method = "GET"
-              Path = "rate_limit"
-              Query = []
-              Body = NoBody
-              // FREE. The meter read does not spend the meter, and it is billed to NEITHER counter. That is
-              // what makes "back off until the reset" a strategy and not a guess — and the corpus depends
-              // on it: bill this one and every GraphQL count delta it asserts shifts by one.
-              Budget = Free
-              IfNoneMatch = None
-              Subject = "the rate limit" }
+            {
+                Method = "GET"
+                Path = "rate_limit"
+                Query = []
+                Body = NoBody
+                // FREE. The meter read does not spend the meter, and it is billed to NEITHER counter. That is
+                // what makes "back off until the reset" a strategy and not a guess — and the corpus depends
+                // on it: bill this one and every GraphQL count delta it asserts shifts by one.
+                Budget = Free
+                IfNoneMatch = None
+                Subject = "the rate limit"
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1535,7 +1736,12 @@ module Reads =
 
     // ---- body-edit provenance (.github#2477) -------------------------------------------------------
 
-    type ContentEdit = { EditedAt: DateTimeOffset; EditorLogin: string option }
+    type ContentEdit =
+        {
+            EditedAt: DateTimeOffset
+            EditorLogin: string option
+        }
+
     type ContentEditProvenance = { Total: int; Edits: ContentEdit list }
 
     [<Literal>]
@@ -1552,19 +1758,23 @@ module Reads =
         let subject = $"%s{owner}/%s{repo}#%d{number} content-edit provenance"
 
         let request =
-            { Method = "POST"
-              Path = "graphql"
-              Query = []
-              Body =
-                Transport.Query(
-                    ContentEditsDoc,
-                    [ "owner", Transport.VString owner
-                      "repo", Transport.VString repo
-                      "number", Transport.VNumber(double number) ]
-                )
-              Budget = GraphQl
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "POST"
+                Path = "graphql"
+                Query = []
+                Body =
+                    Transport.Query(
+                        ContentEditsDoc,
+                        [
+                            "owner", Transport.VString owner
+                            "repo", Transport.VString repo
+                            "number", Transport.VNumber(double number)
+                        ]
+                    )
+                Budget = GraphQl
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1582,66 +1792,72 @@ module Reads =
                 | Error e -> Error e
                 | Ok data ->
 
-                // FAILS CLOSED (#2456/#2477): a null `issueOrPullRequest` (not found, wrong type, or not
-                // visible to this token), a response with no `userContentEdits`, or a `totalCount` that is
-                // not a number are each a STRUCTURAL failure caught below as `Malformed` — an ERROR, never
-                // `Ok { Total = 0; Edits = [] }`. `.github#2456` exists precisely because a REST-timeline
-                // "no edits found" is `NOT_MEASURED`, not a negative result; degrading an unreadable
-                // GraphQL response into an empty connection here would silently manufacture that exact
-                // false negative through the "authoritative" path instead.
-                try
-                    let editsNode =
-                        data
-                            .GetProperty("repository")
-                            .GetProperty("issueOrPullRequest")
-                            .GetProperty("userContentEdits")
+                    // FAILS CLOSED (#2456/#2477): a null `issueOrPullRequest` (not found, wrong type, or not
+                    // visible to this token), a response with no `userContentEdits`, or a `totalCount` that is
+                    // not a number are each a STRUCTURAL failure caught below as `Malformed` — an ERROR, never
+                    // `Ok { Total = 0; Edits = [] }`. `.github#2456` exists precisely because a REST-timeline
+                    // "no edits found" is `NOT_MEASURED`, not a negative result; degrading an unreadable
+                    // GraphQL response into an empty connection here would silently manufacture that exact
+                    // false negative through the "authoritative" path instead.
+                    try
+                        let editsNode =
+                            data
+                                .GetProperty("repository")
+                                .GetProperty("issueOrPullRequest")
+                                .GetProperty("userContentEdits")
 
-                    let total = editsNode.GetProperty("totalCount").GetInt32()
+                        let total = editsNode.GetProperty("totalCount").GetInt32()
 
-                    let edits =
-                        editsNode.GetProperty("nodes").EnumerateArray()
-                        |> Seq.choose (fun n ->
-                            match n.TryGetProperty "editedAt" with
-                            | true, v when v.ValueKind = JsonValueKind.String ->
-                                match DateTimeOffset.TryParse(v.GetString()) with
-                                | true, editedAt ->
-                                    let login =
-                                        match n.TryGetProperty "editor" with
-                                        | true, ed when ed.ValueKind = JsonValueKind.Object -> str ed "login"
-                                        | _ -> None
+                        let edits =
+                            editsNode.GetProperty("nodes").EnumerateArray()
+                            |> Seq.choose (fun n ->
+                                match n.TryGetProperty "editedAt" with
+                                | true, v when v.ValueKind = JsonValueKind.String ->
+                                    match DateTimeOffset.TryParse(v.GetString()) with
+                                    | true, editedAt ->
+                                        let login =
+                                            match n.TryGetProperty "editor" with
+                                            | true, ed when ed.ValueKind = JsonValueKind.Object -> str ed "login"
+                                            | _ -> None
 
-                                    Some { EditedAt = editedAt; EditorLogin = login }
-                                | _ -> None
-                            | _ -> None)
-                        |> List.ofSeq
+                                        Some
+                                            {
+                                                EditedAt = editedAt
+                                                EditorLogin = login
+                                            }
+                                    | _ -> None
+                                | _ -> None)
+                            |> List.ofSeq
 
-                    Ok { Total = total; Edits = edits }
-                with
-                | :? System.Collections.Generic.KeyNotFoundException
-                | :? System.NullReferenceException
-                // Same present-but-null case `subIssues` (#2365) and `recentCommentBodies` guard: a
-                // `null` `data.repository` (or `.issueOrPullRequest`, or `.userContentEdits`) throws
-                // `InvalidOperationException` from `GetProperty`, not `NullReferenceException`.
-                | :? System.InvalidOperationException ->
-                    Error(
-                        Malformed(
-                            subject,
-                            "the content-edit response is missing `repository.issueOrPullRequest.userContentEdits` — a null or absent node here is a FAILED READ, never zero edits"
+                        Ok { Total = total; Edits = edits }
+                    with
+                    | :? System.Collections.Generic.KeyNotFoundException
+                    | :? System.NullReferenceException
+                    // Same present-but-null case `subIssues` (#2365) and `recentCommentBodies` guard: a
+                    // `null` `data.repository` (or `.issueOrPullRequest`, or `.userContentEdits`) throws
+                    // `InvalidOperationException` from `GetProperty`, not `NullReferenceException`.
+                    | :? System.InvalidOperationException ->
+                        Error(
+                            Malformed(
+                                subject,
+                                "the content-edit response is missing `repository.issueOrPullRequest.userContentEdits` — a null or absent node here is a FAILED READ, never zero edits"
+                            )
                         )
-                    )
 
     let prHeadRef (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : IoResult<string> =
 
         let subject = $"%s{owner}/%s{repo} PR #%d{pr}"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
-              Query = []
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1666,13 +1882,15 @@ module Reads =
         let subject = $"%s{owner}/%s{repo} PR #%d{pr}"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
-              Query = []
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1693,13 +1911,15 @@ module Reads =
         let subject = $"%s{owner}/%s{repo} PR #%d{pr}"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
-              Query = []
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1724,13 +1944,15 @@ module Reads =
         let subject = $"%s{owner}/%s{repo} PR #%d{pr} effective base"
 
         let prRequest =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
-              Query = []
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         let baseRef =
             match transport.Send prRequest with
@@ -1752,14 +1974,17 @@ module Reads =
         | Error e -> Error e
         | Ok branch ->
             let tipSubject = $"%s{owner}/%s{repo} base branch %s{branch} tip for PR #%d{pr}"
+
             let tipRequest =
-                { Method = "GET"
-                  Path = $"repos/%s{owner}/%s{repo}/git/ref/heads/%s{Uri.EscapeDataString branch}"
-                  Query = []
-                  Body = NoBody
-                  Budget = Rest
-                  IfNoneMatch = None
-                  Subject = tipSubject }
+                {
+                    Method = "GET"
+                    Path = $"repos/%s{owner}/%s{repo}/git/ref/heads/%s{Uri.EscapeDataString branch}"
+                    Query = []
+                    Body = NoBody
+                    Budget = Rest
+                    IfNoneMatch = None
+                    Subject = tipSubject
+                }
 
             match transport.Send tipRequest with
             | Error e -> Error e
@@ -1789,13 +2014,15 @@ module Reads =
             path.Split('/') |> Array.map Uri.EscapeDataString |> String.concat "/"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/contents/%s{escapedPath}"
-              Query = [ "ref", gitRef ]
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/contents/%s{escapedPath}"
+                Query = [ "ref", gitRef ]
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1818,14 +2045,18 @@ module Reads =
 
     let commitMessage (transport: IGitHubTransport) (owner: string) (repo: string) (sha: string) : IoResult<string> =
         let subject = $"%s{owner}/%s{repo} commit %s{sha}"
+
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/commits/%s{sha}"
-              Query = []
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/commits/%s{sha}"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
+
         match transport.Send request with
         | Error e -> Error e
         | Ok response ->
@@ -1833,6 +2064,7 @@ module Reads =
             | Error e -> Error e
             | Ok doc ->
                 use doc = doc
+
                 match doc.RootElement.TryGetProperty "commit" with
                 | true, commit when commit.ValueKind = JsonValueKind.Object ->
                     match str commit "message" with
@@ -1845,13 +2077,15 @@ module Reads =
         let subject = $"%s{owner}/%s{repo} PR #%d{pr} files"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}/files"
-              Query = [ "per_page", "100" ]
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}/files"
+                Query = [ "per_page", "100" ]
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1875,13 +2109,15 @@ module Reads =
         let subject = $"%s{owner}/%s{repo} PR #%d{pr} body"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
-              Query = []
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1955,14 +2191,16 @@ module Reads =
                                 prs.EnumerateArray() |> Seq.choose (fun p -> intOf p "number") |> List.ofSeq
                             | _ -> []
 
-                        ({ Path = str r "path" |> Option.defaultValue ""
-                           Event = str r "event" |> Option.defaultValue ""
-                           HeadBranch = str r "head_branch" |> Option.defaultValue ""
-                           PrNumbers = prNumbers
-                           RunNumber = intOf r "run_number" |> Option.defaultValue 0
-                           Status = str r "status" |> Option.defaultValue ""
-                           Conclusion = str r "conclusion"
-                           CheckSuiteId = int64Of r "check_suite_id" }
+                        ({
+                            Path = str r "path" |> Option.defaultValue ""
+                            Event = str r "event" |> Option.defaultValue ""
+                            HeadBranch = str r "head_branch" |> Option.defaultValue ""
+                            PrNumbers = prNumbers
+                            RunNumber = intOf r "run_number" |> Option.defaultValue 0
+                            Status = str r "status" |> Option.defaultValue ""
+                            Conclusion = str r "conclusion"
+                            CheckSuiteId = int64Of r "check_suite_id"
+                        }
                         : Landable.RunRow))
                     |> List.ofSeq
                     |> Some
@@ -1984,8 +2222,10 @@ module Reads =
             conditionalGet transport subject path [] Single
             |> Result.bind (fun body -> parse subject body)
 
-        match readObject prSubject $"repos/%s{owner}/%s{repo}/pulls/%d{pr}",
-              readObject repoSubject $"repos/%s{owner}/%s{repo}" with
+        match
+            readObject prSubject $"repos/%s{owner}/%s{repo}/pulls/%d{pr}",
+            readObject repoSubject $"repos/%s{owner}/%s{repo}"
+        with
         | Error error, _
         | _, Error error -> Error error
         | Ok prDoc, Ok repoDoc ->
@@ -1993,15 +2233,19 @@ module Reads =
             use repoDoc = repoDoc
             let prRoot = prDoc.RootElement
             let repoRoot = repoDoc.RootElement
+
             let merged =
                 match prRoot.TryGetProperty "merged" with
                 | true, value when value.ValueKind = JsonValueKind.True -> true
                 | _ -> false
+
             let mergeSha = str prRoot "merge_commit_sha"
+
             let baseBranch =
                 match prRoot.TryGetProperty "base" with
                 | true, value when value.ValueKind = JsonValueKind.Object -> str value "ref"
                 | _ -> None
+
             let defaultBranch = str repoRoot "default_branch"
 
             match merged, mergeSha, baseBranch, defaultBranch with
@@ -2010,9 +2254,14 @@ module Reads =
             | _, _, None, _ -> Error(Malformed(prSubject, "the merged PR carried no base.ref"))
             | _, _, _, None -> Error(Malformed(repoSubject, "the repository carried no default_branch"))
             | true, Some mergeSha, Some baseBranch, Some defaultBranch when baseBranch <> defaultBranch ->
-                Ok(Delivery.Rejected($"merged PR base '%s{baseBranch}' is not repository default branch '%s{defaultBranch}'"))
+                Ok(
+                    Delivery.Rejected(
+                        $"merged PR base '%s{baseBranch}' is not repository default branch '%s{defaultBranch}'"
+                    )
+                )
             | true, Some mergeSha, Some _, Some defaultBranch ->
                 let runsSubject = $"%s{owner}/%s{repo} post-merge runs @ %s{mergeSha}"
+
                 match
                     conditionalGet
                         transport
@@ -2028,11 +2277,14 @@ module Reads =
                     | Ok runsDoc ->
                         use runsDoc = runsDoc
                         let root = runsDoc.RootElement
+
                         match root.TryGetProperty "total_count", root.TryGetProperty "workflow_runs" with
-                        | (true, total), (true, runs)
-                            when total.ValueKind = JsonValueKind.Number && runs.ValueKind = JsonValueKind.Array ->
+                        | (true, total), (true, runs) when
+                            total.ValueKind = JsonValueKind.Number && runs.ValueKind = JsonValueKind.Array
+                            ->
                             let expected = total.GetInt32()
                             let observed = runs.GetArrayLength()
+
                             if expected <> observed then
                                 Error(
                                     Malformed(
@@ -2045,50 +2297,79 @@ module Reads =
                                     let requiredString name =
                                         match str run name with
                                         | Some value when not (String.IsNullOrWhiteSpace value) -> Ok value
-                                        | _ -> Error(Malformed(runsSubject, $"workflow_runs[%d{index}] carried no %s{name}"))
+                                        | _ ->
+                                            Error(
+                                                Malformed(runsSubject, $"workflow_runs[%d{index}] carried no %s{name}")
+                                            )
+
                                     let requiredInt64 name =
                                         match int64Of run name with
                                         | Some value -> Ok value
-                                        | None -> Error(Malformed(runsSubject, $"workflow_runs[%d{index}] carried no %s{name}"))
+                                        | None ->
+                                            Error(
+                                                Malformed(runsSubject, $"workflow_runs[%d{index}] carried no %s{name}")
+                                            )
+
                                     let requiredInt name =
                                         match intOf run name with
                                         | Some value -> Ok value
-                                        | None -> Error(Malformed(runsSubject, $"workflow_runs[%d{index}] carried no %s{name}"))
+                                        | None ->
+                                            Error(
+                                                Malformed(runsSubject, $"workflow_runs[%d{index}] carried no %s{name}")
+                                            )
 
-                                    match requiredInt64 "id", requiredInt "run_attempt", requiredString "path",
-                                          requiredString "event", requiredString "head_branch", requiredString "head_sha",
-                                          requiredString "status", requiredString "html_url" with
+                                    match
+                                        requiredInt64 "id",
+                                        requiredInt "run_attempt",
+                                        requiredString "path",
+                                        requiredString "event",
+                                        requiredString "head_branch",
+                                        requiredString "head_sha",
+                                        requiredString "status",
+                                        requiredString "html_url"
+                                    with
                                     | Ok id, Ok attempt, Ok workflow, Ok event, Ok branch, Ok sha, Ok status, Ok url ->
-                                        Ok
-                                            ({ Id = id
-                                               Attempt = attempt
-                                               Workflow = workflow
-                                               Event = event
-                                               Branch = branch
-                                               Sha = sha
-                                               Status = status
-                                               Conclusion = str run "conclusion" |> Option.defaultValue ""
-                                               Url = url }: Delivery.PostMergeRun)
+                                        Ok(
+                                            {
+                                                Id = id
+                                                Attempt = attempt
+                                                Workflow = workflow
+                                                Event = event
+                                                Branch = branch
+                                                Sha = sha
+                                                Status = status
+                                                Conclusion = str run "conclusion" |> Option.defaultValue ""
+                                                Url = url
+                                            }
+                                            : Delivery.PostMergeRun
+                                        )
                                     | results ->
                                         let firstError =
-                                            [ match results with
-                                              | Error error, _, _, _, _, _, _, _ -> yield error
-                                              | _, Error error, _, _, _, _, _, _ -> yield error
-                                              | _, _, Error error, _, _, _, _, _ -> yield error
-                                              | _, _, _, Error error, _, _, _, _ -> yield error
-                                              | _, _, _, _, Error error, _, _, _ -> yield error
-                                              | _, _, _, _, _, Error error, _, _ -> yield error
-                                              | _, _, _, _, _, _, Error error, _ -> yield error
-                                              | _, _, _, _, _, _, _, Error error -> yield error
-                                              | _ -> () ]
+                                            [
+                                                match results with
+                                                | Error error, _, _, _, _, _, _, _ -> yield error
+                                                | _, Error error, _, _, _, _, _, _ -> yield error
+                                                | _, _, Error error, _, _, _, _, _ -> yield error
+                                                | _, _, _, Error error, _, _, _, _ -> yield error
+                                                | _, _, _, _, Error error, _, _, _ -> yield error
+                                                | _, _, _, _, _, Error error, _, _ -> yield error
+                                                | _, _, _, _, _, _, Error error, _ -> yield error
+                                                | _, _, _, _, _, _, _, Error error -> yield error
+                                                | _ -> ()
+                                            ]
                                             |> List.head
+
                                         Error firstError
 
                                 let parsed =
                                     runs.EnumerateArray()
                                     |> Seq.mapi parseRun
-                                    |> Seq.fold (fun state next ->
-                                        state |> Result.bind (fun collected -> next |> Result.map (fun value -> value :: collected))) (Ok [])
+                                    |> Seq.fold
+                                        (fun state next ->
+                                            state
+                                            |> Result.bind (fun collected ->
+                                                next |> Result.map (fun value -> value :: collected)))
+                                        (Ok [])
                                     |> Result.map List.rev
 
                                 parsed
@@ -2096,9 +2377,8 @@ module Reads =
                                     let matching =
                                         allRuns
                                         |> List.filter (fun run ->
-                                            run.Event = "push"
-                                            && run.Branch = defaultBranch
-                                            && run.Sha = mergeSha)
+                                            run.Event = "push" && run.Branch = defaultBranch && run.Sha = mergeSha)
+
                                     let ordered = matching |> List.sortBy (fun run -> run.Id, run.Attempt)
 
                                     if List.isEmpty matching then
@@ -2114,11 +2394,14 @@ module Reads =
                                         // receipt. Retain every matching run so their red/pending/cancelled state
                                         // remains durable and visible instead of disappearing from the audit.
                                         Delivery.Verified
-                                            { MergeSha = mergeSha
-                                              DefaultBranch = defaultBranch
-                                              Runs = ordered }
+                                            {
+                                                MergeSha = mergeSha
+                                                DefaultBranch = defaultBranch
+                                                Runs = ordered
+                                            }
                                     elif matching |> List.exists (fun run -> run.Status <> "completed") then
-                                        Delivery.Awaiting "no successful exact-merge default-branch push execution has completed; at least one matching execution is still running"
+                                        Delivery.Awaiting
+                                            "no successful exact-merge default-branch push execution has completed; at least one matching execution is still running"
                                     else
                                         match matching |> List.tryFind (fun run -> run.Conclusion <> "success") with
                                         | Some run ->
@@ -2128,8 +2411,15 @@ module Reads =
                                         | None ->
                                             // Defensive only: every completed success was admitted above and
                                             // every other completed conclusion is rejected here.
-                                            Delivery.Rejected "no successful exact-merge default-branch push execution was found")
-                        | _ -> Error(Malformed(runsSubject, "the Actions response carried no numeric total_count and workflow_runs array"))
+                                            Delivery.Rejected
+                                                "no successful exact-merge default-branch push execution was found")
+                        | _ ->
+                            Error(
+                                Malformed(
+                                    runsSubject,
+                                    "the Actions response carried no numeric total_count and workflow_runs array"
+                                )
+                            )
 
     // The `check_runs[]` on a head SHA, as `Landable.CheckRow`s — or `None` if the read failed.
     let private checkRuns
@@ -2167,10 +2457,12 @@ module Reads =
                             | true, s when s.ValueKind = JsonValueKind.Object -> int64Of s "id"
                             | _ -> None
 
-                        ({ Name = str c "name" |> Option.defaultValue ""
-                           CheckSuiteId = suiteId
-                           Status = str c "status" |> Option.defaultValue ""
-                           Conclusion = str c "conclusion" }
+                        ({
+                            Name = str c "name" |> Option.defaultValue ""
+                            CheckSuiteId = suiteId
+                            Status = str c "status" |> Option.defaultValue ""
+                            Conclusion = str c "conclusion"
+                        }
                         : Landable.CheckRow))
                     |> List.ofSeq
                     |> Some
@@ -2299,13 +2591,15 @@ module Reads =
                     | _ -> false
 
                 Some
-                    { Merge = merge
-                      HeadSha = sha
-                      HeadRef = headRef
-                      BaseRef = baseRef
-                      MergeableState = str root "mergeable_state"
-                      State = str root "state"
-                      Merged = merged }
+                    {
+                        Merge = merge
+                        HeadSha = sha
+                        HeadRef = headRef
+                        BaseRef = baseRef
+                        MergeableState = str root "mergeable_state"
+                        State = str root "state"
+                        Merged = merged
+                    }
 
     // The BRANCH's real tip — the commit `refs/heads/{branch}` names right now, or `None` if it cannot be
     // read. `None` is never "the branch is empty": an unreadable ref proves nothing, and the one caller
@@ -2326,16 +2620,18 @@ module Reads =
         let path = $"repos/%s{owner}/%s{repo}/git/ref/heads/%s{Uri.EscapeDataString branch}"
 
         let request =
-            { Method = "GET"
-              Path = path
-              Query = []
-              Body = NoBody
-              // REST — the budget the claim lock lives on (ADR-0034 §3). Stated here, at the call, because
-              // this read is the whole COST of #989 and it must be visible where it is spent. It is paid
-              // only on the `false`-with-no-`--sha` path: a conflicted verdict, never the green hot path.
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = path
+                Query = []
+                Body = NoBody
+                // REST — the budget the claim lock lives on (ADR-0034 §3). Stated here, at the call, because
+                // this read is the whole COST of #989 and it must be visible where it is spent. It is paid
+                // only on the `false`-with-no-`--sha` path: a conflicted verdict, never the green hot path.
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error _ -> None
@@ -2624,13 +2920,15 @@ module Reads =
         let rec readMerge (triesLeft: int) : PrFacts =
             match prFacts transport owner repo pr with
             | None ->
-                { Merge = Absent
-                  HeadSha = None
-                  HeadRef = None
-                  BaseRef = None
-                  MergeableState = None
-                  State = None
-                  Merged = false }
+                {
+                    Merge = Absent
+                    HeadSha = None
+                    HeadRef = None
+                    BaseRef = None
+                    MergeableState = None
+                    State = None
+                    Merged = false
+                }
             // A CLOSED PR IS NEVER RE-READ (#1680). Its `mergeable` is `null` and will stay `null` forever
             // — GitHub stops computing mergeability once a PR leaves `open` — so every try of this budget
             // is spent waiting for a background job that will never run again. That is the FIRST of the two
@@ -2710,8 +3008,10 @@ module Reads =
         let assertedSha =
             match facts.HeadSha, expected with
             | Some sha, Some want when sha <> want ->
-                [ Asserted
-                      $"you asked about %s{want}, but this PR's head is %s{sha} — the merge that landed is not the commit you named" ]
+                [
+                    Asserted
+                        $"you asked about %s{want}, but this PR's head is %s{sha} — the merge that landed is not the commit you named"
+                ]
             | _ -> []
 
         match facts.State, facts.Merged with
@@ -2730,8 +3030,10 @@ module Reads =
 
                 PrPending,
                 0,
-                [ Asserted
-                      $"the PR still names head %s{sha}, not the %s{want} you asked to gate — GitHub has not caught up with the push (or --sha named a commit that is not this PR's head)" ]
+                [
+                    Asserted
+                        $"the PR still names head %s{sha}, not the %s{want} you asked to gate — GitHub has not caught up with the push (or --sha named a commit that is not this PR's head)"
+                ]
             | None ->
 
                 // Bound HERE, past the early return above, and matched on `expected = None` — so the read is spent on
@@ -2846,9 +3148,7 @@ module Reads =
                         // the fail-closed default would falsely name an advisory failure as causal.
                         let (state, n), scoringAdvisory =
                             let couldChangeTheAnswer =
-                                fst closed <> PrGreen
-                                && snd closed > 0
-                                && (refusedState facts |> Option.isNone)
+                                fst closed <> PrGreen && snd closed > 0 && (refusedState facts |> Option.isNone)
 
                             if not couldChangeTheAnswer then
                                 closed, closedAdvisory
@@ -2988,8 +3288,10 @@ module Reads =
                             let named =
                                 match facts.BaseRef with
                                 | None ->
-                                    [ PolicyUnreadable
-                                          "the PR object named no base branch, so its policy could not be read to say which requirement is unmet" ]
+                                    [
+                                        PolicyUnreadable
+                                            "the PR object named no base branch, so its policy could not be read to say which requirement is unmet"
+                                    ]
                                 | Some b ->
                                     match requiredContexts transport owner repo b with
                                     | RequiredUnreadable why -> [ PolicyUnreadable why ]
@@ -3023,19 +3325,23 @@ module Reads =
         let subject = $"%s{owner}/%s{repo} PR #%d{pr} closing refs"
 
         let request =
-            { Method = "POST"
-              Path = "graphql"
-              Query = []
-              Body =
-                Transport.Query(
-                    ClosingRefDoc,
-                    [ "owner", Transport.VString owner
-                      "repo", Transport.VString repo
-                      "pr", Transport.VNumber(double pr) ]
-                )
-              Budget = GraphQl
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "POST"
+                Path = "graphql"
+                Query = []
+                Body =
+                    Transport.Query(
+                        ClosingRefDoc,
+                        [
+                            "owner", Transport.VString owner
+                            "repo", Transport.VString repo
+                            "pr", Transport.VNumber(double pr)
+                        ]
+                    )
+                Budget = GraphQl
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -3060,75 +3366,79 @@ module Reads =
                 | Error e -> Error e
                 | Ok data ->
 
-                try
-                    let connection =
-                        data
-                            .GetProperty("repository")
-                            .GetProperty("pullRequest")
-                            .GetProperty("closingIssuesReferences")
+                    try
+                        let connection =
+                            data
+                                .GetProperty("repository")
+                                .GetProperty("pullRequest")
+                                .GetProperty("closingIssuesReferences")
 
-                    // AND `Ok None` ALSO MEANS *MEASURED* NONE ON THE OTHER AXIS (`.github#2535`). The
-                    // window is `first: 5`, and `Seq.tryHead` below takes ONE of whatever arrived — so a PR
-                    // that closes more issues than the window admits was answered from a set already known
-                    // to be short, and nothing said so. The honest answer to that is a refusal: this read's
-                    // whole contract is *"the one item this PR implements"*, and a PR whose closing graph we
-                    // could only partly see does not have a defensible "one". `verify-paths` renders an
-                    // `Error` as a refusal and `Ok None` as `FSGG-PATHS SKIP … ExitGreen`, so the failure
-                    // direction matters here exactly as much as it did for `.github#2534`.
-                    match connectionComplete subject "this PR's closing-issue connection" ClosingRefWindow connection with
-                    | Error e -> Error e
-                    | Ok() ->
+                        // AND `Ok None` ALSO MEANS *MEASURED* NONE ON THE OTHER AXIS (`.github#2535`). The
+                        // window is `first: 5`, and `Seq.tryHead` below takes ONE of whatever arrived — so a PR
+                        // that closes more issues than the window admits was answered from a set already known
+                        // to be short, and nothing said so. The honest answer to that is a refusal: this read's
+                        // whole contract is *"the one item this PR implements"*, and a PR whose closing graph we
+                        // could only partly see does not have a defensible "one". `verify-paths` renders an
+                        // `Error` as a refusal and `Ok None` as `FSGG-PATHS SKIP … ExitGreen`, so the failure
+                        // direction matters here exactly as much as it did for `.github#2534`.
+                        match
+                            connectionComplete subject "this PR's closing-issue connection" ClosingRefWindow connection
+                        with
+                        | Error e -> Error e
+                        | Ok() ->
 
-                    let nodes = connection.GetProperty("nodes")
+                            let nodes = connection.GetProperty("nodes")
 
-                    match nodes.EnumerateArray() |> Seq.tryHead with
-                    | None -> Ok None
-                    | Some n ->
-                        let number =
-                            match n.TryGetProperty "number" with
-                            | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
-                            | _ -> None
+                            match nodes.EnumerateArray() |> Seq.tryHead with
+                            | None -> Ok None
+                            | Some n ->
+                                let number =
+                                    match n.TryGetProperty "number" with
+                                    | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                                    | _ -> None
 
-                        let nwo =
-                            match n.TryGetProperty "repository" with
-                            | true, r when r.ValueKind = JsonValueKind.Object -> str r "nameWithOwner"
-                            | _ -> None
+                                let nwo =
+                                    match n.TryGetProperty "repository" with
+                                    | true, r when r.ValueKind = JsonValueKind.Object -> str r "nameWithOwner"
+                                    | _ -> None
 
-                        match number, nwo with
-                        | Some num, Some nwo when nwo.Contains "/" ->
-                            let parts = nwo.Split('/')
+                                match number, nwo with
+                                | Some num, Some nwo when nwo.Contains "/" ->
+                                    let parts = nwo.Split('/')
 
-                            Ok(
-                                Some
-                                    { Owner = parts.[0]
-                                      Repo = parts.[1]
-                                      Number = num }
+                                    Ok(
+                                        Some
+                                            {
+                                                Owner = parts.[0]
+                                                Repo = parts.[1]
+                                                Number = num
+                                            }
+                                    )
+                                // A NODE IS PRESENT AND UNREADABLE. The connection reported a closing reference
+                                // and we could not name it — the opposite of "it closes nothing", so it may not
+                                // borrow that answer's value.
+                                | _ ->
+                                    Error(
+                                        Malformed(
+                                            subject,
+                                            "a closing-issue reference is present but carries no readable `number`/`repository.nameWithOwner` — a reference we could not name is a FAILED READ, never 'this PR closes nothing'"
+                                        )
+                                    )
+                    with
+                    | :? System.Collections.Generic.KeyNotFoundException
+                    | :? System.NullReferenceException
+                    // Same present-but-null case as `recentCommentBodies` (.github#2365): a `null`
+                    // `data.repository` (or `.pullRequest`) throws `InvalidOperationException` from
+                    // `GetProperty`, not `NullReferenceException`. This arm used to answer `Ok None` for all
+                    // three, which is what made an unreadable graph indistinguishable from a PR that genuinely
+                    // closes no issue.
+                    | :? System.InvalidOperationException ->
+                        Error(
+                            Malformed(
+                                subject,
+                                "the closing-refs response is missing `repository.pullRequest.closingIssuesReferences` — a null or absent node here is a FAILED READ, never 'this PR closes nothing'"
                             )
-                        // A NODE IS PRESENT AND UNREADABLE. The connection reported a closing reference
-                        // and we could not name it — the opposite of "it closes nothing", so it may not
-                        // borrow that answer's value.
-                        | _ ->
-                            Error(
-                                Malformed(
-                                    subject,
-                                    "a closing-issue reference is present but carries no readable `number`/`repository.nameWithOwner` — a reference we could not name is a FAILED READ, never 'this PR closes nothing'"
-                                )
-                            )
-                with
-                | :? System.Collections.Generic.KeyNotFoundException
-                | :? System.NullReferenceException
-                // Same present-but-null case as `recentCommentBodies` (.github#2365): a `null`
-                // `data.repository` (or `.pullRequest`) throws `InvalidOperationException` from
-                // `GetProperty`, not `NullReferenceException`. This arm used to answer `Ok None` for all
-                // three, which is what made an unreadable graph indistinguishable from a PR that genuinely
-                // closes no issue.
-                | :? System.InvalidOperationException ->
-                    Error(
-                        Malformed(
-                            subject,
-                            "the closing-refs response is missing `repository.pullRequest.closingIssuesReferences` — a null or absent node here is a FAILED READ, never 'this PR closes nothing'"
                         )
-                    )
 
     // ---- the claim-scan candidate set --------------------------------------------------------------
 
@@ -3144,16 +3454,18 @@ module Reads =
         let subject = $"%s{owner}/%s{repo} open issues"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/issues"
-              Query = [ "state", "open"; "per_page", "100" ]
-              Body = NoBody
-              Budget = Rest
-              // UNCONDITIONAL, AND IT MATTERS. This is the set the claim scan runs over. A 304 serving a
-              // body captured before a marker was posted would hide a live lock. The corpus asserts
-              // `inm=none` on exactly this request.
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/issues"
+                Query = [ "state", "open"; "per_page", "100" ]
+                Body = NoBody
+                Budget = Rest
+                // UNCONDITIONAL, AND IT MATTERS. This is the set the claim scan runs over. A 304 serving a
+                // body captured before a marker was posted would hide a live lock. The corpus asserts
+                // `inm=none` on exactly this request.
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -3182,42 +3494,42 @@ module Reads =
                         | true, _ -> Ok None
                         | _ ->
 
-                        match i.TryGetProperty "number" with
+                            match i.TryGetProperty "number" with
                             // AN ELEMENT NOBODY CAN NAME REFUSES THE WHOLE READ (.github#1794). It cannot be
                             // carried as an unreadable ENTRY the way a marker scan is keyed
                             // on the number, so there is no lock to look up, no ref to report, and nothing a
                             // caller could fail closed *about*. Dropping it was the fail-open — the issue
                             // vanished from the claim scan, its lock reserved nothing, and nothing anywhere
                             // said an element had been discarded. #266: never "I looked and it was fine".
-                        | true, n when n.ValueKind <> JsonValueKind.Number ->
-                            Error(
-                                Malformed(
-                                    subject,
-                                    $"element %d{index} of %d{total} has a `number` that is not a number (%A{n.ValueKind}) — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                            | true, n when n.ValueKind <> JsonValueKind.Number ->
+                                Error(
+                                    Malformed(
+                                        subject,
+                                        $"element %d{index} of %d{total} has a `number` that is not a number (%A{n.ValueKind}) — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                                    )
                                 )
-                            )
-                        | false, _ ->
-                            Error(
-                                Malformed(
-                                    subject,
-                                    $"element %d{index} of %d{total} carries no `number` — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                            | false, _ ->
+                                Error(
+                                    Malformed(
+                                        subject,
+                                        $"element %d{index} of %d{total} carries no `number` — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                                    )
                                 )
-                            )
-                        | true, n ->
-                            let body =
-                                match i.TryGetProperty "body" with
-                                | true, b when b.ValueKind = JsonValueKind.String -> BodyRead(b.GetString())
-                                // `"body": null` IS A SUCCESSFUL READ, AND IT STAYS ONE. GitHub serves null
-                                // for an issue nobody wrote a description for; the issue exists and declares
-                                // nothing, which is exactly what `TouchSet.parse ""` answers. The defect
-                                // .github#1794 names is not this line — it is that the two lines below used
-                                // to be this line.
-                                | true, b when b.ValueKind = JsonValueKind.Null -> BodyRead ""
-                                | true, b ->
-                                    BodyUnread $"the `body` field is a %A{b.ValueKind}, not a string or null"
-                                | false, _ -> BodyUnread "the element carries no `body` field"
+                            | true, n ->
+                                let body =
+                                    match i.TryGetProperty "body" with
+                                    | true, b when b.ValueKind = JsonValueKind.String -> BodyRead(b.GetString())
+                                    // `"body": null` IS A SUCCESSFUL READ, AND IT STAYS ONE. GitHub serves null
+                                    // for an issue nobody wrote a description for; the issue exists and declares
+                                    // nothing, which is exactly what `TouchSet.parse ""` answers. The defect
+                                    // .github#1794 names is not this line — it is that the two lines below used
+                                    // to be this line.
+                                    | true, b when b.ValueKind = JsonValueKind.Null -> BodyRead ""
+                                    | true, b ->
+                                        BodyUnread $"the `body` field is a %A{b.ValueKind}, not a string or null"
+                                    | false, _ -> BodyUnread "the element carries no `body` field"
 
-                            Ok(Some { Number = n.GetInt32(); Body = body })
+                                Ok(Some { Number = n.GetInt32(); Body = body })
 
                     // Short-circuit on the first refusal. `List.fold` would read the rest of the array to
                     // no purpose, and an `Error` is an answer about the WHOLE read, not about one element.
@@ -3274,15 +3586,17 @@ module Reads =
         let subject = $"%s{owner}/%s{repo} issues"
 
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/issues"
-              Query = query
-              Body = NoBody
-              Budget = Rest
-              // CONDITIONAL BY DESIGN — the ETag is what makes the 304 free. `--refresh` (fresh) drops it,
-              // forcing a full re-read when the caller wants to bypass the cache.
-              IfNoneMatch = (if fresh then None else Cache.getETag cacheKey)
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/issues"
+                Query = query
+                Body = NoBody
+                Budget = Rest
+                // CONDITIONAL BY DESIGN — the ETag is what makes the 304 free. `--refresh` (fresh) drops it,
+                // forcing a full re-read when the caller wants to bypass the cache.
+                IfNoneMatch = (if fresh then None else Cache.getETag cacheKey)
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -3400,28 +3714,73 @@ module Reads =
     //
     // `per_page` is taken from `CollectionPageSize` rather than written out again: a literal here that
     // drifted from the constant the guard compares against would disarm the guard silently.
-    let duplicateCandidates (transport: IGitHubTransport) (owner: string) (repo: string) : IoResult<DuplicateCandidate list> =
+    let duplicateCandidates
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        : IoResult<DuplicateCandidate list> =
         let subject = $"%s{owner}/%s{repo} all duplicate candidates"
-        let request = { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues"; Query = [ "state", "all"; "per_page", string CollectionPageSize ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
-        transport.Send request |> Result.bind (fun response ->
+
+        let request =
+            {
+                Method = "GET"
+                Path = $"repos/%s{owner}/%s{repo}/issues"
+                Query = [ "state", "all"; "per_page", string CollectionPageSize ]
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
+
+        transport.Send request
+        |> Result.bind (fun response ->
             let paginated = response.NextLink.IsSome
-            parse subject response.Body |> Result.bind (fun doc ->
+
+            parse subject response.Body
+            |> Result.bind (fun doc ->
                 use doc = doc
-                if doc.RootElement.ValueKind <> JsonValueKind.Array then Error(Malformed(subject, "candidate list is not an array")) else
-                let observed = doc.RootElement.GetArrayLength()
-                if paginated && observed <= CollectionPageSize then
-                    // A FAILED READ, NOT AN EMPTY ANSWER — and the message has to say which, because the
-                    // caller's next act is to decide whether a row it is about to create already exists.
-                    Error(Malformed(subject, $"the listing advertises a continuation but only %d{observed} element(s) arrived over a page size of %d{CollectionPageSize}: either the continuation was not merged, or the server advertised a page it had not filled. Neither can be told from the other here and neither is a set to decide from, so the duplicate inventory is treated as incomplete. That is a FAILED READ, not an empty answer — refusing to decide from it"))
+
+                if doc.RootElement.ValueKind <> JsonValueKind.Array then
+                    Error(Malformed(subject, "candidate list is not an array"))
                 else
-                doc.RootElement.EnumerateArray()
-                |> Seq.mapi (fun index item ->
-                    try
-                        let number = item.GetProperty("number").GetInt32()
-                        let state = item.GetProperty("state").GetString()
-                        let title = item.GetProperty("title").GetString()
-                        let body = match item.TryGetProperty "body" with | true, b when b.ValueKind = JsonValueKind.String -> b.GetString() | true, b when b.ValueKind = JsonValueKind.Null -> "" | _ -> raise (System.Exception "unreadable body")
-                        Ok { Number = number; State = state; Title = title; Body = body; IsPullRequest = item.TryGetProperty "pull_request" |> fst }
-                    with ex -> Error(Malformed(subject, $"candidate element %d{index} is unreadable: %s{ex.Message}")))
-                |> Seq.fold (fun state next -> state |> Result.bind (fun xs -> next |> Result.map (fun x -> x::xs))) (Ok [])
-                |> Result.map List.rev))
+                    let observed = doc.RootElement.GetArrayLength()
+
+                    if paginated && observed <= CollectionPageSize then
+                        // A FAILED READ, NOT AN EMPTY ANSWER — and the message has to say which, because the
+                        // caller's next act is to decide whether a row it is about to create already exists.
+                        Error(
+                            Malformed(
+                                subject,
+                                $"the listing advertises a continuation but only %d{observed} element(s) arrived over a page size of %d{CollectionPageSize}: either the continuation was not merged, or the server advertised a page it had not filled. Neither can be told from the other here and neither is a set to decide from, so the duplicate inventory is treated as incomplete. That is a FAILED READ, not an empty answer — refusing to decide from it"
+                            )
+                        )
+                    else
+                        doc.RootElement.EnumerateArray()
+                        |> Seq.mapi (fun index item ->
+                            try
+                                let number = item.GetProperty("number").GetInt32()
+                                let state = item.GetProperty("state").GetString()
+                                let title = item.GetProperty("title").GetString()
+
+                                let body =
+                                    match item.TryGetProperty "body" with
+                                    | true, b when b.ValueKind = JsonValueKind.String -> b.GetString()
+                                    | true, b when b.ValueKind = JsonValueKind.Null -> ""
+                                    | _ -> raise (System.Exception "unreadable body")
+
+                                Ok
+                                    {
+                                        Number = number
+                                        State = state
+                                        Title = title
+                                        Body = body
+                                        IsPullRequest = item.TryGetProperty "pull_request" |> fst
+                                    }
+                            with ex ->
+                                Error(
+                                    Malformed(subject, $"candidate element %d{index} is unreadable: %s{ex.Message}")
+                                ))
+                        |> Seq.fold
+                            (fun state next -> state |> Result.bind (fun xs -> next |> Result.map (fun x -> x :: xs)))
+                            (Ok [])
+                        |> Result.map List.rev))

@@ -103,7 +103,12 @@ module Kernel =
     /// factored so `done`'s Status=Done stamp and `claim`'s In-progress move cannot regrow the same
     /// promise-under-`ignore` (#1151). It does NOT touch the verdict: the caller keeps its exit code and
     /// merely emits this note, because the WORK is done (or the lock is held) whatever the column says.
-    let boardWriteNote (ref: Ref) (field: string) (value: string) (outcome: Result<Board.WriteOutcome, Errors.IoError>) : unit =
+    let boardWriteNote
+        (ref: Ref)
+        (field: string)
+        (value: string)
+        (outcome: Result<Board.WriteOutcome, Errors.IoError>)
+        : unit =
         match outcome with
         | Ok Board.Written -> ()
         | Ok Board.Deferred ->
@@ -125,13 +130,15 @@ module Kernel =
         | v -> v
 
     type Context =
-        { Transport: IGitHubTransport
-          Owner: string
-          Title: string
-          // `DefaultRepo`'s one line and `ChoreLocks`' four live in `Kernel.fsi` alone, by rule 3: both
-          // copies were byte-identical, so the signature keeps them and these fields are left bare.
-          DefaultRepo: string option
-          ChoreLocks: Ref list }
+        {
+            Transport: IGitHubTransport
+            Owner: string
+            Title: string
+            // `DefaultRepo`'s one line and `ChoreLocks`' four live in `Kernel.fsi` alone, by rule 3: both
+            // copies were byte-identical, so the signature keeps them and these fields are left bare.
+            DefaultRepo: string option
+            ChoreLocks: Ref list
+        }
 
     /// Fake transports are deterministic in-process fixtures: they do not receive HTTP response
     /// headers and therefore cannot populate the credential ledger. Production admission is applied
@@ -161,7 +168,8 @@ module Kernel =
                 // #419: point at the mint COMMAND, not a literal — the same remedy `whoami` gives, so the
                 // command path agents actually run most does not re-introduce the copy-a-literal attractor.
                 // The id is named as DIAGNOSIS (which id you are using now), never as one to invent.
-                eprint $"fsgg-coord-engine: WARNING — worker id '%s{w.Id}' was derived from a session where %s{why}. Give EACH worker a unique id (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
+                eprint
+                    $"fsgg-coord-engine: WARNING — worker id '%s{w.Id}' was derived from a session where %s{why}. Give EACH worker a unique id (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
             | _ -> ()
 
             Ok w
@@ -203,7 +211,8 @@ module Kernel =
     /// literal — an id an agent copies is an id agents collide on (#551), which is why no id appears here to
     /// copy.
     let mintRemedy () =
-        eprint "  Mint a fresh, unique id in THIS shell (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
+        eprint
+            "  Mint a fresh, unique id in THIS shell (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
 
     /// THE TWIN REFUSAL, shared by the three verbs that REFUSE over a twin's marker — `release`, `heartbeat`,
     /// `widen` (#1031).
@@ -225,7 +234,9 @@ module Kernel =
         // A different session can also be a long-lived worker whose harness rotated its ambient
         // session id (#1857). We cannot prove that here, so preserve #419's refusal; but minting
         // would strand that worker's live claim. Name the safe recovery which pins the marker fact.
-        eprint $"  This may be a rotated session, not a twin. If this is your existing claim, retry with CLAUDE_CODE_SESSION_ID=%s{theirs.Value} FSGG_WORKER=%s{workerId}; do NOT mint a new id for this live claim."
+        eprint
+            $"  This may be a rotated session, not a twin. If this is your existing claim, retry with CLAUDE_CODE_SESSION_ID=%s{theirs.Value} FSGG_WORKER=%s{workerId}; do NOT mint a new id for this live claim."
+
         ExitRed
 
     /// THE IMPERSONATION REFUSAL (#1646), shared by the verbs that REFUSE over a worker we are not — `claim`,
@@ -258,12 +269,7 @@ module Kernel =
     /// own bypass has closed nothing.
     ///
     /// ExitRed, matching the twin refusal: acting as another worker is a stop, not a retry.
-    let impersonationRefusal
-        (verb: string)
-        (ref: Ref)
-        (derived: WorkerId)
-        (named: WorkerId)
-        : int =
+    let impersonationRefusal (verb: string) (ref: Ref) (derived: WorkerId) (named: WorkerId) : int =
         eprint
             $"fsgg-coord-engine: refusing to %s{verb} %s{ref.Short} as '%s{named.Value}' — this process's OWN worker id is '%s{derived.Value}'. `--worker` ASSERTS an identity; it does not prove one, so acting on %s{ref.Short} under another worker's id would take, renew or destroy their lock with nothing recorded and nobody told (#1646)."
 
@@ -373,13 +379,16 @@ module Kernel =
     let parseChoreLocks (raw: string) : Ref list =
         raw.Split(',')
         |> Array.choose (fun tok ->
-            let m = Text.RegularExpressions.Regex.Match(tok.Trim(), @"^([\w.-]+)/([\w.-]+)#(\d+)$")
+            let m =
+                Text.RegularExpressions.Regex.Match(tok.Trim(), @"^([\w.-]+)/([\w.-]+)#(\d+)$")
 
             if m.Success then
                 Some(
-                    { Owner = m.Groups.[1].Value
-                      Repo = resolveRepo m.Groups.[2].Value
-                      Number = int m.Groups.[3].Value }
+                    {
+                        Owner = m.Groups.[1].Value
+                        Repo = resolveRepo m.Groups.[2].Value
+                        Number = int m.Groups.[3].Value
+                    }
                     : Ref
                 )
             else

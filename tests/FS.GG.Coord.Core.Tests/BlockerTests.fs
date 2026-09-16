@@ -11,20 +11,26 @@ open FS.GG.Coord.Types
 module BlockerTests =
 
     let private ref n =
-        { Owner = "FS-GG"
-          Repo = "FS.GG.SDD"
-          Number = n }
+        {
+            Owner = "FS-GG"
+            Repo = "FS.GG.SDD"
+            Number = n
+        }
 
     let private blocker n state =
-        { Ref = Some(ref n)
-          Raw = (ref n).Short
-          State = state }
+        {
+            Ref = Some(ref n)
+            Raw = (ref n).Short
+            State = state
+        }
 
     /// A blocker whose `Blocked by` text is not a ref at all — the case the record could not hold.
     let private prose text =
-        { Ref = None
-          Raw = text
-          State = BlockerUnparseable }
+        {
+            Ref = None
+            Raw = text
+            State = BlockerUnparseable
+        }
 
     // ---- #476: MERGED resolves. This is the clause that was missing. --------------------------------
     //
@@ -102,9 +108,7 @@ module BlockerTests =
     [<Fact>]
     let ``one OPEN blocker among resolved ones still holds the item`` () =
         let blockers =
-            [ blocker 1 BlockerClosed
-              blocker 2 BlockerMerged
-              blocker 3 BlockerOpen ]
+            [ blocker 1 BlockerClosed; blocker 2 BlockerMerged; blocker 3 BlockerOpen ]
 
         let holding = Blockers.unresolved blockers
         Assert.Equal(1, List.length holding)
@@ -128,7 +132,8 @@ module BlockerTests =
     // not parse it. `canonicalizeBlockedBy` is the gate on the WRITE: every accepted form reduces to one
     // canonical `owner/repo#n`, and prose is refused before it can be stored. `SDD` here is the BLOCKED
     // item's own owner/repo (FS-GG/FS.GG.SDD), so a bare `#n` adopts it.
-    let private canon raw = Blockers.canonicalizeBlockedBy "FS-GG" "FS.GG.SDD" raw
+    let private canon raw =
+        Blockers.canonicalizeBlockedBy "FS-GG" "FS.GG.SDD" raw
 
     [<Fact>]
     let ``a full owner/repo#n ref passes through unchanged`` () =
@@ -181,7 +186,10 @@ module BlockerTests =
 
     [<Fact>]
     let ``a delivery log is prose, not a dependency`` () =
-        Assert.Equal<Result<string option, _>>(Error Blockers.NotIssueRefs, canon "RESOLVED: #8 closed, shipped @d80a8ae")
+        Assert.Equal<Result<string option, _>>(
+            Error Blockers.NotIssueRefs,
+            canon "RESOLVED: #8 closed, shipped @d80a8ae"
+        )
 
     [<Fact>]
     let ``the inverted 'blocks X' edge is refused — it is the wrong direction`` () =
@@ -218,7 +226,8 @@ module BlockerTests =
 
             Assert.True(
                 (viaRecord = viaState),
-                $"{c.Name}: isResolved and isResolvedState disagree — the rule is decided twice")
+                $"{c.Name}: isResolved and isResolvedState disagree — the rule is decided twice"
+            )
 
     /// AND NOBODY ELSE DECIDES IT — asserted against the SOURCE, because reflection cannot see this.
     ///
@@ -287,7 +296,8 @@ module BlockerTests =
 
         Assert.True(
             List.isEmpty offenders,
-            $"""these decide a blocker's resolution outside Blockers.fs: {String.concat ", " offenders} — that is the rule, decided a second time, and `BLOCKER-CLEARED` turns on it. Ask `Blockers.isResolved`/`isResolvedState` (#889).""")
+            $"""these decide a blocker's resolution outside Blockers.fs: {String.concat ", " offenders} — that is the rule, decided a second time, and `BLOCKER-CLEARED` turns on it. Ask `Blockers.isResolved`/`isResolvedState` (#889)."""
+        )
 
     // ---- #1092: THE RING. The state four per-item repairs cannot see. ------------------------------
     //
@@ -303,24 +313,29 @@ module BlockerTests =
     // drains. That one could not.
 
     let private gh n =
-        { Owner = "FS-GG"
-          Repo = ".github"
-          Number = n }
+        {
+            Owner = "FS-GG"
+            Repo = ".github"
+            Number = n
+        }
 
     /// An item as the graph sees it: its ref, and the refs it is blocked BY.
     let private node n (blockedBy: int list) =
         gh n,
         blockedBy
         |> List.map (fun b ->
-            { Ref = Some(gh b)
-              Raw = (gh b).Short
-              State = BlockerOpen })
+            {
+                Ref = Some(gh b)
+                Raw = (gh b).Short
+                State = BlockerOpen
+            })
 
     let private ringOf (cycle: Ref list) = cycle |> List.map (fun r -> r.Number)
 
     [<Fact>]
     let ``#1092 the LIVE ring — 1059 -> 1063 -> 1073 -> 1059 is one deadlocked set of three`` () =
-        let found = Blockers.cycles [ node 1059 [ 1063 ]; node 1063 [ 1073 ]; node 1073 [ 1059 ] ]
+        let found =
+            Blockers.cycles [ node 1059 [ 1063 ]; node 1063 [ 1073 ]; node 1073 [ 1059 ] ]
 
         Assert.Equal<int list list>([ [ 1059; 1063; 1073 ] ], found |> List.map ringOf)
 
@@ -343,7 +358,9 @@ module BlockerTests =
     [<Fact>]
     let ``#1092 a DIAMOND is not a ring — a shared blocker is convergence, not a cycle`` () =
         // 1 -> 2, 1 -> 3, 2 -> 4, 3 -> 4. Every node reachable from 1; none reachable BACK.
-        let found = Blockers.cycles [ node 1 [ 2; 3 ]; node 2 [ 4 ]; node 3 [ 4 ]; node 4 [] ]
+        let found =
+            Blockers.cycles [ node 1 [ 2; 3 ]; node 2 [ 4 ]; node 3 [ 4 ]; node 4 [] ]
+
         Assert.Empty(found)
 
     [<Fact>]
@@ -361,15 +378,23 @@ module BlockerTests =
         // twice agrees once (#520).
         let closed n b =
             gh n,
-            [ { Ref = Some(gh b)
-                Raw = (gh b).Short
-                State = BlockerClosed } ]
+            [
+                {
+                    Ref = Some(gh b)
+                    Raw = (gh b).Short
+                    State = BlockerClosed
+                }
+            ]
 
         let merged n b =
             gh n,
-            [ { Ref = Some(gh b)
-                Raw = (gh b).Short
-                State = BlockerMerged } ]
+            [
+                {
+                    Ref = Some(gh b)
+                    Raw = (gh b).Short
+                    State = BlockerMerged
+                }
+            ]
 
         Assert.Empty(Blockers.cycles [ closed 1 2; merged 2 3; closed 3 1 ])
 
@@ -380,9 +405,13 @@ module BlockerTests =
         // with the least-understood edge is the one we stay silent about.
         let unknown n b =
             gh n,
-            [ { Ref = Some(gh b)
-                Raw = (gh b).Short
-                State = BlockerUnknown } ]
+            [
+                {
+                    Ref = Some(gh b)
+                    Raw = (gh b).Short
+                    State = BlockerUnknown
+                }
+            ]
 
         Assert.Equal<int list list>([ [ 1; 2 ] ], Blockers.cycles [ unknown 1 2; unknown 2 1 ] |> List.map ringOf)
 
@@ -396,7 +425,9 @@ module BlockerTests =
 
     [<Fact>]
     let ``#1092 prose blockers cannot close a ring — they have no ref to point at`` () =
-        let found = Blockers.cycles [ (gh 1, [ prose "blocked on a human" ]); (gh 2, [ prose "waiting" ]) ]
+        let found =
+            Blockers.cycles [ (gh 1, [ prose "blocked on a human" ]); (gh 2, [ prose "waiting" ]) ]
+
         Assert.Empty(found)
 
     [<Fact>]

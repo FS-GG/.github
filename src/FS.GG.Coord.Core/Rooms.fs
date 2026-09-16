@@ -29,23 +29,32 @@ module Rooms =
     let private toRef (selfOwner: string) (selfRepo: string) (m: Match) : Ref =
         if m.Groups.[1].Success then
             let parts = m.Groups.[1].Value.Split('/')
-            { Owner = parts.[0]
-              Repo = parts.[1]
-              Number = int m.Groups.[2].Value }
+
+            {
+                Owner = parts.[0]
+                Repo = parts.[1]
+                Number = int m.Groups.[2].Value
+            }
         elif m.Groups.[3].Success then
-            { Owner = m.Groups.[3].Value
-              Repo = m.Groups.[4].Value
-              Number = int m.Groups.[5].Value }
+            {
+                Owner = m.Groups.[3].Value
+                Repo = m.Groups.[4].Value
+                Number = int m.Groups.[5].Value
+            }
         elif m.Groups.[6].Success then
             // `repo#n`: the owner defaults to the referencing item's own; only the REPO is carried.
-            { Owner = selfOwner
-              Repo = m.Groups.[6].Value
-              Number = int m.Groups.[7].Value }
+            {
+                Owner = selfOwner
+                Repo = m.Groups.[6].Value
+                Number = int m.Groups.[7].Value
+            }
         else
             // bare `#n`: owner AND repo default to the referencing item's own.
-            { Owner = selfOwner
-              Repo = selfRepo
-              Number = int m.Groups.[8].Value }
+            {
+                Owner = selfOwner
+                Repo = selfRepo
+                Number = int m.Groups.[8].Value
+            }
 
     let parse (selfOwner: string) (selfRepo: string) (body: string) : Ref list =
         // OUTSIDE fences, via the one `Markdown.unfenced` every body-line rule shares (#972) — a `Rooms:`

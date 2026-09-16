@@ -42,14 +42,21 @@ open FS.GG.Coord.Cli
 module ForceStealTests =
 
     let private currentRouteComment () =
-        StructuredFixtures.routeComment "FS-GG/FS.GG.SDD#42" (Some FS.GG.Coord.DeliveryRoute.Lightweight) "fixture-force" None
+        StructuredFixtures.routeComment
+            "FS-GG/FS.GG.SDD#42"
+            (Some FS.GG.Coord.DeliveryRoute.Lightweight)
+            "fixture-force"
+            None
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None; Headers = Map.empty }
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            }
 
     /// The board the fixture serves — enough of one that `claim` can bootstrap and read a column back.
     /// The Status WRITE is deliberately not served: it fails, the receipt reports `statusWrite:"failed"`,
@@ -96,11 +103,13 @@ module ForceStealTests =
 
             let route =
                 JsonSerializer.Serialize
-                    {| id = 7001L
-                       body = currentRouteComment ()
-                       user = {| login = "EHotwagner" |}
-                       created_at = ts
-                       updated_at = ts |}
+                    {|
+                        id = 7001L
+                        body = currentRouteComment ()
+                        user = {| login = "EHotwagner" |}
+                        created_at = ts
+                        updated_at = ts
+                    |}
 
             let claims =
                 comments
@@ -134,74 +143,81 @@ module ForceStealTests =
             currentRouteComment () :: claims
 
     let private world (thread: Thread) =
-        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-            let path = req.Path.Trim '/'
+        Fake.Recorder(
+            StructuredFixtures.withIntake
+            <| fun (req: Request) ->
+                let path = req.Path.Trim '/'
 
-            match req.Method, path with
-            // .github#2300 repair 2: `requireCurrentDeliveryRoute`'s bounded marker search — served from
-            // the SAME `thread` the REST `/comments` arm below reads, so a steal/renewal that appends a
-            // new claim marker mid-test is visible to both arms identically.
-            | "POST", "graphql" when
-                (match req.Body with
-                 | Query(document, _) -> document.Contains "comments(last:"
-                 | _ -> false)
-                ->
-                match req.Body with
-                | Query(_, variables) ->
-                    let lastVar =
-                        variables
-                        |> List.tryFind (fun (k, _) -> k = "last")
-                        |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
-
-                    match lastVar with
-                    | Some last ->
-                        let recent =
-                            thread.Bodies
-                            |> List.rev
-                            |> List.truncate last
-                            |> List.rev
-                            |> List.map (fun body -> {| body = body |})
-                            |> JsonSerializer.Serialize
-
-                        let payload =
-                            "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
-                            + recent
-                            + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
-
-                        ok payload
-                    | None -> Error(Errors.NotFound "the recent-comments query is missing a `last` variable")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, _) ->
-                    match graphqlAnswer document with
-                    | Some answer -> ok answer
-                    | None -> Error(Errors.NotFound "the fixture serves no board WRITE — the lock is what is under test")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json())
-            | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
-                let body =
+                match req.Method, path with
+                // .github#2300 repair 2: `requireCurrentDeliveryRoute`'s bounded marker search — served from
+                // the SAME `thread` the REST `/comments` arm below reads, so a steal/renewal that appends a
+                // new claim marker mid-test is visible to both arms identically.
+                | "POST", "graphql" when
+                    (match req.Body with
+                     | Query(document, _) -> document.Contains "comments(last:"
+                     | _ -> false)
+                    ->
                     match req.Body with
-                    | Json payload ->
-                        JsonDocument.Parse(payload).RootElement.GetProperty("body").GetString()
-                    | _ -> ""
+                    | Query(_, variables) ->
+                        let lastVar =
+                            variables
+                            |> List.tryFind (fun (k, _) -> k = "last")
+                            |> Option.bind (fun (_, v) ->
+                                match v with
+                                | VNumber n -> Some(int n)
+                                | _ -> None)
 
-                ok (sprintf """{"id":%d}""" (thread.Add body))
-            | "DELETE", _ when path.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
-                thread.Remove(Int64.Parse(path.Substring(path.LastIndexOf '/' + 1)))
-                ok ""
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" ->
-                ok """{"number":42,"body":"Paths: src/Thing.fs"}"""
-            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+                        match lastVar with
+                        | Some last ->
+                            let recent =
+                                thread.Bodies
+                                |> List.rev
+                                |> List.truncate last
+                                |> List.rev
+                                |> List.map (fun body -> {| body = body |})
+                                |> JsonSerializer.Serialize
+
+                            let payload =
+                                "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                                + recent
+                                + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+
+                            ok payload
+                        | None -> Error(Errors.NotFound "the recent-comments query is missing a `last` variable")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, _) ->
+                        match graphqlAnswer document with
+                        | Some answer -> ok answer
+                        | None ->
+                            Error(Errors.NotFound "the fixture serves no board WRITE — the lock is what is under test")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json())
+                | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
+                    let body =
+                        match req.Body with
+                        | Json payload -> JsonDocument.Parse(payload).RootElement.GetProperty("body").GetString()
+                        | _ -> ""
+
+                    ok (sprintf """{"id":%d}""" (thread.Add body))
+                | "DELETE", _ when path.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
+                    thread.Remove(Int64.Parse(path.Substring(path.LastIndexOf '/' + 1)))
+                    ok ""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok """{"number":42,"body":"Paths: src/Thing.fs"}"""
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+        )
 
     let private context (transport: Fake.Recorder) : Kernel.Context =
-        { Transport = transport
-          Owner = "FS-GG"
-          Title = "Coordination"
-          DefaultRepo = Some "FS.GG.SDD"
-          ChoreLocks = [] }
+        {
+            Transport = transport
+            Owner = "FS-GG"
+            Title = "Coordination"
+            DefaultRepo = Some "FS.GG.SDD"
+            ChoreLocks = []
+        }
 
     /// Drive `Client.claim` against a throwaway cache, exactly as `ApplicationServiceTests.run` does and
     /// on the same licence: `AssemblyInfo.fs` disables cross-class parallelism, so the process-global
@@ -228,13 +244,23 @@ module ForceStealTests =
     /// ours, and the steal legs still turn on the marker's WORKER differing from ours. Neither ever depended
     /// on this process being anonymous.
     let private sessionVars =
-        [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
+        [
+            "CLAUDE_CODE_SESSION_ID"
+            "OPENCODE_SESSION_ID"
+            "FSGG_AGENT_SESSION_ID"
+            "FSGG_WORKER"
+        ]
 
     let private runClaim (transport: Fake.Recorder) (args: string list) : int * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-1620-" + Guid.NewGuid().ToString "n")
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-1620-" + Guid.NewGuid().ToString "n")
+
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
-        let previousSessions = sessionVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+
+        let previousSessions =
+            sessionVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+
         let stdout = Console.Out
         use captured = new StringWriter()
 
@@ -356,7 +382,9 @@ module ForceStealTests =
         // OUR id, ANOTHER session. `runClaim` pins ours to `ed60050b`, so the two are known and differ —
         // which is the only configuration in which the protocol is entitled to call this a twin.
         let thread = Thread(None)
-        thread.Add "<!-- fsgg:claim worker=vole-418 lease=120 session=79b9e347 -->" |> ignore
+
+        thread.Add "<!-- fsgg:claim worker=vole-418 lease=120 session=79b9e347 -->"
+        |> ignore
 
         let transport = world thread
         let before = thread.Ids

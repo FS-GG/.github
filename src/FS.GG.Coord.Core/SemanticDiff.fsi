@@ -21,25 +21,29 @@ module SemanticDiff =
         | Unresolved
 
     type Occurrence =
-        { Id: string
-          Path: string
-          Line: int
-          Classification: Classification
-          Confidence: int
-          Before: string
-          After: string
-          Disposition: Disposition }
+        {
+            Id: string
+            Path: string
+            Line: int
+            Classification: Classification
+            Confidence: int
+            Before: string
+            After: string
+            Disposition: Disposition
+        }
 
     type Receipt =
-        { SchemaVersion: int
-          Repository: string
-          BaseSha: string
-          HeadSha: string
-          OldToken: string
-          NewToken: string
-          DeclaredPaths: string list
-          Required: bool
-          Occurrences: Occurrence list }
+        {
+            SchemaVersion: int
+            Repository: string
+            BaseSha: string
+            HeadSha: string
+            OldToken: string
+            NewToken: string
+            DeclaredPaths: string list
+            Required: bool
+            Occurrences: Occurrence list
+        }
 
     /// What the ENGINE independently established about the diff, for a chain that submits receipts.
     /// `Expected` proves each submitted receipt honest about the pair it names; `Discovered` proves the
@@ -47,10 +51,12 @@ module SemanticDiff =
     /// one rename pair, so honesty alone let a receipt for 6 of 12 discovered occurrences validate
     /// (.github#2144 repair-phase round 2).
     type TrustedAudit =
-        { /// One engine recomputation per submitted receipt, matched by rename pair and declared paths.
-          Expected: Receipt list
-          /// Every occurrence the engine discovered across the whole diff, receipts notwithstanding.
-          Discovered: Occurrence list }
+        {
+            /// One engine recomputation per submitted receipt, matched by rename pair and declared paths.
+            Expected: Receipt list
+            /// Every occurrence the engine discovered across the whole diff, receipts notwithstanding.
+            Discovered: Occurrence list
+        }
 
     /// Every semantic occurrence of the rename in one file's base/head pair.
     ///

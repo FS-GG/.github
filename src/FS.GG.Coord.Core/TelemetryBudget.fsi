@@ -13,8 +13,10 @@ module TelemetryBudget =
         | Breach of numerator: int64 * denominator: int64 * severe: bool
 
     type Interval =
-        { StartNanoseconds: int64
-          EndNanoseconds: int64 }
+        {
+            StartNanoseconds: int64
+            EndNanoseconds: int64
+        }
 
     val assess: Usability -> Verdict
     val unionNanoseconds: intervals: Interval list -> int64 option

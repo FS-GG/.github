@@ -17,22 +17,44 @@ open FS.GG.Coord.Cli.BoardOps
 /// transport makes the invariant observable: a retry may repair projection, but it cannot issue a
 /// second `POST /issues`.
 module IntakeTransactionTests =
-    let private ok body = Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty }
-    let private draft = """{"schema":"fsgg.coord.intake/v1","id":"tx-2134","owner":"FS-GG","repository":".github","title":"same","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Backlog","backlogReason":"not-yet-actionable","disposition":"create"}"""
+    let private ok body =
+        Ok
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            }
+
+    let private draft =
+        """{"schema":"fsgg.coord.intake/v1","id":"tx-2134","owner":"FS-GG","repository":".github","title":"same","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Backlog","backlogReason":"not-yet-actionable","disposition":"create"}"""
 
     // `Options.parse` intentionally leaves intake's action/path in its generic positional bucket;
     // keep the test on the real parser, then make that command-local shape explicit for the handler.
     let private options path =
-        let parsed = Options.parse [ "intake"; "apply"; path ] |> Result.defaultWith failwith
+        let parsed =
+            Options.parse [ "intake"; "apply"; path ] |> Result.defaultWith failwith
+
         { parsed with Args = [ "apply"; path ] }
-    let private context transport : Kernel.Context = { Transport = transport; Owner = "FS-GG"; Title = "Coordination"; DefaultRepo = Some ".github"; ChoreLocks = [] }
+
+    let private context transport : Kernel.Context =
+        {
+            Transport = transport
+            Owner = "FS-GG"
+            Title = "Coordination"
+            DefaultRepo = Some ".github"
+            ChoreLocks = []
+        }
 
     let private invokeDraft cache (json: string) transport =
         let path = Path.Combine(cache, "draft.json")
         File.WriteAllText(path, json)
+
         match IntakeApplication.readDraft path with
         | Error error -> failwith error
         | Ok _ -> ()
+
         Handlers.intakeCmd (context transport) (options path)
 
     let private invokeDraftWithError cache json transport =
@@ -51,6 +73,7 @@ module IntakeTransactionTests =
     let private draftDigest cache =
         let path = Path.Combine(cache, "digest-draft.json")
         File.WriteAllText(path, draft)
+
         match IntakeApplication.readDraft path with
         | Ok parsed -> IntakeReceipt.digest parsed
         | Error error -> failwith error
@@ -58,20 +81,25 @@ module IntakeTransactionTests =
     let private draftMarker cache =
         let path = Path.Combine(cache, "marker-draft.json")
         File.WriteAllText(path, draft)
+
         match IntakeApplication.readDraft path with
         | Ok parsed -> IntakeReceipt.marker parsed
         | Error error -> failwith error
 
     let private draftBody (parsed: Intake.Draft) =
         let paths = String.concat " " parsed.Paths
+
         let optionalLines =
-            [ parsed.Phase |> Option.map (sprintf "Phase: %s")
-              parsed.Severity |> Option.map (sprintf "Severity: %s")
-              parsed.BlockedBy |> Option.map (sprintf "Blocked by: %s")
-              parsed.BlockedOn |> Option.map (sprintf "Blocked on: %s")
-              parsed.BacklogReason |> Option.map (sprintf "Backlog reason: %s") ]
+            [
+                parsed.Phase |> Option.map (sprintf "Phase: %s")
+                parsed.Severity |> Option.map (sprintf "Severity: %s")
+                parsed.BlockedBy |> Option.map (sprintf "Blocked by: %s")
+                parsed.BlockedOn |> Option.map (sprintf "Blocked on: %s")
+                parsed.BacklogReason |> Option.map (sprintf "Backlog reason: %s")
+            ]
             |> List.choose id
             |> String.concat "\n"
+
         $"%s{IntakeReceipt.marker parsed}\n\n## Observed behavior\n\n%s{parsed.Observed}\n\n## Root cause\n\n%s{parsed.RootCause}\n\n## Acceptance\n\n%s{parsed.Acceptance}\n\n## Verification\n\n%s{parsed.Verification}\n\nClass: %s{parsed.Class}\n%s{optionalLines}\n\nPaths: %s{paths}"
 
     let private severityDraft value =
@@ -79,60 +107,74 @@ module IntakeTransactionTests =
 
     let private lightweightRouteComment subject =
         let draft: StructuredDecision.RouteRecord =
-            { Schema = StructuredDecision.RouteSchema
-              Subject = subject
-              Revision = 1
-              PreviousDigest = None
-              Scope = [ "intake Ready guard" ]
-              Dependencies = [ "none" ]
-              TouchSet = [ "src/FS.GG.Coord.Core" ]
-              PolicyVersion = StructuredDecision.PolicyVersion
-              Route = Some DeliveryRoute.Lightweight
-              Agent = "intake-test"
-              Timestamp = "2026-08-23T00:00:00Z"
-              ReasonCodes = [ "fixture" ]
-              Rationale = "current route receipt for the intake Ready guard fixture"
-              SddWorkId = None
-              SpecHome = None
-              RequiredGates = []
-              Digest = "" }
+            {
+                Schema = StructuredDecision.RouteSchema
+                Subject = subject
+                Revision = 1
+                PreviousDigest = None
+                Scope = [ "intake Ready guard" ]
+                Dependencies = [ "none" ]
+                TouchSet = [ "src/FS.GG.Coord.Core" ]
+                PolicyVersion = StructuredDecision.PolicyVersion
+                Route = Some DeliveryRoute.Lightweight
+                Agent = "intake-test"
+                Timestamp = "2026-08-23T00:00:00Z"
+                ReasonCodes = [ "fixture" ]
+                Rationale = "current route receipt for the intake Ready guard fixture"
+                SddWorkId = None
+                SpecHome = None
+                RequiredGates = []
+                Digest = ""
+            }
 
         let record =
             { draft with
-                Digest = StructuredDecision.routeDigest draft }
+                Digest = StructuredDecision.routeDigest draft
+            }
 
         "<!-- fsgg:route-decision/v2 -->\n"
         + JsonSerializer.Serialize
-            {| schema = record.Schema
-               subject = record.Subject
-               revision = record.Revision
-               previousDigest = record.PreviousDigest
-               scope = record.Scope
-               dependencies = record.Dependencies
-               touchSet = record.TouchSet
-               policyVersion = record.PolicyVersion
-               route = "lightweight"
-               agent = record.Agent
-               timestamp = record.Timestamp
-               reasonCodes = record.ReasonCodes
-               rationale = record.Rationale
-               sddWorkId = record.SddWorkId
-               specHome = record.SpecHome
-               requiredGates = record.RequiredGates
-               digest = record.Digest |}
+            {|
+                schema = record.Schema
+                subject = record.Subject
+                revision = record.Revision
+                previousDigest = record.PreviousDigest
+                scope = record.Scope
+                dependencies = record.Dependencies
+                touchSet = record.TouchSet
+                policyVersion = record.PolicyVersion
+                route = "lightweight"
+                agent = record.Agent
+                timestamp = record.Timestamp
+                reasonCodes = record.ReasonCodes
+                rationale = record.Rationale
+                sddWorkId = record.SddWorkId
+                specHome = record.SpecHome
+                requiredGates = record.RequiredGates
+                digest = record.Digest
+            |}
 
     let private withCache action =
-        let cache = Path.Combine(Path.GetTempPath(), "fsgg-intake-" + Guid.NewGuid().ToString("N"))
+        let cache =
+            Path.Combine(Path.GetTempPath(), "fsgg-intake-" + Guid.NewGuid().ToString("N"))
+
         let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousWorker = Environment.GetEnvironmentVariable "FSGG_WORKER"
         Directory.CreateDirectory cache |> ignore
         Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
         Environment.SetEnvironmentVariable("FSGG_WORKER", "intake-test")
-        try action cache finally Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous); Environment.SetEnvironmentVariable("FSGG_WORKER", previousWorker); Directory.Delete(cache, true)
+
+        try
+            action cache
+        finally
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous)
+            Environment.SetEnvironmentVariable("FSGG_WORKER", previousWorker)
+            Directory.Delete(cache, true)
 
     [<Fact>]
     let ``#2835 lowercase severity decodes to the exact board option and unknown values refuse`` () =
-        withCache <| fun cache ->
+        withCache
+        <| fun cache ->
             let lowerPath = Path.Combine(cache, "lower.json")
             File.WriteAllText(lowerPath, severityDraft "high")
             let lower = IntakeApplication.readDraft lowerPath |> Result.defaultWith failwith
@@ -141,33 +183,52 @@ module IntakeTransactionTests =
 
             let unknownPath = Path.Combine(cache, "unknown.json")
             File.WriteAllText(unknownPath, severityDraft "urgent")
+
             match IntakeApplication.readDraft unknownPath with
             | Error detail -> Assert.Contains("Critical, High, Medium, Low or Unset", detail)
             | Ok parsed -> failwithf "unknown severity unexpectedly decoded: %A" parsed.Severity
 
     [<Fact>]
     let ``#2835 a corrected severity resumes a legacy receipt and reports the existing issue`` () =
-        withCache <| fun cache ->
+        withCache
+        <| fun cache ->
             let canonicalPath = Path.Combine(cache, "canonical.json")
             File.WriteAllText(canonicalPath, severityDraft "High")
-            let canonical = IntakeApplication.readDraft canonicalPath |> Result.defaultWith failwith
-            let legacy = { canonical with Severity = Some "high" }
+
+            let canonical =
+                IntakeApplication.readDraft canonicalPath |> Result.defaultWith failwith
+
+            let legacy =
+                { canonical with
+                    Severity = Some "high"
+                }
+
             Cache.putIntakeReceipt
-                { IntakeReceipt.Receipt.DraftId = canonical.Id
-                  Owner = canonical.Owner
-                  Repository = canonical.Repository
-                  IssueNumber = 77
-                  DraftDigest = IntakeReceipt.digest legacy }
+                {
+                    IntakeReceipt.Receipt.DraftId = canonical.Id
+                    Owner = canonical.Owner
+                    Repository = canonical.Repository
+                    IssueNumber = 77
+                    DraftDigest = IntakeReceipt.digest legacy
+                }
             |> Result.defaultWith failwith
 
             let mutable creates = 0
             let mutable body = draftBody legacy
-            let world = Fake.Recorder(fun req ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/issues/77" -> ok ($"{{\"number\":77,\"state\":\"open\",\"body\":%s{JsonSerializer.Serialize body}}}")
-                | "PATCH", "repos/FS-GG/.github/issues/77" -> body <- draftBody canonical; ok "{}"
-                | "POST", path when path.EndsWith "/issues" -> creates <- creates + 1; Error(NotFound "must not create")
-                | _ -> Error(NotFound "stop after legacy receipt recovery"))
+
+            let world =
+                Fake.Recorder(fun req ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "repos/FS-GG/.github/issues/77" ->
+                        ok ($"{{\"number\":77,\"state\":\"open\",\"body\":%s{JsonSerializer.Serialize body}}}")
+                    | "PATCH", "repos/FS-GG/.github/issues/77" ->
+                        body <- draftBody canonical
+                        ok "{}"
+                    | "POST", path when path.EndsWith "/issues" ->
+                        creates <- creates + 1
+                        Error(NotFound "must not create")
+                    | _ -> Error(NotFound "stop after legacy receipt recovery"))
+
             let code, error = invokeDraftWithError cache (severityDraft "High") world
             Assert.Equal(Kernel.ExitError, code)
             Assert.Equal(0, creates)
@@ -176,30 +237,53 @@ module IntakeTransactionTests =
 
     [<Fact>]
     let ``#2835 a corrected severity also resumes the create-before-receipt legacy intent`` () =
-        withCache <| fun cache ->
+        withCache
+        <| fun cache ->
             let canonicalPath = Path.Combine(cache, "canonical-intent.json")
             File.WriteAllText(canonicalPath, severityDraft "High")
-            let canonical = IntakeApplication.readDraft canonicalPath |> Result.defaultWith failwith
-            let legacy = { canonical with Severity = Some "high" }
+
+            let canonical =
+                IntakeApplication.readDraft canonicalPath |> Result.defaultWith failwith
+
+            let legacy =
+                { canonical with
+                    Severity = Some "high"
+                }
+
             let legacyDigest = IntakeReceipt.digest legacy
+
             Cache.putIntakeIntent
-                { Cache.IntakeIntent.DraftId = canonical.Id; Owner = canonical.Owner
-                  Repository = canonical.Repository; DraftDigest = legacyDigest }
+                {
+                    Cache.IntakeIntent.DraftId = canonical.Id
+                    Owner = canonical.Owner
+                    Repository = canonical.Repository
+                    DraftDigest = legacyDigest
+                }
             |> Result.defaultWith failwith
+
             let mutable body = draftBody legacy
             let mutable creates = 0
-            let world = Fake.Recorder(fun req ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/issues" ->
-                    ok ($"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":%s{JsonSerializer.Serialize body}}}]")
-                | "GET", "repos/FS-GG/.github/issues/77" -> ok ($"{{\"number\":77,\"state\":\"open\",\"body\":%s{JsonSerializer.Serialize body}}}")
-                | "PATCH", "repos/FS-GG/.github/issues/77" -> body <- draftBody canonical; ok "{}"
-                | "POST", path when path.EndsWith "/issues" ->
-                    creates <- creates + 1
-                    Error(NotFound "legacy intent must not create again")
-                | _ -> Error(NotFound "stop after legacy intent recovery"))
+
+            let world =
+                Fake.Recorder(fun req ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "repos/FS-GG/.github/issues" ->
+                        ok (
+                            $"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":%s{JsonSerializer.Serialize body}}}]"
+                        )
+                    | "GET", "repos/FS-GG/.github/issues/77" ->
+                        ok ($"{{\"number\":77,\"state\":\"open\",\"body\":%s{JsonSerializer.Serialize body}}}")
+                    | "PATCH", "repos/FS-GG/.github/issues/77" ->
+                        body <- draftBody canonical
+                        ok "{}"
+                    | "POST", path when path.EndsWith "/issues" ->
+                        creates <- creates + 1
+                        Error(NotFound "legacy intent must not create again")
+                    | _ -> Error(NotFound "stop after legacy intent recovery"))
+
             Assert.Equal(Kernel.ExitError, invokeDraft cache (severityDraft "High") world)
             Assert.Equal(0, creates)
+
             match Cache.getIntakeReceipt canonical.Id with
             | Ok(Some receipt) ->
                 Assert.Equal(77, receipt.IssueNumber)
@@ -224,8 +308,10 @@ module IntakeTransactionTests =
     [<Fact>]
     let ``#2738 a moved Projects item revision stales the Ready decision even when the edge value is unchanged`` () =
         let observedAt revision : Board.BlockedByObservation =
-            { Value = None
-              Revision = Some revision }
+            {
+                Value = None
+                Revision = Some revision
+            }
 
         Assert.False(Handlers.readyDependencyStale (Some(observedAt "r1")) (Some(observedAt "r1")))
         Assert.True(Handlers.readyDependencyStale (Some(observedAt "r1")) (Some(observedAt "r2")))
@@ -244,11 +330,13 @@ module IntakeTransactionTests =
             let parsed = IntakeApplication.readDraft draftPath |> Result.defaultWith failwith
 
             Cache.putIntakeReceipt
-                { IntakeReceipt.Receipt.DraftId = parsed.Id
-                  Owner = parsed.Owner
-                  Repository = parsed.Repository
-                  IssueNumber = 88
-                  DraftDigest = IntakeReceipt.digest parsed }
+                {
+                    IntakeReceipt.Receipt.DraftId = parsed.Id
+                    Owner = parsed.Owner
+                    Repository = parsed.Repository
+                    IssueNumber = 88
+                    DraftDigest = IntakeReceipt.digest parsed
+                }
             |> Result.defaultWith failwith
 
             let body =
@@ -299,11 +387,13 @@ module IntakeTransactionTests =
             let parsed = IntakeApplication.readDraft draftPath |> Result.defaultWith failwith
 
             Cache.putIntakeReceipt
-                { IntakeReceipt.Receipt.DraftId = parsed.Id
-                  Owner = parsed.Owner
-                  Repository = parsed.Repository
-                  IssueNumber = 88
-                  DraftDigest = IntakeReceipt.digest parsed }
+                {
+                    IntakeReceipt.Receipt.DraftId = parsed.Id
+                    Owner = parsed.Owner
+                    Repository = parsed.Repository
+                    IssueNumber = 88
+                    DraftDigest = IntakeReceipt.digest parsed
+                }
             |> Result.defaultWith failwith
 
             let route = lightweightRouteComment "FS-GG/.github#88" |> JsonSerializer.Serialize
@@ -326,9 +416,17 @@ module IntakeTransactionTests =
                         | Query(document, _) when document.Contains "fields(first" ->
                             ok
                                 """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"S","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"R","name":"Ready"}]},{"id":"C","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"H","name":"hardening"}]},{"id":"B","name":"Blocked by","dataType":"TEXT"}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
-                        | Query(document, _) when document.Contains "updatedAt" && document.Contains "fieldValueByName(name: \"Blocked by\")" ->
+                        | Query(document, _) when
+                            document.Contains "updatedAt"
+                            && document.Contains "fieldValueByName(name: \"Blocked by\")"
+                            ->
                             edgeReads <- edgeReads + 1
-                            let revision = if edgeReads = 1 then "2026-08-23T10:00:00Z" else "2026-08-23T10:01:00Z"
+
+                            let revision =
+                                if edgeReads = 1 then
+                                    "2026-08-23T10:00:00Z"
+                                else
+                                    "2026-08-23T10:01:00Z"
 
                             ok
                                 $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"totalCount":1,"nodes":[{{"updatedAt":"%s{revision}","project":{{"number":1}},"fieldValueByName":null}}]}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}}}"""
@@ -343,10 +441,12 @@ module IntakeTransactionTests =
 
             let code, error = invokeDraftWithError cache ready world
             Assert.Equal(Kernel.ExitError, code)
+
             Assert.True(
                 error.Contains("Stale dependency-edge observation", StringComparison.Ordinal),
                 error + "\n" + String.concat "\n" world.Log
             )
+
             Assert.Equal(2, edgeReads)
             Assert.Equal(0, mutationWrites)
 
@@ -362,11 +462,13 @@ module IntakeTransactionTests =
             let parsed = IntakeApplication.readDraft draftPath |> Result.defaultWith failwith
 
             Cache.putIntakeReceipt
-                { IntakeReceipt.Receipt.DraftId = parsed.Id
-                  Owner = parsed.Owner
-                  Repository = parsed.Repository
-                  IssueNumber = 88
-                  DraftDigest = IntakeReceipt.digest parsed }
+                {
+                    IntakeReceipt.Receipt.DraftId = parsed.Id
+                    Owner = parsed.Owner
+                    Repository = parsed.Repository
+                    IssueNumber = 88
+                    DraftDigest = IntakeReceipt.digest parsed
+                }
             |> Result.defaultWith failwith
 
             let route = lightweightRouteComment "FS-GG/.github#88" |> JsonSerializer.Serialize
@@ -389,7 +491,10 @@ module IntakeTransactionTests =
                         | Query(document, _) when document.Contains "fields(first" ->
                             ok
                                 """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"S","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"R","name":"Ready"}]},{"id":"C","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"H","name":"hardening"}]},{"id":"B","name":"Blocked by","dataType":"TEXT"}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
-                        | Query(document, _) when document.Contains "updatedAt" && document.Contains "fieldValueByName(name: \"Blocked by\")" ->
+                        | Query(document, _) when
+                            document.Contains "updatedAt"
+                            && document.Contains "fieldValueByName(name: \"Blocked by\")"
+                            ->
                             edgeReads <- edgeReads + 1
 
                             if edgeReads < 3 then
@@ -409,10 +514,12 @@ module IntakeTransactionTests =
 
             let code, error = invokeDraftWithError cache ready world
             Assert.Equal(Kernel.ExitError, code)
+
             Assert.True(
                 error.Contains("changed at the board-write boundary", StringComparison.Ordinal),
                 error + "\n" + String.concat "\n" world.Log
             )
+
             Assert.Equal(3, edgeReads)
             Assert.Equal(0, readyMutationWrites)
 
@@ -430,11 +537,13 @@ module IntakeTransactionTests =
             let parsed = IntakeApplication.readDraft draftPath |> Result.defaultWith failwith
 
             Cache.putIntakeReceipt
-                { IntakeReceipt.Receipt.DraftId = parsed.Id
-                  Owner = parsed.Owner
-                  Repository = parsed.Repository
-                  IssueNumber = 88
-                  DraftDigest = IntakeReceipt.digest parsed }
+                {
+                    IntakeReceipt.Receipt.DraftId = parsed.Id
+                    Owner = parsed.Owner
+                    Repository = parsed.Repository
+                    IssueNumber = 88
+                    DraftDigest = IntakeReceipt.digest parsed
+                }
             |> Result.defaultWith failwith
 
             let route = lightweightRouteComment "FS-GG/.github#88" |> JsonSerializer.Serialize
@@ -458,7 +567,10 @@ module IntakeTransactionTests =
                         | Query(document, _) when document.Contains "fields(first" ->
                             ok
                                 """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"S","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"R","name":"Ready"}]},{"id":"C","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"H","name":"hardening"}]},{"id":"B","name":"Blocked by","dataType":"TEXT"}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
-                        | Query(document, _) when document.Contains "updatedAt" && document.Contains "fieldValueByName(name: \"Blocked by\")" ->
+                        | Query(document, _) when
+                            document.Contains "updatedAt"
+                            && document.Contains "fieldValueByName(name: \"Blocked by\")"
+                            ->
                             edgeReads <- edgeReads + 1
 
                             // The third response is the final observation used by Board. Capture the
@@ -482,10 +594,12 @@ module IntakeTransactionTests =
 
             let code, error = invokeDraftWithError cache ready world
             Assert.Equal(Kernel.ExitError, code)
+
             Assert.True(
                 error.Contains("cannot atomically compare", StringComparison.Ordinal),
                 error + "\n" + String.concat "\n" world.Log
             )
+
             Assert.Contains("Status=Ready was not sent", error, StringComparison.Ordinal)
             Assert.Equal(3, edgeReads)
             Assert.Equal(installEdgeAfterFinalRead, edgeInstalled)
@@ -493,105 +607,203 @@ module IntakeTransactionTests =
 
     [<Fact>]
     let ``#2134 a durable receipt bypasses issue creation`` () =
-        withCache <| fun cache ->
-            Cache.putIntakeReceipt { IntakeReceipt.Receipt.DraftId = "tx-2134"; Owner = "FS-GG"; Repository = ".github"; IssueNumber = 77; DraftDigest = draftDigest cache } |> ignore
+        withCache
+        <| fun cache ->
+            Cache.putIntakeReceipt
+                {
+                    IntakeReceipt.Receipt.DraftId = "tx-2134"
+                    Owner = "FS-GG"
+                    Repository = ".github"
+                    IssueNumber = 77
+                    DraftDigest = draftDigest cache
+                }
+            |> ignore
+
             let mutable posts = 0
-            let world = Fake.Recorder(fun req ->
-                if req.Method = "POST" && req.Path.EndsWith "/issues" then posts <- posts + 1
-                Error(NotFound "stop after receipt recovery"))
+
+            let world =
+                Fake.Recorder(fun req ->
+                    if req.Method = "POST" && req.Path.EndsWith "/issues" then
+                        posts <- posts + 1
+
+                    Error(NotFound "stop after receipt recovery"))
+
             Assert.Equal(Kernel.ExitError, invoke cache world)
             Assert.Equal(0, posts)
 
     [<Fact>]
     let ``#2134 apply refuses a nonexistent live path before transport`` () =
-        withCache <| fun cache ->
-            let invalid = draft.Replace("src/FS.GG.Coord.Core", "definitely/not/a/live/path-2134")
-            let world = Fake.Recorder(fun _ -> Error(NotFound "live-path refusal must precede transport"))
+        withCache
+        <| fun cache ->
+            let invalid =
+                draft.Replace("src/FS.GG.Coord.Core", "definitely/not/a/live/path-2134")
+
+            let world =
+                Fake.Recorder(fun _ -> Error(NotFound "live-path refusal must precede transport"))
+
             Assert.Equal(Kernel.ExitError, invokeDraft cache invalid world)
             Assert.Equal(0, world.RestCalls + world.GraphQlCalls)
 
     [<Fact>]
     let ``#2134 apply refuses a resolved Blocked dependency before create`` () =
-        withCache <| fun cache ->
-            let blocked = """{"schema":"fsgg.coord.intake/v1","id":"blocked-2134","owner":"FS-GG","repository":".github","title":"blocked","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Blocked","blockedBy":"FS-GG/.github#42","disposition":"create"}"""
+        withCache
+        <| fun cache ->
+            let blocked =
+                """{"schema":"fsgg.coord.intake/v1","id":"blocked-2134","owner":"FS-GG","repository":".github","title":"blocked","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Blocked","blockedBy":"FS-GG/.github#42","disposition":"create"}"""
+
             let mutable creates = 0
-            let world = Fake.Recorder(fun req ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/issues/42" -> ok "{\"number\":42,\"state\":\"closed\"}"
-                | "POST", path when path.EndsWith "/issues" -> creates <- creates + 1; Error(NotFound "must refuse before create")
-                | _ -> Error(NotFound "unexpected request"))
+
+            let world =
+                Fake.Recorder(fun req ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "repos/FS-GG/.github/issues/42" -> ok "{\"number\":42,\"state\":\"closed\"}"
+                    | "POST", path when path.EndsWith "/issues" ->
+                        creates <- creates + 1
+                        Error(NotFound "must refuse before create")
+                    | _ -> Error(NotFound "unexpected request"))
+
             Assert.Equal(Kernel.ExitError, invokeDraft cache blocked world)
             Assert.Equal(0, creates)
 
     [<Fact>]
     let ``#2134 Ready reuse refuses a live human-choice marker`` () =
-        withCache <| fun cache ->
-            let ready = """{"schema":"fsgg.coord.intake/v1","id":"ready-2134","owner":"FS-GG","repository":".github","title":"ready","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Ready","disposition":"reuse"}"""
+        withCache
+        <| fun cache ->
+            let ready =
+                """{"schema":"fsgg.coord.intake/v1","id":"ready-2134","owner":"FS-GG","repository":".github","title":"ready","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Ready","disposition":"reuse"}"""
+
             let draftPath = Path.Combine(cache, "ready-digest.json")
             File.WriteAllText(draftPath, ready)
             let parsed = IntakeApplication.readDraft draftPath |> Result.defaultWith failwith
-            Cache.putIntakeReceipt { IntakeReceipt.Receipt.DraftId = parsed.Id; Owner = parsed.Owner; Repository = parsed.Repository; IssueNumber = 88; DraftDigest = IntakeReceipt.digest parsed } |> Result.defaultWith failwith
+
+            Cache.putIntakeReceipt
+                {
+                    IntakeReceipt.Receipt.DraftId = parsed.Id
+                    Owner = parsed.Owner
+                    Repository = parsed.Repository
+                    IssueNumber = 88
+                    DraftDigest = IntakeReceipt.digest parsed
+                }
+            |> Result.defaultWith failwith
+
             let mutable bodyReads = 0
-            let world = Fake.Recorder(fun req ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/issues/88" -> bodyReads <- bodyReads + 1; ok "{\"number\":88,\"state\":\"open\",\"body\":\"Blocked on: human/decision\"}"
-                | _ -> Error(NotFound "Ready guard must refuse before board projection"))
+
+            let world =
+                Fake.Recorder(fun req ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "repos/FS-GG/.github/issues/88" ->
+                        bodyReads <- bodyReads + 1
+                        ok "{\"number\":88,\"state\":\"open\",\"body\":\"Blocked on: human/decision\"}"
+                    | _ -> Error(NotFound "Ready guard must refuse before board projection"))
+
             Assert.Equal(Kernel.ExitError, invokeDraft cache ready world)
             Assert.True(bodyReads >= 1, "the Ready gate must inspect the live issue body")
 
     [<Fact>]
     let ``#2134 interruption after create persists receipt and retry issues no second POST`` () =
-        withCache <| fun cache ->
+        withCache
+        <| fun cache ->
             let mutable posts = 0
-            let first = Fake.Recorder(fun req ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
-                | "POST", "repos/FS-GG/.github/issues" -> posts <- posts + 1; ok "{\"number\":77}"
-                | _ -> Error(NotFound "interrupted after persisted create"))
+
+            let first =
+                Fake.Recorder(fun req ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+                    | "POST", "repos/FS-GG/.github/issues" ->
+                        posts <- posts + 1
+                        ok "{\"number\":77}"
+                    | _ -> Error(NotFound "interrupted after persisted create"))
+
             Assert.Equal(Kernel.ExitError, invoke cache first)
-            if posts <> 1 then failwith (String.concat "\n" first.Log)
+
+            if posts <> 1 then
+                failwith (String.concat "\n" first.Log)
+
             let mutable retryPosts = 0
-            let retry = Fake.Recorder(fun req ->
-                if req.Method = "POST" && req.Path.EndsWith "/issues" then retryPosts <- retryPosts + 1
-                Error(NotFound "stop after recovered receipt"))
+
+            let retry =
+                Fake.Recorder(fun req ->
+                    if req.Method = "POST" && req.Path.EndsWith "/issues" then
+                        retryPosts <- retryPosts + 1
+
+                    Error(NotFound "stop after recovered receipt"))
+
             Assert.Equal(Kernel.ExitError, invoke cache retry)
             Assert.Equal(0, retryPosts)
 
     [<Fact>]
     let ``#2134 create-before-receipt crash converges through the durable intent`` () =
-        withCache <| fun cache ->
+        withCache
+        <| fun cache ->
             let digest = draftDigest cache
-            Cache.putIntakeIntent { Cache.IntakeIntent.DraftId = "tx-2134"; Owner = "FS-GG"; Repository = ".github"; DraftDigest = digest } |> Result.defaultWith failwith
+
+            Cache.putIntakeIntent
+                {
+                    Cache.IntakeIntent.DraftId = "tx-2134"
+                    Owner = "FS-GG"
+                    Repository = ".github"
+                    DraftDigest = digest
+                }
+            |> Result.defaultWith failwith
+
             let mutable posts = 0
-            let world = Fake.Recorder(fun req ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/issues" -> ok ($"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":{System.Text.Json.JsonSerializer.Serialize(draftMarker cache)}}}]")
-                | "POST", path when path.EndsWith "/issues" -> posts <- posts + 1; Error(NotFound "must not create again")
-                | _ -> Error(NotFound "stop after intent recovery"))
+
+            let world =
+                Fake.Recorder(fun req ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "repos/FS-GG/.github/issues" ->
+                        ok (
+                            $"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":{System.Text.Json.JsonSerializer.Serialize(draftMarker cache)}}}]"
+                        )
+                    | "POST", path when path.EndsWith "/issues" ->
+                        posts <- posts + 1
+                        Error(NotFound "must not create again")
+                    | _ -> Error(NotFound "stop after intent recovery"))
+
             Assert.Equal(Kernel.ExitError, invoke cache world)
             Assert.Equal(0, posts)
+
             match Cache.getIntakeReceipt "tx-2134" with
             | Ok(Some receipt) -> Assert.Equal(77, receipt.IssueNumber)
             | other -> failwithf "intent recovery did not bind a receipt: %A" other
 
     [<Fact>]
     let ``#2134 intent never binds an unrelated same-title issue`` () =
-        withCache <| fun cache ->
-            Cache.putIntakeIntent { Cache.IntakeIntent.DraftId = "tx-2134"; Owner = "FS-GG"; Repository = ".github"; DraftDigest = draftDigest cache } |> Result.defaultWith failwith
+        withCache
+        <| fun cache ->
+            Cache.putIntakeIntent
+                {
+                    Cache.IntakeIntent.DraftId = "tx-2134"
+                    Owner = "FS-GG"
+                    Repository = ".github"
+                    DraftDigest = draftDigest cache
+                }
+            |> Result.defaultWith failwith
+
             let mutable posts = 0
-            let world = Fake.Recorder(fun req ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/issues" -> ok "[{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":\"unrelated issue filed by another actor\"}]"
-                | "POST", path when path.EndsWith "/issues" -> posts <- posts + 1; Error(NotFound "must refuse, not create")
-                | _ -> Error(NotFound "stop after provenance refusal"))
+
+            let world =
+                Fake.Recorder(fun req ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "repos/FS-GG/.github/issues" ->
+                        ok
+                            "[{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":\"unrelated issue filed by another actor\"}]"
+                    | "POST", path when path.EndsWith "/issues" ->
+                        posts <- posts + 1
+                        Error(NotFound "must refuse, not create")
+                    | _ -> Error(NotFound "stop after provenance refusal"))
+
             Assert.Equal(Kernel.ExitError, invoke cache world)
             Assert.Equal(0, posts)
             Assert.Equal(Ok None, Cache.getIntakeReceipt "tx-2134")
 
     [<Fact>]
     let ``#2134 the per-draft lock refuses a concurrent create window`` () =
-        withCache <| fun _ ->
-            let result = Cache.withIntakeLock "tx-2134" (fun () -> Cache.withIntakeLock "tx-2134" (fun () -> 1))
+        withCache
+        <| fun _ ->
+            let result =
+                Cache.withIntakeLock "tx-2134" (fun () -> Cache.withIntakeLock "tx-2134" (fun () -> 1))
+
             match result with
             | Ok(Error reason) -> Assert.Contains("already being applied", reason)
             | other -> failwithf "concurrent intake unexpectedly entered the create window: %A" other
@@ -600,40 +812,60 @@ module IntakeTransactionTests =
     [<InlineData("{\"number\":7,\"state\":\"closed\",\"title\":\"same\",\"body\":\"x\"}")>]
     [<InlineData("{\"number\":8,\"state\":\"open\",\"title\":\"same\",\"body\":\"x\",\"pull_request\":{}}")>]
     let ``#2134 duplicate closed issue or PR refuses before create POST`` candidate =
-        withCache <| fun cache ->
+        withCache
+        <| fun cache ->
             let mutable posts = 0
-            let world = Fake.Recorder(fun req ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/issues" -> ok ("[" + candidate + "]")
-                | "POST", _ -> posts <- posts + 1; Error(NotFound "duplicate must stop before any other write")
-                | _ -> Error(NotFound "duplicate must stop before any other write"))
+
+            let world =
+                Fake.Recorder(fun req ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "repos/FS-GG/.github/issues" -> ok ("[" + candidate + "]")
+                    | "POST", _ ->
+                        posts <- posts + 1
+                        Error(NotFound "duplicate must stop before any other write")
+                    | _ -> Error(NotFound "duplicate must stop before any other write"))
+
             Assert.Equal(Kernel.ExitError, invoke cache world)
             Assert.Equal(0, posts)
 
     [<Fact>]
     let ``#2134 explicit reuse binds the selected candidate without create`` () =
-        withCache <| fun cache ->
+        withCache
+        <| fun cache ->
             let reuse = draft.Replace("\"disposition\":\"create\"", "\"disposition\":\"reuse\"")
             let mutable creates = 0
-            let world = Fake.Recorder(fun req ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/issues" -> ok "[{\"number\":88,\"state\":\"open\",\"title\":\"same\",\"body\":\"existing\"}]"
-                | "POST", path when path.EndsWith "/issues" -> creates <- creates + 1; Error(NotFound "reuse must not create")
-                | _ -> Error(NotFound "stop after reuse binding"))
+
+            let world =
+                Fake.Recorder(fun req ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "repos/FS-GG/.github/issues" ->
+                        ok "[{\"number\":88,\"state\":\"open\",\"title\":\"same\",\"body\":\"existing\"}]"
+                    | "POST", path when path.EndsWith "/issues" ->
+                        creates <- creates + 1
+                        Error(NotFound "reuse must not create")
+                    | _ -> Error(NotFound "stop after reuse binding"))
+
             Assert.Equal(Kernel.ExitError, invokeDraft cache reuse world)
             Assert.Equal(0, creates)
+
             match Cache.getIntakeReceipt "tx-2134" with
             | Ok(Some receipt) -> Assert.Equal(88, receipt.IssueNumber)
             | other -> failwithf "reuse did not bind a receipt: %A" other
 
     [<Fact>]
     let ``#2134 unreadable and binding-mismatched receipts fail closed before POST`` () =
-        withCache <| fun cache ->
+        withCache
+        <| fun cache ->
             File.WriteAllText(Path.Combine(cache, "intake-tx-2134.json"), "not-json")
             let unreadable = Fake.Recorder(fun _ -> Error(NotFound "must not read network"))
             Assert.Equal(Kernel.ExitError, invoke cache unreadable)
             Assert.Equal(0, unreadable.RestCalls)
-            File.WriteAllText(Path.Combine(cache, "intake-tx-2134.json"), "{\"draftId\":\"tx-2134\",\"owner\":\"other\",\"repository\":\".github\",\"issueNumber\":77}")
+
+            File.WriteAllText(
+                Path.Combine(cache, "intake-tx-2134.json"),
+                "{\"draftId\":\"tx-2134\",\"owner\":\"other\",\"repository\":\".github\",\"issueNumber\":77}"
+            )
+
             let mismatched = Fake.Recorder(fun _ -> Error(NotFound "must not read network"))
             Assert.Equal(Kernel.ExitError, invoke cache mismatched)
             Assert.Equal(0, mismatched.RestCalls)
@@ -647,114 +879,204 @@ module IntakeTransactionTests =
         let projectedClass: string option ref = ref None
         let projectedSeverity: string option ref = ref None
         let currentBody = ref initialBody
-        let world = Fake.Recorder(fun req ->
-            match req.Method, req.Path.Trim '/' with
-            | "GET", "repos/FS-GG/.github/issues" -> ok duplicateCandidates
-            | "POST", "repos/FS-GG/.github/issues" -> creates.Value <- creates.Value + 1; ok "{\"number\":77}"
-            | "GET", "repos/FS-GG/.github/issues/77" -> ok ($"{{\"number\":77,\"state\":\"open\",\"body\":%s{JsonSerializer.Serialize currentBody.Value}}}")
-            | "PATCH", "repos/FS-GG/.github/issues/77" -> currentBody.Value <- canonicalBody; ok "{}"
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(doc, _) when doc.Contains "projectsV2" ->
-                    ok "{\"data\":{\"organization\":{\"projectsV2\":{\"nodes\":[{\"number\":1,\"title\":\"Coordination\",\"id\":\"PVT\"}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
-                | Query(doc, _) when doc.Contains "fields(first" ->
-                    ok "{\"data\":{\"organization\":{\"projectV2\":{\"fields\":{\"nodes\":[{\"id\":\"F\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"B\",\"name\":\"Backlog\"}]},{\"id\":\"C\",\"name\":\"Class\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"H\",\"name\":\"hardening\"}]},{\"id\":\"S\",\"name\":\"Severity\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"HI\",\"name\":\"High\"}]}]}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
-                | Query(doc, variables) when doc.Contains "node(id: $itemId)" ->
-                    let field = variables |> List.tryPick (function "field", VString value -> Some value | _ -> None)
-                    let value =
-                        match field with
-                        | Some "Status" -> projectedStatus.Value
-                        | Some "Class" -> projectedClass.Value
-                        | Some "Severity" -> projectedSeverity.Value
-                        | _ -> None
-                    let node = value |> Option.map (fun projected -> $"{{\"name\":{JsonSerializer.Serialize projected}}}") |> Option.defaultValue "null"
-                    ok $"{{\"data\":{{\"node\":{{\"fieldValueByName\":%s{node}}},\"rateLimit\":{{\"cost\":1,\"remaining\":1}}}}}}"
-                | Query(doc, _) when doc.Contains "projectItems(first" && doc.Contains "fieldValueByName" ->
-                    let field = projectedStatus.Value |> Option.map (fun status -> $"{{\"name\":\"%s{status}\"}}") |> Option.defaultValue "null"
-                    ok $"{{\"data\":{{\"repository\":{{\"issue\":{{\"projectItems\":{{\"nodes\":[{{\"project\":{{\"number\":1}},\"fieldValueByName\":%s{field}}}]}}}}}}}},\"rateLimit\":{{\"cost\":1,\"remaining\":1}}}}"
-                | Query(doc, _) when doc.Contains "projectItems(first" ->
-                    let nodes = if boardAdded.Value then "[{\"id\":\"PI\",\"project\":{\"number\":1}}]" else "[]"
-                    ok ("{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":" + nodes + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}")
-                | Query(doc, _) when doc.Contains "issue(number" -> ok "{\"data\":{\"repository\":{\"issue\":{\"id\":\"I\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
-                | Query(doc, _) when doc.Contains "addProjectV2ItemById" -> added.Value <- added.Value + 1; boardAdded.Value <- true; ok "{\"data\":{\"addProjectV2ItemById\":{\"item\":{\"id\":\"PI\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
-                | Query(doc, _) when doc.Contains "updateProjectV2ItemFieldValue" ->
-                    writes.Value <- writes.Value + 1
-                    projectedStatus.Value <- Some "Backlog"
-                    projectedClass.Value <- Some "hardening"
-                    projectedSeverity.Value <- Some "High"
-                    ok "{\"data\":{\"updateProjectV2ItemFieldValue\":{\"projectV2Item\":{\"id\":\"PI\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
-                | _ -> Error(NotFound "unrecognised board request")
-            | _ -> Error(NotFound "unrecognised request"))
+
+        let world =
+            Fake.Recorder(fun req ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "repos/FS-GG/.github/issues" -> ok duplicateCandidates
+                | "POST", "repos/FS-GG/.github/issues" ->
+                    creates.Value <- creates.Value + 1
+                    ok "{\"number\":77}"
+                | "GET", "repos/FS-GG/.github/issues/77" ->
+                    ok (
+                        $"{{\"number\":77,\"state\":\"open\",\"body\":%s{JsonSerializer.Serialize currentBody.Value}}}"
+                    )
+                | "PATCH", "repos/FS-GG/.github/issues/77" ->
+                    currentBody.Value <- canonicalBody
+                    ok "{}"
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(doc, _) when doc.Contains "projectsV2" ->
+                        ok
+                            "{\"data\":{\"organization\":{\"projectsV2\":{\"nodes\":[{\"number\":1,\"title\":\"Coordination\",\"id\":\"PVT\"}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                    | Query(doc, _) when doc.Contains "fields(first" ->
+                        ok
+                            "{\"data\":{\"organization\":{\"projectV2\":{\"fields\":{\"nodes\":[{\"id\":\"F\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"B\",\"name\":\"Backlog\"}]},{\"id\":\"C\",\"name\":\"Class\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"H\",\"name\":\"hardening\"}]},{\"id\":\"S\",\"name\":\"Severity\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"HI\",\"name\":\"High\"}]}]}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                    | Query(doc, variables) when doc.Contains "node(id: $itemId)" ->
+                        let field =
+                            variables
+                            |> List.tryPick (function
+                                | "field", VString value -> Some value
+                                | _ -> None)
+
+                        let value =
+                            match field with
+                            | Some "Status" -> projectedStatus.Value
+                            | Some "Class" -> projectedClass.Value
+                            | Some "Severity" -> projectedSeverity.Value
+                            | _ -> None
+
+                        let node =
+                            value
+                            |> Option.map (fun projected -> $"{{\"name\":{JsonSerializer.Serialize projected}}}")
+                            |> Option.defaultValue "null"
+
+                        ok
+                            $"{{\"data\":{{\"node\":{{\"fieldValueByName\":%s{node}}},\"rateLimit\":{{\"cost\":1,\"remaining\":1}}}}}}"
+                    | Query(doc, _) when doc.Contains "projectItems(first" && doc.Contains "fieldValueByName" ->
+                        let field =
+                            projectedStatus.Value
+                            |> Option.map (fun status -> $"{{\"name\":\"%s{status}\"}}")
+                            |> Option.defaultValue "null"
+
+                        ok
+                            $"{{\"data\":{{\"repository\":{{\"issue\":{{\"projectItems\":{{\"nodes\":[{{\"project\":{{\"number\":1}},\"fieldValueByName\":%s{field}}}]}}}}}}}},\"rateLimit\":{{\"cost\":1,\"remaining\":1}}}}"
+                    | Query(doc, _) when doc.Contains "projectItems(first" ->
+                        let nodes =
+                            if boardAdded.Value then
+                                "[{\"id\":\"PI\",\"project\":{\"number\":1}}]"
+                            else
+                                "[]"
+
+                        ok (
+                            "{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":"
+                            + nodes
+                            + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                        )
+                    | Query(doc, _) when doc.Contains "issue(number" ->
+                        ok
+                            "{\"data\":{\"repository\":{\"issue\":{\"id\":\"I\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                    | Query(doc, _) when doc.Contains "addProjectV2ItemById" ->
+                        added.Value <- added.Value + 1
+                        boardAdded.Value <- true
+
+                        ok
+                            "{\"data\":{\"addProjectV2ItemById\":{\"item\":{\"id\":\"PI\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                    | Query(doc, _) when doc.Contains "updateProjectV2ItemFieldValue" ->
+                        writes.Value <- writes.Value + 1
+                        projectedStatus.Value <- Some "Backlog"
+                        projectedClass.Value <- Some "hardening"
+                        projectedSeverity.Value <- Some "High"
+
+                        ok
+                            "{\"data\":{\"updateProjectV2ItemFieldValue\":{\"projectV2Item\":{\"id\":\"PI\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                    | _ -> Error(NotFound "unrecognised board request")
+                | _ -> Error(NotFound "unrecognised request"))
+
         world, creates, added, writes
 
     [<Theory>]
     [<InlineData("receipt")>]
     [<InlineData("intent")>]
     let ``#2835 a corrected legacy draft completes production-shaped projection without another create`` recovery =
-        withCache <| fun cache ->
+        withCache
+        <| fun cache ->
             let canonicalPath = Path.Combine(cache, "corrected.json")
             let correctedJson = severityDraft "High"
             File.WriteAllText(canonicalPath, correctedJson)
-            let canonical = IntakeApplication.readDraft canonicalPath |> Result.defaultWith failwith
-            let legacy = { canonical with Severity = Some "high" }
+
+            let canonical =
+                IntakeApplication.readDraft canonicalPath |> Result.defaultWith failwith
+
+            let legacy =
+                { canonical with
+                    Severity = Some "high"
+                }
+
             let legacyDigest = IntakeReceipt.digest legacy
+
             let duplicateCandidates =
                 if recovery = "receipt" then
                     Cache.putIntakeReceipt
-                        { IntakeReceipt.Receipt.DraftId = canonical.Id; Owner = canonical.Owner
-                          Repository = canonical.Repository; IssueNumber = 77; DraftDigest = legacyDigest }
+                        {
+                            IntakeReceipt.Receipt.DraftId = canonical.Id
+                            Owner = canonical.Owner
+                            Repository = canonical.Repository
+                            IssueNumber = 77
+                            DraftDigest = legacyDigest
+                        }
                     |> Result.defaultWith failwith
+
                     "[]"
                 else
                     Cache.putIntakeIntent
-                        { Cache.IntakeIntent.DraftId = canonical.Id; Owner = canonical.Owner
-                          Repository = canonical.Repository; DraftDigest = legacyDigest }
+                        {
+                            Cache.IntakeIntent.DraftId = canonical.Id
+                            Owner = canonical.Owner
+                            Repository = canonical.Repository
+                            DraftDigest = legacyDigest
+                        }
                     |> Result.defaultWith failwith
+
                     $"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":%s{JsonSerializer.Serialize(draftBody legacy)}}}]"
+
             let world, creates, added, writes =
                 successfulProjectionWorld duplicateCandidates (draftBody legacy) (draftBody canonical)
+
             let code = invokeDraft cache correctedJson world
-            if code <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
+
+            if code <> Kernel.ExitGreen then
+                failwith (String.concat "\n" world.Log)
+
             Assert.Equal(0, creates.Value)
             Assert.Equal(1, added.Value)
             Assert.Equal(1, writes.Value)
 
     [<Fact>]
     let ``a board-invalid legacy class is canonically repaired before projection`` () =
-        withCache <| fun cache ->
+        withCache
+        <| fun cache ->
             let canonicalPath = Path.Combine(cache, "canonical-class.json")
             File.WriteAllText(canonicalPath, draft)
-            let canonical = IntakeApplication.readDraft canonicalPath |> Result.defaultWith failwith
+
+            let canonical =
+                IntakeApplication.readDraft canonicalPath |> Result.defaultWith failwith
+
             let legacy = { canonical with Class = "capability" }
+
             Cache.putIntakeReceipt
-                { IntakeReceipt.Receipt.DraftId = canonical.Id
-                  Owner = canonical.Owner
-                  Repository = canonical.Repository
-                  IssueNumber = 77
-                  DraftDigest = IntakeReceipt.digest legacy }
+                {
+                    IntakeReceipt.Receipt.DraftId = canonical.Id
+                    Owner = canonical.Owner
+                    Repository = canonical.Repository
+                    IssueNumber = 77
+                    DraftDigest = IntakeReceipt.digest legacy
+                }
             |> Result.defaultWith failwith
+
             let world, creates, added, writes =
                 successfulProjectionWorld "[]" (draftBody legacy) (draftBody canonical)
+
             let code = invoke cache world
-            if code <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
+
+            if code <> Kernel.ExitGreen then
+                failwith (String.concat "\n" world.Log)
+
             Assert.Equal(0, creates.Value)
             Assert.Equal(1, added.Value)
             Assert.Equal(1, writes.Value)
+
             match Cache.getIntakeReceipt canonical.Id with
             | Ok(Some receipt) -> Assert.Equal(IntakeReceipt.digest canonical, receipt.DraftDigest)
             | other -> failwithf "class repair did not advance the canonical receipt: %A" other
 
     [<Fact>]
     let ``#2835 receipt persistence failure names the created issue and same-id recovery completes`` () =
-        withCache <| fun cache ->
+        withCache
+        <| fun cache ->
             let receiptPath = Path.Combine(cache, "intake-tx-2134.json")
             Directory.CreateDirectory receiptPath |> ignore
             let mutable initialCreates = 0
-            let first = Fake.Recorder(fun req ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
-                | "POST", "repos/FS-GG/.github/issues" -> initialCreates <- initialCreates + 1; ok "{\"number\":77}"
-                | _ -> Error(NotFound "unexpected request before receipt persistence"))
+
+            let first =
+                Fake.Recorder(fun req ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+                    | "POST", "repos/FS-GG/.github/issues" ->
+                        initialCreates <- initialCreates + 1
+                        ok "{\"number\":77}"
+                    | _ -> Error(NotFound "unexpected request before receipt persistence"))
+
             let firstCode, firstError = invokeDraftWithError cache draft first
             Assert.Equal(Kernel.ExitError, firstCode)
             Assert.Equal(1, initialCreates)
@@ -763,14 +1085,24 @@ module IntakeTransactionTests =
 
             Directory.Delete receiptPath
             let marker = draftMarker cache
-            let duplicate = $"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":%s{JsonSerializer.Serialize marker}}}]"
+
+            let duplicate =
+                $"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":%s{JsonSerializer.Serialize marker}}}]"
+
             let canonicalPath = Path.Combine(cache, "canonical-recovery.json")
             File.WriteAllText(canonicalPath, draft)
-            let canonical = IntakeApplication.readDraft canonicalPath |> Result.defaultWith failwith
+
+            let canonical =
+                IntakeApplication.readDraft canonicalPath |> Result.defaultWith failwith
+
             let world, creates, added, writes =
                 successfulProjectionWorld duplicate (draftBody canonical) (draftBody canonical)
+
             let retryCode = invoke cache world
-            if retryCode <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
+
+            if retryCode <> Kernel.ExitGreen then
+                failwith (String.concat "\n" world.Log)
+
             Assert.Equal(0, creates.Value)
             Assert.Equal(1, added.Value)
             Assert.Equal(1, writes.Value)
@@ -779,16 +1111,20 @@ module IntakeTransactionTests =
     [<InlineData(false)>]
     [<InlineData(true)>]
     let ``#2134 successful create binds receipt and verifies org or user-owned board projection`` userOwned =
-        withCache <| fun cache ->
+        withCache
+        <| fun cache ->
             let priorKind = Environment.GetEnvironmentVariable "FSGG_COORD_OWNER_TYPE"
             let priorOwner = Environment.GetEnvironmentVariable "FSGG_COORD_OWNER"
             Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", if userOwned then "user" else null)
             Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", "FS-GG")
+
             use _restore =
                 { new IDisposable with
                     member _.Dispose() =
                         Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", priorKind)
-                        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", priorOwner) }
+                        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", priorOwner)
+                }
+
             let ownerNode = if userOwned then "user" else "organization"
             let mutable creates = 0
             let mutable added = 0
@@ -796,39 +1132,96 @@ module IntakeTransactionTests =
             let mutable boardAdded = false
             let mutable projectedStatus: string option = None
             let mutable projectedClass: string option = None
-            let world = Fake.Recorder(fun req ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
-                | "POST", "repos/FS-GG/.github/issues" -> creates <- creates + 1; ok "{\"number\":77}"
-                | "GET", "repos/FS-GG/.github/issues/77" -> ok "{\"number\":77,\"state\":\"open\"}"
-                | "POST", "graphql" ->
-                    match req.Body with
-                    | Query(doc, _) when doc.Contains "projectsV2" -> ok ("{\"data\":{\"OWNER\":{\"projectsV2\":{\"nodes\":[{\"number\":1,\"title\":\"Coordination\",\"id\":\"PVT\"}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}".Replace("OWNER", ownerNode))
-                    | Query(doc, _) when doc.Contains "fields(first" -> ok ("{\"data\":{\"OWNER\":{\"projectV2\":{\"fields\":{\"nodes\":[{\"id\":\"F\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"B\",\"name\":\"Backlog\"}]},{\"id\":\"C\",\"name\":\"Class\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"H\",\"name\":\"hardening\"}]}]}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}".Replace("OWNER", ownerNode))
-                    | Query(doc, variables) when doc.Contains "node(id: $itemId)" ->
-                        let field = variables |> List.tryPick (function "field", VString value -> Some value | _ -> None)
-                        let value = match field with Some "Status" -> projectedStatus | Some "Class" -> projectedClass | _ -> None
-                        let node = value |> Option.map (fun projected -> $"{{\"name\":{System.Text.Json.JsonSerializer.Serialize projected}}}") |> Option.defaultValue "null"
-                        ok $"{{\"data\":{{\"node\":{{\"fieldValueByName\":%s{node}}},\"rateLimit\":{{\"cost\":1,\"remaining\":1}}}}}}"
-                    | Query(doc, _) when doc.Contains "projectItems(first" && doc.Contains "fieldValueByName" ->
-                        let field =
-                            projectedStatus
-                            |> Option.map (fun status -> $"{{\"name\":\"%s{status}\"}}")
-                            |> Option.defaultValue "null"
-                        ok $"{{\"data\":{{\"repository\":{{\"issue\":{{\"projectItems\":{{\"nodes\":[{{\"project\":{{\"number\":1}},\"fieldValueByName\":%s{field}}}]}}}}}}}},\"rateLimit\":{{\"cost\":1,\"remaining\":1}}}}"
-                    | Query(doc, _) when doc.Contains "projectItems(first" ->
-                        let nodes = if boardAdded then "[{\"id\":\"PI\",\"project\":{\"number\":1}}]" else "[]"
-                        ok ("{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":" + nodes + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}")
-                    | Query(doc, _) when doc.Contains "issue(number" -> ok "{\"data\":{\"repository\":{\"issue\":{\"id\":\"I\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
-                    | Query(doc, _) when doc.Contains "addProjectV2ItemById" -> added <- added + 1; boardAdded <- true; ok "{\"data\":{\"addProjectV2ItemById\":{\"item\":{\"id\":\"PI\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
-                    | Query(doc, _) when doc.Contains "updateProjectV2ItemFieldValue" -> statusWrites <- statusWrites + 1; projectedStatus <- Some "Backlog"; projectedClass <- Some "hardening"; ok "{\"data\":{\"updateProjectV2ItemFieldValue\":{\"projectV2Item\":{\"id\":\"PI\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
-                    | _ -> Error(NotFound "unrecognised board request")
-                | _ -> Error(NotFound "unrecognised request"))
+
+            let world =
+                Fake.Recorder(fun req ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+                    | "POST", "repos/FS-GG/.github/issues" ->
+                        creates <- creates + 1
+                        ok "{\"number\":77}"
+                    | "GET", "repos/FS-GG/.github/issues/77" -> ok "{\"number\":77,\"state\":\"open\"}"
+                    | "POST", "graphql" ->
+                        match req.Body with
+                        | Query(doc, _) when doc.Contains "projectsV2" ->
+                            ok (
+                                "{\"data\":{\"OWNER\":{\"projectsV2\":{\"nodes\":[{\"number\":1,\"title\":\"Coordination\",\"id\":\"PVT\"}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                                    .Replace("OWNER", ownerNode)
+                            )
+                        | Query(doc, _) when doc.Contains "fields(first" ->
+                            ok (
+                                "{\"data\":{\"OWNER\":{\"projectV2\":{\"fields\":{\"nodes\":[{\"id\":\"F\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"B\",\"name\":\"Backlog\"}]},{\"id\":\"C\",\"name\":\"Class\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"H\",\"name\":\"hardening\"}]}]}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                                    .Replace("OWNER", ownerNode)
+                            )
+                        | Query(doc, variables) when doc.Contains "node(id: $itemId)" ->
+                            let field =
+                                variables
+                                |> List.tryPick (function
+                                    | "field", VString value -> Some value
+                                    | _ -> None)
+
+                            let value =
+                                match field with
+                                | Some "Status" -> projectedStatus
+                                | Some "Class" -> projectedClass
+                                | _ -> None
+
+                            let node =
+                                value
+                                |> Option.map (fun projected ->
+                                    $"{{\"name\":{System.Text.Json.JsonSerializer.Serialize projected}}}")
+                                |> Option.defaultValue "null"
+
+                            ok
+                                $"{{\"data\":{{\"node\":{{\"fieldValueByName\":%s{node}}},\"rateLimit\":{{\"cost\":1,\"remaining\":1}}}}}}"
+                        | Query(doc, _) when doc.Contains "projectItems(first" && doc.Contains "fieldValueByName" ->
+                            let field =
+                                projectedStatus
+                                |> Option.map (fun status -> $"{{\"name\":\"%s{status}\"}}")
+                                |> Option.defaultValue "null"
+
+                            ok
+                                $"{{\"data\":{{\"repository\":{{\"issue\":{{\"projectItems\":{{\"nodes\":[{{\"project\":{{\"number\":1}},\"fieldValueByName\":%s{field}}}]}}}}}}}},\"rateLimit\":{{\"cost\":1,\"remaining\":1}}}}"
+                        | Query(doc, _) when doc.Contains "projectItems(first" ->
+                            let nodes =
+                                if boardAdded then
+                                    "[{\"id\":\"PI\",\"project\":{\"number\":1}}]"
+                                else
+                                    "[]"
+
+                            ok (
+                                "{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":"
+                                + nodes
+                                + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                            )
+                        | Query(doc, _) when doc.Contains "issue(number" ->
+                            ok
+                                "{\"data\":{\"repository\":{\"issue\":{\"id\":\"I\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                        | Query(doc, _) when doc.Contains "addProjectV2ItemById" ->
+                            added <- added + 1
+                            boardAdded <- true
+
+                            ok
+                                "{\"data\":{\"addProjectV2ItemById\":{\"item\":{\"id\":\"PI\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                        | Query(doc, _) when doc.Contains "updateProjectV2ItemFieldValue" ->
+                            statusWrites <- statusWrites + 1
+                            projectedStatus <- Some "Backlog"
+                            projectedClass <- Some "hardening"
+
+                            ok
+                                "{\"data\":{\"updateProjectV2ItemFieldValue\":{\"projectV2Item\":{\"id\":\"PI\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                        | _ -> Error(NotFound "unrecognised board request")
+                    | _ -> Error(NotFound "unrecognised request"))
+
             let code = invoke cache world
-            if code <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
+
+            if code <> Kernel.ExitGreen then
+                failwith (String.concat "\n" world.Log)
+
             Assert.Equal(1, creates)
             Assert.Equal(1, added)
             Assert.Equal(1, statusWrites)
+
             match Cache.getIntakeReceipt "tx-2134" with
             | Ok(Some receipt) -> Assert.Equal(77, receipt.IssueNumber)
             | other -> failwithf "receipt was not durably persisted: %A" other
@@ -838,19 +1231,32 @@ module IntakeTransactionTests =
     [<InlineData("durable-receipt")>]
     [<InlineData("board-add")>]
     [<InlineData("post-projection")>]
-    let ``#3210 roadmap preparation replays after every durable intake boundary without duplicate issues`` failureBoundary =
-        withCache <| fun cache ->
+    let ``#3210 roadmap preparation replays after every durable intake boundary without duplicate issues``
+        failureBoundary
+        =
+        withCache
+        <| fun cache ->
             let shaText (value: string) =
                 SHA256.HashData(Encoding.UTF8.GetBytes value)
                 |> Convert.ToHexString
                 |> _.ToLowerInvariant()
+
             let unit id title prerequisites qGates commands =
-                let unsigned = $"""{{"exitGate":"test","gateCommands":%s{commands},"id":"%s{id}","owner":"FS.GG.Coordination","permissionCeiling":["local"],"prerequisites":%s{prerequisites},"qGates":%s{qGates},"title":"%s{title}"}}"""
-                unsigned[..unsigned.Length - 2] + $",\"contractSha256\":\"%s{shaText unsigned}\"}}"
-            let roadmap = "- [x] **GS2-07.2 — Previous.** done\n- [ ] **GS2-07.3 — Compile roadmap units.** next\n"
+                let unsigned =
+                    $"""{{"exitGate":"test","gateCommands":%s{commands},"id":"%s{id}","owner":"FS.GG.Coordination","permissionCeiling":["local"],"prerequisites":%s{prerequisites},"qGates":%s{qGates},"title":"%s{title}"}}"""
+
+                unsigned[.. unsigned.Length - 2]
+                + $",\"contractSha256\":\"%s{shaText unsigned}\"}}"
+
+            let roadmap =
+                "- [x] **GS2-07.2 — Previous.** done\n- [ ] **GS2-07.3 — Compile roadmap units.** next\n"
+
             let catalog =
                 $"""{{"schema":"fsgg.coordination.roadmap-index/1","roadmap":{{"repository":"FS-GG/.github","revision":"%s{String('a', 40)}","path":"docs/github-substrate-v2-roadmap.md","sha256":"%s{shaText roadmap}"}},"units":[%s{unit "GS2-07.2" "Previous" "[\"GS2-07.1\"]" "[]" "[\"previous\"]"},%s{unit "GS2-07.3" "Compile roadmap units" "[\"GS2-07.2\"]" "[\"Q3\"]" "[\"acceptance\"]"}]}}"""
-            let request = $"""{{"schema":"%s{RoadmapWorkUnit.PreparationInputSchema}","roadmapRevision":"%s{String.replicate 40 "a"}","authorityIssue":"https://github.com/FS-GG/.github/issues/3210","sddWorkId":"3210-roadmap-work-unit-compiler","registrationOwner":"FS-GG","registrationRepository":".github","registrationPaths":["src/FS.GG.Coord.Core"]}}"""
+
+            let request =
+                $"""{{"schema":"%s{RoadmapWorkUnit.PreparationInputSchema}","roadmapRevision":"%s{String.replicate 40 "a"}","authorityIssue":"https://github.com/FS-GG/.github/issues/3210","sddWorkId":"3210-roadmap-work-unit-compiler","registrationOwner":"FS-GG","registrationRepository":".github","registrationPaths":["src/FS.GG.Coord.Core"]}}"""
+
             let requestPath = Path.Combine(cache, "request.json")
             let roadmapPath = Path.Combine(cache, "roadmap.md")
             let catalogPath = Path.Combine(cache, "catalog.json")
@@ -867,111 +1273,225 @@ module IntakeTransactionTests =
             let projected = Collections.Generic.HashSet<int>()
             let mutable injectedFailure = false
             let receiptPath = Path.Combine(cache, "intake-roadmap-unit-gs2-07.3.json")
-            if failureBoundary = "issue-create" then Directory.CreateDirectory receiptPath |> ignore
-            let world = Fake.Recorder(fun req ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/issues" ->
-                    let rows =
-                        bodies
-                        |> Seq.map (fun pair ->
-                            let title = if titles.ContainsKey pair.Key then titles[pair.Key] else ""
-                            $"{{\"number\":%d{pair.Key},\"state\":\"open\",\"title\":%s{JsonSerializer.Serialize title},\"body\":%s{JsonSerializer.Serialize pair.Value}}}")
-                        |> String.concat ","
-                    ok ($"[%s{rows}]")
-                | "POST", "repos/FS-GG/.github/issues" ->
-                    creates <- creates + 1
-                    currentIssue <- 77
-                    match req.Body with
-                    | Json body ->
-                        use document = JsonDocument.Parse body
-                        bodies[currentIssue] <- document.RootElement.GetProperty("body").GetString()
-                        titles[currentIssue] <- document.RootElement.GetProperty("title").GetString()
-                    | _ -> bodies[currentIssue] <- ""
-                    ok ($"{{\"number\":%d{currentIssue}}}")
-                | "GET", path when path.StartsWith("repos/FS-GG/.github/issues/", StringComparison.Ordinal) && not (path.EndsWith("/comments", StringComparison.Ordinal)) ->
-                    currentIssue <- Int32.Parse(path.Split('/')[4])
-                    if failureBoundary = "durable-receipt" && creates = 1 && not injectedFailure then
-                        injectedFailure <- true
-                        Error(NotFound "injected after durable receipt")
-                    else
-                        let body = if bodies.ContainsKey currentIssue then bodies[currentIssue] else ""
-                        ok ($"{{\"number\":%d{currentIssue},\"state\":\"open\",\"body\":%s{JsonSerializer.Serialize body}}}")
-                | "PATCH", path when path.StartsWith("repos/FS-GG/.github/issues/", StringComparison.Ordinal) ->
-                    currentIssue <- Int32.Parse(path.Split('/')[4])
-                    match req.Body with
-                    | Json body ->
-                        use document = JsonDocument.Parse body
-                        if document.RootElement.TryGetProperty("body") |> fst then
-                            bodies[currentIssue] <- document.RootElement.GetProperty("body").GetString()
-                    | _ -> ()
-                    ok "{}"
-                | "POST", "graphql" ->
-                    match req.Body with
-                    | Query(doc, _) when doc.Contains "projectsV2" ->
-                        ok "{\"data\":{\"organization\":{\"projectsV2\":{\"nodes\":[{\"number\":1,\"title\":\"Coordination\",\"id\":\"PVT\"}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}"
-                    | Query(doc, _) when doc.Contains "fields(first" ->
-                        ok "{\"data\":{\"organization\":{\"projectV2\":{\"fields\":{\"nodes\":[{\"id\":\"F\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"B\",\"name\":\"Backlog\"}]},{\"id\":\"C\",\"name\":\"Class\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"H\",\"name\":\"hardening\"}]},{\"id\":\"P\",\"name\":\"Phase\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"P5\",\"name\":\"P5 Versioning\"}]},{\"id\":\"S\",\"name\":\"Severity\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"HI\",\"name\":\"High\"}]}]}}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}"
-                    | Query(doc, variables) when doc.Contains "node(id: $itemId)" ->
-                        if failureBoundary = "post-projection" && projected.Contains currentIssue && not injectedFailure then
-                            injectedFailure <- true
-                            Error(NotFound "injected after post-projection mutation")
-                        else
-                            let field = variables |> List.tryPick (function "field", VString value -> Some value | _ -> None)
-                            let value =
-                                if not (projected.Contains currentIssue) then None
-                                else match field with Some "Status" -> Some "Backlog" | Some "Class" -> Some "hardening" | Some "Phase" -> Some "P5 Versioning" | Some "Severity" -> Some "High" | _ -> None
-                            let node = value |> Option.map (fun item -> $"{{\"name\":%s{JsonSerializer.Serialize item}}}") |> Option.defaultValue "null"
-                            ok $"{{\"data\":{{\"node\":{{\"fieldValueByName\":%s{node}}},\"rateLimit\":{{\"cost\":1,\"remaining\":100}}}}}}"
-                    | Query(doc, _) when doc.Contains "projectItems(first" && doc.Contains "fieldValueByName" ->
-                        let field = if projected.Contains currentIssue then "{\"name\":\"Backlog\"}" else "null"
-                        ok ("{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":[{\"project\":{\"number\":1},\"fieldValueByName\":" + field + "}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}}")
-                    | Query(doc, _) when doc.Contains "projectItems(first" ->
-                        let nodes = if boardItems.Contains currentIssue then $"[{{\"id\":\"PI-%d{currentIssue}\",\"project\":{{\"number\":1}}}}]" else "[]"
-                        ok ("{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":" + nodes + "}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}}")
-                    | Query(doc, _) when doc.Contains "issue(number" -> ok "{\"data\":{\"repository\":{\"issue\":{\"id\":\"I\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}"
-                    | Query(doc, _) when doc.Contains "addProjectV2ItemById" -> boardItems.Add currentIssue |> ignore; ok ($"{{\"data\":{{\"addProjectV2ItemById\":{{\"item\":{{\"id\":\"PI-%d{currentIssue}\"}}}}}},\"rateLimit\":{{\"cost\":1,\"remaining\":100}}}}")
-                    | Query(doc, _) when doc.Contains "f0:" && failureBoundary = "board-add" && not injectedFailure ->
-                        injectedFailure <- true
-                        Error(NotFound "injected after board add")
-                    | Query(doc, _) when doc.Contains "f0:" -> projected.Add currentIssue |> ignore; ok "{\"data\":{\"f0\":{\"clientMutationId\":null},\"f1\":{\"clientMutationId\":null},\"f2\":{\"clientMutationId\":null},\"f3\":{\"clientMutationId\":null}}}"
-                    | _ -> Error(NotFound "unrecognized roadmap preparation board request")
-                | _ -> Error(NotFound "unrecognized roadmap preparation request"))
 
-            let parsed = Options.parse [ "intake"; "apply"; "/dev/null" ] |> Result.defaultWith failwith
-            let opts = { parsed with Args = [ "--input"; requestPath; "--roadmap"; roadmapPath; "--catalog"; catalogPath; "--output"; outputPath ] }
+            if failureBoundary = "issue-create" then
+                Directory.CreateDirectory receiptPath |> ignore
+
+            let world =
+                Fake.Recorder(fun req ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "repos/FS-GG/.github/issues" ->
+                        let rows =
+                            bodies
+                            |> Seq.map (fun pair ->
+                                let title = if titles.ContainsKey pair.Key then titles[pair.Key] else ""
+                                $"{{\"number\":%d{pair.Key},\"state\":\"open\",\"title\":%s{JsonSerializer.Serialize title},\"body\":%s{JsonSerializer.Serialize pair.Value}}}")
+                            |> String.concat ","
+
+                        ok ($"[%s{rows}]")
+                    | "POST", "repos/FS-GG/.github/issues" ->
+                        creates <- creates + 1
+                        currentIssue <- 77
+
+                        match req.Body with
+                        | Json body ->
+                            use document = JsonDocument.Parse body
+                            bodies[currentIssue] <- document.RootElement.GetProperty("body").GetString()
+                            titles[currentIssue] <- document.RootElement.GetProperty("title").GetString()
+                        | _ -> bodies[currentIssue] <- ""
+
+                        ok ($"{{\"number\":%d{currentIssue}}}")
+                    | "GET", path when
+                        path.StartsWith("repos/FS-GG/.github/issues/", StringComparison.Ordinal)
+                        && not (path.EndsWith("/comments", StringComparison.Ordinal))
+                        ->
+                        currentIssue <- Int32.Parse(path.Split('/')[4])
+
+                        if failureBoundary = "durable-receipt" && creates = 1 && not injectedFailure then
+                            injectedFailure <- true
+                            Error(NotFound "injected after durable receipt")
+                        else
+                            let body =
+                                if bodies.ContainsKey currentIssue then
+                                    bodies[currentIssue]
+                                else
+                                    ""
+
+                            ok (
+                                $"{{\"number\":%d{currentIssue},\"state\":\"open\",\"body\":%s{JsonSerializer.Serialize body}}}"
+                            )
+                    | "PATCH", path when path.StartsWith("repos/FS-GG/.github/issues/", StringComparison.Ordinal) ->
+                        currentIssue <- Int32.Parse(path.Split('/')[4])
+
+                        match req.Body with
+                        | Json body ->
+                            use document = JsonDocument.Parse body
+
+                            if document.RootElement.TryGetProperty("body") |> fst then
+                                bodies[currentIssue] <- document.RootElement.GetProperty("body").GetString()
+                        | _ -> ()
+
+                        ok "{}"
+                    | "POST", "graphql" ->
+                        match req.Body with
+                        | Query(doc, _) when doc.Contains "projectsV2" ->
+                            ok
+                                "{\"data\":{\"organization\":{\"projectsV2\":{\"nodes\":[{\"number\":1,\"title\":\"Coordination\",\"id\":\"PVT\"}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}"
+                        | Query(doc, _) when doc.Contains "fields(first" ->
+                            ok
+                                "{\"data\":{\"organization\":{\"projectV2\":{\"fields\":{\"nodes\":[{\"id\":\"F\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"B\",\"name\":\"Backlog\"}]},{\"id\":\"C\",\"name\":\"Class\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"H\",\"name\":\"hardening\"}]},{\"id\":\"P\",\"name\":\"Phase\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"P5\",\"name\":\"P5 Versioning\"}]},{\"id\":\"S\",\"name\":\"Severity\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"HI\",\"name\":\"High\"}]}]}}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}"
+                        | Query(doc, variables) when doc.Contains "node(id: $itemId)" ->
+                            if
+                                failureBoundary = "post-projection"
+                                && projected.Contains currentIssue
+                                && not injectedFailure
+                            then
+                                injectedFailure <- true
+                                Error(NotFound "injected after post-projection mutation")
+                            else
+                                let field =
+                                    variables
+                                    |> List.tryPick (function
+                                        | "field", VString value -> Some value
+                                        | _ -> None)
+
+                                let value =
+                                    if not (projected.Contains currentIssue) then
+                                        None
+                                    else
+                                        match field with
+                                        | Some "Status" -> Some "Backlog"
+                                        | Some "Class" -> Some "hardening"
+                                        | Some "Phase" -> Some "P5 Versioning"
+                                        | Some "Severity" -> Some "High"
+                                        | _ -> None
+
+                                let node =
+                                    value
+                                    |> Option.map (fun item -> $"{{\"name\":%s{JsonSerializer.Serialize item}}}")
+                                    |> Option.defaultValue "null"
+
+                                ok
+                                    $"{{\"data\":{{\"node\":{{\"fieldValueByName\":%s{node}}},\"rateLimit\":{{\"cost\":1,\"remaining\":100}}}}}}"
+                        | Query(doc, _) when doc.Contains "projectItems(first" && doc.Contains "fieldValueByName" ->
+                            let field =
+                                if projected.Contains currentIssue then
+                                    "{\"name\":\"Backlog\"}"
+                                else
+                                    "null"
+
+                            ok (
+                                "{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":[{\"project\":{\"number\":1},\"fieldValueByName\":"
+                                + field
+                                + "}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}}"
+                            )
+                        | Query(doc, _) when doc.Contains "projectItems(first" ->
+                            let nodes =
+                                if boardItems.Contains currentIssue then
+                                    $"[{{\"id\":\"PI-%d{currentIssue}\",\"project\":{{\"number\":1}}}}]"
+                                else
+                                    "[]"
+
+                            ok (
+                                "{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":"
+                                + nodes
+                                + "}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}}"
+                            )
+                        | Query(doc, _) when doc.Contains "issue(number" ->
+                            ok
+                                "{\"data\":{\"repository\":{\"issue\":{\"id\":\"I\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":100}}"
+                        | Query(doc, _) when doc.Contains "addProjectV2ItemById" ->
+                            boardItems.Add currentIssue |> ignore
+
+                            ok (
+                                $"{{\"data\":{{\"addProjectV2ItemById\":{{\"item\":{{\"id\":\"PI-%d{currentIssue}\"}}}}}},\"rateLimit\":{{\"cost\":1,\"remaining\":100}}}}"
+                            )
+                        | Query(doc, _) when doc.Contains "f0:" && failureBoundary = "board-add" && not injectedFailure ->
+                            injectedFailure <- true
+                            Error(NotFound "injected after board add")
+                        | Query(doc, _) when doc.Contains "f0:" ->
+                            projected.Add currentIssue |> ignore
+
+                            ok
+                                "{\"data\":{\"f0\":{\"clientMutationId\":null},\"f1\":{\"clientMutationId\":null},\"f2\":{\"clientMutationId\":null},\"f3\":{\"clientMutationId\":null}}}"
+                        | _ -> Error(NotFound "unrecognized roadmap preparation board request")
+                    | _ -> Error(NotFound "unrecognized roadmap preparation request"))
+
+            let parsed =
+                Options.parse [ "intake"; "apply"; "/dev/null" ] |> Result.defaultWith failwith
+
+            let opts =
+                { parsed with
+                    Args =
+                        [
+                            "--input"
+                            requestPath
+                            "--roadmap"
+                            roadmapPath
+                            "--catalog"
+                            catalogPath
+                            "--output"
+                            outputPath
+                        ]
+                }
+
             let invokeApply options =
                 let priorOutput = Console.Out
                 use captured = new StringWriter()
+
                 try
                     Console.SetOut captured
                     Handlers.roadmapUnitPrepareApply (context world) options, captured.ToString()
                 finally
                     Console.SetOut priorOutput
+
             let interrupted, _ = invokeApply opts
             Assert.NotEqual(Kernel.ExitGreen, interrupted)
+
             if failureBoundary = "issue-create" then
                 Directory.Delete receiptPath
                 injectedFailure <- true
+
             Assert.True(injectedFailure)
             Assert.Equal(1, creates)
 
             let first, firstOutput = invokeApply opts
-            if first <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
+
+            if first <> Kernel.ExitGreen then
+                failwith (String.concat "\n" world.Log)
+
             Assert.Equal("", firstOutput)
             let firstBytes = File.ReadAllBytes outputPath
-            let application = RoadmapWorkUnit.parsePreparationApplication firstBytes |> Result.defaultWith (String.concat "; " >> failwith)
+
+            let application =
+                RoadmapWorkUnit.parsePreparationApplication firstBytes
+                |> Result.defaultWith (String.concat "; " >> failwith)
+
             Assert.Single(application.Registrations) |> ignore
             Assert.Equal(1, creates)
 
             let second, secondOutput = invokeApply opts
-            if second <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
+
+            if second <> Kernel.ExitGreen then
+                failwith (String.concat "\n" world.Log)
+
             Assert.Equal("", secondOutput)
             Assert.True(firstBytes.AsSpan().SequenceEqual((File.ReadAllBytes outputPath).AsSpan()))
             Assert.Equal(1, creates)
 
-            let stdoutOptions = { opts with Args = opts.Args |> List.take (opts.Args.Length - 2) }
+            let stdoutOptions =
+                { opts with
+                    Args = opts.Args |> List.take (opts.Args.Length - 2)
+                }
+
             let third, receiptOutput = invokeApply stdoutOptions
-            if third <> Kernel.ExitGreen then failwith (String.concat "\n" world.Log)
-            let stdoutReceipt = RoadmapWorkUnit.parsePreparationApplication (Encoding.UTF8.GetBytes receiptOutput) |> Result.defaultWith (String.concat "; " >> failwith)
+
+            if third <> Kernel.ExitGreen then
+                failwith (String.concat "\n" world.Log)
+
+            let stdoutReceipt =
+                RoadmapWorkUnit.parsePreparationApplication (Encoding.UTF8.GetBytes receiptOutput)
+                |> Result.defaultWith (String.concat "; " >> failwith)
+
             Assert.Equal(application.Digest, stdoutReceipt.Digest)
             Assert.Equal(1, creates)

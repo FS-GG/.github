@@ -25,13 +25,15 @@ module Budget =
     /// A reading from the response that actually served (or refused) a resource. The ledger retains no
     /// credential: its filename is keyed by a one-way digest of the credential.
     type RestObservation =
-        { Resource: string
-          Limit: int option
-          Remaining: int option
-          Used: int option
-          ResetAt: System.DateTimeOffset option
-          ObservedAt: System.DateTimeOffset
-          Source: string }
+        {
+            Resource: string
+            Limit: int option
+            Remaining: int option
+            Used: int option
+            ResetAt: System.DateTimeOffset option
+            ObservedAt: System.DateTimeOffset
+            Source: string
+        }
 
     /// Persist a credential-hashed observation from real REST response headers. Missing or malformed
     /// headers are not inferred into a resource reading.
@@ -68,9 +70,7 @@ module Budget =
     /// so a MUTATION cannot carry it — `set-field --batch`'s document is therefore the one call whose cost
     /// the meter cannot read, which is fine precisely because that document's cost is the thing it makes
     /// constant (one aliased document = one point, at the floor).
-    type Meter =
-        { Cost: int
-          Remaining: int }
+    type Meter = { Cost: int; Remaining: int }
 
     /// GitHub bills `cost = max(1, nodes/100)` — a ONE-POINT FLOOR per request.
     ///
@@ -137,10 +137,12 @@ module Budget =
 
     /// What one invocation spent, measured from the meter and never from arithmetic of our own.
     type Spend =
-        { Points: int
-          Calls: int
-          /// The meter's own `remaining` from the LAST billed call — GitHub's number, never our arithmetic.
-          LastRemaining: int option }
+        {
+            Points: int
+            Calls: int
+            /// The meter's own `remaining` from the LAST billed call — GitHub's number, never our arithmetic.
+            LastRemaining: int option
+        }
 
     /// Record one 2xx GraphQL response's meter against this process's running total.
     ///
@@ -162,11 +164,13 @@ module Budget =
 
     /// One invocation's spend, as persisted to the cross-process ledger.
     type SpendRecord =
-        { Command: string
-          Points: int
-          Calls: int
-          Worker: string option
-          ObservedAt: System.DateTimeOffset }
+        {
+            Command: string
+            Points: int
+            Calls: int
+            Worker: string option
+            ObservedAt: System.DateTimeOffset
+        }
 
     /// Append this invocation's spend, keyed by command and `$FSGG_WORKER`.
     ///

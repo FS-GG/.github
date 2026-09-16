@@ -25,11 +25,13 @@ module TelemetryDashboardApplication =
     let private emitStatus status workspace repository reasons =
         let bytes =
             JsonSerializer.SerializeToUtf8Bytes(
-                {| schema = "fsgg.telemetry.local-dashboard-status/1"
-                   status = status
-                   workspaceId = workspace
-                   repository = repository
-                   reasons = reasons |}
+                {|
+                    schema = "fsgg.telemetry.local-dashboard-status/1"
+                    status = status
+                    workspaceId = workspace
+                    repository = repository
+                    reasons = reasons
+                |}
             )
 
         Console.Out.WriteLine(Encoding.UTF8.GetString bytes)
@@ -37,11 +39,7 @@ module TelemetryDashboardApplication =
     let private projectSnapshot (binding: WorkspaceTelemetryApplication.LocalDashboardBinding) =
         let assessment = TelemetryStoreApplication.assessProductionRoot binding.StoreRoot
 
-        TelemetryStoreApplication.scopedDashboardSnapshot
-            binding.StoreRoot
-            assessment
-            binding.WorkspaceId
-            None
+        TelemetryStoreApplication.scopedDashboardSnapshot binding.StoreRoot assessment binding.WorkspaceId None
         |> Result.bind (fun snapshot ->
             DashboardProjection.project binding.WorkspaceId (Encoding.UTF8.GetBytes snapshot)
             |> Result.mapError (fun error -> [ $"projection-{error}" ]))
@@ -77,15 +75,18 @@ module TelemetryDashboardApplication =
             info.UseShellExecute <- true
             Process.Start(info) |> ignore
             true
-        with _ -> false
+        with _ ->
+            false
 
     let private serve args =
         match resolve args with
         | Error errors ->
-            errors |> List.iter (fun reason -> Console.Error.WriteLine($"fsgg-coord-engine: telemetry dashboard: {reason}"))
+            errors
+            |> List.iter (fun reason -> Console.Error.WriteLine($"fsgg-coord-engine: telemetry dashboard: {reason}"))
+
             red
         | Ok initial ->
-            let snapshotProvider (_:string) (cancellationToken:CancellationToken) =
+            let snapshotProvider (_: string) (cancellationToken: CancellationToken) =
                 Task.Run(
                     (fun () ->
                         if cancellationToken.IsCancellationRequested then
@@ -101,33 +102,54 @@ module TelemetryDashboardApplication =
             let assetProvider route =
                 DashboardAssets.tryGetLocal route
                 |> Option.map (fun asset ->
-                    { ContentType = asset.ContentType
-                      Content = asset.Bytes })
+                    {
+                        ContentType = asset.ContentType
+                        Content = asset.Bytes
+                    })
 
             match projectSnapshot initial with
             | Error errors ->
-                errors |> List.iter (fun reason -> Console.Error.WriteLine($"fsgg-coord-engine: telemetry dashboard: {reason}"))
+                errors
+                |> List.iter (fun reason ->
+                    Console.Error.WriteLine($"fsgg-coord-engine: telemetry dashboard: {reason}"))
+
                 red
             | Ok _ ->
                 use shutdown = new CancellationTokenSource()
+
                 let cancelHandler =
                     ConsoleCancelEventHandler(fun _ event ->
                         event.Cancel <- true
                         shutdown.Cancel())
+
                 Console.CancelKeyPress.AddHandler cancelHandler
+
                 let terminate =
-                    if OperatingSystem.IsWindows() then None
+                    if OperatingSystem.IsWindows() then
+                        None
                     else
-                        Some(PosixSignalRegistration.Create(PosixSignal.SIGTERM, fun context ->
-                            context.Cancel <- true
-                            shutdown.Cancel()))
+                        Some(
+                            PosixSignalRegistration.Create(
+                                PosixSignal.SIGTERM,
+                                fun context ->
+                                    context.Cancel <- true
+                                    shutdown.Cancel()
+                            )
+                        )
 
                 try
-                    let options = TelemetryDashboardServer.defaultOptions initial.WorkspaceId assetProvider snapshotProvider
+                    let options =
+                        TelemetryDashboardServer.defaultOptions initial.WorkspaceId assetProvider snapshotProvider
 
-                    match TelemetryDashboardServer.start options shutdown.Token |> fun task -> task.GetAwaiter().GetResult() with
+                    match
+                        TelemetryDashboardServer.start options shutdown.Token
+                        |> fun task -> task.GetAwaiter().GetResult()
+                    with
                     | Error errors ->
-                        errors |> List.iter (fun reason -> Console.Error.WriteLine($"fsgg-coord-engine: telemetry dashboard: {reason}"))
+                        errors
+                        |> List.iter (fun reason ->
+                            Console.Error.WriteLine($"fsgg-coord-engine: telemetry dashboard: {reason}"))
+
                         red
                     | Ok server ->
                         use server = server
@@ -135,12 +157,15 @@ module TelemetryDashboardApplication =
                         Console.Out.Flush()
 
                         if not (List.contains "--no-open" args) && not (openBrowser server.BootstrapUrl) then
-                            Console.Error.WriteLine("fsgg-coord-engine: telemetry dashboard: browser-open-failed; use the URL printed to stdout")
+                            Console.Error.WriteLine(
+                                "fsgg-coord-engine: telemetry dashboard: browser-open-failed; use the URL printed to stdout"
+                            )
 
                         try
                             server.Completion.GetAwaiter().GetResult()
                             green
-                        with :? OperationCanceledException -> green
+                        with :? OperationCanceledException ->
+                            green
                 finally
                     terminate |> Option.iter _.Dispose()
                     Console.CancelKeyPress.RemoveHandler cancelHandler

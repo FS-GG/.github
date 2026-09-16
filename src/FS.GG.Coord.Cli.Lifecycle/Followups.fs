@@ -18,14 +18,18 @@ module Followups =
         | Audit
 
     type AuditedQueue =
-        { Worker: string
-          Age: TimeSpan
-          Refs: Ref list }
+        {
+            Worker: string
+            Age: TimeSpan
+            Refs: Ref list
+        }
 
     type Audit =
-        { Stale: AuditedQueue list
-          Fresh: AuditedQueue list
-          Unreadable: (string * string) list }
+        {
+            Stale: AuditedQueue list
+            Fresh: AuditedQueue list
+            Unreadable: (string * string) list
+        }
 
     type Outcome =
         | Added of Ref
@@ -50,7 +54,9 @@ module Followups =
         // NAMED, not swallowed. `followup add a b` is a caller who thinks they queued two things; a parser
         // that took the first and shrugged at the rest would be `Options`' own residue rule broken one
         // level down — an argument that is ignored is indistinguishable from one that was honoured.
-        | "add" :: _ :: extra -> Error $"followup add takes exactly one ref (got %d{List.length extra + 1}). Queue them one at a time: %s{verbs}."
+        | "add" :: _ :: extra ->
+            Error
+                $"followup add takes exactly one ref (got %d{List.length extra + 1}). Queue them one at a time: %s{verbs}."
         | [ "peek" ] -> Ok Peek
         | [ "pop" ] -> Ok Pop
         | [ "list" ] -> Ok List
@@ -128,7 +134,7 @@ module Followups =
         try
             use fs = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None)
 
-            let buf = Array.zeroCreate<byte> (int fs.Length)
+            let buf = Array.zeroCreate<byte>(int fs.Length)
             fs.ReadExactly(buf, 0, buf.Length)
 
             let lines = splitLines (Encoding.UTF8.GetString buf)
@@ -164,8 +170,10 @@ module Followups =
             // NO QUEUE IS NOT AN UNREADABLE QUEUE. You have never queued anything, or you drained it.
             Empty
         | :? IOException as e ->
-            Unreadable $"could not open the follow-up queue %s{file}: %s{e.Message} Another `followup` may hold it — retry. This is NOT an empty queue (#266): it is a promise that may still be there."
-        | :? UnauthorizedAccessException as e -> Unreadable $"could not open the follow-up queue %s{file}: %s{e.Message}"
+            Unreadable
+                $"could not open the follow-up queue %s{file}: %s{e.Message} Another `followup` may hold it — retry. This is NOT an empty queue (#266): it is a promise that may still be there."
+        | :? UnauthorizedAccessException as e ->
+            Unreadable $"could not open the follow-up queue %s{file}: %s{e.Message}"
 
     let private addTo (file: string) (r: Ref) : Outcome =
         try
@@ -177,63 +185,67 @@ module Followups =
             Added r
         with
         | :? IOException as e -> Unreadable $"could not write the follow-up queue %s{file}: %s{e.Message}"
-        | :? UnauthorizedAccessException as e -> Unreadable $"could not write the follow-up queue %s{file}: %s{e.Message}"
+        | :? UnauthorizedAccessException as e ->
+            Unreadable $"could not write the follow-up queue %s{file}: %s{e.Message}"
 
     let apply (worker: Worker) (action: Action) : Outcome =
         match path worker with
         | Error why -> Refused why
         | Ok file ->
 
-        match action with
-        | Add raw ->
-            match parseQualified raw with
-            | Error why -> Refused why
-            | Ok r -> addTo file r
+            match action with
+            | Add raw ->
+                match parseQualified raw with
+                | Error why -> Refused why
+                | Ok r -> addTo file r
 
-        | Peek ->
-            withQueue file (fun lines ->
-                match lines with
-                | [] -> Empty, None
-                | head :: _ ->
-                    match parseLine file head with
-                    | Ok r -> Head r, None
-                    | Error why -> Unreadable why, None)
+            | Peek ->
+                withQueue file (fun lines ->
+                    match lines with
+                    | [] -> Empty, None
+                    | head :: _ ->
+                        match parseLine file head with
+                        | Ok r -> Head r, None
+                        | Error why -> Unreadable why, None)
 
-        | Pop ->
-            withQueue file (fun lines ->
-                match lines with
-                | [] -> Empty, None
-                | head :: tail ->
-                    match parseLine file head with
-                    // The rewrite happens ONLY on a head we could read. A pop that cannot name what it
-                    // removed is a promise deleted by a machine that never knew what it was.
-                    | Ok r -> Popped r, Some tail
-                    | Error why -> Unreadable why, None)
+            | Pop ->
+                withQueue file (fun lines ->
+                    match lines with
+                    | [] -> Empty, None
+                    | head :: tail ->
+                        match parseLine file head with
+                        // The rewrite happens ONLY on a head we could read. A pop that cannot name what it
+                        // removed is a promise deleted by a machine that never knew what it was.
+                        | Ok r -> Popped r, Some tail
+                        | Error why -> Unreadable why, None)
 
-        | List ->
-            withQueue file (fun lines ->
-                match lines with
-                | [] -> Empty, None
-                | _ ->
-                    let parsed = lines |> List.map (parseLine file)
+            | List ->
+                withQueue file (fun lines ->
+                    match lines with
+                    | [] -> Empty, None
+                    | _ ->
+                        let parsed = lines |> List.map (parseLine file)
 
-                    match parsed |> List.tryPick (function
-                              | Error why -> Some why
-                              | Ok _ -> None) with
-                    | Some why -> Unreadable why, None
-                    | None ->
-                        let refs =
+                        match
                             parsed
-                            |> List.choose (function
-                                | Ok r -> Some r
-                                | Error _ -> None)
+                            |> List.tryPick (function
+                                | Error why -> Some why
+                                | Ok _ -> None)
+                        with
+                        | Some why -> Unreadable why, None
+                        | None ->
+                            let refs =
+                                parsed
+                                |> List.choose (function
+                                    | Ok r -> Some r
+                                    | Error _ -> None)
 
-                        Listed refs, None)
+                            Listed refs, None)
 
-        | Audit ->
-            // `run` handles this before identity resolution: a fleet audit is deliberately NOT scoped to
-            // whoever invoked it. Keeping the impossible branch explicit makes that boundary total.
-            Refused "followup audit reads every worker queue and does not take a worker argument."
+            | Audit ->
+                // `run` handles this before identity resolution: a fleet audit is deliberately NOT scoped to
+                // whoever invoked it. Keeping the impossible branch explicit makes that boundary total.
+                Refused "followup audit reads every worker queue and does not take a worker argument."
 
     /// Remove only refs whose durable disposition was already written. The queue is re-read under its
     /// exclusive handle, so a concurrent append survives this reconciliation; an unreadable line aborts
@@ -242,20 +254,27 @@ module Followups =
         match path worker with
         | Error why -> Error why
         | Ok file ->
-            match withQueue file (fun lines ->
-                let parsed = lines |> List.map (fun line -> line, parseLine file line)
+            match
+                withQueue file (fun lines ->
+                    let parsed = lines |> List.map (fun line -> line, parseLine file line)
 
-                match parsed |> List.tryPick (function _, Error why -> Some why | _ -> None) with
-                | Some why -> Unreadable why, None
-                | None ->
-                    let remaining =
+                    match
                         parsed
-                        |> List.choose (function
-                            | line, Ok r when not (Set.contains r refs) -> Some line
+                        |> List.tryPick (function
+                            | _, Error why -> Some why
                             | _ -> None)
+                    with
+                    | Some why -> Unreadable why, None
+                    | None ->
+                        let remaining =
+                            parsed
+                            |> List.choose (function
+                                | line, Ok r when not (Set.contains r refs) -> Some line
+                                | _ -> None)
 
-                    let removed = List.length lines - List.length remaining
-                    Reconciled removed, Some remaining) with
+                        let removed = List.length lines - List.length remaining
+                        Reconciled removed, Some remaining)
+            with
             | Unreadable why
             | Refused why -> Error why
             | Reconciled removed -> Ok removed
@@ -267,34 +286,55 @@ module Followups =
     /// that with live claims — but it IS the bounded local candidate a driver must be able to see.
     let private abandonedAfter = TimeSpan.FromMinutes 120.0
 
-    let private queueDirectory () = Path.Combine(Cache.root (), "followups")
+    let private queueDirectory () =
+        Path.Combine(Cache.root (), "followups")
 
     let private readAuditQueue (now: DateTimeOffset) (file: string) : Result<AuditedQueue, string> =
         let worker = Path.GetFileNameWithoutExtension file
 
         try
             use stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None)
-            let bytes = Array.zeroCreate<byte> (int stream.Length)
+            let bytes = Array.zeroCreate<byte>(int stream.Length)
             stream.ReadExactly(bytes, 0, bytes.Length)
             let lines = splitLines (Encoding.UTF8.GetString bytes)
 
-            match lines |> List.map (parseLine file) |> List.tryPick (function Error why -> Some why | Ok _ -> None) with
+            match
+                lines
+                |> List.map (parseLine file)
+                |> List.tryPick (function
+                    | Error why -> Some why
+                    | Ok _ -> None)
+            with
             | Some why -> Error why
             | None ->
                 // The parser has already proved every line above. Re-read it here only to preserve the
                 // canonical `Ref` values rather than printing raw file bytes as if they were refs.
-                let parsed = lines |> List.choose (fun line -> parseLine file line |> Result.toOption)
+                let parsed =
+                    lines |> List.choose (fun line -> parseLine file line |> Result.toOption)
+
                 let age = now - DateTimeOffset(File.GetLastWriteTimeUtc file)
-                Ok { Worker = worker; Age = age; Refs = parsed }
+
+                Ok
+                    {
+                        Worker = worker
+                        Age = age
+                        Refs = parsed
+                    }
         with
-        | :? IOException as error -> Error $"could not open the follow-up queue %s{file}: %s{error.Message} This is NOT an empty queue."
-        | :? UnauthorizedAccessException as error -> Error $"could not open the follow-up queue %s{file}: %s{error.Message}"
+        | :? IOException as error ->
+            Error $"could not open the follow-up queue %s{file}: %s{error.Message} This is NOT an empty queue."
+        | :? UnauthorizedAccessException as error ->
+            Error $"could not open the follow-up queue %s{file}: %s{error.Message}"
 
     let audit (now: DateTimeOffset) : Audit =
         let directory = queueDirectory ()
 
         if not (Directory.Exists directory) then
-            { Stale = []; Fresh = []; Unreadable = [] }
+            {
+                Stale = []
+                Fresh = []
+                Unreadable = []
+            }
         else
             let mutable stale, fresh, unreadable = [], [], []
 
@@ -307,7 +347,11 @@ module Followups =
                 | Ok queue when queue.Age >= abandonedAfter -> stale <- queue :: stale
                 | Ok queue -> fresh <- queue :: fresh
 
-            { Stale = List.rev stale; Fresh = List.rev fresh; Unreadable = List.rev unreadable }
+            {
+                Stale = List.rev stale
+                Fresh = List.rev fresh
+                Unreadable = List.rev unreadable
+            }
 
     // ---- the projection ----------------------------------------------------------------------------
 
@@ -327,8 +371,14 @@ module Followups =
                     [ $"%s{label}: worker %s{queue.Worker}, age %O{queue.Age}" ]
                     @ (queue.Refs |> List.map (fun r -> $"  %s{qualified r}")))
 
-            let unreadable = audit.Unreadable |> List.map (fun (worker, why) -> $"UNREADABLE: worker %s{worker}: %s{why}")
-            [], queueLines "ABANDONED-CANDIDATE" audit.Stale @ queueLines "ACTIVE-CANDIDATE" audit.Fresh @ unreadable
+            let unreadable =
+                audit.Unreadable
+                |> List.map (fun (worker, why) -> $"UNREADABLE: worker %s{worker}: %s{why}")
+
+            [],
+            queueLines "ABANDONED-CANDIDATE" audit.Stale
+            @ queueLines "ACTIVE-CANDIDATE" audit.Fresh
+            @ unreadable
         | Empty -> [], [ "the follow-up queue is empty — nothing owed. Back to the board." ]
         | Refused why -> [], [ $"fsgg-coord-engine: %s{why}" ]
         | Unreadable why -> [], [ $"fsgg-coord-engine: %s{why}" ]
@@ -340,7 +390,8 @@ module Followups =
         | Popped _
         | Listed _ -> ExitCode.toInt ExitCode.Green
         | Reconciled _ -> ExitCode.toInt ExitCode.Green
-        | Audited audit when not (List.isEmpty audit.Stale) || not (List.isEmpty audit.Unreadable) -> ExitCode.toInt ExitCode.Red
+        | Audited audit when not (List.isEmpty audit.Stale) || not (List.isEmpty audit.Unreadable) ->
+            ExitCode.toInt ExitCode.Red
         | Audited _ -> ExitCode.toInt ExitCode.Green
         // EX_NONE, and `Client`'s own constant rather than a 5 typed here — "I looked and there is nothing"
         // has exactly one meaning across this engine, and `take` already owns it (#585).
@@ -362,8 +413,12 @@ module Followups =
             let outcome = Audited(audit DateTimeOffset.UtcNow)
             let out, err = render outcome
 
-            for line in out do Console.Out.WriteLine(line: string)
-            for line in err do Console.Error.WriteLine(line: string)
+            for line in out do
+                Console.Out.WriteLine(line: string)
+
+            for line in err do
+                Console.Error.WriteLine(line: string)
+
             exitCode outcome
         | Ok action ->
             match Identity.resolve opts.Worker with

@@ -34,34 +34,38 @@ module DriverEvents =
     /// delivery reads `driver`/`delivery` already perform. Never mutated; classification derives the
     /// NEXT state from this, the cursor supplies the LAST one.
     type ItemFacts =
-        { Ref: string
-          ReadOk: bool
-          UnreadableReason: string option
-          BoardStatus: Types.BoardStatus option
-          IssueState: Types.IssueState option
-          ClaimWorker: string option
-          HumanBlock: Types.HumanBlock option
-          Pr: int option
-          Review: Driver.ReviewChain option
-          Merged: bool
-          ObligationsDeclared: bool
-          Obligations: Delivery.Obligation list
-          /// A short human-readable pointer to the fact(s) that produced the classification — a claim
-          /// marker id, PR head SHA, commit SHA, or similar. Carried through to the emitted event
-          /// unchanged; this module never invents evidence.
-          Evidence: string
-          ObservedAt: int64
-          SourceSha: string }
+        {
+            Ref: string
+            ReadOk: bool
+            UnreadableReason: string option
+            BoardStatus: Types.BoardStatus option
+            IssueState: Types.IssueState option
+            ClaimWorker: string option
+            HumanBlock: Types.HumanBlock option
+            Pr: int option
+            Review: Driver.ReviewChain option
+            Merged: bool
+            ObligationsDeclared: bool
+            Obligations: Delivery.Obligation list
+            /// A short human-readable pointer to the fact(s) that produced the classification — a claim
+            /// marker id, PR head SHA, commit SHA, or similar. Carried through to the emitted event
+            /// unchanged; this module never invents evidence.
+            Evidence: string
+            ObservedAt: int64
+            SourceSha: string
+        }
 
     /// One item, classified: its live facts plus the `MaterialState` and reason `classify` derived from
     /// them.
     type Classified =
-        { Ref: string
-          State: MaterialState
-          Reason: string
-          Evidence: string
-          ObservedAt: int64
-          SourceSha: string }
+        {
+            Ref: string
+            State: MaterialState
+            Reason: string
+            Evidence: string
+            ObservedAt: int64
+            SourceSha: string
+        }
 
     /// The durable, versioned per-item cursor — the LAST material state observed for each ref. A ref
     /// absent from the cursor has never been observed; its first classification is always a transition.
@@ -69,31 +73,35 @@ module DriverEvents =
 
     /// A material transition: strictly a CHANGE from the cursor's last-known state for this ref.
     type TransitionEvent =
-        { Ref: string
-          Previous: MaterialState option
-          New: MaterialState
-          Reason: string
-          Evidence: string
-          ObservedAt: int64
-          SourceSha: string }
+        {
+            Ref: string
+            Previous: MaterialState option
+            New: MaterialState
+            Reason: string
+            Evidence: string
+            ObservedAt: int64
+            SourceSha: string
+        }
 
     /// The rendered projection for one refresh: the transitions since the cursor, PLUS the complete
     /// active inventory — rendered unconditionally, because "nothing transitioned" and "nothing is
     /// active" are different facts and must never collapse into each other (issue acceptance #3/#7).
     type Projection =
-        { Transitions: TransitionEvent list
-          Active: Classified list
-          /// Every row this read could NOT account for — a failed per-item read, a refused terminal
-          /// regression, or a previously-active ref absent from the facts batch entirely. Disjoint from
-          /// `Active` by construction, because `isActive Unreadable` is false (.github#2525).
-          ///
-          /// It exists because discarding these rows made "the active set is empty" and "the active set
-          /// could not be measured" render identically, and the board stopping rule consumes that line as
-          /// if it were the first. Carrying them lets the renderer — and any other consumer of this
-          /// projection — refuse to state an inventory it did not finish reading.
-          Unreadable: Classified list
-          Cursor: Cursor
-          RenderedAt: int64 }
+        {
+            Transitions: TransitionEvent list
+            Active: Classified list
+            /// Every row this read could NOT account for — a failed per-item read, a refused terminal
+            /// regression, or a previously-active ref absent from the facts batch entirely. Disjoint from
+            /// `Active` by construction, because `isActive Unreadable` is false (.github#2525).
+            ///
+            /// It exists because discarding these rows made "the active set is empty" and "the active set
+            /// could not be measured" render identically, and the board stopping rule consumes that line as
+            /// if it were the first. Carrying them lets the renderer — and any other consumer of this
+            /// projection — refuse to state an inventory it did not finish reading.
+            Unreadable: Classified list
+            Cursor: Cursor
+            RenderedAt: int64
+        }
 
     /// Derive one item's typed material state and a short reason from its live facts. Pure and total.
     val classify: ItemFacts -> Classified

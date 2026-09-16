@@ -5,46 +5,75 @@ open FS.GG.Coord
 
 module DeliveryRouteTests =
     let private receipt route : DeliveryRoute.Receipt =
-        { DeliveryRoute.Schema = DeliveryRoute.Schema
-          Subject = "FS-GG/.github#2137"
-          SubjectRevision = "body-sha"
-          Route = route
-          Agent = "brant-cf73"
-          Timestamp = "2026-08-09T00:00:00Z"
-          ReasonCodes = [ "multi-phase" ]
-          Rationale = "The state machine crosses the client, board and SDD boundary."
-          DeclaredImpacts = [ "public-cli" ]
-          ObservedFacts = [ "current-board-read" ]
-          SddWorkId = Some "2137-delivery-route"
-          SpecHome = Some "work/2137-delivery-route/spec.md"
-          RequiredGates = [ "implementationReady"; "analyze"; "verify"; "ship" ] }
+        {
+            DeliveryRoute.Schema = DeliveryRoute.Schema
+            Subject = "FS-GG/.github#2137"
+            SubjectRevision = "body-sha"
+            Route = route
+            Agent = "brant-cf73"
+            Timestamp = "2026-08-09T00:00:00Z"
+            ReasonCodes = [ "multi-phase" ]
+            Rationale = "The state machine crosses the client, board and SDD boundary."
+            DeclaredImpacts = [ "public-cli" ]
+            ObservedFacts = [ "current-board-read" ]
+            SddWorkId = Some "2137-delivery-route"
+            SpecHome = Some "work/2137-delivery-route/spec.md"
+            RequiredGates = [ "implementationReady"; "analyze"; "verify"; "ship" ]
+        }
 
     [<Fact>]
     let ``#2137 SDD routing is explicit and current rather than inferred from checklist facts`` () =
-        Assert.True(DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" (receipt (Some DeliveryRoute.SddRequired)) |> Result.isOk)
-        Assert.True(DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" (receipt None) |> Result.isError)
+        Assert.True(
+            DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" (receipt (Some DeliveryRoute.SddRequired))
+            |> Result.isOk
+        )
+
+        Assert.True(
+            DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" (receipt None)
+            |> Result.isError
+        )
 
     [<Fact>]
     let ``#2137 a changed subject revision invalidates a previously valid routing receipt`` () =
-        Assert.True(DeliveryRoute.validate "FS-GG/.github#2137" "new-body-sha" (receipt (Some DeliveryRoute.SddRequired)) |> Result.isError)
+        Assert.True(
+            DeliveryRoute.validate "FS-GG/.github#2137" "new-body-sha" (receipt (Some DeliveryRoute.SddRequired))
+            |> Result.isError
+        )
 
     [<Fact>]
     let ``#2137 SDD route cannot omit its work binding or required gate`` () =
-        let missingBinding = { receipt (Some DeliveryRoute.SddRequired) with SddWorkId = None; RequiredGates = [] }
-        Assert.True(DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" missingBinding |> Result.isError)
+        let missingBinding =
+            { receipt (Some DeliveryRoute.SddRequired) with
+                SddWorkId = None
+                RequiredGates = []
+            }
+
+        Assert.True(
+            DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" missingBinding
+            |> Result.isError
+        )
 
     [<Fact>]
     let ``#2137 SDD route rejects a mismatched spec home or lifecycle gate contract`` () =
         let mismatchedSpec =
             { receipt (Some DeliveryRoute.SddRequired) with
-                SpecHome = Some "work/another-item/spec.md" }
+                SpecHome = Some "work/another-item/spec.md"
+            }
 
         let mismatchedGates =
             { receipt (Some DeliveryRoute.SddRequired) with
-                RequiredGates = [ "implementationReady"; "verify" ] }
+                RequiredGates = [ "implementationReady"; "verify" ]
+            }
 
-        Assert.True(DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" mismatchedSpec |> Result.isError)
-        Assert.True(DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" mismatchedGates |> Result.isError)
+        Assert.True(
+            DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" mismatchedSpec
+            |> Result.isError
+        )
+
+        Assert.True(
+            DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" mismatchedGates
+            |> Result.isError
+        )
 
     [<Fact>]
     let ``#2137 decision facts never select a route and unreadable revisions produce no verdict`` () =
@@ -67,8 +96,13 @@ module DeliveryRouteTests =
                 ObservedFacts = [ "" ]
                 SddWorkId = None
                 SpecHome = None
-                RequiredGates = [] }
-        Assert.True(DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" malformed |> Result.isError)
+                RequiredGates = []
+            }
+
+        Assert.True(
+            DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" malformed
+            |> Result.isError
+        )
 
     // ---- .github#2324: the sdd-required route's own mandatory output ---------------------------------
 
@@ -85,7 +119,8 @@ module DeliveryRouteTests =
             { receipt (Some DeliveryRoute.Lightweight) with
                 SddWorkId = None
                 SpecHome = None
-                RequiredGates = [] }
+                RequiredGates = []
+            }
 
         Assert.Empty(DeliveryRoute.mandatorySddPaths lightweight)
         // Even a lightweight receipt still CARRYING an SDD binding (which `validate` refuses outright)
@@ -97,20 +132,39 @@ module DeliveryRouteTests =
     let ``#2324 a receipt whose SDD binding does not validate exempts nothing`` () =
         // Each of these makes `validateSddBinding` unhappy, and every one of them must fail CLOSED to the
         // empty list rather than produce a partly-guessed package location.
-        Assert.Empty(DeliveryRoute.mandatorySddPaths { receipt (Some DeliveryRoute.SddRequired) with SddWorkId = None })
-        Assert.Empty(DeliveryRoute.mandatorySddPaths { receipt (Some DeliveryRoute.SddRequired) with SddWorkId = Some "" })
-        Assert.Empty(DeliveryRoute.mandatorySddPaths { receipt (Some DeliveryRoute.SddRequired) with SpecHome = None })
-
         Assert.Empty(
             DeliveryRoute.mandatorySddPaths
                 { receipt (Some DeliveryRoute.SddRequired) with
-                    SpecHome = Some "work/some-other-item/spec.md" }
+                    SddWorkId = None
+                }
         )
 
         Assert.Empty(
             DeliveryRoute.mandatorySddPaths
                 { receipt (Some DeliveryRoute.SddRequired) with
-                    RequiredGates = [ "implementationReady"; "verify" ] }
+                    SddWorkId = Some ""
+                }
+        )
+
+        Assert.Empty(
+            DeliveryRoute.mandatorySddPaths
+                { receipt (Some DeliveryRoute.SddRequired) with
+                    SpecHome = None
+                }
+        )
+
+        Assert.Empty(
+            DeliveryRoute.mandatorySddPaths
+                { receipt (Some DeliveryRoute.SddRequired) with
+                    SpecHome = Some "work/some-other-item/spec.md"
+                }
+        )
+
+        Assert.Empty(
+            DeliveryRoute.mandatorySddPaths
+                { receipt (Some DeliveryRoute.SddRequired) with
+                    RequiredGates = [ "implementationReady"; "verify" ]
+                }
         )
 
     [<Fact>]
@@ -121,27 +175,32 @@ module DeliveryRouteTests =
         let traversal =
             { receipt (Some DeliveryRoute.SddRequired) with
                 SddWorkId = Some ".."
-                SpecHome = Some "work/../spec.md" }
+                SpecHome = Some "work/../spec.md"
+            }
 
         Assert.Empty(DeliveryRoute.mandatorySddPaths traversal)
 
         let hidden =
             { receipt (Some DeliveryRoute.SddRequired) with
                 SddWorkId = Some ".git"
-                SpecHome = Some "work/.git/spec.md" }
+                SpecHome = Some "work/.git/spec.md"
+            }
 
         Assert.Empty(DeliveryRoute.mandatorySddPaths hidden)
 
         let slashed =
             { receipt (Some DeliveryRoute.SddRequired) with
                 SddWorkId = Some "2324/../.."
-                SpecHome = Some "work/2324/../../spec.md" }
+                SpecHome = Some "work/2324/../../spec.md"
+            }
 
         Assert.Empty(DeliveryRoute.mandatorySddPaths slashed)
 
     [<Fact>]
     let ``#2324 the exemption is bound to this receipt's own work id, never to work or readiness as roots`` () =
-        let paths = DeliveryRoute.mandatorySddPaths (receipt (Some DeliveryRoute.SddRequired))
+        let paths =
+            DeliveryRoute.mandatorySddPaths (receipt (Some DeliveryRoute.SddRequired))
+
         Assert.DoesNotContain("work", paths)
         Assert.DoesNotContain("readiness", paths)
         Assert.All(paths, fun p -> Assert.EndsWith("2137-delivery-route", p))

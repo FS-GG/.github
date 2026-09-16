@@ -164,16 +164,30 @@ let ``#2143 ownerless legacy rows only fold default-owner writes when same-name 
     // The legacy row has no owner and therefore cannot truthfully stand for the explicit external item.
     // Only the external row changes; a later fresh read cannot report the default-owner twin as written.
     patchScan "FS-GG" "Coordination" "EHotwagner" "rogue3" 96 "Status" "In progress"
-    let externalFold = File.ReadAllText(Directory.GetFiles(sandbox.Dir, "scan-*.json") |> Array.exactlyOne)
+
+    let externalFold =
+        File.ReadAllText(Directory.GetFiles(sandbox.Dir, "scan-*.json") |> Array.exactlyOne)
+
     Assert.Contains("{\"repo\":\"rogue3\",\"number\":96,\"status\":\"Ready\"}", externalFold)
-    Assert.Contains("{\"owner\":\"EHotwagner\",\"repo\":\"rogue3\",\"number\":96,\"status\":\"In progress\"}", externalFold)
+
+    Assert.Contains(
+        "{\"owner\":\"EHotwagner\",\"repo\":\"rogue3\",\"number\":96,\"status\":\"In progress\"}",
+        externalFold
+    )
 
     // The compatibility case is intentionally narrower: an ownerless row remains foldable only for the
     // board owner it historically denoted.
     patchScan "FS-GG" "Coordination" "FS-GG" "rogue3" 96 "Status" "Done"
-    let defaultFold = File.ReadAllText(Directory.GetFiles(sandbox.Dir, "scan-*.json") |> Array.exactlyOne)
+
+    let defaultFold =
+        File.ReadAllText(Directory.GetFiles(sandbox.Dir, "scan-*.json") |> Array.exactlyOne)
+
     Assert.Contains("{\"repo\":\"rogue3\",\"number\":96,\"status\":\"Done\"}", defaultFold)
-    Assert.Contains("{\"owner\":\"EHotwagner\",\"repo\":\"rogue3\",\"number\":96,\"status\":\"In progress\"}", defaultFold)
+
+    Assert.Contains(
+        "{\"owner\":\"EHotwagner\",\"repo\":\"rogue3\",\"number\":96,\"status\":\"In progress\"}",
+        defaultFold
+    )
 
 [<Fact>]
 let ``a ZERO-BYTE cache file is a miss, not an empty board`` () =
@@ -200,12 +214,14 @@ let ``the cache is keyed on the BOARD - one board's items are never served for a
 // ---- the deferred board-write queue (#510) ---------------------------------------------------------
 
 let private entry =
-    { Ref = "FS.GG.SDD#810"
-      Field = "Status"
-      Value = "In progress"
-      At = "2026-07-14T12:00:00Z"
-      Worker = "vole-418"
-      Board = Some("FS-GG", "Coordination") }
+    {
+        Ref = "FS.GG.SDD#810"
+        Field = "Status"
+        Value = "In progress"
+        At = "2026-07-14T12:00:00Z"
+        Worker = "vole-418"
+        Board = Some("FS-GG", "Coordination")
+    }
 
 [<Fact>]
 let ``#510 a board write may be deferred ONLY on an exhausted budget`` () =
@@ -317,7 +333,13 @@ let ``a board map with NO fields is never cached - it is a bootstrap that went w
 
     // An empty field map is #199's shape — a document we failed to walk. Caching it would make every write
     // fail with "no field named Status" for a day, so it is refused at the write, like an empty scan.
-    Assert.False(putBoardMap "FS-GG" "Coordination" """{"number":12,"id":"PVT_coord","owner":"FS-GG","title":"Coordination","fields":{}}""")
+    Assert.False(
+        putBoardMap
+            "FS-GG"
+            "Coordination"
+            """{"number":12,"id":"PVT_coord","owner":"FS-GG","title":"Coordination","fields":{}}"""
+    )
+
     Assert.False(putBoardMap "FS-GG" "Coordination" "<html>502</html>")
     Assert.True((getBoardMap "FS-GG" "Coordination").IsNone)
 
@@ -418,7 +440,8 @@ let ``#881 a concurrent defer is NOT destroyed by a flush's dropPending`` () =
     // and no concurrent `defer` ever lands inside it. The first draft of this test seeded ONE entry, passed
     // against the unfixed code, and proved nothing — a green test that could not see its subject (#266).
     for i in 1..400 do
-        defer (RateLimited(UnknownBudget, None)) { entry with Ref = $"FS.GG.SDD#%d{i}" } |> ignore
+        defer (RateLimited(UnknownBudget, None)) { entry with Ref = $"FS.GG.SDD#%d{i}" }
+        |> ignore
 
     let mutable lost = 0
 
@@ -427,7 +450,8 @@ let ``#881 a concurrent defer is NOT destroyed by a flush's dropPending`` () =
         let victim =
             { entry with
                 Ref = $"FS.GG.Game#%d{i}"
-                Value = "Ready" }
+                Value = "Ready"
+            }
 
         // The dropper drops one real entry, which is exactly what `flush` does per replayed write.
         let dropper =
@@ -517,7 +541,11 @@ let ``#882 dropPending does not drop the SAME write queued against another board
     use _sandbox = new Sandbox()
 
     let mine = entry
-    let theirs = { entry with Board = Some("FS-GG", "Some Other Board") }
+
+    let theirs =
+        { entry with
+            Board = Some("FS-GG", "Some Other Board")
+        }
 
     defer (RateLimited(UnknownBudget, None)) mine |> ignore
     defer (RateLimited(UnknownBudget, None)) theirs |> ignore

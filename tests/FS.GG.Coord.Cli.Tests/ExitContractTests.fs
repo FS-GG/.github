@@ -78,7 +78,8 @@ module ExitContractTests =
         for c in Protocol.takeExitCodes do
             Assert.False(
                 c.Meaning.Contains "half-landed" || c.Meaning.Contains "half-written",
-                $"take exit %d{c.Code} describes a half-landed WRITE — that is EX_PARTIAL's meaning, and `take` cannot return it (#889)")
+                $"take exit %d{c.Code} describes a half-landed WRITE — that is EX_PARTIAL's meaning, and `take` cannot return it (#889)"
+            )
 
     /// THE RED LEG. `Batch.schedule` REFUSES a batch when an in-flight claim declares a touch-set that
     /// matches no file (`Batch.fs`, tested in `BatchTests`), `renderDecision` turns that into `ExitRed`,
@@ -88,7 +89,8 @@ module ExitContractTests =
     let ``take's REFUSED leg is documented`` () =
         Assert.True(
             documented Kernel.ExitRed,
-            "3 (the batch was REFUSED) is reachable from `take` via renderDecision's Red arm and is not documented")
+            "3 (the batch was REFUSED) is reachable from `take` via renderDecision's Red arm and is not documented"
+        )
 
     /// THE FLOOR (#266, #436). A gate that asserts "the numbers agree" over an EMPTY list agrees
     /// vacuously — and this whole file would then pass while `take`'s contract went undocumented. The
@@ -96,9 +98,11 @@ module ExitContractTests =
     [<Fact>]
     let ``take's contract is actually stated`` () =
         Assert.NotEmpty Protocol.takeExitCodes
+
         Assert.True(
             Protocol.takeExitCodes |> List.exists (fun c -> c.Name <> ""),
-            "no EX_* code is documented at all — the table has gone vacuous")
+            "no EX_* code is documented at all — the table has gone vacuous"
+        )
 
     /// #918 — THE ONE SOURCE, ENFORCED ACROSS THE THREE MODULES THAT USED TO DISAGREE.
     ///
@@ -165,14 +169,20 @@ module ExitContractTests =
     [<Fact>]
     let ``the documented landable codes are the literals the engine returns`` () =
         Assert.True(landableDocuments Kernel.ExitGreen, "0 (green — the only code that means merge) is not documented")
-        Assert.True(landableDocuments Kernel.ExitPending, "7 (pending — the only code that means wait) is not documented")
+
+        Assert.True(
+            landableDocuments Kernel.ExitPending,
+            "7 (pending — the only code that means wait) is not documented"
+        )
+
         Assert.True(landableDocuments Kernel.ExitRed, "3 (red/conflicted) is not documented")
         Assert.True(landableDocuments Kernel.ExitNoVerdict, "4 (unknown — fail-closed) is not documented")
         Assert.True(landableDocuments Kernel.ExitError, "1 (refused input) is not documented")
 
         Assert.True(
             landableDocuments Kernel.ExitNotOpen,
-            "10 (the PR is not open — merged, or closed unmerged) is not documented, so a merged PR has no documented outcome (#1680)")
+            "10 (the PR is not open — merged, or closed unmerged) is not documented, so a merged PR has no documented outcome (#1680)"
+        )
 
     /// THE TWO CODES THE POLL LOOP READS, tied to their meanings THROUGH the constants.
     ///
@@ -197,14 +207,18 @@ module ExitContractTests =
         | Some m ->
             Assert.True(
                 m.StartsWith "PENDING",
-                "Kernel.ExitPending's value is not documented as PENDING — a loop built on this table waits on the wrong code (#900)")
+                "Kernel.ExitPending's value is not documented as PENDING — a loop built on this table waits on the wrong code (#900)"
+            )
 
         match landableMeaningOf Kernel.ExitRed with
-        | None -> Assert.Fail "Kernel.ExitRed names no documented landable row — a red/conflicted PR has no documented outcome"
+        | None ->
+            Assert.Fail
+                "Kernel.ExitRed names no documented landable row — a red/conflicted PR has no documented outcome"
         | Some m ->
             Assert.True(
                 m.StartsWith "RED",
-                "Kernel.ExitRed's value is not documented as RED — #900 is precisely that it was called 'pending', and a loop that waits on it never terminates")
+                "Kernel.ExitRed's value is not documented as RED — #900 is precisely that it was called 'pending', and a loop that waits on it never terminates"
+            )
 
     /// THE ENUMERATION MUST BE COMPLETE IN BOTH DIRECTIONS (#889). Every assertion above is an EXISTENCE
     /// check: it catches a code the engine returns and the table omits. Nothing yet catches the reverse
@@ -223,11 +237,13 @@ module ExitContractTests =
     let ``landable documents none of take's codes`` () =
         Assert.False(
             landableDocuments Kernel.ExitNone,
-            "landable documents 5 (EX_NONE) — that is `take`'s empty queue; landable has no queue, and its remedy (back off and retry) is wrong for every verdict landable returns")
+            "landable documents 5 (EX_NONE) — that is `take`'s empty queue; landable has no queue, and its remedy (back off and retry) is wrong for every verdict landable returns"
+        )
 
         Assert.False(
             landableDocuments Kernel.ExitContended,
-            "landable documents 6 (EX_CONTENDED) — that is `take`'s lost CAS; landable takes no lock")
+            "landable documents 6 (EX_CONTENDED) — that is `take`'s lost CAS; landable takes no lock"
+        )
 
     /// `ExitPending` IS THE ONE RETRYABLE CODE, so it must not collide with a way to STOP. Its own
     /// comment in `Client.fs` says it "dodges the reserved codes", and that dodge is only a fact for as
@@ -261,7 +277,8 @@ module ExitContractTests =
     let ``landable's defect code is documented, pinned to the union (#918)`` () =
         Assert.True(
             landableDocuments (ExitCode.toInt ExitCode.Defect),
-            "2 (the engine broke — Program.main's defect handler) is reachable from `landable` and is not documented")
+            "2 (the engine broke — Program.main's defect handler) is reachable from `landable` and is not documented"
+        )
 
     /// #1680 — THE PIN THAT KEEPS THE MERGED VERDICT OFF THE RETRYABLE CODE. `ProtocolTests` pins that
     /// row 10 SAYS "MERGED"; this pins that `Kernel.ExitNotOpen`'s VALUE is that row. The two halves
@@ -277,7 +294,8 @@ module ExitContractTests =
         | Some m ->
             Assert.True(
                 m.StartsWith "MERGED",
-                "Kernel.ExitNotOpen's value is not documented as MERGED — #1680 is that a merged PR was reported as 'pending', and a loop built on that never terminates")
+                "Kernel.ExitNotOpen's value is not documented as MERGED — #1680 is that a merged PR was reported as 'pending', and a loop built on that never terminates"
+            )
 
         // The defect in one assertion: the merged verdict must never be reachable through the code the
         // contract defines as worth retrying.
@@ -305,7 +323,8 @@ module ExitContractTests =
             if n <> ExitCode.toInt ExitCode.Error && n <> ExitCode.toInt ExitCode.Defect then
                 Assert.True(
                     usage.Contains $"%d{n} " || usage.Contains $"· %d{n}",
-                    $"the usage block never mentions landable exit %d{n} — a caller reading --help cannot learn what the engine will return (#1680 AC6)")
+                    $"the usage block never mentions landable exit %d{n} — a caller reading --help cannot learn what the engine will return (#1680 AC6)"
+                )
 
         // And the word, not merely the digit: AC2's distinguishability has to survive into `--help`.
         Assert.Contains("merged", usage)
@@ -344,11 +363,13 @@ module TakeFallthroughTests =
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None
-              Headers = Map.empty }
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            }
 
     /// The lanes the fixture board offers: disjoint touch-sets, so the scheduler admits all of them and
     /// the fallthrough has somewhere to go. Disjointness is not decoration — see
@@ -361,7 +382,8 @@ module TakeFallthroughTests =
         StructuredFixtures.routeComment $"FS-GG/.github#%d{n}" (Some DeliveryRoute.Lightweight) "fixture-2683" None
 
     /// A live claim marker by somebody else — the rival that won the race we lost.
-    let private rivalMarker (n: int) = $"<!-- fsgg:claim worker=rival-%d{n} lease=120 -->\nheld"
+    let private rivalMarker (n: int) =
+        $"<!-- fsgg:claim worker=rival-%d{n} lease=120 -->\nheld"
 
     /// HOW MANY TIMES ONE `take`'S SCAN READS A LANE'S COMMENT THREAD BEFORE ANY CLAIM RUNS. MEASURED,
     /// not assumed: `Scan.snapshot`'s marker read, then the delivery-route read `enrichDeliveryRoutes`
@@ -392,7 +414,7 @@ module TakeFallthroughTests =
         /// The rival's marker, added once. Idempotent: the CAS re-reads more than once and a thread that
         /// grew a second rival marker per read would be testing marker-scan de-duplication instead.
         member _.EnsureRival() =
-            if not (comments |> Seq.exists (fun (_, b) -> b.Contains $"worker=rival-%d{n}") ) then
+            if not (comments |> Seq.exists (fun (_, b) -> b.Contains $"worker=rival-%d{n}")) then
                 nextId <- nextId + 1L
                 comments.Add(nextId, rivalMarker n)
 
@@ -410,11 +432,13 @@ module TakeFallthroughTests =
             comments
             |> Seq.map (fun (id, body) ->
                 JsonSerializer.Serialize
-                    {| id = id
-                       body = body
-                       user = {| login = "EHotwagner" |}
-                       created_at = ts
-                       updated_at = ts |})
+                    {|
+                        id = id
+                        body = body
+                        user = {| login = "EHotwagner" |}
+                        created_at = ts
+                        updated_at = ts
+                    |})
             |> String.concat ","
             |> fun inner -> "[" + inner + "]"
 
@@ -449,112 +473,123 @@ module TakeFallthroughTests =
     /// gone by — everything before that is the scan, and the scan must see every lane FREE or there is no
     /// race to lose.
     let private world (behaviour: Map<int, Rival>) (threads: Dictionary<int, Lane>) =
-        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-            let path = req.Path.Trim '/'
+        Fake.Recorder(
+            StructuredFixtures.withIntake
+            <| fun (req: Request) ->
+                let path = req.Path.Trim '/'
 
-            match req.Method, path with
-            | "POST", "graphql" when
-                (match req.Body with
-                 | Query(document, _) -> document.Contains "comments(last:"
-                 | _ -> false)
-                ->
-                match req.Body with
-                | Query(_, variables) ->
-                    let number =
-                        variables
-                        |> List.tryPick (fun (k, v) ->
-                            match k, v with
-                            | "number", VNumber n -> Some(int n)
-                            | _ -> None)
-
-                    match number with
-                    | Some n ->
-                        let nodes = [ {| body = routeFor n |} ] |> JsonSerializer.Serialize
-
-                        ok
-                            ("{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
-                             + nodes
-                             + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
-                    | None -> Error(Errors.NotFound "the recent-comments query names no issue number")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, _) ->
-                    match graphqlAnswer document with
-                    | Some answer -> ok answer
-                    | None ->
-                        Error(Errors.NotFound "the fixture serves no board WRITE — the LOCK is what is under test")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
-            | _ ->
-
-            let threadOf (n: int) =
-                match threads.TryGetValue n with
-                | true, lane -> lane
-                | _ ->
-                    let lane = Lane n
-                    threads.[n] <- lane
-                    lane
-
-            let lane =
-                lanes
-                |> List.tryFind (fun n ->
-                    path = $"repos/FS-GG/.github/issues/%d{n}"
-                    || path = $"repos/FS-GG/.github/issues/%d{n}/comments")
-
-            let deleted =
-                if req.Method <> "DELETE" then
-                    None
-                elif not (path.StartsWith "repos/FS-GG/.github/issues/comments/") then
-                    None
-                else
-                    match Int64.TryParse(path.Substring(path.LastIndexOf '/' + 1)) with
-                    | true, id -> Some id
-                    | _ -> None
-
-            match lane, req.Method, deleted with
-            | _, _, Some id ->
-                for n in lanes do
-                    (threadOf n).Remove id
-
-                ok ""
-            | Some n, "GET", _ when path.EndsWith "/comments" ->
-                let thread = threadOf n
-                thread.CountRead()
-
-                // THE WINDOW. The first `scanReadsPerLane` reads are the scan's, so every lane is free
-                // and every lane is a candidate the scheduler may choose. Every read after them belongs
-                // to a claim's own CAS, and that is where the leg's declared behaviour begins.
-                let behaving =
-                    thread.Reads > scanReadsPerLane
-                    && (behaviour |> Map.tryFind n |> Option.defaultValue StaysFree) <> StaysFree
-
-                match behaving, behaviour |> Map.tryFind n with
-                | true, Some ExhaustsTheBudget -> Error(Errors.RateLimited(Errors.UnknownBudget, None))
-                | true, Some WinsTheRace ->
-                    thread.EnsureRival()
-                    ok (thread.Json())
-                | _ -> ok (thread.Json())
-            | Some n, "GET", _ -> ok $"""{{"number":%d{n},"body":"Paths: src/lane%d{n}.fs"}}"""
-            | Some n, "POST", _ ->
-                let body =
+                match req.Method, path with
+                | "POST", "graphql" when
+                    (match req.Body with
+                     | Query(document, _) -> document.Contains "comments(last:"
+                     | _ -> false)
+                    ->
                     match req.Body with
-                    | Json payload -> JsonDocument.Parse(payload).RootElement.GetProperty("body").GetString()
-                    | _ -> ""
+                    | Query(_, variables) ->
+                        let number =
+                            variables
+                            |> List.tryPick (fun (k, v) ->
+                                match k, v with
+                                | "number", VNumber n -> Some(int n)
+                                | _ -> None)
 
-                ok $"""{{"id":%d{(threadOf n).Add body}}}"""
-            | _ -> Error(Errors.NotFound $"the fixture serves no %s{req.Method} %s{path}"))
+                        match number with
+                        | Some n ->
+                            let nodes = [ {| body = routeFor n |} ] |> JsonSerializer.Serialize
+
+                            ok (
+                                "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                                + nodes
+                                + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+                            )
+                        | None -> Error(Errors.NotFound "the recent-comments query names no issue number")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, _) ->
+                        match graphqlAnswer document with
+                        | Some answer -> ok answer
+                        | None ->
+                            Error(Errors.NotFound "the fixture serves no board WRITE — the LOCK is what is under test")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+                | _ ->
+
+                    let threadOf (n: int) =
+                        match threads.TryGetValue n with
+                        | true, lane -> lane
+                        | _ ->
+                            let lane = Lane n
+                            threads.[n] <- lane
+                            lane
+
+                    let lane =
+                        lanes
+                        |> List.tryFind (fun n ->
+                            path = $"repos/FS-GG/.github/issues/%d{n}"
+                            || path = $"repos/FS-GG/.github/issues/%d{n}/comments")
+
+                    let deleted =
+                        if req.Method <> "DELETE" then
+                            None
+                        elif not (path.StartsWith "repos/FS-GG/.github/issues/comments/") then
+                            None
+                        else
+                            match Int64.TryParse(path.Substring(path.LastIndexOf '/' + 1)) with
+                            | true, id -> Some id
+                            | _ -> None
+
+                    match lane, req.Method, deleted with
+                    | _, _, Some id ->
+                        for n in lanes do
+                            (threadOf n).Remove id
+
+                        ok ""
+                    | Some n, "GET", _ when path.EndsWith "/comments" ->
+                        let thread = threadOf n
+                        thread.CountRead()
+
+                        // THE WINDOW. The first `scanReadsPerLane` reads are the scan's, so every lane is free
+                        // and every lane is a candidate the scheduler may choose. Every read after them belongs
+                        // to a claim's own CAS, and that is where the leg's declared behaviour begins.
+                        let behaving =
+                            thread.Reads > scanReadsPerLane
+                            && (behaviour |> Map.tryFind n |> Option.defaultValue StaysFree) <> StaysFree
+
+                        match behaving, behaviour |> Map.tryFind n with
+                        | true, Some ExhaustsTheBudget -> Error(Errors.RateLimited(Errors.UnknownBudget, None))
+                        | true, Some WinsTheRace ->
+                            thread.EnsureRival()
+                            ok (thread.Json())
+                        | _ -> ok (thread.Json())
+                    | Some n, "GET", _ -> ok $"""{{"number":%d{n},"body":"Paths: src/lane%d{n}.fs"}}"""
+                    | Some n, "POST", _ ->
+                        let body =
+                            match req.Body with
+                            | Json payload -> JsonDocument.Parse(payload).RootElement.GetProperty("body").GetString()
+                            | _ -> ""
+
+                        ok $"""{{"id":%d{(threadOf n).Add body}}}"""
+                    | _ -> Error(Errors.NotFound $"the fixture serves no %s{req.Method} %s{path}")
+        )
 
     let private context (transport: Fake.Recorder) : Kernel.Context =
-        { Transport = transport
-          Owner = "FS-GG"
-          Title = "Coordination"
-          DefaultRepo = Some ".github"
-          ChoreLocks = [] }
+        {
+            Transport = transport
+            Owner = "FS-GG"
+            Title = "Coordination"
+            DefaultRepo = Some ".github"
+            ChoreLocks = []
+        }
 
     let private sessionVars =
-        [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
+        [
+            "CLAUDE_CODE_SESSION_ID"
+            "OPENCODE_SESSION_ID"
+            "FSGG_AGENT_SESSION_ID"
+            "FSGG_WORKER"
+        ]
 
     /// Drive the REAL `Client.take` against a throwaway cache and a pinned identity, on the same licence
     /// `ForceStealTests.runClaim` takes: `AssemblyInfo.fs` disables cross-class parallelism, so the
@@ -562,10 +597,15 @@ module TakeFallthroughTests =
     /// private per call. The identity is pinned for #1646's reason — `claim` measures the named worker
     /// against the derived one, so an unpinned `$FSGG_WORKER` would make every leg an impersonation.
     let private runTake (transport: Fake.Recorder) : int * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2683-" + Guid.NewGuid().ToString "n")
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-2683-" + Guid.NewGuid().ToString "n")
+
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
-        let previousSessions = sessionVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+
+        let previousSessions =
+            sessionVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+
         let stdout = Console.Out
         let stderr = Console.Error
         use captured = new StringWriter()
@@ -625,16 +665,15 @@ module TakeFallthroughTests =
                 (match threads.TryGetValue n with
                  | true, lane -> lane.Reads >= scanReadsPerLane
                  | _ -> false),
-                $"the scan did not read lane %d{n}'s comment thread %d{scanReadsPerLane} time(s) — this leg measured a board that offered fewer lanes than it claims to")
+                $"the scan did not read lane %d{n}'s comment thread %d{scanReadsPerLane} time(s) — this leg measured a board that offered fewer lanes than it claims to"
+            )
 
     // ---- THE PAIR, PLUS THE TWO SHORT-CIRCUITS ------------------------------------------------------
 
     /// ACCEPTANCE 1. The head of the ranking is lost; the next candidate is CLAIMED, in the same call,
     /// off the same scan.
     [<Fact>]
-    let ``.github#2683 a lost claim CAS advances to the next ranked candidate instead of idling the slot``
-        ()
-        =
+    let ``.github#2683 a lost claim CAS advances to the next ranked candidate instead of idling the slot`` () =
         let threads = Dictionary<int, Lane>()
         let transport = world (Map.ofList [ 9001, WinsTheRace ]) threads
 
@@ -644,26 +683,27 @@ module TakeFallthroughTests =
 
         Assert.True(
             attemptedAndLost said 9001,
-            "the engine never reported losing lane 9001 — the head of the ranking was not attempted, so this leg is not measuring a LOST race (see `scanReadsPerLane`)")
+            "the engine never reported losing lane 9001 — the head of the ranking was not attempted, so this leg is not measuring a LOST race (see `scanReadsPerLane`)"
+        )
 
         Assert.Equal(Kernel.ExitGreen, code)
 
         Assert.False(
             claimed transport 9001,
-            "a marker was posted to the lane a rival had already won — the CAS did not refuse it")
+            "a marker was posted to the lane a rival had already won — the CAS did not refuse it"
+        )
 
         Assert.True(
             claimed transport 9002,
-            "the next ranked candidate was free and was never claimed: `take` discarded the remainder of a ranking it had already paid a board scan for, and the implementer slot idles (.github#2683)")
+            "the next ranked candidate was free and was never claimed: `take` discarded the remainder of a ranking it had already paid a board scan for, and the implementer slot idles (.github#2683)"
+        )
 
     /// ACCEPTANCE 3 AND ACCEPTANCE 2, IN ONE LEG. `EX_CONTENDED` still fires — but only after every
     /// candidate the ranking offered has been attempted and lost, and the ranking is BOUNDED: four lanes
     /// are free at scan time, three are attempted, the fourth is not. A fallthrough with no bound would
     /// attempt all four.
     [<Fact>]
-    let ``.github#2683 EX_CONTENDED fires only when every candidate in the BOUNDED ranking has been lost``
-        ()
-        =
+    let ``.github#2683 EX_CONTENDED fires only when every candidate in the BOUNDED ranking has been lost`` () =
         let threads = Dictionary<int, Lane>()
 
         let transport =
@@ -689,9 +729,7 @@ module TakeFallthroughTests =
     /// `EX_RATE` would therefore CLAIM lane 9002 and exit 0. So "exit 75, and nothing was claimed
     /// anywhere" is the whole of the short-circuit — there is no third outcome that satisfies both.
     [<Fact>]
-    let ``.github#2683 EX_RATE short-circuits immediately and is never retried against further candidates``
-        ()
-        =
+    let ``.github#2683 EX_RATE short-circuits immediately and is never retried against further candidates`` () =
         let threads = Dictionary<int, Lane>()
         let transport = world (Map.ofList [ 9001, ExhaustsTheBudget ]) threads
 
@@ -704,7 +742,8 @@ module TakeFallthroughTests =
         for n in lanes do
             Assert.False(
                 claimed transport n,
-                $"lane %d{n} was claimed after the head exhausted the budget — EX_RATE must short-circuit, not walk the ranking (.github#2683 acceptance 4)")
+                $"lane %d{n} was claimed after the head exhausted the budget — EX_RATE must short-circuit, not walk the ranking (.github#2683 acceptance 4)"
+            )
 
     /// ACCEPTANCE 6, AS A GATE RATHER THAN A READING. The engine must not tell a caller to perform the
     /// retry every worker brief in this org forbids. `Client.claim`'s lost-race line used to end "Pick

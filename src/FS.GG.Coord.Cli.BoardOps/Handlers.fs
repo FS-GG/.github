@@ -36,30 +36,41 @@ module Handlers =
         | _ -> false
 
     type LifecycleAuthorityExpectation =
-        { Repository: string
-          Number: int
-          Url: string
-          Subject: string
-          CurrentClaimGeneration: string
-          ImplementationRepository: string
-          ImplementationCandidate: string
-          ImplementationMerge: string
-          AcceptanceCandidate: string
-          AcceptanceMerge: string
-          ProtectedMain: string }
+        {
+            Repository: string
+            Number: int
+            Url: string
+            Subject: string
+            CurrentClaimGeneration: string
+            ImplementationRepository: string
+            ImplementationCandidate: string
+            ImplementationMerge: string
+            AcceptanceCandidate: string
+            AcceptanceMerge: string
+            ProtectedMain: string
+        }
 
     let validateLifecycleAuthority expectation (lifecycleLog: string) =
         let errors = ResizeArray<string>()
+
         let rec expectedRevision phase =
             match phase with
-            | "merge" | "post-merge-obligations" -> expectation.ImplementationMerge
+            | "merge"
+            | "post-merge-obligations" -> expectation.ImplementationMerge
             | "acceptance-candidate" -> expectation.AcceptanceCandidate
-            | "acceptance" | "protected-main-verification" | "receipt-projection" | "cleanup" -> expectation.AcceptanceMerge
+            | "acceptance"
+            | "protected-main-verification"
+            | "receipt-projection"
+            | "cleanup" -> expectation.AcceptanceMerge
             | value when value.StartsWith("telemetry-reconciliation-", StringComparison.Ordinal) ->
                 expectedRevision (value.Substring("telemetry-reconciliation-".Length))
             | _ -> expectation.ImplementationCandidate
+
         let lines = lifecycleLog.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-        if lines.Length = 0 then errors.Add("lifecycle authority ledger is empty")
+
+        if lines.Length = 0 then
+            errors.Add("lifecycle authority ledger is empty")
+
         lines
         |> Array.iteri (fun index line ->
             try
@@ -68,35 +79,53 @@ module Handlers =
                 let item = root.GetProperty "item"
                 let source = root.GetProperty "source"
                 let authority = root.GetProperty "authority"
-                if item.GetProperty("repo").GetString() <> expectation.Repository
-                   || item.GetProperty("number").GetInt32() <> expectation.Number
-                   || item.GetProperty("url").GetString() <> expectation.Url then
+
+                if
+                    item.GetProperty("repo").GetString() <> expectation.Repository
+                    || item.GetProperty("number").GetInt32() <> expectation.Number
+                    || item.GetProperty("url").GetString() <> expectation.Url
+                then
                     errors.Add($"lifecycle event %d{index + 1} is not bound to the applied unit issue")
+
                 if authority.GetProperty("subject").GetString() <> expectation.Subject then
                     errors.Add($"lifecycle event %d{index + 1} authority subject differs from the applied unit issue")
+
                 let generation = authority.GetProperty("claim_generation").GetString()
+
                 match Int64.TryParse generation with
                 | true, value when value > 0L -> ()
                 | _ -> errors.Add($"lifecycle event %d{index + 1} claim generation is not a GitHub-issued comment id")
+
                 if index = lines.Length - 1 && generation <> expectation.CurrentClaimGeneration then
                     errors.Add("terminal lifecycle event claim generation is not the live winning claim")
+
                 let phase = root.GetProperty("phase").GetString()
                 let revision = source.GetProperty("revision").GetString()
                 let expectedRevision = expectedRevision phase
-                if source.GetProperty("repository").GetString() <> expectation.ImplementationRepository
-                   || revision <> expectedRevision then
+
+                if
+                    source.GetProperty("repository").GetString()
+                    <> expectation.ImplementationRepository
+                    || revision <> expectedRevision
+                then
                     errors.Add($"lifecycle event %d{index + 1} source revision is invalid for phase %s{phase}")
-            with error -> errors.Add($"lifecycle event %d{index + 1} authority binding: %s{error.Message}"))
+            with error ->
+                errors.Add($"lifecycle event %d{index + 1} authority binding: %s{error.Message}"))
+
         List.ofSeq errors
 
     let validateCompleteSddWorkModel expectedWorkId (workModelJson: string) =
         let errors = ResizeArray<string>()
+
         try
             use document = JsonDocument.Parse workModelJson
             let root = document.RootElement
+
             if root.GetProperty("workId").GetString() <> expectedWorkId then
                 errors.Add("SDD work model does not name the applied unit work id")
+
             let tasks = root.GetProperty "tasks"
+
             if tasks.ValueKind <> JsonValueKind.Array || tasks.GetArrayLength() = 0 then
                 errors.Add("SDD work model declares no tasks")
             else
@@ -104,8 +133,12 @@ module Handlers =
                 |> Seq.iter (fun task ->
                     let id = task.GetProperty("id").GetString()
                     let status = task.GetProperty("status").GetString()
-                    if status <> "done" then errors.Add($"SDD task %s{id} is %s{status}, expected done"))
-        with error -> errors.Add("invalid SDD work model: " + error.Message)
+
+                    if status <> "done" then
+                        errors.Add($"SDD task %s{id} is %s{status}, expected done"))
+        with error ->
+            errors.Add("invalid SDD work model: " + error.Message)
+
         List.ofSeq errors
 
     [<Literal>]
@@ -193,16 +226,27 @@ module Handlers =
             |> List.choose (fun comment ->
                 if comment.StartsWith(StructuredRouteMarker + "\n", StringComparison.Ordinal) then
                     Some(comment.Substring(StructuredRouteMarker.Length).Trim())
-                else None)
+                else
+                    None)
 
-        if List.isEmpty marked then Ok None
+        if List.isEmpty marked then
+            Ok None
         else
             let decoded = marked |> List.map DeliveryRouteApplication.decodeStructured
-            let failures = decoded |> List.choose (function Error error -> Some error | Ok _ -> None)
-            if not (List.isEmpty failures) then Error failures
+
+            let failures =
+                decoded
+                |> List.choose (function
+                    | Error error -> Some error
+                    | Ok _ -> None)
+
+            if not (List.isEmpty failures) then
+                Error failures
             else
                 let records = decoded |> List.choose Result.toOption
-                StructuredDecision.validateRouteLedger subject records |> Result.map (fun latest -> Some(records, latest))
+
+                StructuredDecision.validateRouteLedger subject records
+                |> Result.map (fun latest -> Some(records, latest))
 
     let validateAcceptanceSddRoute (subject: string) (expectedWorkId: string) (comments: string list) =
         match structuredRouteLedger subject comments with
@@ -212,18 +256,17 @@ module Handlers =
             match latest.Route, latest.SddWorkId with
             | Some DeliveryRoute.SddRequired, Some workId when workId = expectedWorkId -> []
             | Some DeliveryRoute.SddRequired, Some workId ->
-                [ $"acceptance SDD work id %s{expectedWorkId} differs from current route work id %s{workId}" ]
-            | Some DeliveryRoute.SddRequired, None ->
-                [ "current sdd-required route has no SDD work id" ]
+                [
+                    $"acceptance SDD work id %s{expectedWorkId} differs from current route work id %s{workId}"
+                ]
+            | Some DeliveryRoute.SddRequired, None -> [ "current sdd-required route has no SDD work id" ]
             | _ -> [ "acceptance requires a current sdd-required delivery route" ]
 
-    let validateAcceptanceEvidenceComment
-        (input: RoadmapWorkUnit.AcceptanceInput)
-        (comment: Reads.AuthorityComment)
-        =
+    let validateAcceptanceEvidenceComment (input: RoadmapWorkUnit.AcceptanceInput) (comment: Reads.AuthorityComment) =
         let canonical (text: string) =
             CanonicalJson.canonicalize (Encoding.UTF8.GetBytes text)
             |> Result.mapError (fun reason -> $"invalid canonical JSON authority: %s{reason}")
+
         if comment.Url <> input.ReviewEvidence then
             [ "review evidence comment URL differs from the acceptance-envelope identity" ]
         elif comment.CreatedAt <> comment.UpdatedAt then
@@ -231,10 +274,17 @@ module Handlers =
         else
             match canonical (Qualification.canonicalResult input.Qualification), canonical input.ReviewReceipt with
             | Ok qualification, Ok critique ->
-                let expected = $"<!-- fsgg:roadmap-unit-acceptance-evidence/v1 -->\n```json\n%s{qualification}\n```\n```json\n%s{critique}\n```"
-                if comment.Body.TrimEnd() = expected then []
-                else [ "review evidence is not the exact leading-marker qualification/critique envelope" ]
-            | Error reason, _ | _, Error reason -> [ reason ]
+                let expected =
+                    $"<!-- fsgg:roadmap-unit-acceptance-evidence/v1 -->\n```json\n%s{qualification}\n```\n```json\n%s{critique}\n```"
+
+                if comment.Body.TrimEnd() = expected then
+                    []
+                else
+                    [
+                        "review evidence is not the exact leading-marker qualification/critique envelope"
+                    ]
+            | Error reason, _
+            | _, Error reason -> [ reason ]
 
     let validateCritiqueCommitRelation
         (observeComparison: string -> string -> Result<Reads.CommitComparison, string>)
@@ -246,38 +296,52 @@ module Handlers =
         (verdict: string)
         =
         let errors = ResizeArray<string>()
-        let work = Regex.Match(sddWorkId, "^[1-9][0-9]*-(.+)$", RegexOptions.CultureInvariant)
+
+        let work =
+            Regex.Match(sddWorkId, "^[1-9][0-9]*-(.+)$", RegexOptions.CultureInvariant)
+
         let workCycle =
             work.Success
             && not (String.IsNullOrWhiteSpace cycle)
             && cycle.EndsWith("-" + work.Groups[1].Value, StringComparison.OrdinalIgnoreCase)
+
         if cycle <> reviewCycleId && not workCycle then
             errors.Add("critique cycle differs from the selected unit and its route-authorized work identity")
-        if verdict <> "pass" then errors.Add("critique confirmation does not pass")
+
+        if verdict <> "pass" then
+            errors.Add("critique confirmation does not pass")
+
         if cycle = reviewCycleId && reviewed <> implementationCandidate then
             errors.Add("unit-cycle critique confirmation does not pass the implementation candidate")
         elif workCycle then
             let expectedArtifact = $"reviews/roadmap/%s{cycle}.json"
+
             match observeComparison reviewed implementationCandidate with
             | Error error -> errors.Add error
-            | Ok comparison
-                when comparison.Status = "ahead"
-                     && comparison.MergeBase = reviewed
-                     && comparison.AheadBy = 1
-                     && comparison.Files = [ expectedArtifact, "modified" ] -> ()
+            | Ok comparison when
+                comparison.Status = "ahead"
+                && comparison.MergeBase = reviewed
+                && comparison.AheadBy = 1
+                && comparison.Files = [ expectedArtifact, "modified" ]
+                ->
+                ()
             | Ok comparison ->
-                let comparedFiles = comparison.Files |> List.map (fun (path, status) -> $"%s{status}:%s{path}") |> String.concat ","
+                let comparedFiles =
+                    comparison.Files
+                    |> List.map (fun (path, status) -> $"%s{status}:%s{path}")
+                    |> String.concat ","
+
                 errors.Add(
-                    $"work-cycle critique reviewed commit is not the exact one-commit ancestor of a modified-artifact-only final candidate: status=%s{comparison.Status} aheadBy=%d{comparison.AheadBy} mergeBase=%s{comparison.MergeBase} files=%s{comparedFiles}")
+                    $"work-cycle critique reviewed commit is not the exact one-commit ancestor of a modified-artifact-only final candidate: status=%s{comparison.Status} aheadBy=%d{comparison.AheadBy} mergeBase=%s{comparison.MergeBase} files=%s{comparedFiles}"
+                )
+
         List.ofSeq errors
 
     let private routeEvidence (subject: string) (comments: string list) : DeliveryRoute.Verdict =
         match structuredRouteLedger subject comments with
         | Error errors -> DeliveryRoute.Stale errors
-        | Ok(Some(_, latest)) ->
-            DeliveryRoute.Current(StructuredDecision.toEffectiveRoute latest)
-        | Ok None ->
-            DeliveryRoute.Stale [ "structured route ledger is missing" ]
+        | Ok(Some(_, latest)) -> DeliveryRoute.Current(StructuredDecision.toEffectiveRoute latest)
+        | Ok None -> DeliveryRoute.Stale [ "structured route ledger is missing" ]
 
     // The route decision is an impure receipt: both the source item and its append-only receipt ledger
     // are read immediately before the pure scheduler sees the item.  An unreadable read stays typed as
@@ -291,19 +355,28 @@ module Handlers =
     // particular, a rate-limited receipt read must remain EX_RATE for a JSON worker, not be flattened into
 
     let private requireCoherentBlockedWrite (ctx: Context) (ref: Ref) (status: BoardStatus option) : Result<unit, int> =
-        if status <> Some BoardStatus.Blocked then Ok()
+        if status <> Some BoardStatus.Blocked then
+            Ok()
         else
             match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
-            | Error e -> eprint $"fsgg-coord-engine: Status=Blocked: board unreadable ({Errors.explain e})"; Error ExitError
+            | Error e ->
+                eprint $"fsgg-coord-engine: Status=Blocked: board unreadable ({Errors.explain e})"
+                Error ExitError
             | Ok board ->
                 match Board.itemBlockedBy ctx.Transport board ref.Owner ref.Repo ref.Number with
                 | Ok(Some value) when not (String.IsNullOrWhiteSpace value) -> Ok()
-                | Error e -> eprint $"fsgg-coord-engine: Status=Blocked: Blocked by unreadable ({Errors.explain e})"; Error ExitError
+                | Error e ->
+                    eprint $"fsgg-coord-engine: Status=Blocked: Blocked by unreadable ({Errors.explain e})"
+                    Error ExitError
                 | Ok _ ->
                     match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
                     | Ok body when HumanBlock.parse body |> Option.isSome -> Ok()
-                    | Ok _ -> eprint "fsgg-coord-engine: Status=Blocked refuses an incoherent park (.github#2079)."; Error ExitError
-                    | Error e -> eprint $"fsgg-coord-engine: Status=Blocked: body unreadable ({Errors.explain e})"; Error ExitError
+                    | Ok _ ->
+                        eprint "fsgg-coord-engine: Status=Blocked refuses an incoherent park (.github#2079)."
+                        Error ExitError
+                    | Error e ->
+                        eprint $"fsgg-coord-engine: Status=Blocked: body unreadable ({Errors.explain e})"
+                        Error ExitError
 
     // THE ONE RESOLVED-STATUS BOUNDARY FOR A `Ready` WRITE (.github#2698) — the deliberate mirror of
     // `requireCoherentBlockedWrite` directly above, and placed beside it so the two lifecycle columns
@@ -335,7 +408,8 @@ module Handlers =
     // preserved rather than flattened to 1, so a rate-limited read stays EX_RATE and keeps its back-off
     // contract instead of reading to a JSON worker as a permanent refusal.
     let private requireCurrentRouteIfReady (ctx: Context) (ref: Ref) (status: BoardStatus option) : Result<unit, int> =
-        if status <> Some BoardStatus.Ready then Ok()
+        if status <> Some BoardStatus.Ready then
+            Ok()
         else
             match readDeliveryRouteComments ctx ref with
             | Error e ->
@@ -540,7 +614,10 @@ module Handlers =
                         | _ -> 30_000
 
                 if not (p.WaitForExit timeoutMs) then
-                    (try p.Kill true with _ -> ())
+                    (try
+                        p.Kill true
+                     with _ ->
+                         ())
 
                     eprint
                         $"fsgg-coord-engine: scripts/generated-paths did not finish within %d{timeoutMs}ms and was killed — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
@@ -548,21 +625,21 @@ module Handlers =
                     Set.empty
                 else
 
-                // The child is gone; this second, unbounded wait is the documented way to let the async
-                // handlers flush what it wrote before exiting. It cannot hang — the process has exited.
-                p.WaitForExit()
-                let out = lock sync (fun () -> stdout.ToString())
+                    // The child is gone; this second, unbounded wait is the documented way to let the async
+                    // handlers flush what it wrote before exiting. It cannot hang — the process has exited.
+                    p.WaitForExit()
+                    let out = lock sync (fun () -> stdout.ToString())
 
-                if p.ExitCode <> 0 then
-                    eprint
-                        $"fsgg-coord-engine: scripts/generated-paths exited %d{p.ExitCode} — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
+                    if p.ExitCode <> 0 then
+                        eprint
+                            $"fsgg-coord-engine: scripts/generated-paths exited %d{p.ExitCode} — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
 
-                    Set.empty
-                else
-                    out.Split('\n')
-                    |> Array.map (fun l -> l.Trim())
-                    |> Array.filter (fun l -> l <> "")
-                    |> Set.ofArray
+                        Set.empty
+                    else
+                        out.Split('\n')
+                        |> Array.map (fun l -> l.Trim())
+                        |> Array.filter (fun l -> l <> "")
+                        |> Set.ofArray
             with ex ->
                 eprint
                     $"fsgg-coord-engine: could not run scripts/generated-paths (%s{ex.Message}) — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
@@ -646,13 +723,17 @@ module Handlers =
                 // observation to derive their result, but malformed intent must spend zero GraphQL.
                 let boardResult =
                     match mutation with
-                    | Options.ClearBlockedBy -> Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title |> Result.mapError Choice2Of2
+                    | Options.ClearBlockedBy ->
+                        Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
+                        |> Result.mapError Choice2Of2
                     | Options.AddBlockedBy raw
                     | Options.RemoveBlockedBy raw
                     | Options.ReplaceBlockedBy raw ->
                         match canonicalBlockedByRefs ref raw with
                         | Error rc -> Error(Choice1Of2 rc)
-                        | Ok _ -> Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title |> Result.mapError Choice2Of2
+                        | Ok _ ->
+                            Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
+                            |> Result.mapError Choice2Of2
 
                 match boardResult with
                 | Error(Choice1Of2 rc) -> rc
@@ -665,17 +746,28 @@ module Handlers =
                                 "set %s Blocked by %s = %s"
                                 ref.Canonical
                                 operation
-                                (match write with | Board.Set value -> value | Board.Clear -> "<cleared>")
+                                (match write with
+                                 | Board.Set value -> value
+                                 | Board.Clear -> "<cleared>")
+
                             ExitGreen
                         | Board.Deferred ->
-                            printfn "set-field %s Blocked by %s — QUEUED (budget exhausted; flush replays it)" ref.Canonical operation
+                            printfn
+                                "set-field %s Blocked by %s — QUEUED (budget exhausted; flush replays it)"
+                                ref.Canonical
+                                operation
+
                             Errors.ExRate
                         | Board.NotOnBoard ->
-                            eprint $"fsgg-coord-engine: %s{ref.Canonical} is not an item on this board — nothing written."
+                            eprint
+                                $"fsgg-coord-engine: %s{ref.Canonical} is not an item on this board — nothing written."
+
                             ExitError
 
                     let writeExplicit operation write =
-                        match Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Blocked by" write w.Id with
+                        match
+                            Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Blocked by" write w.Id
+                        with
                         | Error e -> Error e
                         | Ok outcome -> Ok(renderOutcome operation write outcome)
 
@@ -688,19 +780,21 @@ module Handlers =
                             match canonicalBlockedByRefs ref raw with
                             | Error rc -> Ok rc
                             | Ok [] ->
-                                eprint "fsgg-coord-engine: --replace needs at least one issue ref; use --clear to clear the set."
+                                eprint
+                                    "fsgg-coord-engine: --replace needs at least one issue ref; use --clear to clear the set."
+
                                 Ok ExitError
                             | Ok refs ->
                                 let write = blockedByWrite refs
                                 writeExplicit "replace" write
-                        | Options.ClearBlockedBy ->
-                            writeExplicit "clear" Board.Clear
+                        | Options.ClearBlockedBy -> writeExplicit "clear" Board.Clear
                         | Options.AddBlockedBy raw
                         | Options.RemoveBlockedBy raw as edgeMutation ->
                             match Board.itemBlockedByObservation ctx.Transport board ref.Owner ref.Repo ref.Number with
                             | Error e -> Error e
                             | Ok observed ->
                                 let liveRaw = observed.Value |> Option.defaultValue ""
+
                                 match canonicalBlockedByRefs ref liveRaw, canonicalBlockedByRefs ref raw with
                                 | Error rc, _
                                 | _, Error rc -> Ok rc
@@ -717,14 +811,29 @@ module Handlers =
                                         match edgeMutation with
                                         | Options.AddBlockedBy _ ->
                                             let seen = Set.ofList live
-                                            live @ (requested |> List.filter (fun value -> not (Set.contains value seen))), "add"
+
+                                            live
+                                            @ (requested |> List.filter (fun value -> not (Set.contains value seen))),
+                                            "add"
                                         | Options.RemoveBlockedBy _ ->
                                             let removed = Set.ofList requested
-                                            live |> List.filter (fun value -> not (Set.contains value removed)), "remove"
+
+                                            live |> List.filter (fun value -> not (Set.contains value removed)),
+                                            "remove"
                                         | _ -> failwith "unreachable explicit edge mutation"
 
                                     let write = blockedByWrite result
-                                    match Board.boardWriteGuarded ctx.Transport board ref.Owner ref.Repo ref.Number observed write with
+
+                                    match
+                                        Board.boardWriteGuarded
+                                            ctx.Transport
+                                            board
+                                            ref.Owner
+                                            ref.Repo
+                                            ref.Number
+                                            observed
+                                            write
+                                    with
                                     | Error e -> Error e
                                     | Ok outcome -> Ok(renderOutcome operation write outcome)
 
@@ -732,10 +841,14 @@ module Handlers =
                     | Error e -> fail e
                     | Ok code -> code
         | [ _; field ] ->
-            eprint $"fsgg-coord-engine: --add/--remove/--replace/--clear apply only to the set-valued 'Blocked by' field (got '%s{field}')."
+            eprint
+                $"fsgg-coord-engine: --add/--remove/--replace/--clear apply only to the set-valued 'Blocked by' field (got '%s{field}')."
+
             ExitError
         | _ ->
-            eprint "fsgg-coord-engine: an explicit Blocked by mutation takes <ref> 'Blocked by' and exactly one of --add REFS, --remove REFS, --replace REFS, or --clear."
+            eprint
+                "fsgg-coord-engine: an explicit Blocked by mutation takes <ref> 'Blocked by' and exactly one of --add REFS, --remove REFS, --replace REFS, or --clear."
+
             ExitError
 
     // `set-field --batch <ref> Field=Value ...` — N fields in ONE aliased mutation (#448).
@@ -764,18 +877,30 @@ module Handlers =
                         let field = s.Substring(0, i)
                         let value = s.Substring(i + 1)
 
-                        if field = "" then Error s
-                        else Ok(field, (if value = "" then Board.Clear else Board.Set value))
+                        if field = "" then
+                            Error s
+                        else
+                            Ok(field, (if value = "" then Board.Clear else Board.Set value))
 
                 let parsed = pairs |> List.map parsePair
 
-                match parsed |> List.tryPick (function | Error s -> Some s | Ok _ -> None) with
+                match
+                    parsed
+                    |> List.tryPick (function
+                        | Error s -> Some s
+                        | Ok _ -> None)
+                with
                 | Some bad ->
                     eprint
                         $"fsgg-coord-engine: set-field --batch takes Field=Value pairs (an empty value clears); '%s{bad}' is not one."
+
                     ExitError
                 | None ->
-                    let rawWrites = parsed |> List.choose (function | Ok p -> Some p | Error _ -> None)
+                    let rawWrites =
+                        parsed
+                        |> List.choose (function
+                            | Ok p -> Some p
+                            | Error _ -> None)
 
                     // The `Blocked by` gate applies to `--batch` too — the same one home the single write
                     // uses — so a prose dependency cannot slip in through the aliased document. It runs
@@ -800,111 +925,133 @@ module Handlers =
                     | Error rc -> rc
                     | Ok writes ->
 
-                    // #2098 AC1: the SAME coherent-park invariant `release`/single `set-field` already
-                    // enforce, reached through the batch door — a `Status=Blocked` write must not land
-                    // with an empty `Blocked by` field and no `Blocked on: human/...` sentinel. Judged
-                    // against THIS batch's own pending writes (`requireCoherentParkIfBlockedForBatch`),
-                    // so a call pairing `Status=Blocked` with a non-empty `Blocked by=<ref>` in the SAME
-                    // document is coherent without a live read racing its own not-yet-emitted mutation.
-                    // Runs BEFORE any alias is emitted, same as `gateField` above — a refused batch must
-                    // cost nothing.
-                    let requestedStatus =
-                        writes
-                        |> List.tryPick (fun (field, write) ->
-                            if field = "Status" then
-                                match write with
-                                | Board.Set v -> Reads.statusOfName v
-                                | Board.Clear -> None
-                            else
-                                None)
+                        // #2098 AC1: the SAME coherent-park invariant `release`/single `set-field` already
+                        // enforce, reached through the batch door — a `Status=Blocked` write must not land
+                        // with an empty `Blocked by` field and no `Blocked on: human/...` sentinel. Judged
+                        // against THIS batch's own pending writes (`requireCoherentParkIfBlockedForBatch`),
+                        // so a call pairing `Status=Blocked` with a non-empty `Blocked by=<ref>` in the SAME
+                        // document is coherent without a live read racing its own not-yet-emitted mutation.
+                        // Runs BEFORE any alias is emitted, same as `gateField` above — a refused batch must
+                        // cost nothing.
+                        let requestedStatus =
+                            writes
+                            |> List.tryPick (fun (field, write) ->
+                                if field = "Status" then
+                                    match write with
+                                    | Board.Set v -> Reads.statusOfName v
+                                    | Board.Clear -> None
+                                else
+                                    None)
 
-                    let pendingBlockedBy =
-                        writes
-                        |> List.tryPick (fun (field, write) -> if field = "Blocked by" then Some write else None)
+                        let pendingBlockedBy =
+                            writes
+                            |> List.tryPick (fun (field, write) -> if field = "Blocked by" then Some write else None)
 
-                    match requireCoherentParkIfBlockedForBatch ctx ref requestedStatus pendingBlockedBy with
-                    | Error rc -> rc
-                    | Ok() ->
+                        match requireCoherentParkIfBlockedForBatch ctx ref requestedStatus pendingBlockedBy with
+                        | Error rc -> rc
+                        | Ok() ->
 
-                    // .github#2698, reached through the batch door — the same seam `set-field <ref> Status
-                    // Ready` uses, and gated from the same `requestedStatus` the park gate above already
-                    // resolved off the CANONICAL `write` pairs rather than off raw argv. Before any alias
-                    // is emitted, so a refused batch costs nothing and leaves the row exactly as it was.
-                    //
-                    // No batch-local variant is needed the way `Blocked` needed one: a route receipt is a
-                    // comment ledger on the issue, and no `set-field` document can write one, so there is
-                    // no pending-write-in-this-same-document case for the live read to race.
-                    match requireCurrentRouteIfReady ctx ref requestedStatus with
-                    | Error rc -> rc
-                    | Ok() ->
+                            // .github#2698, reached through the batch door — the same seam `set-field <ref> Status
+                            // Ready` uses, and gated from the same `requestedStatus` the park gate above already
+                            // resolved off the CANONICAL `write` pairs rather than off raw argv. Before any alias
+                            // is emitted, so a refused batch costs nothing and leaves the row exactly as it was.
+                            //
+                            // No batch-local variant is needed the way `Blocked` needed one: a route receipt is a
+                            // comment ledger on the issue, and no `set-field` document can write one, so there is
+                            // no pending-write-in-this-same-document case for the live read to race.
+                            match requireCurrentRouteIfReady ctx ref requestedStatus with
+                            | Error rc -> rc
+                            | Ok() ->
 
-                    match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
-                    | Error e -> fail e
-                    | Ok board ->
-                        // Map an alias ("f2") back to the pair it wrote, so a partial write can be reported
-                        // in the caller's OWN vocabulary — `Field='value'` — not "f2".
-                        let describe (alias: string) : string =
-                            let idx =
-                                match Int32.TryParse(alias.TrimStart 'f') with
-                                | true, n -> Some n
-                                | _ -> None
+                                match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                                | Error e -> fail e
+                                | Ok board ->
+                                    // Map an alias ("f2") back to the pair it wrote, so a partial write can be reported
+                                    // in the caller's OWN vocabulary — `Field='value'` — not "f2".
+                                    let describe (alias: string) : string =
+                                        let idx =
+                                            match Int32.TryParse(alias.TrimStart 'f') with
+                                            | true, n -> Some n
+                                            | _ -> None
 
-                            match idx with
-                            | Some i when i >= 0 && i < List.length writes ->
-                                match List.item i writes with
-                                | field, Board.Set v -> $"%s{field}='%s{v}'"
-                                | field, Board.Clear -> $"%s{field}=<cleared>"
-                            | _ -> alias
+                                        match idx with
+                                        | Some i when i >= 0 && i < List.length writes ->
+                                            match List.item i writes with
+                                            | field, Board.Set v -> $"%s{field}='%s{v}'"
+                                            | field, Board.Clear -> $"%s{field}=<cleared>"
+                                        | _ -> alias
 
-                        match
-                            withBlockedByLeaseForWrites ctx ref writes (fun () ->
-                                Board.boardWriteBatch ctx.Transport board ref.Owner ref.Repo ref.Number None writes w.Id)
-                        with
-                        // THE PARTIAL ARM IS ITS OWN ANSWER — matched BEFORE the generic failure. Some aliases
-                        // landed; reporting nothing happened would be a lie, and reporting success is the bug
-                        // #448 forbade by name. EX_PARTIAL (4), and the board is half-written on the record.
-                        | Error(Errors.Partial(applied, failed)) ->
-                            eprint
-                                "fsgg-coord-engine: PARTIALLY APPLIED — the board is now half-written. This is NOT queued: replaying the document would rewrite the aliases that already landed."
+                                    match
+                                        withBlockedByLeaseForWrites ctx ref writes (fun () ->
+                                            Board.boardWriteBatch
+                                                ctx.Transport
+                                                board
+                                                ref.Owner
+                                                ref.Repo
+                                                ref.Number
+                                                None
+                                                writes
+                                                w.Id)
+                                    with
+                                    // THE PARTIAL ARM IS ITS OWN ANSWER — matched BEFORE the generic failure. Some aliases
+                                    // landed; reporting nothing happened would be a lie, and reporting success is the bug
+                                    // #448 forbade by name. EX_PARTIAL (4), and the board is half-written on the record.
+                                    | Error(Errors.Partial(applied, failed)) ->
+                                        eprint
+                                            "fsgg-coord-engine: PARTIALLY APPLIED — the board is now half-written. This is NOT queued: replaying the document would rewrite the aliases that already landed."
 
-                            for alias in applied do
-                                eprint $"  APPLIED  %s{describe alias}"
+                                        for alias in applied do
+                                            eprint $"  APPLIED  %s{describe alias}"
 
-                            for alias, msg in failed do
-                                eprint $"  FAILED   %s{describe alias} — %s{msg}"
+                                        for alias, msg in failed do
+                                            eprint $"  FAILED   %s{describe alias} — %s{msg}"
 
-                            Errors.ExPartial
-                        | Error e -> fail e
-                        | Ok Board.Written ->
-                            printfn "set %d field(s) on %s in one aliased mutation:" (List.length writes) ref.Canonical
+                                        Errors.ExPartial
+                                    | Error e -> fail e
+                                    | Ok Board.Written ->
+                                        printfn
+                                            "set %d field(s) on %s in one aliased mutation:"
+                                            (List.length writes)
+                                            ref.Canonical
 
-                            for field, write in writes do
-                                printfn "  %s = %s" field (match write with | Board.Set v -> v | Board.Clear -> "<cleared>")
+                                        for field, write in writes do
+                                            printfn
+                                                "  %s = %s"
+                                                field
+                                                (match write with
+                                                 | Board.Set v -> v
+                                                 | Board.Clear -> "<cleared>")
 
-                            // .github#2690: the batch door onto the same intent channel. `requestedStatus`
-                            // above is already exactly the landed column — the batch is all-or-nothing at
-                            // this arm (a partial write is `Errors.Partial`, matched before it), so the
-                            // pair this records really did land together.
-                            match requestedStatus with
-                            | None -> ExitGreen
-                            | Some status ->
-                                match
-                                    recordExplicitStatusIntent ctx ref status $"explicit set-field --batch by %s{w.Id}"
-                                with
-                                | Ok() -> ExitGreen
-                                | Error why ->
-                                    eprint (explicitStatusIntentFailure ref status why)
-                                    ExitError
-                        | Ok Board.Deferred ->
-                            printfn
-                                "set-field --batch %s — QUEUED all %d field(s) (budget exhausted; flush replays the batch)"
-                                ref.Canonical
-                                (List.length writes)
+                                        // .github#2690: the batch door onto the same intent channel. `requestedStatus`
+                                        // above is already exactly the landed column — the batch is all-or-nothing at
+                                        // this arm (a partial write is `Errors.Partial`, matched before it), so the
+                                        // pair this records really did land together.
+                                        match requestedStatus with
+                                        | None -> ExitGreen
+                                        | Some status ->
+                                            match
+                                                recordExplicitStatusIntent
+                                                    ctx
+                                                    ref
+                                                    status
+                                                    $"explicit set-field --batch by %s{w.Id}"
+                                            with
+                                            | Ok() -> ExitGreen
+                                            | Error why ->
+                                                eprint (explicitStatusIntentFailure ref status why)
+                                                ExitError
+                                    | Ok Board.Deferred ->
+                                        printfn
+                                            "set-field --batch %s — QUEUED all %d field(s) (budget exhausted; flush replays the batch)"
+                                            ref.Canonical
+                                            (List.length writes)
 
-                            Errors.ExRate
-                        | Ok Board.NotOnBoard ->
-                            eprint $"fsgg-coord-engine: %s{ref.Canonical} is not an item on this board — nothing written."
-                            ExitError
+                                        Errors.ExRate
+                                    | Ok Board.NotOnBoard ->
+                                        eprint
+                                            $"fsgg-coord-engine: %s{ref.Canonical} is not an item on this board — nothing written."
+
+                                        ExitError
         | _ ->
             eprint "fsgg-coord-engine: set-field --batch takes <ref> followed by one or more Field=Value pairs."
             ExitError
@@ -914,111 +1061,136 @@ module Handlers =
             setFieldBatchCmd ctx opts
         else
 
-        match opts.Args with
-        | [ _; "Blocked by"; _ ] ->
-            eprint
-                "fsgg-coord-engine: bare replacement of the set-valued 'Blocked by' field is refused. Name the intent: --add REFS, --remove REFS, --replace REFS, or --clear."
+            match opts.Args with
+            | [ _; "Blocked by"; _ ] ->
+                eprint
+                    "fsgg-coord-engine: bare replacement of the set-valued 'Blocked by' field is refused. Name the intent: --add REFS, --remove REFS, --replace REFS, or --clear."
 
-            ExitError
-        | [ refArg; field; value ] ->
-            match parseRef ctx refArg, worker opts with
-            | Error msg, _ ->
-                eprint $"fsgg-coord-engine: %s{msg}"
                 ExitError
-            | _, Error c -> c
-            | Ok ref, Ok w ->
-                // The `Blocked by` gate runs FIRST — before any board read — so a refused value spends no
-                // GraphQL, and it produces the canonical value (or `Clear`) the write below emits.
-                match gateField ref field value with
-                | Error rc -> rc
-                | Ok write ->
+            | [ refArg; field; value ] ->
+                match parseRef ctx refArg, worker opts with
+                | Error msg, _ ->
+                    eprint $"fsgg-coord-engine: %s{msg}"
+                    ExitError
+                | _, Error c -> c
+                | Ok ref, Ok w ->
+                    // The `Blocked by` gate runs FIRST — before any board read — so a refused value spends no
+                    // GraphQL, and it produces the canonical value (or `Clear`) the write below emits.
+                    match gateField ref field value with
+                    | Error rc -> rc
+                    | Ok write ->
 
-                // AC1 (.github#2079): `set-field <ref> Status Blocked` is `release --status Blocked`'s
-                // other door onto the same park invariant — refused BEFORE any write when the row would
-                // land with neither a non-empty `Blocked by` field nor a `Blocked on: human/...` sentinel.
-                // A no-op for every other field/value pair (`requireCoherentParkIfBlocked` itself is a
-                // no-op unless the resolved status is `Blocked`).
-                match requireCoherentParkIfBlocked ctx ref (if field = "Status" then Reads.statusOfName value else None) with
-                | Error rc -> rc
-                | Ok() ->
+                        // AC1 (.github#2079): `set-field <ref> Status Blocked` is `release --status Blocked`'s
+                        // other door onto the same park invariant — refused BEFORE any write when the row would
+                        // land with neither a non-empty `Blocked by` field nor a `Blocked on: human/...` sentinel.
+                        // A no-op for every other field/value pair (`requireCoherentParkIfBlocked` itself is a
+                        // no-op unless the resolved status is `Blocked`).
+                        match
+                            requireCoherentParkIfBlocked
+                                ctx
+                                ref
+                                (if field = "Status" then Reads.statusOfName value else None)
+                        with
+                        | Error rc -> rc
+                        | Ok() ->
 
-                // .github#2698 — THE SEAM THE FILED AC MISSED AND THE ONE OPERATORS ACTUALLY USE. `add`
-                // with no `--status` defaults to `Backlog` (#1823), so `set-field <ref> Status Ready` is
-                // how a triaging host promotes a row; three of the seven instances the host measured on
-                // 2026-08-16 came through this exact command. Refused BEFORE any board read or write.
-                //
-                // Resolved off `write` — the canonical pair `gateField` produced — and not off raw argv,
-                // which is `.github#2690`'s own rule for the intent recorded further down this function:
-                // the column the board will actually hold is the one whose precondition must be checked.
-                let promotedStatus =
-                    if field = "Status" then
-                        match write with
-                        | Board.Set v -> Reads.statusOfName v
-                        | Board.Clear -> None
-                    else
-                        None
+                            // .github#2698 — THE SEAM THE FILED AC MISSED AND THE ONE OPERATORS ACTUALLY USE. `add`
+                            // with no `--status` defaults to `Backlog` (#1823), so `set-field <ref> Status Ready` is
+                            // how a triaging host promotes a row; three of the seven instances the host measured on
+                            // 2026-08-16 came through this exact command. Refused BEFORE any board read or write.
+                            //
+                            // Resolved off `write` — the canonical pair `gateField` produced — and not off raw argv,
+                            // which is `.github#2690`'s own rule for the intent recorded further down this function:
+                            // the column the board will actually hold is the one whose precondition must be checked.
+                            let promotedStatus =
+                                if field = "Status" then
+                                    match write with
+                                    | Board.Set v -> Reads.statusOfName v
+                                    | Board.Clear -> None
+                                else
+                                    None
 
-                match requireCurrentRouteIfReady ctx ref promotedStatus with
-                | Error rc -> rc
-                | Ok() ->
+                            match requireCurrentRouteIfReady ctx ref promotedStatus with
+                            | Error rc -> rc
+                            | Ok() ->
 
-                match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
-                | Error e -> fail e
-                | Ok board ->
-                    match Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number field write w.Id with
-                    | Error e -> fail e
-                    | Ok Board.Written ->
-                        printfn
-                            "set %s %s = %s"
-                            ref.Canonical
-                            field
-                            (match write with
-                             | Board.Set v -> v
-                             | Board.Clear -> "<cleared>")
+                                match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                                | Error e -> fail e
+                                | Ok board ->
+                                    match
+                                        Board.boardWrite
+                                            ctx.Transport
+                                            board
+                                            ref.Owner
+                                            ref.Repo
+                                            ref.Number
+                                            field
+                                            write
+                                            w.Id
+                                    with
+                                    | Error e -> fail e
+                                    | Ok Board.Written ->
+                                        printfn
+                                            "set %s %s = %s"
+                                            ref.Canonical
+                                            field
+                                            (match write with
+                                             | Board.Set v -> v
+                                             | Board.Clear -> "<cleared>")
 
-                        // .github#2690: THE COLUMN IS NOT THE DECISION. Read the landed value off `write`
-                        // — the canonical pair `gateField` produced — rather than off raw argv, exactly as
-                        // the batch arm does, so the intent recorded is the one the board actually holds.
-                        // A `Clear` records nothing: an emptied column is the absence of a choice.
-                        let landed =
-                            if field = "Status" then
-                                match write with
-                                | Board.Set v -> Reads.statusOfName v
-                                | Board.Clear -> None
-                            else
-                                None
+                                        // .github#2690: THE COLUMN IS NOT THE DECISION. Read the landed value off `write`
+                                        // — the canonical pair `gateField` produced — rather than off raw argv, exactly as
+                                        // the batch arm does, so the intent recorded is the one the board actually holds.
+                                        // A `Clear` records nothing: an emptied column is the absence of a choice.
+                                        let landed =
+                                            if field = "Status" then
+                                                match write with
+                                                | Board.Set v -> Reads.statusOfName v
+                                                | Board.Clear -> None
+                                            else
+                                                None
 
-                        match landed with
-                        | None -> ExitGreen
-                        | Some status ->
-                            match
-                                recordExplicitStatusIntent ctx ref status $"explicit set-field by %s{w.Id}"
-                            with
-                            | Ok() -> ExitGreen
-                            | Error why ->
-                                eprint (explicitStatusIntentFailure ref status why)
-                                ExitError
-                    | Ok Board.Deferred ->
-                        printfn
-                            "set %s %s = %s — QUEUED (budget exhausted; flush replays it)"
-                            ref.Canonical
-                            field
-                            (match write with
-                             | Board.Set v -> v
-                             | Board.Clear -> "<cleared>")
+                                        match landed with
+                                        | None -> ExitGreen
+                                        | Some status ->
+                                            match
+                                                recordExplicitStatusIntent
+                                                    ctx
+                                                    ref
+                                                    status
+                                                    $"explicit set-field by %s{w.Id}"
+                                            with
+                                            | Ok() -> ExitGreen
+                                            | Error why ->
+                                                eprint (explicitStatusIntentFailure ref status why)
+                                                ExitError
+                                    | Ok Board.Deferred ->
+                                        printfn
+                                            "set %s %s = %s — QUEUED (budget exhausted; flush replays it)"
+                                            ref.Canonical
+                                            field
+                                            (match write with
+                                             | Board.Set v -> v
+                                             | Board.Clear -> "<cleared>")
 
-                        Errors.ExRate
-                    | Ok Board.NotOnBoard ->
-                        eprint $"fsgg-coord-engine: %s{ref.Canonical} is not an item on this board — nothing written."
-                        ExitError
-        | _ ->
-            eprint "fsgg-coord-engine: set-field takes <ref> <field> <value>, or <ref> 'Blocked by' with one explicit set mutation."
-            ExitError
+                                        Errors.ExRate
+                                    | Ok Board.NotOnBoard ->
+                                        eprint
+                                            $"fsgg-coord-engine: %s{ref.Canonical} is not an item on this board — nothing written."
+
+                                        ExitError
+            | _ ->
+                eprint
+                    "fsgg-coord-engine: set-field takes <ref> <field> <value>, or <ref> 'Blocked by' with one explicit set mutation."
+
+                ExitError
 
     let setField (ctx: Context) (opts: Options) : int =
         match opts.Batch, opts.BlockedByMutation with
         | true, Some _ ->
-            eprint "fsgg-coord-engine: set-field --batch cannot be combined with --add, --remove, --replace, or --clear."
+            eprint
+                "fsgg-coord-engine: set-field --batch cannot be combined with --add, --remove, --replace, or --clear."
+
             ExitError
         | _, Some mutation -> setBlockedByMutation ctx opts mutation
         | _ -> setFieldPositional ctx opts
@@ -1043,6 +1215,7 @@ module Handlers =
                     | Error e ->
                         eprint
                             $"fsgg-coord-engine: child: cannot read %s{parent.Short}'s sub-issues (%s{Errors.explain e}) — refusing to guess whether %s{childRef.Short} is already linked."
+
                         ExitError
                     | Ok existing when List.contains childId existing ->
                         printfn "%s is already a sub-issue of %s — nothing to do" childRef.Short parent.Short
@@ -1080,7 +1253,8 @@ module Handlers =
                 // (heron-b71) can never see. `*` — anyone holding the item — is the one literal that is
                 // not a worker id. Slug via Identity.slug, the SAME normalization that creates ids (#485).
                 let normalizedTo =
-                    if toW = "*" then Ok "*"
+                    if toW = "*" then
+                        Ok "*"
                     else
                         match Identity.slug toW with
                         | "" -> Error $"say: --to '%s{toW}' is not a usable worker id."
@@ -1124,7 +1298,10 @@ module Handlers =
         // family-owned handler.  The central Client dispatcher must not know that one listed
         // BoardOps verb needs repository defaulting while another does not.
         let opts =
-            if opts.AllRepos then opts else { opts with Repo = scopedRepo opts }
+            if opts.AllRepos then
+                opts
+            else
+                { opts with Repo = scopedRepo opts }
 
         match worker opts with
         | Error c -> c
@@ -1285,7 +1462,13 @@ module Handlers =
                 ExitError
             else
                 let parsed = opts.Over |> List.map (fun t -> t, parseRef ctx t)
-                let bad = parsed |> List.choose (fun (t, r) -> match r with Error m -> Some(t, m) | Ok _ -> None)
+
+                let bad =
+                    parsed
+                    |> List.choose (fun (t, r) ->
+                        match r with
+                        | Error m -> Some(t, m)
+                        | Ok _ -> None)
 
                 match bad with
                 | _ :: _ ->
@@ -1317,11 +1500,13 @@ module Handlers =
                         // A cross-repo knot is cross-repo-coordination's domain (ADR-0001), not a room's.
                         let owner, repo = first.Owner, first.Repo
 
-                        let strangers =
-                            members |> List.filter (fun m -> m.Owner <> owner || m.Repo <> repo)
+                        let strangers = members |> List.filter (fun m -> m.Owner <> owner || m.Repo <> repo)
 
                         if not (List.isEmpty strangers) then
-                            let named = strangers |> List.map (fun m -> $"%s{m.Owner}/%s{m.Repo}#%d{m.Number}") |> String.concat ", "
+                            let named =
+                                strangers
+                                |> List.map (fun m -> $"%s{m.Owner}/%s{m.Repo}#%d{m.Number}")
+                                |> String.concat ", "
 
                             eprint
                                 $"fsgg-coord-engine: room open is intra-repo (ADR-0027 §5) — these members are outside %s{owner}/%s{repo}: %s{named}. A cross-repo knot is cross-repo-coordination's domain (ADR-0001), not a room's."
@@ -1329,51 +1514,51 @@ module Handlers =
                             ExitError
                         else
 
-                        let memberList = members |> List.map (fun r -> r.Short) |> String.concat ", "
-                        let title = $"coordination room over %s{memberList}"
+                            let memberList = members |> List.map (fun r -> r.Short) |> String.concat ", "
+                            let title = $"coordination room over %s{memberList}"
 
-                        let bodyText =
-                            $"Coordination room (ADR-0051), opened by worker %s{w.Id} over %s{memberList}.\n\n"
-                            + "Workers holding these items share this room's channel — reach it with `say` on this "
-                            + "issue and read it with `inbox`. Membership and lifecycle are DERIVED from the "
-                            + "`Rooms:` back-references on the items: this room closes itself when every referenced "
-                            + "item is done. Record any touch-set agreement as a `widen` on the real items, not here.\n\n"
-                            + "Paths: none"
+                            let bodyText =
+                                $"Coordination room (ADR-0051), opened by worker %s{w.Id} over %s{memberList}.\n\n"
+                                + "Workers holding these items share this room's channel — reach it with `say` on this "
+                                + "issue and read it with `inbox`. Membership and lifecycle are DERIVED from the "
+                                + "`Rooms:` back-references on the items: this room closes itself when every referenced "
+                                + "item is done. Record any touch-set agreement as a `widen` on the real items, not here.\n\n"
+                                + "Paths: none"
 
-                        match Writes.createRoom ctx.Transport owner repo title bodyText with
-                        | Error e -> fail e
-                        | Ok room ->
-                            // Every member shares the room's repo (enforced above), so the back-reference is a
-                            // bare `#n` — which `Rooms.parse`, defaulting a bare ref to the member's own repo,
-                            // resolves to exactly this room.
-                            let roomToken = $"#%d{room.Number}"
+                            match Writes.createRoom ctx.Transport owner repo title bodyText with
+                            | Error e -> fail e
+                            | Ok room ->
+                                // Every member shares the room's repo (enforced above), so the back-reference is a
+                                // bare `#n` — which `Rooms.parse`, defaulting a bare ref to the member's own repo,
+                                // resolves to exactly this room.
+                                let roomToken = $"#%d{room.Number}"
 
-                            let mutable failure: Errors.IoError option = None
+                                let mutable failure: Errors.IoError option = None
 
-                            for m in members do
-                                if failure.IsNone then
-                                    match Reads.issueBody ctx.Transport m.Owner m.Repo m.Number with
-                                    | Error e -> failure <- Some e
-                                    | Ok mbody ->
-                                        // Idempotent: a member already referencing the room keeps its one line
-                                        // rather than growing a duplicate (the union in `Rooms.parse` would
-                                        // collapse it anyway, but a clean body is worth the read).
-                                        if Rooms.parse m.Owner m.Repo mbody |> List.contains room then
-                                            ()
-                                        else
-                                            match Writes.writeRoomRef ctx.Transport m mbody roomToken with
-                                            | Error e -> failure <- Some e
-                                            | Ok() -> ()
+                                for m in members do
+                                    if failure.IsNone then
+                                        match Reads.issueBody ctx.Transport m.Owner m.Repo m.Number with
+                                        | Error e -> failure <- Some e
+                                        | Ok mbody ->
+                                            // Idempotent: a member already referencing the room keeps its one line
+                                            // rather than growing a duplicate (the union in `Rooms.parse` would
+                                            // collapse it anyway, but a clean body is worth the read).
+                                            if Rooms.parse m.Owner m.Repo mbody |> List.contains room then
+                                                ()
+                                            else
+                                                match Writes.writeRoomRef ctx.Transport m mbody roomToken with
+                                                | Error e -> failure <- Some e
+                                                | Ok() -> ()
 
-                            match failure with
-                            | Some e ->
-                                eprint
-                                    $"fsgg-coord-engine: room %s{room.Short} was created, but a `Rooms:` back-reference could not be written: %s{Errors.explain e}. The room exists; wire the remaining members by hand or re-run."
+                                match failure with
+                                | Some e ->
+                                    eprint
+                                        $"fsgg-coord-engine: room %s{room.Short} was created, but a `Rooms:` back-reference could not be written: %s{Errors.explain e}. The room exists; wire the remaining members by hand or re-run."
 
-                                Errors.exitCode e
-                            | None ->
-                                printfn "opened room %s over %s" room.Short memberList
-                                ExitGreen
+                                    Errors.exitCode e
+                                | None ->
+                                    printfn "opened room %s over %s" room.Short memberList
+                                    ExitGreen
 
 
     let bootstrapCmd (ctx: Context) (opts: Options) : int =
@@ -1385,7 +1570,13 @@ module Handlers =
         match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
         | Error e -> fail e
         | Ok board ->
-            printfn "bootstrapped board #%d '%s' in %s (%d fields)" board.Number board.Title board.Owner (Map.count board.Fields)
+            printfn
+                "bootstrapped board #%d '%s' in %s (%d fields)"
+                board.Number
+                board.Title
+                board.Owner
+                (Map.count board.Fields)
+
             ExitGreen
 
     let boardCmd (ctx: Context) : int =
@@ -1495,13 +1686,17 @@ module Handlers =
                     | Json ->
                         let doc =
                             JsonSerializer.Serialize(
-                                {| ref = ref.Short
-                                   totalEdits = provenance.Total
-                                   edits =
-                                    provenance.Edits
-                                    |> List.map (fun edit ->
-                                        {| editedAt = edit.EditedAt.ToString "o"
-                                           editor = edit.EditorLogin |> Option.toObj |}) |}
+                                {|
+                                    ref = ref.Short
+                                    totalEdits = provenance.Total
+                                    edits =
+                                        provenance.Edits
+                                        |> List.map (fun edit ->
+                                            {|
+                                                editedAt = edit.EditedAt.ToString "o"
+                                                editor = edit.EditorLogin |> Option.toObj
+                                            |})
+                                |}
                             )
 
                         printfn "%s" doc
@@ -1533,7 +1728,11 @@ module Handlers =
 
     let private capabilitySegment (value: string) =
         value
-        |> Seq.map (fun c -> if Char.IsLetterOrDigit c || c = '-' || c = '_' then c else '-')
+        |> Seq.map (fun c ->
+            if Char.IsLetterOrDigit c || c = '-' || c = '_' then
+                c
+            else
+                '-')
         |> Seq.toArray
         |> String
 
@@ -1541,7 +1740,9 @@ module Handlers =
     type CommentCapability internal (operationDirectory: string, path: string, body: string) =
         member _.Path = path
         member _.Body = body
-        member _.Cleanup() = Directory.Delete(operationDirectory, true)
+
+        member _.Cleanup() =
+            Directory.Delete(operationDirectory, true)
 
     let allocateCommentCapability (worker: string) (item: Ref) (source: string) =
         let mutable recoveryPath = None
@@ -1554,10 +1755,15 @@ module Handlers =
             else
                 let attributes = File.GetAttributes sourcePath
 
-                if attributes.HasFlag FileAttributes.Directory || attributes.HasFlag FileAttributes.ReparsePoint then
+                if
+                    attributes.HasFlag FileAttributes.Directory
+                    || attributes.HasFlag FileAttributes.ReparsePoint
+                then
                     Error $"source must be a regular, non-symbolic file: %s{sourcePath}"
                 else
-                    let operationId = Convert.ToHexString(RandomNumberGenerator.GetBytes 16).ToLowerInvariant()
+                    let operationId =
+                        Convert.ToHexString(RandomNumberGenerator.GetBytes 16).ToLowerInvariant()
+
                     let operationDirectory =
                         Path.Combine(
                             Path.GetTempPath(),
@@ -1575,17 +1781,20 @@ module Handlers =
                     Ok(CommentCapability(operationDirectory, capabilityPath, body))
         with ex ->
             match recoveryPath with
-            | Some path -> Error $"capability allocation failed; recovery capability preserved at %s{path}: %s{ex.Message}"
+            | Some path ->
+                Error $"capability allocation failed; recovery capability preserved at %s{path}: %s{ex.Message}"
             | None -> Error ex.Message
 
     [<Literal>]
     let private LifecycleCommentMarker = "<!-- fsgg:item-lifecycle/v1 -->"
 
     type private LifecycleAppendKey =
-        { RunId: string
-          UnitId: string
-          Revision: int
-          PreviousDigest: string option }
+        {
+            RunId: string
+            UnitId: string
+            Revision: int
+            PreviousDigest: string option
+        }
 
     let private lifecycleAppendKey (item: Ref) (body: string) : Errors.IoResult<LifecycleAppendKey option> =
         if not (body.StartsWith(LifecycleCommentMarker, StringComparison.Ordinal)) then
@@ -1594,11 +1803,18 @@ module Handlers =
             let prefix = LifecycleCommentMarker + "\n```json\n"
             let suffix = "\n```\n"
 
-            if not (body.StartsWith(prefix, StringComparison.Ordinal) && body.EndsWith(suffix, StringComparison.Ordinal)) then
+            if
+                not (
+                    body.StartsWith(prefix, StringComparison.Ordinal)
+                    && body.EndsWith(suffix, StringComparison.Ordinal)
+                )
+            then
                 Error(Errors.Malformed(item.Short, "lifecycle comment must contain exactly one fenced JSON event"))
             else
                 try
-                    let json = body.Substring(prefix.Length, body.Length - prefix.Length - suffix.Length)
+                    let json =
+                        body.Substring(prefix.Length, body.Length - prefix.Length - suffix.Length)
+
                     use document = JsonDocument.Parse json
                     let root = document.RootElement
                     let mutable runElement = Unchecked.defaultof<JsonElement>
@@ -1609,39 +1825,52 @@ module Handlers =
                     let mutable revision = 0
                     let mutable sequence = 0
 
-                    if root.ValueKind <> JsonValueKind.Object
-                       || not (root.TryGetProperty("run_id", &runElement))
-                       || runElement.ValueKind <> JsonValueKind.String
-                       || not (root.TryGetProperty("unit_id", &unitElement))
-                       || unitElement.ValueKind <> JsonValueKind.String
-                       || not (root.TryGetProperty("revision", &revisionElement))
-                       || not (revisionElement.TryGetInt32(&revision))
-                       || not (root.TryGetProperty("sequence", &sequenceElement))
-                       || not (sequenceElement.TryGetInt32(&sequence))
-                       || revision <= 0
-                       || sequence <> revision
-                       || not (root.TryGetProperty("previous_digest", &previousElement)) then
-                        Error(Errors.Malformed(item.Short, "lifecycle event has no valid run/unit/revision/predecessor append key"))
+                    if
+                        root.ValueKind <> JsonValueKind.Object
+                        || not (root.TryGetProperty("run_id", &runElement))
+                        || runElement.ValueKind <> JsonValueKind.String
+                        || not (root.TryGetProperty("unit_id", &unitElement))
+                        || unitElement.ValueKind <> JsonValueKind.String
+                        || not (root.TryGetProperty("revision", &revisionElement))
+                        || not (revisionElement.TryGetInt32(&revision))
+                        || not (root.TryGetProperty("sequence", &sequenceElement))
+                        || not (sequenceElement.TryGetInt32(&sequence))
+                        || revision <= 0
+                        || sequence <> revision
+                        || not (root.TryGetProperty("previous_digest", &previousElement))
+                    then
+                        Error(
+                            Errors.Malformed(
+                                item.Short,
+                                "lifecycle event has no valid run/unit/revision/predecessor append key"
+                            )
+                        )
                     else
                         let previous =
                             match previousElement.ValueKind with
                             | JsonValueKind.Null -> Ok None
                             | JsonValueKind.String -> Ok(Some(previousElement.GetString()))
-                            | _ -> Error(Errors.Malformed(item.Short, "lifecycle previous_digest must be a string or null"))
+                            | _ ->
+                                Error(
+                                    Errors.Malformed(item.Short, "lifecycle previous_digest must be a string or null")
+                                )
 
                         previous
                         |> Result.bind (fun predecessor ->
                             let runId = runElement.GetString()
                             let unitId = unitElement.GetString()
+
                             if String.IsNullOrWhiteSpace runId || String.IsNullOrWhiteSpace unitId then
                                 Error(Errors.Malformed(item.Short, "lifecycle run_id and unit_id must be non-empty"))
                             else
                                 Ok(
                                     Some
-                                        { RunId = runId
-                                          UnitId = unitId
-                                          Revision = revision
-                                          PreviousDigest = predecessor }
+                                        {
+                                            RunId = runId
+                                            UnitId = unitId
+                                            Revision = revision
+                                            PreviousDigest = predecessor
+                                        }
                                 ))
                 with :? JsonException as error ->
                     Error(Errors.Malformed(item.Short, $"lifecycle event JSON is invalid: %s{error.Message}"))
@@ -1659,17 +1888,26 @@ module Handlers =
                 Reads.commentsWithIdentity ctx.Transport item.Owner item.Repo item.Number
                 |> Result.bind (fun comments ->
                     comments
-                    |> List.fold (fun state comment ->
-                        state
-                        |> Result.bind (fun candidates ->
-                            lifecycleAppendKey item comment.Body
-                            |> Result.map (function
-                                | Some candidate when candidate = proposed -> comment.Id :: candidates
-                                | _ -> candidates))) (Ok [])
+                    |> List.fold
+                        (fun state comment ->
+                            state
+                            |> Result.bind (fun candidates ->
+                                lifecycleAppendKey item comment.Body
+                                |> Result.map (function
+                                    | Some candidate when candidate = proposed -> comment.Id :: candidates
+                                    | _ -> candidates)))
+                        (Ok [])
                     |> Result.bind (function
-                        | [] -> Error(Errors.Malformed(item.Short, "lifecycle append disappeared from authoritative readback"))
+                        | [] ->
+                            Error(
+                                Errors.Malformed(
+                                    item.Short,
+                                    "lifecycle append disappeared from authoritative readback"
+                                )
+                            )
                         | candidates ->
                             let winner = List.min candidates
+
                             if winner = receipt.CommentId then
                                 Ok receipt
                             else
@@ -1691,7 +1929,12 @@ module Handlers =
         if not (body.StartsWith(LifecycleCommentMarker, StringComparison.Ordinal)) then
             Ok()
         elif target.Canonical <> item.Canonical then
-            Error(Errors.Malformed(item.Short, "lifecycle comments must be appended to their canonical item, not another target"))
+            Error(
+                Errors.Malformed(
+                    item.Short,
+                    "lifecycle comments must be appended to their canonical item, not another target"
+                )
+            )
         else
             Reads.markerScan ctx.Transport item.Owner item.Repo item.Number
             |> Result.bind (Reads.requireCompleteMarkerScan item.Short)
@@ -1707,7 +1950,8 @@ module Handlers =
                             $"lifecycle append authority belongs to claim worker '%s{marker.Worker.Value}', not '%s{worker.Id}'"
                         )
                     )
-                | None -> Error(Errors.Malformed(item.Short, "no live claim marker can serialize this lifecycle append")))
+                | None ->
+                    Error(Errors.Malformed(item.Short, "no live claim marker can serialize this lifecycle append")))
 
     let commentCmd (ctx: Context) (opts: Options) : int =
         let parsed =
@@ -1717,18 +1961,26 @@ module Handlers =
                 match Int64.TryParse commentId with
                 | true, id when id > 0L -> Ok("amend", targetArg, itemArg, Some id, source)
                 | _ -> Error "comment amend: COMMENT-ID must be a positive integer"
-            | _ -> Error "comment: usage comment <create TARGET ITEM FILE|amend TARGET ITEM COMMENT-ID FILE> [--json|--text]"
+            | _ ->
+                Error
+                    "comment: usage comment <create TARGET ITEM FILE|amend TARGET ITEM COMMENT-ID FILE> [--json|--text]"
 
         match parsed with
-        | Error message -> eprint $"fsgg-coord-engine: %s{message}"; ExitError
+        | Error message ->
+            eprint $"fsgg-coord-engine: %s{message}"
+            ExitError
         | Ok(operation, targetArg, itemArg, commentId, source) ->
             match parseRef ctx targetArg, parseRef ctx itemArg, worker opts with
             | Error message, _, _
-            | _, Error message, _ -> eprint $"fsgg-coord-engine: %s{message}"; ExitError
+            | _, Error message, _ ->
+                eprint $"fsgg-coord-engine: %s{message}"
+                ExitError
             | _, _, Error code -> code
             | Ok target, Ok item, Ok w ->
                 match allocateCommentCapability w.Id item source with
-                | Error message -> eprint $"fsgg-coord-engine: comment: %s{message}"; ExitError
+                | Error message ->
+                    eprint $"fsgg-coord-engine: comment: %s{message}"
+                    ExitError
                 | Ok capability ->
                     match authorizeLifecycleComment ctx opts target item w capability.Body with
                     | Error error ->
@@ -1744,7 +1996,9 @@ module Handlers =
 
                         match result with
                         | Error error ->
-                            eprint $"fsgg-coord-engine: comment %s{operation} failed; recovery capability preserved at %s{capability.Path}"
+                            eprint
+                                $"fsgg-coord-engine: comment %s{operation} failed; recovery capability preserved at %s{capability.Path}"
+
                             fail error
                         | Ok receipt ->
                             try
@@ -1753,21 +2007,33 @@ module Handlers =
                                 match opts.Render with
                                 | Json ->
                                     JsonSerializer.Serialize(
-                                        {| schema = "fsgg.coord.comment-mutation-result/v1"
-                                           operation = operation
-                                           target = target.Canonical
-                                           item = item.Canonical
-                                           commentId = receipt.CommentId
-                                           byteLength = receipt.ByteLength
-                                           sha256 = receipt.Sha256
-                                           cleanup = "removed" |}
-                                    ) |> printfn "%s"
+                                        {|
+                                            schema = "fsgg.coord.comment-mutation-result/v1"
+                                            operation = operation
+                                            target = target.Canonical
+                                            item = item.Canonical
+                                            commentId = receipt.CommentId
+                                            byteLength = receipt.ByteLength
+                                            sha256 = receipt.Sha256
+                                            cleanup = "removed"
+                                        |}
+                                    )
+                                    |> printfn "%s"
                                 | Text ->
-                                    printfn "comment %s verified: target=%s item=%s id=%d bytes=%d sha256=%s cleanup=removed" operation target.Canonical item.Canonical receipt.CommentId receipt.ByteLength receipt.Sha256
+                                    printfn
+                                        "comment %s verified: target=%s item=%s id=%d bytes=%d sha256=%s cleanup=removed"
+                                        operation
+                                        target.Canonical
+                                        item.Canonical
+                                        receipt.CommentId
+                                        receipt.ByteLength
+                                        receipt.Sha256
 
                                 ExitGreen
                             with ex ->
-                                eprint $"fsgg-coord-engine: comment %s{operation} was remotely verified, but cleanup failed; recovery capability remains at %s{capability.Path}: %s{ex.Message}"
+                                eprint
+                                    $"fsgg-coord-engine: comment %s{operation} was remotely verified, but cleanup failed; recovery capability remains at %s{capability.Path}: %s{ex.Message}"
+
                                 ExitError
 
     // The column `add` writes when the caller names none (.github#1823).
@@ -1864,274 +2130,329 @@ module Handlers =
                 | Error e -> fail e
                 | Ok body ->
 
-                match outOfVocabularyClass body with
-                | Some detail ->
-                    eprint $"fsgg-coord-engine: refusing to board %s{ref.Short} — %s{detail} Fix the body line and re-run `add`."
-                    ExitError
-                | None ->
-
-                let laneOfOneWarning =
-                    match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
-                    | Error e -> Some($"could not inspect sibling declarations ({Errors.explain e})")
-                    | Ok board ->
-                        match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
-                        | Error e -> Some($"could not inspect sibling declarations ({Errors.explain e})")
-                        | Ok rows ->
-                            match Scan.snapshot ctx.Transport rows (Some ref.Repo) true None opts.LeaseMinutes with
-                            | Error e -> Some($"could not inspect sibling declarations ({Errors.explain e})")
-                            | Ok(doc, _) ->
-                                match Snapshot.parse doc with
-                                | Error errors ->
-                                    let detail = sprintf "%A" errors
-                                    Some($"could not inspect sibling declarations ({detail})")
-                                | Ok request ->
-                                    let siblings = filingLaneOfOne ref (TouchSet.parse body) (request.Candidates |> List.map _.Item)
-                                    if List.isEmpty siblings then None
-                                    else
-                                        let names = siblings |> List.map _.Short |> String.concat ", "
-                                        Some($"its Paths: declaration strictly contains {names}. A directory token reserves future files beneath it too, so this is a lane of one; narrow the holding declaration or sequence the work.")
-
-                laneOfOneWarning |> Option.iter (fun warning -> eprint $"fsgg-coord-engine: filing advisory for %s{ref.Short} — %s{warning}")
-
-                // .github#2305/ADR-0044 — ADVISORY, not a refusal, and DELIBERATELY not the same shape as
-                // `updateTouchSet`'s hard refusal. `add` boards a body ALREADY WRITTEN on GitHub (`gh issue
-                // create`, or a human/host editor); there is no `--paths` write for this command to refuse
-                // — the declaration to react to already exists. Refusing to board it entirely would strand
-                // an authored issue off every scheduler until somebody edits the live issue body to fix
-                // it, and an issue-body edit invalidates that item's delivery-route receipt `subjectRevision`
-                // (`pnext-item`'s own binding rule) — a strictly worse remedy than a stderr note for what
-                // is, today, silent: `.github#2216` is open right now with both
-                // `registry/driver-skill-manifest.json` and `registry/coordination-kit-skill-manifest.json`
-                // verbatim in its live `Paths:`, filed before this warning existed and unnoticed until the
-                // critic's repair-1 review found it. This closes that half of the gap — a filer/host now
-                // learns immediately, on the same stderr surface `laneOfOneWarning` already uses — while
-                // `widen`/`set-paths` (`updateTouchSet` above) remain the hard gate against a NEW
-                // declaration, which is the door this engine actually controls.
-                let generatedTokenWarning =
-                    let generated =
-                        match KitDigest.kitRoot () with
-                        | Some root -> generatedPathCollector root
-                        | None -> Set.empty
-
-                    match TouchSet.generatedTokens generated (declaredPathTokens (TouchSet.parse body)) with
-                    | [] -> None
-                    | tokens ->
-                        let named = String.concat ", " tokens
-
-                        Some(
-                            $"its Paths: declaration names {named} — a generated, CI-gated artifact (ADR-0044): nobody authors it, so declaring it reserves nothing, and a later widen naming it will be refused for the same reason. Narrow the Paths: line on the issue."
-                        )
-
-                generatedTokenWarning
-                |> Option.iter (fun warning -> eprint $"fsgg-coord-engine: filing advisory for %s{ref.Short} — %s{warning}")
-
-                match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
-                | Error e -> fail e
-                | Ok board ->
-
-                // AN EXPLICIT `--status` IS CHECKED BEFORE ANYTHING IS WRITTEN, and it costs zero
-                // GraphQL: `bootstrapCached` has already resolved the column's options, so the check is
-                // free and it precedes the add.
-                //
-                // Checked here, and not left to the write, because of what the write does with a refusal.
-                // The Status write is deliberately NON-FATAL — the row is boarded, so a red would send a
-                // filer back to re-run `add` rather than to the field write actually owed — and that is
-                // right for a DEFAULT nobody asked for. It is wrong for an instruction: `add --status Redy`
-                // would board the row, print the id, note the refusal, and exit 0, leaving a row with NO
-                // column at all. The flag added to close "a boarded row invisible to every scheduler"
-                // would itself be a way to produce one, on a green exit. `set-field` exits non-zero for
-                // the same value, and this must not be the weaker verb it says it is.
-                //
-                // NOTHING HAS BEEN WRITTEN when this refuses, and the remedy is: fix the value, re-run.
-                // `add` is idempotent, so the retry is free — `outOfVocabularyClass` above, exactly.
-                let explicitStatus =
-                    match opts.Status with
-                    | None -> Ok None
-                    | Some name ->
-                        match Map.tryFind "Status" board.Fields with
-                        | Some { Type = Board.SingleSelect options } when Map.containsKey name options -> Ok(Some name)
-                        | Some { Type = Board.SingleSelect options } ->
-                            let known = options |> Map.keys |> String.concat ", "
-
-                            Error
-                                $"'%s{name}' is not a column on this board's `Status` field. Known columns: %s{known}. Nothing was written — fix the value and re-run `add` (it is idempotent, so the retry is free)."
-                        | Some _ -> Error "this board's `Status` field is not a single-select, so `--status` cannot name a column on it."
-                        | None ->
-                            let known = board.Fields |> Map.keys |> String.concat ", "
-
-                            Error $"this board has no `Status` field at all, so `--status` names nothing. Known fields: %s{known}."
-
-                match explicitStatus with
-                | Error detail ->
-                    eprint $"fsgg-coord-engine: refusing to board %s{ref.Short} — %s{detail}"
-                    ExitError
-                | Ok explicitStatus ->
-
-                // #2109: `add --status Blocked` is a Status writer, not merely an add with a
-                // convenient flag. Establish the coherent-park invariant BEFORE item-add: after it,
-                // the otherwise-invalid board row already exists. Reuse the shared gate so the live
-                // `Blocked by` field and the human sentinel keep exactly the same meaning as the
-                // other explicit Status=Blocked doors.
-                match requireCoherentParkIfBlocked ctx ref (if explicitStatus = Some "Blocked" then Some BoardStatus.Blocked else None) with
-                | Error c -> c
-                | Ok() ->
-
-                // .github#2698 AC1 — `add --status Ready` is a Status writer, exactly as `--status
-                // Blocked` is directly above, and it establishes its precondition in the same place and
-                // for the same reason: BEFORE item-add, because after it the otherwise-invisible board row
-                // already exists and `add` is documented as green once the row is boarded, so a later
-                // refusal could not undo it.
-                //
-                // AC2 — THE OTHER COLUMNS ARE UNTOUCHED. `explicitStatus` is `None` for a bare `add`, so
-                // the #1823 `Backlog` default below never reaches this gate, and neither does `--status
-                // Backlog` or `--status Blocked`. A row that is deliberately not yet schedulable owes no
-                // route decision; that is the whole point of parking it.
-                match requireCurrentRouteIfReady ctx ref (if explicitStatus = Some "Ready" then Some BoardStatus.Ready else None) with
-                | Error c -> c
-                | Ok() ->
-
-                match Board.addItem ctx.Transport board ref.Owner ref.Repo ref.Number with
-                | Error e -> fail e
-                | Ok outcome ->
-
-                // ALREADY THERE IS A SUCCESS, and it exits 0. `add` is the second line of the recipe's
-                // filing procedure, so a close-out pass, a retry, or two workers racing the same
-                // follow-up all reach it — and none of them is an error. It says so on stderr and puts
-                // the id on stdout, so a caller piping it gets an id either way.
-                let itemId =
-                    match outcome with
-                    | Board.AlreadyOnBoard id ->
-                        eprint $"fsgg-coord-engine: %s{ref.Short} is already on board '%s{ctx.Title}'."
-                        id
-                    | Board.AddedToBoard id ->
-                        eprint $"added %s{ref.Short} to board '%s{ctx.Title}'."
-                        id
-
-                // THE ID GOES OUT BEFORE THE COLUMN IS SETTLED, unconditionally. `add`'s promise is
-                // "this issue is on the board, here is its item id", and that promise is already kept
-                // by the time we get here. Every Status outcome below is a note ABOUT a row that is
-                // boarded; none of them may swallow the id a caller is piping.
-                printfn "%s" itemId
-
-                // THE IDENTITY IS RESOLVED HERE, AFTER THE ROW IS BOARDED, AND NEVER BEFORE IT.
-                //
-                // The deferral queue is keyed on the worker id, so a board write needs one — but #1823
-                // explicitly REFUSED to make `add` refuse: *"`add` is called mid-item by a worker who
-                // has just found something outside its touch-set, and a refusal at that moment is how a
-                // finding ends up in a report instead of on the board."* Resolving before the add would
-                // turn a working `add` into a refusal for any caller with no identity ladder, which is
-                // that same failure wearing this change's badge. So the column is what degrades, loudly
-                // and by name, and `add`'s own promise is untouched.
-                //
-                // Through `worker`, not `Identity.resolve`, so the #419 shared-session WARNING fires here
-                // as it does on every other verb that writes. `add` is now one of them, and a write verb
-                // that alone stays silent about a shared id is the one place the warning is missing.
-                let write (value: string) (why: string) : int =
-                    match worker opts with
-                    | Error _ ->
+                    match outOfVocabularyClass body with
+                    | Some detail ->
                         eprint
-                            $"fsgg-coord-engine: %s{ref.Short} IS on the board (its id is on stdout), but Status was NOT set to '%s{value}' — a board write is queued against a worker id and this process could not derive one. The refusal above says how to fix it; then:  scripts/fsgg-coord set-field %s{ref.Short} Status %s{value}"
+                            $"fsgg-coord-engine: refusing to board %s{ref.Short} — %s{detail} Fix the body line and re-run `add`."
 
-                        ExitGreen
+                        ExitError
+                    | None ->
 
-                    | Ok w ->
+                        let laneOfOneWarning =
+                            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                            | Error e -> Some($"could not inspect sibling declarations ({Errors.explain e})")
+                            | Ok board ->
+                                match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
+                                | Error e -> Some($"could not inspect sibling declarations ({Errors.explain e})")
+                                | Ok rows ->
+                                    match
+                                        Scan.snapshot ctx.Transport rows (Some ref.Repo) true None opts.LeaseMinutes
+                                    with
+                                    | Error e -> Some($"could not inspect sibling declarations ({Errors.explain e})")
+                                    | Ok(doc, _) ->
+                                        match Snapshot.parse doc with
+                                        | Error errors ->
+                                            let detail = sprintf "%A" errors
+                                            Some($"could not inspect sibling declarations ({detail})")
+                                        | Ok request ->
+                                            let siblings =
+                                                filingLaneOfOne
+                                                    ref
+                                                    (TouchSet.parse body)
+                                                    (request.Candidates |> List.map _.Item)
 
-                    let writeOutcome =
-                        Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set value) w.Id
+                                            if List.isEmpty siblings then
+                                                None
+                                            else
+                                                let names = siblings |> List.map _.Short |> String.concat ", "
 
-                    match writeOutcome with
-                    | Ok Board.Written ->
-                        eprint $"fsgg-coord-engine: Status=%s{value} on %s{ref.Short} — %s{why}"
+                                                Some(
+                                                    $"its Paths: declaration strictly contains {names}. A directory token reserves future files beneath it too, so this is a lane of one; narrow the holding declaration or sequence the work."
+                                                )
 
-                        // .github#2690 direction C — THE ONE WITH NO OPERATOR IN IT AT ALL, and the reason
-                        // this arm covers the #1823 DEFAULT and not only `--status`. The stderr line
-                        // immediately above promises a freshly filed row is *"VISIBLE to triage, but NOT
-                        // startable … promoting it there is a deliberate act"*. That sentence was false:
-                        // nothing recorded the park, so the next `reconcile --apply` pass derived `Auto`
-                        // from the row's own declared paths and promoted it, with no operator anywhere in
-                        // the loop. `#2678`, `#2679`, `#2683`, `#2684` and `#2688` all read `Ready` within
-                        // the hour of being filed to `Backlog`. Recording the intent is what makes the
-                        // promise above true.
-                        //
-                        // `add`'s verdict stays GREEN for the reason its own `| _ ->` arm gives: the row IS
-                        // boarded, which is what `add` was asked to do, and reddening here would send a
-                        // filer back to re-run `add` rather than to the one write that is owed. The
-                        // consequence is on stderr, named, with the command that finishes it.
-                        // A SHORT, STABLE REASON — never `why`. `why` is the paragraph this verb prints to a
-                        // human; the reason is `Uri.EscapeDataString`d into a wire marker that every later
-                        // reconcile pass re-reads, and splicing four hundred characters of prose into it
-                        // would make the row's own receipt unreadable for no gain.
-                        let intentReason =
+                        laneOfOneWarning
+                        |> Option.iter (fun warning ->
+                            eprint $"fsgg-coord-engine: filing advisory for %s{ref.Short} — %s{warning}")
+
+                        // .github#2305/ADR-0044 — ADVISORY, not a refusal, and DELIBERATELY not the same shape as
+                        // `updateTouchSet`'s hard refusal. `add` boards a body ALREADY WRITTEN on GitHub (`gh issue
+                        // create`, or a human/host editor); there is no `--paths` write for this command to refuse
+                        // — the declaration to react to already exists. Refusing to board it entirely would strand
+                        // an authored issue off every scheduler until somebody edits the live issue body to fix
+                        // it, and an issue-body edit invalidates that item's delivery-route receipt `subjectRevision`
+                        // (`pnext-item`'s own binding rule) — a strictly worse remedy than a stderr note for what
+                        // is, today, silent: `.github#2216` is open right now with both
+                        // `registry/driver-skill-manifest.json` and `registry/coordination-kit-skill-manifest.json`
+                        // verbatim in its live `Paths:`, filed before this warning existed and unnoticed until the
+                        // critic's repair-1 review found it. This closes that half of the gap — a filer/host now
+                        // learns immediately, on the same stderr surface `laneOfOneWarning` already uses — while
+                        // `widen`/`set-paths` (`updateTouchSet` above) remain the hard gate against a NEW
+                        // declaration, which is the door this engine actually controls.
+                        let generatedTokenWarning =
+                            let generated =
+                                match KitDigest.kitRoot () with
+                                | Some root -> generatedPathCollector root
+                                | None -> Set.empty
+
+                            match TouchSet.generatedTokens generated (declaredPathTokens (TouchSet.parse body)) with
+                            | [] -> None
+                            | tokens ->
+                                let named = String.concat ", " tokens
+
+                                Some(
+                                    $"its Paths: declaration names {named} — a generated, CI-gated artifact (ADR-0044): nobody authors it, so declaring it reserves nothing, and a later widen naming it will be refused for the same reason. Narrow the Paths: line on the issue."
+                                )
+
+                        generatedTokenWarning
+                        |> Option.iter (fun warning ->
+                            eprint $"fsgg-coord-engine: filing advisory for %s{ref.Short} — %s{warning}")
+
+                        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                        | Error e -> fail e
+                        | Ok board ->
+
+                            // AN EXPLICIT `--status` IS CHECKED BEFORE ANYTHING IS WRITTEN, and it costs zero
+                            // GraphQL: `bootstrapCached` has already resolved the column's options, so the check is
+                            // free and it precedes the add.
+                            //
+                            // Checked here, and not left to the write, because of what the write does with a refusal.
+                            // The Status write is deliberately NON-FATAL — the row is boarded, so a red would send a
+                            // filer back to re-run `add` rather than to the field write actually owed — and that is
+                            // right for a DEFAULT nobody asked for. It is wrong for an instruction: `add --status Redy`
+                            // would board the row, print the id, note the refusal, and exit 0, leaving a row with NO
+                            // column at all. The flag added to close "a boarded row invisible to every scheduler"
+                            // would itself be a way to produce one, on a green exit. `set-field` exits non-zero for
+                            // the same value, and this must not be the weaker verb it says it is.
+                            //
+                            // NOTHING HAS BEEN WRITTEN when this refuses, and the remedy is: fix the value, re-run.
+                            // `add` is idempotent, so the retry is free — `outOfVocabularyClass` above, exactly.
+                            let explicitStatus =
+                                match opts.Status with
+                                | None -> Ok None
+                                | Some name ->
+                                    match Map.tryFind "Status" board.Fields with
+                                    | Some { Type = Board.SingleSelect options } when Map.containsKey name options ->
+                                        Ok(Some name)
+                                    | Some { Type = Board.SingleSelect options } ->
+                                        let known = options |> Map.keys |> String.concat ", "
+
+                                        Error
+                                            $"'%s{name}' is not a column on this board's `Status` field. Known columns: %s{known}. Nothing was written — fix the value and re-run `add` (it is idempotent, so the retry is free)."
+                                    | Some _ ->
+                                        Error
+                                            "this board's `Status` field is not a single-select, so `--status` cannot name a column on it."
+                                    | None ->
+                                        let known = board.Fields |> Map.keys |> String.concat ", "
+
+                                        Error
+                                            $"this board has no `Status` field at all, so `--status` names nothing. Known fields: %s{known}."
+
                             match explicitStatus with
-                            | Some _ -> "explicit add --status"
-                            | None -> "add filed this row to Backlog pending triage (#1823)"
+                            | Error detail ->
+                                eprint $"fsgg-coord-engine: refusing to board %s{ref.Short} — %s{detail}"
+                                ExitError
+                            | Ok explicitStatus ->
 
-                        match Reads.statusOfName value with
-                        | None -> ExitGreen
-                        | Some status ->
-                            match recordExplicitStatusIntent ctx ref status intentReason with
-                            | Ok() -> ExitGreen
-                            | Error reason ->
-                                eprint (explicitStatusIntentFailure ref status reason)
-                                eprint
-                                    $"fsgg-coord-engine: the row IS boarded and its Status IS set, so `add` is green — but re-run the column write to record the intent:  scripts/fsgg-coord set-field %s{ref.Short} Status %s{value}"
+                                // #2109: `add --status Blocked` is a Status writer, not merely an add with a
+                                // convenient flag. Establish the coherent-park invariant BEFORE item-add: after it,
+                                // the otherwise-invalid board row already exists. Reuse the shared gate so the live
+                                // `Blocked by` field and the human sentinel keep exactly the same meaning as the
+                                // other explicit Status=Blocked doors.
+                                match
+                                    requireCoherentParkIfBlocked
+                                        ctx
+                                        ref
+                                        (if explicitStatus = Some "Blocked" then
+                                             Some BoardStatus.Blocked
+                                         else
+                                             None)
+                                with
+                                | Error c -> c
+                                | Ok() ->
 
-                                ExitGreen
-                    | _ ->
-                        // Deferred / NotOnBoard / a failed mutation. `boardWriteNote` names what did
-                        // NOT land and the exact command that finishes it. The verdict stays green:
-                        // the ROW IS BOARDED, which is what `add` was asked to do and what its stdout
-                        // now says — and reporting a red here would send a filer back to re-run `add`
-                        // rather than to the one-field write that is actually owed. (An explicit
-                        // `--status` cannot reach here on a bad VALUE — that was refused above, before
-                        // the add — so what remains is genuinely a transport or budget condition.)
-                        boardWriteNote ref "Status" value writeOutcome
-                        ExitGreen
+                                    // .github#2698 AC1 — `add --status Ready` is a Status writer, exactly as `--status
+                                    // Blocked` is directly above, and it establishes its precondition in the same place and
+                                    // for the same reason: BEFORE item-add, because after it the otherwise-invisible board row
+                                    // already exists and `add` is documented as green once the row is boarded, so a later
+                                    // refusal could not undo it.
+                                    //
+                                    // AC2 — THE OTHER COLUMNS ARE UNTOUCHED. `explicitStatus` is `None` for a bare `add`, so
+                                    // the #1823 `Backlog` default below never reaches this gate, and neither does `--status
+                                    // Backlog` or `--status Blocked`. A row that is deliberately not yet schedulable owes no
+                                    // route decision; that is the whole point of parking it.
+                                    match
+                                        requireCurrentRouteIfReady
+                                            ctx
+                                            ref
+                                            (if explicitStatus = Some "Ready" then
+                                                 Some BoardStatus.Ready
+                                             else
+                                                 None)
+                                    with
+                                    | Error c -> c
+                                    | Ok() ->
 
-                match explicitStatus with
-                // AC2 — AN EXPLICIT STATUS STILL WINS. `--status` is the caller naming the column, so
-                // it is written whatever is there: this is `set-field <ref> Status <S>` reached from
-                // `add`, and #1823 makes only the DEFAULT conditional. A flag accepted and then
-                // silently declined would be #867's defect, on the flag #867 is about.
-                | Some explicit ->
-                    write explicit "you named it with --status (an explicit column always wins over the #1823 default)."
+                                        match Board.addItem ctx.Transport board ref.Owner ref.Repo ref.Number with
+                                        | Error e -> fail e
+                                        | Ok outcome ->
 
-                | None ->
+                                            // ALREADY THERE IS A SUCCESS, and it exits 0. `add` is the second line of the recipe's
+                                            // filing procedure, so a close-out pass, a retry, or two workers racing the same
+                                            // follow-up all reach it — and none of them is an error. It says so on stderr and puts
+                                            // the id on stdout, so a caller piping it gets an id either way.
+                                            let itemId =
+                                                match outcome with
+                                                | Board.AlreadyOnBoard id ->
+                                                    eprint
+                                                        $"fsgg-coord-engine: %s{ref.Short} is already on board '%s{ctx.Title}'."
 
-                // AC4 — THE IDEMPOTENCE ARM, AND IT IS THE ONLY ARM. Read the column, then prefer
-                // whatever is already there. This is what a "just set Status on add" change gets wrong.
-                //
-                // THE FRESHLY-ADDED CASE USED TO SKIP THIS READ and it was wrong to. The justification was
-                // "a new project item has no field values, and #421's guard means `AddedToBoard` only
-                // follows a definite not-on-board read" — but `Board.addItem`'s own docstring records the
-                // opposite about the mutation: `addProjectV2ItemById` is idempotent SERVER-side and
-                // returns the EXISTING item's id for an issue already on the board. So `AddedToBoard`
-                // means "the lookup did not find it", never "the item is new" — and that lookup is
-                // `projectItems(first: 20)` with no pagination, so a successful read can miss a row that
-                // is on the board carrying a live column. One unpaginated miss and the default would have
-                // overwritten it. That is the ONE direction this change destroys information, asserted to
-                // be impossible rather than made so. It costs one GraphQL point on a once-per-filing verb
-                // (#418) to stop asserting it.
-                match Board.itemStatus ctx.Transport board ref.Owner ref.Repo ref.Number with
-                | Error e ->
-                    // #266. NOT MEASURED is not `Ok None`. We could not read the column, so we may
-                    // not assert it is empty, and defaulting on an unread column is exactly how
-                    // this change would destroy information instead of adding it.
-                    eprint
-                        $"fsgg-coord-engine: %s{ref.Short} is on the board, but its Status could NOT BE READ (%s{Errors.explain e}) — so the #1823 default was NOT applied. That is a read that did not happen, not an empty column, and defaulting over one would overwrite whatever is really there. Check it:  scripts/fsgg-coord ready --all --repo %s{ref.Repo}"
+                                                    id
+                                                | Board.AddedToBoard id ->
+                                                    eprint $"added %s{ref.Short} to board '%s{ctx.Title}'."
+                                                    id
 
-                    ExitGreen
+                                            // THE ID GOES OUT BEFORE THE COLUMN IS SETTLED, unconditionally. `add`'s promise is
+                                            // "this issue is on the board, here is its item id", and that promise is already kept
+                                            // by the time we get here. Every Status outcome below is a note ABOUT a row that is
+                                            // boarded; none of them may swallow the id a caller is piping.
+                                            printfn "%s" itemId
 
-                | Ok(Some existing) ->
-                    eprint
-                        $"fsgg-coord-engine: %s{ref.Short} already has Status='%s{statusWireName existing}' — LEFT AS IT IS. The #1823 default only ever fills an EMPTY column, so re-running `add` never walks a row somebody set back to Backlog."
+                                            // THE IDENTITY IS RESOLVED HERE, AFTER THE ROW IS BOARDED, AND NEVER BEFORE IT.
+                                            //
+                                            // The deferral queue is keyed on the worker id, so a board write needs one — but #1823
+                                            // explicitly REFUSED to make `add` refuse: *"`add` is called mid-item by a worker who
+                                            // has just found something outside its touch-set, and a refusal at that moment is how a
+                                            // finding ends up in a report instead of on the board."* Resolving before the add would
+                                            // turn a working `add` into a refusal for any caller with no identity ladder, which is
+                                            // that same failure wearing this change's badge. So the column is what degrades, loudly
+                                            // and by name, and `add`'s own promise is untouched.
+                                            //
+                                            // Through `worker`, not `Identity.resolve`, so the #419 shared-session WARNING fires here
+                                            // as it does on every other verb that writes. `add` is now one of them, and a write verb
+                                            // that alone stays silent about a shared id is the one place the warning is missing.
+                                            let write (value: string) (why: string) : int =
+                                                match worker opts with
+                                                | Error _ ->
+                                                    eprint
+                                                        $"fsgg-coord-engine: %s{ref.Short} IS on the board (its id is on stdout), but Status was NOT set to '%s{value}' — a board write is queued against a worker id and this process could not derive one. The refusal above says how to fix it; then:  scripts/fsgg-coord set-field %s{ref.Short} Status %s{value}"
 
-                    ExitGreen
+                                                    ExitGreen
 
-                | Ok None ->
-                    write
-                        AddDefaultStatus
-                        $"the #1823 default, because you named none. The row is ON the board and VISIBLE to triage, but NOT startable: a scheduler takes `Ready`, and promoting it there is a deliberate act. Use `--status <column>` to choose, or `set-field %s{ref.Short} Status Ready` once it is triaged."
+                                                | Ok w ->
+
+                                                    let writeOutcome =
+                                                        Board.boardWrite
+                                                            ctx.Transport
+                                                            board
+                                                            ref.Owner
+                                                            ref.Repo
+                                                            ref.Number
+                                                            "Status"
+                                                            (Board.Set value)
+                                                            w.Id
+
+                                                    match writeOutcome with
+                                                    | Ok Board.Written ->
+                                                        eprint
+                                                            $"fsgg-coord-engine: Status=%s{value} on %s{ref.Short} — %s{why}"
+
+                                                        // .github#2690 direction C — THE ONE WITH NO OPERATOR IN IT AT ALL, and the reason
+                                                        // this arm covers the #1823 DEFAULT and not only `--status`. The stderr line
+                                                        // immediately above promises a freshly filed row is *"VISIBLE to triage, but NOT
+                                                        // startable … promoting it there is a deliberate act"*. That sentence was false:
+                                                        // nothing recorded the park, so the next `reconcile --apply` pass derived `Auto`
+                                                        // from the row's own declared paths and promoted it, with no operator anywhere in
+                                                        // the loop. `#2678`, `#2679`, `#2683`, `#2684` and `#2688` all read `Ready` within
+                                                        // the hour of being filed to `Backlog`. Recording the intent is what makes the
+                                                        // promise above true.
+                                                        //
+                                                        // `add`'s verdict stays GREEN for the reason its own `| _ ->` arm gives: the row IS
+                                                        // boarded, which is what `add` was asked to do, and reddening here would send a
+                                                        // filer back to re-run `add` rather than to the one write that is owed. The
+                                                        // consequence is on stderr, named, with the command that finishes it.
+                                                        // A SHORT, STABLE REASON — never `why`. `why` is the paragraph this verb prints to a
+                                                        // human; the reason is `Uri.EscapeDataString`d into a wire marker that every later
+                                                        // reconcile pass re-reads, and splicing four hundred characters of prose into it
+                                                        // would make the row's own receipt unreadable for no gain.
+                                                        let intentReason =
+                                                            match explicitStatus with
+                                                            | Some _ -> "explicit add --status"
+                                                            | None ->
+                                                                "add filed this row to Backlog pending triage (#1823)"
+
+                                                        match Reads.statusOfName value with
+                                                        | None -> ExitGreen
+                                                        | Some status ->
+                                                            match
+                                                                recordExplicitStatusIntent ctx ref status intentReason
+                                                            with
+                                                            | Ok() -> ExitGreen
+                                                            | Error reason ->
+                                                                eprint (explicitStatusIntentFailure ref status reason)
+
+                                                                eprint
+                                                                    $"fsgg-coord-engine: the row IS boarded and its Status IS set, so `add` is green — but re-run the column write to record the intent:  scripts/fsgg-coord set-field %s{ref.Short} Status %s{value}"
+
+                                                                ExitGreen
+                                                    | _ ->
+                                                        // Deferred / NotOnBoard / a failed mutation. `boardWriteNote` names what did
+                                                        // NOT land and the exact command that finishes it. The verdict stays green:
+                                                        // the ROW IS BOARDED, which is what `add` was asked to do and what its stdout
+                                                        // now says — and reporting a red here would send a filer back to re-run `add`
+                                                        // rather than to the one-field write that is actually owed. (An explicit
+                                                        // `--status` cannot reach here on a bad VALUE — that was refused above, before
+                                                        // the add — so what remains is genuinely a transport or budget condition.)
+                                                        boardWriteNote ref "Status" value writeOutcome
+                                                        ExitGreen
+
+                                            match explicitStatus with
+                                            // AC2 — AN EXPLICIT STATUS STILL WINS. `--status` is the caller naming the column, so
+                                            // it is written whatever is there: this is `set-field <ref> Status <S>` reached from
+                                            // `add`, and #1823 makes only the DEFAULT conditional. A flag accepted and then
+                                            // silently declined would be #867's defect, on the flag #867 is about.
+                                            | Some explicit ->
+                                                write
+                                                    explicit
+                                                    "you named it with --status (an explicit column always wins over the #1823 default)."
+
+                                            | None ->
+
+                                                // AC4 — THE IDEMPOTENCE ARM, AND IT IS THE ONLY ARM. Read the column, then prefer
+                                                // whatever is already there. This is what a "just set Status on add" change gets wrong.
+                                                //
+                                                // THE FRESHLY-ADDED CASE USED TO SKIP THIS READ and it was wrong to. The justification was
+                                                // "a new project item has no field values, and #421's guard means `AddedToBoard` only
+                                                // follows a definite not-on-board read" — but `Board.addItem`'s own docstring records the
+                                                // opposite about the mutation: `addProjectV2ItemById` is idempotent SERVER-side and
+                                                // returns the EXISTING item's id for an issue already on the board. So `AddedToBoard`
+                                                // means "the lookup did not find it", never "the item is new" — and that lookup is
+                                                // `projectItems(first: 20)` with no pagination, so a successful read can miss a row that
+                                                // is on the board carrying a live column. One unpaginated miss and the default would have
+                                                // overwritten it. That is the ONE direction this change destroys information, asserted to
+                                                // be impossible rather than made so. It costs one GraphQL point on a once-per-filing verb
+                                                // (#418) to stop asserting it.
+                                                match
+                                                    Board.itemStatus ctx.Transport board ref.Owner ref.Repo ref.Number
+                                                with
+                                                | Error e ->
+                                                    // #266. NOT MEASURED is not `Ok None`. We could not read the column, so we may
+                                                    // not assert it is empty, and defaulting on an unread column is exactly how
+                                                    // this change would destroy information instead of adding it.
+                                                    eprint
+                                                        $"fsgg-coord-engine: %s{ref.Short} is on the board, but its Status could NOT BE READ (%s{Errors.explain e}) — so the #1823 default was NOT applied. That is a read that did not happen, not an empty column, and defaulting over one would overwrite whatever is really there. Check it:  scripts/fsgg-coord ready --all --repo %s{ref.Repo}"
+
+                                                    ExitGreen
+
+                                                | Ok(Some existing) ->
+                                                    eprint
+                                                        $"fsgg-coord-engine: %s{ref.Short} already has Status='%s{statusWireName existing}' — LEFT AS IT IS. The #1823 default only ever fills an EMPTY column, so re-running `add` never walks a row somebody set back to Backlog."
+
+                                                    ExitGreen
+
+                                                | Ok None ->
+                                                    write
+                                                        AddDefaultStatus
+                                                        $"the #1823 default, because you named none. The row is ON the board and VISIBLE to triage, but NOT startable: a scheduler takes `Ready`, and promoting it there is a deliberate act. Use `--status <column>` to choose, or `set-field %s{ref.Short} Status Ready` once it is triaged."
         | _ ->
             eprint "fsgg-coord-engine: add takes <ref> (a URL, owner/repo#n, or repo#n)."
             ExitError
@@ -2343,18 +2664,39 @@ module Handlers =
     // from a later board result.
     let intakeCmd (ctx: Context) (opts: Options) : int =
         match opts.Args with
-        | "authorize" :: refArgs when not(List.isEmpty refArgs) ->
+        | "authorize" :: refArgs when not (List.isEmpty refArgs) ->
             let gate = BoardIntake.Gate(ctx.Transport)
-            let rec authorize acc = function
+
+            let rec authorize acc =
+                function
                 | [] -> Ok(List.rev acc)
                 | refArg :: rest ->
                     match parseRef ctx refArg with
-                    | Error reason -> Error(Errors.Malformed(refArg,reason))
-                    | Ok itemRef -> gate.Authorize(itemRef.Owner,itemRef.Repo,itemRef.Number) |> Result.bind (fun admission -> authorize ((itemRef,admission)::acc) rest)
+                    | Error reason -> Error(Errors.Malformed(refArg, reason))
+                    | Ok itemRef ->
+                        gate.Authorize(itemRef.Owner, itemRef.Repo, itemRef.Number)
+                        |> Result.bind (fun admission -> authorize ((itemRef, admission) :: acc) rest)
+
             match authorize [] refArgs with
             | Error error -> fail error
             | Ok admissions ->
-                printfn "%s" (JsonSerializer.Serialize(admissions |> List.map (fun (itemRef,admission) -> {| schema = "fsgg.coord.board-intake-admission/1"; issue = itemRef.Canonical; repositoryId = admission.RepositoryId; issueId = admission.IssueId; updatedAt = admission.UpdatedAt; authorId = admission.AuthorId; authorLogin = admission.AuthorLogin; permission = admission.Permission |})))
+                printfn
+                    "%s"
+                    (JsonSerializer.Serialize(
+                        admissions
+                        |> List.map (fun (itemRef, admission) ->
+                            {|
+                                schema = "fsgg.coord.board-intake-admission/1"
+                                issue = itemRef.Canonical
+                                repositoryId = admission.RepositoryId
+                                issueId = admission.IssueId
+                                updatedAt = admission.UpdatedAt
+                                authorId = admission.AuthorId
+                                authorLogin = admission.AuthorLogin
+                                permission = admission.Permission
+                            |})
+                    ))
+
                 ExitGreen
         | [ "validate"; _ ] ->
             // Keep the pure, token-free production route behind the registered family handler.
@@ -2363,23 +2705,60 @@ module Handlers =
             IntakeApplication.run opts
         | [ action; path ] ->
             match IntakeApplication.readDraft path, action with
-            | Error reason, _ -> eprint $"fsgg-coord-engine: intake: %s{reason}"; ExitError
+            | Error reason, _ ->
+                eprint $"fsgg-coord-engine: intake: %s{reason}"
+                ExitError
             | Ok draft, "apply" ->
-                match Intake.validate draft |> Result.bind (fun valid -> IntakeApplication.validateLivePaths valid |> Result.map (fun () -> valid) |> Result.mapError (fun reason -> [ { Intake.Finding.Field = "paths"; Detail = reason } ])) with
-                | Error findings -> eprint (findings |> List.map (fun f -> $"%s{f.Field} %s{f.Detail}") |> String.concat "; "); ExitError
+                match
+                    Intake.validate draft
+                    |> Result.bind (fun valid ->
+                        IntakeApplication.validateLivePaths valid
+                        |> Result.map (fun () -> valid)
+                        |> Result.mapError (fun reason ->
+                            [
+                                {
+                                    Intake.Finding.Field = "paths"
+                                    Detail = reason
+                                }
+                            ]))
+                with
+                | Error findings ->
+                    eprint (
+                        findings
+                        |> List.map (fun f -> $"%s{f.Field} %s{f.Detail}")
+                        |> String.concat "; "
+                    )
+
+                    ExitError
                 | Ok _ ->
                     let dependencyGuard =
                         match draft.BlockedBy with
                         | None -> Ok()
                         | Some raw ->
                             match parseRefIn draft.Owner (Some draft.Repository) raw with
-                            | Error reason -> Error(Errors.Malformed(draft.Id, $"Blocked dependency is not canonical: %s{reason}"))
+                            | Error reason ->
+                                Error(Errors.Malformed(draft.Id, $"Blocked dependency is not canonical: %s{reason}"))
                             | Ok dependency ->
                                 Reads.blockerState ctx.Transport dependency.Owner dependency.Repo dependency.Number
                                 |> Result.bind (function
                                     | Types.BlockerOpen -> Ok()
-                                    | Types.BlockerClosed | Types.BlockerMerged -> Error(Errors.Malformed(draft.Id, $"Blocked dependency %s{dependency.Canonical} is already resolved"))
-                                    | Types.BlockerUnknown | Types.BlockerUnparseable -> Error(Errors.Malformed(draft.Id, $"Blocked dependency %s{dependency.Canonical} is not live/readable")))
+                                    | Types.BlockerClosed
+                                    | Types.BlockerMerged ->
+                                        Error(
+                                            Errors.Malformed(
+                                                draft.Id,
+                                                $"Blocked dependency %s{dependency.Canonical} is already resolved"
+                                            )
+                                        )
+                                    | Types.BlockerUnknown
+                                    | Types.BlockerUnparseable ->
+                                        Error(
+                                            Errors.Malformed(
+                                                draft.Id,
+                                                $"Blocked dependency %s{dependency.Canonical} is not live/readable"
+                                            )
+                                        ))
+
                     let receiptTransactionCore () =
                         match Cache.getIntakeReceipt draft.Id with
                         | Error e -> Error(Errors.Malformed(draft.Id, e))
@@ -2390,84 +2769,158 @@ module Handlers =
                                 Writes.canonicalizeIntake ctx.Transport r draft
                                 |> Result.bind (fun () ->
                                     let canonical =
-                                        { r with DraftDigest = IntakeReceipt.digest draft }
+                                        { r with
+                                            DraftDigest = IntakeReceipt.digest draft
+                                        }
+
                                     Cache.putIntakeReceipt canonical
                                     |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
                                     |> Result.map (fun () ->
-                                        { Owner = canonical.Owner
-                                          Repo = canonical.Repository
-                                          Number = canonical.IssueNumber })))
+                                        {
+                                            Owner = canonical.Owner
+                                            Repo = canonical.Repository
+                                            Number = canonical.IssueNumber
+                                        })))
                         | Ok None ->
                             let digest = IntakeReceipt.digest draft
+
                             let intent =
                                 Cache.getIntakeIntent draft.Id
                                 |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
                                 |> Result.bind (function
                                     | None -> Ok None
-                                    | Some stored when stored.Owner = draft.Owner && stored.Repository = draft.Repository && (IntakeReceipt.compatibleDigests draft |> List.contains stored.DraftDigest) -> Ok(Some stored)
-                                    | Some _ -> Error(Errors.Malformed(draft.Id, "intake intent does not match this draft")))
-                            intent |> Result.bind (fun intent ->
-                              Reads.duplicateCandidates ctx.Transport draft.Owner draft.Repository
-                              |> Result.bind (fun candidates ->
-                                let matches = candidates |> List.filter (fun c -> c.Title = draft.Title)
-                                let provenanceMarkers =
-                                    IntakeReceipt.compatibleDigests draft
-                                    |> List.map (fun compatibleDigest ->
-                                        compatibleDigest,
-                                        $"<!-- fsgg:intake:v1 id=%s{draft.Id} digest=%s{compatibleDigest} -->")
-                                let persist number =
-                                    let receipt: IntakeReceipt.Receipt = { DraftId = draft.Id; Owner = draft.Owner; Repository = draft.Repository; IssueNumber = number; DraftDigest = digest }
-                                    Cache.putIntakeReceipt receipt |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
-                                    |> Result.map (fun () -> { Owner = draft.Owner; Repo = draft.Repository; Number = number })
-                                match draft.Disposition, matches, intent with
-                                | Some Intake.Reuse, [ c ], _ -> persist c.Number
-                                | Some Intake.Reuse, [], _ -> Error(Errors.Malformed(draft.Id, "reuse was selected but no duplicate candidate matches the title"))
-                                | Some Intake.Reuse, _, _ -> Error(Errors.Malformed(draft.Id, "reuse is ambiguous because multiple duplicate candidates match the title"))
-                                | Some Intake.Create, [ c ], Some _ when not c.IsPullRequest ->
-                                    match
-                                        provenanceMarkers
-                                        |> List.tryFind (fun (_, marker) -> c.Body.Contains(marker, StringComparison.Ordinal))
-                                    with
-                                    | None ->
-                                        Error(Errors.Malformed(draft.Id, "the durable intake intent found a same-title issue without a compatible provenance marker"))
-                                    | Some(predecessorDigest, _) ->
-                                        let predecessorReceipt: IntakeReceipt.Receipt =
-                                            { DraftId = draft.Id
-                                              Owner = draft.Owner
-                                              Repository = draft.Repository
-                                              IssueNumber = c.Number
-                                              DraftDigest = predecessorDigest }
-                                        Writes.canonicalizeIntake ctx.Transport predecessorReceipt draft
-                                        |> Result.bind (fun () -> persist c.Number)
-                                | Some Intake.Create, _ :: _, _ ->
-                                    Error(Errors.Malformed(draft.Id, "a duplicate candidate matches the title; select reuse or revise the draft"))
-                                | Some Intake.Create, [], _ ->
-                                    let intent: Cache.IntakeIntent = { DraftId = draft.Id; Owner = draft.Owner; Repository = draft.Repository; DraftDigest = digest }
-                                    Cache.putIntakeIntent intent
-                                    |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
-                                    |> Result.bind (fun () -> Writes.createIntake ctx.Transport draft)
-                                    |> Result.bind (fun created ->
-                                        match persist created.Number with
-                                        | Ok issue -> Ok issue
-                                        | Error error ->
-                                            eprint $"fsgg-coord-engine: intake apply partially completed draft '%s{draft.Id}': issue %s{created.Canonical} was created, but its receipt could not be persisted. Retry this draft with the same id to recover the provenance-bound issue without another issue-create POST."
-                                            Error error)
-                                | None, _, _ -> Error(Errors.Malformed(draft.Id, "draft disposition is missing"))))
-                    let receiptTransaction () = dependencyGuard |> Result.bind (fun () -> receiptTransactionCore ())
+                                    | Some stored when
+                                        stored.Owner = draft.Owner
+                                        && stored.Repository = draft.Repository
+                                        && (IntakeReceipt.compatibleDigests draft |> List.contains stored.DraftDigest)
+                                        ->
+                                        Ok(Some stored)
+                                    | Some _ ->
+                                        Error(Errors.Malformed(draft.Id, "intake intent does not match this draft")))
+
+                            intent
+                            |> Result.bind (fun intent ->
+                                Reads.duplicateCandidates ctx.Transport draft.Owner draft.Repository
+                                |> Result.bind (fun candidates ->
+                                    let matches = candidates |> List.filter (fun c -> c.Title = draft.Title)
+
+                                    let provenanceMarkers =
+                                        IntakeReceipt.compatibleDigests draft
+                                        |> List.map (fun compatibleDigest ->
+                                            compatibleDigest,
+                                            $"<!-- fsgg:intake:v1 id=%s{draft.Id} digest=%s{compatibleDigest} -->")
+
+                                    let persist number =
+                                        let receipt: IntakeReceipt.Receipt =
+                                            {
+                                                DraftId = draft.Id
+                                                Owner = draft.Owner
+                                                Repository = draft.Repository
+                                                IssueNumber = number
+                                                DraftDigest = digest
+                                            }
+
+                                        Cache.putIntakeReceipt receipt
+                                        |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
+                                        |> Result.map (fun () ->
+                                            {
+                                                Owner = draft.Owner
+                                                Repo = draft.Repository
+                                                Number = number
+                                            })
+
+                                    match draft.Disposition, matches, intent with
+                                    | Some Intake.Reuse, [ c ], _ -> persist c.Number
+                                    | Some Intake.Reuse, [], _ ->
+                                        Error(
+                                            Errors.Malformed(
+                                                draft.Id,
+                                                "reuse was selected but no duplicate candidate matches the title"
+                                            )
+                                        )
+                                    | Some Intake.Reuse, _, _ ->
+                                        Error(
+                                            Errors.Malformed(
+                                                draft.Id,
+                                                "reuse is ambiguous because multiple duplicate candidates match the title"
+                                            )
+                                        )
+                                    | Some Intake.Create, [ c ], Some _ when not c.IsPullRequest ->
+                                        match
+                                            provenanceMarkers
+                                            |> List.tryFind (fun (_, marker) ->
+                                                c.Body.Contains(marker, StringComparison.Ordinal))
+                                        with
+                                        | None ->
+                                            Error(
+                                                Errors.Malformed(
+                                                    draft.Id,
+                                                    "the durable intake intent found a same-title issue without a compatible provenance marker"
+                                                )
+                                            )
+                                        | Some(predecessorDigest, _) ->
+                                            let predecessorReceipt: IntakeReceipt.Receipt =
+                                                {
+                                                    DraftId = draft.Id
+                                                    Owner = draft.Owner
+                                                    Repository = draft.Repository
+                                                    IssueNumber = c.Number
+                                                    DraftDigest = predecessorDigest
+                                                }
+
+                                            Writes.canonicalizeIntake ctx.Transport predecessorReceipt draft
+                                            |> Result.bind (fun () -> persist c.Number)
+                                    | Some Intake.Create, _ :: _, _ ->
+                                        Error(
+                                            Errors.Malformed(
+                                                draft.Id,
+                                                "a duplicate candidate matches the title; select reuse or revise the draft"
+                                            )
+                                        )
+                                    | Some Intake.Create, [], _ ->
+                                        let intent: Cache.IntakeIntent =
+                                            {
+                                                DraftId = draft.Id
+                                                Owner = draft.Owner
+                                                Repository = draft.Repository
+                                                DraftDigest = digest
+                                            }
+
+                                        Cache.putIntakeIntent intent
+                                        |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
+                                        |> Result.bind (fun () -> Writes.createIntake ctx.Transport draft)
+                                        |> Result.bind (fun created ->
+                                            match persist created.Number with
+                                            | Ok issue -> Ok issue
+                                            | Error error ->
+                                                eprint
+                                                    $"fsgg-coord-engine: intake apply partially completed draft '%s{draft.Id}': issue %s{created.Canonical} was created, but its receipt could not be persisted. Retry this draft with the same id to recover the provenance-bound issue without another issue-create POST."
+
+                                                Error error)
+                                    | None, _, _ -> Error(Errors.Malformed(draft.Id, "draft disposition is missing"))))
+
+                    let receiptTransaction () =
+                        dependencyGuard |> Result.bind (fun () -> receiptTransactionCore ())
+
                     let receiptResult =
                         Cache.withIntakeLock draft.Id receiptTransaction
                         |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
                         |> Result.bind id
+
                     match receiptResult with
                     | Error e -> fail e
                     | Ok issue ->
                         let reportPartial () =
-                            eprint $"fsgg-coord-engine: intake apply partially completed draft '%s{draft.Id}': issue %s{issue.Canonical} already exists; board projection is incomplete. Retry this corrected draft with the same id to resume without another issue-create POST."
+                            eprint
+                                $"fsgg-coord-engine: intake apply partially completed draft '%s{draft.Id}': issue %s{issue.Canonical} already exists; board projection is incomplete. Retry this corrected draft with the same id to resume without another issue-create POST."
+
                         let failProjection e =
                             reportPartial ()
                             fail e
+
                         let preProjectionReadyGuard =
-                            if draft.Status <> "Ready" then Ok()
+                            if draft.Status <> "Ready" then
+                                Ok()
                             else
                                 Reads.issueBody ctx.Transport issue.Owner issue.Repo issue.Number
                                 |> Result.bind (fun body ->
@@ -2486,12 +2939,26 @@ module Handlers =
                                         | DeliveryRoute.Current _ -> Ok()
                                         | DeliveryRoute.Stale reasons
                                         | DeliveryRoute.Unreadable reasons ->
-                                            Error(Errors.Malformed(draft.Id, "Ready is refused until a current delivery-route receipt exists: " + String.concat "; " reasons)))
-                        match preProjectionReadyGuard, Reads.issueState ctx.Transport issue.Owner issue.Repo issue.Number, Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title, worker opts with
+                                            Error(
+                                                Errors.Malformed(
+                                                    draft.Id,
+                                                    "Ready is refused until a current delivery-route receipt exists: "
+                                                    + String.concat "; " reasons
+                                                )
+                                            ))
+
+                        match
+                            preProjectionReadyGuard,
+                            Reads.issueState ctx.Transport issue.Owner issue.Repo issue.Number,
+                            Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title,
+                            worker opts
+                        with
                         | Error e, _, _, _ -> failProjection e
                         | _, Error e, _, _ -> failProjection e
                         | _, _, Error e, _ -> failProjection e
-                        | _, _, _, Error code -> reportPartial (); code
+                        | _, _, _, Error code ->
+                            reportPartial ()
+                            code
                         | Ok(), Ok issueState, Ok board, Ok w ->
                             // ADR-0045: the Projects-v2 column is the dependency edge's sole authority.
                             // Body prose is a projection written by intake and is deliberately absent
@@ -2565,17 +3032,19 @@ module Handlers =
                                     | Error e -> failProjection e
                                     | Ok _ ->
                                         let writes =
-                                            [ yield "Status", Board.Set draft.Status
-                                              yield "Class", Board.Set draft.Class
-                                              match draft.Phase with
-                                              | Some value -> yield "Phase", Board.Set value
-                                              | None -> ()
-                                              match draft.Severity with
-                                              | Some value -> yield "Severity", Board.Set value
-                                              | None -> ()
-                                              match draft.BlockedBy with
-                                              | Some value -> yield "Blocked by", Board.Set value
-                                              | None -> () ]
+                                            [
+                                                yield "Status", Board.Set draft.Status
+                                                yield "Class", Board.Set draft.Class
+                                                match draft.Phase with
+                                                | Some value -> yield "Phase", Board.Set value
+                                                | None -> ()
+                                                match draft.Severity with
+                                                | Some value -> yield "Severity", Board.Set value
+                                                | None -> ()
+                                                match draft.BlockedBy with
+                                                | Some value -> yield "Blocked by", Board.Set value
+                                                | None -> ()
+                                            ]
 
                                         let dependencyFresh =
                                             dependencyObservationNow ()
@@ -2607,11 +3076,17 @@ module Handlers =
                                         | Error e -> failProjection e
                                         | Ok Board.Deferred ->
                                             reportPartial ()
-                                            eprint "fsgg-coord-engine: intake projection is queued; retry after flush (no second POST)."
+
+                                            eprint
+                                                "fsgg-coord-engine: intake projection is queued; retry after flush (no second POST)."
+
                                             Errors.ExRate
                                         | Ok Board.NotOnBoard ->
                                             reportPartial ()
-                                            eprint "fsgg-coord-engine: intake add did not produce a readable board item."
+
+                                            eprint
+                                                "fsgg-coord-engine: intake add did not produce a readable board item."
+
                                             ExitError
                                         | Ok Board.Written ->
                                             for field, write in writes do
@@ -2619,37 +3094,88 @@ module Handlers =
                                                     match write with
                                                     | Board.Set value -> value
                                                     | Board.Clear -> ""
+
                                                 let queued: Cache.Deferred =
-                                                    { Ref = issue.Canonical; Field = field; Value = value; At = ""; Worker = w.Id
-                                                      Board = Some(board.Owner, board.Title) }
+                                                    {
+                                                        Ref = issue.Canonical
+                                                        Field = field
+                                                        Value = value
+                                                        At = ""
+                                                        Worker = w.Id
+                                                        Board = Some(board.Owner, board.Title)
+                                                    }
+
                                                 Cache.dropPending queued
+
                                             let readback =
                                                 writes
-                                                |> List.fold (fun state (field, write) ->
-                                                    state |> Result.bind (fun () ->
-                                                        let expected =
-                                                            match write with
-                                                            | Board.Set value -> Some value
-                                                            | Board.Clear -> None
-                                                        Board.itemFieldValue ctx.Transport board issue.Owner issue.Repo issue.Number field
-                                                        |> Result.bind (fun actual ->
-                                                            if actual = expected then Ok()
-                                                            else Error(Errors.Malformed(draft.Id, $"fresh %s{field} readback did not match the requested projection"))))
-                                                ) (Ok())
+                                                |> List.fold
+                                                    (fun state (field, write) ->
+                                                        state
+                                                        |> Result.bind (fun () ->
+                                                            let expected =
+                                                                match write with
+                                                                | Board.Set value -> Some value
+                                                                | Board.Clear -> None
+
+                                                            Board.itemFieldValue
+                                                                ctx.Transport
+                                                                board
+                                                                issue.Owner
+                                                                issue.Repo
+                                                                issue.Number
+                                                                field
+                                                            |> Result.bind (fun actual ->
+                                                                if actual = expected then
+                                                                    Ok()
+                                                                else
+                                                                    Error(
+                                                                        Errors.Malformed(
+                                                                            draft.Id,
+                                                                            $"fresh %s{field} readback did not match the requested projection"
+                                                                        )
+                                                                    ))))
+                                                    (Ok())
+
                                             match readback with
                                             | Error e -> failProjection e
                                             | Ok() ->
-                                                let disposition = match draft.Disposition with Some Intake.Create -> "create" | Some Intake.Reuse -> "reuse" | None -> "unknown"
+                                                let disposition =
+                                                    match draft.Disposition with
+                                                    | Some Intake.Create -> "create"
+                                                    | Some Intake.Reuse -> "reuse"
+                                                    | None -> "unknown"
+
                                                 let fields = writes |> List.map fst |> JsonSerializer.Serialize
+
                                                 match Cache.pending () with
                                                 | Error e -> failProjection e
                                                 | Ok pending ->
-                                                    let boardIdentity = $"{{\"owner\":{JsonSerializer.Serialize board.Owner},\"title\":{JsonSerializer.Serialize board.Title},\"number\":%d{board.Number},\"id\":{JsonSerializer.Serialize board.Id}}}"
-                                                    let issueUrl = $"https://github.com/%s{issue.Owner}/%s{issue.Repo}/issues/%d{issue.Number}"
-                                                    printfn "{\"schema\":\"fsgg.coord.intake-result/v1\",\"kind\":\"applied\",\"draftId\":%s,\"issue\":%s,\"issueUrl\":%s,\"dedupeDisposition\":%s,\"board\":%s,\"status\":%s,\"fields\":%s,\"projectionFresh\":true,\"pendingWrites\":%d,\"judgementQuestion\":%s}" (JsonSerializer.Serialize draft.Id) (JsonSerializer.Serialize issue.Canonical) (JsonSerializer.Serialize issueUrl) (JsonSerializer.Serialize disposition) boardIdentity (JsonSerializer.Serialize draft.Status) fields pending.Length (JsonSerializer.Serialize draft.JudgementQuestion)
+                                                    let boardIdentity =
+                                                        $"{{\"owner\":{JsonSerializer.Serialize board.Owner},\"title\":{JsonSerializer.Serialize board.Title},\"number\":%d{board.Number},\"id\":{JsonSerializer.Serialize board.Id}}}"
+
+                                                    let issueUrl =
+                                                        $"https://github.com/%s{issue.Owner}/%s{issue.Repo}/issues/%d{issue.Number}"
+
+                                                    printfn
+                                                        "{\"schema\":\"fsgg.coord.intake-result/v1\",\"kind\":\"applied\",\"draftId\":%s,\"issue\":%s,\"issueUrl\":%s,\"dedupeDisposition\":%s,\"board\":%s,\"status\":%s,\"fields\":%s,\"projectionFresh\":true,\"pendingWrites\":%d,\"judgementQuestion\":%s}"
+                                                        (JsonSerializer.Serialize draft.Id)
+                                                        (JsonSerializer.Serialize issue.Canonical)
+                                                        (JsonSerializer.Serialize issueUrl)
+                                                        (JsonSerializer.Serialize disposition)
+                                                        boardIdentity
+                                                        (JsonSerializer.Serialize draft.Status)
+                                                        fields
+                                                        pending.Length
+                                                        (JsonSerializer.Serialize draft.JudgementQuestion)
+
                                                     ExitGreen
-            | Ok _, _ -> eprint "fsgg-coord-engine: intake: expected validate or apply"; ExitError
-        | _ -> eprint "fsgg-coord-engine: intake: usage intake <validate|apply> <draft.json>"; ExitError
+            | Ok _, _ ->
+                eprint "fsgg-coord-engine: intake: expected validate or apply"
+                ExitError
+        | _ ->
+            eprint "fsgg-coord-engine: intake: usage intake <validate|apply> <draft.json>"
+            ExitError
 
     let roadmapUnitPrepareApply (ctx: Context) (opts: Options) : int =
         let parseArguments values =
@@ -2657,64 +3183,100 @@ module Handlers =
                 match remaining with
                 | [] -> Ok seen
                 | name :: value :: tail when List.contains name [ "--input"; "--roadmap"; "--catalog"; "--output" ] ->
-                    if value.StartsWith("--", StringComparison.Ordinal) then Error($"%s{name} requires a value")
-                    elif Map.containsKey name seen then Error($"%s{name} may be supplied only once")
-                    else loop tail (Map.add name value seen)
+                    if value.StartsWith("--", StringComparison.Ordinal) then
+                        Error($"%s{name} requires a value")
+                    elif Map.containsKey name seen then
+                        Error($"%s{name} may be supplied only once")
+                    else
+                        loop tail (Map.add name value seen)
                 | name :: _ when name.StartsWith("--", StringComparison.Ordinal) -> Error($"unknown argument: %s{name}")
-                | [ name ] when List.contains name [ "--input"; "--roadmap"; "--catalog"; "--output" ] -> Error($"%s{name} requires a value")
+                | [ name ] when List.contains name [ "--input"; "--roadmap"; "--catalog"; "--output" ] ->
+                    Error($"%s{name} requires a value")
                 | value :: _ -> Error($"unexpected positional argument: %s{value}")
+
             loop values Map.empty
             |> Result.bind (fun parsed ->
                 [ "--input"; "--roadmap"; "--catalog" ]
                 |> List.tryFind (fun name -> not (Map.containsKey name parsed))
-                |> function Some name -> Error($"%s{name} is required") | None -> Ok parsed)
+                |> function
+                    | Some name -> Error($"%s{name} is required")
+                    | None -> Ok parsed)
 
         let applyRegistration opts registration =
             let path = Path.GetTempFileName()
+
             try
                 File.WriteAllText(path, RoadmapWorkUnit.canonicalIntakeDraft registration, UTF8Encoding(false))
                 let priorOutput = Console.Out
                 use suppressedOutput = new StringWriter()
+
                 let exitCode =
                     try
                         Console.SetOut suppressedOutput
                         intakeCmd ctx { opts with Args = [ "apply"; path ] }
                     finally
                         Console.SetOut priorOutput
-                if exitCode <> ExitGreen then Error exitCode
+
+                if exitCode <> ExitGreen then
+                    Error exitCode
                 else
                     match Cache.getIntakeReceipt registration.Id with
-                    | Error reason -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"; Error ExitError
-                    | Ok None -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: intake receipt is missing for %s{registration.Id}"; Error ExitError
+                    | Error reason ->
+                        eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"
+                        Error ExitError
+                    | Ok None ->
+                        eprint
+                            $"fsgg-coord-engine: roadmap unit prepare apply: intake receipt is missing for %s{registration.Id}"
+
+                        Error ExitError
                     | Ok(Some receipt) ->
                         match IntakeReceipt.validate registration.Draft receipt with
-                        | Error reason -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"; Error ExitError
+                        | Error reason ->
+                            eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"
+                            Error ExitError
                         | Ok accepted ->
-                            let canonical = $"%s{accepted.Owner}/%s{accepted.Repository}#%d{accepted.IssueNumber}"
-                            Ok
-                                ({ Id = registration.Id; Kind = registration.Kind
-                                   DraftSha256 = IntakeReceipt.digest registration.Draft
-                                   Issue = canonical
-                                   IssueUrl = $"https://github.com/%s{accepted.Owner}/%s{accepted.Repository}/issues/%d{accepted.IssueNumber}" }
-                                 : RoadmapWorkUnit.AppliedRegistration)
+                            let canonical =
+                                $"%s{accepted.Owner}/%s{accepted.Repository}#%d{accepted.IssueNumber}"
+
+                            Ok(
+                                {
+                                    Id = registration.Id
+                                    Kind = registration.Kind
+                                    DraftSha256 = IntakeReceipt.digest registration.Draft
+                                    Issue = canonical
+                                    IssueUrl =
+                                        $"https://github.com/%s{accepted.Owner}/%s{accepted.Repository}/issues/%d{accepted.IssueNumber}"
+                                }
+                                : RoadmapWorkUnit.AppliedRegistration
+                            )
             finally
-                if File.Exists path then File.Delete path
+                if File.Exists path then
+                    File.Delete path
 
         match parseArguments opts.Args with
-        | Error reason -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"; ExitError
+        | Error reason ->
+            eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"
+            ExitError
         | Ok args ->
             try
                 let request =
                     File.ReadAllBytes args["--input"]
                     |> RoadmapWorkUnit.parsePreparationRequest
                     |> Result.mapError (String.concat "; ")
+
                 let plan =
                     request
                     |> Result.bind (fun request ->
-                        RoadmapWorkUnit.compilePreparation (File.ReadAllBytes args["--roadmap"]) (File.ReadAllBytes args["--catalog"]) request
+                        RoadmapWorkUnit.compilePreparation
+                            (File.ReadAllBytes args["--roadmap"])
+                            (File.ReadAllBytes args["--catalog"])
+                            request
                         |> Result.mapError (List.map string >> String.concat "; "))
+
                 match plan with
-                | Error reason -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"; ExitError
+                | Error reason ->
+                    eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{reason}"
+                    ExitError
                 | Ok plan ->
                     let rec apply remaining accepted =
                         match remaining with
@@ -2723,42 +3285,77 @@ module Handlers =
                             match applyRegistration opts registration with
                             | Error exitCode -> Error exitCode
                             | Ok result -> apply tail (result :: accepted)
+
                     match apply plan.Registrations [] with
                     | Error exitCode -> exitCode
                     | Ok registrations ->
                         match RoadmapWorkUnit.sealPreparationApplication plan registrations with
                         | Error findings ->
-                            findings |> List.iter (fun finding -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %O{finding}")
+                            findings
+                            |> List.iter (fun finding ->
+                                eprint $"fsgg-coord-engine: roadmap unit prepare apply: %O{finding}")
+
                             ExitError
                         | Ok receipt ->
                             let rendered = RoadmapWorkUnit.canonicalPreparationApplication receipt
+
                             match Map.tryFind "--output" args with
                             | Some output -> File.WriteAllText(output, rendered, UTF8Encoding(false))
                             | None -> printf "%s" rendered
-                            ExitGreen
-            with error -> eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{error.Message}"; ExitError
 
-    let internal validateImmutablePreparation (input: RoadmapWorkUnit.AcceptanceInput) (roadmap: string) (catalog: string) =
-        match input.Plan.Registrations |> List.tryFind (fun registration -> registration.Kind = "unit") with
+                            ExitGreen
+            with error ->
+                eprint $"fsgg-coord-engine: roadmap unit prepare apply: %s{error.Message}"
+                ExitError
+
+    let internal validateImmutablePreparation
+        (input: RoadmapWorkUnit.AcceptanceInput)
+        (roadmap: string)
+        (catalog: string)
+        =
+        match
+            input.Plan.Registrations
+            |> List.tryFind (fun registration -> registration.Kind = "unit")
+        with
         | None -> Error [ "preparation plan has no unit registration" ]
         | Some registration ->
             let request: RoadmapWorkUnit.PreparationRequest =
-                { Schema = RoadmapWorkUnit.PreparationInputSchema
-                  RoadmapRevision = input.Plan.Authority.RoadmapRevision
-                  AuthorityIssue = input.Plan.Authority.Issue
-                  SddWorkId = input.Plan.SddWorkId
-                  RegistrationOwner = registration.Draft.Owner
-                  RegistrationRepository = registration.Draft.Repository
-                  RegistrationPaths = registration.Draft.Paths }
-            match RoadmapWorkUnit.compilePreparation (Encoding.UTF8.GetBytes roadmap) (Encoding.UTF8.GetBytes catalog) request with
-            | Error findings -> Error(findings |> List.map (fun finding -> "immutable preparation authority: " + string finding))
-            | Ok observed when RoadmapWorkUnit.canonicalPlan observed <> RoadmapWorkUnit.canonicalPlan input.Plan ->
-                Error [ "preparation plan differs from the plan recompiled at the immutable implementation candidate" ]
+                {
+                    Schema = RoadmapWorkUnit.PreparationInputSchema
+                    RoadmapRevision = input.Plan.Authority.RoadmapRevision
+                    AuthorityIssue = input.Plan.Authority.Issue
+                    SddWorkId = input.Plan.SddWorkId
+                    RegistrationOwner = registration.Draft.Owner
+                    RegistrationRepository = registration.Draft.Repository
+                    RegistrationPaths = registration.Draft.Paths
+                }
+
+            match
+                RoadmapWorkUnit.compilePreparation
+                    (Encoding.UTF8.GetBytes roadmap)
+                    (Encoding.UTF8.GetBytes catalog)
+                    request
+            with
+            | Error findings ->
+                Error(
+                    findings
+                    |> List.map (fun finding -> "immutable preparation authority: " + string finding)
+                )
+            | Ok observed when
+                RoadmapWorkUnit.canonicalPlan observed
+                <> RoadmapWorkUnit.canonicalPlan input.Plan
+                ->
+                Error
+                    [
+                        "preparation plan differs from the plan recompiled at the immutable implementation candidate"
+                    ]
             | Ok _ -> Ok()
 
     let private roadmapUnitAcceptCore runQualification observerOverrides (ctx: Context) (opts: Options) : int =
         let fail reasons =
-            reasons |> List.iter (fun reason -> eprint $"fsgg-coord-engine: roadmap unit accept: %s{reason}")
+            reasons
+            |> List.iter (fun reason -> eprint $"fsgg-coord-engine: roadmap unit accept: %s{reason}")
+
             ExitError
 
         let parseArguments values =
@@ -2767,13 +3364,39 @@ module Handlers =
                 let rec loop remaining seen =
                     match remaining with
                     | [] -> Ok(action, seen)
-                    | name :: value :: rest when List.contains name [ "--input"; "--qualification-input"; "--qualification-execution"; "--bundle"; "--output" ] ->
-                        if value.StartsWith("--", StringComparison.Ordinal) then Error($"%s{name} requires a value")
-                        elif Map.containsKey name seen then Error($"%s{name} may be supplied only once")
-                        else loop rest (Map.add name value seen)
-                    | name :: _ when name.StartsWith("--", StringComparison.Ordinal) -> Error($"unknown argument: %s{name}")
-                    | [ name ] when List.contains name [ "--input"; "--qualification-input"; "--qualification-execution"; "--bundle"; "--output" ] -> Error($"%s{name} requires a value")
+                    | name :: value :: rest when
+                        List.contains
+                            name
+                            [
+                                "--input"
+                                "--qualification-input"
+                                "--qualification-execution"
+                                "--bundle"
+                                "--output"
+                            ]
+                        ->
+                        if value.StartsWith("--", StringComparison.Ordinal) then
+                            Error($"%s{name} requires a value")
+                        elif Map.containsKey name seen then
+                            Error($"%s{name} may be supplied only once")
+                        else
+                            loop rest (Map.add name value seen)
+                    | name :: _ when name.StartsWith("--", StringComparison.Ordinal) ->
+                        Error($"unknown argument: %s{name}")
+                    | [ name ] when
+                        List.contains
+                            name
+                            [
+                                "--input"
+                                "--qualification-input"
+                                "--qualification-execution"
+                                "--bundle"
+                                "--output"
+                            ]
+                        ->
+                        Error($"%s{name} requires a value")
                     | value :: _ -> Error($"unexpected positional argument: %s{value}")
+
                 loop tail Map.empty
                 |> Result.bind (fun (action, args) ->
                     [ "--input"; "--qualification-input"; "--qualification-execution" ]
@@ -2788,14 +3411,31 @@ module Handlers =
                 Regex.Match(
                     value,
                     "^(?:https://github[.]com/)?([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)(?:#|/issues/)([1-9][0-9]*)$",
-                    RegexOptions.CultureInvariant)
-            if matched.Success then Ok(matched.Groups[1].Value, matched.Groups[2].Value, Int32.Parse matched.Groups[3].Value)
-            else Error($"invalid issue identity: %s{value}")
+                    RegexOptions.CultureInvariant
+                )
+
+            if matched.Success then
+                Ok(matched.Groups[1].Value, matched.Groups[2].Value, Int32.Parse matched.Groups[3].Value)
+            else
+                Error($"invalid issue identity: %s{value}")
 
         let parseCommentUrl (value: string) =
-            let matched = Regex.Match(value, "^https://github[.]com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/(?:pull|issues)/([1-9][0-9]*)#issuecomment-([1-9][0-9]*)$", RegexOptions.CultureInvariant)
-            if matched.Success then Ok(matched.Groups[1].Value, matched.Groups[2].Value, Int32.Parse matched.Groups[3].Value, Int64.Parse matched.Groups[4].Value)
-            else Error($"invalid review evidence URL: %s{value}")
+            let matched =
+                Regex.Match(
+                    value,
+                    "^https://github[.]com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/(?:pull|issues)/([1-9][0-9]*)#issuecomment-([1-9][0-9]*)$",
+                    RegexOptions.CultureInvariant
+                )
+
+            if matched.Success then
+                Ok(
+                    matched.Groups[1].Value,
+                    matched.Groups[2].Value,
+                    Int32.Parse matched.Groups[3].Value,
+                    Int64.Parse matched.Groups[4].Value
+                )
+            else
+                Error($"invalid review evidence URL: %s{value}")
 
         let canonicalJson (text: string) =
             CanonicalJson.canonicalize (Encoding.UTF8.GetBytes text)
@@ -2815,81 +3455,175 @@ module Handlers =
             use child = Process.Start info
             let stdout = child.StandardOutput.ReadToEndAsync()
             let stderr = child.StandardError.ReadToEndAsync()
+
             if not (child.WaitForExit(timeoutSeconds * 1000)) then
-                try child.Kill(true) with _ -> ()
+                try
+                    child.Kill(true)
+                with _ ->
+                    ()
+
                 Error($"%s{Path.GetFileName executable} timed out after %d{timeoutSeconds}s")
             else
                 let output = stdout.GetAwaiter().GetResult()
                 let error = stderr.GetAwaiter().GetResult()
-                if child.ExitCode = 0 then Ok output
-                else Error($"%s{Path.GetFileName executable} exited %d{child.ExitCode}: %s{error.Trim()}")
+
+                if child.ExitCode = 0 then
+                    Ok output
+                else
+                    Error($"%s{Path.GetFileName executable} exited %d{child.ExitCode}: %s{error.Trim()}")
 
         let independentlyObserveSdd (input: RoadmapWorkUnit.AcceptanceInput) =
             let implementationParts = input.ImplementationBinding.Repository.Split('/')
-            if implementationParts.Length <> 2 then Error [ "implementation repository identity is malformed" ]
+
+            if implementationParts.Length <> 2 then
+                Error [ "implementation repository identity is malformed" ]
             else
-                let operationRoot = Path.Combine(Path.GetTempPath(), "fsgg-roadmap-unit-observation", Guid.NewGuid().ToString("N"))
+                let operationRoot =
+                    Path.Combine(Path.GetTempPath(), "fsgg-roadmap-unit-observation", Guid.NewGuid().ToString("N"))
+
                 let checkout = Path.Combine(operationRoot, "checkout")
                 let git = "/usr/bin/git"
-                let sdd = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dotnet", "tools", "fsgg-sdd")
+
+                let sdd =
+                    Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                        ".dotnet",
+                        "tools",
+                        "fsgg-sdd"
+                    )
+
                 try
                     try
                         Directory.CreateDirectory checkout |> ignore
-                        let run executable directory arguments timeout = runPinnedProcess executable directory arguments timeout
+
+                        let run executable directory arguments timeout =
+                            runPinnedProcess executable directory arguments timeout
+
                         let result =
-                            if not (File.Exists git) then Error [ "pinned system git /usr/bin/git is unavailable" ]
-                            elif not (File.Exists sdd) then Error [ $"host-installed fsgg-sdd is unavailable at %s{sdd}" ]
+                            if not (File.Exists git) then
+                                Error [ "pinned system git /usr/bin/git is unavailable" ]
+                            elif not (File.Exists sdd) then
+                                Error [ $"host-installed fsgg-sdd is unavailable at %s{sdd}" ]
                             else
                                 run sdd checkout [ "--version" ] 30
                                 |> Result.mapError List.singleton
                                 |> Result.bind (fun version ->
-                                    if version.Trim() = "1.5.0" then Ok()
-                                    else Error [ $"host-installed fsgg-sdd is %s{version.Trim()}, expected pinned 1.5.0" ])
-                                |> Result.bind (fun () -> run git checkout [ "init"; "--quiet" ] 30 |> Result.mapError List.singleton)
-                                |> Result.bind (fun _ -> run git checkout [ "remote"; "add"; "origin"; $"https://github.com/%s{input.ImplementationBinding.Repository}.git" ] 30 |> Result.mapError List.singleton)
-                                |> Result.bind (fun _ -> run git checkout [ "fetch"; "--quiet"; "--depth=1"; "origin"; input.Identities.ImplementationCandidate ] 300 |> Result.mapError List.singleton)
-                                |> Result.bind (fun _ -> run git checkout [ "checkout"; "--quiet"; "--detach"; "FETCH_HEAD" ] 30 |> Result.mapError List.singleton)
+                                    if version.Trim() = "1.5.0" then
+                                        Ok()
+                                    else
+                                        Error
+                                            [ $"host-installed fsgg-sdd is %s{version.Trim()}, expected pinned 1.5.0" ])
+                                |> Result.bind (fun () ->
+                                    run git checkout [ "init"; "--quiet" ] 30 |> Result.mapError List.singleton)
+                                |> Result.bind (fun _ ->
+                                    run
+                                        git
+                                        checkout
+                                        [
+                                            "remote"
+                                            "add"
+                                            "origin"
+                                            $"https://github.com/%s{input.ImplementationBinding.Repository}.git"
+                                        ]
+                                        30
+                                    |> Result.mapError List.singleton)
+                                |> Result.bind (fun _ ->
+                                    run
+                                        git
+                                        checkout
+                                        [
+                                            "fetch"
+                                            "--quiet"
+                                            "--depth=1"
+                                            "origin"
+                                            input.Identities.ImplementationCandidate
+                                        ]
+                                        300
+                                    |> Result.mapError List.singleton)
+                                |> Result.bind (fun _ ->
+                                    run git checkout [ "checkout"; "--quiet"; "--detach"; "FETCH_HEAD" ] 30
+                                    |> Result.mapError List.singleton)
                                 |> Result.bind (fun _ ->
                                     [ "analyze"; "verify"; "ship" ]
-                                    |> List.fold (fun state stage ->
-                                        state |> Result.bind (fun () ->
-                                            run sdd checkout [ stage; "--work"; input.SddWorkId ] 300
-                                            |> Result.mapError (fun reason -> [ $"independent SDD %s{stage}: %s{reason}" ])
-                                            |> Result.map ignore)) (Ok()))
+                                    |> List.fold
+                                        (fun state stage ->
+                                            state
+                                            |> Result.bind (fun () ->
+                                                run sdd checkout [ stage; "--work"; input.SddWorkId ] 300
+                                                |> Result.mapError (fun reason ->
+                                                    [ $"independent SDD %s{stage}: %s{reason}" ])
+                                                |> Result.map ignore))
+                                        (Ok()))
                                 |> Result.bind (fun () ->
-                                    let files = [ "analyze", "analysis.json"; "verify", "verify.json"; "ship", "ship-verdict.json" ]
+                                    let files =
+                                        [
+                                            "analyze", "analysis.json"
+                                            "verify", "verify.json"
+                                            "ship", "ship-verdict.json"
+                                        ]
+
                                     let errors =
                                         files
                                         |> List.choose (fun (stage, fileName) ->
-                                            let expected = input.SddObservations |> List.tryFind (fun value -> value.Stage = stage)
+                                            let expected =
+                                                input.SddObservations
+                                                |> List.tryFind (fun value -> value.Stage = stage)
+
                                             let path = Path.Combine(checkout, "readiness", input.SddWorkId, fileName)
+
                                             match expected with
                                             | None -> Some($"SDD %s{stage} observation is missing")
-                                            | Some _ when not (File.Exists path) -> Some($"independent SDD %s{stage} did not produce %s{fileName}")
+                                            | Some _ when not (File.Exists path) ->
+                                                Some($"independent SDD %s{stage} did not produce %s{fileName}")
                                             | Some observation ->
-                                                match canonicalJson (File.ReadAllText path), canonicalJson observation.ArtifactJson with
+                                                match
+                                                    canonicalJson (File.ReadAllText path),
+                                                    canonicalJson observation.ArtifactJson
+                                                with
                                                 | Ok observed, Ok supplied when observed = supplied -> None
-                                                | Ok _, Ok _ -> Some($"independent SDD %s{stage} artifact differs from the acceptance input")
-                                                | Error reason, _ | _, Error reason -> Some reason)
-                                    let workModelPath = Path.Combine(checkout, "readiness", input.SddWorkId, "work-model.json")
+                                                | Ok _, Ok _ ->
+                                                    Some(
+                                                        $"independent SDD %s{stage} artifact differs from the acceptance input"
+                                                    )
+                                                | Error reason, _
+                                                | _, Error reason -> Some reason)
+
+                                    let workModelPath =
+                                        Path.Combine(checkout, "readiness", input.SddWorkId, "work-model.json")
+
                                     if not (File.Exists workModelPath) then
-                                        errors @ [ "independent SDD execution did not produce work-model.json" ] |> Error
+                                        errors @ [ "independent SDD execution did not produce work-model.json" ]
+                                        |> Error
                                     else
-                                        let taskErrors = validateCompleteSddWorkModel input.SddWorkId (File.ReadAllText workModelPath)
+                                        let taskErrors =
+                                            validateCompleteSddWorkModel
+                                                input.SddWorkId
+                                                (File.ReadAllText workModelPath)
+
                                         let allErrors = errors @ taskErrors
                                         if allErrors.IsEmpty then Ok() else Error allErrors)
                                 |> Result.bind (fun () ->
                                     run git checkout [ "rev-parse"; "HEAD" ] 30
                                     |> Result.mapError List.singleton
                                     |> Result.bind (fun revision ->
-                                        if revision.Trim() = input.Identities.ImplementationCandidate then Ok()
-                                        else Error [ "independent checkout moved away from the implementation candidate" ]))
+                                        if revision.Trim() = input.Identities.ImplementationCandidate then
+                                            Ok()
+                                        else
+                                            Error
+                                                [
+                                                    "independent checkout moved away from the implementation candidate"
+                                                ]))
                                 |> Result.bind (fun () ->
                                     run git checkout [ "rev-parse"; "HEAD^{tree}" ] 30
                                     |> Result.mapError List.singleton
                                     |> Result.bind (fun tree ->
-                                        if tree.Trim() = input.ImplementationBinding.CandidateTree then Ok()
-                                        else Error [ "independent checkout tree differs from the implementation candidate tree" ]))
+                                        if tree.Trim() = input.ImplementationBinding.CandidateTree then
+                                            Ok()
+                                        else
+                                            Error
+                                                [
+                                                    "independent checkout tree differs from the implementation candidate tree"
+                                                ]))
                                 |> Result.bind (fun () ->
                                     run git checkout [ "status"; "--porcelain=v1"; "-z"; "--untracked-files=all" ] 30
                                     |> Result.mapError List.singleton
@@ -2898,24 +3632,43 @@ module Handlers =
                                             [ "analysis.json"; "verify.json"; "ship-verdict.json"; "work-model.json" ]
                                             |> List.map (fun name -> $"readiness/%s{input.SddWorkId}/%s{name}")
                                             |> Set.ofList
+
                                         let unexpected =
                                             status.Split('\000', StringSplitOptions.RemoveEmptyEntries)
                                             |> Array.filter (fun entry ->
                                                 entry.Length < 4
                                                 || (entry.Substring(0, 2) <> " M" && entry.Substring(0, 2) <> "??")
                                                 || not (Set.contains (entry.Substring 3) generated))
-                                        if unexpected.Length = 0 then Ok()
-                                        else Error [ "independent SDD execution changed paths outside its exact generated readiness outputs" ]))
+
+                                        if unexpected.Length = 0 then
+                                            Ok()
+                                        else
+                                            Error
+                                                [
+                                                    "independent SDD execution changed paths outside its exact generated readiness outputs"
+                                                ]))
+
                         result
-                    with error -> Error [ "independent SDD observation: " + error.Message ]
+                    with error ->
+                        Error [ "independent SDD observation: " + error.Message ]
                 finally
-                    if Directory.Exists operationRoot then Directory.Delete(operationRoot, true)
+                    if Directory.Exists operationRoot then
+                        Directory.Delete(operationRoot, true)
 
         let observePull owner repo number candidate merge =
             let subject = $"%s{owner}/%s{repo} PR #%d{number} roadmap acceptance"
+
             let request: Request =
-                { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/pulls/%d{number}"; Query = []
-                  Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+                {
+                    Method = "GET"
+                    Path = $"repos/%s{owner}/%s{repo}/pulls/%d{number}"
+                    Query = []
+                    Body = NoBody
+                    Budget = Rest
+                    IfNoneMatch = None
+                    Subject = subject
+                }
+
             ctx.Transport.Send request
             |> Result.mapError Errors.explain
             |> Result.bind (fun response ->
@@ -2927,17 +3680,30 @@ module Handlers =
                     let mergeSha = root.GetProperty("merge_commit_sha").GetString()
                     let mergedAt = root.GetProperty("merged_at").GetString()
                     let baseRef = root.GetProperty("base").GetProperty("ref").GetString()
-                    if head <> candidate then Error($"PR #%d{number} head is %s{head}, expected %s{candidate}")
-                    elif not merged then Error($"PR #%d{number} is not merged")
-                    elif mergeSha <> merge then Error($"PR #%d{number} merge is %s{mergeSha}, expected %s{merge}")
-                    elif baseRef <> "main" then Error($"PR #%d{number} base is %s{baseRef}, expected main")
-                    elif String.IsNullOrWhiteSpace mergedAt then Error($"PR #%d{number} has no merged_at authority")
-                    else Ok mergedAt
-                with error -> Error($"malformed %s{subject}: %s{error.Message}"))
+
+                    if head <> candidate then
+                        Error($"PR #%d{number} head is %s{head}, expected %s{candidate}")
+                    elif not merged then
+                        Error($"PR #%d{number} is not merged")
+                    elif mergeSha <> merge then
+                        Error($"PR #%d{number} merge is %s{mergeSha}, expected %s{merge}")
+                    elif baseRef <> "main" then
+                        Error($"PR #%d{number} base is %s{baseRef}, expected main")
+                    elif String.IsNullOrWhiteSpace mergedAt then
+                        Error($"PR #%d{number} has no merged_at authority")
+                    else
+                        Ok mergedAt
+                with error ->
+                    Error($"malformed %s{subject}: %s{error.Message}"))
 
         let observeAuthorities (input: RoadmapWorkUnit.AcceptanceInput) =
             let errors = ResizeArray<string>()
-            let retain = function Ok () -> () | Error reason -> errors.Add reason
+
+            let retain =
+                function
+                | Ok() -> ()
+                | Error reason -> errors.Add reason
+
             let registrationRepository =
                 input.Plan.Registrations
                 |> List.tryFind (fun registration -> registration.Kind = "unit")
@@ -2948,7 +3714,10 @@ module Handlers =
             | Error error -> errors.Add(Errors.explain error)
             | Ok board ->
                 for registration in input.Plan.Registrations do
-                    match input.PreparationApplication.Registrations |> List.tryFind (fun applied -> applied.Id = registration.Id) with
+                    match
+                        input.PreparationApplication.Registrations
+                        |> List.tryFind (fun applied -> applied.Id = registration.Id)
+                    with
                     | None -> errors.Add($"applied registration %s{registration.Id} is missing")
                     | Some applied ->
                         match parseIssueRef applied.Issue with
@@ -2960,29 +3729,45 @@ module Handlers =
                                 let marker = IntakeReceipt.marker registration.Draft
                                 let first = body.IndexOf(marker, StringComparison.Ordinal)
                                 let last = body.LastIndexOf(marker, StringComparison.Ordinal)
+
                                 if first <> 0 || last <> first then
-                                    errors.Add($"%s{applied.Issue} does not carry one exact leading intake receipt for %s{registration.Id}")
+                                    errors.Add(
+                                        $"%s{applied.Issue} does not carry one exact leading intake receipt for %s{registration.Id}"
+                                    )
+
                             let progression =
                                 [ "Backlog", 0; "Ready", 1; "In progress", 2; "In review", 3; "Done", 4 ]
                                 |> Map.ofList
+
                             match Board.itemFieldValue ctx.Transport board owner repo number "Status" with
                             | Error error -> errors.Add(Errors.explain error)
                             | Ok(Some actual) ->
-                                match Map.tryFind registration.Draft.Status progression, Map.tryFind actual progression with
+                                match
+                                    Map.tryFind registration.Draft.Status progression, Map.tryFind actual progression
+                                with
                                 | Some expectedRank, Some actualRank when actualRank >= expectedRank -> ()
-                                | _ -> errors.Add($"%s{applied.Issue} live Status is Some \"%s{actual}\", which is not a valid progression from %s{registration.Draft.Status}")
+                                | _ ->
+                                    errors.Add(
+                                        $"%s{applied.Issue} live Status is Some \"%s{actual}\", which is not a valid progression from %s{registration.Draft.Status}"
+                                    )
                             | Ok None -> errors.Add($"%s{applied.Issue} live Status is missing")
+
                             let projected =
-                                [ "Class", Some registration.Draft.Class
-                                  "Phase", registration.Draft.Phase
-                                  "Severity", registration.Draft.Severity
-                                  "Blocked by", registration.Draft.BlockedBy ]
-                                |> List.choose (fun (field, value) -> value |> Option.map (fun expected -> field, expected))
+                                [
+                                    "Class", Some registration.Draft.Class
+                                    "Phase", registration.Draft.Phase
+                                    "Severity", registration.Draft.Severity
+                                    "Blocked by", registration.Draft.BlockedBy
+                                ]
+                                |> List.choose (fun (field, value) ->
+                                    value |> Option.map (fun expected -> field, expected))
+
                             for field, expected in projected do
                                 match Board.itemFieldValue ctx.Transport board owner repo number field with
                                 | Error error -> errors.Add(Errors.explain error)
                                 | Ok(Some actual) when actual = expected -> ()
-                                | Ok actual -> errors.Add($"%s{applied.Issue} live %s{field} is %A{actual}, expected %s{expected}")
+                                | Ok actual ->
+                                    errors.Add($"%s{applied.Issue} live %s{field} is %A{actual}, expected %s{expected}")
 
             let appliedUnitIssue =
                 input.Plan.Registrations
@@ -2991,58 +3776,83 @@ module Handlers =
                     input.PreparationApplication.Registrations
                     |> List.tryFind (fun applied -> applied.Id = registration.Id))
                 |> Option.map _.Issue
+
             match appliedUnitIssue with
             | None -> errors.Add("applied unit registration is unavailable for lifecycle authority")
             | Some issue ->
-              match parseIssueRef issue with
-              | Error reason -> errors.Add reason
-              | Ok(owner, repo, number) ->
-                let expectedItem = $"%s{owner}/%s{repo}"
-                let expectedSubject = $"%s{expectedItem}#%d{number}"
-                let expectedUrl = $"https://github.com/%s{expectedItem}/issues/%d{number}"
-                let winningClaim =
-                    match Reads.markerScan ctx.Transport owner repo number with
-                    | Error error -> errors.Add(Errors.explain error); None
-                    | Ok scan ->
-                        match Reads.requireCompleteMarkerScan expectedSubject scan with
-                        | Error error -> errors.Add(Errors.explain error); None
-                        | Ok markers ->
-                            match Reads.winner opts.LeaseMinutes markers with
-                            | None -> errors.Add("authority issue has no live winning claim"); None
-                            | Some marker -> Some(string marker.Id)
-                match Reads.authorityComments ctx.Transport owner repo number with
-                | Error error -> errors.Add(Errors.explain error)
-                | Ok comments ->
-                    validateAcceptanceSddRoute expectedSubject input.SddWorkId (comments |> List.map _.Body)
-                    |> List.iter errors.Add
-                    let commentsJson =
-                        comments
-                        |> List.map (fun comment ->
-                            {| id = comment.Id; html_url = comment.Url; body = comment.Body
-                               created_at = comment.CreatedAt; updated_at = comment.UpdatedAt |})
-                        |> JsonSerializer.Serialize
-                    match LifecycleTelemetry.exportComments input.LifecycleRunId input.LifecycleUnitId commentsJson with
-                    | Error findings -> findings |> List.iter (fun finding -> errors.Add($"lifecycle authority: %O{finding}"))
-                    | Ok(exported, rejected) when not rejected.IsEmpty -> errors.Add("lifecycle authority contains a rejected fork")
-                    | Ok(exported, _) when exported <> input.LifecycleLog -> errors.Add("lifecycle input differs byte-for-byte from the canonical GitHub comment ledger")
-                    | Ok _ -> ()
-                    match winningClaim with
-                    | None -> ()
-                    | Some claim ->
-                        validateLifecycleAuthority
-                            { Repository = expectedItem
-                              Number = number
-                              Url = expectedUrl
-                              Subject = expectedSubject
-                              CurrentClaimGeneration = claim
-                              ImplementationRepository = input.ImplementationBinding.Repository
-                              ImplementationCandidate = input.Identities.ImplementationCandidate
-                              ImplementationMerge = input.Identities.ImplementationMerge
-                              AcceptanceCandidate = input.Identities.AcceptanceCandidate
-                              AcceptanceMerge = input.Identities.AcceptanceMerge
-                              ProtectedMain = input.Identities.ProtectedMain }
-                            input.LifecycleLog
+                match parseIssueRef issue with
+                | Error reason -> errors.Add reason
+                | Ok(owner, repo, number) ->
+                    let expectedItem = $"%s{owner}/%s{repo}"
+                    let expectedSubject = $"%s{expectedItem}#%d{number}"
+                    let expectedUrl = $"https://github.com/%s{expectedItem}/issues/%d{number}"
+
+                    let winningClaim =
+                        match Reads.markerScan ctx.Transport owner repo number with
+                        | Error error ->
+                            errors.Add(Errors.explain error)
+                            None
+                        | Ok scan ->
+                            match Reads.requireCompleteMarkerScan expectedSubject scan with
+                            | Error error ->
+                                errors.Add(Errors.explain error)
+                                None
+                            | Ok markers ->
+                                match Reads.winner opts.LeaseMinutes markers with
+                                | None ->
+                                    errors.Add("authority issue has no live winning claim")
+                                    None
+                                | Some marker -> Some(string marker.Id)
+
+                    match Reads.authorityComments ctx.Transport owner repo number with
+                    | Error error -> errors.Add(Errors.explain error)
+                    | Ok comments ->
+                        validateAcceptanceSddRoute expectedSubject input.SddWorkId (comments |> List.map _.Body)
                         |> List.iter errors.Add
+
+                        let commentsJson =
+                            comments
+                            |> List.map (fun comment ->
+                                {|
+                                    id = comment.Id
+                                    html_url = comment.Url
+                                    body = comment.Body
+                                    created_at = comment.CreatedAt
+                                    updated_at = comment.UpdatedAt
+                                |})
+                            |> JsonSerializer.Serialize
+
+                        match
+                            LifecycleTelemetry.exportComments input.LifecycleRunId input.LifecycleUnitId commentsJson
+                        with
+                        | Error findings ->
+                            findings
+                            |> List.iter (fun finding -> errors.Add($"lifecycle authority: %O{finding}"))
+                        | Ok(exported, rejected) when not rejected.IsEmpty ->
+                            errors.Add("lifecycle authority contains a rejected fork")
+                        | Ok(exported, _) when exported <> input.LifecycleLog ->
+                            errors.Add("lifecycle input differs byte-for-byte from the canonical GitHub comment ledger")
+                        | Ok _ -> ()
+
+                        match winningClaim with
+                        | None -> ()
+                        | Some claim ->
+                            validateLifecycleAuthority
+                                {
+                                    Repository = expectedItem
+                                    Number = number
+                                    Url = expectedUrl
+                                    Subject = expectedSubject
+                                    CurrentClaimGeneration = claim
+                                    ImplementationRepository = input.ImplementationBinding.Repository
+                                    ImplementationCandidate = input.Identities.ImplementationCandidate
+                                    ImplementationMerge = input.Identities.ImplementationMerge
+                                    AcceptanceCandidate = input.Identities.AcceptanceCandidate
+                                    AcceptanceMerge = input.Identities.AcceptanceMerge
+                                    ProtectedMain = input.Identities.ProtectedMain
+                                }
+                                input.LifecycleLog
+                            |> List.iter errors.Add
 
             match parseCommentUrl input.ReviewEvidence with
             | Error reason -> errors.Add reason
@@ -3050,112 +3860,251 @@ module Handlers =
                 match Reads.authorityComments ctx.Transport owner repo number with
                 | Error error -> errors.Add(Errors.explain error)
                 | Ok comments ->
-                    match comments |> List.tryFind (fun comment -> comment.Id = commentId && comment.Url = input.ReviewEvidence) with
+                    match
+                        comments
+                        |> List.tryFind (fun comment -> comment.Id = commentId && comment.Url = input.ReviewEvidence)
+                    with
                     | None -> errors.Add("review evidence comment is absent from the authoritative GitHub ledger")
-                    | Some comment ->
-                        validateAcceptanceEvidenceComment input comment |> List.iter errors.Add
+                    | Some comment -> validateAcceptanceEvidenceComment input comment |> List.iter errors.Add
 
             let implementationParts = input.ImplementationBinding.Repository.Split('/')
             let acceptanceParts = input.AcceptanceBinding.Repository.Split('/')
             let roadmapAuthority = parseIssueRef input.Plan.Authority.Issue
-            if implementationParts.Length <> 2 then errors.Add("implementation repository identity is malformed")
-            elif acceptanceParts.Length <> 2 then errors.Add("acceptance repository identity is malformed")
-            elif roadmapAuthority |> Result.isError then errors.Add("roadmap authority issue identity is malformed")
-            else
-              let roadmapOwner, roadmapRepo, _ = roadmapAuthority |> Result.defaultWith (fun _ -> failwith "validated roadmap authority")
-              match Reads.fileAtRef ctx.Transport roadmapOwner roadmapRepo "docs/github-substrate-v2-roadmap.md" input.Plan.Authority.RoadmapRevision,
-                    Reads.fileAtRef ctx.Transport acceptanceParts[0] acceptanceParts[1] "eng/github-substrate-v2-units.json" input.Identities.AcceptanceCandidate with
-              | Error error, _ | _, Error error -> errors.Add(Errors.explain error)
-              | Ok roadmap, Ok catalog ->
-                  validateImmutablePreparation input roadmap catalog
-                  |> Result.mapError (List.iter errors.Add)
-                  |> ignore
-              match Reads.authorityComments ctx.Transport implementationParts[0] implementationParts[1] input.Identities.ImplementationPullRequest with
-              | Error error -> errors.Add(Errors.explain error)
-              | Ok comments ->
-                comments
-                |> List.filter (fun comment -> comment.Body.StartsWith("<!-- fsgg:review-", StringComparison.Ordinal) && comment.CreatedAt <> comment.UpdatedAt)
-                |> List.iter (fun comment -> errors.Add($"structured review authority comment %d{comment.Id} was edited"))
-                let projected = comments |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
-                let live = Driver.liveReviewComments input.Identities.ImplementationCandidate projected
-                let phaseFacts = Driver.reviewPhaseFacts projected
-                if not live.Diagnostics.IsEmpty || not live.StructuredErrors.IsEmpty then errors.Add("structured review authority contains diagnostics")
-                if phaseFacts.LatestReviewUrl <> Some input.StructuredReviewEvidence then
-                    errors.Add("structured review evidence is not the latest review record for the implementation candidate")
-                match parseCommentUrl input.StructuredReviewEvidence with
-                | Error reason -> errors.Add reason
-                | Ok(owner, repo, number, commentId)
-                    when owner <> implementationParts[0]
-                         || repo <> implementationParts[1]
-                         || number <> input.Identities.ImplementationPullRequest ->
-                    errors.Add("structured review evidence is not on the implementation pull request")
-                | Ok(_, _, _, commentId) ->
-                    match comments |> List.tryFind (fun comment -> comment.Id = commentId && comment.Url = input.StructuredReviewEvidence) with
-                    | None -> errors.Add("structured review evidence comment is absent from the authoritative pull-request ledger")
-                    | Some comment when comment.CreatedAt <> comment.UpdatedAt -> errors.Add("structured review evidence comment was edited")
-                    | Some _ -> ()
-                match Driver.parseEffectiveReviewComments input.Identities.ImplementationCandidate projected with
-                | Error reasons -> reasons |> List.iter (fun reason -> errors.Add("structured review authority: " + reason))
-                | Ok chain ->
-                    Driver.validateReviewChainStructure 12 chain |> List.iter (fun reason -> errors.Add("structured review authority: " + reason))
-                    if chain.HeadSha <> Some input.Identities.ImplementationCandidate then errors.Add("structured review does not bind the implementation candidate")
-                    if chain.CriticIdentity.IsNone then errors.Add("structured review has no critic identity")
-                    if not chain.HostAccepted then errors.Add("structured review has no host acceptance")
-                    try
-                        use critique = JsonDocument.Parse input.ReviewReceipt
-                        let root = critique.RootElement
-                        let critic = root.GetProperty("critic").GetString()
-                        let cycle = root.GetProperty("cycle_id").GetString()
-                        let confirmation = root.GetProperty("confirmation")
-                        let reviewed = confirmation.GetProperty("reviewed_commit").GetString()
-                        let verdict = confirmation.GetProperty("verdict").GetString()
-                        let implementationActors =
-                            input.LifecycleLog.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                            |> Array.choose (fun line ->
-                                use event = JsonDocument.Parse line
-                                let root = event.RootElement
-                                let phase = root.GetProperty("phase").GetString()
-                                if phase = "implementation" || phase.StartsWith("repair", StringComparison.Ordinal) then
-                                    Some(root.GetProperty("actor").GetString())
-                                else None)
-                            |> Set.ofArray
-                        if chain.CriticIdentity <> Some critic then errors.Add("critique critic differs from the live structured review critic")
-                        if Set.contains critic implementationActors then errors.Add("structured review critic is not independent from the implementation actor")
-                        validateCritiqueCommitRelation
-                            (fun ancestor descendant ->
-                                Reads.compareCommits ctx.Transport implementationParts[0] implementationParts[1] ancestor descendant
-                                |> Result.mapError Errors.explain)
-                            input.ReviewCycleId
-                            input.SddWorkId
-                            input.Identities.ImplementationCandidate
-                            cycle
-                            reviewed
-                            verdict
-                        |> List.iter errors.Add
-                    with error -> errors.Add("critique/live review binding: " + error.Message)
 
-            if registrationRepository <> input.AcceptanceBinding.Repository then errors.Add("acceptance repository differs from the applied unit registration")
+            if implementationParts.Length <> 2 then
+                errors.Add("implementation repository identity is malformed")
+            elif acceptanceParts.Length <> 2 then
+                errors.Add("acceptance repository identity is malformed")
+            elif roadmapAuthority |> Result.isError then
+                errors.Add("roadmap authority issue identity is malformed")
+            else
+                let roadmapOwner, roadmapRepo, _ =
+                    roadmapAuthority
+                    |> Result.defaultWith (fun _ -> failwith "validated roadmap authority")
+
+                match
+                    Reads.fileAtRef
+                        ctx.Transport
+                        roadmapOwner
+                        roadmapRepo
+                        "docs/github-substrate-v2-roadmap.md"
+                        input.Plan.Authority.RoadmapRevision,
+                    Reads.fileAtRef
+                        ctx.Transport
+                        acceptanceParts[0]
+                        acceptanceParts[1]
+                        "eng/github-substrate-v2-units.json"
+                        input.Identities.AcceptanceCandidate
+                with
+                | Error error, _
+                | _, Error error -> errors.Add(Errors.explain error)
+                | Ok roadmap, Ok catalog ->
+                    validateImmutablePreparation input roadmap catalog
+                    |> Result.mapError (List.iter errors.Add)
+                    |> ignore
+
+                match
+                    Reads.authorityComments
+                        ctx.Transport
+                        implementationParts[0]
+                        implementationParts[1]
+                        input.Identities.ImplementationPullRequest
+                with
+                | Error error -> errors.Add(Errors.explain error)
+                | Ok comments ->
+                    comments
+                    |> List.filter (fun comment ->
+                        comment.Body.StartsWith("<!-- fsgg:review-", StringComparison.Ordinal)
+                        && comment.CreatedAt <> comment.UpdatedAt)
+                    |> List.iter (fun comment ->
+                        errors.Add($"structured review authority comment %d{comment.Id} was edited"))
+
+                    let projected =
+                        comments
+                        |> List.map (fun comment ->
+                            ({
+                                Id = comment.Id
+                                Url = comment.Url
+                                Body = comment.Body
+                            }
+                            : Driver.ReviewComment))
+
+                    let live =
+                        Driver.liveReviewComments input.Identities.ImplementationCandidate projected
+
+                    let phaseFacts = Driver.reviewPhaseFacts projected
+
+                    if not live.Diagnostics.IsEmpty || not live.StructuredErrors.IsEmpty then
+                        errors.Add("structured review authority contains diagnostics")
+
+                    if phaseFacts.LatestReviewUrl <> Some input.StructuredReviewEvidence then
+                        errors.Add(
+                            "structured review evidence is not the latest review record for the implementation candidate"
+                        )
+
+                    match parseCommentUrl input.StructuredReviewEvidence with
+                    | Error reason -> errors.Add reason
+                    | Ok(owner, repo, number, commentId) when
+                        owner <> implementationParts[0]
+                        || repo <> implementationParts[1]
+                        || number <> input.Identities.ImplementationPullRequest
+                        ->
+                        errors.Add("structured review evidence is not on the implementation pull request")
+                    | Ok(_, _, _, commentId) ->
+                        match
+                            comments
+                            |> List.tryFind (fun comment ->
+                                comment.Id = commentId && comment.Url = input.StructuredReviewEvidence)
+                        with
+                        | None ->
+                            errors.Add(
+                                "structured review evidence comment is absent from the authoritative pull-request ledger"
+                            )
+                        | Some comment when comment.CreatedAt <> comment.UpdatedAt ->
+                            errors.Add("structured review evidence comment was edited")
+                        | Some _ -> ()
+
+                    match Driver.parseEffectiveReviewComments input.Identities.ImplementationCandidate projected with
+                    | Error reasons ->
+                        reasons
+                        |> List.iter (fun reason -> errors.Add("structured review authority: " + reason))
+                    | Ok chain ->
+                        Driver.validateReviewChainStructure 12 chain
+                        |> List.iter (fun reason -> errors.Add("structured review authority: " + reason))
+
+                        if chain.HeadSha <> Some input.Identities.ImplementationCandidate then
+                            errors.Add("structured review does not bind the implementation candidate")
+
+                        if chain.CriticIdentity.IsNone then
+                            errors.Add("structured review has no critic identity")
+
+                        if not chain.HostAccepted then
+                            errors.Add("structured review has no host acceptance")
+
+                        try
+                            use critique = JsonDocument.Parse input.ReviewReceipt
+                            let root = critique.RootElement
+                            let critic = root.GetProperty("critic").GetString()
+                            let cycle = root.GetProperty("cycle_id").GetString()
+                            let confirmation = root.GetProperty("confirmation")
+                            let reviewed = confirmation.GetProperty("reviewed_commit").GetString()
+                            let verdict = confirmation.GetProperty("verdict").GetString()
+
+                            let implementationActors =
+                                input.LifecycleLog.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                                |> Array.choose (fun line ->
+                                    use event = JsonDocument.Parse line
+                                    let root = event.RootElement
+                                    let phase = root.GetProperty("phase").GetString()
+
+                                    if
+                                        phase = "implementation"
+                                        || phase.StartsWith("repair", StringComparison.Ordinal)
+                                    then
+                                        Some(root.GetProperty("actor").GetString())
+                                    else
+                                        None)
+                                |> Set.ofArray
+
+                            if chain.CriticIdentity <> Some critic then
+                                errors.Add("critique critic differs from the live structured review critic")
+
+                            if Set.contains critic implementationActors then
+                                errors.Add("structured review critic is not independent from the implementation actor")
+
+                            validateCritiqueCommitRelation
+                                (fun ancestor descendant ->
+                                    Reads.compareCommits
+                                        ctx.Transport
+                                        implementationParts[0]
+                                        implementationParts[1]
+                                        ancestor
+                                        descendant
+                                    |> Result.mapError Errors.explain)
+                                input.ReviewCycleId
+                                input.SddWorkId
+                                input.Identities.ImplementationCandidate
+                                cycle
+                                reviewed
+                                verdict
+                            |> List.iter errors.Add
+                        with error ->
+                            errors.Add("critique/live review binding: " + error.Message)
+
+            if registrationRepository <> input.AcceptanceBinding.Repository then
+                errors.Add("acceptance repository differs from the applied unit registration")
+
             if implementationParts.Length = 2 && acceptanceParts.Length = 2 then
-                let implementationOwner, implementationRepo = implementationParts[0], implementationParts[1]
+                let implementationOwner, implementationRepo =
+                    implementationParts[0], implementationParts[1]
+
                 let acceptanceOwner, acceptanceRepo = acceptanceParts[0], acceptanceParts[1]
-                observePull implementationOwner implementationRepo input.Identities.ImplementationPullRequest input.Identities.ImplementationCandidate input.Identities.ImplementationMerge |> Result.map ignore |> retain
-                match observePull acceptanceOwner acceptanceRepo input.Identities.AcceptancePullRequest input.Identities.AcceptanceCandidate input.Identities.AcceptanceMerge with
+
+                observePull
+                    implementationOwner
+                    implementationRepo
+                    input.Identities.ImplementationPullRequest
+                    input.Identities.ImplementationCandidate
+                    input.Identities.ImplementationMerge
+                |> Result.map ignore
+                |> retain
+
+                match
+                    observePull
+                        acceptanceOwner
+                        acceptanceRepo
+                        input.Identities.AcceptancePullRequest
+                        input.Identities.AcceptanceCandidate
+                        input.Identities.AcceptanceMerge
+                with
                 | Error reason -> errors.Add reason
                 | Ok mergedAt when mergedAt = input.AcceptedAt -> ()
-                | Ok mergedAt -> errors.Add($"acceptedAt is caller-authored (%s{input.AcceptedAt}); expected acceptance PR merged_at %s{mergedAt}")
-                match Reads.prBaseTipSha ctx.Transport acceptanceOwner acceptanceRepo input.Identities.AcceptancePullRequest with
+                | Ok mergedAt ->
+                    errors.Add(
+                        $"acceptedAt is caller-authored (%s{input.AcceptedAt}); expected acceptance PR merged_at %s{mergedAt}"
+                    )
+
+                match
+                    Reads.prBaseTipSha
+                        ctx.Transport
+                        acceptanceOwner
+                        acceptanceRepo
+                        input.Identities.AcceptancePullRequest
+                with
                 | Error error -> errors.Add(Errors.explain error)
                 | Ok tip when tip = input.Identities.ProtectedMain -> ()
                 | Ok tip -> errors.Add($"protected main is %s{tip}, expected %s{input.Identities.ProtectedMain}")
+
                 let observeRemoteBinding label candidate merge (binding: RoadmapWorkUnit.RevisionBinding) =
                     let repository = binding.Repository.Split('/')
-                    match Reads.commitTreeSha ctx.Transport repository[0] repository[1] candidate, Reads.commitTreeSha ctx.Transport repository[0] repository[1] merge with
-                    | Error error, _ | _, Error error -> Error(Errors.explain error)
-                    | Ok candidateTree, Ok mergeTree when candidateTree <> binding.CandidateTree || mergeTree <> binding.MergeTree -> Error($"remote %s{label} trees differ from the supplied binding")
-                    | Ok candidateTree, Ok mergeTree when candidateTree <> mergeTree -> Error($"remote %s{label} merge does not preserve the candidate tree")
+
+                    match
+                        Reads.commitTreeSha ctx.Transport repository[0] repository[1] candidate,
+                        Reads.commitTreeSha ctx.Transport repository[0] repository[1] merge
+                    with
+                    | Error error, _
+                    | _, Error error -> Error(Errors.explain error)
+                    | Ok candidateTree, Ok mergeTree when
+                        candidateTree <> binding.CandidateTree || mergeTree <> binding.MergeTree
+                        ->
+                        Error($"remote %s{label} trees differ from the supplied binding")
+                    | Ok candidateTree, Ok mergeTree when candidateTree <> mergeTree ->
+                        Error($"remote %s{label} merge does not preserve the candidate tree")
                     | Ok _, Ok _ -> Ok()
-                observeRemoteBinding "implementation" input.Identities.ImplementationCandidate input.Identities.ImplementationMerge input.ImplementationBinding |> retain
-                observeRemoteBinding "acceptance" input.Identities.AcceptanceCandidate input.Identities.AcceptanceMerge input.AcceptanceBinding |> retain
+
+                observeRemoteBinding
+                    "implementation"
+                    input.Identities.ImplementationCandidate
+                    input.Identities.ImplementationMerge
+                    input.ImplementationBinding
+                |> retain
+
+                observeRemoteBinding
+                    "acceptance"
+                    input.Identities.AcceptanceCandidate
+                    input.Identities.AcceptanceMerge
+                    input.AcceptanceBinding
+                |> retain
 
             if errors.Count = 0 then Ok() else Error(List.ofSeq errors)
 
@@ -3169,30 +4118,58 @@ module Handlers =
                     match RoadmapWorkUnit.inspectAcceptanceCandidate input with
                     | Error findings -> fail (findings |> List.map string)
                     | Ok candidate ->
-                        let qualificationInput = Qualification.parseInput (File.ReadAllBytes args["--qualification-input"])
+                        let qualificationInput =
+                            Qualification.parseInput (File.ReadAllBytes args["--qualification-input"])
+
                         let sddExecutionBinding =
                             qualificationInput
                             |> Result.mapError (List.map string)
                             |> Result.bind (fun qualification ->
                                 let expected =
-                                    [ "analyze", Qualification.Analyze; "verify", Qualification.Verify; "ship", Qualification.Ship ]
+                                    [
+                                        "analyze", Qualification.Analyze
+                                        "verify", Qualification.Verify
+                                        "ship", Qualification.Ship
+                                    ]
+
                                 let errors =
                                     expected
                                     |> List.choose (fun (stage, kind) ->
-                                        let observation = input.SddObservations |> List.find (fun value -> value.Stage = stage)
-                                        let artifactDigest = CanonicalJson.sha256 (Encoding.UTF8.GetBytes observation.ArtifactJson)
+                                        let observation =
+                                            input.SddObservations |> List.find (fun value -> value.Stage = stage)
+
+                                        let artifactDigest =
+                                            CanonicalJson.sha256 (Encoding.UTF8.GetBytes observation.ArtifactJson)
+
                                         qualification.Operations
                                         |> List.tryFind (fun operation -> operation.Kind = kind)
                                         |> function
-                                            | Some operation when List.contains artifactDigest operation.ArtifactSha256 -> None
-                                            | _ -> Some($"SDD %s{stage} artifact is not an output of the production qualification operation"))
+                                            | Some operation when
+                                                List.contains artifactDigest operation.ArtifactSha256
+                                                ->
+                                                None
+                                            | _ ->
+                                                Some(
+                                                    $"SDD %s{stage} artifact is not an output of the production qualification operation"
+                                                ))
+
                                 if errors.IsEmpty then Ok() else Error errors)
+
                         match sddExecutionBinding with
                         | Error reasons -> fail reasons
-                        | Ok () ->
-                            match runQualification input.ImplementationBinding.CandidateTree args["--qualification-input"] args["--qualification-execution"] with
-                            | Error reasons -> fail (reasons |> List.map (fun reason -> "production qualification: " + reason))
-                            | Ok observedQualification when Qualification.canonicalResult observedQualification <> Qualification.canonicalResult input.Qualification ->
+                        | Ok() ->
+                            match
+                                runQualification
+                                    input.ImplementationBinding.CandidateTree
+                                    args["--qualification-input"]
+                                    args["--qualification-execution"]
+                            with
+                            | Error reasons ->
+                                fail (reasons |> List.map (fun reason -> "production qualification: " + reason))
+                            | Ok observedQualification when
+                                Qualification.canonicalResult observedQualification
+                                <> Qualification.canonicalResult input.Qualification
+                                ->
                                 fail [ "production qualification result differs from the acceptance input" ]
                             | Ok _ ->
                                 let observeSdd, observeLiveAuthorities =
@@ -3200,21 +4177,28 @@ module Handlers =
                                     | Some(observeSdd, Some observeAuthorities) -> observeSdd, observeAuthorities
                                     | Some(observeSdd, None) -> observeSdd, observeAuthorities
                                     | None -> independentlyObserveSdd, observeAuthorities
+
                                 match observeSdd input with
                                 | Error reasons -> fail reasons
-                                | Ok () ->
+                                | Ok() ->
                                     match observeLiveAuthorities input with
                                     | Error reasons -> fail reasons
-                                    | Ok () ->
+                                    | Ok() ->
                                         let observed = RoadmapWorkUnit.observeAcceptance candidate
                                         let accepted = RoadmapWorkUnit.sealObservedAcceptance observed
+
                                         match action with
                                         | "seal" ->
                                             let rendered = RoadmapWorkUnit.acceptedBundle accepted
-                                            match Map.tryFind "--output" args with Some path -> File.WriteAllText(path, rendered, UTF8Encoding(false)) | None -> printf "%s" rendered
+
+                                            match Map.tryFind "--output" args with
+                                            | Some path -> File.WriteAllText(path, rendered, UTF8Encoding(false))
+                                            | None -> printf "%s" rendered
+
                                             ExitGreen
                                         | _ -> ExitError
-            with error -> fail [ error.Message ]
+            with error ->
+                fail [ error.Message ]
 
     let roadmapUnitAccept runQualification ctx opts =
         roadmapUnitAcceptCore runQualification None ctx opts
@@ -3232,22 +4216,24 @@ module Handlers =
     // scheduling and mutation boundaries.
 
     let handlers =
-        [ Add, addCmd
-          Flush, flushCmd
-          SetField, setField
-          Child, child
-          BodyEdits, bodyEditsCmd
-          FieldId, fieldId
-          OptionId, optionId
-          ItemId, itemIdCmd
-          BoardCmd, fun ctx _ -> boardCmd ctx
-          Bootstrap, bootstrapCmd
-          Issues, issues
-          IntakeCmd, intakeCmd
-          Say, say
-          Inbox, inbox
-          RoomOpen, roomOpen
-          CommentCmd, commentCmd ]
+        [
+            Add, addCmd
+            Flush, flushCmd
+            SetField, setField
+            Child, child
+            BodyEdits, bodyEditsCmd
+            FieldId, fieldId
+            OptionId, optionId
+            ItemId, itemIdCmd
+            BoardCmd, fun ctx _ -> boardCmd ctx
+            Bootstrap, bootstrapCmd
+            Issues, issues
+            IntakeCmd, intakeCmd
+            Say, say
+            Inbox, inbox
+            RoomOpen, roomOpen
+            CommentCmd, commentCmd
+        ]
 
     // Program-level registrations are also a BoardOps-family product. Intake validation is the one
     // tokenless BoardOps route: it parses the draft and validates paths against the local checkout,

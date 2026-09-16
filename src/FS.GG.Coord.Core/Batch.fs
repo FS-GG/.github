@@ -14,32 +14,42 @@ module Batch =
         | UnknownHolder
 
     type Reservation =
-        { Owner: string
-          Repo: string
-          Paths: TouchSet
-          Holder: Holder }
+        {
+            Owner: string
+            Repo: string
+            Paths: TouchSet
+            Holder: Holder
+        }
 
     type Decision =
-        { Item: Item
-          Result: Schedulability
-          CollidedWith: Holder option
-          Rank: Rank.Rank }
+        {
+            Item: Item
+            Result: Schedulability
+            CollidedWith: Holder option
+            Rank: Rank.Rank
+        }
 
     type BatchResult =
-        { Chosen: Item list
-          Decisions: Decision list
-          Truncated: bool }
+        {
+            Chosen: Item list
+            Decisions: Decision list
+            Truncated: bool
+        }
 
     type WaveModel =
-        { Waves: int
-          ImplementerSlotsPerWave: int
-          ReviewSlots: int
-          ConsolidationThreshold: int }
+        {
+            Waves: int
+            ImplementerSlotsPerWave: int
+            ReviewSlots: int
+            ConsolidationThreshold: int
+        }
 
     type WaveOccupancy =
-        { ActiveItems: int
-          WaveCapacity: int
-          OpenSlots: int }
+        {
+            ActiveItems: int
+            WaveCapacity: int
+            OpenSlots: int
+        }
 
     // WHAT OCCUPIES AN IMPLEMENTER SLOT, AND WHAT MERELY LOOKS BUSY (.github#2678).
     //
@@ -59,9 +69,10 @@ module Batch =
     // occupancy is precisely what made it invisible. It gets its own name here instead.
     type SlotOccupancy =
         {
-          Occupying: Ref list
+            Occupying: Ref list
 
-          WorkWithoutClaim: Ref list }
+            WorkWithoutClaim: Ref list
+        }
 
     // Project the scheduler's own inputs onto the implementer-slot question (.github#2678).
     //
@@ -158,11 +169,13 @@ module Batch =
         // overlap (a marker makes the reservation `RClaim`, never `RUnowned`), but a hand-authored or
         // offline snapshot can, and a ref counted in both lists is the same double-count this projection
         // exists to remove.
-        { Occupying = occupying
-          WorkWithoutClaim =
-            unclaimedWork @ unownedReservations
-            |> List.distinct
-            |> List.filter (fun item -> not (Set.contains item occupyingSet)) }
+        {
+            Occupying = occupying
+            WorkWithoutClaim =
+                unclaimedWork @ unownedReservations
+                |> List.distinct
+                |> List.filter (fun item -> not (Set.contains item occupyingSet))
+        }
 
     let private waveModelPattern =
         Regex(
@@ -178,29 +191,33 @@ module Batch =
         else
             let m = matches[0]
 
-            let values =
-                [ for i in 1..4 -> Int32.TryParse(m.Groups[i].Value) ]
+            let values = [ for i in 1..4 -> Int32.TryParse(m.Groups[i].Value) ]
 
             match values with
-            | [ (true, waves); (true, implementers); (true, reviewers); (true, consolidation) ]
-                when waves = Protocol.wavePolicy.Waves
-                     && implementers = Protocol.wavePolicy.ImplementerSlotsPerWave
-                     && reviewers = Protocol.wavePolicy.ReviewSlots
-                     && consolidation = Protocol.wavePolicy.ConsolidationThreshold ->
+            | [ (true, waves); (true, implementers); (true, reviewers); (true, consolidation) ] when
+                waves = Protocol.wavePolicy.Waves
+                && implementers = Protocol.wavePolicy.ImplementerSlotsPerWave
+                && reviewers = Protocol.wavePolicy.ReviewSlots
+                && consolidation = Protocol.wavePolicy.ConsolidationThreshold
+                ->
                 Ok
-                    { Waves = waves
-                      ImplementerSlotsPerWave = implementers
-                      ReviewSlots = reviewers
-                      ConsolidationThreshold = consolidation }
+                    {
+                        Waves = waves
+                        ImplementerSlotsPerWave = implementers
+                        ReviewSlots = reviewers
+                        ConsolidationThreshold = consolidation
+                    }
             | _ -> Error "fsgg:wave-model:v1 must match the typed Protocol.wavePolicy"
 
     let waveOccupancy (model: WaveModel) (activeItems: Ref list) : WaveOccupancy =
         let active = activeItems |> List.distinct |> List.length
         let capacity = model.Waves * model.ImplementerSlotsPerWave
 
-        { ActiveItems = active
-          WaveCapacity = capacity
-          OpenSlots = max 0 (capacity - active) }
+        {
+            ActiveItems = active
+            WaveCapacity = capacity
+            OpenSlots = max 0 (capacity - active)
+        }
 
     let renderWaveOccupancy (occupancy: WaveOccupancy) : string =
         $"wave occupancy: {{\"activeItems\":%d{occupancy.ActiveItems},\"waveCapacity\":%d{occupancy.WaveCapacity},\"openSlots\":%d{occupancy.OpenSlots}}}"
@@ -271,10 +288,12 @@ module Batch =
     // claim whose own PR proves the work outlived its lease (#581), because a lapsed-but-alive lease is
     // evidence to talk, never a lease to reap.
     type private QueuedClaim =
-        { Worker: WorkerId
-          Holder: Ref
-          AgeSeconds: int
-          KnownLiveWork: bool }
+        {
+            Worker: WorkerId
+            Holder: Ref
+            AgeSeconds: int
+            KnownLiveWork: bool
+        }
 
     let private itemAge (item: Item) =
         match item.Claim with
@@ -293,28 +312,34 @@ module Batch =
             match d.Result, d.CollidedWith with
             | HeldBy w, _ ->
                 Some
-                    { Worker = w
-                      Holder = d.Item.Ref
-                      AgeSeconds = itemAge d.Item
-                      KnownLiveWork = false }
+                    {
+                        Worker = w
+                        Holder = d.Item.Ref
+                        AgeSeconds = itemAge d.Item
+                        KnownLiveWork = false
+                    }
             | HeldByLiveWork(w, _), _ ->
                 Some
-                    { Worker = w
-                      Holder = d.Item.Ref
-                      AgeSeconds = itemAge d.Item
-                      KnownLiveWork = true }
+                    {
+                        Worker = w
+                        Holder = d.Item.Ref
+                        AgeSeconds = itemAge d.Item
+                        KnownLiveWork = true
+                    }
             | OverlapsInFlight _, Some(LiveClaim(w, holder, age, livePr)) ->
                 Some
-                    { Worker = w
-                      Holder = holder
-                      AgeSeconds = age
-                      // DERIVED, not hardcoded (#712). This used to be `false` because the collided
-                      // `LiveClaim` had thrown its liveness away at the reserve site, so there was
-                      // nothing to set it from — which silently defeated the `leaseExpired` guard below
-                      // for the one shape it was written for, letting the phantom "lease EXPIRED —
-                      // reapable" reach the batch summary too. `livePr` restores the fact: `Some` proof
-                      // of life is exactly the #581 claim that is over its lease yet not reapable.
-                      KnownLiveWork = Option.isSome livePr }
+                    {
+                        Worker = w
+                        Holder = holder
+                        AgeSeconds = age
+                        // DERIVED, not hardcoded (#712). This used to be `false` because the collided
+                        // `LiveClaim` had thrown its liveness away at the reserve site, so there was
+                        // nothing to set it from — which silently defeated the `leaseExpired` guard below
+                        // for the one shape it was written for, letting the phantom "lease EXPIRED —
+                        // reapable" reach the batch summary too. `livePr` restores the fact: `Some` proof
+                        // of life is exactly the #581 claim that is over its lease yet not reapable.
+                        KnownLiveWork = Option.isSome livePr
+                    }
             | _ -> None)
 
     // A lease a `reap` would collect: expired by the clock, and NOT one whose PR proves the work is alive.
@@ -374,12 +399,16 @@ module Batch =
 
             match repos with
             | [ one ] ->
-                [ count
-                  $"  triage them to Ready, or schedule from Backlog as-is: scripts/fsgg-coord take --repo %s{one} --include-backlog" ]
+                [
+                    count
+                    $"  triage them to Ready, or schedule from Backlog as-is: scripts/fsgg-coord take --repo %s{one} --include-backlog"
+                ]
             | many ->
-                (count :: "  triage them to Ready, or schedule from Backlog as-is — one repo at a time:" :: [
-                    for r in many -> $"    scripts/fsgg-coord take --repo %s{r} --include-backlog"
-                ])
+                (count
+                 :: "  triage them to Ready, or schedule from Backlog as-is — one repo at a time:"
+                 :: [
+                     for r in many -> $"    scripts/fsgg-coord take --repo %s{r} --include-backlog"
+                 ])
 
     // THE DEADLOCK SECTION (#1092) — the one starved-queue cause that WAITING CANNOT FIX.
     //
@@ -416,29 +445,31 @@ module Batch =
         | rings ->
             let byRef = items |> List.map (fun i -> i.Ref, i) |> Map.ofList
 
-            [ for ring in rings do
-                  let inRing = Set.ofList ring
+            [
+                for ring in rings do
+                    let inRing = Set.ofList ring
 
-                  $"DEADLOCKED: %d{List.length ring} item(s) form a `Blocked by` CYCLE — NONE of them can EVER be startable, and no lease frees them:"
+                    $"DEADLOCKED: %d{List.length ring} item(s) form a `Blocked by` CYCLE — NONE of them can EVER be startable, and no lease frees them:"
 
-                  for r in ring do
-                      match Map.tryFind r byRef with
-                      | Some item ->
-                          let holds =
-                              item.Blockers
-                              |> List.filter (Blockers.isResolved >> not)
-                              |> List.choose (fun b -> b.Ref)
-                              |> List.filter inRing.Contains
-                              |> List.map (fun x -> x.Short)
-                              |> List.distinct
-                              |> String.concat ", "
+                    for r in ring do
+                        match Map.tryFind r byRef with
+                        | Some item ->
+                            let holds =
+                                item.Blockers
+                                |> List.filter (Blockers.isResolved >> not)
+                                |> List.choose (fun b -> b.Ref)
+                                |> List.filter inRing.Contains
+                                |> List.map (fun x -> x.Short)
+                                |> List.distinct
+                                |> String.concat ", "
 
-                          $"  %s{r.Short} — Blocked by %s{holds}"
-                      | None -> ()
+                            $"  %s{r.Short} — Blocked by %s{holds}"
+                        | None -> ()
 
-                  "  This is a BUG, not a wait. Break ONE edge: re-read each item's `Blocked by` premise — the"
-                  "  edge to cut is the one whose premise is spent (the overlap was retracted, the work merged)."
-                  "  scripts/fsgg-coord set-field <ref> 'Blocked by' ''" ]
+                    "  This is a BUG, not a wait. Break ONE edge: re-read each item's `Blocked by` premise — the"
+                    "  edge to cut is the one whose premise is spent (the overlap was retracted, the work merged)."
+                    "  scripts/fsgg-coord set-field <ref> 'Blocked by' ''"
+            ]
 
     // Returns [] whenever the queue is NOT starved: work WAS handed out (a `chosen` batch is not starved),
     // or nothing is queued behind a live claim AND nothing was withheld at the column AND no `Blocked by`
@@ -504,9 +535,11 @@ module Batch =
                         expired |> List.map (fun q -> q.Holder.Repo) |> List.distinct |> List.sort
 
                     let banner =
-                        [ "this queue is BUSY, not empty."
-                          $"%d{List.length queued} item(s) are QUEUED BEHIND LIVE CLAIMS held by: %s{holders}"
-                          $"  soonest: %s{soonest}" ]
+                        [
+                            "this queue is BUSY, not empty."
+                            $"%d{List.length queued} item(s) are QUEUED BEHIND LIVE CLAIMS held by: %s{holders}"
+                            $"  soonest: %s{soonest}"
+                        ]
 
                     // The one blocker a worker can clear ALONE is a dead lease — so if any has expired, do not
                     // let it read as a wait: name how many, and the exact `reap` that collects them. `reap`
@@ -519,7 +552,9 @@ module Batch =
                         match reapRepos with
                         | [] -> []
                         | [ one ] ->
-                            [ $"  %d{expiredLeases} of those lease(s) have EXPIRED — collect them: scripts/fsgg-coord reap --repo %s{one} --apply" ]
+                            [
+                                $"  %d{expiredLeases} of those lease(s) have EXPIRED — collect them: scripts/fsgg-coord reap --repo %s{one} --apply"
+                            ]
                         | many ->
                             ($"  %d{expiredLeases} of those lease(s) have EXPIRED — collect them, one repo at a time:"
                              :: [ for r in many -> $"    scripts/fsgg-coord reap --repo %s{r} --apply" ])
@@ -569,7 +604,9 @@ module Batch =
     let private unusableReservation (r: Reservation) =
         match r.Paths with
         | Unreadable reason ->
-            [ $"the holder's issue body could not be read, so its touch-set is UNKNOWN (%s{reason})" ]
+            [
+                $"the holder's issue body could not be read, so its touch-set is UNKNOWN (%s{reason})"
+            ]
         | _ -> TouchSet.unmatchable r.Paths
 
     let scheduleWith
@@ -610,158 +647,167 @@ module Batch =
 
         | [] ->
 
-        // PRIORITY-GREEDY, not merely maximal (.github#1598). The disjointness guarantee is unchanged —
-        // this still admits a candidate only if it clears everything already reserved — but the ORDER the
-        // fold walks is now the derived rank, so the highest-ranked schedulable item is ALWAYS admitted
-        // rather than losing its lane to whichever lower-value item happened to have a smaller number.
-        // That is the exact failure this replaces: on 2026-07-27 three P0 items were refused as
-        // "overlaps batch member #1560" while #1560 was hardening, and the only remedy available was to
-        // park nineteen rows in `Backlog`.
-        //
-        // DETERMINISM IS STILL THE POINT, and it survives: every rank term is a fact about the board, and
-        // the issue NUMBER is the final term, so two workers reading one cached window (#418) still
-        // compute one batch. What is NOT stable is the batch across DIFFERENT windows — rank moves as the
-        // board moves, so a caller must not assume two `batch` calls return the same set (a risk this
-        // item states rather than leaves to be discovered).
-        //
-        // The ranks are computed ONCE, here, and travel on each `Decision` so the renderer prints the rank
-        // the fold used. The ranks travel WITH their items through the fold — never re-looked-up by ref. A
-        // `Map` keyed on `Ref` was the obvious spelling for THAT and it is the wrong one: it would
-        // silently collapse two board cards pointing at one issue into a single entry, and it forced an
-        // unreachable "rank not found" default, which is a branch nothing can ever test.
-        //
-        // `boardCounts` IS keyed on `Ref`, and that is a different question with a different answer: a
-        // COUNT is a property of the blocked-upon ISSUE, so two cards pointing at one issue genuinely
-        // share one count. It is a lookup table, not the carrier.
-        //
-        // **THE COUNTS COME FROM THE CALLER, NOT FROM `candidates`** (.github#1628). They used to be
-        // derived here, from the candidate set, and `Scan.snapshot` scopes that set with `--repo` — so an
-        // item three items in another repo were `Blocked by` counted 0 under `batch --repo <its repo>`
-        // and 3 under a bare `batch`. Same board, same instant, two ranks, and the scoped spelling is the
-        // one every worker runs. The blocking GRAPH is a whole-board fact; the candidate LIST is a scoped
-        // projection of it, and deriving the former from the latter truncated it silently — no error, the
-        // batch still well-formed, still disjoint, still deterministic, and ordered by a count that was
-        // wrong in the direction that matters most.
-        let ordered = Rank.ofItemsWith boardCounts candidates |> List.sortBy (snd >> Rank.key)
+            // PRIORITY-GREEDY, not merely maximal (.github#1598). The disjointness guarantee is unchanged —
+            // this still admits a candidate only if it clears everything already reserved — but the ORDER the
+            // fold walks is now the derived rank, so the highest-ranked schedulable item is ALWAYS admitted
+            // rather than losing its lane to whichever lower-value item happened to have a smaller number.
+            // That is the exact failure this replaces: on 2026-07-27 three P0 items were refused as
+            // "overlaps batch member #1560" while #1560 was hardening, and the only remedy available was to
+            // park nineteen rows in `Backlog`.
+            //
+            // DETERMINISM IS STILL THE POINT, and it survives: every rank term is a fact about the board, and
+            // the issue NUMBER is the final term, so two workers reading one cached window (#418) still
+            // compute one batch. What is NOT stable is the batch across DIFFERENT windows — rank moves as the
+            // board moves, so a caller must not assume two `batch` calls return the same set (a risk this
+            // item states rather than leaves to be discovered).
+            //
+            // The ranks are computed ONCE, here, and travel on each `Decision` so the renderer prints the rank
+            // the fold used. The ranks travel WITH their items through the fold — never re-looked-up by ref. A
+            // `Map` keyed on `Ref` was the obvious spelling for THAT and it is the wrong one: it would
+            // silently collapse two board cards pointing at one issue into a single entry, and it forced an
+            // unreachable "rank not found" default, which is a branch nothing can ever test.
+            //
+            // `boardCounts` IS keyed on `Ref`, and that is a different question with a different answer: a
+            // COUNT is a property of the blocked-upon ISSUE, so two cards pointing at one issue genuinely
+            // share one count. It is a lookup table, not the carrier.
+            //
+            // **THE COUNTS COME FROM THE CALLER, NOT FROM `candidates`** (.github#1628). They used to be
+            // derived here, from the candidate set, and `Scan.snapshot` scopes that set with `--repo` — so an
+            // item three items in another repo were `Blocked by` counted 0 under `batch --repo <its repo>`
+            // and 3 under a bare `batch`. Same board, same instant, two ranks, and the scoped spelling is the
+            // one every worker runs. The blocking GRAPH is a whole-board fact; the candidate LIST is a scoped
+            // projection of it, and deriving the former from the latter truncated it silently — no error, the
+            // batch still well-formed, still disjoint, still deterministic, and ordered by a count that was
+            // wrong in the direction that matters most.
+            let ordered =
+                Rank.ofItemsWith boardCounts candidates |> List.sortBy (snd >> Rank.key)
 
-        let mutable reserved = inFlight
-        let mutable chosen = []
-        let mutable decisions = []
-        let mutable truncated = false
-        let mutable stop = false
+            let mutable reserved = inFlight
+            let mutable chosen = []
+            let mutable decisions = []
+            let mutable truncated = false
+            let mutable stop = false
 
-        let atLimit () =
-            match limit with
-            | Some n when n > 0 -> List.length chosen >= n
-            | _ -> false
+            let atLimit () =
+                match limit with
+                | Some n when n > 0 -> List.length chosen >= n
+                | _ -> false
 
-        // A candidate whose files are OCCUPIED does not merely drop out of the batch — it reserves.
-        // The lock, not the board column, is the truth: a claim whose `Status` flip failed still owns
-        // the item, and its files with it. Skipping it WITHOUT reserving would hand a later candidate
-        // the very files another worker is standing in — which is the accident this whole scheduler
-        // exists to prevent.
-        let reserve (item: Item) (holder: Holder) =
-            reserved <-
-                reserved
-                @ [ { Owner = item.Ref.Owner
-                      Repo = item.PathRepo
-                      Paths = item.TouchSet
-                      Holder = holder } ]
+            // A candidate whose files are OCCUPIED does not merely drop out of the batch — it reserves.
+            // The lock, not the board column, is the truth: a claim whose `Status` flip failed still owns
+            // the item, and its files with it. Skipping it WITHOUT reserving would hand a later candidate
+            // the very files another worker is standing in — which is the accident this whole scheduler
+            // exists to prevent.
+            let reserve (item: Item) (holder: Holder) =
+                reserved <-
+                    reserved
+                    @ [
+                        {
+                            Owner = item.Ref.Owner
+                            Repo = item.PathRepo
+                            Paths = item.TouchSet
+                            Holder = holder
+                        }
+                    ]
 
-        let ageOf (item: Item) =
-            match item.Claim with
-            | Some(c, _) -> c.AgeSeconds
-            | None -> 0
+            let ageOf (item: Item) =
+                match item.Claim with
+                | Some(c, _) -> c.AgeSeconds
+                | None -> 0
 
-        let step (item: Item, rank: Rank.Rank) =
-            let owner, repo = item.Ref.Owner, item.PathRepo
+            let step (item: Item, rank: Rank.Rank) =
+                let owner, repo = item.Ref.Owner, item.PathRepo
 
-            // Only this repo's reservations. The ORDER is part of the contract: `inFlight` precedes
-            // the batch members appended below, so a candidate colliding with both reports the LIVE
-            // CLAIM — the collision that has a lease and a worker behind it, and therefore the only
-            // one an operator can actually act on.
-            let visible = reserved |> inRepo owner repo |> List.map (fun r -> r.Paths)
+                // Only this repo's reservations. The ORDER is part of the contract: `inFlight` precedes
+                // the batch members appended below, so a candidate colliding with both reports the LIVE
+                // CLAIM — the collision that has a lease and a worker behind it, and therefore the only
+                // one an operator can actually act on.
+                let visible = reserved |> inRepo owner repo |> List.map (fun r -> r.Paths)
 
-            let result = schedulable generated allowBacklog visible item
+                let result = schedulable generated allowBacklog visible item
 
-            let collidedWith, reportedResult =
+                let collidedWith, reportedResult =
+                    match result with
+                    | OverlapsInFlight((_, reservedToken) :: _ as hits) ->
+                        // `conflicts` yields (candidateToken, reservedToken), and the RESERVED side is
+                        // the key that joins this collision back to its owner (#428). Name the holder,
+                        // not just the files: nobody can wait for, or talk to, a pair of paths.
+                        let holder = holderOf reserved owner repo reservedToken
+
+                        // `schedulable` aggregates every collision so the fold can still make its one
+                        // safety decision. The passed-over sentence, however, names one holder: keep its
+                        // evidence to that holder's tokens rather than attributing another reservation to
+                        // the first worker in the aggregate (#2229).
+                        let holderHits =
+                            holder
+                            |> Option.map (fun h ->
+                                hits
+                                |> List.filter (fun (_, token) -> holderOf reserved owner repo token = Some h))
+                            |> Option.defaultValue hits
+
+                        holder |> Option.orElse (Some UnknownHolder), OverlapsInFlight holderHits
+                    | _ -> None, result
+
+                decisions <-
+                    {
+                        Item = item
+                        Result = reportedResult
+                        CollidedWith = collidedWith
+                        Rank = rank
+                    }
+                    :: decisions
+
                 match result with
-                | OverlapsInFlight((_, reservedToken) :: _ as hits) ->
-                    // `conflicts` yields (candidateToken, reservedToken), and the RESERVED side is
-                    // the key that joins this collision back to its owner (#428). Name the holder,
-                    // not just the files: nobody can wait for, or talk to, a pair of paths.
-                    let holder = holderOf reserved owner repo reservedToken
+                | Startable ->
+                    chosen <- item :: chosen
+                    reserve item (BatchMember item.Ref)
 
-                    // `schedulable` aggregates every collision so the fold can still make its one
-                    // safety decision. The passed-over sentence, however, names one holder: keep its
-                    // evidence to that holder's tokens rather than attributing another reservation to
-                    // the first worker in the aggregate (#2229).
-                    let holderHits =
-                        holder
-                        |> Option.map (fun h ->
-                            hits
-                            |> List.filter (fun (_, token) -> holderOf reserved owner repo token = Some h))
-                        |> Option.defaultValue hits
+                    if atLimit () then
+                        stop <- true
+                        // TRUNCATED ONLY IF SOMETHING WAS LEFT UNSEEN. Hitting the cap ON the last
+                        // candidate evaluated everything; reporting a cap that did not bite would be its
+                        // own small lie.
+                        truncated <- List.length decisions < List.length ordered
+                | AwaitingDeliveryRouteDecision _ -> ()
 
-                    holder |> Option.orElse (Some UnknownHolder), OverlapsInFlight holderHits
-                | _ -> None, result
+                // Held — by a live lease, or by a lapsed one whose `item/<n>-*` PR proves the work is
+                // still alive (#581). Either way its worker is IN those files.
+                | HeldBy worker -> reserve item (LiveClaim(worker, item.Ref, ageOf item, None))
+                // #712's root cause was HERE: the PR that proves this claim is alive (#581) was dropped
+                // (`_`), so every later item that collided with this reservation saw a liveness-less
+                // `LiveClaim` and was told to wait out a lease that will never free. Carry it through.
+                | HeldByLiveWork(worker, pr) -> reserve item (LiveClaim(worker, item.Ref, ageOf item, Some pr))
 
-            decisions <-
-                { Item = item
-                  Result = reportedResult
-                  CollidedWith = collidedWith
-                  Rank = rank }
-                :: decisions
+                // NOT A UNIT OF WORK (.github#2712) — reserves nothing and is never chosen, exactly like the
+                // other non-startable verdicts below it. It reserves nothing DELIBERATELY: a standing row's
+                // touch-set (a register declares none) must not be held against work that is real.
+                | NotAUnitOfWork _
+                | WrongStatus _
+                | IssueClosed
+                | NoTouchSet
+                | DeliberatelyNoTouchSet
+                | UnusableTouchSet _
+                | BlockedBy _
+                | AwaitingHuman _
+                | ItemPrOpen _
+                | OverlapsInFlight _
+                | Undetermined _ ->
+                    // Not startable, and reserving nothing. `ItemPrOpen` is the #651 leg: an open `item/<n>-*`
+                    // PR with no marker means someone is implementing it, but there is no claim to name and no
+                    // lease to wait out — so, like a markerless Ready row, it reserves nothing here; it is simply
+                    // not handed out (which is what stops the duplicate implementation).
+                    ()
 
-            match result with
-            | Startable ->
-                chosen <- item :: chosen
-                reserve item (BatchMember item.Ref)
+            for ranked in ordered do
+                if not stop then
+                    step ranked
 
-                if atLimit () then
-                    stop <- true
-                    // TRUNCATED ONLY IF SOMETHING WAS LEFT UNSEEN. Hitting the cap ON the last
-                    // candidate evaluated everything; reporting a cap that did not bite would be its
-                    // own small lie.
-                    truncated <- List.length decisions < List.length ordered
-            | AwaitingDeliveryRouteDecision _ -> ()
-
-            // Held — by a live lease, or by a lapsed one whose `item/<n>-*` PR proves the work is
-            // still alive (#581). Either way its worker is IN those files.
-            | HeldBy worker -> reserve item (LiveClaim(worker, item.Ref, ageOf item, None))
-            // #712's root cause was HERE: the PR that proves this claim is alive (#581) was dropped
-            // (`_`), so every later item that collided with this reservation saw a liveness-less
-            // `LiveClaim` and was told to wait out a lease that will never free. Carry it through.
-            | HeldByLiveWork(worker, pr) -> reserve item (LiveClaim(worker, item.Ref, ageOf item, Some pr))
-
-            // NOT A UNIT OF WORK (.github#2712) — reserves nothing and is never chosen, exactly like the
-            // other non-startable verdicts below it. It reserves nothing DELIBERATELY: a standing row's
-            // touch-set (a register declares none) must not be held against work that is real.
-            | NotAUnitOfWork _
-            | WrongStatus _
-            | IssueClosed
-            | NoTouchSet
-            | DeliberatelyNoTouchSet
-            | UnusableTouchSet _
-            | BlockedBy _
-            | AwaitingHuman _
-            | ItemPrOpen _
-            | OverlapsInFlight _
-            | Undetermined _ ->
-                // Not startable, and reserving nothing. `ItemPrOpen` is the #651 leg: an open `item/<n>-*`
-                // PR with no marker means someone is implementing it, but there is no claim to name and no
-                // lease to wait out — so, like a markerless Ready row, it reserves nothing here; it is simply
-                // not handed out (which is what stops the duplicate implementation).
-                ()
-
-        for ranked in ordered do
-            if not stop then
-                step ranked
-
-        Green
-            { Chosen = List.rev chosen
-              Decisions = List.rev decisions
-              Truncated = truncated }
+            Green
+                {
+                    Chosen = List.rev chosen
+                    Decisions = List.rev decisions
+                    Truncated = truncated
+                }
 
     // `scheduleWith` when the candidate list IS the whole board — the counts are derived from it.
     //
@@ -806,8 +852,10 @@ module Batch =
     // stderr refusal prose, and a column layout that wraps is worse than a sentence that does not.
     let explainRanking (result: BatchResult) : string list =
         let header =
-            [ "RANKING (.github#1598) — candidates in the order the scheduler considered them."
-              "  rank inputs, in lexicographic order: starvation escalation, blocking count, Class, Phase, age, issue number." ]
+            [
+                "RANKING (.github#1598) — candidates in the order the scheduler considered them."
+                "  rank inputs, in lexicographic order: starvation escalation, blocking count, Class, Phase, age, issue number."
+            ]
 
         let lines =
             result.Decisions
@@ -841,8 +889,7 @@ module Batch =
                     // priority evidence is not being punished, it simply has nothing to sort on, and a
                     // board of such items schedules exactly as it did before this existed.
                     $"  refused  %s{id} — %s{inputs} (no priority evidence: sorts last); %s{overlapHolder}"
-                | _ when Rank.isUnranked d.Rank ->
-                    $"  refused  %s{id} — %s{inputs} (no priority evidence: sorts last)"
+                | _ when Rank.isUnranked d.Rank -> $"  refused  %s{id} — %s{inputs} (no priority evidence: sorts last)"
                 | OverlapsInFlight _ -> $"  refused  %s{id} — %s{inputs}; %s{overlapHolder}"
                 | _ -> $"  refused  %s{id} — %s{inputs}")
 

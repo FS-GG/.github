@@ -61,12 +61,7 @@ module Chore =
         | Whole of Item list
         | Filtered of Item list
 
-    val safePoint:
-        boundary: Boundary ->
-        worker: WorkerId ->
-        observed: Board ->
-        subject: Item list ->
-            SafePoint option
+    val safePoint: boundary: Boundary -> worker: WorkerId -> observed: Board -> subject: Item list -> SafePoint option
 
     /// Derive stale-claim and Class maintenance. It never independently derives Status.
     val derive: items: Item list -> Chore list

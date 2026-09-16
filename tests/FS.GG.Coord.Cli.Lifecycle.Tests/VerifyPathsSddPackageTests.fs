@@ -24,7 +24,12 @@ module VerifyPathsSddPackageTests =
     /// JSON. `Client`'s search matches on that literal prefix, so the fixture must reproduce it rather
     /// than approximate it.
     let private receiptComment (subjectRevision: string) (route: string) (workId: string option) =
-        let selected = if route = "sdd-required" then Some FS.GG.Coord.DeliveryRoute.SddRequired else Some FS.GG.Coord.DeliveryRoute.Lightweight
+        let selected =
+            if route = "sdd-required" then
+                Some FS.GG.Coord.DeliveryRoute.SddRequired
+            else
+                Some FS.GG.Coord.DeliveryRoute.Lightweight
+
         StructuredFixtures.routeComment "FS-GG/.github#42" selected "fixture-host" workId
 
     /// The engine hashes the issue body's own canonical SUBJECT to decide whether a receipt is current
@@ -56,23 +61,54 @@ module VerifyPathsSddPackageTests =
         Fake.Recorder(fun (req: Request) ->
             if req.Path.EndsWith "issues/42/comments" then
                 match comments with
-                | Some bodies -> Ok { Status = 200; Body = restComments bodies; ETag = None; NextLink = None; Headers = Map.empty }
+                | Some bodies ->
+                    Ok
+                        {
+                            Status = 200
+                            Body = restComments bodies
+                            ETag = None
+                            NextLink = None
+                            Headers = Map.empty
+                        }
                 | None -> Error(Errors.Malformed("receipt ledger", "the fixture refuses this read"))
             elif req.Path.EndsWith "pulls/900/files" then
-                Ok { Status = 200; Body = files; ETag = None; NextLink = None; Headers = Map.empty }
+                Ok
+                    {
+                        Status = 200
+                        Body = files
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             elif req.Path.EndsWith "pulls/900" then
-                Ok { Status = 200; Body = prBody; ETag = None; NextLink = None; Headers = Map.empty }
+                Ok
+                    {
+                        Status = 200
+                        Body = prBody
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             elif req.Path.EndsWith "issues/42" then
-                Ok { Status = 200; Body = issueBody; ETag = None; NextLink = None; Headers = Map.empty }
+                Ok
+                    {
+                        Status = 200
+                        Body = issueBody
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             else
                 Error(Errors.NotFound $"unexpected read for this fixture: %s{req.Path}"))
 
     let private context (transport: Fake.Recorder) : Kernel.Context =
-        { Transport = transport
-          Owner = "FS-GG"
-          Title = "Coordination"
-          DefaultRepo = Some ".github"
-          ChoreLocks = [] }
+        {
+            Transport = transport
+            Owner = "FS-GG"
+            Title = "Coordination"
+            DefaultRepo = Some ".github"
+            ChoreLocks = []
+        }
 
     /// Drive `LiveHandlers.verifyPaths` and capture (exit code, stdout, STDERR) — same cache-isolation licence
     /// as `VerifyPathsClosingKeywordTests.runVerifyPaths`.
@@ -85,7 +121,9 @@ module VerifyPathsSddPackageTests =
     /// verdict and removes the only pointer to its cause — which is exactly what the production doc
     /// comment promises will not happen, so the promise needs a witness.
     let private runVerifyPaths (transport: Fake.Recorder) : int * string * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2324-" + Guid.NewGuid().ToString "n")
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-2324-" + Guid.NewGuid().ToString "n")
+
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let stdout = Console.Out
         let stderr = Console.Error
@@ -110,6 +148,7 @@ module VerifyPathsSddPackageTests =
                     ignore
                     (context transport)
                     opts
+
             Console.Out.Flush()
             Console.Error.Flush()
             code, captured.ToString(), capturedError.ToString()
@@ -127,8 +166,12 @@ module VerifyPathsSddPackageTests =
     /// item carries at filing time, because `work/<id>/` and `readiness/<id>/` cannot be named before the
     /// item exists.
     let private declaredBody = "Paths: src/Impl.fs"
-    let private issue = $"""{{"number":42,"body":%s{JsonSerializer.Serialize declaredBody}}}"""
-    let private sddReceipt = receiptComment (legacyRevision declaredBody) "sdd-required" (Some "2324-mandatory-sdd-output-enforcement")
+
+    let private issue =
+        $"""{{"number":42,"body":%s{JsonSerializer.Serialize declaredBody}}}"""
+
+    let private sddReceipt =
+        receiptComment (legacyRevision declaredBody) "sdd-required" (Some "2324-mandatory-sdd-output-enforcement")
 
     let private files (names: string list) =
         names
@@ -137,13 +180,16 @@ module VerifyPathsSddPackageTests =
         |> sprintf "[%s]"
 
     let private packageFiles =
-        [ "src/Impl.fs"
-          "work/2324-mandatory-sdd-output-enforcement/spec.md"
-          "readiness/2324-mandatory-sdd-output-enforcement/analysis.json" ]
+        [
+            "src/Impl.fs"
+            "work/2324-mandatory-sdd-output-enforcement/spec.md"
+            "readiness/2324-mandatory-sdd-output-enforcement/analysis.json"
+        ]
 
     [<Fact>]
     let ``#2324 AC-001 the item's own sdd package is expected output, not drift`` () =
-        let code, out, _ = runVerifyPaths (serving issue (files packageFiles) (Some [ sddReceipt ]))
+        let code, out, _ =
+            runVerifyPaths (serving issue (files packageFiles) (Some [ sddReceipt ]))
 
         Assert.Equal(Kernel.ExitGreen, code)
         Assert.Contains("FSGG-PATHS OK", out)
@@ -180,9 +226,11 @@ module VerifyPathsSddPackageTests =
         // this assertion would catch it.
         let lightweight = receiptComment (legacyRevision declaredBody) "lightweight" None
 
-        let numberShapedPackage = [ "src/Impl.fs"; "work/42/spec.md"; "readiness/42/analysis.json" ]
+        let numberShapedPackage =
+            [ "src/Impl.fs"; "work/42/spec.md"; "readiness/42/analysis.json" ]
 
-        let code, out, _ = runVerifyPaths (serving issue (files numberShapedPackage) (Some [ lightweight ]))
+        let code, out, _ =
+            runVerifyPaths (serving issue (files numberShapedPackage) (Some [ lightweight ]))
 
         Assert.Equal(Kernel.ExitRed, code)
         Assert.Contains("FSGG-PATHS DRIFT", out)
@@ -219,7 +267,8 @@ module VerifyPathsSddPackageTests =
             receiptComment "ignored" "sdd-required" (Some "2324-mandatory-sdd-output-enforcement")
             |> _.Replace("\"scope\":[\"fixture scope\"]", "\"scope\":[\"tampered scope\"]")
 
-        let code, out, err = runVerifyPaths (serving issue (files packageFiles) (Some [ stale ]))
+        let code, out, err =
+            runVerifyPaths (serving issue (files packageFiles) (Some [ stale ]))
 
         Assert.Equal(Kernel.ExitRed, code)
         Assert.Contains("FSGG-PATHS DRIFT", out)
@@ -239,12 +288,15 @@ module VerifyPathsSddPackageTests =
         // that discriminates: it is a DIFFERENT item's directory, and `TouchSet.covers` knows that
         // because it compares path SEGMENTS, not characters.
         let otherItemsPackage =
-            [ "src/Impl.fs"
-              "work/2324-mandatory-sdd-output-enforcement-followup/spec.md"
-              "work/9999-someone-elses-item/spec.md"
-              "readiness/9999-someone-elses-item/analysis.json" ]
+            [
+                "src/Impl.fs"
+                "work/2324-mandatory-sdd-output-enforcement-followup/spec.md"
+                "work/9999-someone-elses-item/spec.md"
+                "readiness/9999-someone-elses-item/analysis.json"
+            ]
 
-        let code, out, _ = runVerifyPaths (serving issue (files otherItemsPackage) (Some [ sddReceipt ]))
+        let code, out, _ =
+            runVerifyPaths (serving issue (files otherItemsPackage) (Some [ sddReceipt ]))
 
         Assert.Equal(Kernel.ExitRed, code)
         Assert.Contains("FSGG-PATHS DRIFT", out)

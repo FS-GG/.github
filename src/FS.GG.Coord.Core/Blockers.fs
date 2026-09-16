@@ -93,7 +93,9 @@ module Blockers =
                     let w = stack.Pop()
                     onStack.Remove w |> ignore
                     comp.Add w
-                    if w = v then popping <- false
+
+                    if w = v then
+                        popping <- false
 
                 let members = List.ofSeq comp
 
@@ -123,7 +125,8 @@ module Blockers =
     // forms are anchored (`^…$`) so trailing prose — `FS-GG/FS.GG.SDD#8 (republish vehicle)` — cannot be
     // silently swallowed by a ref prefix; only a token that is a ref, whole, canonicalizes.
     let private canonToken (defaultOwner: string) (defaultRepo: string) (tok: string) : string option =
-        let url = Regex.Match(tok, @"^https?://github\.com/([\w.-]+)/([\w.-]+)/issues/(\d+)$")
+        let url =
+            Regex.Match(tok, @"^https?://github\.com/([\w.-]+)/([\w.-]+)/issues/(\d+)$")
 
         if url.Success then
             Some $"%s{url.Groups.[1].Value}/%s{url.Groups.[2].Value}#%s{url.Groups.[3].Value}"

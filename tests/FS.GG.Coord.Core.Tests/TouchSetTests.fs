@@ -54,10 +54,7 @@ module TouchSetTests =
         // `TouchSet.parse` intentionally reads issue-body declarations one physical line at a time. This
         // pins that boundary so argv callers must split embedded newlines before constructing their
         // synthetic `Paths:` body rather than assuming the parser will reinterpret ordinary body lines.
-        Assert.Equal(
-            Declared [ Matchable "src/A.fs" ],
-            TouchSet.parse "Paths: src/A.fs\nsrc/B.fs\nsrc/C.fs"
-        )
+        Assert.Equal(Declared [ Matchable "src/A.fs" ], TouchSet.parse "Paths: src/A.fs\nsrc/B.fs\nsrc/C.fs")
 
     // ---- #496: `Paths: none` is a DECISION; a missing line is an OMISSION ---------------------------
     // Before they were told apart they rendered identically, so no gate could be written at all: nine
@@ -160,7 +157,8 @@ module TouchSetTests =
     let ``#273 a token that can match no file is refused, never tolerated`` (token: string) =
         match TouchSet.classify token with
         | Unmatchable _ -> ()
-        | Matchable t -> failwith $"'%s{t}' can match no file — treating it as a token makes it DISJOINT against everyone"
+        | Matchable t ->
+            failwith $"'%s{t}' can match no file — treating it as a token makes it DISJOINT against everyone"
 
     // ---- #1507: a FLAG is never a path ---------------------------------------------------------------
     // `widen <ref> --paths <tokens> --json` wrote `--json` into a live claim's `Paths:` line at exit 0.
@@ -184,7 +182,8 @@ module TouchSetTests =
         match TouchSet.classify token with
         | Unmatchable _ -> ()
         | Matchable t ->
-            failwith $"'%s{t}' is a FLAG — calling it matchable is what let `widen --paths ... --json` corrupt a live declaration"
+            failwith
+                $"'%s{t}' is a FLAG — calling it matchable is what let `widen --paths ... --json` corrupt a live declaration"
 
     [<Fact>]
     let ``#1507 the flag-shape rule survives the separator whitespace parse leaves behind`` () =
@@ -196,7 +195,13 @@ module TouchSetTests =
     [<Fact>]
     let ``#1507 a real path is NOT flag-shaped — the guard must not eat the grammar`` () =
         // The mirror. A guard that also refused real declarations would just move the defect.
-        for token in [ "src/FS.GG.Coord.Core/"; "Directory.Packages.props"; "src/Scene/**"; "-- odd/name" ] do
+        for token in
+            [
+                "src/FS.GG.Coord.Core/"
+                "Directory.Packages.props"
+                "src/Scene/**"
+                "-- odd/name"
+            ] do
             if token.StartsWith "-" then
                 Assert.True(TouchSet.isFlagShaped token)
             else
@@ -216,8 +221,7 @@ module TouchSetTests =
         // case, where the item LOOKS declared while one token silently reserves nothing. It is what makes
         // `take` exit 3 (EX_REFUSED) instead of handing a second worker the same files.
         let ts =
-            TouchSet.parse
-                "Paths: .claude/skills/, .codex/skills/, scripts/materialize-skill-roots.sh, --json"
+            TouchSet.parse "Paths: .claude/skills/, .codex/skills/, scripts/materialize-skill-roots.sh, --json"
 
         Assert.Equal(TouchSet.SomeUnmatchable [ "--json" ], TouchSet.usability ts)
 
@@ -267,18 +271,14 @@ module TouchSetTests =
         let a = Declared [ Matchable "scripts/skill-view" ]
         let b = Declared [ Matchable "scripts/skill-view" ]
 
-        Assert.Empty(
-            TouchSet.scopedConflicts "FS-GG" "FS.GG.Audio" "FS-GG" ".github" a b
-        )
+        Assert.Empty(TouchSet.scopedConflicts "FS-GG" "FS.GG.Audio" "FS-GG" ".github" a b)
 
     [<Fact>]
     let ``#1732 equal tokens in the same declared repo scope still collide`` () =
         let a = Declared [ Matchable "scripts/skill-view" ]
         let b = Declared [ Matchable "scripts/skill-view" ]
 
-        Assert.NotEmpty(
-            TouchSet.scopedConflicts "FS-GG" "FS.GG.Audio" "FS-GG" "FS.GG.Audio" a b
-        )
+        Assert.NotEmpty(TouchSet.scopedConflicts "FS-GG" "FS.GG.Audio" "FS-GG" "FS.GG.Audio" a b)
 
     // ---- .github#2305 / ADR-0044: generated, CI-gated artifacts are not reservable ------------------
     // `verify-paths` already excludes a repo's generated artifacts from DRIFT (ADR-0044, #309, #498).
@@ -295,14 +295,24 @@ module TouchSetTests =
     [<Fact>]
     let ``#2305 generatedTokens names an exact match`` () =
         let generated =
-            Set.ofList [ "registry/driver-skill-manifest.json"; "registry/coordination-kit-skill-manifest.json" ]
+            Set.ofList
+                [
+                    "registry/driver-skill-manifest.json"
+                    "registry/coordination-kit-skill-manifest.json"
+                ]
 
-        let requested = [ ".claude/skills/drive-board/SKILL.md"; "registry/driver-skill-manifest.json" ]
+        let requested =
+            [ ".claude/skills/drive-board/SKILL.md"; "registry/driver-skill-manifest.json" ]
 
-        Assert.Equal<string list>([ "registry/driver-skill-manifest.json" ], TouchSet.generatedTokens generated requested)
+        Assert.Equal<string list>(
+            [ "registry/driver-skill-manifest.json" ],
+            TouchSet.generatedTokens generated requested
+        )
 
     [<Fact>]
-    let ``#2305 generatedTokens does NOT catch a directory-prefix request — the #309 trap stays open for real claims`` () =
+    let ``#2305 generatedTokens does NOT catch a directory-prefix request — the #309 trap stays open for real claims``
+        ()
+        =
         // Declaring the generated file's PARENT is a real claim over everything under it, generated or
         // not (the same reasoning `#309 declaring a PARENT reserves...` pins above). `generatedTokens`
         // must not treat `registry/**` as though it named `registry/driver-skill-manifest.json` — a
@@ -311,19 +321,30 @@ module TouchSetTests =
         Assert.Empty(TouchSet.generatedTokens generated [ "registry/**" ])
 
     [<Fact>]
-    let ``#2305 generatedTokens is a no-op against the FS.GG.Kit Version field — it is absent from the generated roster`` () =
+    let ``#2305 generatedTokens is a no-op against the FS.GG.Kit Version field — it is absent from the generated roster``
+        ()
+        =
         // AC-4's distinction, proven rather than merely asserted: the kit csproj is a genuine
         // single-writer semantic field (check-kit-published-coherence), not a generated artifact, so it
         // must never be caught here — this is what keeps it colliding normally.
         let generated =
-            Set.ofList [ "registry/driver-skill-manifest.json"; "registry/coordination-kit-skill-manifest.json" ]
+            Set.ofList
+                [
+                    "registry/driver-skill-manifest.json"
+                    "registry/coordination-kit-skill-manifest.json"
+                ]
 
         Assert.Empty(TouchSet.generatedTokens generated [ "src/FS.GG.Kit/FS.GG.Kit.csproj" ])
 
     [<Fact>]
     let ``#2305 excludeGenerated drops a pair where both sides exactly name the same generated artifact`` () =
         let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
-        let pairs = [ ("registry/driver-skill-manifest.json", "registry/driver-skill-manifest.json") ]
+
+        let pairs =
+            [
+                ("registry/driver-skill-manifest.json", "registry/driver-skill-manifest.json")
+            ]
+
         Assert.Empty(TouchSet.excludeGenerated generated pairs)
 
     [<Fact>]
@@ -333,7 +354,9 @@ module TouchSetTests =
         Assert.Equal<(string * string) list>(pairs, TouchSet.excludeGenerated generated pairs)
 
     [<Fact>]
-    let ``#2305 excludeGenerated keeps an ASYMMETRIC pair — a directory claim over a generated file still collides`` () =
+    let ``#2305 excludeGenerated keeps an ASYMMETRIC pair — a directory claim over a generated file still collides``
+        ()
+        =
         // The other half of the #309 guard: one side names the generated file exactly, the other
         // declares its parent directory. That is a real claim (the parent side may touch other, real
         // files too), so the pair must NOT be dropped even though one stem is in `generated`.
@@ -348,7 +371,9 @@ module TouchSetTests =
         Assert.Equal<(string * string) list>(pairs, TouchSet.excludeGenerated generated pairs)
 
     [<Fact>]
-    let ``#2305 equivalent constructed pair — two disjoint skill edits sharing only a generated manifest token are DISJOINT`` () =
+    let ``#2305 equivalent constructed pair — two disjoint skill edits sharing only a generated manifest token are DISJOINT``
+        ()
+        =
         // The row's own measured instance, reconstructed: `.github#2254` edited a driver skill and
         // regenerated `registry/driver-skill-manifest.json`; `.github#2248` edited a pnext-item
         // reference and needed the same regeneration. Their REAL subjects never overlapped — only the
@@ -357,12 +382,18 @@ module TouchSetTests =
         let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
 
         let a =
-            Declared [ Matchable ".claude/skills/drive-board/SKILL.md"; Matchable "registry/driver-skill-manifest.json" ]
+            Declared
+                [
+                    Matchable ".claude/skills/drive-board/SKILL.md"
+                    Matchable "registry/driver-skill-manifest.json"
+                ]
 
         let b =
             Declared
-                [ Matchable ".claude/skills/pnext-item/references/independent-review.md"
-                  Matchable "registry/driver-skill-manifest.json" ]
+                [
+                    Matchable ".claude/skills/pnext-item/references/independent-review.md"
+                    Matchable "registry/driver-skill-manifest.json"
+                ]
 
         Assert.NotEmpty(TouchSet.conflicts a b) // raw conflicts still fires on the shared generated token today
         Assert.Empty(TouchSet.conflicts a b |> TouchSet.excludeGenerated generated) // the remedy clears it
@@ -381,8 +412,7 @@ module TouchSetTests =
         TouchSet.tokensOverlap a.Get b.Get = TouchSet.tokensOverlap b.Get a.Get
 
     [<Property>]
-    let ``a token always overlaps itself`` (t: NonNull<string>) =
-        TouchSet.tokensOverlap t.Get t.Get
+    let ``a token always overlaps itself`` (t: NonNull<string>) = TouchSet.tokensOverlap t.Get t.Get
 
     [<Fact>]
     let ``an unmatchable token is never silently dropped — it survives as a NAMED case`` () =
@@ -407,10 +437,7 @@ module TouchSetTests =
         // declared, and its dead tokens reserve nothing.
         Assert.Equal(TouchSet.Usable, TouchSet.usability (Declared [ Matchable "src/A/" ]))
 
-        Assert.Equal(
-            TouchSet.AllUnmatchable [ "**/x" ],
-            TouchSet.usability (Declared [ Unmatchable "**/x" ])
-        )
+        Assert.Equal(TouchSet.AllUnmatchable [ "**/x" ], TouchSet.usability (Declared [ Unmatchable "**/x" ]))
 
         // The case the two modules disagreed about. ONE live token does NOT rescue it.
         Assert.Equal(
@@ -451,7 +478,13 @@ module TouchSetTests =
         // The tokens are the remedy: they are what the worker passes back to `widen`. Naming a live one
         // sends them to "fix" a declaration that is correct.
         let ts =
-            Declared [ Matchable "src/A/"; Unmatchable "**/x"; Matchable "src/B/"; Unmatchable "a*b" ]
+            Declared
+                [
+                    Matchable "src/A/"
+                    Unmatchable "**/x"
+                    Matchable "src/B/"
+                    Unmatchable "a*b"
+                ]
 
         Assert.Equal(TouchSet.SomeUnmatchable [ "**/x"; "a*b" ], TouchSet.usability ts)
 
@@ -490,11 +523,9 @@ module TouchSetTests =
         | Declared tokens ->
             let names =
                 tokens
-                |> List.map (
-                    function
+                |> List.map (function
                     | Matchable t -> t
-                    | Unmatchable t -> t
-                )
+                    | Unmatchable t -> t)
 
             Assert.Contains(".github/workflows/**", names)
             Assert.Contains(".agents/skills/foo/", names)
@@ -550,7 +581,15 @@ module TouchSetTests =
         // Declared, where both reserved words are Unmatchable — caught as an unusable declaration.
         match TouchSet.parse "x\n\nPaths: none any" with
         | Declared tokens ->
-            Assert.All(tokens, (fun t -> Assert.True((match t with Unmatchable _ -> true | _ -> false))))
+            Assert.All(
+                tokens,
+                (fun t ->
+                    Assert.True(
+                        (match t with
+                         | Unmatchable _ -> true
+                         | _ -> false)
+                    ))
+            )
         | other -> failwith $"expected a Declared-with-unmatchable contradiction, got %A{other}"
 
     [<Fact>]

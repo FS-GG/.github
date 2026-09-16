@@ -3,10 +3,12 @@ namespace FS.GG.Coord
 module RegistryPredicate =
 
     type Row =
-        { Id: string
-          Owner: string option
-          Source: string option
-          Fields: Map<string, string> }
+        {
+            Id: string
+            Owner: string option
+            Source: string option
+            Fields: Map<string, string>
+        }
 
     type OwnerDeclaration =
         | Declares of value: string
@@ -14,16 +16,19 @@ module RegistryPredicate =
         | Unreadable of reason: string
 
     type Assertion =
-        { Id: string
-          Field: string
-          Value: string }
+        {
+            Id: string
+            Field: string
+            Value: string
+        }
 
     type Verdict =
         | Agrees
         | Contradicts of ownerValue: string * note: string
         | Unknown of reason: string
 
-    let assertionLabels = ("Asserted registry id", "Asserted registry field", "Asserted registry value")
+    let assertionLabels =
+        ("Asserted registry id", "Asserted registry field", "Asserted registry value")
 
     // ---- parsing registry/skills.yml rows ---------------------------------------------------------
 
@@ -35,6 +40,7 @@ module RegistryPredicate =
         let sb = System.Text.StringBuilder()
         let mutable depth = 0
         let mutable inStr = false
+
         for ch in inside do
             match ch with
             | '"' ->
@@ -50,55 +56,66 @@ module RegistryPredicate =
                 parts.Add(sb.ToString())
                 sb.Clear() |> ignore
             | _ -> sb.Append(ch) |> ignore
+
         parts.Add(sb.ToString())
         parts |> List.ofSeq
 
     let private unquote (v: string) : string =
         let t = v.Trim()
-        if t.Length >= 2 && t.StartsWith("\"") && t.EndsWith("\"") then t.Substring(1, t.Length - 2)
-        else t
+
+        if t.Length >= 2 && t.StartsWith("\"") && t.EndsWith("\"") then
+            t.Substring(1, t.Length - 2)
+        else
+            t
 
     // Parse one `- { k: v, ... }` line into a field map, or `None` if the line is not a flow-mapping
     // row (a comment, the `skills:` header, a blank line).
     let private parseRow (line: string) : Row option =
         let t = line.Trim()
+
         if not (t.StartsWith("-")) then
             None
         else
             let afterDash = t.Substring(1).Trim()
             let lb = afterDash.IndexOf('{')
             let rb = afterDash.LastIndexOf('}')
+
             if lb < 0 || rb <= lb then
                 None
             else
                 let inside = afterDash.Substring(lb + 1, rb - lb - 1)
+
                 let fields =
                     splitTopLevel inside
                     |> List.choose (fun token ->
                         let token = token.Trim()
+
                         if token = "" then
                             None
                         else
                             let colon = token.IndexOf(':')
-                            if colon <= 0 then None
+
+                            if colon <= 0 then
+                                None
                             else
                                 let key = token.Substring(0, colon).Trim()
                                 let value = unquote (token.Substring(colon + 1))
                                 Some(key, value))
                     |> Map.ofList
+
                 match Map.tryFind "id" fields with
                 | Some id when id <> "" ->
                     Some
-                        { Id = id
-                          Owner = Map.tryFind "owner" fields
-                          Source = Map.tryFind "source" fields
-                          Fields = fields }
+                        {
+                            Id = id
+                            Owner = Map.tryFind "owner" fields
+                            Source = Map.tryFind "source" fields
+                            Fields = fields
+                        }
                 | _ -> None
 
     let parseRows (yaml: string) : Row list =
-        yaml.Replace("\r\n", "\n").Split('\n')
-        |> Array.toList
-        |> List.choose parseRow
+        yaml.Replace("\r\n", "\n").Split('\n') |> Array.toList |> List.choose parseRow
 
     let findRow (rows: Row list) (id: string) : Row option =
         rows |> List.tryFind (fun r -> r.Id = id)
@@ -112,9 +129,13 @@ module RegistryPredicate =
         let heading = "### " + label
         let mutable i = 0
         let mutable found = -1
+
         while found < 0 && i < lines.Length do
-            if lines.[i].Trim() = heading then found <- i
+            if lines.[i].Trim() = heading then
+                found <- i
+
             i <- i + 1
+
         if found < 0 then
             None
         else
@@ -124,16 +145,28 @@ module RegistryPredicate =
                 |> Array.takeWhile (fun l -> not (l.TrimStart().StartsWith("### ")))
                 |> Array.map (fun l -> l.Trim())
                 |> Array.filter (fun l -> l <> "")
+
             match collected with
             | [||] -> None
             | _ ->
                 let value = String.concat " " (List.ofArray collected)
-                if value.Trim().ToLowerInvariant() = "_no response_" then None else Some(value.Trim())
+
+                if value.Trim().ToLowerInvariant() = "_no response_" then
+                    None
+                else
+                    Some(value.Trim())
 
     let parseAssertion (issueBody: string) : Assertion option =
         let (idLabel, fieldLabel, valueLabel) = assertionLabels
+
         match sectionValue issueBody idLabel, sectionValue issueBody fieldLabel, sectionValue issueBody valueLabel with
-        | Some id, Some field, Some value -> Some { Id = id; Field = field; Value = value }
+        | Some id, Some field, Some value ->
+            Some
+                {
+                    Id = id
+                    Field = field
+                    Value = value
+                }
         | _ -> None
 
     // ---- the oracle -------------------------------------------------------------------------------
@@ -153,7 +186,8 @@ module RegistryPredicate =
         let unquoted =
             if
                 t.Length >= 2
-                && ((t.StartsWith("\"") && t.EndsWith("\"")) || (t.StartsWith("'") && t.EndsWith("'")))
+                && ((t.StartsWith("\"") && t.EndsWith("\""))
+                    || (t.StartsWith("'") && t.EndsWith("'")))
             then
                 t.Substring(1, t.Length - 2).Trim()
             else
@@ -169,9 +203,11 @@ module RegistryPredicate =
     let private governingNote (field: string) (ownerSlug: string) (ownerValue: string) : string =
         // supportsField restricts to `mirrored`.
         ignore field
+
         sprintf
             "`mirrored:` is ADR-0022 §6's frozen-mirror OBLIGATION, and only the owner (`%s`) declares it — an absent value is UNKNOWN, never `false` (.github#658). The owning manifest declares `mirrored: %s`; a request asserting otherwise is the FS.GG.Rendering#505 / .github#658 trap the field exists to refuse. Derive from the owner, not from this projection (ADR-0044)."
-            ownerSlug ownerValue
+            ownerSlug
+            ownerValue
 
     let classify (rows: Row list) (owner: OwnerDeclaration) (assertion: Assertion) : Verdict =
         match findRow rows assertion.Id with
@@ -194,6 +230,7 @@ module RegistryPredicate =
                     Unknown(sprintf "the owning manifest for `%s` could not be read: %s" assertion.Id reason)
                 | Silent ->
                     let ownerSlug = row.Owner |> Option.defaultValue "the owning producer"
+
                     Unknown(
                         sprintf
                             "%s declares no `%s` for `%s` — an absent value is UNKNOWN, never a refutation (`mirror_of` / .github#658)"

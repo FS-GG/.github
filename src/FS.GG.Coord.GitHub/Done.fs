@@ -12,13 +12,16 @@ module Done =
 
     let private requireComplete subject what window connection =
         match Reads.connectionComplete subject what window connection with
-        | Ok () -> ()
+        | Ok() -> ()
         | Error error -> raise (IncompleteFactsRead error)
 
     let private missingConnection subject what =
         raise (
             IncompleteFactsRead(
-                Malformed(subject, $"%s{what} is missing, so its completeness cannot be established — this is a FAILED READ, never an absence")
+                Malformed(
+                    subject,
+                    $"%s{what} is missing, so its completeness cannot be established — this is a FAILED READ, never an absence"
+                )
             )
         )
 
@@ -29,12 +32,14 @@ module Done =
         | StillOpen
 
     type ClosingPr =
-        { Number: int
-          Merged: bool
-          MergedAt: string
-          Oid: string
-          Repo: string
-          ClosesThis: bool }
+        {
+            Number: int
+            Merged: bool
+            MergedAt: string
+            Oid: string
+            Repo: string
+            ClosesThis: bool
+        }
 
     type Children =
         | NoChildren
@@ -47,13 +52,15 @@ module Done =
         | Partial of why: string
 
     type Facts =
-        { Ref: Ref
-          State: IssueState
-          ClosingPrs: ClosingPr list
-          CloserPrs: ClosingPr list
-          Children: Children
-          BoardStatus: BoardStatus
-          Parent: Ref option }
+        {
+            Ref: Ref
+            State: IssueState
+            ClosingPrs: ClosingPr list
+            CloserPrs: ClosingPr list
+            Children: Children
+            BoardStatus: BoardStatus
+            Parent: Ref option
+        }
 
     type RollUp =
         | ParentClosed of Ref
@@ -74,15 +81,27 @@ module Done =
     let receiptState (comments: string list) =
         let legacy =
             comments
-            |> List.exists (fun body ->
-                body.StartsWith("<!-- fsgg:done-receipt v=1 -->", StringComparison.Ordinal))
+            |> List.exists (fun body -> body.StartsWith("<!-- fsgg:done-receipt v=1 -->", StringComparison.Ordinal))
+
         let typed =
             comments
             |> List.filter (fun body ->
                 body.StartsWith(FS.GG.Coord.Delivery.CompletionReceiptMarker, StringComparison.Ordinal))
             |> List.map FS.GG.Coord.Delivery.tryDecodeCompletionReceipt
-        let errors = typed |> List.choose (function Error error -> Some error | _ -> None) |> List.collect id
-        let receipts = typed |> List.choose (function Ok (Some receipt) -> Some receipt | _ -> None)
+
+        let errors =
+            typed
+            |> List.choose (function
+                | Error error -> Some error
+                | _ -> None)
+            |> List.collect id
+
+        let receipts =
+            typed
+            |> List.choose (function
+                | Ok(Some receipt) -> Some receipt
+                | _ -> None)
+
         match errors, receipts with
         | _ :: _, _ -> InvalidCompletionReceipt errors
         | [], [ receipt ] -> VerifiedCompletionReceipt receipt
@@ -101,7 +120,9 @@ module Done =
         match receiptState comments with
         | VerifiedCompletionReceipt receipt when receipt.Item <> ref.Canonical ->
             InvalidCompletionReceipt
-                [ $"delivery completion receipt item '%s{receipt.Item}' does not match '%s{ref.Canonical}'" ]
+                [
+                    $"delivery completion receipt item '%s{receipt.Item}' does not match '%s{ref.Canonical}'"
+                ]
         | state -> state
 
     let hasReceiptFor ref comments =
@@ -117,18 +138,33 @@ module Done =
             |> List.filter (fun body ->
                 body.StartsWith(FS.GG.Coord.Delivery.CompletionCorrectionMarker, StringComparison.Ordinal))
             |> List.map FS.GG.Coord.Delivery.tryDecodeCompletionCorrectionReceipt
-        let errors = parsed |> List.choose (function Error error -> Some error | _ -> None) |> List.collect id
-        let receipts = parsed |> List.choose (function Ok (Some receipt) -> Some receipt | _ -> None)
+
+        let errors =
+            parsed
+            |> List.choose (function
+                | Error error -> Some error
+                | _ -> None)
+            |> List.collect id
+
+        let receipts =
+            parsed
+            |> List.choose (function
+                | Ok(Some receipt) -> Some receipt
+                | _ -> None)
+
         match errors, receipts with
         | _ :: _, _ -> InvalidCompletionCorrection errors
         | [], [ receipt ] when receipt.Item = ref.Canonical -> VerifiedCompletionCorrection receipt
         | [], [ receipt ] ->
             InvalidCompletionCorrection
-                [ $"completion correction receipt item '%s{receipt.Item}' does not match '%s{ref.Canonical}'" ]
+                [
+                    $"completion correction receipt item '%s{receipt.Item}' does not match '%s{ref.Canonical}'"
+                ]
         | [], _ :: _ :: _ -> InvalidCompletionCorrection [ "more than one completion correction receipt exists" ]
         | [], [] -> NoCompletionCorrection
 
-    let selfHostReplayState comments = FS.GG.Coord.SelfHost.replayState comments
+    let selfHostReplayState comments =
+        FS.GG.Coord.SelfHost.replayState comments
 
     // ---- THE PRECONDITIONS, PURE -------------------------------------------------------------------
 
@@ -149,162 +185,190 @@ module Done =
             // #583. A parent with open children is not done, whatever its board column says.
             let names = numbers |> List.map (fun n -> $"#%d{n}") |> String.concat ", "
 
-            Red [ $"%d{List.length numbers} sub-issue(s) are still OPEN: %s{names}. A parent is not finished while its children are." ]
+            Red
+                [
+                    $"%d{List.length numbers} sub-issue(s) are still OPEN: %s{names}. A parent is not finished while its children are."
+                ]
 
         | NoChildren
         | AllResolved _ ->
 
-        match facts.State with
-        | Open ->
-            Red
-                [ "the issue is still OPEN. The stamp records that work is finished; it does not finish it." ]
-
-        | Closed ->
-
-        // THE CLOSING ACT, FROM GITHUB'S OWN RECORD — never from the prose, and NEVER the first merge that
-        // merely mentions the issue (#342).
-        //
-        // A PR CLOSES this issue if EITHER of GitHub's own records says so — both are records of the act,
-        // neither is a mention:
-        //   (A) its `closingIssuesReferences` names this issue — the `Closes #N` in the PR BODY (`ClosesThis`);
-        //   (B) the issue's own `CLOSED_EVENT` names it as the closer, directly (a PullRequest) or as the PR
-        //       associated with the closing Commit (`CloserPrs`). This is the leg #558/#543 needed: the
-        //       recipe's `gh pr create --fill` routes a closing keyword in the commit SUBJECT to the PR TITLE,
-        //       where (A) cannot see it — so a correctly merged, correctly closing PR stamped RED forever.
-        //
-        // (A) and (B) are two INDEPENDENT records, and neither is a subset of the other — which is why both
-        // are read, and why (B) is unioned in below rather than merely consulted (#928).
-        //
-        // Among those, the LATEST-MERGED wins. `closedByPullRequestsReferences` lists mentions too, and GitHub
-        // returns them lowest-number-first — so taking the first stamped an earlier prose mention, or a merge
-        // that never touched the work (#342). It is provenance, not just outcome.
-        //
-        // `--pr` overrides WHICH pull request the stamp names — NEVER whether it closed the issue. Selecting by
-        // number alone (#543 leg 2) was a soundness hole: point it at any merged PR that mentions the issue and
-        // the stamp went green. Same predicate, both paths.
-        let closerSet = facts.CloserPrs |> List.map (fun p -> p.Number) |> Set.ofList
-        let closes (p: ClosingPr) = p.ClosesThis || closerSet.Contains p.Number
-
-        // THE UNION, AND IT IS THE WHOLE OF #928. Leg (B) used to be applied only as a PREDICATE over leg
-        // (A)'s list, so it could only ever NARROW that list — it could never put a PR INTO it. When the list
-        // was empty leg (B) had nothing to filter, and the stamp went red no matter what the CLOSED_EVENT
-        // said.
-        //
-        // And the list IS empty in precisely the case leg (B) was written for: a PR whose body never carried
-        // the keyword is not in `closedByPullRequestsReferences` at all, because GitHub builds that
-        // connection FROM the body linkage. So #558's fix was inert for its own case — measured on
-        // .github#622 / PR #926, where the close event names the squash commit and the reference list is [].
-        //
-        // A candidate the CLOSED_EVENT names therefore ENTERS the set here. `closes` is unchanged, `Merged`
-        // is still required of it, and #342's latest-merged-wins still decides among true closers — the union
-        // adds a source, it does not soften a single test below it.
-        let listed = facts.ClosingPrs |> List.map (fun p -> p.Number) |> Set.ofList
-
-        let candidates =
-            facts.ClosingPrs
-            @ (facts.CloserPrs |> List.filter (fun p -> not (listed.Contains p.Number)))
-
-        // .github#2427 — A SAME-REPOSITORY TRUE CLOSER OUTRANKS A FOREIGN ONE, REGARDLESS OF MERGE TIME.
-        //
-        // Measured on .github#2343: its source fix (.github#2413) merged first, in THIS repo. A cross-repo
-        // receiver retrofit (EHotwagner/S.I.R.#195) merged ~13 minutes later and ALSO registered as a true
-        // closer — its body's "Source fix: FS-GG/.github#2343" line was never meant as a closing keyword, but
-        // GitHub's parser matched `fix:` immediately before the cross-repo reference anyway. Pure
-        // latest-merged (#342) then picked the retrofit, and the stamp sent an auditor to a PR that does not
-        // contain the fix.
-        //
-        // #342's rule is preserved WITHIN a repository — it decides among same-repo closers, and among
-        // foreign-repo closers should more than one ever exist. It was designed and evaluated only against
-        // same-repo re-open/re-close sequences, never against a closer in a DIFFERENT repository, so
-        // extending it across repositories was never a considered decision.
-        let ownRepo = $"%s{facts.Ref.Owner}/%s{facts.Ref.Repo}"
-        let sameRepo (p: ClosingPr) = String.Equals(p.Repo, ownRepo, StringComparison.OrdinalIgnoreCase)
-
-        let trueClosers = candidates |> List.filter (fun p -> p.Merged && closes p)
-        let sameRepoClosers = trueClosers |> List.filter sameRepo
-        let foreignClosers = trueClosers |> List.filter (sameRepo >> not)
-
-        let chosen =
-            match prOverride with
-            // `--pr` still overrides WHICH pull request the stamp names, never whether it closed the issue —
-            // and that includes the repository preference: an operator who explicitly asks for the foreign
-            // PR by number gets it, without the provenance check (`Merged`, `closes`) being skipped (#543).
-            | Some n -> candidates |> List.filter (fun p -> p.Number = n && p.Merged && closes p) |> List.tryHead
-            | None ->
-                // Same-repo closers are preferred as a POOL, not merely as a first choice: if any exist, the
-                // decision among THEM is still latest-merged (#342 unchanged within the tier). Only when no
-                // same-repo closer exists at all does a foreign one legitimately win.
-                let pool = if List.isEmpty sameRepoClosers then trueClosers else sameRepoClosers
-                pool |> List.sortBy (fun p -> p.MergedAt) |> List.tryLast
-
-        // A foreign closer was PASSED OVER only when the repository preference is what decided it: an
-        // override is an explicit choice (nothing was "passed over"), and a foreign winner with no same-repo
-        // rival was not preferred away from anything.
-        let passedOverForeign =
-            match prOverride, chosen with
-            | Some _, _ -> None
-            | None, Some c when sameRepo c && not (List.isEmpty foreignClosers) ->
-                foreignClosers
-                |> List.sortBy (fun p -> p.MergedAt)
-                |> List.tryLast
-                |> Option.map (fun p -> p.Number, p.Repo)
-            | _ -> None
-
-        match chosen with
-        | Some p ->
-            let day = if p.MergedAt.Length >= 10 then p.MergedAt.Substring(0, 10) else p.MergedAt
-            Green(ClosedByPullRequest(p.Number, p.Oid, day, passedOverForeign))
-
-        | None ->
-            // #600 — THE GREEN PATH FOR WORK RESOLVED WITHOUT A PR.
-            //
-            // An item legitimately closed with no code change in this repo at all: obsolete, resolved by
-            // other work, a duplicate whose detail was transplanted into the survivor (which `pnext-item` §4
-            // explicitly instructs), a decision item whose deliverable is an ADR somewhere else. Every one
-            // of those stamped RED, reproducibly, on correct work — and a red that fires reproducibly on
-            // correct work teaches every worker that red stamps are noise.
-            //
-            // The evidence is REQUIRED. A green path that took no argument would not be a stamp; it would be
-            // a way of switching the stamp off, and it would be reached for by exactly the people it was not
-            // meant for.
-            match resolvedWithoutPr with
-            | Some evidence when not (String.IsNullOrWhiteSpace evidence) -> Green(ResolvedWithoutPr evidence)
-
-            | Some _ ->
+            match facts.State with
+            | Open ->
                 Red
-                    [ "no PR closes this issue, and the evidence offered for resolving it without one is blank. Say what finished it." ]
+                    [
+                        "the issue is still OPEN. The stamp records that work is finished; it does not finish it."
+                    ]
 
-            | None ->
-                match prOverride with
-                | Some n ->
-                    // #543 leg 2 — `--pr` pointed at a PR that does NOT close this issue (it is not merged, or
-                    // it only mentions the issue). `--pr` cannot launder a mention into a stamp.
-                    Red
-                        [ $"PR #%d{n} does not close this issue — it must be merged, and either name this issue in its body (Closes #%d{facts.Ref.Number}) or be what GitHub recorded as closing it. `--pr` overrides WHICH pull request the stamp names, never WHETHER it closed the issue (#543)." ]
+            | Closed ->
+
+                // THE CLOSING ACT, FROM GITHUB'S OWN RECORD — never from the prose, and NEVER the first merge that
+                // merely mentions the issue (#342).
+                //
+                // A PR CLOSES this issue if EITHER of GitHub's own records says so — both are records of the act,
+                // neither is a mention:
+                //   (A) its `closingIssuesReferences` names this issue — the `Closes #N` in the PR BODY (`ClosesThis`);
+                //   (B) the issue's own `CLOSED_EVENT` names it as the closer, directly (a PullRequest) or as the PR
+                //       associated with the closing Commit (`CloserPrs`). This is the leg #558/#543 needed: the
+                //       recipe's `gh pr create --fill` routes a closing keyword in the commit SUBJECT to the PR TITLE,
+                //       where (A) cannot see it — so a correctly merged, correctly closing PR stamped RED forever.
+                //
+                // (A) and (B) are two INDEPENDENT records, and neither is a subset of the other — which is why both
+                // are read, and why (B) is unioned in below rather than merely consulted (#928).
+                //
+                // Among those, the LATEST-MERGED wins. `closedByPullRequestsReferences` lists mentions too, and GitHub
+                // returns them lowest-number-first — so taking the first stamped an earlier prose mention, or a merge
+                // that never touched the work (#342). It is provenance, not just outcome.
+                //
+                // `--pr` overrides WHICH pull request the stamp names — NEVER whether it closed the issue. Selecting by
+                // number alone (#543 leg 2) was a soundness hole: point it at any merged PR that mentions the issue and
+                // the stamp went green. Same predicate, both paths.
+                let closerSet = facts.CloserPrs |> List.map (fun p -> p.Number) |> Set.ofList
+
+                let closes (p: ClosingPr) =
+                    p.ClosesThis || closerSet.Contains p.Number
+
+                // THE UNION, AND IT IS THE WHOLE OF #928. Leg (B) used to be applied only as a PREDICATE over leg
+                // (A)'s list, so it could only ever NARROW that list — it could never put a PR INTO it. When the list
+                // was empty leg (B) had nothing to filter, and the stamp went red no matter what the CLOSED_EVENT
+                // said.
+                //
+                // And the list IS empty in precisely the case leg (B) was written for: a PR whose body never carried
+                // the keyword is not in `closedByPullRequestsReferences` at all, because GitHub builds that
+                // connection FROM the body linkage. So #558's fix was inert for its own case — measured on
+                // .github#622 / PR #926, where the close event names the squash commit and the reference list is [].
+                //
+                // A candidate the CLOSED_EVENT names therefore ENTERS the set here. `closes` is unchanged, `Merged`
+                // is still required of it, and #342's latest-merged-wins still decides among true closers — the union
+                // adds a source, it does not soften a single test below it.
+                let listed = facts.ClosingPrs |> List.map (fun p -> p.Number) |> Set.ofList
+
+                let candidates =
+                    facts.ClosingPrs
+                    @ (facts.CloserPrs |> List.filter (fun p -> not (listed.Contains p.Number)))
+
+                // .github#2427 — A SAME-REPOSITORY TRUE CLOSER OUTRANKS A FOREIGN ONE, REGARDLESS OF MERGE TIME.
+                //
+                // Measured on .github#2343: its source fix (.github#2413) merged first, in THIS repo. A cross-repo
+                // receiver retrofit (EHotwagner/S.I.R.#195) merged ~13 minutes later and ALSO registered as a true
+                // closer — its body's "Source fix: FS-GG/.github#2343" line was never meant as a closing keyword, but
+                // GitHub's parser matched `fix:` immediately before the cross-repo reference anyway. Pure
+                // latest-merged (#342) then picked the retrofit, and the stamp sent an auditor to a PR that does not
+                // contain the fix.
+                //
+                // #342's rule is preserved WITHIN a repository — it decides among same-repo closers, and among
+                // foreign-repo closers should more than one ever exist. It was designed and evaluated only against
+                // same-repo re-open/re-close sequences, never against a closer in a DIFFERENT repository, so
+                // extending it across repositories was never a considered decision.
+                let ownRepo = $"%s{facts.Ref.Owner}/%s{facts.Ref.Repo}"
+
+                let sameRepo (p: ClosingPr) =
+                    String.Equals(p.Repo, ownRepo, StringComparison.OrdinalIgnoreCase)
+
+                let trueClosers = candidates |> List.filter (fun p -> p.Merged && closes p)
+                let sameRepoClosers = trueClosers |> List.filter sameRepo
+                let foreignClosers = trueClosers |> List.filter (sameRepo >> not)
+
+                let chosen =
+                    match prOverride with
+                    // `--pr` still overrides WHICH pull request the stamp names, never whether it closed the issue —
+                    // and that includes the repository preference: an operator who explicitly asks for the foreign
+                    // PR by number gets it, without the provenance check (`Merged`, `closes`) being skipped (#543).
+                    | Some n ->
+                        candidates
+                        |> List.filter (fun p -> p.Number = n && p.Merged && closes p)
+                        |> List.tryHead
+                    | None ->
+                        // Same-repo closers are preferred as a POOL, not merely as a first choice: if any exist, the
+                        // decision among THEM is still latest-merged (#342 unchanged within the tier). Only when no
+                        // same-repo closer exists at all does a foreign one legitimately win.
+                        let pool =
+                            if List.isEmpty sameRepoClosers then
+                                trueClosers
+                            else
+                                sameRepoClosers
+
+                        pool |> List.sortBy (fun p -> p.MergedAt) |> List.tryLast
+
+                // A foreign closer was PASSED OVER only when the repository preference is what decided it: an
+                // override is an explicit choice (nothing was "passed over"), and a foreign winner with no same-repo
+                // rival was not preferred away from anything.
+                let passedOverForeign =
+                    match prOverride, chosen with
+                    | Some _, _ -> None
+                    | None, Some c when sameRepo c && not (List.isEmpty foreignClosers) ->
+                        foreignClosers
+                        |> List.sortBy (fun p -> p.MergedAt)
+                        |> List.tryLast
+                        |> Option.map (fun p -> p.Number, p.Repo)
+                    | _ -> None
+
+                match chosen with
+                | Some p ->
+                    let day =
+                        if p.MergedAt.Length >= 10 then
+                            p.MergedAt.Substring(0, 10)
+                        else
+                            p.MergedAt
+
+                    Green(ClosedByPullRequest(p.Number, p.Oid, day, passedOverForeign))
 
                 | None ->
-                    // THE REFUSAL MUST DESCRIBE THE SUBJECT IT ACTUALLY READ (#928/#266). "its close event
-                    // names no PR or commit" was printed unconditionally — including on .github#622, whose
-                    // close event named commit 4cf06e10 and PR #926. A refusal that misreports its own
-                    // evidence sends the worker to read the source, and it hid this bug for #558's whole life.
-                    // The list itself is the subject, NOT `CloserPrs |> filter (not Merged)`: reaching here
-                    // means no closer was both merged and admissible, so anything the event named is unusable
-                    // by definition. Filtering by `not Merged` would fall back to the "names no PR or commit"
-                    // sentence for any OTHER reason a named closer failed — printing the false claim again, in
-                    // the one branch written to stop printing it.
-                    let why =
-                        match facts.CloserPrs with
-                        | [] ->
-                            "no merged PR closes this issue, and nothing records what closed it — no merged PR names it, and its close event names no PR or commit."
-                        | closers ->
-                            // The closer IS known — say THAT, and say what disqualified it.
-                            let names = closers |> List.map (fun p -> $"#%d{p.Number}") |> String.concat ", "
+                    // #600 — THE GREEN PATH FOR WORK RESOLVED WITHOUT A PR.
+                    //
+                    // An item legitimately closed with no code change in this repo at all: obsolete, resolved by
+                    // other work, a duplicate whose detail was transplanted into the survivor (which `pnext-item` §4
+                    // explicitly instructs), a decision item whose deliverable is an ADR somewhere else. Every one
+                    // of those stamped RED, reproducibly, on correct work — and a red that fires reproducibly on
+                    // correct work teaches every worker that red stamps are noise.
+                    //
+                    // The evidence is REQUIRED. A green path that took no argument would not be a stamp; it would be
+                    // a way of switching the stamp off, and it would be reached for by exactly the people it was not
+                    // meant for.
+                    match resolvedWithoutPr with
+                    | Some evidence when not (String.IsNullOrWhiteSpace evidence) -> Green(ResolvedWithoutPr evidence)
 
-                            $"its close event names %s{names}, but nothing there is a MERGED pull request, so nothing closed this issue that the stamp can name. A PR that is not merged has landed no work."
+                    | Some _ ->
+                        Red
+                            [
+                                "no PR closes this issue, and the evidence offered for resolving it without one is blank. Say what finished it."
+                            ]
 
-                    Red
-                        [ why
-                          "If it was resolved WITHOUT a pull request (obsolete, a duplicate, resolved by other work, a decision recorded elsewhere), say so with evidence — that is a green path, not a workaround (#600)." ]
+                    | None ->
+                        match prOverride with
+                        | Some n ->
+                            // #543 leg 2 — `--pr` pointed at a PR that does NOT close this issue (it is not merged, or
+                            // it only mentions the issue). `--pr` cannot launder a mention into a stamp.
+                            Red
+                                [
+                                    $"PR #%d{n} does not close this issue — it must be merged, and either name this issue in its body (Closes #%d{facts.Ref.Number}) or be what GitHub recorded as closing it. `--pr` overrides WHICH pull request the stamp names, never WHETHER it closed the issue (#543)."
+                                ]
+
+                        | None ->
+                            // THE REFUSAL MUST DESCRIBE THE SUBJECT IT ACTUALLY READ (#928/#266). "its close event
+                            // names no PR or commit" was printed unconditionally — including on .github#622, whose
+                            // close event named commit 4cf06e10 and PR #926. A refusal that misreports its own
+                            // evidence sends the worker to read the source, and it hid this bug for #558's whole life.
+                            // The list itself is the subject, NOT `CloserPrs |> filter (not Merged)`: reaching here
+                            // means no closer was both merged and admissible, so anything the event named is unusable
+                            // by definition. Filtering by `not Merged` would fall back to the "names no PR or commit"
+                            // sentence for any OTHER reason a named closer failed — printing the false claim again, in
+                            // the one branch written to stop printing it.
+                            let why =
+                                match facts.CloserPrs with
+                                | [] ->
+                                    "no merged PR closes this issue, and nothing records what closed it — no merged PR names it, and its close event names no PR or commit."
+                                | closers ->
+                                    // The closer IS known — say THAT, and say what disqualified it.
+                                    let names = closers |> List.map (fun p -> $"#%d{p.Number}") |> String.concat ", "
+
+                                    $"its close event names %s{names}, but nothing there is a MERGED pull request, so nothing closed this issue that the stamp can name. A PR that is not merged has landed no work."
+
+                            Red
+                                [
+                                    why
+                                    "If it was resolved WITHOUT a pull request (obsolete, a duplicate, resolved by other work, a decision recorded elsewhere), say so with evidence — that is a green path, not a workaround (#600)."
+                                ]
 
     let passedOverForeignNote (ref: Ref) (verdict: Verdict<Closure>) =
         match verdict with
@@ -382,288 +446,319 @@ module Done =
         let subject = ref.Short
 
         let request =
-            { Method = "POST"
-              Path = "graphql"
-              Query = []
-              Body =
-                Query(
-                    FactsDoc,
-                    [ "owner", VString ref.Owner
-                      "repo", VString ref.Repo
-                      "number", VNumber(double ref.Number) ]
-                )
-              Budget = GraphQl
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "POST"
+                Path = "graphql"
+                Query = []
+                Body =
+                    Query(
+                        FactsDoc,
+                        [
+                            "owner", VString ref.Owner
+                            "repo", VString ref.Repo
+                            "number", VNumber(double ref.Number)
+                        ]
+                    )
+                Budget = GraphQl
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error e -> Error e
         | Ok response ->
 
-        match GraphQl.decode subject response.Body Ok with
-        | Error error -> Error error
-        | Ok data ->
-          try
-            let issue = data.GetProperty("repository").GetProperty("issue")
+            match GraphQl.decode subject response.Body Ok with
+            | Error error -> Error error
+            | Ok data ->
+                try
+                    let issue = data.GetProperty("repository").GetProperty("issue")
 
-            if issue.ValueKind = JsonValueKind.Null then
-                Error(NotFound subject)
-            else
+                    if issue.ValueKind = JsonValueKind.Null then
+                        Error(NotFound subject)
+                    else
 
-            let state =
-                match issue.TryGetProperty "state" with
-                | true, s when s.ValueKind = JsonValueKind.String ->
-                    if s.GetString().ToUpperInvariant() = "CLOSED" then Closed else Open
-                | _ -> Open
+                        let state =
+                            match issue.TryGetProperty "state" with
+                            | true, s when s.ValueKind = JsonValueKind.String ->
+                                if s.GetString().ToUpperInvariant() = "CLOSED" then
+                                    Closed
+                                else
+                                    Open
+                            | _ -> Open
 
-            // The whole `closedByPullRequestsReferences` set, MERGE STATE AND PROVENANCE INTACT. `verify`
-            // decides which one closed the issue (the latest-merged true closer), so the read must not collapse
-            // the set to a single number: a mention and the real closer look identical until you keep their
-            // `mergedAt` and their `closingIssuesReferences`.
-            let strOf (el: JsonElement) (name: string) =
-                match el.TryGetProperty name with
-                | true, v when v.ValueKind = JsonValueKind.String -> v.GetString()
-                | _ -> ""
+                        // The whole `closedByPullRequestsReferences` set, MERGE STATE AND PROVENANCE INTACT. `verify`
+                        // decides which one closed the issue (the latest-merged true closer), so the read must not collapse
+                        // the set to a single number: a mention and the real closer look identical until you keep their
+                        // `mergedAt` and their `closingIssuesReferences`.
+                        let strOf (el: JsonElement) (name: string) =
+                            match el.TryGetProperty name with
+                            | true, v when v.ValueKind = JsonValueKind.String -> v.GetString()
+                            | _ -> ""
 
-            let mergedOf (n: JsonElement) =
-                match n.TryGetProperty "merged" with
-                | true, m -> m.ValueKind = JsonValueKind.True
-                | _ -> false
+                        let mergedOf (n: JsonElement) =
+                            match n.TryGetProperty "merged" with
+                            | true, m -> m.ValueKind = JsonValueKind.True
+                            | _ -> false
 
-            let oidOf (n: JsonElement) =
-                match n.TryGetProperty "mergeCommit" with
-                | true, mc when mc.ValueKind = JsonValueKind.Object -> strOf mc "oid"
-                | _ -> ""
+                        let oidOf (n: JsonElement) =
+                            match n.TryGetProperty "mergeCommit" with
+                            | true, mc when mc.ValueKind = JsonValueKind.Object -> strOf mc "oid"
+                            | _ -> ""
 
-            // .github#2427 — the candidate's OWN `owner/repo`, read off its OWN `repository` field (a
-            // PullRequest node, not the nested `closingIssuesReferences` used for `ClosesThis`). "" if
-            // unknown, which `verify` treats as not-same-repo — never as a crash or a silent wrong repo.
-            let repoOf (n: JsonElement) =
-                match n.TryGetProperty "repository" with
-                | true, r when r.ValueKind = JsonValueKind.Object -> strOf r "nameWithOwner"
-                | _ -> ""
+                        // .github#2427 — the candidate's OWN `owner/repo`, read off its OWN `repository` field (a
+                        // PullRequest node, not the nested `closingIssuesReferences` used for `ClosesThis`). "" if
+                        // unknown, which `verify` treats as not-same-repo — never as a crash or a silent wrong repo.
+                        let repoOf (n: JsonElement) =
+                            match n.TryGetProperty "repository" with
+                            | true, r when r.ValueKind = JsonValueKind.Object -> strOf r "nameWithOwner"
+                            | _ -> ""
 
-            // A PR node named by the CLOSED_EVENT, WITH its merge facts (#928). `ClosesThis` is false by
-            // construction: this PR's claim on the issue is the close EVENT, not its own body — that is the
-            // entire case leg (B) exists for — and `verify` reads that claim out of `CloserPrs`, not here.
-            //
-            // A Commit closer has no `number`, which is how it is told from a PullRequest closer.
-            let closerPrOf (n: JsonElement) =
-                match n.TryGetProperty "number" with
-                | true, num when num.ValueKind = JsonValueKind.Number ->
-                    Some
-                        { Number = num.GetInt32()
-                          Merged = mergedOf n
-                          MergedAt = strOf n "mergedAt"
-                          Oid = oidOf n
-                          Repo = repoOf n
-                          ClosesThis = false }
-                | _ -> None
-
-            let closingPrs =
-                match issue.TryGetProperty "closedByPullRequestsReferences" with
-                | true, refs ->
-                    // Closure evidence is a whole-set read. A hidden tail could contain the actual latest
-                    // merged closer, so incompleteness is an unverified read rather than evidence that the
-                    // work is not done (#2561/#600).
-                    requireComplete subject "this issue's closing-PR reference connection" ClosedByPullRequestsWindow refs
-
-                    match refs.TryGetProperty "nodes" with
-                    | true, nodes when nodes.ValueKind = JsonValueKind.Array ->
-                        nodes.EnumerateArray()
-                        |> Seq.choose (fun n ->
+                        // A PR node named by the CLOSED_EVENT, WITH its merge facts (#928). `ClosesThis` is false by
+                        // construction: this PR's claim on the issue is the close EVENT, not its own body — that is the
+                        // entire case leg (B) exists for — and `verify` reads that claim out of `CloserPrs`, not here.
+                        //
+                        // A Commit closer has no `number`, which is how it is told from a PullRequest closer.
+                        let closerPrOf (n: JsonElement) =
                             match n.TryGetProperty "number" with
                             | true, num when num.ValueKind = JsonValueKind.Number ->
-                                // `closesThis`: this PR's body names THIS issue in its own repo (#342/#543).
-                                let closesThis =
-                                    match n.TryGetProperty "closingIssuesReferences" with
-                                    | true, cir ->
-                                        requireComplete
-                                            subject
-                                            $"PR #%d{num.GetInt32()}'s closing-issue connection"
-                                            ClosingIssuesWindow
-                                            cir
-
-                                        match cir.TryGetProperty "nodes" with
-                                        | true, cn when cn.ValueKind = JsonValueKind.Array ->
-                                            cn.EnumerateArray()
-                                            |> Seq.exists (fun c ->
-                                                let num =
-                                                    match c.TryGetProperty "number" with
-                                                    | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
-                                                    | _ -> None
-
-                                                let nwo =
-                                                    match c.TryGetProperty "repository" with
-                                                    | true, r when r.ValueKind = JsonValueKind.Object -> strOf r "nameWithOwner"
-                                                    | _ -> ""
-
-                                                num = Some ref.Number
-                                                && String.Equals(nwo, $"%s{ref.Owner}/%s{ref.Repo}", StringComparison.OrdinalIgnoreCase))
-                                        | _ -> false
-                                    | _ -> missingConnection subject $"PR #%d{num.GetInt32()}'s closing-issue connection"
-
                                 Some
-                                    { Number = num.GetInt32()
-                                      Merged = mergedOf n
-                                      MergedAt = strOf n "mergedAt"
-                                      Oid = oidOf n
-                                      Repo = repoOf n
-                                      ClosesThis = closesThis }
-                            | _ -> None)
-                        |> List.ofSeq
-                    | _ -> []
-                | _ -> missingConnection subject "this issue's closing-PR reference connection"
+                                    {
+                                        Number = num.GetInt32()
+                                        Merged = mergedOf n
+                                        MergedAt = strOf n "mergedAt"
+                                        Oid = oidOf n
+                                        Repo = repoOf n
+                                        ClosesThis = false
+                                    }
+                            | _ -> None
 
-            // THE CLOSED_EVENT CLOSERS. A PullRequest closer names its own number; a Commit closer (a squash
-            // whose subject carried the keyword) names the PR(s) associated with it (#558). Both are the PR that
-            // actually closed the issue, per GitHub's own record.
-            //
-            // Their MERGE FACTS are read here, and that is what lets `verify` union them into the candidate set
-            // rather than merely filter with them (#928). Without them a closer could only be admitted by
-            // ASSUMING it merged — and that assumption is the #543 leg-2 hole: `associatedPullRequests` returns
-            // the PRs that CONTAIN the commit, which need not be merged ones.
-            let closerPrs =
-                match issue.TryGetProperty "timelineItems" with
-                | true, tl ->
-                    match tl.TryGetProperty "nodes" with
-                    | true, nodes when nodes.ValueKind = JsonValueKind.Array ->
-                        nodes.EnumerateArray()
-                        |> Seq.collect (fun n ->
-                            match n.TryGetProperty "closer" with
-                            | true, c when c.ValueKind = JsonValueKind.Object ->
-                                match closerPrOf c with
-                                | Some pr -> Seq.singleton pr
-                                | None ->
-                                    // A Commit closer — resolve through to the PR(s) it is associated with.
-                                    match c.TryGetProperty "associatedPullRequests" with
-                                    | true, apr ->
-                                        requireComplete
-                                            subject
-                                            "the closing commit's associated-PR connection"
-                                            AssociatedPullRequestsWindow
-                                            apr
+                        let closingPrs =
+                            match issue.TryGetProperty "closedByPullRequestsReferences" with
+                            | true, refs ->
+                                // Closure evidence is a whole-set read. A hidden tail could contain the actual latest
+                                // merged closer, so incompleteness is an unverified read rather than evidence that the
+                                // work is not done (#2561/#600).
+                                requireComplete
+                                    subject
+                                    "this issue's closing-PR reference connection"
+                                    ClosedByPullRequestsWindow
+                                    refs
 
-                                        match apr.TryGetProperty "nodes" with
-                                        | true, an when an.ValueKind = JsonValueKind.Array ->
-                                            an.EnumerateArray() |> Seq.choose closerPrOf
-                                        | _ -> Seq.empty
-                                    | _ -> missingConnection subject "the closing commit's associated-PR connection"
-                            | _ -> Seq.empty)
-                        |> List.ofSeq
-                        |> List.distinctBy (fun p -> p.Number)
-                    | _ -> []
-                | _ -> []
+                                match refs.TryGetProperty "nodes" with
+                                | true, nodes when nodes.ValueKind = JsonValueKind.Array ->
+                                    nodes.EnumerateArray()
+                                    |> Seq.choose (fun n ->
+                                        match n.TryGetProperty "number" with
+                                        | true, num when num.ValueKind = JsonValueKind.Number ->
+                                            // `closesThis`: this PR's body names THIS issue in its own repo (#342/#543).
+                                            let closesThis =
+                                                match n.TryGetProperty "closingIssuesReferences" with
+                                                | true, cir ->
+                                                    requireComplete
+                                                        subject
+                                                        $"PR #%d{num.GetInt32()}'s closing-issue connection"
+                                                        ClosingIssuesWindow
+                                                        cir
 
-            let children =
-                match issue.TryGetProperty "subIssues" with
-                | true, subs ->
-                    let total =
-                        match subs.TryGetProperty "totalCount" with
-                        | true, t when t.ValueKind = JsonValueKind.Number -> t.GetInt32()
-                        | _ -> 0
+                                                    match cir.TryGetProperty "nodes" with
+                                                    | true, cn when cn.ValueKind = JsonValueKind.Array ->
+                                                        cn.EnumerateArray()
+                                                        |> Seq.exists (fun c ->
+                                                            let num =
+                                                                match c.TryGetProperty "number" with
+                                                                | true, v when v.ValueKind = JsonValueKind.Number ->
+                                                                    Some(v.GetInt32())
+                                                                | _ -> None
 
-                    let seen =
-                        match subs.TryGetProperty "nodes" with
-                        | true, nodes when nodes.ValueKind = JsonValueKind.Array ->
-                            nodes.EnumerateArray()
-                            |> Seq.choose (fun n ->
-                                let num =
-                                    match n.TryGetProperty "number" with
-                                    | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
-                                    | _ -> None
+                                                            let nwo =
+                                                                match c.TryGetProperty "repository" with
+                                                                | true, r when r.ValueKind = JsonValueKind.Object ->
+                                                                    strOf r "nameWithOwner"
+                                                                | _ -> ""
 
-                                let st =
-                                    match n.TryGetProperty "state" with
-                                    | true, v when v.ValueKind = JsonValueKind.String -> v.GetString().ToUpperInvariant()
-                                    | _ -> "OPEN"
+                                                            num = Some ref.Number
+                                                            && String.Equals(
+                                                                nwo,
+                                                                $"%s{ref.Owner}/%s{ref.Repo}",
+                                                                StringComparison.OrdinalIgnoreCase
+                                                            ))
+                                                    | _ -> false
+                                                | _ ->
+                                                    missingConnection
+                                                        subject
+                                                        $"PR #%d{num.GetInt32()}'s closing-issue connection"
 
-                                num |> Option.map (fun n -> n, st))
-                            |> List.ofSeq
-                        | _ -> []
+                                            Some
+                                                {
+                                                    Number = num.GetInt32()
+                                                    Merged = mergedOf n
+                                                    MergedAt = strOf n "mergedAt"
+                                                    Oid = oidOf n
+                                                    Repo = repoOf n
+                                                    ClosesThis = closesThis
+                                                }
+                                        | _ -> None)
+                                    |> List.ofSeq
+                                | _ -> []
+                            | _ -> missingConnection subject "this issue's closing-PR reference connection"
 
-                    // THE TRUNCATION CHECK, AT THE READ. `totalCount` is the server's count; `nodes` is what
-                    // it gave us. When they disagree the page was cut short, and an unverifiable subject may
-                    // not report green.
-                    if total <> List.length seen then
-                        Unverifiable(total, List.length seen)
-                    elif total = 0 then
-                        NoChildren
-                    else
-                        let openOnes =
-                            seen |> List.filter (fun (_, st) -> st <> "CLOSED") |> List.map fst
+                        // THE CLOSED_EVENT CLOSERS. A PullRequest closer names its own number; a Commit closer (a squash
+                        // whose subject carried the keyword) names the PR(s) associated with it (#558). Both are the PR that
+                        // actually closed the issue, per GitHub's own record.
+                        //
+                        // Their MERGE FACTS are read here, and that is what lets `verify` union them into the candidate set
+                        // rather than merely filter with them (#928). Without them a closer could only be admitted by
+                        // ASSUMING it merged — and that assumption is the #543 leg-2 hole: `associatedPullRequests` returns
+                        // the PRs that CONTAIN the commit, which need not be merged ones.
+                        let closerPrs =
+                            match issue.TryGetProperty "timelineItems" with
+                            | true, tl ->
+                                match tl.TryGetProperty "nodes" with
+                                | true, nodes when nodes.ValueKind = JsonValueKind.Array ->
+                                    nodes.EnumerateArray()
+                                    |> Seq.collect (fun n ->
+                                        match n.TryGetProperty "closer" with
+                                        | true, c when c.ValueKind = JsonValueKind.Object ->
+                                            match closerPrOf c with
+                                            | Some pr -> Seq.singleton pr
+                                            | None ->
+                                                // A Commit closer — resolve through to the PR(s) it is associated with.
+                                                match c.TryGetProperty "associatedPullRequests" with
+                                                | true, apr ->
+                                                    requireComplete
+                                                        subject
+                                                        "the closing commit's associated-PR connection"
+                                                        AssociatedPullRequestsWindow
+                                                        apr
 
-                        if List.isEmpty openOnes then
-                            AllResolved total
-                        else
-                            SomeOpen openOnes
+                                                    match apr.TryGetProperty "nodes" with
+                                                    | true, an when an.ValueKind = JsonValueKind.Array ->
+                                                        an.EnumerateArray() |> Seq.choose closerPrOf
+                                                    | _ -> Seq.empty
+                                                | _ ->
+                                                    missingConnection
+                                                        subject
+                                                        "the closing commit's associated-PR connection"
+                                        | _ -> Seq.empty)
+                                    |> List.ofSeq
+                                    |> List.distinctBy (fun p -> p.Number)
+                                | _ -> []
+                            | _ -> []
 
-                | _ -> NoChildren
+                        let children =
+                            match issue.TryGetProperty "subIssues" with
+                            | true, subs ->
+                                let total =
+                                    match subs.TryGetProperty "totalCount" with
+                                    | true, t when t.ValueKind = JsonValueKind.Number -> t.GetInt32()
+                                    | _ -> 0
 
-            let boardStatus =
-                match issue.TryGetProperty "projectItems" with
-                | true, items ->
-                    // `NoStatus` is a measured answer only after the whole project-item set was read. If our
-                    // board row was hidden past the window, refuse the facts instead of manufacturing absence.
-                    requireComplete subject "this issue's project-item connection" ProjectItemsWindow items
+                                let seen =
+                                    match subs.TryGetProperty "nodes" with
+                                    | true, nodes when nodes.ValueKind = JsonValueKind.Array ->
+                                        nodes.EnumerateArray()
+                                        |> Seq.choose (fun n ->
+                                            let num =
+                                                match n.TryGetProperty "number" with
+                                                | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                                                | _ -> None
 
-                    match items.TryGetProperty "nodes" with
-                    | true, nodes when nodes.ValueKind = JsonValueKind.Array ->
-                        nodes.EnumerateArray()
-                        |> Seq.tryPick (fun n ->
-                            let onOurBoard =
-                                match n.TryGetProperty "project" with
-                                | true, p ->
-                                    match p.TryGetProperty "number" with
-                                    | true, num when num.ValueKind = JsonValueKind.Number ->
-                                        num.GetInt32() = board.Number
-                                    | _ -> false
-                                | _ -> false
+                                            let st =
+                                                match n.TryGetProperty "state" with
+                                                | true, v when v.ValueKind = JsonValueKind.String ->
+                                                    v.GetString().ToUpperInvariant()
+                                                | _ -> "OPEN"
 
-                            if not onOurBoard then
-                                None
-                            else
-                                match n.TryGetProperty "status" with
-                                | true, s when s.ValueKind = JsonValueKind.Object ->
-                                    match s.TryGetProperty "name" with
-                                    | true, nm when nm.ValueKind = JsonValueKind.String ->
-                                        Some(boardStatusOf (nm.GetString()))
-                                    | _ -> Some NoStatus
-                                | _ -> Some NoStatus)
-                        |> Option.defaultValue NoStatus
-                    | _ -> NoStatus
-                | _ -> missingConnection subject "this issue's project-item connection"
+                                            num |> Option.map (fun n -> n, st))
+                                        |> List.ofSeq
+                                    | _ -> []
 
-            let parent =
-                match issue.TryGetProperty "parent" with
-                | true, p when p.ValueKind = JsonValueKind.Object ->
-                    try
-                        let num = p.GetProperty("number").GetInt32()
-                        let repo = p.GetProperty("repository")
-                        let name = repo.GetProperty("name").GetString()
-                        let owner = repo.GetProperty("owner").GetProperty("login").GetString()
+                                // THE TRUNCATION CHECK, AT THE READ. `totalCount` is the server's count; `nodes` is what
+                                // it gave us. When they disagree the page was cut short, and an unverifiable subject may
+                                // not report green.
+                                if total <> List.length seen then
+                                    Unverifiable(total, List.length seen)
+                                elif total = 0 then
+                                    NoChildren
+                                else
+                                    let openOnes = seen |> List.filter (fun (_, st) -> st <> "CLOSED") |> List.map fst
 
-                        Some
-                            { Owner = owner
-                              Repo = name
-                              Number = num }
-                    with _ ->
-                        None
-                | _ -> None
+                                    if List.isEmpty openOnes then
+                                        AllResolved total
+                                    else
+                                        SomeOpen openOnes
 
-            Ok
-                { Ref = ref
-                  State = state
-                  ClosingPrs = closingPrs
-                  CloserPrs = closerPrs
-                  Children = children
-                  BoardStatus = boardStatus
-                  Parent = parent }
+                            | _ -> NoChildren
 
-          with
-          | IncompleteFactsRead error -> Error error
-          | :? JsonException as e ->
-            Error(Malformed(subject, $"the done-stamp query's response is not JSON: %s{e.Message}"))
+                        let boardStatus =
+                            match issue.TryGetProperty "projectItems" with
+                            | true, items ->
+                                // `NoStatus` is a measured answer only after the whole project-item set was read. If our
+                                // board row was hidden past the window, refuse the facts instead of manufacturing absence.
+                                requireComplete subject "this issue's project-item connection" ProjectItemsWindow items
+
+                                match items.TryGetProperty "nodes" with
+                                | true, nodes when nodes.ValueKind = JsonValueKind.Array ->
+                                    nodes.EnumerateArray()
+                                    |> Seq.tryPick (fun n ->
+                                        let onOurBoard =
+                                            match n.TryGetProperty "project" with
+                                            | true, p ->
+                                                match p.TryGetProperty "number" with
+                                                | true, num when num.ValueKind = JsonValueKind.Number ->
+                                                    num.GetInt32() = board.Number
+                                                | _ -> false
+                                            | _ -> false
+
+                                        if not onOurBoard then
+                                            None
+                                        else
+                                            match n.TryGetProperty "status" with
+                                            | true, s when s.ValueKind = JsonValueKind.Object ->
+                                                match s.TryGetProperty "name" with
+                                                | true, nm when nm.ValueKind = JsonValueKind.String ->
+                                                    Some(boardStatusOf (nm.GetString()))
+                                                | _ -> Some NoStatus
+                                            | _ -> Some NoStatus)
+                                    |> Option.defaultValue NoStatus
+                                | _ -> NoStatus
+                            | _ -> missingConnection subject "this issue's project-item connection"
+
+                        let parent =
+                            match issue.TryGetProperty "parent" with
+                            | true, p when p.ValueKind = JsonValueKind.Object ->
+                                try
+                                    let num = p.GetProperty("number").GetInt32()
+                                    let repo = p.GetProperty("repository")
+                                    let name = repo.GetProperty("name").GetString()
+                                    let owner = repo.GetProperty("owner").GetProperty("login").GetString()
+
+                                    Some
+                                        {
+                                            Owner = owner
+                                            Repo = name
+                                            Number = num
+                                        }
+                                with _ ->
+                                    None
+                            | _ -> None
+
+                        Ok
+                            {
+                                Ref = ref
+                                State = state
+                                ClosingPrs = closingPrs
+                                CloserPrs = closerPrs
+                                Children = children
+                                BoardStatus = boardStatus
+                                Parent = parent
+                            }
+
+                with
+                | IncompleteFactsRead error -> Error error
+                | :? JsonException as e ->
+                    Error(Malformed(subject, $"the done-stamp query's response is not JSON: %s{e.Message}"))
 
     // ---- closing an issue ---------------------------------------------------------------------------
 
@@ -676,13 +771,15 @@ module Done =
         let payload = """{"state":"closed","state_reason":"completed"}"""
 
         let request =
-            { Method = "PATCH"
-              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}"
-              Query = []
-              Body = Json payload
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = ref.Short }
+            {
+                Method = "PATCH"
+                Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}"
+                Query = []
+                Body = Json payload
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = ref.Short
+            }
 
         transport.Send request |> Result.map ignore
 
@@ -757,209 +854,239 @@ module Done =
         match discharge with
         | Partial why ->
             Ok
-                [ ParentLeftOpen(
-                      parent,
-                      [ $"this child is a PARTIAL fix and does not discharge its parent: %s{why}"
-                        "the parent stays OPEN, even though this may be its only child (#614)." ]
-                  ) ]
+                [
+                    ParentLeftOpen(
+                        parent,
+                        [
+                            $"this child is a PARTIAL fix and does not discharge its parent: %s{why}"
+                            "the parent stays OPEN, even though this may be its only child (#614)."
+                        ]
+                    )
+                ]
 
         | Completes ->
 
-        let results = ResizeArray<RollUp>()
+            let results = ResizeArray<RollUp>()
 
-        let rec climb (current: Ref) (hops: int) : IoResult<unit> =
-            if hops >= MaxHops then
-                // A PARENT CHAIN LONGER THAN TEN HOPS IS A CYCLE, and a cycle is a bug — one that would
-                // otherwise climb forever, stamping as it went.
-                results.Add(
-                    ParentLeftOpen(current, [ $"the parent chain is more than %d{MaxHops} deep — refusing to climb further; this is a cycle, not a hierarchy." ])
-                )
-
-                Ok()
-            else
-
-            match facts transport board current with
-            | Error e -> Error e
-            | Ok parentFacts ->
-
-            // THE PARENT IS JUDGED BY THE SAME TOTAL FUNCTION AS EVERY OTHER ITEM. There is no second,
-            // laxer set of rules for a parent — that asymmetry is how #613 and #614 both got in.
-            //
-            // The parent is still OPEN at this point (we are about to close it), so `verify` would refuse it
-            // for that reason alone. What we need from it is the CHILD verdict, so the children are checked
-            // directly and the closing act is not required of a parent: a parent is closed BY its children,
-            // not by a PR of its own.
-            match parentFacts.Children with
-            | Unverifiable(total, seen) ->
-                results.Add(
-                    ParentLeftOpen(
-                        current,
-                        [ $"the parent's sub-issue list was truncated — %d{total} exist, %d{seen} returned. Refusing to close a parent whose children we could not fully see." ]
+            let rec climb (current: Ref) (hops: int) : IoResult<unit> =
+                if hops >= MaxHops then
+                    // A PARENT CHAIN LONGER THAN TEN HOPS IS A CYCLE, and a cycle is a bug — one that would
+                    // otherwise climb forever, stamping as it went.
+                    results.Add(
+                        ParentLeftOpen(
+                            current,
+                            [
+                                $"the parent chain is more than %d{MaxHops} deep — refusing to climb further; this is a cycle, not a hierarchy."
+                            ]
+                        )
                     )
-                )
 
-                Ok()
+                    Ok()
+                else
 
-            | SomeOpen numbers ->
-                let names = numbers |> List.map (fun n -> $"#%d{n}") |> String.concat ", "
+                    match facts transport board current with
+                    | Error e -> Error e
+                    | Ok parentFacts ->
 
-                results.Add(
-                    ParentLeftOpen(current, [ $"%d{List.length numbers} sibling(s) are still OPEN: %s{names}." ])
-                )
+                        // THE PARENT IS JUDGED BY THE SAME TOTAL FUNCTION AS EVERY OTHER ITEM. There is no second,
+                        // laxer set of rules for a parent — that asymmetry is how #613 and #614 both got in.
+                        //
+                        // The parent is still OPEN at this point (we are about to close it), so `verify` would refuse it
+                        // for that reason alone. What we need from it is the CHILD verdict, so the children are checked
+                        // directly and the closing act is not required of a parent: a parent is closed BY its children,
+                        // not by a PR of its own.
+                        match parentFacts.Children with
+                        | Unverifiable(total, seen) ->
+                            results.Add(
+                                ParentLeftOpen(
+                                    current,
+                                    [
+                                        $"the parent's sub-issue list was truncated — %d{total} exist, %d{seen} returned. Refusing to close a parent whose children we could not fully see."
+                                    ]
+                                )
+                            )
 
-                Ok()
+                            Ok()
 
-            | NoChildren ->
-                // A PARENT WITH NO CHILDREN IS NOT A PARENT WE CLOSE. We reached it by climbing FROM a
-                // child, so a zero-child answer means the read disagrees with the edge we followed — and
-                // closing an issue on the strength of a contradiction is exactly the shape of #614.
-                results.Add(
-                    ParentLeftOpen(
-                        current,
-                        [ "we climbed to this parent from one of its children, and it reports NO children. Refusing to close on a contradiction." ]
-                    )
-                )
+                        | SomeOpen numbers ->
+                            let names = numbers |> List.map (fun n -> $"#%d{n}") |> String.concat ", "
 
-                Ok()
+                            results.Add(
+                                ParentLeftOpen(
+                                    current,
+                                    [ $"%d{List.length numbers} sibling(s) are still OPEN: %s{names}." ]
+                                )
+                            )
 
-            | AllResolved _ ->
+                            Ok()
 
-            // THE EPIC-UNLINKED-CHILD RULE, APPLIED TO THE ROLL-UP (#325). "All children resolved" is a
-            // claim about the sub-issue GRAPH — but if the parent's BODY declares a child the graph does not
-            // contain, that claim is about a set the body itself says is incomplete, and the roll-up would
-            // close the parent over a criterion it split out and lost track of. So the same check `lint`
-            // makes is made here: a body-cited PR ref is dropped (#346), an unresolvable one is kept (#266).
-            // (`facts`' graph is summarised to counts, so the refs are re-read; a parent about to flip is rare.)
-            match Reads.issueBody transport current.Owner current.Repo current.Number with
-            | Error e -> Error e
-            | Ok parentBody ->
+                        | NoChildren ->
+                            // A PARENT WITH NO CHILDREN IS NOT A PARENT WE CLOSE. We reached it by climbing FROM a
+                            // child, so a zero-child answer means the read disagrees with the edge we followed — and
+                            // closing an issue on the strength of a contradiction is exactly the shape of #614.
+                            results.Add(
+                                ParentLeftOpen(
+                                    current,
+                                    [
+                                        "we climbed to this parent from one of its children, and it reports NO children. Refusing to close on a contradiction."
+                                    ]
+                                )
+                            )
 
-            // AN EPIC'S ACCEPTANCE IS ITS CHILDREN (#965), AND THIS IS WHERE THAT IS ENFORCED.
-            //
-            // Every guard below this one asks a question ABOUT THE GRAPH — are the children all closed, is
-            // the graph whole, does the body cite one the graph lacks. Not one of them can see the criterion
-            // that was never delegated to anybody, because it is not in the graph to be seen. `AllResolved`
-            // is computed from child `state`, and a state is a record, not reality: a parent inherits the
-            // truth of its children's closures without ever testing one, so a criterion the parent kept for
-            // ITSELF is closed over silently. #561 is the measured cost — its step 3 (`global.json` into
-            // FILES, tripwire deleted) was the parent's own work, delegated to no child, never taken, and it
-            // was closed because its four children were closed. Three repos still drift from canonical.
-            //
-            // It runs FIRST, before the graph read and before the PR probes underneath `bodyUnlinkedChildren`
-            // — it is a pure property of the body, so an epic that cannot legally close is refused without
-            // spending a single request on proving the rest.
-            //
-            // The rule is deliberately blunt, and it is blunt because the faithful alternative does not
-            // exist: nothing can mechanically decide "the tripwire is intact" from prose. Deleting the
-            // un-delegated prose is what makes the question answerable — which is why the fix is a REFUSAL
-            // to close rather than an attempt to verify.
-            //
-            // IT APPLIES TO EVERY PARENT, AND IT MUST NOT BE NARROWED TO `[epic]`-TITLED ONES. That looks
-            // like the obvious tidy-up — `lint` scopes its twin rule exactly that way, from the title — and
-            // it would sail straight past the case this guard exists for: **#561 is titled `[cross-repo]`,
-            // not `[epic]`**, and it has four children of its own. "Epic" here is a fact about the GRAPH, not
-            // about the title: an issue with children is a parent, a parent's acceptance is discharged by its
-            // children, and one that kept a criterion for itself is the whole defect. A leaf's ref-less
-            // acceptance is ordinary prose and is never examined — the climb only ever reaches parents — so
-            // the breadth costs nothing and buys the motivating case.
-            match FS.GG.Coord.EpicBody.undelegatedAcceptance parentBody with
-            | undelegated when not (List.isEmpty undelegated) ->
-                results.Add(
-                    ParentLeftOpen(
-                        current,
-                        [ $"the body states %d{List.length undelegated} acceptance line(s) that delegate to NO child, so nothing in the sub-issue graph can ever discharge them and closing this parent would close them unread (#965):"
-                          yield! undelegated
-                          "a parent's acceptance IS its children: make each line a child (`scripts/fsgg-coord child <parent> <child>`), or drop it from the body if it is not acceptance." ]
-                    )
-                )
+                            Ok()
 
-                Ok()
+                        | AllResolved _ ->
 
-            | _ ->
+                            // THE EPIC-UNLINKED-CHILD RULE, APPLIED TO THE ROLL-UP (#325). "All children resolved" is a
+                            // claim about the sub-issue GRAPH — but if the parent's BODY declares a child the graph does not
+                            // contain, that claim is about a set the body itself says is incomplete, and the roll-up would
+                            // close the parent over a criterion it split out and lost track of. So the same check `lint`
+                            // makes is made here: a body-cited PR ref is dropped (#346), an unresolvable one is kept (#266).
+                            // (`facts`' graph is summarised to counts, so the refs are re-read; a parent about to flip is rare.)
+                            match Reads.issueBody transport current.Owner current.Repo current.Number with
+                            | Error e -> Error e
+                            | Ok parentBody ->
 
-            // ...AND THE HALF THAT GUARD COULD NOT SEE (#1003). The check above reads the ref-less task
-            // lines. A body with NO task lines has none — so "every acceptance line is a child ref" is
-            // VACUOUSLY TRUE, the guard reports itself satisfied, and the close proceeds over whatever the
-            // prose says.
-            //
-            // It shipped that way, and it was not a corner: 13 of the 28 parents in `.github` state no
-            // task-line acceptance. Two of them are the ones that matter. **#561 — the false closure #965
-            // was written about — has zero task lines**, so the fix could not have caught the bug it was
-            // built for. And #889 was closed by this very function ~10 minutes after #965's guard landed,
-            // its prose `## The work` naming three driver skills of which one was never done.
-            //
-            // "Every criterion is delegated" and "no criterion is written down in a form anything can
-            // check" are opposite facts, and until now they were the same empty list. So: no acceptance
-            // stated, no close. The remedy is a declaration, never an escape sentinel — one that let an
-            // author assert "it is all delegated" would be a loophole that PAYS its user, and #889 would
-            // have taken it.
-            if not (FS.GG.Coord.EpicBody.statesAcceptance parentBody) then
-                results.Add(
-                    ParentLeftOpen(
-                        current,
-                        [ "this parent's body states NO task-line acceptance, so there is nothing in it to check against the sub-issue graph — and closing it on the strength of that graph would close an unread body (#1003)."
-                          "a criterion delegated to NOBODY is what closed #561: its four children were closed, its graph was whole, and its step 3 was a sentence nobody was given (#965)."
-                          "an epic's acceptance IS its children: state each criterion as a task line naming its child — `- [ ] #123 the thing` — and link it with `scripts/fsgg-coord child <parent> <child>`." ]
-                    )
-                )
+                                // AN EPIC'S ACCEPTANCE IS ITS CHILDREN (#965), AND THIS IS WHERE THAT IS ENFORCED.
+                                //
+                                // Every guard below this one asks a question ABOUT THE GRAPH — are the children all closed, is
+                                // the graph whole, does the body cite one the graph lacks. Not one of them can see the criterion
+                                // that was never delegated to anybody, because it is not in the graph to be seen. `AllResolved`
+                                // is computed from child `state`, and a state is a record, not reality: a parent inherits the
+                                // truth of its children's closures without ever testing one, so a criterion the parent kept for
+                                // ITSELF is closed over silently. #561 is the measured cost — its step 3 (`global.json` into
+                                // FILES, tripwire deleted) was the parent's own work, delegated to no child, never taken, and it
+                                // was closed because its four children were closed. Three repos still drift from canonical.
+                                //
+                                // It runs FIRST, before the graph read and before the PR probes underneath `bodyUnlinkedChildren`
+                                // — it is a pure property of the body, so an epic that cannot legally close is refused without
+                                // spending a single request on proving the rest.
+                                //
+                                // The rule is deliberately blunt, and it is blunt because the faithful alternative does not
+                                // exist: nothing can mechanically decide "the tripwire is intact" from prose. Deleting the
+                                // un-delegated prose is what makes the question answerable — which is why the fix is a REFUSAL
+                                // to close rather than an attempt to verify.
+                                //
+                                // IT APPLIES TO EVERY PARENT, AND IT MUST NOT BE NARROWED TO `[epic]`-TITLED ONES. That looks
+                                // like the obvious tidy-up — `lint` scopes its twin rule exactly that way, from the title — and
+                                // it would sail straight past the case this guard exists for: **#561 is titled `[cross-repo]`,
+                                // not `[epic]`**, and it has four children of its own. "Epic" here is a fact about the GRAPH, not
+                                // about the title: an issue with children is a parent, a parent's acceptance is discharged by its
+                                // children, and one that kept a criterion for itself is the whole defect. A leaf's ref-less
+                                // acceptance is ordinary prose and is never examined — the climb only ever reaches parents — so
+                                // the breadth costs nothing and buys the motivating case.
+                                match FS.GG.Coord.EpicBody.undelegatedAcceptance parentBody with
+                                | undelegated when not (List.isEmpty undelegated) ->
+                                    results.Add(
+                                        ParentLeftOpen(
+                                            current,
+                                            [
+                                                $"the body states %d{List.length undelegated} acceptance line(s) that delegate to NO child, so nothing in the sub-issue graph can ever discharge them and closing this parent would close them unread (#965):"
+                                                yield! undelegated
+                                                "a parent's acceptance IS its children: make each line a child (`scripts/fsgg-coord child <parent> <child>`), or drop it from the body if it is not acceptance."
+                                            ]
+                                        )
+                                    )
 
-                Ok()
-            else
+                                    Ok()
 
-            match Reads.subIssues transport current.Owner current.Repo current.Number with
-            | Error e -> Error e
-            | Ok graph ->
+                                | _ ->
 
-            match
-                bodyUnlinkedChildren
-                    transport
-                    current.Owner
-                    current.Repo
-                    parentBody
-                    (graph.Children |> List.map (fun c -> c.Ref))
-            with
-            | Error e -> Error e
-            | Ok unlinked when not (List.isEmpty unlinked) ->
-                let named = unlinked |> List.map shortRef |> String.concat ", "
+                                    // ...AND THE HALF THAT GUARD COULD NOT SEE (#1003). The check above reads the ref-less task
+                                    // lines. A body with NO task lines has none — so "every acceptance line is a child ref" is
+                                    // VACUOUSLY TRUE, the guard reports itself satisfied, and the close proceeds over whatever the
+                                    // prose says.
+                                    //
+                                    // It shipped that way, and it was not a corner: 13 of the 28 parents in `.github` state no
+                                    // task-line acceptance. Two of them are the ones that matter. **#561 — the false closure #965
+                                    // was written about — has zero task lines**, so the fix could not have caught the bug it was
+                                    // built for. And #889 was closed by this very function ~10 minutes after #965's guard landed,
+                                    // its prose `## The work` naming three driver skills of which one was never done.
+                                    //
+                                    // "Every criterion is delegated" and "no criterion is written down in a form anything can
+                                    // check" are opposite facts, and until now they were the same empty list. So: no acceptance
+                                    // stated, no close. The remedy is a declaration, never an escape sentinel — one that let an
+                                    // author assert "it is all delegated" would be a loophole that PAYS its user, and #889 would
+                                    // have taken it.
+                                    if not (FS.GG.Coord.EpicBody.statesAcceptance parentBody) then
+                                        results.Add(
+                                            ParentLeftOpen(
+                                                current,
+                                                [
+                                                    "this parent's body states NO task-line acceptance, so there is nothing in it to check against the sub-issue graph — and closing it on the strength of that graph would close an unread body (#1003)."
+                                                    "a criterion delegated to NOBODY is what closed #561: its four children were closed, its graph was whole, and its step 3 was a sentence nobody was given (#965)."
+                                                    "an epic's acceptance IS its children: state each criterion as a task line naming its child — `- [ ] #123 the thing` — and link it with `scripts/fsgg-coord child <parent> <child>`."
+                                                ]
+                                            )
+                                        )
 
-                results.Add(
-                    ParentLeftOpen(
-                        current,
-                        [ $"the epic body declares %d{List.length unlinked} child(ren) the sub-issue graph does not contain: %s{named}. Link them with `scripts/fsgg-coord child`, or drop them from the body, before it can roll up (#325)." ]
-                    )
-                )
+                                        Ok()
+                                    else
 
-                Ok()
+                                        match Reads.subIssues transport current.Owner current.Repo current.Number with
+                                        | Error e -> Error e
+                                        | Ok graph ->
 
-            | Ok _ ->
+                                            match
+                                                bodyUnlinkedChildren
+                                                    transport
+                                                    current.Owner
+                                                    current.Repo
+                                                    parentBody
+                                                    (graph.Children |> List.map (fun c -> c.Ref))
+                                            with
+                                            | Error e -> Error e
+                                            | Ok unlinked when not (List.isEmpty unlinked) ->
+                                                let named = unlinked |> List.map shortRef |> String.concat ", "
 
-            // BOARD *AND* ISSUE, TOGETHER. #613: the roll-up stamped the parent `Done` on the board and
-            // never CLOSED THE ISSUE — so the upward climb died at the next hop (which reads an OPEN child),
-            // and the board and the issue disagreed about the same work. FS.GG.Rendering#361 sat like that:
-            // board `Done`, issue OPEN, all four children closed.
-            let boardResult =
-                Board.boardWrite transport board current.Owner current.Repo current.Number "Status" (Board.Set "Done") worker
+                                                results.Add(
+                                                    ParentLeftOpen(
+                                                        current,
+                                                        [
+                                                            $"the epic body declares %d{List.length unlinked} child(ren) the sub-issue graph does not contain: %s{named}. Link them with `scripts/fsgg-coord child`, or drop them from the body, before it can roll up (#325)."
+                                                        ]
+                                                    )
+                                                )
 
-            match boardResult with
-            | Error e -> Error e
-            | Ok _ ->
+                                                Ok()
 
-            match closeIssue transport current with
+                                            | Ok _ ->
+
+                                                // BOARD *AND* ISSUE, TOGETHER. #613: the roll-up stamped the parent `Done` on the board and
+                                                // never CLOSED THE ISSUE — so the upward climb died at the next hop (which reads an OPEN child),
+                                                // and the board and the issue disagreed about the same work. FS.GG.Rendering#361 sat like that:
+                                                // board `Done`, issue OPEN, all four children closed.
+                                                let boardResult =
+                                                    Board.boardWrite
+                                                        transport
+                                                        board
+                                                        current.Owner
+                                                        current.Repo
+                                                        current.Number
+                                                        "Status"
+                                                        (Board.Set "Done")
+                                                        worker
+
+                                                match boardResult with
+                                                | Error e -> Error e
+                                                | Ok _ ->
+
+                                                    match closeIssue transport current with
+                                                    | Error e -> Error e
+                                                    | Ok() ->
+                                                        results.Add(ParentClosed current)
+
+                                                        // CLIMB ON. The parent we just closed is now a resolved child of ITS parent, and it
+                                                        // `Completes` that parent by construction: we only got here because all of its own children
+                                                        // were resolved. This is the hop #613 was losing.
+                                                        match parentFacts.Parent with
+                                                        | None -> Ok()
+                                                        | Some grandparent -> climb grandparent (hops + 1)
+
+            match climb parent 0 with
             | Error e -> Error e
             | Ok() ->
-                results.Add(ParentClosed current)
-
-                // CLIMB ON. The parent we just closed is now a resolved child of ITS parent, and it
-                // `Completes` that parent by construction: we only got here because all of its own children
-                // were resolved. This is the hop #613 was losing.
-                match parentFacts.Parent with
-                | None -> Ok()
-                | Some grandparent -> climb grandparent (hops + 1)
-
-        match climb parent 0 with
-        | Error e -> Error e
-        | Ok() ->
-            if results.Count = 0 then
-                Ok [ NoParent ]
-            else
-                Ok(List.ofSeq results)
+                if results.Count = 0 then
+                    Ok [ NoParent ]
+                else
+                    Ok(List.ofSeq results)

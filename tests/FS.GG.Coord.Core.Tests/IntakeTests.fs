@@ -5,15 +5,36 @@ open FS.GG.Coord
 
 module IntakeTests =
     let private draft: Intake.Draft =
-        { Schema = Intake.Schema; Id = "intake-42"; Owner = "FS-GG"; Repository = ".github"
-          Title = "title"; Observed = "observed"; RootCause = "cause"; Acceptance = "acceptance"
-          Verification = "verification"; Paths = [ "src/FS.GG.Coord.Core" ]; Class = "hardening"
-          Status = "Backlog"; Disposition = Some Intake.Create; Phase = None; Severity = None
-          BlockedBy = None; BlockedOn = None; BacklogReason = Some "not-yet-actionable"; JudgementQuestion = None }
+        {
+            Schema = Intake.Schema
+            Id = "intake-42"
+            Owner = "FS-GG"
+            Repository = ".github"
+            Title = "title"
+            Observed = "observed"
+            RootCause = "cause"
+            Acceptance = "acceptance"
+            Verification = "verification"
+            Paths = [ "src/FS.GG.Coord.Core" ]
+            Class = "hardening"
+            Status = "Backlog"
+            Disposition = Some Intake.Create
+            Phase = None
+            Severity = None
+            BlockedBy = None
+            BlockedOn = None
+            BacklogReason = Some "not-yet-actionable"
+            JudgementQuestion = None
+        }
 
     [<Fact>]
     let ``#2134 intake draft refuses an unknown schema before IO`` () =
-        match Intake.validate { draft with Schema = "fsgg.coord.intake/v0" } with
+        match
+            Intake.validate
+                { draft with
+                    Schema = "fsgg.coord.intake/v0"
+                }
+        with
         | Error findings -> Assert.Contains(findings, fun finding -> finding.Field = "schema")
         | Ok _ -> failwith "an unsupported schema must refuse"
 
@@ -39,14 +60,25 @@ module IntakeTests =
     let ``intake class vocabulary is the shared board vocabulary`` () =
         match Intake.validate { draft with Class = "capability" } with
         | Error findings ->
-            Assert.Contains(findings, fun finding ->
-                finding.Field = "class"
-                && finding.Detail.Contains("defect, hardening, decision"))
+            Assert.Contains(
+                findings,
+                fun finding ->
+                    finding.Field = "class"
+                    && finding.Detail.Contains("defect, hardening, decision")
+            )
         | Ok _ -> failwith "a class the board cannot project must refuse before IO"
 
     [<Fact>]
     let ``#2134 receipt cannot turn a different draft into a retry`` () =
-        let receipt: IntakeReceipt.Receipt = { DraftId = "other"; Owner = "FS-GG"; Repository = ".github"; IssueNumber = 42; DraftDigest = "wrong" }
+        let receipt: IntakeReceipt.Receipt =
+            {
+                DraftId = "other"
+                Owner = "FS-GG"
+                Repository = ".github"
+                IssueNumber = 42
+                DraftDigest = "wrong"
+            }
+
         Assert.True(IntakeReceipt.validate draft receipt |> Result.isError)
 
     [<Fact>]
@@ -57,18 +89,38 @@ module IntakeTests =
 
     [<Fact>]
     let ``#2134 Blocked requires a dependency or human park`` () =
-        match Intake.validate { draft with Status = "Blocked"; BacklogReason = None } with
+        match
+            Intake.validate
+                { draft with
+                    Status = "Blocked"
+                    BacklogReason = None
+                }
+        with
         | Error findings -> Assert.Contains(findings, fun finding -> finding.Field = "blockedBy")
         | Ok _ -> failwith "incoherent Blocked must refuse"
 
     [<Fact>]
     let ``#2134 Blocked refuses a noncanonical dependency token`` () =
-        match Intake.validate { draft with Status = "Blocked"; BacklogReason = None; BlockedBy = Some "x#y" } with
+        match
+            Intake.validate
+                { draft with
+                    Status = "Blocked"
+                    BacklogReason = None
+                    BlockedBy = Some "x#y"
+                }
+        with
         | Error findings -> Assert.Contains(findings, fun finding -> finding.Field = "blockedBy")
         | Ok _ -> failwith "x#y is not a canonical dependency"
 
     [<Fact>]
     let ``#2134 Ready refuses unresolved judgement`` () =
-        match Intake.validate { draft with Status = "Ready"; BacklogReason = None; JudgementQuestion = Some "owner?" } with
+        match
+            Intake.validate
+                { draft with
+                    Status = "Ready"
+                    BacklogReason = None
+                    JudgementQuestion = Some "owner?"
+                }
+        with
         | Error findings -> Assert.Contains(findings, fun finding -> finding.Field = "status")
         | Ok _ -> failwith "Ready with judgement must refuse"

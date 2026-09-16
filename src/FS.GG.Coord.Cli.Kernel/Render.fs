@@ -53,38 +53,40 @@ module Render =
     /// A classified in-flight row: the item, its lock state, the touch-set it reserves, and — on a STALE
     /// row only — the #581 proof of life that turns a bare `STALE` into `STALE (#NNN OPEN)`.
     type WhoRow =
-        { Ref: Ref
-          State: WhoState
-          Paths: string list
-          /// The item's own OPEN `item/<n>-*` PR, as (number, headRef), when the lease lapsed but the WORK
-          /// did not (#581). Populated ONLY on a Stale row; `None` on held/unclaimed and on a genuinely dead
-          /// stale claim a reaper may collect.
-          LivePr: (int * string) option
-          /// #1055: the lease lapsed and there is NO open PR, but a pushed `item/<n>-*` branch exists — proof
-          /// of life during §3, before §5 opens the PR. `true` only on a Stale row whose probe found a branch
-          /// and no PR; it turns a bare `STALE` (which reads as reapable) into `STALE (item/<n>-* pushed)`.
-          /// Mutually exclusive with `LivePr` by construction: a PR-open row is `LeaseExpiredPrOpen`, not this.
-          BranchPushed: bool
-          /// WHAT that PR says (#697), when there is one — is the finished work landable? `Some` exactly when
-          /// `LivePr` is `Some`; `None` otherwise. It turns `STALE (#NNN OPEN)` into `STALE (#NNN OPEN —
-          /// GREEN: LAND IT)` and points a human at `adopt` instead of `reap`. A held/unclaimed row has no
-          /// PR to read, so it carries none.
-          PrState: PrState option
-          /// `who --local` — the local git worktree this item is checked out in, if any (#959). `None` when
-          /// `--local` was not asked, or when no local worktree is on this item's `item/<n>-*` branch. It is
-          /// informational: a claim with no local worktree is normal (another worker holds it, elsewhere).
-          Worktree: string option
+        {
+            Ref: Ref
+            State: WhoState
+            Paths: string list
+            /// The item's own OPEN `item/<n>-*` PR, as (number, headRef), when the lease lapsed but the WORK
+            /// did not (#581). Populated ONLY on a Stale row; `None` on held/unclaimed and on a genuinely dead
+            /// stale claim a reaper may collect.
+            LivePr: (int * string) option
+            /// #1055: the lease lapsed and there is NO open PR, but a pushed `item/<n>-*` branch exists — proof
+            /// of life during §3, before §5 opens the PR. `true` only on a Stale row whose probe found a branch
+            /// and no PR; it turns a bare `STALE` (which reads as reapable) into `STALE (item/<n>-* pushed)`.
+            /// Mutually exclusive with `LivePr` by construction: a PR-open row is `LeaseExpiredPrOpen`, not this.
+            BranchPushed: bool
+            /// WHAT that PR says (#697), when there is one — is the finished work landable? `Some` exactly when
+            /// `LivePr` is `Some`; `None` otherwise. It turns `STALE (#NNN OPEN)` into `STALE (#NNN OPEN —
+            /// GREEN: LAND IT)` and points a human at `adopt` instead of `reap`. A held/unclaimed row has no
+            /// PR to read, so it carries none.
+            PrState: PrState option
+            /// `who --local` — the local git worktree this item is checked out in, if any (#959). `None` when
+            /// `--local` was not asked, or when no local worktree is on this item's `item/<n>-*` branch. It is
+            /// informational: a claim with no local worktree is normal (another worker holds it, elsewhere).
+            Worktree: string option
 
-          /// EVERY COMMENT THE MARKER READ COULD NOT CLASSIFY (.github#1668) — on EVERY row, whatever its
-          /// state, because an incomplete read is a property of the READ and not of the verdict drawn from
-          /// it. Empty on the overwhelmingly normal row, and empty is the load-bearing value: only an empty
-          /// list licenses acting on this row's state as a fact.
-          ///
-          /// It is NOT redundant with `Undetermined`. That state is the case where the short read left NO
-          /// marker at all; this field also fires on `Held` and `Stale`, where a marker WAS found and the
-          /// hidden one may be a lower id (so the named holder is the wrong holder) or a live claim behind
-          /// a lapsed one (so the `STALE` a human is about to `reap` is not free).
-          Incomplete: string list }
+            /// EVERY COMMENT THE MARKER READ COULD NOT CLASSIFY (.github#1668) — on EVERY row, whatever its
+            /// state, because an incomplete read is a property of the READ and not of the verdict drawn from
+            /// it. Empty on the overwhelmingly normal row, and empty is the load-bearing value: only an empty
+            /// list licenses acting on this row's state as a fact.
+            ///
+            /// It is NOT redundant with `Undetermined`. That state is the case where the short read left NO
+            /// marker at all; this field also fires on `Held` and `Stale`, where a marker WAS found and the
+            /// hidden one may be a lower id (so the named holder is the wrong holder) or a live claim behind
+            /// a lapsed one (so the `STALE` a human is about to `reap` is not free).
+            Incomplete: string list
+        }
 
     /// ONE claim a path update — or, since .github#2459, a `claim` itself — now collides with. The human
     /// OVERLAP branch prints these same facts across two stderr lines and then a THIRD naming whether the
@@ -93,90 +95,110 @@ module Render =
     /// log line. Moved ahead of `ClaimReceipt` (.github#2459) because that receipt now carries a list of
     /// these too, and an F# record referring to a type must follow its definition.
     type PathCollision =
-        { Ref: Ref
-          Worker: string
-          SharedTokens: string list
-          Notified: bool
-          NotifyError: string option }
+        {
+            Ref: Ref
+            Worker: string
+            SharedTokens: string list
+            Notified: bool
+            NotifyError: string option
+        }
 
     type ClaimMarkerReceipt =
-        { MarkerId: int64
-          Worker: string
-          Live: bool }
+        {
+            MarkerId: int64
+            Worker: string
+            Live: bool
+        }
 
     type ClaimMarkerCensusReceipt =
-        { WinnerMarkerId: int64 option
-          Markers: ClaimMarkerReceipt list }
+        {
+            WinnerMarkerId: int64 option
+            Markers: ClaimMarkerReceipt list
+        }
 
     type ForcedClaimCensusesReceipt =
-        { Before: ClaimMarkerCensusReceipt
-          After: ClaimMarkerCensusReceipt option }
+        {
+            Before: ClaimMarkerCensusReceipt
+            After: ClaimMarkerCensusReceipt option
+        }
 
     type ForcedClaimOutcomeReceipt =
-        { Ref: Ref
-          Worker: string
-          Kind: string
-          ReplacementMarkerId: int64 option
-          StandingWorker: string option
-          StandingMarkerId: int64 option
-          RemovedWorkers: string list
-          FailedWorker: string option
-          FailedMarkerId: int64 option
-          Reason: string option
-          ForcedClaimCensuses: ForcedClaimCensusesReceipt }
+        {
+            Ref: Ref
+            Worker: string
+            Kind: string
+            ReplacementMarkerId: int64 option
+            StandingWorker: string option
+            StandingMarkerId: int64 option
+            RemovedWorkers: string list
+            FailedWorker: string option
+            FailedMarkerId: int64 option
+            Reason: string option
+            ForcedClaimCensuses: ForcedClaimCensusesReceipt
+        }
 
     type ClaimReceipt =
-        { Ref: Ref
-          Worker: string
-          Kind: string
-          MarkerObserved: bool
-          MarkerId: int64 option
-          AssigneeObserved: string option
-          Status: string option
-          StatusRead: string
-          StatusWrite: string
-          PendingBoardWrites: int option
-          Collisions: PathCollision list
-          ForcedClaimCensuses: ForcedClaimCensusesReceipt option
-          Converged: bool }
+        {
+            Ref: Ref
+            Worker: string
+            Kind: string
+            MarkerObserved: bool
+            MarkerId: int64 option
+            AssigneeObserved: string option
+            Status: string option
+            StatusRead: string
+            StatusWrite: string
+            PendingBoardWrites: int option
+            Collisions: PathCollision list
+            ForcedClaimCensuses: ForcedClaimCensusesReceipt option
+            Converged: bool
+        }
 
     /// `take --json`'s other outcome (.github#1525) — see the `.fsi` for why it is not a `ClaimReceipt`
     /// with everything optional.
     type NoItemReceipt =
-        { Worker: string
-          PassedOver: int
-          RepoAdvisory: string option }
+        {
+            Worker: string
+            PassedOver: int
+            RepoAdvisory: string option
+        }
 
     type LintFinding =
-        { Code: string
-          Severity: string
-          Id: string
-          Short: string
-          Status: string
-          Url: string
-          Detail: string }
+        {
+            Code: string
+            Severity: string
+            Id: string
+            Short: string
+            Status: string
+            Url: string
+            Detail: string
+        }
 
     /// A `predicate --json` result — the ADR-0050 oracle verdict, structured. `verdict` is the word
     /// (`agrees`/`contradicts`/`unknown`); `ownerValue`/`note` are non-null on `contradicts` (the
     /// owner-declared value and the governing note the filing-time check auto-comments), `reason` on
     /// `unknown`. A real JSON writer, so a note carrying a quote cannot forge the object.
     type PredicateResult =
-        { Verdict: string
-          Id: string
-          Field: string
-          Value: string
-          OwnerValue: string option
-          Note: string option
-          Reason: string option }
+        {
+            Verdict: string
+            Id: string
+            Field: string
+            Value: string
+            OwnerValue: string option
+            Note: string option
+            Reason: string option
+        }
 
     /// The `widen --json` / `set-paths --json` receipt (.github#1517) — the ref, the RESULTING declaration,
     /// and the #353 overlap verdict in one object. `Kind` is the past-tense verb, mirroring `ClaimReceipt`.
     type PathUpdateReceipt =
-        { Ref: Ref
-          Worker: string
-          Kind: string
-          Paths: string list
-          Collisions: PathCollision list }
+        {
+            Ref: Ref
+            Worker: string
+            Kind: string
+            Paths: string list
+            Collisions: PathCollision list
+        }
 
     /// HOW ONE MECHANICAL REPAIR WENT under `reconcile --apply` (.github#1524).
     ///
@@ -220,22 +242,24 @@ module Render =
 
     /// ONE row of `reconcile --json` — a mechanical finding, and (under `--apply`) how repairing it went.
     type ReconcileRow =
-        { Id: string
-          Rule: string
-          Subject: Ref
-          Size: string
-          Remedy: string
-          Statement: string
-          /// The field this repair sets and the value it sets it to — `None` for `STALE-CLAIM`, whose
-          /// remedy is a marker collection delegated to `reap`, not a field write. ONE option over the
-          /// PAIR, so "which field" and "which value" cannot be present independently of each other.
-          Write: (string * string) option
-          /// All intended field values for an apply receipt.  BLOCKER-CLEARED is deliberately two writes.
-          Writes: (string * string) list
-          /// Values observed on the fresh verification read; absent when no fresh observation was possible.
-          Observed: (string * string) list option
-          /// `None` on a DRY RUN, where nothing was attempted and therefore nothing is known.
-          Outcome: ReconcileOutcome option }
+        {
+            Id: string
+            Rule: string
+            Subject: Ref
+            Size: string
+            Remedy: string
+            Statement: string
+            /// The field this repair sets and the value it sets it to — `None` for `STALE-CLAIM`, whose
+            /// remedy is a marker collection delegated to `reap`, not a field write. ONE option over the
+            /// PAIR, so "which field" and "which value" cannot be present independently of each other.
+            Write: (string * string) option
+            /// All intended field values for an apply receipt.  BLOCKER-CLEARED is deliberately two writes.
+            Writes: (string * string) list
+            /// Values observed on the fresh verification read; absent when no fresh observation was possible.
+            Observed: (string * string) list option
+            /// `None` on a DRY RUN, where nothing was attempted and therefore nothing is known.
+            Outcome: ReconcileOutcome option
+        }
 
     /// `ready --json` — THE MACHINE CONTRACT a reconciler (`/check-board`) and `next` read, an array of
     /// board rows. The field set is bash's `board_items` projection, the fields a consumer keys on: the
@@ -245,7 +269,9 @@ module Render =
     /// Written with a real JSON writer so a title carrying a quote cannot forge the array.
     let renderReadyJson (rows: Scan.Row list) : string =
         use stream = new MemoryStream()
-        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        use w =
+            new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
 
         w.WriteStartArray()
 
@@ -323,7 +349,9 @@ module Render =
     /// carries it — a string path, or `null` where no local worktree is on this item's branch.
     let renderWhoJson (includeWorktree: bool) (rows: WhoRow list) : string =
         use stream = new MemoryStream()
-        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        use w =
+            new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
 
         w.WriteStartArray()
 
@@ -401,7 +429,10 @@ module Render =
 
     let renderClaimReceiptJson (receipt: ClaimReceipt) : string =
         use stream = new MemoryStream()
-        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        use w =
+            new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
         w.WriteStartObject()
         w.WriteString("ref", receipt.Ref.Short)
         w.WriteString("repo", $"%s{receipt.Ref.Owner}/%s{receipt.Ref.Repo}")
@@ -409,6 +440,7 @@ module Render =
         w.WriteString("worker", receipt.Worker)
         w.WriteString("kind", receipt.Kind)
         w.WriteBoolean("markerObserved", receipt.MarkerObserved)
+
         match receipt.MarkerId with
         | Some id -> w.WriteNumber("markerId", id)
         | None -> w.WriteNull("markerId")
@@ -417,11 +449,14 @@ module Render =
         match receipt.AssigneeObserved with
         | Some a -> w.WriteString("assigneeObserved", a)
         | None -> w.WriteNull("assigneeObserved")
+
         match receipt.Status with
         | Some s -> w.WriteString("status", s)
         | None -> w.WriteNull("status")
+
         w.WriteString("statusRead", receipt.StatusRead)
         w.WriteString("statusWrite", receipt.StatusWrite)
+
         match receipt.PendingBoardWrites with
         | Some n -> w.WriteNumber("pendingBoardWrites", n)
         | None -> w.WriteNull("pendingBoardWrites")
@@ -458,16 +493,20 @@ module Render =
 
         let writeCensus (name: string) (census: ClaimMarkerCensusReceipt) =
             w.WriteStartObject(name)
+
             match census.WinnerMarkerId with
             | Some markerId -> w.WriteNumber("winnerMarkerId", markerId)
             | None -> w.WriteNull("winnerMarkerId")
+
             w.WriteStartArray("markers")
+
             for marker in census.Markers do
                 w.WriteStartObject()
                 w.WriteNumber("markerId", marker.MarkerId)
                 w.WriteString("worker", marker.Worker)
                 w.WriteBoolean("live", marker.Live)
                 w.WriteEndObject()
+
             w.WriteEndArray()
             w.WriteEndObject()
 
@@ -476,9 +515,11 @@ module Render =
         | Some censuses ->
             w.WriteStartObject("forcedClaimCensuses")
             writeCensus "before" censuses.Before
+
             match censuses.After with
             | Some after -> writeCensus "after" after
             | None -> w.WriteNull("after")
+
             w.WriteEndObject()
 
         w.WriteBoolean("converged", receipt.Converged)
@@ -488,20 +529,26 @@ module Render =
 
     let renderForcedClaimOutcomeJson (receipt: ForcedClaimOutcomeReceipt) : string =
         use stream = new MemoryStream()
-        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        use w =
+            new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
 
         let writeCensus (name: string) (census: ClaimMarkerCensusReceipt) =
             w.WriteStartObject(name)
+
             match census.WinnerMarkerId with
             | Some markerId -> w.WriteNumber("winnerMarkerId", markerId)
             | None -> w.WriteNull("winnerMarkerId")
+
             w.WriteStartArray("markers")
+
             for marker in census.Markers do
                 w.WriteStartObject()
                 w.WriteNumber("markerId", marker.MarkerId)
                 w.WriteString("worker", marker.Worker)
                 w.WriteBoolean("live", marker.Live)
                 w.WriteEndObject()
+
             w.WriteEndArray()
             w.WriteEndObject()
 
@@ -511,33 +558,45 @@ module Render =
         w.WriteNumber("number", receipt.Ref.Number)
         w.WriteString("worker", receipt.Worker)
         w.WriteString("kind", receipt.Kind)
+
         match receipt.ReplacementMarkerId with
         | Some markerId -> w.WriteNumber("replacementMarkerId", markerId)
         | None -> w.WriteNull("replacementMarkerId")
+
         match receipt.StandingWorker with
         | Some worker -> w.WriteString("standingWorker", worker)
         | None -> w.WriteNull("standingWorker")
+
         match receipt.StandingMarkerId with
         | Some markerId -> w.WriteNumber("standingMarkerId", markerId)
         | None -> w.WriteNull("standingMarkerId")
+
         w.WriteStartArray("removedWorkers")
+
         for worker in receipt.RemovedWorkers do
             w.WriteStringValue worker
+
         w.WriteEndArray()
+
         match receipt.FailedWorker with
         | Some worker -> w.WriteString("failedWorker", worker)
         | None -> w.WriteNull("failedWorker")
+
         match receipt.FailedMarkerId with
         | Some markerId -> w.WriteNumber("failedMarkerId", markerId)
         | None -> w.WriteNull("failedMarkerId")
+
         match receipt.Reason with
         | Some reason -> w.WriteString("reason", reason)
         | None -> w.WriteNull("reason")
+
         w.WriteStartObject("forcedClaimCensuses")
         writeCensus "before" receipt.ForcedClaimCensuses.Before
+
         match receipt.ForcedClaimCensuses.After with
         | Some after -> writeCensus "after" after
         | None -> w.WriteNull("after")
+
         w.WriteEndObject()
         w.WriteEndObject()
         w.Flush()
@@ -562,7 +621,10 @@ module Render =
     /// the same places and the divergence in one place.
     let renderNoItemJson (receipt: NoItemReceipt) : string =
         use stream = new MemoryStream()
-        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        use w =
+            new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
         w.WriteStartObject()
         w.WriteNull "ref"
         w.WriteNull "repo"
@@ -575,13 +637,16 @@ module Render =
         match receipt.RepoAdvisory with
         | Some a -> w.WriteString("repoAdvisory", a)
         | None -> w.WriteNull "repoAdvisory"
+
         w.WriteEndObject()
         w.Flush()
         Text.Encoding.UTF8.GetString(stream.ToArray())
 
     let renderInboxJson (msgs: (string * Reads.Message) list) : string =
         use stream = new MemoryStream()
-        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        use w =
+            new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
 
         w.WriteStartArray()
 
@@ -601,7 +666,9 @@ module Render =
 
     let renderLintJson (findings: LintFinding list) : string =
         use stream = new MemoryStream()
-        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        use w =
+            new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
 
         w.WriteStartArray()
 
@@ -621,7 +688,9 @@ module Render =
 
     let renderPredicateJson (result: PredicateResult) : string =
         use stream = new MemoryStream()
-        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        use w =
+            new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
 
         let writeOpt (name: string) (v: string option) =
             match v with
@@ -644,16 +713,21 @@ module Render =
     /// rate-limit class is data rather than a phrase a board driver must parse (#1892).
     let renderFailureJson (exitCode: int) (message: string) (rateLimit: Errors.RateLimitKind option) : string =
         use stream = new MemoryStream()
-        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        use w =
+            new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
         w.WriteStartObject()
         w.WriteString("kind", "error")
         w.WriteNumber("exitCode", exitCode)
         w.WriteString("message", message)
+
         match rateLimit with
         | Some Errors.Primary -> w.WriteString("rateLimit", "primary")
         | Some Errors.Secondary -> w.WriteString("rateLimit", "secondary")
         | Some Errors.Unknown -> w.WriteString("rateLimit", "unknown")
         | None -> w.WriteNull("rateLimit")
+
         w.WriteEndObject()
         w.Flush()
         Text.Encoding.UTF8.GetString(stream.ToArray())
@@ -678,7 +752,9 @@ module Render =
     /// this row's ref, and a second key carrying the same string would be one fact with two names.
     let renderReconcileJson (includeOutcome: bool) (rows: ReconcileRow list) : string =
         use stream = new MemoryStream()
-        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        use w =
+            new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
 
         w.WriteStartArray()
 
@@ -695,20 +771,25 @@ module Render =
 
             if includeOutcome then
                 w.WriteStartArray("writes")
+
                 for field, value in r.Writes do
                     w.WriteStartObject()
                     w.WriteString("field", field)
                     w.WriteString("value", value)
                     w.WriteEndObject()
+
                 w.WriteEndArray()
 
                 w.WriteStartArray("observed")
+
                 for field, value in r.Observed |> Option.defaultValue [] do
                     w.WriteStartObject()
                     w.WriteString("field", field)
                     w.WriteString("value", value)
                     w.WriteEndObject()
+
                 w.WriteEndArray()
+
                 match r.Write with
                 | Some(field, value) ->
                     w.WriteString("field", field)
@@ -753,7 +834,9 @@ module Render =
     /// on stderr, so a consumer reading one stream can be told the opposite of what the other says.
     let renderPathUpdateJson (receipt: PathUpdateReceipt) : string =
         use stream = new MemoryStream()
-        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        use w =
+            new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
 
         w.WriteStartObject()
         w.WriteString("ref", receipt.Ref.Short)
@@ -769,7 +852,13 @@ module Render =
 
         w.WriteEndArray()
 
-        w.WriteString("verdict", (if List.isEmpty receipt.Collisions then "disjoint" else "overlap"))
+        w.WriteString(
+            "verdict",
+            (if List.isEmpty receipt.Collisions then
+                 "disjoint"
+             else
+                 "overlap")
+        )
 
         w.WriteStartArray("collisions")
 

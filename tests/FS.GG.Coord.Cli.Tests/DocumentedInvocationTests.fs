@@ -52,8 +52,10 @@ module DocumentedInvocationTests =
             if isNull (box d) then
                 failwith
                     "DocumentedInvocationTests: no repo root above the test binary (looked for a directory holding both `docs/coordination` and `.claude/skills`)."
-            elif Directory.Exists(Path.Combine(d.FullName, "docs", "coordination"))
-                 && Directory.Exists(Path.Combine(d.FullName, ".claude", "skills")) then
+            elif
+                Directory.Exists(Path.Combine(d.FullName, "docs", "coordination"))
+                && Directory.Exists(Path.Combine(d.FullName, ".claude", "skills"))
+            then
                 d.FullName
             else
                 up d.Parent
@@ -83,7 +85,8 @@ module DocumentedInvocationTests =
     /// `fsgg-coord <verb>`, but NOT `fsgg-coord-engine <verb>` — the lookahead is load-bearing. `\b`
     /// alone matches between "fsgg-coord" and "-engine", which would read `whoami --mint`'s own
     /// documented line as the verb `engine` and red this gate on a line that is correct.
-    let private invocation = Regex(@"(?:scripts/)?fsgg-coord(?![\w-])\s+(?=\S)", RegexOptions.Compiled)
+    let private invocation =
+        Regex(@"(?:scripts/)?fsgg-coord(?![\w-])\s+(?=\S)", RegexOptions.Compiled)
 
     /// Tokens that end a command line rather than belonging to it. A prescribed line is prose-adjacent:
     /// it carries trailing `# comments`, and it is sometimes piped or chained.
@@ -112,7 +115,11 @@ module DocumentedInvocationTests =
             let c = s.[i]
 
             if quote <> '\000' then
-                if c = quote then quote <- '\000' else cur.Append c |> ignore
+                if c = quote then
+                    quote <- '\000'
+                else
+                    cur.Append c |> ignore
+
                 started <- true
             elif c = '\'' || c = '"' then
                 quote <- c
@@ -139,7 +146,8 @@ module DocumentedInvocationTests =
             let ch = s.[i]
 
             if quote <> '\000' then
-                (if ch = quote then quote <- '\000')
+                (if ch = quote then
+                     quote <- '\000')
             elif ch = '\'' || ch = '"' then
                 quote <- ch
             elif ch = c then
@@ -196,10 +204,15 @@ module DocumentedInvocationTests =
     /// most carefully-documented invocation in the corpus would be the one nothing checks.
     let private unquote (line: string) =
         let t = line.TrimStart()
-        if t.StartsWith ">" then t.Substring(1).TrimStart() else line
+
+        if t.StartsWith ">" then
+            t.Substring(1).TrimStart()
+        else
+            line
 
     /// A fence opens/closes on ``` — nothing else on the line matters to us.
-    let private isFence (line: string) = (unquote line).TrimStart().StartsWith "```"
+    let private isFence (line: string) =
+        (unquote line).TrimStart().StartsWith "```"
 
     /// An inline code span. A prose sentence that NAMES the tool is not prescribing an invocation; a
     /// span that spells one out is. `pnext-item:318` prescribes `say` exactly this way — inline, mid
@@ -212,38 +225,40 @@ module DocumentedInvocationTests =
     /// read the board to decide…") is discussion, not instruction, and feeding it to the parser would
     /// red this gate on English rather than on a defect.
     let private prescribed () =
-        [ for file in corpus () do
-              let rel = Path.GetRelativePath(repoRoot, file).Replace('\\', '/')
-              let mutable inFence = false
+        [
+            for file in corpus () do
+                let rel = Path.GetRelativePath(repoRoot, file).Replace('\\', '/')
+                let mutable inFence = false
 
-              for (i, raw) in File.ReadAllLines file |> Array.indexed do
-                  let line = unquote raw
+                for (i, raw) in File.ReadAllLines file |> Array.indexed do
+                    let line = unquote raw
 
-                  if isFence raw then
-                      inFence <- not inFence
-                  else
-                      // A ```console block echoes the prompt. The command is what follows it.
-                      let code =
-                          if inFence then
-                              let t = line.TrimStart()
-                              // A whole-line `# comment` inside a fence is prose that happens to live in
-                              // code, and it name-drops the tool in backticks exactly as prose does
-                              // (`docs/coordination/README.md:52`). Reading it as an invocation checks a
-                              // sentence.
-                              if t.StartsWith "#" then []
-                              elif t.StartsWith "$ " then [ t.Substring 2 ]
-                              else [ line ]
-                          else
-                              [ for m in inlineSpan.Matches line -> m.Groups.[1].Value ]
+                    if isFence raw then
+                        inFence <- not inFence
+                    else
+                        // A ```console block echoes the prompt. The command is what follows it.
+                        let code =
+                            if inFence then
+                                let t = line.TrimStart()
+                                // A whole-line `# comment` inside a fence is prose that happens to live in
+                                // code, and it name-drops the tool in backticks exactly as prose does
+                                // (`docs/coordination/README.md:52`). Reading it as an invocation checks a
+                                // sentence.
+                                if t.StartsWith "#" then []
+                                elif t.StartsWith "$ " then [ t.Substring 2 ]
+                                else [ line ]
+                            else
+                                [ for m in inlineSpan.Matches line -> m.Groups.[1].Value ]
 
-                      for c in code do
-                          for m in invocation.Matches c do
-                              let before = c.Substring(0, m.Index)
-                              let rest = c.Substring(m.Index + m.Length)
+                        for c in code do
+                            for m in invocation.Matches c do
+                                let before = c.Substring(0, m.Index)
+                                let rest = c.Substring(m.Index + m.Length)
 
-                              match argvOf before rest with
-                              | [] -> ()
-                              | argv -> yield rel, i + 1, argv ]
+                                match argvOf before rest with
+                                | [] -> ()
+                                | argv -> yield rel, i + 1, argv
+        ]
 
     [<Fact>]
     let ``the corpus actually prescribes invocations — this gate has a subject`` () =
@@ -258,9 +273,7 @@ module DocumentedInvocationTests =
 
         // The line this whole issue is about must be IN the subject — not merely "some say line".
         // Without this, a regex that silently stops matching inline code still passes every assertion.
-        let sayLines =
-            found
-            |> List.filter (fun (_, _, argv) -> List.head argv = "say")
+        let sayLines = found |> List.filter (fun (_, _, argv) -> List.head argv = "say")
 
         Assert.NotEmpty sayLines
 
@@ -280,12 +293,12 @@ module DocumentedInvocationTests =
     /// the issue to do it exists.
     let private knownGaps: (string list * string) list =
         [
-          // EMPTY, and that is the healthy state. An entry here is a documented invocation the engine
-          // REFUSES — a temporary exemption keyed to the issue that will close it. #959 (`who --local`) was
-          // the last one, ported and its exemption deleted by the same PR (the `must be deleted, not left to
-          // rot` test below reds if a fixed entry lingers). The family before it: #861 (`add`), #867
-          // (`release --status`), #919 (`say`). Add an entry ONLY with the issue that retires it.
-          ]
+        // EMPTY, and that is the healthy state. An entry here is a documented invocation the engine
+        // REFUSES — a temporary exemption keyed to the issue that will close it. #959 (`who --local`) was
+        // the last one, ported and its exemption deleted by the same PR (the `must be deleted, not left to
+        // rot` test below reds if a fixed entry lingers). The family before it: #861 (`add`), #867
+        // (`release --status`), #919 (`say`). Add an entry ONLY with the issue that retires it.
+        ]
 
     [<Fact>]
     let ``every invocation the corpus prescribes is one the parser ACCEPTS`` () =
@@ -300,6 +313,7 @@ module DocumentedInvocationTests =
                     match TelemetryApplication.validateInvocation argv with
                     | Some result -> result
                     | None -> parse argv |> Result.map ignore
+
                 match parsed with
                 | Ok _ -> None
                 | Error e -> Some $"  %s{file}:%d{line}\n    argv:  %A{argv}\n    engine: %s{e}")
@@ -325,6 +339,7 @@ module DocumentedInvocationTests =
                     match TelemetryApplication.validateInvocation argv with
                     | Some result -> result
                     | None -> parse argv |> Result.map ignore
+
                 match parsed with
                 | Ok _ -> Some $"  %A{argv}\n    listed as: %s{why}"
                 | Error _ -> None)
@@ -339,7 +354,15 @@ module DocumentedInvocationTests =
     let ``say accepts the form all seven prescribing sites document`` () =
         // The #919 regression, pinned by SHAPE rather than by the corpus — so deleting the doc line
         // cannot make this pass.
-        let o = parse [ "say"; ".github#889"; "--to"; "brant-0666"; "I need src/Audio; can you land first?" ]
+        let o =
+            parse
+                [
+                    "say"
+                    ".github#889"
+                    "--to"
+                    "brant-0666"
+                    "I need src/Audio; can you land first?"
+                ]
 
         match o with
         | Error e -> failwithf "the documented form was refused: %s" e

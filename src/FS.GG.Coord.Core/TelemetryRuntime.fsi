@@ -11,39 +11,48 @@ module TelemetryRuntime =
     val InvocationContextEnvironment: string = "FSGG_TELEMETRY_CODEX_INVOCATION"
 
     type Assignment =
-        { FeatureId: string
-          ItemId: string
-          AttemptId: string
-          ParentAttemptId: string option
-          ProducerStream: string }
+        {
+            FeatureId: string
+            ItemId: string
+            AttemptId: string
+            ParentAttemptId: string option
+            ProducerStream: string
+        }
 
     type InvocationContext =
-        { Assignment: Assignment
-          ActivationId: string
-          DispatchId: string
-          InvocationId: string
-          RootInvocationId: string
-          StoreRoot: string option
-          LateAfterSeconds: int64 }
+        {
+            Assignment: Assignment
+            ActivationId: string
+            DispatchId: string
+            InvocationId: string
+            RootInvocationId: string
+            StoreRoot: string option
+            LateAfterSeconds: int64
+        }
 
-    type InvocationRelation = Root | Child | FollowUp
+    type InvocationRelation =
+        | Root
+        | Child
+        | FollowUp
 
     val relationText: relation: InvocationRelation -> string
     val parseRelation: value: string -> InvocationRelation option
 
     type TurnUsage =
-        { ThreadId: string
-          TurnId: string option
-          TurnSequence: int64
-          Provider: string option
-          ObservedModel: string option
-          ObservedEffort: string option
-          Backend: string option
-          Input: int64
-          CachedInput: int64
-          Output: int64
-          Reasoning: int64 option
-          Total: int64 }
+        {
+            ThreadId: string
+            TurnId: string option
+            TurnSequence: int64
+            Provider: string option
+            ObservedModel: string option
+            ObservedEffort: string option
+            Backend: string option
+            Input: int64
+            CachedInput: int64
+            Output: int64
+            Reasoning: int64 option
+            Total: int64
+        }
 
     type Projection =
         | ThreadStarted of threadId: string

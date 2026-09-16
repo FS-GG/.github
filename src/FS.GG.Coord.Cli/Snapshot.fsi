@@ -38,53 +38,57 @@ module Snapshot =
     type Error = Json.Error
 
     type Candidate =
-        { Item: Item
+        {
+            Item: Item
 
-          /// The touch-set the BASH client parsed out of the very same body.
-          ///
-          /// The engine decides from ITS OWN parse (`TouchSet.parse` of the raw body) — that is the
-          /// point, because the touch-set grammar is its own family of incidents (#273, #277, #435,
-          /// #496) and a shadow that re-used bash's parse would never exercise it. This field is
-          /// carried ONLY so that a divergence can show both parses side by side instead of leaving a
-          /// reader to guess which layer disagreed.
-          BashPaths: string list option
+            /// The touch-set the BASH client parsed out of the very same body.
+            ///
+            /// The engine decides from ITS OWN parse (`TouchSet.parse` of the raw body) — that is the
+            /// point, because the touch-set grammar is its own family of incidents (#273, #277, #435,
+            /// #496) and a shadow that re-used bash's parse would never exercise it. This field is
+            /// carried ONLY so that a divergence can show both parses side by side instead of leaving a
+            /// reader to guess which layer disagreed.
+            BashPaths: string list option
 
-          /// The registry-predicate ASSERTION this item's body declares, or `None` when it declares none
-          /// (ADR-0050 call-site B, .github#1213). PARSED off the body here, on the same terms as the
-          /// touch-set and the `Blocked on:` sentinel — but only the PURE id/field/value triple, never the
-          /// owner VERDICT, which needs the owning producer's manifest off disk and so is resolved at the
-          /// offer path's impure edge (`Client.enrichPredicates`), where it becomes `Item.Predicate` and the
-          /// flip-time gate reads it. Absent on an unreadable or swept-closed body — a predicate we did not
-          /// read is one the gate holds on anyway (#266).
-          DeclaredPredicate: RegistryPredicate.Assertion option }
+            /// The registry-predicate ASSERTION this item's body declares, or `None` when it declares none
+            /// (ADR-0050 call-site B, .github#1213). PARSED off the body here, on the same terms as the
+            /// touch-set and the `Blocked on:` sentinel — but only the PURE id/field/value triple, never the
+            /// owner VERDICT, which needs the owning producer's manifest off disk and so is resolved at the
+            /// offer path's impure edge (`Client.enrichPredicates`), where it becomes `Item.Predicate` and the
+            /// flip-time gate reads it. Absent on an unreadable or swept-closed body — a predicate we did not
+            /// read is one the gate holds on anyway (#266).
+            DeclaredPredicate: RegistryPredicate.Assertion option
+        }
 
     /// The documented default (`FSGG_CLAIM_LEASE_MIN`), for a shim too old to send one.
     val DefaultLeaseMinutes: int
 
     type Request =
-        { AllowBacklog: bool
+        {
+            AllowBacklog: bool
 
-          /// `batch -n`. `None` is unlimited.
-          Limit: int option
+            /// `batch -n`. `None` is unlimited.
+            Limit: int option
 
-          /// The claim lease, in minutes — how long before a claim is reapable.
-          ///
-          /// It travels with the SNAPSHOT because it is configurable in the client
-          /// (`FSGG_CLAIM_LEASE_MIN`), so the engine may not assume it: a repo that shortened its lease,
-          /// plus an engine that hard-coded 120, would agree to tell every worker to wait out a window
-          /// that has already closed. Optional on the wire, defaulted to `DefaultLeaseMinutes`.
-          LeaseMinutes: int
+            /// The claim lease, in minutes — how long before a claim is reapable.
+            ///
+            /// It travels with the SNAPSHOT because it is configurable in the client
+            /// (`FSGG_CLAIM_LEASE_MIN`), so the engine may not assume it: a repo that shortened its lease,
+            /// plus an engine that hard-coded 120, would agree to tell every worker to wait out a window
+            /// that has already closed. Optional on the wire, defaulted to `DefaultLeaseMinutes`.
+            LeaseMinutes: int
 
-          /// Touch-sets already spoken for by live claims, as the bash client observed them.
-          ///
-          /// These arrive PRE-PARSED — bash extracted them from the claimed items' bodies before it
-          /// called us — so the shadow does not currently compare the two body-parsers on the
-          /// reservation side, only on the candidate side. `TouchSet.classify` still runs over every
-          /// token here, so #273's unmatchable-token rule IS exercised. The gap is the EXTRACTION,
-          /// and it is named rather than papered over.
-          InFlight: Batch.Reservation list
+            /// Touch-sets already spoken for by live claims, as the bash client observed them.
+            ///
+            /// These arrive PRE-PARSED — bash extracted them from the claimed items' bodies before it
+            /// called us — so the shadow does not currently compare the two body-parsers on the
+            /// reservation side, only on the candidate side. `TouchSet.classify` still runs over every
+            /// token here, so #273's unmatchable-token rule IS exercised. The gap is the EXTRACTION,
+            /// and it is named rather than papered over.
+            InFlight: Batch.Reservation list
 
-          Candidates: Candidate list }
+            Candidates: Candidate list
+        }
 
     /// Read a snapshot. Returns EVERY error, not the first — a shadow that has to be fixed one field
     /// per round-trip across six repos does not get fixed.
@@ -95,8 +99,7 @@ module Snapshot =
     /// `candidates` is threaded through only to echo `BashPaths` back beside the engine's own parse.
     /// `leaseMinutes` is what turns "already claimed" into "wait ~96m, or reap it" — see
     /// `Batch.explainDecision`, whose output the client relays to the worker verbatim.
-    val render:
-        leaseMinutes: int -> candidates: Candidate list -> decision: Verdict<Batch.BatchResult> -> string
+    val render: leaseMinutes: int -> candidates: Candidate list -> decision: Verdict<Batch.BatchResult> -> string
 
     /// Render a lane partition (#428).
     ///

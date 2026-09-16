@@ -65,7 +65,12 @@ module PacketCliTests =
     [<Fact>]
     let ``#2737 a malformed packet exits non-zero and reads its findings on STDERR`` () =
         // The sentinels written the way the whole register writes them today.
-        let damaged = real.Replace("""{"notSearched":"an adjudicator should check whether a gate already derives this"}""", "\"none\"")
+        let damaged =
+            real.Replace(
+                """{"notSearched":"an adjudicator should check whether a gate already derives this"}""",
+                "\"none\""
+            )
+
         Assert.NotEqual<string>(real, damaged) // the mutation must have applied, or this test asserts nothing
 
         let code, stdout, stderr = invoke damaged

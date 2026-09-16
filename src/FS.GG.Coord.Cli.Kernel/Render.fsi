@@ -32,32 +32,34 @@ module Render =
     /// A classified in-flight row: the item, its lock state, the paths it reserves, and — on a STALE row
     /// only — the proof-of-life a human needs before reaping (#581/#697/#1055).
     type WhoRow =
-        { Ref: Ref
-          State: WhoState
-          Paths: string list
-          /// The item's own OPEN `item/<n>-*` PR as (number, headRef), when the lease lapsed but the WORK
-          /// did not (#581). `Some` only on a Stale row.
-          LivePr: (int * string) option
-          /// #1055: the lease lapsed, there is NO open PR, but a pushed `item/<n>-*` branch exists — proof
-          /// of life during §3. `true` only on a Stale row. Mutually exclusive with `LivePr`.
-          BranchPushed: bool
-          /// What that PR says (#697), when there is one — is the finished work landable? `Some` exactly
-          /// when `LivePr` is `Some`.
-          PrState: PrState option
-          /// `who --local` — the local git worktree this item is checked out in, if any (#959). Emitted
-          /// only when `--local` was asked.
-          Worktree: string option
+        {
+            Ref: Ref
+            State: WhoState
+            Paths: string list
+            /// The item's own OPEN `item/<n>-*` PR as (number, headRef), when the lease lapsed but the WORK
+            /// did not (#581). `Some` only on a Stale row.
+            LivePr: (int * string) option
+            /// #1055: the lease lapsed, there is NO open PR, but a pushed `item/<n>-*` branch exists — proof
+            /// of life during §3. `true` only on a Stale row. Mutually exclusive with `LivePr`.
+            BranchPushed: bool
+            /// What that PR says (#697), when there is one — is the finished work landable? `Some` exactly
+            /// when `LivePr` is `Some`.
+            PrState: PrState option
+            /// `who --local` — the local git worktree this item is checked out in, if any (#959). Emitted
+            /// only when `--local` was asked.
+            Worktree: string option
 
-          /// EVERY COMMENT THE MARKER READ COULD NOT CLASSIFY (.github#1668) — on EVERY row, whatever its
-          /// state, because an incomplete read is a property of the READ and not of the verdict drawn from
-          /// it. Empty on the overwhelmingly normal row, and empty is the load-bearing value: only an empty
-          /// list licenses acting on this row's state as a fact.
-          ///
-          /// It is NOT redundant with `Undetermined`. That state is the case where the short read left NO
-          /// marker at all; this field also fires on `Held` and `Stale`, where a marker WAS found and the
-          /// hidden one may be a lower id (so the named holder is the wrong holder) or a live claim behind
-          /// a lapsed one (so the `STALE` a human is about to `reap` is not free).
-          Incomplete: string list }
+            /// EVERY COMMENT THE MARKER READ COULD NOT CLASSIFY (.github#1668) — on EVERY row, whatever its
+            /// state, because an incomplete read is a property of the READ and not of the verdict drawn from
+            /// it. Empty on the overwhelmingly normal row, and empty is the load-bearing value: only an empty
+            /// list licenses acting on this row's state as a fact.
+            ///
+            /// It is NOT redundant with `Undetermined`. That state is the case where the short read left NO
+            /// marker at all; this field also fires on `Held` and `Stale`, where a marker WAS found and the
+            /// hidden one may be a lower id (so the named holder is the wrong holder) or a live claim behind
+            /// a lapsed one (so the `STALE` a human is about to `reap` is not free).
+            Incomplete: string list
+        }
 
     /// ONE claim a path update — or, since .github#2459, a `claim` itself — now collides with (.github#1517)
     /// — the same three facts the human OVERLAP branch prints (`OVERLAP — now collides with <ref> (worker
@@ -67,77 +69,89 @@ module Render =
     /// from silence. Placed ahead of `ClaimReceipt` (.github#2459) because that receipt now carries a list
     /// of these too, and an F# signature must declare a type before referring to it.
     type PathCollision =
-        { Ref: Ref
-          Worker: string
-          /// The shared token STEMS. A LIST, rendered as an array — the human form joins them into one
-          /// stderr line, and a machine field shaped to that line would be a consumer splitting on ", ".
-          SharedTokens: string list
-          Notified: bool
-          /// Why the notice failed; `None` when it landed.
-          NotifyError: string option }
+        {
+            Ref: Ref
+            Worker: string
+            /// The shared token STEMS. A LIST, rendered as an array — the human form joins them into one
+            /// stderr line, and a machine field shaped to that line would be a consumer splitting on ", ".
+            SharedTokens: string list
+            Notified: bool
+            /// Why the notice failed; `None` when it landed.
+            NotifyError: string option
+        }
 
     /// One marker in a complete authoritative forced-claim census.
     type ClaimMarkerReceipt =
-        { MarkerId: int64
-          Worker: string
-          Live: bool }
+        {
+            MarkerId: int64
+            Worker: string
+            Live: bool
+        }
 
     type ClaimMarkerCensusReceipt =
-        { WinnerMarkerId: int64 option
-          Markers: ClaimMarkerReceipt list }
+        {
+            WinnerMarkerId: int64 option
+            Markers: ClaimMarkerReceipt list
+        }
 
     type ForcedClaimCensusesReceipt =
-        { Before: ClaimMarkerCensusReceipt
-          /// `None` means the post-operation census was unreadable, never empty.
-          After: ClaimMarkerCensusReceipt option }
+        {
+            Before: ClaimMarkerCensusReceipt
+            /// `None` means the post-operation census was unreadable, never empty.
+            After: ClaimMarkerCensusReceipt option
+        }
 
     /// A terminal non-green `claim --force --json` result. Unlike `ClaimReceipt`, this document does not
     /// claim that the caller holds a marker or that a board projection was attempted. It reports only the
     /// typed transition outcome and the authoritative pre/final census that governed it.
     type ForcedClaimOutcomeReceipt =
-        { Ref: Ref
-          Worker: string
-          Kind: string
-          ReplacementMarkerId: int64 option
-          StandingWorker: string option
-          StandingMarkerId: int64 option
-          RemovedWorkers: string list
-          FailedWorker: string option
-          FailedMarkerId: int64 option
-          Reason: string option
-          ForcedClaimCensuses: ForcedClaimCensusesReceipt }
+        {
+            Ref: Ref
+            Worker: string
+            Kind: string
+            ReplacementMarkerId: int64 option
+            StandingWorker: string option
+            StandingMarkerId: int64 option
+            RemovedWorkers: string list
+            FailedWorker: string option
+            FailedMarkerId: int64 option
+            Reason: string option
+            ForcedClaimCensuses: ForcedClaimCensusesReceipt
+        }
 
     /// The fresh postcondition emitted by `claim --json` and `take --json`. The lock and board column are
     /// separate observations; `Converged` is true only when both were read back successfully.
     type ClaimReceipt =
-        { Ref: Ref
-          Worker: string
-          Kind: string
-          MarkerObserved: bool
-          MarkerId: int64 option
-          AssigneeObserved: string option
-          Status: string option
-          StatusRead: string
-          /// `written` / `deferred` / `not-on-board` / `failed` — `Board.WriteOutcome`'s three cases plus a
-          /// mutation that was attempted and rejected — or `withheld` (.github#2645): the lifecycle reducer
-          /// could not establish a destination from this item's live facts, so NO write was attempted and
-          /// the column is unchanged. `withheld` is deliberately distinct from both neighbours it would
-          /// otherwise be confused with: `failed` asserts a mutation was sent, and `deferred` promises
-          /// `flush` will still land one. Neither is true here, and the lock is unaffected either way.
-          StatusWrite: string
-          PendingBoardWrites: int option
-          /// `claim`'s own #353 collision report (.github#2459) — every live claim THIS item's declared
-          /// touch-set collides with, in the same shape `PathUpdateReceipt.Collisions` already uses.
-          /// Empty when the scan found none, and also (best-effort) when the scan itself could not run —
-          /// `claim` must keep working through a degraded scan, so a caller cannot read `[]` here as proof
-          /// of disjointness; `--refuse-overlap` is the form that turns "could not check" into a refusal.
-          /// Purely advisory: it never participates in `Converged`, which is about THIS item's own lock
-          /// and board state, not about other items this claim happens to overlap.
-          Collisions: PathCollision list
-          /// Present for a successful `claim --force` transition, naming the governing pre/post marker
-          /// observations. Ordinary claims preserve their existing wire shape by carrying `None`.
-          ForcedClaimCensuses: ForcedClaimCensusesReceipt option
-          Converged: bool }
+        {
+            Ref: Ref
+            Worker: string
+            Kind: string
+            MarkerObserved: bool
+            MarkerId: int64 option
+            AssigneeObserved: string option
+            Status: string option
+            StatusRead: string
+            /// `written` / `deferred` / `not-on-board` / `failed` — `Board.WriteOutcome`'s three cases plus a
+            /// mutation that was attempted and rejected — or `withheld` (.github#2645): the lifecycle reducer
+            /// could not establish a destination from this item's live facts, so NO write was attempted and
+            /// the column is unchanged. `withheld` is deliberately distinct from both neighbours it would
+            /// otherwise be confused with: `failed` asserts a mutation was sent, and `deferred` promises
+            /// `flush` will still land one. Neither is true here, and the lock is unaffected either way.
+            StatusWrite: string
+            PendingBoardWrites: int option
+            /// `claim`'s own #353 collision report (.github#2459) — every live claim THIS item's declared
+            /// touch-set collides with, in the same shape `PathUpdateReceipt.Collisions` already uses.
+            /// Empty when the scan found none, and also (best-effort) when the scan itself could not run —
+            /// `claim` must keep working through a degraded scan, so a caller cannot read `[]` here as proof
+            /// of disjointness; `--refuse-overlap` is the form that turns "could not check" into a refusal.
+            /// Purely advisory: it never participates in `Converged`, which is about THIS item's own lock
+            /// and board state, not about other items this claim happens to overlap.
+            Collisions: PathCollision list
+            /// Present for a successful `claim --force` transition, naming the governing pre/post marker
+            /// observations. Ordinary claims preserve their existing wire shape by carrying `None`.
+            ForcedClaimCensuses: ForcedClaimCensusesReceipt option
+            Converged: bool
+        }
 
     /// The OTHER outcome of `take --json`: it looked, and it claimed nothing (.github#1525). A LOOK THAT
     /// SUCCEEDED — `take`'s EX_NONE — so it is a receipt of its own rather than the absence of one.
@@ -149,43 +163,49 @@ module Render =
     /// wire for a command that wrote nothing and therefore observed nothing, which reads as a claim that
     /// FAILED. `kind` tells the two apart, and it is the only key a consumer must branch on.
     type NoItemReceipt =
-        { Worker: string
-          /// How many candidates the scheduler LOOKED AT and refused. #428's distinction in machine form:
-          /// `0` is a genuinely empty queue, and anything higher is a BUSY one whose items are behind
-          /// claims, columns or blockers — the same fact, and two opposite instructions to the caller.
-          /// The per-item REASONS stay on stderr, where `batch --json` already puts them.
-          PassedOver: int
-          /// `Scan.Receipt.RepoAdvisory` — "the `--repo` you named matched nothing on this board" (#979).
-          ///
-          /// IT RIDES IN THE DOCUMENT BECAUSE THIS DOCUMENT IS NEW. #979 put the advisory on stderr
-          /// because the only reader was a human: `take` had no machine projection of this outcome to
-          /// carry it in. Now it does, and `passedOver:0` is EXACTLY what a typo'd `--repo` produces —
-          /// indistinguishable, to a parser, from a board that is genuinely empty. A driver would read
-          /// "this repo has no work" off a misspelling and stop dispatching to a full repo, which is the
-          /// harm #979 exists to prevent, arriving on the surface this receipt creates. `None` (wire
-          /// `null`) whenever the scope named something, which is every healthy call.
-          RepoAdvisory: string option }
+        {
+            Worker: string
+            /// How many candidates the scheduler LOOKED AT and refused. #428's distinction in machine form:
+            /// `0` is a genuinely empty queue, and anything higher is a BUSY one whose items are behind
+            /// claims, columns or blockers — the same fact, and two opposite instructions to the caller.
+            /// The per-item REASONS stay on stderr, where `batch --json` already puts them.
+            PassedOver: int
+            /// `Scan.Receipt.RepoAdvisory` — "the `--repo` you named matched nothing on this board" (#979).
+            ///
+            /// IT RIDES IN THE DOCUMENT BECAUSE THIS DOCUMENT IS NEW. #979 put the advisory on stderr
+            /// because the only reader was a human: `take` had no machine projection of this outcome to
+            /// carry it in. Now it does, and `passedOver:0` is EXACTLY what a typo'd `--repo` produces —
+            /// indistinguishable, to a parser, from a board that is genuinely empty. A driver would read
+            /// "this repo has no work" off a misspelling and stop dispatching to a full repo, which is the
+            /// harm #979 exists to prevent, arriving on the surface this receipt creates. `None` (wire
+            /// `null`) whenever the scope named something, which is every healthy call.
+            RepoAdvisory: string option
+        }
 
     /// A single `lint` finding, in the shape `lint --json` emits.
     type LintFinding =
-        { Code: string
-          Severity: string
-          Id: string
-          Short: string
-          Status: string
-          Url: string
-          Detail: string }
+        {
+            Code: string
+            Severity: string
+            Id: string
+            Short: string
+            Status: string
+            Url: string
+            Detail: string
+        }
 
     /// A `predicate --json` result — the ADR-0050 oracle verdict, structured (.github#1202). `ownerValue`
     /// and `note` are non-null exactly on `contradicts`; `reason` on `unknown`.
     type PredicateResult =
-        { Verdict: string
-          Id: string
-          Field: string
-          Value: string
-          OwnerValue: string option
-          Note: string option
-          Reason: string option }
+        {
+            Verdict: string
+            Id: string
+            Field: string
+            Value: string
+            OwnerValue: string option
+            Note: string option
+            Reason: string option
+        }
 
     /// The receipt `widen --json` and `set-paths --json` emit (.github#1517): the ref, the declaration the
     /// update RESULTED IN, and the #353 overlap verdict — all three in ONE object, so a machine consumer
@@ -193,12 +213,14 @@ module Render =
     /// `Kind` is the past-tense verb (`widened`/`set`), mirroring `ClaimReceipt.Kind`'s `claimed`.
     /// `Collisions` is empty exactly when the verdict is `disjoint`.
     type PathUpdateReceipt =
-        { Ref: Ref
-          Worker: string
-          Kind: string
-          /// The tokens the item now declares — the resulting touch-set, not the tokens that were asked for.
-          Paths: string list
-          Collisions: PathCollision list }
+        {
+            Ref: Ref
+            Worker: string
+            Kind: string
+            /// The tokens the item now declares — the resulting touch-set, not the tokens that were asked for.
+            Paths: string list
+            Collisions: PathCollision list
+        }
 
     /// How ONE mechanical repair went under `reconcile --apply` (.github#1524). The wire words are
     /// `ClaimReceipt.StatusWrite`'s (`written`/`deferred`/`not-on-board`) rather than the human line's
@@ -221,19 +243,21 @@ module Render =
     /// One row of `reconcile --json`: a mechanical finding, plus — under `--apply` — the field write it
     /// attempted and how that went.
     type ReconcileRow =
-        { Id: string
-          Rule: string
-          Subject: Ref
-          Size: string
-          Remedy: string
-          Statement: string
-          /// The field and value this repair sets; `None` for `STALE-CLAIM`, which writes no field. One
-          /// option over the PAIR, so the two cannot be present independently.
-          Write: (string * string) option
-          Writes: (string * string) list
-          Observed: (string * string) list option
-          /// `None` on a dry run — nothing was attempted, so nothing is known.
-          Outcome: ReconcileOutcome option }
+        {
+            Id: string
+            Rule: string
+            Subject: Ref
+            Size: string
+            Remedy: string
+            Statement: string
+            /// The field and value this repair sets; `None` for `STALE-CLAIM`, which writes no field. One
+            /// option over the PAIR, so the two cannot be present independently.
+            Write: (string * string) option
+            Writes: (string * string) list
+            Observed: (string * string) list option
+            /// `None` on a dry run — nothing was attempted, so nothing is known.
+            Outcome: ReconcileOutcome option
+        }
 
     /// `ready --json` — the machine contract a reconciler reads: a JSON array of the startable rows. A
     /// real JSON writer, so a title or path carrying a quote cannot forge the array.

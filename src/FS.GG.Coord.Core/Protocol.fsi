@@ -14,15 +14,17 @@ module Protocol =
     /// One rule. `Id` is the anchor a projection references, so a doc can cite a rule without restating
     /// it and a reader can grep the id back to the code that enforces it.
     type Rule =
-        { Id: string
-          Title: string
+        {
+            Id: string
+            Title: string
 
-          /// The rule itself, in one paragraph. This is the text that lands in every projection.
-          Statement: string
+            /// The rule itself, in one paragraph. This is the text that lands in every projection.
+            Statement: string
 
-          /// Why it is this way — the incident that bought it. Emitted into the canonical doc, and
-          /// omitted from the terse skill projections.
-          Because: string }
+            /// Why it is this way — the incident that bought it. Emitted into the canonical doc, and
+            /// omitted from the terse skill projections.
+            Because: string
+        }
 
     /// A schedulability verdict, as the worker meets it.
     type VerdictDoc = { Kind: string; Meaning: string }
@@ -30,53 +32,59 @@ module Protocol =
     /// One TOP-LEVEL key of the snapshot document (`scan --json`), as the `jq` filters in `check-board`
     /// meet it. See `snapshotKeys`.
     type SnapshotKeyDoc =
-        { /// The key as it appears on the wire — the string `Scan.snapshot` writes.
-          Key: string
+        {
+            /// The key as it appears on the wire — the string `Scan.snapshot` writes.
+            Key: string
 
-          /// Whether a RECONCILER acts on this key, or merely carries it.
-          ///
-          /// The bit a key NAME cannot carry, and the one a reader needs: `limit` and `leaseMinutes`
-          /// look like board facts and are the scan's own PARAMETERS echoed back, so a pass that
-          /// selects on them is reconciling against its own request rather than against the board.
-          Reconciled: bool
+            /// Whether a RECONCILER acts on this key, or merely carries it.
+            ///
+            /// The bit a key NAME cannot carry, and the one a reader needs: `limit` and `leaseMinutes`
+            /// look like board facts and are the scan's own PARAMETERS echoed back, so a pass that
+            /// selects on them is reconciling against its own request rather than against the board.
+            Reconciled: bool
 
-          /// What the key carries, and why a reconciler does or does not act on it.
-          Meaning: string }
+            /// What the key carries, and why a reconciler does or does not act on it.
+            Meaning: string
+        }
 
     /// One board `Status` option, as a filer meets it: the option name the board stores, and whether the
     /// scheduler hands the item out while it sits there.
     type BoardStatusDoc =
-        { /// The Projects v2 option name — `Types.statusWireName`'s answer, never a second spelling. This
-          /// is the string `set-field` accepts and a `jq` `.status` selector matches.
-          Wire: string
+        {
+            /// The Projects v2 option name — `Types.statusWireName`'s answer, never a second spelling. This
+            /// is the string `set-field` accepts and a `jq` `.status` selector matches.
+            Wire: string
 
-          /// Whether a scheduler offers an item in this column — `Schedulability.columnStartability`'s
-          /// answer, spelled by `Schedulability.columnStartabilityWireName`, never a second spelling.
-          ///
-          /// A STRING, on `VerdictDoc.Kind`'s terms and for its reason: the vocabulary belongs to `Core`,
-          /// beside the union it names. Carrying the union here instead would push the spelling out into
-          /// whichever projection renders it — which is what the first draft of #1057 did, in `Snapshot.fs`,
-          /// where renaming a case compiled with zero F# errors.
-          ///
-          /// NOT a bool: the truth has three states. `Backlog` is startable only under `--include-backlog`,
-          /// and that is the state a filer most often asks about.
-          Startable: string
+            /// Whether a scheduler offers an item in this column — `Schedulability.columnStartability`'s
+            /// answer, spelled by `Schedulability.columnStartabilityWireName`, never a second spelling.
+            ///
+            /// A STRING, on `VerdictDoc.Kind`'s terms and for its reason: the vocabulary belongs to `Core`,
+            /// beside the union it names. Carrying the union here instead would push the spelling out into
+            /// whichever projection renders it — which is what the first draft of #1057 did, in `Snapshot.fs`,
+            /// where renaming a case compiled with zero F# errors.
+            ///
+            /// NOT a bool: the truth has three states. `Backlog` is startable only under `--include-backlog`,
+            /// and that is the state a filer most often asks about.
+            Startable: string
 
-          /// What the column asserts about the item, and why a scheduler does or does not offer it.
-          Meaning: string }
+            /// What the column asserts about the item, and why a scheduler does or does not offer it.
+            Meaning: string
+        }
 
     /// One `BlockerState`, as a reader of the scan's JSON meets it: the wire string, and what it says
     /// about the blocker.
     type BlockerStateDoc =
-        { /// The string `scan` emits — `Types.blockerStateWireName`'s answer, never a second spelling.
-          Wire: string
+        {
+            /// The string `scan` emits — `Types.blockerStateWireName`'s answer, never a second spelling.
+            Wire: string
 
-          /// Whether the blocker HOLDS. The one bit a reconciler acts on, and the one the union's case
-          /// name does not carry: `unknown` and `unparseable` read like non-answers and BLOCK.
-          Holds: bool
+            /// Whether the blocker HOLDS. The one bit a reconciler acts on, and the one the union's case
+            /// name does not carry: `unknown` and `unparseable` read like non-answers and BLOCK.
+            Holds: bool
 
-          /// What the state says about the blocker, and why it holds or does not.
-          Meaning: string }
+            /// What the state says about the blocker, and why it holds or does not.
+            Meaning: string
+        }
 
     /// The blocker wire vocabulary, as prose — the five cases of `Types.BlockerState`, each with the
     /// string `scan` actually writes and what it means (#889).
@@ -154,49 +162,55 @@ module Protocol =
 
     /// One exit code, as the CALLER's contract — the fact a shell script reads without parsing prose.
     type ExitCodeDoc =
-        { Code: int
+        {
+            Code: int
 
-          /// The `EX_*` spelling, where the code has one a worker would recognise; `""` where it does
-          /// not. The name is a label on the number, never a second source for it.
-          Name: string
+            /// The `EX_*` spelling, where the code has one a worker would recognise; `""` where it does
+            /// not. The name is a label on the number, never a second source for it.
+            Name: string
 
-          /// What the code means the engine OBSERVED.
-          Meaning: string
+            /// What the code means the engine OBSERVED.
+            Meaning: string
 
-          /// What the caller should DO about it. A code whose remedy is unstated is a code a worker
-          /// invents a remedy for.
-          Action: string }
+            /// What the caller should DO about it. A code whose remedy is unstated is a code a worker
+            /// invents a remedy for.
+            Action: string
+        }
 
     /// One row of `release`/`reap`'s column precedence — the mapping from an item's state at unclaim
     /// time to the column it ends in. NOT an `ExitCodeDoc`: there is no exit code and no `EX_*` name.
     /// The subject is `(explicit --status, live column, recorded column)` → end state, so the row
     /// carries the CONDITION and the resulting column, plus the two things a worker actually reads back.
     type ReleaseColumnDoc =
-        { /// The input, stated in PRECEDENCE ORDER — what is true of the explicit `--status`, the live
-          /// column, and the marker's recorded column. The first row whose condition holds wins, exactly
-          /// as `release` evaluates them.
-          Condition: string
+        {
+            /// The input, stated in PRECEDENCE ORDER — what is true of the explicit `--status`, the live
+            /// column, and the marker's recorded column. The first row whose condition holds wins, exactly
+            /// as `release` evaluates them.
+            Condition: string
 
-          /// The column the item ends in.
-          EndState: string
+            /// The column the item ends in.
+            EndState: string
 
-          /// Whether `release` WRITES the column, or leaves it exactly as it is. The absence of a write
-          /// is not an optimisation: it IS the observable that says the column was nobody's to change
-          /// (#331), and "preserved" and "restored" are indistinguishable to the board's history without
-          /// it.
-          Writes: bool
+            /// Whether `release` WRITES the column, or leaves it exactly as it is. The absence of a write
+            /// is not an optimisation: it IS the observable that says the column was nobody's to change
+            /// (#331), and "preserved" and "restored" are indistinguishable to the board's history without
+            /// it.
+            Writes: bool
 
-          /// The line stdout prints — the TELL. `release` exits 0 even when the column write does not
-          /// land, so the exit code cannot confirm a park; the stdout line can, and a worker keys on it
-          /// to tell a preserve from a set from a bare "no column was set" without re-reading the board.
-          Stdout: string }
+            /// The line stdout prints — the TELL. `release` exits 0 even when the column write does not
+            /// land, so the exit code cannot confirm a park; the stdout line can, and a worker keys on it
+            /// to tell a preserve from a set from a bare "no column was set" without re-reading the board.
+            Stdout: string
+        }
 
     /// The fixed fleet shape that a host declaration and the driver planner must agree on.
     type WavePolicyDoc =
-        { Waves: int
-          ImplementerSlotsPerWave: int
-          ReviewSlots: int
-          ConsolidationThreshold: int }
+        {
+            Waves: int
+            ImplementerSlotsPerWave: int
+            ReviewSlots: int
+            ConsolidationThreshold: int
+        }
 
     // ---- MARKER GRAMMAR TYPES (.github#2399) ----------------------------------------------------------
     //
@@ -304,25 +318,31 @@ module Protocol =
 
     /// Structured-ledger vocabulary and bounded review policy enforced by `Driver`.
     type ReviewPolicyDoc =
-        { Schema: string
-          Kinds: string list
-          MaxAutomatedRepairRounds: int
-          RepairPhaseMaxRounds: int }
+        {
+            Schema: string
+            Kinds: string list
+            MaxAutomatedRepairRounds: int
+            RepairPhaseMaxRounds: int
+        }
 
     /// Facts that determine whether an item can move between lifecycle stages.
     type LifecyclePolicyDoc =
-        { RequiredHousekeeping: string list
-          TerminalActions: string list
-          HostAcceptanceFields: string list }
+        {
+            RequiredHousekeeping: string list
+            TerminalActions: string list
+            HostAcceptanceFields: string list
+        }
 
     /// The stable shape of the content-addressed planning ledger.
     type LedgerPolicyDoc =
-        { Schema: string
-          ObservationFields: string list
-          ContentIntakeFields: string list
-          ContentDispositionFields: string list
-          ReceiptFields: string list
-          RequiredObservations: (string * string) list }
+        {
+            Schema: string
+            ObservationFields: string list
+            ContentIntakeFields: string list
+            ContentDispositionFields: string list
+            ReceiptFields: string list
+            RequiredObservations: (string * string) list
+        }
 
     /// `take`'s exit contract (#585) — the one command in the worker loop, so the code that tells "you
     /// hold it" from the ways it can hand you nothing is the difference between a fan-out and a

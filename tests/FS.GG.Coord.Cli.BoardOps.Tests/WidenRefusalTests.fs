@@ -67,7 +67,17 @@ module WidenRefusalTests =
         let world = overlappingWorld false
 
         let code, out =
-            run world [ verb; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+            run
+                world
+                [
+                    verb
+                    "FS.GG.SDD#74"
+                    "--worker"
+                    "kite-469"
+                    "--json"
+                    "--paths"
+                    "src/Shared.fs"
+                ]
 
         Assert.Equal(6, code)
         Assert.Equal("overlap", str "verdict" (parsed out))
@@ -84,14 +94,16 @@ module WidenRefusalTests =
         let code, out =
             run
                 world
-                [ "widen"
-                  "FS.GG.SDD#74"
-                  "--worker"
-                  "kite-469"
-                  "--json"
-                  "--paths"
-                  "docs/unrelated.md"
-                  "src/Shared.fs" ]
+                [
+                    "widen"
+                    "FS.GG.SDD#74"
+                    "--worker"
+                    "kite-469"
+                    "--json"
+                    "--paths"
+                    "docs/unrelated.md"
+                    "src/Shared.fs"
+                ]
 
         Assert.Equal(6, code)
         Assert.Equal("overlap", str "verdict" (parsed out))
@@ -116,7 +128,17 @@ module WidenRefusalTests =
         let world = overlappingWorld false
 
         let code, out =
-            run world [ verb; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+            run
+                world
+                [
+                    verb
+                    "FS.GG.SDD#74"
+                    "--worker"
+                    "kite-469"
+                    "--json"
+                    "--paths"
+                    "src/Shared.fs"
+                ]
 
         Assert.Equal(6, code)
         let receipt = parsed out
@@ -135,14 +157,16 @@ module WidenRefusalTests =
         let code, out =
             run
                 world
-                [ verb
-                  "FS.GG.SDD#74"
-                  "--worker"
-                  "kite-469"
-                  "--json"
-                  "--paths"
-                  "docs/unrelated.md"
-                  "src/Shared.fs" ]
+                [
+                    verb
+                    "FS.GG.SDD#74"
+                    "--worker"
+                    "kite-469"
+                    "--json"
+                    "--paths"
+                    "docs/unrelated.md"
+                    "src/Shared.fs"
+                ]
 
         Assert.Equal(6, code)
         let receipt = parsed out
@@ -158,7 +182,17 @@ module WidenRefusalTests =
         let world = disjointWorld ()
 
         let code, out =
-            run world [ verb; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "docs/new.md" ]
+            run
+                world
+                [
+                    verb
+                    "FS.GG.SDD#74"
+                    "--worker"
+                    "kite-469"
+                    "--json"
+                    "--paths"
+                    "docs/new.md"
+                ]
 
         Assert.Equal(0, code)
         Assert.Equal("disjoint", str "verdict" (parsed out))

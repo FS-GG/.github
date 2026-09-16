@@ -32,8 +32,7 @@ module ClassLintTests =
 
     let private verdict (title: string) (body: string) = Client.classVerdict status title body
 
-    let private codeOf title body =
-        verdict title body |> Option.map fst
+    let private codeOf title body = verdict title body |> Option.map fst
 
     let private detailOf title body =
         match verdict title body with
@@ -103,7 +102,14 @@ module ClassLintTests =
         // `[Pp]aths:` and `HumanBlock`'s `[Bb]locked [Oo]n:` already have, and #1103 decided ONE grammar
         // for body-line sentinels. A third spelling in one of three sentinels is the drift ADR-0045
         // exists to prevent, so `CLASS: defect` is not a `Class:` line at all and reads as absent.
-        for variant in [ "Class: Defect"; "Class: DEFECT"; "class: defect"; "Class:    defect   "; "  Class: Defect" ] do
+        for variant in
+            [
+                "Class: Defect"
+                "Class: DEFECT"
+                "class: defect"
+                "Class:    defect   "
+                "  Class: Defect"
+            ] do
             Assert.True(
                 (verdict "Ordinary work" $"Paths: src/A/**\n\n%s{variant}\n").IsNone,
                 $"'%s{variant}' is a legal declaration under ADR-0066's normalisation and was refused"
@@ -127,7 +133,9 @@ module ClassLintTests =
         // A fenced line QUOTES the grammar, it does not use it (#277) — this very repo's ADR and issue
         // bodies quote `Class: docs` while explaining the bug. Reporting them as invalid declarations
         // would make the fix fire on the documentation of the fix.
-        let body = "How to class a row:\n\n```\nClass: docs\n```\n\n...but this body never wrote a real one.\n"
+        let body =
+            "How to class a row:\n\n```\nClass: docs\n```\n\n...but this body never wrote a real one.\n"
+
         Assert.Equal(Some "CLASS-UNSET", codeOf "Ordinary work" body)
 
     [<Fact>]
@@ -173,10 +181,7 @@ module ClassLintTests =
 
         // And the checker states no OTHER word as legal. Counting the rendered entries is what catches a
         // literal smuggled into the menu beside the derived ones.
-        Assert.Equal(
-            cases.Length,
-            LintApplication.classMenu.Split("`Class: ").Length - 1
-        )
+        Assert.Equal(cases.Length, LintApplication.classMenu.Split("`Class: ").Length - 1)
 
     [<Fact>]
     let ``AC5 the ABSENT diagnostic reads the same vocabulary`` () =

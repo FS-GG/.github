@@ -33,127 +33,129 @@ module Scan =
 
     /// One row of the board, as the scan sees it.
     type Row =
-        { Ref: Ref
-          Title: string
-          Status: BoardStatus
-          /// The `Blocked by` field's raw TEXT. Projects v2 has no list type, so this is free text and the
-          /// structure has to be recovered from it — which is the parse family (#435, #497, #548) and the
-          /// reason `Blockers.parse` lives in the core.
-          BlockedByRaw: string
-          /// The ISSUE's state, which is not the board column. When they disagree the issue wins (#520).
-          State: IssueState
-          /// A PR on the board is not an item of WORK. #641: they were listed as issues, so a duplicate
-          /// check read a PR as "already filed" and suppressed a real finding.
-          IsPullRequest: bool
-          /// The repository whose tree the item's `Paths:` declaration names.  Usually `Ref.Repo`, but
-          /// separately observed from the board's `Repo Scope` field for cross-repository items (#1732).
-          /// `Ref` remains the repository that owns the issue itself.
-          PathRepo: string
-          /// The `Class` column as OBSERVED — the PROJECTION `reconcile` writes, read back so that
-          /// `CLASS-PROJECTION-LAG` can fire on disagreement and RETIRE on agreement (.github#1588).
-          ///
-          /// It costs nothing. `fieldValueByName` is a resolver field, so this is the same 7-point full
-          /// scan the cost model above measures — one more resolved value per item, no node multiplication.
-          ///
-          /// `None` COLLAPSES THREE FACTS ON PURPOSE: the row is unclassed, the column holds a word this
-          /// engine does not speak, or the project has no `Class` field at all. That collapse is safe here
-          /// and nowhere else, because this value is never a verdict — it is one half of a comparison whose
-          /// authority is the ITEM'S OWN TEXT (ADR-0066). All three mean "there is no projection here to
-          /// trust", and the remedy is identical: write what the item declares. Contrast `TouchSet`, where
-          /// exactly this collapse WAS the bug (#496) — there the board was the only source, so "absent"
-          /// and "unreadable" had to be told apart or a gate would report an omission about an item nobody
-          /// looked at. Here the source is the body, and `lint` reads it directly.
-          ///
-          /// WHETHER THIS FIELD IS `None` ON A CLOSED-AND-`Done` ROW IS PART OF WHAT DECIDES `SweptBody`
-          /// BELOW (.github#2254) — see that field's doc for the full mechanism. `BoardClass` itself is
-          /// unchanged by that: it remains purely the OBSERVED column, never a place this repair writes.
-          BoardClass: ItemClass option
+        {
+            Ref: Ref
+            Title: string
+            Status: BoardStatus
+            /// The `Blocked by` field's raw TEXT. Projects v2 has no list type, so this is free text and the
+            /// structure has to be recovered from it — which is the parse family (#435, #497, #548) and the
+            /// reason `Blockers.parse` lives in the core.
+            BlockedByRaw: string
+            /// The ISSUE's state, which is not the board column. When they disagree the issue wins (#520).
+            State: IssueState
+            /// A PR on the board is not an item of WORK. #641: they were listed as issues, so a duplicate
+            /// check read a PR as "already filed" and suppressed a real finding.
+            IsPullRequest: bool
+            /// The repository whose tree the item's `Paths:` declaration names.  Usually `Ref.Repo`, but
+            /// separately observed from the board's `Repo Scope` field for cross-repository items (#1732).
+            /// `Ref` remains the repository that owns the issue itself.
+            PathRepo: string
+            /// The `Class` column as OBSERVED — the PROJECTION `reconcile` writes, read back so that
+            /// `CLASS-PROJECTION-LAG` can fire on disagreement and RETIRE on agreement (.github#1588).
+            ///
+            /// It costs nothing. `fieldValueByName` is a resolver field, so this is the same 7-point full
+            /// scan the cost model above measures — one more resolved value per item, no node multiplication.
+            ///
+            /// `None` COLLAPSES THREE FACTS ON PURPOSE: the row is unclassed, the column holds a word this
+            /// engine does not speak, or the project has no `Class` field at all. That collapse is safe here
+            /// and nowhere else, because this value is never a verdict — it is one half of a comparison whose
+            /// authority is the ITEM'S OWN TEXT (ADR-0066). All three mean "there is no projection here to
+            /// trust", and the remedy is identical: write what the item declares. Contrast `TouchSet`, where
+            /// exactly this collapse WAS the bug (#496) — there the board was the only source, so "absent"
+            /// and "unreadable" had to be told apart or a gate would report an omission about an item nobody
+            /// looked at. Here the source is the body, and `lint` reads it directly.
+            ///
+            /// WHETHER THIS FIELD IS `None` ON A CLOSED-AND-`Done` ROW IS PART OF WHAT DECIDES `SweptBody`
+            /// BELOW (.github#2254) — see that field's doc for the full mechanism. `BoardClass` itself is
+            /// unchanged by that: it remains purely the OBSERVED column, never a place this repair writes.
+            BoardClass: ItemClass option
 
-          /// The `Kind` column as OBSERVED (.github#2712) — whether the board says this row has a
-          /// lifecycle at all.
-          ///
-          /// It costs nothing, on `BoardClass`'s terms exactly: another `fieldValueByName` resolver field
-          /// on a node already selected, so the 7-point full scan is unchanged. A project with no `Kind`
-          /// field — which is every board today — reads `None` rather than failing the scan.
-          ///
-          /// `None` collapses the same three facts for the same reason, and the collapse is safe for the
-          /// same reason: this value is NEVER a verdict. It is one half of a comparison whose authority is
-          /// the item's own `Kind:` line, and on this axis that direction is not merely tidy — the
-          /// reducer exemption and the scheduler refusal both read `Item.Kind` and never this, so a
-          /// lagging or hand-edited column cannot remove a real work row from its own lifecycle.
-          BoardKind: ItemKind option
+            /// The `Kind` column as OBSERVED (.github#2712) — whether the board says this row has a
+            /// lifecycle at all.
+            ///
+            /// It costs nothing, on `BoardClass`'s terms exactly: another `fieldValueByName` resolver field
+            /// on a node already selected, so the 7-point full scan is unchanged. A project with no `Kind`
+            /// field — which is every board today — reads `None` rather than failing the scan.
+            ///
+            /// `None` collapses the same three facts for the same reason, and the collapse is safe for the
+            /// same reason: this value is NEVER a verdict. It is one half of a comparison whose authority is
+            /// the item's own `Kind:` line, and on this axis that direction is not merely tidy — the
+            /// reducer exemption and the scheduler refusal both read `Item.Kind` and never this, so a
+            /// lagging or hand-edited column cannot remove a real work row from its own lifecycle.
+            BoardKind: ItemKind option
 
-          /// **REGISTER DEPTH** — the ISSUE's comment count as observed (.github#2712).
-          ///
-          /// The fact `.github#2712` was filed for: nothing measured how deep a register had got, so
-          /// whether `.github#2691`'s 57 comments were a healthy inbox or a six-week backlog was decided
-          /// by whoever happened to be looking.
-          ///
-          /// It costs nothing, and for a DIFFERENT reason than the resolver fields above: `comments` is a
-          /// CONNECTION, and selecting only its `totalCount` requests no nodes — GraphQL's primary limit
-          /// is metered by nodes REQUESTED, which is the whole reason this query does not nest
-          /// `fieldValues(first: 100)`. Verified before adoption rather than assumed:
-          /// `comments { totalCount }` on `.github#2691` answered `83` at `rateLimit.cost` 1.
-          ///
-          /// `None` means THIS READER DID NOT LOOK — a pull-request node (`comments` is selected only on
-          /// `... on Issue`), or a cache entry written before this field existed. Never "no comments": an
-          /// unread register reading as an empty one is the single reading that would send a host away
-          /// from a full inbox, which is the outcome this field exists to prevent.
-          CommentCount: int option
+            /// **REGISTER DEPTH** — the ISSUE's comment count as observed (.github#2712).
+            ///
+            /// The fact `.github#2712` was filed for: nothing measured how deep a register had got, so
+            /// whether `.github#2691`'s 57 comments were a healthy inbox or a six-week backlog was decided
+            /// by whoever happened to be looking.
+            ///
+            /// It costs nothing, and for a DIFFERENT reason than the resolver fields above: `comments` is a
+            /// CONNECTION, and selecting only its `totalCount` requests no nodes — GraphQL's primary limit
+            /// is metered by nodes REQUESTED, which is the whole reason this query does not nest
+            /// `fieldValues(first: 100)`. Verified before adoption rather than assumed:
+            /// `comments { totalCount }` on `.github#2691` answered `83` at `rateLimit.cost` 1.
+            ///
+            /// `None` means THIS READER DID NOT LOOK — a pull-request node (`comments` is selected only on
+            /// `... on Issue`), or a cache entry written before this field existed. Never "no comments": an
+            /// unread register reading as an empty one is the single reading that would send a host away
+            /// from a full inbox, which is the outcome this field exists to prevent.
+            CommentCount: int option
 
-          /// The observed `Severity` column. Missing/unrecognised values are `Unset`.
-          Severity: Severity
+            /// The observed `Severity` column. Missing/unrecognised values are `Unset`.
+            Severity: Severity
 
-          /// The `Phase` column as OBSERVED (.github#1598) — the third rank input, and the column whose
-          /// invisibility to the scheduler is the whole subject of that item.
-          ///
-          /// It costs nothing, on `BoardClass`'s terms exactly: another `fieldValueByName` resolver field
-          /// on a node already selected, so the 7-point full scan is unchanged.
-          ///
-          /// `None` collapses the same three facts for the same reason — unset, an unspoken word, or no
-          /// such field on this project. Here the collapse is safe because the consumer is an ORDERING,
-          /// not a verdict: all three mean "no phase evidence", and `Rank` sorts such a row last. Nothing
-          /// is refused, reported or written on the strength of this being `None`.
-          Phase: Phase option
+            /// The `Phase` column as OBSERVED (.github#1598) — the third rank input, and the column whose
+            /// invisibility to the scheduler is the whole subject of that item.
+            ///
+            /// It costs nothing, on `BoardClass`'s terms exactly: another `fieldValueByName` resolver field
+            /// on a node already selected, so the 7-point full scan is unchanged.
+            ///
+            /// `None` collapses the same three facts for the same reason — unset, an unspoken word, or no
+            /// such field on this project. Here the collapse is safe because the consumer is an ORDERING,
+            /// not a verdict: all three mean "no phase evidence", and `Rank` sorts such a row last. Nothing
+            /// is refused, reported or written on the strength of this being `None`.
+            Phase: Phase option
 
-          /// When the ISSUE was created — the only age the board can supply (.github#1598).
-          ///
-          /// THE INSTANT, NOT A DAY COUNT, and the distinction is load-bearing because this record is
-          /// CACHED. An `ageDays` written to disk is wrong by the cache's own lifetime the moment it is
-          /// read back; an instant is not. The count is derived once, where the clock is actually read
-          /// (`Client.enrichBoardFacts`), and only then does it reach `Item.AgeDays`.
-          ///
-          /// `None` when the field was absent or did not parse — never a zero age, which would be the
-          /// YOUNGEST possible answer and the one that can never trigger starvation escalation.
-          CreatedAt: System.DateTimeOffset option
+            /// When the ISSUE was created — the only age the board can supply (.github#1598).
+            ///
+            /// THE INSTANT, NOT A DAY COUNT, and the distinction is load-bearing because this record is
+            /// CACHED. An `ageDays` written to disk is wrong by the cache's own lifetime the moment it is
+            /// read back; an instant is not. The count is derived once, where the clock is actually read
+            /// (`Client.enrichBoardFacts`), and only then does it reach `Item.AgeDays`.
+            ///
+            /// `None` when the field was absent or did not parse — never a zero age, which would be the
+            /// YOUNGEST possible answer and the one that can never trigger starvation escalation.
+            CreatedAt: System.DateTimeOffset option
 
-          /// .github#2254 REPAIR 1 (`heron-fef6`). The row's own body TEXT, read ONLY for a closed-and-
-          /// `Done` candidate whose `BoardClass` was EMPTY at the moment `scanFresh` ran with
-          /// `Cache.Reconciling` — never for `Scheduling`/`Offering`, and never merely to double-check a
-          /// column that already carries a value.
-          ///
-          /// `None` is "not applicable, or this scan's intent never asked" — true of the overwhelming
-          /// majority of rows on every scan, including every `Scheduling` scan regardless of population.
-          /// `Some(Ok text)` is the body carried by the reconciling board query; `Some(Error e)` mirrors `snapshot`'s own `bodyUnreadable`
-          /// naming, so a failed census read is COUNTED, never silently dropped (#266).
-          ///
-          /// `snapshot`'s swept branch reads THIS rather than calling `Reads.issueBody` itself, which is
-          /// the whole mechanism that keeps the extra read off every caller but `reconcile`: `board`
-          /// already receives `Cache.ReadIntent` from an UNCHANGED `Client.fs` call site, so gating the
-          /// read HERE — inside `scanFresh`, upstream of `snapshot` entirely — needed no new parameter on
-          /// `snapshot` and no edit to `Client.fs` at all.
-          ///
-          /// DELIBERATELY UNCACHED: `renderRows`/`parseRows` never round-trip it. `Cache.getScan` already
-          /// refuses to serve a hit for `Reconciling`/`Offering`, so every scan that could populate this
-          /// reaches `scanFresh` fresh regardless — nothing is lost by excluding it from the cache file,
-          /// and excluding it is what stops a `Scheduling` read that happens to share a cache file from
-          /// ever inheriting a census read it never asked for and never paid for.
-          SweptBody: IoResult<string> option
+            /// .github#2254 REPAIR 1 (`heron-fef6`). The row's own body TEXT, read ONLY for a closed-and-
+            /// `Done` candidate whose `BoardClass` was EMPTY at the moment `scanFresh` ran with
+            /// `Cache.Reconciling` — never for `Scheduling`/`Offering`, and never merely to double-check a
+            /// column that already carries a value.
+            ///
+            /// `None` is "not applicable, or this scan's intent never asked" — true of the overwhelming
+            /// majority of rows on every scan, including every `Scheduling` scan regardless of population.
+            /// `Some(Ok text)` is the body carried by the reconciling board query; `Some(Error e)` mirrors `snapshot`'s own `bodyUnreadable`
+            /// naming, so a failed census read is COUNTED, never silently dropped (#266).
+            ///
+            /// `snapshot`'s swept branch reads THIS rather than calling `Reads.issueBody` itself, which is
+            /// the whole mechanism that keeps the extra read off every caller but `reconcile`: `board`
+            /// already receives `Cache.ReadIntent` from an UNCHANGED `Client.fs` call site, so gating the
+            /// read HERE — inside `scanFresh`, upstream of `snapshot` entirely — needed no new parameter on
+            /// `snapshot` and no edit to `Client.fs` at all.
+            ///
+            /// DELIBERATELY UNCACHED: `renderRows`/`parseRows` never round-trip it. `Cache.getScan` already
+            /// refuses to serve a hit for `Reconciling`/`Offering`, so every scan that could populate this
+            /// reaches `scanFresh` fresh regardless — nothing is lost by excluding it from the cache file,
+            /// and excluding it is what stops a `Scheduling` read that happens to share a cache file from
+            /// ever inheriting a census read it never asked for and never paid for.
+            SweptBody: IoResult<string> option
 
-          /// The stable GraphQL node identity.  A cache may retain this address, but never the mutable
-          /// body or comment facts it identifies: `snapshot` re-reads those facts fresh before deciding
-          /// a reservation.
-          NodeId: string option }
+            /// The stable GraphQL node identity.  A cache may retain this address, but never the mutable
+            /// body or comment facts it identifies: `snapshot` re-reads those facts fresh before deciding
+            /// a reservation.
+            NodeId: string option
+        }
 
     /// Scan the whole board. Paginated, cursor-based, and CACHED (90s, both invariants — `Cache`).
     ///
@@ -195,19 +197,21 @@ module Scan =
     /// The class had already produced four instances — #381, #446, #962 and #979 — and each repair
     /// added the missing verb rather than removing the list. A funnel plus a gate removes the list.
     type Scoped =
-        { /// The rows in scope. Identical to the input when no `--repo` was given.
-          Rows: Row list
+        {
+            /// The rows in scope. Identical to the input when no `--repo` was given.
+            Rows: Row list
 
-          /// `Some msg` ⇒ `--repo` named a repo NO row carries: a typo, or a repo with no board items
-          /// yet. The two are indistinguishable from here, so the message says both and the EXIT IS
-          /// UNCHANGED (#979 decision (d)).
-          ///
-          /// REPORT, DO NOT GATE. `ready` is a TRUTH read — an empty board is a real answer, and
-          /// erroring would break the reconciler that consumes it. #266 licenses exactly this: an
-          /// out-of-scope subject must be REPORTED, not silently skipped. What a green exit MEANS is
-          /// now stated rather than implied; that a fleet reading exit codes still cannot tell is the
-          /// accepted residual, named on #979 rather than left as an omission nobody noticed.
-          Advisory: string option }
+            /// `Some msg` ⇒ `--repo` named a repo NO row carries: a typo, or a repo with no board items
+            /// yet. The two are indistinguishable from here, so the message says both and the EXIT IS
+            /// UNCHANGED (#979 decision (d)).
+            ///
+            /// REPORT, DO NOT GATE. `ready` is a TRUTH read — an empty board is a real answer, and
+            /// erroring would break the reconciler that consumes it. #266 licenses exactly this: an
+            /// out-of-scope subject must be REPORTED, not silently skipped. What a green exit MEANS is
+            /// now stated rather than implied; that a fleet reading exit codes still cannot tell is the
+            /// accepted residual, named on #979 rather than left as an omission nobody noticed.
+            Advisory: string option
+        }
 
     /// Scope rows to a `--repo`, and say so when the request names no row. See `Scoped`.
     ///
@@ -235,19 +239,21 @@ module Scan =
 
     /// What the scan cost, and what it could not do — so a caller can say so rather than imply it.
     type Receipt =
-        { Candidates: int
-          /// `scope`'s advisory for this scan's `--repo`, carried out so `scan`'s caller can SAY the
-          /// repo named nothing rather than print `0 candidate(s)` over a full board and imply it.
-          RepoAdvisory: string option
-          /// Off-board blocker refs resolved over REST.
-          OffBoardResolved: int
-          /// Off-board refs we did NOT resolve because the cap was hit. They stay `BlockerUnknown`, which
-          /// BLOCKS — the safe direction — and they are COUNTED so the caller can say the cap was reached.
-          OffBoardSkipped: int
-          /// Candidates whose body could not be read. They are NOT dropped: they arrive as
-          /// `TouchSet.Unreadable`, because an item that silently vanishes from the engine's world cannot
-          /// be offered AND cannot be passed over with a reason.
-          BodiesUnreadable: int }
+        {
+            Candidates: int
+            /// `scope`'s advisory for this scan's `--repo`, carried out so `scan`'s caller can SAY the
+            /// repo named nothing rather than print `0 candidate(s)` over a full board and imply it.
+            RepoAdvisory: string option
+            /// Off-board blocker refs resolved over REST.
+            OffBoardResolved: int
+            /// Off-board refs we did NOT resolve because the cap was hit. They stay `BlockerUnknown`, which
+            /// BLOCKS — the safe direction — and they are COUNTED so the caller can say the cap was reached.
+            OffBoardSkipped: int
+            /// Candidates whose body could not be read. They are NOT dropped: they arrive as
+            /// `TouchSet.Unreadable`, because an item that silently vanishes from the engine's world cannot
+            /// be offered AND cannot be passed over with a reason.
+            BodiesUnreadable: int
+        }
 
     /// Assemble the snapshot `decide` consumes: `fsgg.coord.snapshot/1`. Cost is IDENTICAL for every
     /// caller regardless of `Cache.ReadIntent` (.github#2254 repair 1, `heron-fef6`) — this function never

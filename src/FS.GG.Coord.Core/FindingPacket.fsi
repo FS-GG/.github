@@ -52,29 +52,33 @@ module FindingPacket =
         | NotEstablished of string
 
     type Packet =
-        { Schema: string
-          /// Where it showed up — file:line, a command, or a run URL.
-          Surface: string
-          Cause: Cause
-          RedToday: Answer
-          DerivedBy: Answer
-          ClassRow: Answer
-          /// Why the fix could not ride the PR the finder was already pushing.
-          WhyNotHere: string
-          /// The narrow declaration the finder would propose, already in the shape an intake draft takes.
-          Paths: string list
-          /// The finder's minted worker id, ALONE — `scripts/fsgg-coord say <ref> --to <worker>` is the
-          /// documented way an analyst replies, and it takes an id, not a sentence naming one.
-          Finder: string }
+        {
+            Schema: string
+            /// Where it showed up — file:line, a command, or a run URL.
+            Surface: string
+            Cause: Cause
+            RedToday: Answer
+            DerivedBy: Answer
+            ClassRow: Answer
+            /// Why the fix could not ride the PR the finder was already pushing.
+            WhyNotHere: string
+            /// The narrow declaration the finder would propose, already in the shape an intake draft takes.
+            Paths: string list
+            /// The finder's minted worker id, ALONE — `scripts/fsgg-coord say <ref> --to <worker>` is the
+            /// documented way an analyst replies, and it takes an id, not a sentence naming one.
+            Finder: string
+        }
 
     type Finding = { Field: string; Detail: string }
 
     /// The fields an `fsgg.coord.intake/v1` draft takes DIRECTLY from a validated packet, so the
     /// analyst that decides to file does not retype what the finder already established.
     type IntakeSeed =
-        { Observed: string
-          RootCause: string
-          Paths: string list }
+        {
+            Observed: string
+            RootCause: string
+            Paths: string list
+        }
 
     /// Validate an already-decoded packet's intrinsic facts. Never throws.
     ///

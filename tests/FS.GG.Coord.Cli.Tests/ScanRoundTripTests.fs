@@ -24,30 +24,37 @@ open FS.GG.Coord.GitHub.Transport
 /// Nothing is hand-written; a fixture snapshot would only prove the parser agrees with the fixture.
 let private ok (body: string) =
     Ok
-        { Status = 200
-          Body = body
-          ETag = None
-          NextLink = None; Headers = Map.empty }
+        {
+            Status = 200
+            Body = body
+            ETag = None
+            NextLink = None
+            Headers = Map.empty
+        }
 
 let private aRow: Scan.Row =
-    { Ref =
-        { Owner = "FS-GG"
-          Repo = "FS.GG.SDD"
-          Number = 42 }
-      Title = "a real item"
-      Status = Ready
-      BlockedByRaw = ""
-      State = Open
-      IsPullRequest = false
-      PathRepo = "FS.GG.SDD"
-      BoardClass = None
-      BoardKind = None
-      CommentCount = None
-      Severity = Unset
-      Phase = None
-      CreatedAt = None
-      SweptBody = None
-      NodeId = None }
+    {
+        Ref =
+            {
+                Owner = "FS-GG"
+                Repo = "FS.GG.SDD"
+                Number = 42
+            }
+        Title = "a real item"
+        Status = Ready
+        BlockedByRaw = ""
+        State = Open
+        IsPullRequest = false
+        PathRepo = "FS.GG.SDD"
+        BoardClass = None
+        BoardKind = None
+        CommentCount = None
+        Severity = Unset
+        Phase = None
+        CreatedAt = None
+        SweptBody = None
+        NodeId = None
+    }
 
 /// A transport that answers by ENDPOINT, so one fake can serve a body read and a marker read differently —
 /// which is what the snapshot assembler actually does. The off-board open-issue scan (case 25) rides on the
@@ -62,21 +69,24 @@ let private routed (body: string) (comments: string) =
         if comments = "[]" then
             use document = JsonDocument.Parse body
             let issueBody = document.RootElement.GetProperty("body").GetString()
+
             JsonSerializer.Serialize
-                [ {| id = 7001
-                     body = currentRouteComment "FS-GG/FS.GG.SDD#42" issueBody
-                     user = {| login = "fixture" |}
-                     created_at = "2026-01-01T00:00:00Z"
-                     updated_at = "2026-01-01T00:00:00Z" |} ]
-        else comments
+                [
+                    {|
+                        id = 7001
+                        body = currentRouteComment "FS-GG/FS.GG.SDD#42" issueBody
+                        user = {| login = "fixture" |}
+                        created_at = "2026-01-01T00:00:00Z"
+                        updated_at = "2026-01-01T00:00:00Z"
+                    |}
+                ]
+        else
+            comments
 
     Fake.Recorder(fun req ->
-        if req.Path.EndsWith "/issues" then
-            ok "[]"
-        elif req.Path.EndsWith "/comments" then
-            ok comments
-        else
-            ok body)
+        if req.Path.EndsWith "/issues" then ok "[]"
+        elif req.Path.EndsWith "/comments" then ok comments
+        else ok body)
 
 let private issueBody (text: string) =
     let escaped = text.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n")
@@ -86,20 +96,25 @@ let private issueBody (text: string) =
 /// live boundary.  These direct pure-scheduler fixtures state that already-observed current fact explicitly.
 let private withCurrentRoute item =
     let receipt: DeliveryRoute.Receipt =
-        { Schema = DeliveryRoute.Schema
-          Subject = item.Ref.Canonical
-          SubjectRevision = "fixture"
-          Route = Some DeliveryRoute.Lightweight
-          Agent = "fixture-42"
-          Timestamp = "2026-01-01T00:00:00Z"
-          ReasonCodes = [ "fixture" ]
-          Rationale = "fixture route receipt"
-          DeclaredImpacts = [ "internal" ]
-          ObservedFacts = [ "localized" ]
-          SddWorkId = None
-          SpecHome = None
-          RequiredGates = [] }
-    { item with DeliveryRoute = DeliveryRoute.Current receipt }
+        {
+            Schema = DeliveryRoute.Schema
+            Subject = item.Ref.Canonical
+            SubjectRevision = "fixture"
+            Route = Some DeliveryRoute.Lightweight
+            Agent = "fixture-42"
+            Timestamp = "2026-01-01T00:00:00Z"
+            ReasonCodes = [ "fixture" ]
+            Rationale = "fixture route receipt"
+            DeclaredImpacts = [ "internal" ]
+            ObservedFacts = [ "localized" ]
+            SddWorkId = None
+            SpecHome = None
+            RequiredGates = []
+        }
+
+    { item with
+        DeliveryRoute = DeliveryRoute.Current receipt
+    }
 
 // ---- the round trip ---------------------------------------------------------------------------------
 
@@ -111,28 +126,29 @@ let ``a scanned snapshot PARSES - the writer and the reader agree about the form
     | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
     | Ok(document, _) ->
 
-    match Snapshot.parse document with
-    | Error errors ->
-        let detail =
-            errors |> List.map (fun e -> $"{e.Path}: {e.Message}") |> String.concat "; "
+        match Snapshot.parse document with
+        | Error errors ->
+            let detail =
+                errors |> List.map (fun e -> $"{e.Path}: {e.Message}") |> String.concat "; "
 
-        failwith $"the snapshot the ENGINE writes must parse with the parser the ENGINE reads: %s{detail}"
+            failwith $"the snapshot the ENGINE writes must parse with the parser the ENGINE reads: %s{detail}"
 
-    | Ok request ->
-        Assert.Equal(1, List.length request.Candidates)
-        Assert.Equal(120, request.LeaseMinutes)
+        | Ok request ->
+            Assert.Equal(1, List.length request.Candidates)
+            Assert.Equal(120, request.LeaseMinutes)
 
-        let item = request.Candidates.[0].Item
-        Assert.Equal("FS.GG.SDD#42", item.Ref.Short)
-        Assert.Equal(Ready, item.Status)
-        Assert.Equal(Open, item.State)
+            let item = request.Candidates.[0].Item
+            Assert.Equal("FS.GG.SDD#42", item.Ref.Short)
+            Assert.Equal(Ready, item.Status)
+            Assert.Equal(Open, item.State)
 
 [<Fact>]
 let ``the touch-set survives the round trip, parsed by the ENGINE's own grammar`` () =
     // The RAW BODY is what travels, not bash's parse of it. That is deliberate: the touch-set grammar is its
     // own family of incidents (#273, #277, #435, #496), and a snapshot that carried somebody else's parse
     // would compare two schedulers over one parser and call the parser proven.
-    let transport = routed (issueBody "Some prose\n\nPaths: src/Audio/** tests/Audio.fs") "[]"
+    let transport =
+        routed (issueBody "Some prose\n\nPaths: src/Audio/** tests/Audio.fs") "[]"
 
     match Scan.snapshot transport [ aRow ] None false None 120 with
     | Ok(document, _) ->
@@ -163,7 +179,8 @@ let ``a scanned item is SCHEDULABLE end to end - scan, parse, decide`` () =
         match Snapshot.parse document with
         | Ok request ->
             let decision =
-                Batch.schedule Set.empty
+                Batch.schedule
+                    Set.empty
                     request.AllowBacklog
                     request.Limit
                     request.InFlight
@@ -209,12 +226,9 @@ let ``an unreadable BODY does not drop the item - it arrives UNREADABLE, and is 
     // looked at (#496).
     let transport =
         Fake.Recorder(fun req ->
-            if req.Path.EndsWith "/issues" then
-                ok "[]" // the off-board scan finds no claim here; only the candidate BODY is the 502
-            elif req.Path.EndsWith "/comments" then
-                ok "[]"
-            else
-                Error(Errors.Http(502, "bad gateway")))
+            if req.Path.EndsWith "/issues" then ok "[]" // the off-board scan finds no claim here; only the candidate BODY is the 502
+            elif req.Path.EndsWith "/comments" then ok "[]"
+            else Error(Errors.Http(502, "bad gateway")))
 
     match Scan.snapshot transport [ aRow ] None false None 120 with
     | Ok(document, receipt) ->
@@ -234,7 +248,8 @@ let ``an unreadable BODY does not drop the item - it arrives UNREADABLE, and is 
 
             match verdict with
             | Schedulability.AwaitingDeliveryRouteDecision _ -> ()
-            | other -> failwith $"an item whose source body could not be read must await a route decision — got %A{other}"
+            | other ->
+                failwith $"an item whose source body could not be read must await a route decision — got %A{other}"
 
         | Error e -> failwith $"parse failed: %A{e}"
     | Error e -> failwith $"the scan must survive one unreadable body — got %A{e}"
@@ -271,7 +286,11 @@ let ``#520 a CLOSED and STAMPED issue is a candidate, SWEPT with no read, and de
     // `Row.SweptBody`, which `aRow` (like every fixture that predates this repair) carries as `None` — so
     // this test is now, additionally, proof that `Scan.snapshot` ITSELF performs no network I/O for a
     // swept row on any `BoardClass`, having no `Cache.ReadIntent` to consult in the first place.
-    let closed = { aRow with State = Closed; Status = Done }
+    let closed =
+        { aRow with
+            State = Closed
+            Status = Done
+        }
 
     // A transport that FAILS on every BODY and MARKER read — so a green here is proof the closed sweep read
     // no body and no lock. The off-board open-issue scan (case 25) still runs (a lock lives off the board),
@@ -321,7 +340,8 @@ let ``#2254 SweptBody, when carried, is RENDERED into the swept row's body — S
         { aRow with
             State = Closed
             Status = Done
-            SweptBody = Some(Ok "Paths: src/Audio/**\n\nClass: hardening\n") }
+            SweptBody = Some(Ok "Paths: src/Audio/**\n\nClass: hardening\n")
+        }
 
     // Every OTHER read stays unreachable: nothing about rendering an already-carried `SweptBody` may touch
     // the network for BODY or MARKER purposes. `/issues` still answers — the off-board blocker sweep runs
@@ -364,7 +384,8 @@ let ``#2254 a carried SweptBody FAILURE is rendered as bodyUnreadable and counte
         { aRow with
             State = Closed
             Status = Done
-            SweptBody = Some(Error(Errors.Transport "rate limited")) }
+            SweptBody = Some(Error(Errors.Transport "rate limited"))
+        }
 
     let transport =
         Fake.Recorder(fun req ->
@@ -384,8 +405,7 @@ let ``#2254 a carried SweptBody FAILURE is rendered as bodyUnreadable and counte
                 errors |> List.map (fun e -> $"{e.Path}: {e.Message}") |> String.concat "; "
 
             failwith $"a swept closed item with an unreadable SweptBody must still parse: %s{detail}"
-        | Ok request ->
-            Assert.Equal(None, request.Candidates.[0].Item.Class)
+        | Ok request -> Assert.Equal(None, request.Candidates.[0].Item.Class)
 
 [<Fact>]
 let ``#2225 a CLOSED but UNSTAMPED item is READ, and its live claim still RESERVES its touch-set`` () =
@@ -410,7 +430,8 @@ let ``#2225 a CLOSED but UNSTAMPED item is READ, and its live claim still RESERV
     let closedUnstamped =
         { aRow with
             State = Closed
-            Status = InReview }
+            Status = InReview
+        }
 
     let transport = routed (issueBody "Paths: src/Audio/**") marker
 
@@ -435,7 +456,8 @@ let ``#2225 a CLOSED but UNSTAMPED item is READ, and its live claim still RESERV
             match item.TouchSet with
             | Declared [ Matchable "src/Audio/**" ] -> ()
             | Undeclared ->
-                failwith "the closed body went unread and became a confident 'no touch-set declared' — that is .github#2225"
+                failwith
+                    "the closed body went unread and became a confident 'no touch-set declared' — that is .github#2225"
             | other -> failwith $"expected the declared touch-set — got %A{other}"
 
             // THE CLAIM SURVIVES, so `who` can see it.
@@ -452,7 +474,9 @@ let ``#2225 a CLOSED but UNSTAMPED item is READ, and its live claim still RESERV
             | other -> failwith $"the post-merge window must reserve exactly one touch-set — got %A{other}"
 
 [<Fact>]
-let ``#2225 criterion 3 - an overlapping candidate is REFUSED and the CLOSED holder is NAMED, word for word as an open one`` () =
+let ``#2225 criterion 3 - an overlapping candidate is REFUSED and the CLOSED holder is NAMED, word for word as an open one``
+    ()
+    =
     // CRITERION 3, WHICH THE RESERVATION TEST ABOVE DOES NOT REACH. That test stops at `request.InFlight`:
     // it proves the closed holder RESERVES. Criterion 3 asks for something strictly further on — that
     // `batch`/`take` then REFUSE an overlapping candidate "with the same overlap message they emit for an
@@ -478,7 +502,8 @@ let ``#2225 criterion 3 - an overlapping candidate is REFUSED and the CLOSED hol
     let candidate43 =
         { aRow with
             Ref = { aRow.Ref with Number = 43 }
-            Status = Ready }
+            Status = Ready
+        }
 
     let transport =
         Fake.Recorder(fun req ->
@@ -497,7 +522,11 @@ let ``#2225 criterion 3 - an overlapping candidate is REFUSED and the CLOSED hol
     // `State` is the ONLY input that varies — an open row that differed in its column too would leave the
     // equality below provable by coincidence.
     let refusalFor (state: IssueState) =
-        let holder = { aRow with State = state; Status = InReview }
+        let holder =
+            { aRow with
+                State = state
+                Status = InReview
+            }
 
         match Scan.snapshot transport [ holder; candidate43 ] None false None 120 with
         | Error e -> failwith $"the scan must survive a %A{state} holder — got %A{e}"
@@ -506,7 +535,12 @@ let ``#2225 criterion 3 - an overlapping candidate is REFUSED and the CLOSED hol
             | Error e -> failwith $"the %A{state} holder's row must round-trip — got %A{e}"
             | Ok request ->
                 match
-                    Batch.schedule Set.empty request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
+                    Batch.schedule
+                        Set.empty
+                        request.AllowBacklog
+                        request.Limit
+                        request.InFlight
+                        (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
                 with
                 | Green result ->
                     // THE REFUSAL ITSELF: #43 is not handed to a second worker while #42's holder stands in
@@ -556,7 +590,8 @@ let ``a blocker pointing at ANOTHER BOARD ITEM is resolved for FREE - zero extra
     let blocked =
         { aRow with
             Ref = { aRow.Ref with Number = 43 }
-            BlockedByRaw = "FS.GG.SDD#42" }
+            BlockedByRaw = "FS.GG.SDD#42"
+        }
 
     let transport = routed (issueBody "Paths: src/**") "[]"
 
@@ -585,7 +620,8 @@ let ``PROSE in a Blocked-by field is UNPARSEABLE - and it BLOCKS`` () =
     let blocked =
         { aRow with
             Ref = { aRow.Ref with Number = 43 }
-            BlockedByRaw = "RESOLVED: shipped last week" }
+            BlockedByRaw = "RESOLVED: shipped last week"
+        }
 
     let transport = routed (issueBody "Paths: src/**") "[]"
 
@@ -679,7 +715,8 @@ let ``an OFF-BOARD claim reserves its touch-set - the board scan misses it, the 
 
             // AND THE OVERLAPPING CANDIDATE IS REFUSED, not scheduled over the lock the board could not see.
             let decision =
-                Batch.schedule Set.empty
+                Batch.schedule
+                    Set.empty
                     request.AllowBacklog
                     request.Limit
                     request.InFlight
@@ -729,7 +766,12 @@ let ``a STALE off-board claim still RESERVES its touch-set - a lock is broken on
 
             // AND THE OVERLAPPING CANDIDATE IS REFUSED: a stale lock is not scheduled over, only reaped.
             match
-                Batch.schedule Set.empty request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
+                Batch.schedule
+                    Set.empty
+                    request.AllowBacklog
+                    request.Limit
+                    request.InFlight
+                    (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
             with
             | Green result -> Assert.Empty(result.Chosen)
             | other -> failwith $"an overlap with a stale-but-unreaped claim is not schedulable — got %A{other}"
@@ -865,7 +907,8 @@ let ``a MARKERLESS In-progress row RESERVES its touch-set as Unowned - arm A of 
     let candidate43 =
         { aRow with
             Ref = { aRow.Ref with Number = 43 }
-            Status = Ready }
+            Status = Ready
+        }
 
     let transport =
         Fake.Recorder(fun req ->
@@ -891,7 +934,12 @@ let ``a MARKERLESS In-progress row RESERVES its touch-set as Unowned - arm A of 
 
             // AND THE OVERLAPPING Ready CANDIDATE IS REFUSED, its collision naming the Unowned reserver.
             match
-                Batch.schedule Set.empty request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
+                Batch.schedule
+                    Set.empty
+                    request.AllowBacklog
+                    request.Limit
+                    request.InFlight
+                    (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
             with
             | Green result ->
                 Assert.DoesNotContain(43, result.Chosen |> List.map (fun i -> i.Ref.Number))
@@ -923,7 +971,8 @@ let ``#1150 a live-held item whose BODY READ FAILED reserves an UNREADABLE touch
     let candidate43 =
         { aRow with
             Ref = { aRow.Ref with Number = 43 }
-            Status = Ready }
+            Status = Ready
+        }
 
     let transport =
         Fake.Recorder(fun req ->
@@ -949,7 +998,9 @@ let ``#1150 a live-held item whose BODY READ FAILED reserves an UNREADABLE touch
             | [ r ] ->
                 match r.Paths with
                 | Unreadable _ -> ()
-                | other -> failwith $"a held claim with an unreadable body must reserve an Unreadable touch-set — got %A{other}"
+                | other ->
+                    failwith
+                        $"a held claim with an unreadable body must reserve an Unreadable touch-set — got %A{other}"
 
                 match r.Holder with
                 | Batch.LiveClaim(WorkerId w, ref, _, _) ->
@@ -961,7 +1012,12 @@ let ``#1150 a live-held item whose BODY READ FAILED reserves an UNREADABLE touch
             // THE FIX, ARM 2: the batch is RED. A reservation whose surface we never saw makes every later
             // comparison a lie, so #43 is refused rather than handed files #42's holder may be standing in.
             match
-                Batch.schedule Set.empty request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
+                Batch.schedule
+                    Set.empty
+                    request.AllowBacklog
+                    request.Limit
+                    request.InFlight
+                    (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
             with
             | Red reasons -> Assert.True(reasons |> List.exists (fun (m: string) -> m.Contains "vole-418"))
             | other ->
@@ -997,18 +1053,20 @@ let ``Protocol states the schema Scan actually writes, and Snapshot actually acc
     | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
     | Ok(document, _) ->
 
-    let written =
-        use doc = System.Text.Json.JsonDocument.Parse(document: string)
-        doc.RootElement.GetProperty("schema").GetString()
+        let written =
+            use doc = System.Text.Json.JsonDocument.Parse(document: string)
+            doc.RootElement.GetProperty("schema").GetString()
 
-    Assert.Equal(Protocol.snapshotSchema, written)
+        Assert.Equal(Protocol.snapshotSchema, written)
 
-    // And the parser accepts what Protocol claims: a document carrying Protocol's string parses.
-    match Snapshot.parse document with
-    | Ok _ -> ()
-    | Error errors ->
-        let detail = errors |> List.map (fun e -> $"{e.Path}: {e.Message}") |> String.concat "; "
-        failwith $"Snapshot.parse refused a document carrying Protocol.snapshotSchema: {detail}"
+        // And the parser accepts what Protocol claims: a document carrying Protocol's string parses.
+        match Snapshot.parse document with
+        | Ok _ -> ()
+        | Error errors ->
+            let detail =
+                errors |> List.map (fun e -> $"{e.Path}: {e.Message}") |> String.concat "; "
+
+            failwith $"Snapshot.parse refused a document carrying Protocol.snapshotSchema: {detail}"
 
 /// The keys `Protocol` states are the keys the writer EMITS — no more, and none missing.
 ///
@@ -1024,11 +1082,11 @@ let ``Protocol states exactly the snapshot's top-level keys, in the writer's ord
     | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
     | Ok(document, _) ->
 
-    let written =
-        use doc = System.Text.Json.JsonDocument.Parse(document: string)
-        doc.RootElement.EnumerateObject() |> Seq.map (fun p -> p.Name) |> List.ofSeq
+        let written =
+            use doc = System.Text.Json.JsonDocument.Parse(document: string)
+            doc.RootElement.EnumerateObject() |> Seq.map (fun p -> p.Name) |> List.ofSeq
 
-    Assert.Equal<string list>(written, Protocol.snapshotKeys |> List.map (fun k -> k.Key))
+        Assert.Equal<string list>(written, Protocol.snapshotKeys |> List.map (fun k -> k.Key))
 
 // ---- the scan must COLLECT the fact `BLOCKER-CLEARED` reads (.github#1738) ---------------------------
 //
@@ -1046,7 +1104,8 @@ let ``Protocol states exactly the snapshot's top-level keys, in the writer's ord
 let private aClearedBlockedRow: Scan.Row =
     { aRow with
         Status = Blocked
-        BlockedByRaw = "FS.GG.SDD#7" }
+        BlockedByRaw = "FS.GG.SDD#7"
+    }
 
 /// A transport for the blocked-row legs. `pulls` counts its calls rather than asserting inside the
 /// recorder: an exception thrown through the scan would be indistinguishable from any other IO failure,
@@ -1075,27 +1134,29 @@ let private blockedRowTransport (blockerJson: string) (openPrs: string) =
 [<Fact>]
 let ``#1738 a BLOCKED row whose blockers ALL resolved IS probed - its open item PR reaches Item.ItemPr`` () =
     let transport, pullsReads =
-        blockedRowTransport """{"number":7,"state":"closed"}""" """[{"number":1911,"head":{"ref":"item/42-already-written"}}]"""
+        blockedRowTransport
+            """{"number":7,"state":"closed"}"""
+            """[{"number":1911,"head":{"ref":"item/42-already-written"}}]"""
 
     match Scan.snapshot transport [ aClearedBlockedRow ] None false None 120 with
     | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
     | Ok(document, _) ->
 
-    match Snapshot.parse document with
-    | Error e -> failwith $"parse failed: %A{e}"
-    | Ok request ->
+        match Snapshot.parse document with
+        | Error e -> failwith $"parse failed: %A{e}"
+        | Ok request ->
 
-    let item = request.Candidates.[0].Item
+            let item = request.Candidates.[0].Item
 
-    Assert.Equal(1, pullsReads ())
+            Assert.Equal(1, pullsReads ())
 
-    // THE FIELD IS POPULATED — the half that did not exist before #1738.
-    Assert.Equal(Some 1911, item.ItemPr)
-    Assert.False(item.ItemPrUnreadable)
+            // THE FIELD IS POPULATED — the half that did not exist before #1738.
+            Assert.Equal(Some 1911, item.ItemPr)
+            Assert.False(item.ItemPrUnreadable)
 
-    // AND THE GATE THEREFORE FIRES, over an item the REAL writer produced. "The rule holds" and "the rule
-    // can see its subject" are different claims, and only this file can make the second one.
-    Assert.Empty(Chore.derive [ item ])
+            // AND THE GATE THEREFORE FIRES, over an item the REAL writer produced. "The rule holds" and "the rule
+            // can see its subject" are different claims, and only this file can make the second one.
+            Assert.Empty(Chore.derive [ item ])
 
 [<Fact>]
 let ``a scanned cleared blocker cannot invoke the retired Status reducer`` () =
@@ -1107,14 +1168,14 @@ let ``a scanned cleared blocker cannot invoke the retired Status reducer`` () =
     | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
     | Ok(document, _) ->
 
-    match Snapshot.parse document with
-    | Error e -> failwith $"parse failed: %A{e}"
-    | Ok request ->
+        match Snapshot.parse document with
+        | Error e -> failwith $"parse failed: %A{e}"
+        | Ok request ->
 
-    let item = request.Candidates.[0].Item
-    Assert.Equal(None, item.ItemPr)
+            let item = request.Candidates.[0].Item
+            Assert.Equal(None, item.ItemPr)
 
-    Assert.Empty(Chore.derive [ item ])
+            Assert.Empty(Chore.derive [ item ])
 
 [<Fact>]
 let ``#1738 a BLOCKED row with an OPEN blocker is NOT probed - the widened probe buys no request it need not`` () =
@@ -1129,11 +1190,11 @@ let ``#1738 a BLOCKED row with an OPEN blocker is NOT probed - the widened probe
     | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
     | Ok(document, _) ->
 
-    Assert.Equal(0, pullsReads ())
+        Assert.Equal(0, pullsReads ())
 
-    match Snapshot.parse document with
-    | Error e -> failwith $"parse failed: %A{e}"
-    | Ok request -> Assert.Equal(None, request.Candidates.[0].Item.ItemPr)
+        match Snapshot.parse document with
+        | Error e -> failwith $"parse failed: %A{e}"
+        | Ok request -> Assert.Equal(None, request.Candidates.[0].Item.ItemPr)
 
 [<Fact>]
 let ``#1738 a BLOCKED row with NO blockers at all is NOT probed - an empty list is not "every blocker resolved"`` () =
@@ -1147,8 +1208,8 @@ let ``#1738 a BLOCKED row with NO blockers at all is NOT probed - an empty list 
     | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
     | Ok(document, _) ->
 
-    Assert.Equal(0, pullsReads ())
+        Assert.Equal(0, pullsReads ())
 
-    match Snapshot.parse document with
-    | Error e -> failwith $"parse failed: %A{e}"
-    | Ok request -> Assert.Equal(None, request.Candidates.[0].Item.ItemPr)
+        match Snapshot.parse document with
+        | Error e -> failwith $"parse failed: %A{e}"
+        | Ok request -> Assert.Equal(None, request.Candidates.[0].Item.ItemPr)

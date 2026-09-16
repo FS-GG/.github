@@ -3,24 +3,30 @@ namespace FS.GG.Telemetry.Host
 open System
 
 type BrowserPrincipalConfig =
-    { PrincipalId: string
-      KeyHashFile: string
-      WorkspaceIds: string array
-      Revoked: bool }
+    {
+        PrincipalId: string
+        KeyHashFile: string
+        WorkspaceIds: string array
+        Revoked: bool
+    }
 
 type BrowserOptions =
-    { PublicOrigin: Uri
-      IdleLifetime: TimeSpan
-      AbsoluteLifetime: TimeSpan
-      MaximumSessions: int
-      LoginAttemptsPerMinute: int
-      LoginAdmission: int
-      QueryAdmission: int
-      QueryTimeout: TimeSpan }
+    {
+        PublicOrigin: Uri
+        IdleLifetime: TimeSpan
+        AbsoluteLifetime: TimeSpan
+        MaximumSessions: int
+        LoginAttemptsPerMinute: int
+        LoginAdmission: int
+        QueryAdmission: int
+        QueryTimeout: TimeSpan
+    }
 
 type BrowserIdentity =
-    { PrincipalId: string
-      WorkspaceIds: Set<string> }
+    {
+        PrincipalId: string
+        WorkspaceIds: Set<string>
+    }
 
 type BrowserLoginResult =
     | LoginAccepted of sessionId: string * BrowserIdentity
@@ -28,20 +34,20 @@ type BrowserLoginResult =
     | LoginOverloaded
 
 module BrowserSecurity =
-    val validateOptions: BrowserOptions -> Result<BrowserOptions,string list>
-    val validatePrincipals: BrowserPrincipalConfig array -> Result<BrowserPrincipalConfig array,string list>
+    val validateOptions: BrowserOptions -> Result<BrowserOptions, string list>
+    val validatePrincipals: BrowserPrincipalConfig array -> Result<BrowserPrincipalConfig array, string list>
 
     [<Sealed>]
     type Service =
         interface IDisposable
         new: BrowserOptions * BrowserPrincipalConfig array -> Service
-        member Login: principalId:string * accessKey:string * now:DateTimeOffset -> BrowserLoginResult
-        member LoginAcquired: principalId:string * accessKey:string * now:DateTimeOffset -> BrowserLoginResult
+        member Login: principalId: string * accessKey: string * now: DateTimeOffset -> BrowserLoginResult
+        member LoginAcquired: principalId: string * accessKey: string * now: DateTimeOffset -> BrowserLoginResult
         member TryAcquireLogin: unit -> bool
         member ReleaseLogin: unit -> unit
-        member Validate: sessionId:string * now:DateTimeOffset -> BrowserIdentity option
-        member Rotate: sessionId:string * now:DateTimeOffset -> (string * BrowserIdentity) option
-        member Logout: sessionId:string -> unit
+        member Validate: sessionId: string * now: DateTimeOffset -> BrowserIdentity option
+        member Rotate: sessionId: string * now: DateTimeOffset -> (string * BrowserIdentity) option
+        member Logout: sessionId: string -> unit
         member SessionCount: int
         member internal AliasCount: int
         member TryAcquireQuery: unit -> bool

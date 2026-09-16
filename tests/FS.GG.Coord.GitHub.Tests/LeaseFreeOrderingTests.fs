@@ -17,14 +17,16 @@ open FS.GG.Coord.GitHub
 // keep it honest.
 
 let private at (id: int64) (worker: string) (ageSeconds: int) : Reads.Marker =
-    { Reads.Id = id
-      Reads.Worker = WorkerId worker
-      Reads.Session = None
-      Reads.AgeSeconds = ageSeconds
-      Reads.PreviousStatus = None
-      Reads.PathRepo = None
-      Reads.AgentContract = None
-      Reads.Raw = "" }
+    {
+        Reads.Id = id
+        Reads.Worker = WorkerId worker
+        Reads.Session = None
+        Reads.AgeSeconds = ageSeconds
+        Reads.PreviousStatus = None
+        Reads.PathRepo = None
+        Reads.AgentContract = None
+        Reads.Raw = ""
+    }
 
 /// Live: well inside a 120-minute lease.
 let private live (id: int64) (worker: string) = at id worker 60
@@ -47,9 +49,11 @@ let ``lowestId returns the lowest comment id, and SORTS rather than trusting inp
     // ...and the answer does not depend on which order it was handed. Every permutation agrees, which is
     // what "every racer observes the same total order" means operationally.
     let permutations =
-        [ [ live 901L "first"; live 902L "middle"; live 903L "late" ]
-          [ live 903L "late"; live 902L "middle"; live 901L "first" ]
-          [ live 902L "middle"; live 901L "first"; live 903L "late" ] ]
+        [
+            [ live 901L "first"; live 902L "middle"; live 903L "late" ]
+            [ live 903L "late"; live 902L "middle"; live 901L "first" ]
+            [ live 902L "middle"; live 901L "first"; live 903L "late" ]
+        ]
 
     for permutation in permutations do
         match Reads.lowestId permutation with
@@ -78,7 +82,12 @@ let ``winner IS lowestId composed with the staleness filter - one rule with one 
     // The relationship stated as an executable equation rather than as a comment. If someone re-implements
     // either side independently, this leg is what notices.
     let markers =
-        [ lapsed 901L "dead"; live 902L "alive"; live 903L "also-alive"; lapsed 904L "also-dead" ]
+        [
+            lapsed 901L "dead"
+            live 902L "alive"
+            live 903L "also-alive"
+            lapsed 904L "also-dead"
+        ]
 
     let composed = markers |> List.filter (Reads.isStale 120 >> not) |> Reads.lowestId
 

@@ -27,20 +27,24 @@ module Transport =
         | Query of document: string * variables: (string * Var) list
 
     type Request =
-        { Method: string
-          Path: string
-          Query: (string * string) list
-          Body: Payload
-          Budget: Budget
-          IfNoneMatch: string option
-          Subject: string }
+        {
+            Method: string
+            Path: string
+            Query: (string * string) list
+            Body: Payload
+            Budget: Budget
+            IfNoneMatch: string option
+            Subject: string
+        }
 
     type Response =
-        { Status: int
-          Body: string
-          Headers: Map<string, string>
-          ETag: string option
-          NextLink: string option }
+        {
+            Status: int
+            Body: string
+            Headers: Map<string, string>
+            ETag: string option
+            NextLink: string option
+        }
 
     let (|NotModified|_|) (response: Response) =
         if response.Status = 304 then Some() else None
@@ -51,7 +55,10 @@ module Transport =
         |> Option.orElseWith (fun () ->
             response.Headers
             |> Map.tryPick (fun actual value ->
-                if actual.Equals(name, StringComparison.OrdinalIgnoreCase) then Some value else None))
+                if actual.Equals(name, StringComparison.OrdinalIgnoreCase) then
+                    Some value
+                else
+                    None))
 
     type IGitHubTransport =
         abstract Send: request: Request -> IoResult<Response>
@@ -129,16 +136,16 @@ module Transport =
                     None
                 else
 
-                let isNext =
-                    segments
-                    |> Array.skip 1
-                    |> Array.exists (fun s -> s.Trim().Replace("\"", "").Replace(" ", "") = "rel=next")
+                    let isNext =
+                        segments
+                        |> Array.skip 1
+                        |> Array.exists (fun s -> s.Trim().Replace("\"", "").Replace(" ", "") = "rel=next")
 
-                if not isNext then
-                    None
-                else
-                    let url = segments.[0].Trim().TrimStart('<').TrimEnd('>')
-                    if String.IsNullOrWhiteSpace url then None else Some url)
+                    if not isNext then
+                        None
+                    else
+                        let url = segments.[0].Trim().TrimStart('<').TrimEnd('>')
+                        if String.IsNullOrWhiteSpace url then None else Some url)
 
     let private buildQuery (query: (string * string) list) =
         if List.isEmpty query then
@@ -175,13 +182,15 @@ module Transport =
                 Ok(merged.ToJsonString())
             | JsonValueKind.Object, JsonValueKind.Object ->
                 let merged = JsonNode.Parse(first).AsObject()
+
                 let commonArrays =
                     b.RootElement.EnumerateObject()
                     |> Seq.choose (fun property ->
                         match a.RootElement.TryGetProperty property.Name with
-                        | true, firstValue
-                            when firstValue.ValueKind = JsonValueKind.Array
-                                 && property.Value.ValueKind = JsonValueKind.Array ->
+                        | true, firstValue when
+                            firstValue.ValueKind = JsonValueKind.Array
+                            && property.Value.ValueKind = JsonValueKind.Array
+                            ->
                             Some(property.Name, property.Value)
                         | _ -> None)
                     |> List.ofSeq
@@ -191,8 +200,10 @@ module Transport =
                 else
                     for name, source in commonArrays do
                         let target = merged[name].AsArray()
+
                         for item in source.EnumerateArray() do
                             target.Add(JsonNode.Parse(item.GetRawText()))
+
                     Ok(merged.ToJsonString())
             | JsonValueKind.Array, _
             | _, JsonValueKind.Array -> Error "a paginated response whose page is not a JSON array"
@@ -250,14 +261,19 @@ module Transport =
             singlePageClient.Timeout <- TimeSpan.FromSeconds 30.0
 
             if not (String.IsNullOrWhiteSpace token) then
-                client.DefaultRequestHeaders.Authorization <-
-                    Headers.AuthenticationHeaderValue("Bearer", token)
+                client.DefaultRequestHeaders.Authorization <- Headers.AuthenticationHeaderValue("Bearer", token)
+
                 singlePageClient.DefaultRequestHeaders.Authorization <-
                     Headers.AuthenticationHeaderValue("Bearer", token)
 
         // Send one HTTP request. The URL is absolute, because pagination hands us a fully-qualified
         // `Link` to follow rather than a path to rebuild.
-        let sendOne (http: HttpClient) (request: Request) (url: string) (maximumBytes: int option) : IoResult<Response> =
+        let sendOne
+            (http: HttpClient)
+            (request: Request)
+            (url: string)
+            (maximumBytes: int option)
+            : IoResult<Response> =
             try
                 let method =
                     match request.Method.ToUpperInvariant() with
@@ -294,17 +310,25 @@ module Transport =
                         reader.ReadToEnd()
                     | Some maximum ->
                         match response.Content.Headers.ContentLength with
-                        | value when value.HasValue && value.Value > int64 maximum -> raise (IO.InvalidDataException "response exceeds 4 MiB")
+                        | value when value.HasValue && value.Value > int64 maximum ->
+                            raise (IO.InvalidDataException "response exceeds 4 MiB")
                         | _ -> ()
+
                         use stream = response.Content.ReadAsStream()
                         use memory = new IO.MemoryStream()
                         let buffer = Array.zeroCreate<byte> 8192
                         let mutable reading = true
+
                         while reading do
                             let count = stream.Read(buffer, 0, buffer.Length)
-                            if count = 0 then reading <- false
-                            elif memory.Length + int64 count > int64 maximum then raise (IO.InvalidDataException "response exceeds 4 MiB")
-                            else memory.Write(buffer, 0, count)
+
+                            if count = 0 then
+                                reading <- false
+                            elif memory.Length + int64 count > int64 maximum then
+                                raise (IO.InvalidDataException "response exceeds 4 MiB")
+                            else
+                                memory.Write(buffer, 0, count)
+
                         Encoding.UTF8.GetString(memory.ToArray())
 
                 let headers =
@@ -318,7 +342,10 @@ module Transport =
                     |> Option.orElseWith (fun () ->
                         headers
                         |> Map.tryPick (fun actual value ->
-                            if actual.Equals(name, StringComparison.OrdinalIgnoreCase) then Some value else None))
+                            if actual.Equals(name, StringComparison.OrdinalIgnoreCase) then
+                                Some value
+                            else
+                                None))
 
                 let etag = headerValue "ETag"
 
@@ -333,11 +360,13 @@ module Transport =
                 // caller down the error branch on the cheapest correct answer the server can give.
                 if status = 304 then
                     Ok
-                        { Status = 304
-                          Body = ""
-                          Headers = headers
-                          ETag = etag
-                          NextLink = None }
+                        {
+                            Status = 304
+                            Body = ""
+                            Headers = headers
+                            ETag = etag
+                            NextLink = None
+                        }
                 elif status >= 200 && status < 300 then
                     // The GraphQL counterpart of `observeRestHeaders` above, and it was missing until #2418:
                     // every query document selects `rateLimit { cost remaining }`, `Budget.readMeter` parsed
@@ -347,11 +376,13 @@ module Transport =
                         Budget.observeGraphQlBody body
 
                     Ok
-                        { Status = status
-                          Body = body
-                          Headers = headers
-                          ETag = etag
-                          NextLink = headerValue "Link" |> Option.bind parseNextLink }
+                        {
+                            Status = status
+                            Body = body
+                            Headers = headers
+                            ETag = etag
+                            NextLink = headerValue "Link" |> Option.bind parseNextLink
+                        }
                 else
                     // NO RETRY ON A RATE LIMIT. An exhausted budget is not a transient blip — retrying it
                     // three times spends three more calls confirming the same 403, and delays the back-off
@@ -372,6 +403,7 @@ module Transport =
                     match x.InnerException with
                     | null -> x.Message
                     | inner -> $"%s{x.Message} <- %s{chain inner}"
+
                 Error(Transport(chain e))
             | :? TaskCanceledException as e -> Error(Transport $"timed out: %s{e.Message}")
             | :? IO.InvalidDataException as e -> Error(Malformed(request.Subject, e.Message))
@@ -384,34 +416,34 @@ module Transport =
                 | Error e -> Error e
                 | Ok first ->
 
-                let rec follow (acc: Response) (next: string option) (guard: int) : IoResult<Response> =
-                    match next with
-                    | None -> Ok acc
-                    | Some _ when guard <= 0 ->
-                        // A pagination loop is a bug, and an unbounded one is a bug that never returns.
-                        // Refuse rather than spin: a collection we stopped gathering is not a complete one,
-                        // and reporting it as complete is the whole failure class this port exists to end.
-                        Error(Malformed(request.Subject, "pagination did not terminate within 100 pages"))
-                    | Some link ->
-                        match sendOne client request link None with
-                        | Error e -> Error e
-                        | Ok page ->
-                            match mergePages acc.Body page.Body with
-                            | Error detail -> Error(Malformed(request.Subject, detail))
-                            // THE VALIDATOR DIES AT THE MERGE. `acc.ETag` is PAGE ONE'S — it was returned by
-                            // the first request and it describes that request's answer, not this
-                            // concatenation. Carry it forward and a caller could store it against the merged
-                            // body, then revalidate the whole collection against its first page: a set that
-                            // grows a page while page one stays byte-identical answers 304, this merge never
-                            // runs again, and a one-page body is served for a two-page set (#461).
-                            //
-                            // Dropping it HERE is the difference between a rule and a guarantee. This is the
-                            // only layer that knows a merge happened — a caller sees one `Response` and
-                            // cannot tell how many requests paid for it, so a rule asking it to reason about
-                            // that is one it gets wrong once, silently, forever.
-                            | Ok merged -> follow { acc with Body = merged; ETag = None } page.NextLink (guard - 1)
+                    let rec follow (acc: Response) (next: string option) (guard: int) : IoResult<Response> =
+                        match next with
+                        | None -> Ok acc
+                        | Some _ when guard <= 0 ->
+                            // A pagination loop is a bug, and an unbounded one is a bug that never returns.
+                            // Refuse rather than spin: a collection we stopped gathering is not a complete one,
+                            // and reporting it as complete is the whole failure class this port exists to end.
+                            Error(Malformed(request.Subject, "pagination did not terminate within 100 pages"))
+                        | Some link ->
+                            match sendOne client request link None with
+                            | Error e -> Error e
+                            | Ok page ->
+                                match mergePages acc.Body page.Body with
+                                | Error detail -> Error(Malformed(request.Subject, detail))
+                                // THE VALIDATOR DIES AT THE MERGE. `acc.ETag` is PAGE ONE'S — it was returned by
+                                // the first request and it describes that request's answer, not this
+                                // concatenation. Carry it forward and a caller could store it against the merged
+                                // body, then revalidate the whole collection against its first page: a set that
+                                // grows a page while page one stays byte-identical answers 304, this merge never
+                                // runs again, and a one-page body is served for a two-page set (#461).
+                                //
+                                // Dropping it HERE is the difference between a rule and a guarantee. This is the
+                                // only layer that knows a merge happened — a caller sees one `Response` and
+                                // cannot tell how many requests paid for it, so a rule asking it to reason about
+                                // that is one it gets wrong once, silently, forever.
+                                | Ok merged -> follow { acc with Body = merged; ETag = None } page.NextLink (guard - 1)
 
-                follow first first.NextLink 100
+                    follow first first.NextLink 100
 
         interface ISinglePageGitHubTransport with
             member _.SendSingle(request: Request) : IoResult<Response> =
@@ -419,4 +451,6 @@ module Transport =
                 sendOne singlePageClient request url (Some(4 * 1024 * 1024))
 
         interface IDisposable with
-            member _.Dispose() = client.Dispose(); singlePageClient.Dispose()
+            member _.Dispose() =
+                client.Dispose()
+                singlePageClient.Dispose()

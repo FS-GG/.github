@@ -31,24 +31,33 @@ type private Sandbox() =
                 ()
 
 let private board =
-    { Number = 12
-      Id = "PVT_coord"
-      Owner = "FS-GG"
-      Title = "Coordination"
-      Fields =
-        Map.ofList
-            [ "Status",
-              { Id = "PVTSSF_status"
-                Type = SingleSelect(Map.ofList [ "Ready", "opt_ready"; "In progress", "opt_wip" ]) }
-              "Estimate", { Id = "PVTF_est"; Type = Number }
-              "Blocked by", { Id = "PVTF_blocked"; Type = Text } ] }
+    {
+        Number = 12
+        Id = "PVT_coord"
+        Owner = "FS-GG"
+        Title = "Coordination"
+        Fields =
+            Map.ofList
+                [
+                    "Status",
+                    {
+                        Id = "PVTSSF_status"
+                        Type = SingleSelect(Map.ofList [ "Ready", "opt_ready"; "In progress", "opt_wip" ])
+                    }
+                    "Estimate", { Id = "PVTF_est"; Type = Number }
+                    "Blocked by", { Id = "PVTF_blocked"; Type = Text }
+                ]
+    }
 
 let private ok (body: string) =
     Ok
-        { Status = 200
-          Body = body
-          ETag = None
-          NextLink = None; Headers = Map.empty }
+        {
+            Status = 200
+            Body = body
+            ETag = None
+            NextLink = None
+            Headers = Map.empty
+        }
 
 let private serving (body: string) = Fake.Recorder(fun _ -> ok body)
 let private failing (e: IoError) = Fake.Recorder(fun _ -> Error e)
@@ -83,7 +92,9 @@ let ``#421 a rate-limited item lookup is RateLimited - it is NEVER 'not on board
 
     match itemId transport board "FS-GG" "FS.GG.SDD" 42 with
     | Error(RateLimited _) -> ()
-    | Ok None -> failwith "a rate-limited lookup reported the item ABSENT — this is #421: 'could not ask' became 'the answer is no'"
+    | Ok None ->
+        failwith
+            "a rate-limited lookup reported the item ABSENT — this is #421: 'could not ask' became 'the answer is no'"
     | other -> failwith $"expected RateLimited — got %A{other}"
 
 [<Fact>]
@@ -101,9 +112,11 @@ let ``#421 'not on board' is reachable ONLY from a successful read`` () =
 
 /// Not on this board, then the issue's node id, then the mutation.
 let private addResponses =
-    [ ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}"""
-      ok """{"data":{"repository":{"issue":{"id":"I_issue42"}}}}"""
-      ok """{"data":{"addProjectV2ItemById":{"item":{"id":"PVTI_added"}}}}""" ]
+    [
+        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}"""
+        ok """{"data":{"repository":{"issue":{"id":"I_issue42"}}}}"""
+        ok """{"data":{"addProjectV2ItemById":{"item":{"id":"PVTI_added"}}}}"""
+    ]
 
 [<Fact>]
 let ``#421 addItem REFUSES to add on a failed lookup - and spends no mutation`` () =
@@ -122,7 +135,9 @@ let ``#421 addItem REFUSES to add on a failed lookup - and spends no mutation`` 
 
     match addItem transport board "FS-GG" "FS.GG.SDD" 42 with
     | Error(RateLimited _) -> ()
-    | Ok(AddedToBoard _) -> failwith "added the item on a FAILED lookup — this is #421: it reports AddedToBoard for an issue whose presence was never established"
+    | Ok(AddedToBoard _) ->
+        failwith
+            "added the item on a FAILED lookup — this is #421: it reports AddedToBoard for an issue whose presence was never established"
     | other -> failwith $"expected RateLimited — got %A{other}"
 
     Assert.Equal(1, transport.GraphQlCalls)
@@ -220,7 +235,8 @@ let ``itemStatus is Ok None when the item is on the board with NO Status set`` (
     // `fieldValueByName` is null — on the board, no column. A definite "nothing to restore", which a claim
     // records as none and `release` puts back as Ready.
     let transport =
-        serving """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"project":{"number":12},"fieldValueByName":null}]}}}}}"""
+        serving
+            """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"project":{"number":12},"fieldValueByName":null}]}}}}}"""
 
     match itemStatus transport board "FS-GG" "FS.GG.SDD" 42 with
     | Ok None -> ()
@@ -266,7 +282,8 @@ let ``an empty Set is REFUSED - the API would treat it as a no-op and leave the 
 
 [<Fact>]
 let ``Clear is a DIFFERENT MUTATION, and the log shows it`` () =
-    let transport = serving """{"data":{"clearProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+    let transport =
+        serving """{"data":{"clearProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
 
     match setField transport board "PVTI_coord123" "Blocked by" Clear with
     | Ok() ->
@@ -278,7 +295,8 @@ let ``Clear is a DIFFERENT MUTATION, and the log shows it`` () =
 
 [<Fact>]
 let ``a SINGLE_SELECT value is routed to its OPTION ID`` () =
-    let transport = serving """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+    let transport =
+        serving """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
 
     match setField transport board "PVTI_coord123" "Status" (Set "In progress") with
     | Ok() ->
@@ -316,7 +334,8 @@ let ``a SINGLE_SELECT option id is declared String — the schema types it Strin
     // RESOLVES (`opt_wip`) — which it always did. The defect was one layer down, in a type no assertion
     // read. A stub transport answers 200 to a document the real API would reject on sight, so covering the
     // path proves nothing here; the DECLARATION has to be the subject.
-    let doc = emitted (fun t -> setField t board "PVTI_coord123" "Status" (Set "In progress"))
+    let doc =
+        emitted (fun t -> setField t board "PVTI_coord123" "Status" (Set "In progress"))
 
     Assert.Contains("$optionId: String!", doc)
     Assert.DoesNotContain("$optionId: ID!", doc)
@@ -326,7 +345,16 @@ let ``an ITERATION id is declared String too — same schema type, same fix (#84
     // Latent: no field on the board is an Iteration today. It would have been refused exactly as the
     // single-select was, the day somebody added one — so it is pinned here rather than rediscovered there.
     let iterationBoard =
-        { board with Fields = board.Fields |> Map.add "Sprint" { Id = "PVTIF_sprint"; Type = Iteration } }
+        { board with
+            Fields =
+                board.Fields
+                |> Map.add
+                    "Sprint"
+                    {
+                        Id = "PVTIF_sprint"
+                        Type = Iteration
+                    }
+        }
 
     let doc =
         emitted (fun t -> setField t iterationBoard "PVTI_coord123" "Sprint" (Set "iter_abc"))
@@ -342,7 +370,9 @@ let ``a DATE value is declared Date!, not String! — and this leg is REACHED (#
     // `Date` is a named scalar; "it is a string on the wire" is exactly the reasoning that produced the
     // original bug.
     let dateBoard =
-        { board with Fields = board.Fields |> Map.add "Target" { Id = "PVTF_target"; Type = Date } }
+        { board with
+            Fields = board.Fields |> Map.add "Target" { Id = "PVTF_target"; Type = Date }
+        }
 
     let doc =
         emitted (fun t -> setField t dateBoard "PVTI_coord123" "Target" (Set "2026-08-01"))
@@ -401,7 +431,8 @@ let ``a NUMBER field is validated by a REAL numeric parse, not a character class
 let ``a NUMBER is sent as a JSON NUMBER, not a quoted string`` () =
     // GraphQL is typed: a NUMBER field wants `{"number": 3}` and rejects `{"number": "3"}`. This is the trap
     // that was documented and then closed — every variable used to serialise as a string.
-    let transport = serving """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+    let transport =
+        serving """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
 
     match setField transport board "PVTI_coord123" "Estimate" (Set "3") with
     | Ok() -> Assert.True(transport.Logged "--number 3")
@@ -415,9 +446,16 @@ let ``#448 THREE fields cost exactly ONE GraphQL call`` () =
     // ONE-POINT FLOOR and the cost of a placement pass tracks the REQUEST COUNT and nothing else. Three
     // requests are three points; one aliased document is one point.
     let transport =
-        serving """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null},"f2":{"clientMutationId":null}}}"""
+        serving
+            """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null},"f2":{"clientMutationId":null}}}"""
 
-    match setFieldBatch transport board "PVTI_coord123" [ "Status", Set "Ready"; "Estimate", Set "3"; "Blocked by", Clear ] with
+    match
+        setFieldBatch
+            transport
+            board
+            "PVTI_coord123"
+            [ "Status", Set "Ready"; "Estimate", Set "3"; "Blocked by", Clear ]
+    with
     | Ok() ->
         Assert.Equal(1, transport.GraphQlCalls)
         Assert.True(transport.Logged "batch-mutation mutation {")
@@ -480,7 +518,8 @@ let ``a RATE LIMIT is tested BEFORE the partial arm - or it reads as a half-writ
 
     match setFieldBatch transport board "PVTI_coord123" [ "Status", Set "Ready" ] with
     | Error(RateLimited _) -> ()
-    | Error(Partial _) -> failwith "an exhausted budget was misreported as a half-written board — the write would be silently lost"
+    | Error(Partial _) ->
+        failwith "an exhausted budget was misreported as a half-written board — the write would be silently lost"
     | other -> failwith $"expected RateLimited — got %A{other}"
 
 // ---- #510: the ONE board write, and the queue ------------------------------------------------------
@@ -489,8 +528,7 @@ let ``a RATE LIMIT is tested BEFORE the partial arm - or it reads as a half-writ
 let ``#510 an exhausted budget DEFERS the board write - and it is really queued`` () =
     use _sandbox = new Sandbox()
 
-    let transport =
-        scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
+    let transport = scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
 
     match boardWrite transport board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "In progress") "vole-418" with
     | Ok Deferred ->
@@ -529,9 +567,20 @@ let ``#2143 an external-owner batch uses the same canonical cached item as a sin
     Cache.putItemId "EHotwagner" "rogue3" 96 board.Number "PVTI_external96"
 
     let transport =
-        serving """{"data":{"f0":{"projectV2Item":{"id":"PVTI_external96"}},"f1":{"projectV2Item":{"id":"PVTI_external96"}}}}"""
+        serving
+            """{"data":{"f0":{"projectV2Item":{"id":"PVTI_external96"}},"f1":{"projectV2Item":{"id":"PVTI_external96"}}}}"""
 
-    match boardWriteBatch transport board "EHotwagner" "rogue3" 96 None [ "Status", Set "Ready"; "Blocked by", Clear ] "vole-418" with
+    match
+        boardWriteBatch
+            transport
+            board
+            "EHotwagner"
+            "rogue3"
+            96
+            None
+            [ "Status", Set "Ready"; "Blocked by", Clear ]
+            "vole-418"
+    with
     | Ok Written ->
         Assert.Equal(1, transport.GraphQlCalls)
         Assert.True(transport.Logged "itemId: \"PVTI_external96\"")
@@ -584,8 +633,7 @@ let ``#2166 an incomplete external-owner ProjectV2 page fails closed instead of 
     use _sandbox = new Sandbox()
 
     let transport =
-        serving
-            """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":true,"endCursor":null},"nodes":[]}}}}"""
+        serving """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":true,"endCursor":null},"nodes":[]}}}}"""
 
     match itemId transport board "EHotwagner" "rogue3" 96 with
     | Error(Malformed(_, message)) -> Assert.Contains("another page but no usable cursor", message)
@@ -597,11 +645,13 @@ let ``#2166 malformed pagination completeness is never external non-membership``
     use _sandbox = new Sandbox()
 
     let malformedItems =
-        [ "pageInfo absent", """{"nodes":[]}"""
-          "pageInfo null", """{"pageInfo":null,"nodes":[]}"""
-          "hasNextPage absent", """{"pageInfo":{"endCursor":null},"nodes":[]}"""
-          "hasNextPage null", """{"pageInfo":{"hasNextPage":null,"endCursor":null},"nodes":[]}"""
-          "hasNextPage wrong type", """{"pageInfo":{"hasNextPage":"false","endCursor":null},"nodes":[]}""" ]
+        [
+            "pageInfo absent", """{"nodes":[]}"""
+            "pageInfo null", """{"pageInfo":null,"nodes":[]}"""
+            "hasNextPage absent", """{"pageInfo":{"endCursor":null},"nodes":[]}"""
+            "hasNextPage null", """{"pageInfo":{"hasNextPage":null,"endCursor":null},"nodes":[]}"""
+            "hasNextPage wrong type", """{"pageInfo":{"hasNextPage":"false","endCursor":null},"nodes":[]}"""
+        ]
 
     for label, items in malformedItems do
         let transport = serving $"""{{"data":{{"node":{{"items":%s{items}}}}}}}"""
@@ -665,7 +715,8 @@ let ``#2204 itemStatus reads an external-owner column the issue-side connection 
         // result — so reaching `In progress` at all is the assertion.
         Assert.Equal(2, transport.GraphQlCalls)
     | Ok None ->
-        failwith "the external-owner column was manufactured into 'no column' — this is #2204: a filtered row became a definite absence"
+        failwith
+            "the external-owner column was manufactured into 'no column' — this is #2204: a filtered row became a definite absence"
     | other -> failwith $"the external-owner Status must be read from the board — got %A{other}"
 
 [<Fact>]
@@ -675,7 +726,9 @@ let ``#2204 itemBlockedBy reads an external-owner edge from the board side too``
     // The twin reader. #2172 repaired `itemId` alone and left BOTH of these carrying the defect verbatim;
     // they now share one mechanism so a future repair cannot land on one and miss the other.
     let transport =
-        externalOwnerFieldWorld externalRowOnBoard """{"data":{"node":{"fieldValueByName":{"text":"FS-GG/.github#2155"}}}}"""
+        externalOwnerFieldWorld
+            externalRowOnBoard
+            """{"data":{"node":{"fieldValueByName":{"text":"FS-GG/.github#2155"}}}}"""
 
     match itemBlockedBy transport board "EHotwagner" "rogue3" 96 with
     | Ok(Some edge) -> Assert.Equal("FS-GG/.github#2155", edge)
@@ -743,7 +796,8 @@ let ``#2204 a resolved external row whose board node does not resolve is Error, 
 
     // The id came FROM the board, so a null node is an unresolvable read — the row moved, or the read did
     // not happen. Either way the column was not measured, and absence may not be manufactured from it.
-    let transport = externalOwnerFieldWorld externalRowOnBoard """{"data":{"node":null}}"""
+    let transport =
+        externalOwnerFieldWorld externalRowOnBoard """{"data":{"node":null}}"""
 
     match itemStatus transport board "EHotwagner" "rogue3" 96 with
     | Error(NotFound message) -> Assert.Contains("PVTI_external96", message)
@@ -821,10 +875,16 @@ let ``flush replays a queued write and DROPS it`` () =
     use _sandbox = new Sandbox()
 
     let deferring = scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
-    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
+
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418"
+    |> ignore
 
     let replaying =
-        scripted [ ok itemOnBoard; ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" ]
+        scripted
+            [
+                ok itemOnBoard
+                ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+            ]
 
     match flush replaying board with
     | Ok r when r.Written = 1 && r.Queued = 1 && r.Dropped = 0 && r.Stopped.IsNone ->
@@ -843,7 +903,9 @@ let ``#862 flush DROPS an entry whose item left the board - but does NOT count i
     // `NotOnBoard` (the #510 leg above), so this is the ONE way the case is reachable: the entry was
     // legitimately queued against an item that WAS on the board, and the board moved underneath it.
     let deferring = scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
-    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
+
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418"
+    |> ignore
 
     // The replay's lookup succeeds and finds NOTHING — the item is gone.
     let gone =
@@ -873,14 +935,17 @@ let private otherBoard =
     { board with
         Number = 13
         Id = "PVT_other"
-        Title = "Some Other Board" }
+        Title = "Some Other Board"
+    }
 
 [<Fact>]
 let ``#882 a queued write RECORDS the board it was queued against`` () =
     use _sandbox = new Sandbox()
 
     let deferring = scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
-    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
+
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418"
+    |> ignore
 
     // THE BOARD IS KNOWN AT QUEUE TIME AND NOWHERE ELSE. `flush` bootstraps from an environment that may
     // since have been repointed, so an entry that does not carry its own board cannot be resolved — only
@@ -895,7 +960,9 @@ let ``#882 flush SKIPS a write queued against ANOTHER board - it must not be dro
 
     // Queue against the Coordination board...
     let deferring = scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
-    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
+
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418"
+    |> ignore
 
     // ...then flush against a DIFFERENT one. THE WHOLE BUG IS THAT THIS LOOKS LEGITIMATE: the lookup on the
     // other board succeeds and finds nothing, which is `NotOnBoard` — permanent, and therefore dropped and
@@ -935,7 +1002,9 @@ let ``#882 the board that OWNS the queued write still replays it`` () =
     // by the wrong board must still land when its own board flushes. A "fix" that merely stopped dropping
     // would strand it — real, on disk, and reachable by no verb, which is exactly what #878 repaired.
     let deferring = scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
-    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
+
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418"
+    |> ignore
 
     let wrongBoard =
         Fake.Recorder(fun _ -> Error(NotFound "flush must not resolve an entry queued against another board"))
@@ -943,7 +1012,11 @@ let ``#882 the board that OWNS the queued write still replays it`` () =
     flush wrongBoard otherBoard |> ignore
 
     let replaying =
-        scripted [ ok itemOnBoard; ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" ]
+        scripted
+            [
+                ok itemOnBoard
+                ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+            ]
 
     match flush replaying board with
     | Ok r when r.Written = 1 && r.Skipped = 0 ->
@@ -961,17 +1034,23 @@ let ``#882 an entry that recorded NO board is replayed, not skipped forever`` ()
     // Replaying it against the current board is the behaviour it was queued under: no worse than before, and
     // right in the single-board case that is every real one.
     let legacy: Cache.Deferred =
-        { Ref = "FS-GG/FS.GG.SDD#810"
-          Field = "Status"
-          Value = "Ready"
-          At = "2026-07-14T12:00:00Z"
-          Worker = "vole-418"
-          Board = None }
+        {
+            Ref = "FS-GG/FS.GG.SDD#810"
+            Field = "Status"
+            Value = "Ready"
+            At = "2026-07-14T12:00:00Z"
+            Worker = "vole-418"
+            Board = None
+        }
 
     Cache.defer (RateLimited(UnknownBudget, None)) legacy |> ignore
 
     let replaying =
-        scripted [ ok itemOnBoard; ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" ]
+        scripted
+            [
+                ok itemOnBoard
+                ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+            ]
 
     match flush replaying board with
     | Ok r when r.Written = 1 && r.Skipped = 0 && r.Dropped = 0 -> ()
@@ -983,13 +1062,18 @@ let ``an exhausted budget STOPS the flush - the rest would fail identically`` ()
 
     let deferring =
         scripted
-            [ ok itemOnBoard
-              Error(RateLimited(UnknownBudget, None))
-              ok itemOnBoard
-              Error(RateLimited(UnknownBudget, None)) ]
+            [
+                ok itemOnBoard
+                Error(RateLimited(UnknownBudget, None))
+                ok itemOnBoard
+                Error(RateLimited(UnknownBudget, None))
+            ]
 
-    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
-    boardWrite deferring board "FS-GG" "FS.GG.SDD" 811 "Status" (Set "Ready") "vole-418" |> ignore
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418"
+    |> ignore
+
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 811 "Status" (Set "Ready") "vole-418"
+    |> ignore
 
     // Spending REST calls to confirm that the budget is still exhausted is exactly the back-off EX_RATE
     // exists to signal. The remainder stays queued.
@@ -1012,16 +1096,27 @@ let ``#862 a PARTIAL flush reports the writes it DID land, alongside the stop`` 
 
     // Two queued writes; the replay lands the first and meets a fresh rate limit on the second.
     let deferring =
-        scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)); ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
+        scripted
+            [
+                ok itemOnBoard
+                Error(RateLimited(UnknownBudget, None))
+                ok itemOnBoard
+                Error(RateLimited(UnknownBudget, None))
+            ]
 
-    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
-    boardWrite deferring board "FS-GG" "FS.GG.SDD" 811 "Status" (Set "Ready") "vole-418" |> ignore
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418"
+    |> ignore
+
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 811 "Status" (Set "Ready") "vole-418"
+    |> ignore
 
     let partial =
         scripted
-            [ ok itemOnBoard
-              ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
-              Error(RateLimited(UnknownBudget, None)) ]
+            [
+                ok itemOnBoard
+                ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+                Error(RateLimited(UnknownBudget, None))
+            ]
 
     // THE COUNT MUST SURVIVE THE STOP. `flush` used to return `IoResult<int>`, so a stop returned `Error e`
     // and DISCARDED the 1 it had just written — leaving the caller to re-read the shared queue file and
@@ -1053,7 +1148,9 @@ let ``a stopped flush does NOT RE-QUEUE what it was replaying - the queue must n
     // A queue that grows every time you try to drain it is worse than no queue at all: it is a promise that
     // gets louder the less able it is to keep it.
     let deferring = scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
-    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
+
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418"
+    |> ignore
 
     let depthBefore =
         match Cache.pending () with
@@ -1091,7 +1188,11 @@ let ``a landed write folds into the cached scan for THIS board, not a hardcoded 
     Assert.True(Cache.putScan board.Owner board.Title scan)
 
     let transport =
-        scripted [ ok itemOnBoard; ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" ]
+        scripted
+            [
+                ok itemOnBoard
+                ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+            ]
 
     match boardWrite transport board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "In progress") "vole-418" with
     | Ok Written ->
@@ -1104,10 +1205,14 @@ let ``a landed write folds into the cached scan for THIS board, not a hardcoded 
 let ``bootstrap resolves the field and option ids in TWO GraphQL calls`` () =
     let transport =
         scripted
-            [ ok """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
-              ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[
+            [
+                ok
+                    """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
+                ok
+                    """{"data":{"organization":{"projectV2":{"fields":{"nodes":[
                      {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]},
-                     {"id":"PVTF_est","name":"Estimate","dataType":"NUMBER"}]}}}}}""" ]
+                     {"id":"PVTF_est","name":"Estimate","dataType":"NUMBER"}]}}}}}"""
+            ]
 
     match bootstrap transport "FS-GG" "Coordination" with
     | Ok b ->
@@ -1133,8 +1238,11 @@ let ``a board that reports NO fields is a failed read, and is never cached`` () 
     // Status".
     let transport =
         scripted
-            [ ok """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
-              ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[]}}}}}""" ]
+            [
+                ok
+                    """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
+                ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[]}}}}}"""
+            ]
 
     match bootstrap transport "FS-GG" "Coordination" with
     | Error(Malformed _) -> ()
@@ -1186,9 +1294,13 @@ let ``bootstrap resolves a USER-owned board through user(login:) (#1344)`` () =
         let transport =
             capturing
                 docs
-                [ ok """{"data":{"user":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":3,"title":"TowerDefense","id":"PVT_user"}]}}}}"""
-                  ok """{"data":{"user":{"projectV2":{"fields":{"nodes":[
-                         {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}}}}""" ]
+                [
+                    ok
+                        """{"data":{"user":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":3,"title":"TowerDefense","id":"PVT_user"}]}}}}"""
+                    ok
+                        """{"data":{"user":{"projectV2":{"fields":{"nodes":[
+                         {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}}}}"""
+                ]
 
         match bootstrap transport "EHotwagner" "TowerDefense" with
         | Ok b ->
@@ -1227,9 +1339,13 @@ let ``bootstrap resolves a VIEWER-owned board through viewer, with no login in c
         let transport =
             capturing
                 docs
-                [ ok """{"data":{"viewer":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":3,"title":"TowerDefense","id":"PVT_viewer"}]}}}}"""
-                  ok """{"data":{"viewer":{"projectV2":{"fields":{"nodes":[
-                         {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}}}}""" ]
+                [
+                    ok
+                        """{"data":{"viewer":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":3,"title":"TowerDefense","id":"PVT_viewer"}]}}}}"""
+                    ok
+                        """{"data":{"viewer":{"projectV2":{"fields":{"nodes":[
+                         {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}}}}"""
+                ]
 
         match bootstrap transport "@me" "TowerDefense" with
         | Ok b ->
@@ -1265,9 +1381,13 @@ let ``bootstrap still queries organization(login:) by default - org behaviour is
     let transport =
         capturing
             docs
-            [ ok """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
-              ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[
-                     {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}}}}""" ]
+            [
+                ok
+                    """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
+                ok
+                    """{"data":{"organization":{"projectV2":{"fields":{"nodes":[
+                     {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}}}}"""
+            ]
 
     match bootstrap transport "FS-GG" "Coordination" with
     | Ok b ->
@@ -1335,10 +1455,14 @@ let ``bootstrapCached serves the day-cache on the second call - zero GraphQL (#4
 
     let cold =
         scripted
-            [ ok """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
-              ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[
+            [
+                ok
+                    """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
+                ok
+                    """{"data":{"organization":{"projectV2":{"fields":{"nodes":[
                      {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]},
-                     {"id":"PVTF_est","name":"Estimate","dataType":"NUMBER"}]}}}}}""" ]
+                     {"id":"PVTF_est","name":"Estimate","dataType":"NUMBER"}]}}}}}"""
+            ]
 
     match bootstrapCached cold "FS-GG" "Coordination" with
     | Ok _ -> Assert.Equal(2, cold.GraphQlCalls)
@@ -1385,7 +1509,8 @@ let ``itemIdCached never memoises 'not on board' - an item added later must stil
 
     // A successful empty lookup is `Ok None`. It must NOT be cached: the issue could be added to the board a
     // minute later, and a memoised absence would hide it for the life of the cache.
-    let first = scripted [ ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}""" ]
+    let first =
+        scripted [ ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}""" ]
 
     match itemIdCached first board "FS-GG" "FS.GG.SDD" 42 with
     | Ok None -> ()

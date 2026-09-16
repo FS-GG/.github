@@ -8,9 +8,11 @@ open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.GitHub.Writes
 
 let private aRef =
-    { Owner = "FS-GG"
-      Repo = "FS.GG.SDD"
-      Number = 42 }
+    {
+        Owner = "FS-GG"
+        Repo = "FS.GG.SDD"
+        Number = 42
+    }
 
 let private me = WorkerId "vole-418"
 let private them = WorkerId "kite-461"
@@ -43,16 +45,20 @@ let private comments (ms: string list) = "[" + String.concat "," ms + "]"
 
 let private markerWithExactBody (id: int) (body: string) =
     System.Text.Json.JsonSerializer.Serialize(
-        {| id = id
-           body = body
-           updated_at = now |}
+        {|
+            id = id
+            body = body
+            updated_at = now
+        |}
     )
 
 let private durableLeaseComment (id: int) (body: string) =
     System.Text.Json.JsonSerializer.Serialize(
-        {| id = id
-           html_url = $"https://example.invalid/comments/%d{id}"
-           body = body |}
+        {|
+            id = id
+            html_url = $"https://example.invalid/comments/%d{id}"
+            body = body
+        |}
     )
 
 let private postedCommentBody (request: Request) =
@@ -85,26 +91,32 @@ let private scriptedSteps (steps: (Request -> IoResult<Response>) list) =
         if queue.Count = 0 then
             failwith "the transport was called more times than the test scripted"
         else
-            queue.Dequeue() request)
+            queue.Dequeue () request)
 
 let private ok (body: string) =
     Ok
-        { Status = 200
-          Body = body
-          ETag = None
-          NextLink = None; Headers = Map.empty }
+        {
+            Status = 200
+            Body = body
+            ETag = None
+            NextLink = None
+            Headers = Map.empty
+        }
 
 [<Fact>]
 let ``#2131 guarded merge binds GitHub's write to the inspected head SHA`` () =
-    let recorder = Fake.Recorder(fun request ->
-        Assert.Equal("PUT", request.Method)
-        Assert.Equal("repos/FS-GG/FS.GG.SDD/pulls/99/merge", request.Path)
-        match request.Body with
-        | Json body ->
-            Assert.Contains("head-a", body)
-            Assert.Contains("\"merge_method\":\"squash\"", body)
-        | _ -> failwith "a guarded merge must carry the inspected head SHA"
-        ok """{"merged":true}""")
+    let recorder =
+        Fake.Recorder(fun request ->
+            Assert.Equal("PUT", request.Method)
+            Assert.Equal("repos/FS-GG/FS.GG.SDD/pulls/99/merge", request.Path)
+
+            match request.Body with
+            | Json body ->
+                Assert.Contains("head-a", body)
+                Assert.Contains("\"merge_method\":\"squash\"", body)
+            | _ -> failwith "a guarded merge must carry the inspected head SHA"
+
+            ok """{"merged":true}""")
 
     match Writes.mergeAtHead recorder aRef 99 "head-a" OperationalGraphQl.Squash with
     | Ok true -> Assert.Equal(1, recorder.RestCalls)
@@ -121,18 +133,21 @@ let ``#3091 guarded merge serializes the selected repository method`` (wireMetho
         | "rebase" -> OperationalGraphQl.Rebase
         | _ -> OperationalGraphQl.Merge
 
-    let recorder = Fake.Recorder(fun request ->
-        match request.Body with
-        | Json body -> Assert.Contains($"\"merge_method\":\"%s{wireMethod}\"", body)
-        | _ -> failwith "a guarded merge must carry a JSON body"
-        ok """{"merged":true}""")
+    let recorder =
+        Fake.Recorder(fun request ->
+            match request.Body with
+            | Json body -> Assert.Contains($"\"merge_method\":\"%s{wireMethod}\"", body)
+            | _ -> failwith "a guarded merge must carry a JSON body"
+
+            ok """{"merged":true}""")
 
     Assert.Equal(Ok true, Writes.mergeAtHead recorder aRef 99 "head-a" selected)
     Assert.Equal(1, recorder.RestCalls)
 
 [<Fact>]
 let ``#2131 a GitHub head mismatch is a refused guarded merge, not a green write`` () =
-    let recorder = Fake.Recorder(fun _ -> ok """{"merged":false,"message":"Head branch was modified"}""")
+    let recorder =
+        Fake.Recorder(fun _ -> ok """{"merged":false,"message":"Head branch was modified"}""")
 
     match Writes.mergeAtHead recorder aRef 99 "head-a" OperationalGraphQl.Squash with
     | Ok false -> ()
@@ -165,9 +180,11 @@ let ``#2131 a GitHub head mismatch is a refused guarded merge, not a green write
 /// The per-repo chore-lock issue — off the board, and not `aRef`. The prefix (`fsgg:claim`) needs no
 /// parameterising precisely because the SUBJECT disambiguates: only chore markers live here.
 let private choreLock =
-    { Owner = "FS-GG"
-      Repo = "FS.GG.SDD"
-      Number = 7 }
+    {
+        Owner = "FS-GG"
+        Repo = "FS.GG.SDD"
+        Number = 7
+    }
 
 /// A chore is seconds long, not two hours (#550). The lease is a parameter, so this costs no refactor.
 let private choreLease = 2
@@ -176,9 +193,11 @@ let private choreLease = 2
 let ``the chore lock is the item CAS UNCHANGED — an off-board ref, a short lease, and no column`` () =
     let transport =
         scripted
-            [ ok "[]" // 1. read: the lock is free
-              ok """{"id":901}""" // 2. post our marker
-              ok (comments [ marker 901 "vole-418" "" ]) ] // 3. re-read: we hold it
+            [
+                ok "[]" // 1. read: the lock is free
+                ok """{"id":901}""" // 2. post our marker
+                ok (comments [ marker 901 "vole-418" "" ])
+            ] // 3. re-read: we hold it
 
     // The chore-lock configuration, in full: a short lease, and `fun () -> None` for the board callback —
     // a lock issue has no column to restore, which is why the coupling belongs in the callback and not in
@@ -210,9 +229,11 @@ let ``the chore lock is the item CAS UNCHANGED — an off-board ref, a short lea
 let ``#1732 a scoped claim records its path repository in the marker`` () =
     let responses =
         System.Collections.Generic.Queue<IoResult<Response>>(
-            [ ok "[]"
-              ok """{"id":901}"""
-              ok (comments [ marker 901 "vole-418" " pathRepo=FS.GG.Rendering" ]) ]
+            [
+                ok "[]"
+                ok """{"id":901}"""
+                ok (comments [ marker 901 "vole-418" " pathRepo=FS.GG.Rendering" ])
+            ]
         )
 
     let bodies = System.Collections.Generic.List<string>()
@@ -255,9 +276,11 @@ let ``#2758 a claim marker records the dispatched agent contract version`` () =
 
         let responses =
             System.Collections.Generic.Queue<IoResult<Response>>(
-                [ ok "[]"
-                  ok """{"id":901}"""
-                  ok (comments [ marker 901 "vole-418" $" agentContract=%s{version}" ]) ]
+                [
+                    ok "[]"
+                    ok """{"id":901}"""
+                    ok (comments [ marker 901 "vole-418" $" agentContract=%s{version}" ])
+                ]
             )
 
         let bodies = System.Collections.Generic.List<string>()
@@ -317,9 +340,13 @@ let ``#2758 create then environment change then heartbeat preserves the dispatch
                 else
                     let comment =
                         System.Text.Json.JsonSerializer.Serialize
-                            [ {| id = 901
-                                 body = posted
-                                 updated_at = System.DateTimeOffset.UtcNow.ToString("o") |} ]
+                            [
+                                {|
+                                    id = 901
+                                    body = posted
+                                    updated_at = System.DateTimeOffset.UtcNow.ToString("o")
+                                |}
+                            ]
 
                     ok comment
             | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
@@ -388,10 +415,12 @@ let ``a chore is CLAIMED, not broadcast — the CAS refuses the second worker`` 
     // The item CAS already refuses this, on this subject, with no changes. That IS the decision.
     let transport =
         scripted
-            [ ok "[]"
-              ok """{"id":902}""" // ours
-              ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) // a rival got there first
-              ok "" ] // so we withdraw
+            [
+                ok "[]"
+                ok """{"id":902}""" // ours
+                ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) // a rival got there first
+                ok ""
+            ] // so we withdraw
 
     match claim transport choreLease RefuseLiveHolder ignore me itsMe None choreLock (fun () -> None) with
     | Ok(Lost w) -> Assert.Equal(them, w)
@@ -407,10 +436,12 @@ let ``the chore lock COLLECTS a dead holder's debris — the lock a worker died 
     // is already written. This is one of three reasons ADR-0041 does not parameterise these protections off.
     let transport =
         scripted
-            [ ok (comments [ staleClaimJson 800 "kite-461" "" ]) // a lapsed chore lock, holder gone
-              ok """{"id":901}"""
-              ok (comments [ staleClaimJson 800 "kite-461" ""; marker 901 "vole-418" "" ])
-              ok "" ] // collect the dead marker
+            [
+                ok (comments [ staleClaimJson 800 "kite-461" "" ]) // a lapsed chore lock, holder gone
+                ok """{"id":901}"""
+                ok (comments [ staleClaimJson 800 "kite-461" ""; marker 901 "vole-418" "" ])
+                ok ""
+            ] // collect the dead marker
 
     match claim transport choreLease RefuseLiveHolder ignore me itsMe None choreLock (fun () -> None) with
     | Ok(Won(held, evicted)) ->
@@ -439,10 +470,12 @@ let ``#1896 the CAS pre-read refuses one unclassifiable comment beside a readabl
 let ``#1896 the CAS re-read refuses incompleteness and withdraws the marker it already posted`` () =
     let transport =
         scripted
-            [ ok "[]"
-              ok """{"id":901}"""
-              ok (comments [ marker 901 "vole-418" ""; unclassifiableComment 902 ])
-              ok "" ]
+            [
+                ok "[]"
+                ok """{"id":901}"""
+                ok (comments [ marker 901 "vole-418" ""; unclassifiableComment 902 ])
+                ok ""
+            ]
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Undecided reason) -> Assert.Contains("claim-marker scan is incomplete", reason)
@@ -454,9 +487,11 @@ let ``#1896 the CAS re-read refuses incompleteness and withdraws the marker it a
 let ``the CAS WINS when our marker is the lowest live id`` () =
     let transport =
         scripted
-            [ ok "[]" // 1. read: nobody holds it
-              ok """{"id":901}""" // 2. post our marker
-              ok (comments [ marker 901 "vole-418" "" ]) ] // 3. re-read: we are the lowest
+            [
+                ok "[]" // 1. read: nobody holds it
+                ok """{"id":901}""" // 2. post our marker
+                ok (comments [ marker 901 "vole-418" "" ])
+            ] // 3. re-read: we are the lowest
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, _)) ->
@@ -471,10 +506,12 @@ let ``the CAS LOSES to a lower id, and WITHDRAWS its own marker`` () =
     // total order and exactly one of them concludes it won.
     let transport =
         scripted
-            [ ok "[]" // 1. read: free
-              ok """{"id":902}""" // 2. post ours (902)
-              ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) // 3. re-read: 901 beat us
-              ok "" ] // 4. DELETE our 902
+            [
+                ok "[]" // 1. read: free
+                ok """{"id":902}""" // 2. post ours (902)
+                ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) // 3. re-read: 901 beat us
+                ok ""
+            ] // 4. DELETE our 902
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Lost w) -> Assert.Equal(them, w)
@@ -490,10 +527,12 @@ let ``'we cannot tell' is a LOSS - our marker missing from the re-read withdraws
     // strength of an observation we did not make — and two workers would be handed the same files.
     let transport =
         scripted
-            [ ok "[]"
-              ok """{"id":901}"""
-              ok "[]" // the re-read does not contain our marker at all
-              ok "" ] // so we withdraw it
+            [
+                ok "[]"
+                ok """{"id":901}"""
+                ok "[]" // the re-read does not contain our marker at all
+                ok ""
+            ] // so we withdraw it
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Undecided _) -> ()
@@ -505,10 +544,12 @@ let ``'we cannot tell' is a LOSS - our marker missing from the re-read withdraws
 let ``a FAILED re-read withdraws the marker and refuses - it never wins by default`` () =
     let transport =
         scripted
-            [ ok "[]"
-              ok """{"id":901}"""
-              Error(Http(502, "bad gateway")) // the re-read failed
-              ok "" ] // withdraw
+            [
+                ok "[]"
+                ok """{"id":901}"""
+                Error(Http(502, "bad gateway")) // the re-read failed
+                ok ""
+            ] // withdraw
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Undecided _) -> ()
@@ -523,10 +564,12 @@ let ``a marker we can neither win with NOR withdraw is reported LOUDLY - it is o
     // nobody can see.
     let transport =
         scripted
-            [ ok "[]"
-              ok """{"id":901}"""
-              Error(Http(502, "bad gateway"))
-              Error(Http(500, "delete failed")) ]
+            [
+                ok "[]"
+                ok """{"id":901}"""
+                Error(Http(502, "bad gateway"))
+                Error(Http(500, "delete failed"))
+            ]
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Error(Transport detail) -> Assert.Contains("orphaned", detail)
@@ -568,8 +611,10 @@ let ``re-claiming an item we ALREADY hold renews it in place and posts no second
     // PATCH), never posts another — a `Renewed`, not a fresh `Won`.
     let transport =
         scripted
-            [ ok (comments [ marker 901 "vole-418" "" ]) // 1. read: our own live marker
-              ok """{"id":901}""" ] // 2. PATCH: renew the lease in place
+            [
+                ok (comments [ marker 901 "vole-418" "" ]) // 1. read: our own live marker
+                ok """{"id":901}"""
+            ] // 2. PATCH: renew the lease in place
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Renewed(held, _)) -> Assert.Equal(901L, held.MarkerId)
@@ -587,10 +632,12 @@ let ``a won claim COLLECTS a stale OTHER worker's marker and names the evicted w
     // what `heartbeat` later resurrects underneath the new holder — two live markers, one item.
     let transport =
         scripted
-            [ ok (comments [ staleClaimJson 810 "ghost-111" "" ]) // 1. read: a STALE claim by ghost-111
-              ok """{"id":901}""" // 2. post ours (ghost-111's lease has lapsed, so nobody live blocks us)
-              ok (comments [ staleClaimJson 810 "ghost-111" ""; marker 901 "vole-418" "" ]) // 3. re-read: we win
-              ok "" ] // 4. DELETE ghost-111's stale marker
+            [
+                ok (comments [ staleClaimJson 810 "ghost-111" "" ]) // 1. read: a STALE claim by ghost-111
+                ok """{"id":901}""" // 2. post ours (ghost-111's lease has lapsed, so nobody live blocks us)
+                ok (comments [ staleClaimJson 810 "ghost-111" ""; marker 901 "vole-418" "" ]) // 3. re-read: we win
+                ok ""
+            ] // 4. DELETE ghost-111's stale marker
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, collected)) ->
@@ -607,10 +654,12 @@ let ``a claim renewing our OWN stale marker ends with ONE marker and reports no 
     // is not an eviction to report, because you do not message yourself.
     let transport =
         scripted
-            [ ok (comments [ staleClaimJson 811 "vole-418" "" ]) // 1. OUR OWN marker, gone stale
-              ok """{"id":901}""" // 2. post a fresh one
-              ok (comments [ staleClaimJson 811 "vole-418" ""; marker 901 "vole-418" "" ]) // 3. re-read: fresh wins
-              ok "" ] // 4. DELETE our own superseded stale marker
+            [
+                ok (comments [ staleClaimJson 811 "vole-418" "" ]) // 1. OUR OWN marker, gone stale
+                ok """{"id":901}""" // 2. post a fresh one
+                ok (comments [ staleClaimJson 811 "vole-418" ""; marker 901 "vole-418" "" ]) // 3. re-read: fresh wins
+                ok ""
+            ] // 4. DELETE our own superseded stale marker
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, collected)) ->
@@ -626,10 +675,12 @@ let ``collecting a stale marker a peer already removed (404) is not fatal`` () =
     // already removed it. "Already gone" is the goal state of a collector, so the claim still wins.
     let transport =
         scripted
-            [ ok (comments [ staleClaimJson 818 "ghost-444" "" ])
-              ok """{"id":901}"""
-              ok (comments [ staleClaimJson 818 "ghost-444" ""; marker 901 "vole-418" "" ])
-              Error(NotFound "already gone") ] // 4. the winner's delete landed first
+            [
+                ok (comments [ staleClaimJson 818 "ghost-444" "" ])
+                ok """{"id":901}"""
+                ok (comments [ staleClaimJson 818 "ghost-444" ""; marker 901 "vole-418" "" ])
+                Error(NotFound "already gone")
+            ] // 4. the winner's delete landed first
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, collected)) ->
@@ -643,10 +694,12 @@ let ``a stale marker we could not delete is LEFT for reap, never a reason to fai
     // is NOT reported as an eviction — but the claim we already won stands.
     let transport =
         scripted
-            [ ok (comments [ staleClaimJson 810 "ghost-111" "" ])
-              ok """{"id":901}"""
-              ok (comments [ staleClaimJson 810 "ghost-111" ""; marker 901 "vole-418" "" ])
-              Error(RateLimited(UnknownBudget, None)) ] // 4. DELETE faults — leave it for reap
+            [
+                ok (comments [ staleClaimJson 810 "ghost-111" "" ])
+                ok """{"id":901}"""
+                ok (comments [ staleClaimJson 810 "ghost-111" ""; marker 901 "vole-418" "" ])
+                Error(RateLimited(UnknownBudget, None))
+            ] // 4. DELETE faults — leave it for reap
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, collected)) ->
@@ -663,10 +716,12 @@ let ``a STALE unparseable marker is collected as debris but never notified (no w
 
     let transport =
         scripted
-            [ ok (comments [ staleUnparseable ]) // 1. a STALE marker with no parseable worker
-              ok """{"id":901}""" // 2. post ours (the stale one does not block a live winner)
-              ok (comments [ staleUnparseable; marker 901 "vole-418" "" ]) // 3. re-read: we win
-              ok "" ] // 4. DELETE the stale debris
+            [
+                ok (comments [ staleUnparseable ]) // 1. a STALE marker with no parseable worker
+                ok """{"id":901}""" // 2. post ours (the stale one does not block a live winner)
+                ok (comments [ staleUnparseable; marker 901 "vole-418" "" ]) // 3. re-read: we win
+                ok ""
+            ] // 4. DELETE the stale debris
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, collected)) ->
@@ -683,7 +738,8 @@ let ``#419 a live marker with OUR id but a DIFFERENT session is a TWIN - refused
     // The regression #419 was filed on: the marker is ours by id, so the "already ours" branch adopted it
     // and the heartbeat renewed it — silently putting two workers on one item. When both sessions are known
     // and differ, it is a twin: refuse, and carry the OTHER session so the caller can name it.
-    let transport = scripted [ ok (comments [ marker 901 "vole-418" " session=79b9e347" ]) ]
+    let transport =
+        scripted [ ok (comments [ marker 901 "vole-418" " session=79b9e347" ]) ]
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe (Some(SessionId "ed60050b")) aRef (fun () -> None) with
     | Ok(Twin(SessionId theirs)) -> Assert.Equal("79b9e347", theirs)
@@ -708,7 +764,11 @@ let ``#419 a SESSIONLESS marker with our id is genuinely ours - a heartbeat, not
 let ``#419 the SAME session re-claiming its own marker is a heartbeat, not a twin`` () =
     // Without this, the refusal would fire on the worker itself — it could never renew its own claim.
     let transport =
-        scripted [ ok (comments [ marker 901 "vole-418" " session=79b9e347" ]); ok """{"id":901}""" ] // read, then PATCH
+        scripted
+            [
+                ok (comments [ marker 901 "vole-418" " session=79b9e347" ])
+                ok """{"id":901}"""
+            ] // read, then PATCH
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe (Some(SessionId "79b9e347")) aRef (fun () -> None) with
     | Ok(Renewed(held, _)) -> Assert.Equal(901L, held.MarkerId)
@@ -748,11 +808,13 @@ let ``a failed FIRST read is fatal, and nothing is posted`` () =
 let ``#1620 --force TAKES a live claim held by another worker, and names who it took it from`` () =
     let transport =
         scripted
-            [ ok (comments [ marker 901 "kite-461" "" ]) // 1. read: kite-461 holds a LIVE lock
-              ok """{"id":902}""" // 2. post replacement
-              ok "" // 3. evict their marker
-              ok (comments [ marker 902 "vole-418" "" ]) // 4. election read: the way is clear, we win
-              ok (comments [ marker 902 "vole-418" "" ]) ] // 5. final census after cleanup
+            [
+                ok (comments [ marker 901 "kite-461" "" ]) // 1. read: kite-461 holds a LIVE lock
+                ok """{"id":902}""" // 2. post replacement
+                ok "" // 3. evict their marker
+                ok (comments [ marker 902 "vole-418" "" ]) // 4. election read: the way is clear, we win
+                ok (comments [ marker 902 "vole-418" "" ])
+            ] // 5. final census after cleanup
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Stolen(held, from, _, _)) ->
@@ -789,7 +851,8 @@ let ``#1620 a steal does NOT override a TWIN - a broken identity is not a contes
     // worker id, so forcing here deletes a lock a same-id sibling is actively working behind — and it is
     // reachable by accident, because every subagent of one Claude Code session derives the same id. The
     // remedy for a broken identity is a NEW identity, not a bigger hammer.
-    let transport = scripted [ ok (comments [ marker 901 "vole-418" " session=79b9e347" ]) ]
+    let transport =
+        scripted [ ok (comments [ marker 901 "vole-418" " session=79b9e347" ]) ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe (Some(SessionId "ed60050b")) aRef (fun () -> None) with
     | Ok(Twin(SessionId theirs)) -> Assert.Equal("79b9e347", theirs)
@@ -822,10 +885,12 @@ let ``#2772 failed cleanup retains the posted replacement and reports the standi
     // complete census proves both markers remain and the older incumbent is still authoritative.
     let transport =
         scripted
-            [ ok (comments [ marker 901 "kite-461" "" ])
-              ok """{"id":902}"""
-              Error(Http(500, "delete failed"))
-              ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) ]
+            [
+                ok (comments [ marker 901 "kite-461" "" ])
+                ok """{"id":902}"""
+                Error(Http(500, "delete failed"))
+                ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ])
+            ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(CleanupRequired(replacement, removed, failed, failedMarkerId, reason, censuses)) ->
@@ -845,10 +910,12 @@ let ``#2772 failed cleanup retains the posted replacement and reports the standi
 let ``#2772 retry reuses the retained replacement and completes cleanup without posting debris`` () =
     let transport =
         scripted
-            [ ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ])
-              ok ""
-              ok (comments [ marker 902 "vole-418" "" ])
-              ok (comments [ marker 902 "vole-418" "" ]) ]
+            [
+                ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ])
+                ok ""
+                ok (comments [ marker 902 "vole-418" "" ])
+                ok (comments [ marker 902 "vole-418" "" ])
+            ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Stolen(replacement, removed, _, censuses)) ->
@@ -857,18 +924,21 @@ let ``#2772 retry reuses the retained replacement and completes cleanup without 
         Assert.Equal<int64 list>([ 901L; 902L ], censuses.Before.Markers |> List.map _.MarkerId)
         Assert.Equal<int64 list>([ 902L ], censuses.After.Value.Markers |> List.map _.MarkerId)
     | other -> failwith $"retry must reconcile the retained replacement — got %A{other}"
+
     Assert.Equal(0, transport.Count "comment-post")
 
 [<Fact>]
 let ``#2772 an ambiguous DELETE response is resolved from the complete census before classification`` () =
     let transport =
         scripted
-            [ ok (comments [ marker 901 "kite-461" "" ])
-              ok """{"id":902}"""
-              Error(Http(503, "response lost"))
-              ok (comments [ marker 902 "vole-418" "" ])
-              ok (comments [ marker 902 "vole-418" "" ])
-              ok (comments [ marker 902 "vole-418" "" ]) ]
+            [
+                ok (comments [ marker 901 "kite-461" "" ])
+                ok """{"id":902}"""
+                Error(Http(503, "response lost"))
+                ok (comments [ marker 902 "vole-418" "" ])
+                ok (comments [ marker 902 "vole-418" "" ])
+                ok (comments [ marker 902 "vole-418" "" ])
+            ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Stolen(replacement, removed, _, censuses)) ->
@@ -881,10 +951,12 @@ let ``#2772 an ambiguous DELETE response is resolved from the complete census be
 let ``#2772 a vanished replacement and surviving incumbent returns census-backed OldHolderStands`` () =
     let transport =
         scripted
-            [ ok (comments [ marker 901 "kite-461" "" ])
-              ok """{"id":902}"""
-              Error(Http(503, "delete response lost"))
-              ok (comments [ marker 901 "kite-461" "" ]) ]
+            [
+                ok (comments [ marker 901 "kite-461" "" ])
+                ok """{"id":902}"""
+                Error(Http(503, "delete response lost"))
+                ok (comments [ marker 901 "kite-461" "" ])
+            ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(OldHolderStands(replacementMarkerId, holder, holderMarkerId, removed, censuses)) ->
@@ -900,10 +972,12 @@ let ``#2772 a vanished replacement and surviving incumbent returns census-backed
 let ``#2772 a readable empty post-census is a typed no-holder anomaly`` () =
     let transport =
         scripted
-            [ ok (comments [ marker 901 "kite-461" "" ])
-              ok """{"id":902}"""
-              Error(Http(503, "delete response lost"))
-              ok "[]" ]
+            [
+                ok (comments [ marker 901 "kite-461" "" ])
+                ok """{"id":902}"""
+                Error(Http(503, "delete response lost"))
+                ok "[]"
+            ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(NoHolderRemaining(Some replacementMarkerId, removed, censuses)) ->
@@ -918,9 +992,11 @@ let ``#2772 a readable empty post-census is a typed no-holder anomaly`` () =
 let ``#2772 an unreadable census after replacement POST failure returns no ownership verdict`` () =
     let transport =
         scripted
-            [ ok (comments [ marker 901 "kite-461" "" ])
-              Error(Http(500, "post failed"))
-              Error(Http(503, "census failed")) ]
+            [
+                ok (comments [ marker 901 "kite-461" "" ])
+                Error(Http(500, "post failed"))
+                Error(Http(503, "census failed"))
+            ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(PostStateUnreadable(None, removed, reason, censuses)) ->
@@ -936,12 +1012,14 @@ let ``#2772 an unreadable census after replacement POST failure returns no owner
 let ``#2772 a fresh winner after cleanup is distinct from an ordinary incumbent refusal`` () =
     let transport =
         scripted
-            [ ok (comments [ marker 901 "kite-461" "" ])
-              ok """{"id":903}"""
-              ok ""
-              ok (comments [ marker 902 "otter-77" ""; marker 903 "vole-418" "" ])
-              ok ""
-              ok (comments [ marker 902 "otter-77" "" ]) ]
+            [
+                ok (comments [ marker 901 "kite-461" "" ])
+                ok """{"id":903}"""
+                ok ""
+                ok (comments [ marker 902 "otter-77" ""; marker 903 "vole-418" "" ])
+                ok ""
+                ok (comments [ marker 902 "otter-77" "" ])
+            ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(ForcedClaimLost(winner, censuses)) ->
@@ -958,12 +1036,14 @@ let ``#1620 a steal that loses the FRESH race backs off cleanly - it does not fo
     // withdraw our own marker exactly as any loser does — the item transferred, just not to us.
     let transport =
         scripted
-            [ ok (comments [ marker 901 "kite-461" "" ]) // 1. read: kite-461 holds it
-              ok """{"id":903}""" // 2. post ours
-              ok "" // 3. evict 901
-              ok (comments [ marker 902 "otter-77" ""; marker 903 "vole-418" "" ]) // 4. a newcomer beat us
-              ok "" // 5. withdraw ours
-              ok (comments [ marker 902 "otter-77" "" ]) ] // 6. final census
+            [
+                ok (comments [ marker 901 "kite-461" "" ]) // 1. read: kite-461 holds it
+                ok """{"id":903}""" // 2. post ours
+                ok "" // 3. evict 901
+                ok (comments [ marker 902 "otter-77" ""; marker 903 "vole-418" "" ]) // 4. a newcomer beat us
+                ok "" // 5. withdraw ours
+                ok (comments [ marker 902 "otter-77" "" ])
+            ] // 6. final census
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(ForcedClaimLost(w, _)) -> Assert.Equal(WorkerId "otter-77", w)
@@ -978,12 +1058,14 @@ let ``#1620 a steal still COLLECTS stale debris, and reports it apart from who i
     // expired claim was collected" courtesy to a worker whose claim had not expired at all.
     let transport =
         scripted
-            [ ok (comments [ marker 901 "kite-461" ""; staleClaimJson 700 "ghost-111" "" ]) // live holder + stale debris
-              ok """{"id":902}"""
-              ok "" // evict the LIVE marker 901
-              ok (comments [ staleClaimJson 700 "ghost-111" ""; marker 902 "vole-418" "" ])
-              ok "" // collect the stale 700
-              ok (comments [ marker 902 "vole-418" "" ]) ] // final census after stale cleanup
+            [
+                ok (comments [ marker 901 "kite-461" ""; staleClaimJson 700 "ghost-111" "" ]) // live holder + stale debris
+                ok """{"id":902}"""
+                ok "" // evict the LIVE marker 901
+                ok (comments [ staleClaimJson 700 "ghost-111" ""; marker 902 "vole-418" "" ])
+                ok "" // collect the stale 700
+                ok (comments [ marker 902 "vole-418" "" ])
+            ] // final census after stale cleanup
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Stolen(_, from, collected, censuses)) ->
@@ -1008,9 +1090,11 @@ let ``#2772 a replacement POST failure leaves the incumbent standing and announc
 
     let transport =
         scripted
-            [ ok (comments [ marker 901 "kite-461" "" ]) // read: kite-461 holds it
-              Error(Http(500, "post failed"))
-              ok (comments [ marker 901 "kite-461" "" ]) ] // authoritative post-failure census
+            [
+                ok (comments [ marker 901 "kite-461" "" ]) // read: kite-461 holds it
+                Error(Http(500, "post failed"))
+                ok (comments [ marker 901 "kite-461" "" ])
+            ] // authoritative post-failure census
 
     match claim transport 120 StealLiveHolder evicted.AddRange me itsMe None aRef (fun () -> None) with
     | Ok(ReplacementPostFailed(holder, holderMarkerId, reason, censuses)) ->
@@ -1028,16 +1112,19 @@ let ``#2772 a replacement POST failure leaves the incumbent standing and announc
 [<Fact>]
 let ``#2772 a response-lost POST that stored the replacement reconciles old plus replacement`` () =
     let mutable exactDraft = ""
+
     let transport =
         scriptedSteps
-            [ fun _ -> ok (comments [ marker 901 "kite-461" "" ])
-              fun request ->
-                  exactDraft <- postedCommentBody request
-                  Error(Http(503, "POST response lost"))
-              fun _ -> ok (comments [ marker 901 "kite-461" ""; markerWithExactBody 902 exactDraft ])
-              fun _ -> ok "" // delete incumbent only after census discovers the exact replacement
-              fun _ -> ok (comments [ markerWithExactBody 902 exactDraft ])
-              fun _ -> ok (comments [ markerWithExactBody 902 exactDraft ]) ]
+            [
+                fun _ -> ok (comments [ marker 901 "kite-461" "" ])
+                fun request ->
+                    exactDraft <- postedCommentBody request
+                    Error(Http(503, "POST response lost"))
+                fun _ -> ok (comments [ marker 901 "kite-461" ""; markerWithExactBody 902 exactDraft ])
+                fun _ -> ok "" // delete incumbent only after census discovers the exact replacement
+                fun _ -> ok (comments [ markerWithExactBody 902 exactDraft ])
+                fun _ -> ok (comments [ markerWithExactBody 902 exactDraft ])
+            ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Stolen(replacement, removed, _, censuses)) ->
@@ -1051,15 +1138,18 @@ let ``#2772 a response-lost POST that stored the replacement reconciles old plus
 [<Fact>]
 let ``#2772 a response-lost POST whose replacement already wins reports ReplacementWon`` () =
     let mutable exactDraft = ""
+
     let transport =
         scriptedSteps
-            [ fun _ -> ok (comments [ marker 901 "kite-461" "" ])
-              fun request ->
-                  exactDraft <- postedCommentBody request
-                  Error(Http(503, "POST response lost"))
-              fun _ -> ok (comments [ markerWithExactBody 902 exactDraft ])
-              fun _ -> ok (comments [ markerWithExactBody 902 exactDraft ])
-              fun _ -> ok (comments [ markerWithExactBody 902 exactDraft ]) ]
+            [
+                fun _ -> ok (comments [ marker 901 "kite-461" "" ])
+                fun request ->
+                    exactDraft <- postedCommentBody request
+                    Error(Http(503, "POST response lost"))
+                fun _ -> ok (comments [ markerWithExactBody 902 exactDraft ])
+                fun _ -> ok (comments [ markerWithExactBody 902 exactDraft ])
+                fun _ -> ok (comments [ markerWithExactBody 902 exactDraft ])
+            ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(ReplacementWon(replacement, collected, censuses)) ->
@@ -1075,15 +1165,18 @@ let ``#2772 a response-lost POST whose replacement already wins reports Replacem
 [<Fact>]
 let ``#2772 a response-lost POST with failed cleanup retains both markers for deterministic retry`` () =
     let mutable exactDraft = ""
+
     let transport =
         scriptedSteps
-            [ fun _ -> ok (comments [ marker 901 "kite-461" "" ])
-              fun request ->
-                  exactDraft <- postedCommentBody request
-                  Error(Http(503, "POST response lost"))
-              fun _ -> ok (comments [ marker 901 "kite-461" ""; markerWithExactBody 902 exactDraft ])
-              fun _ -> Error(Http(500, "cleanup failed"))
-              fun _ -> ok (comments [ marker 901 "kite-461" ""; markerWithExactBody 902 exactDraft ]) ]
+            [
+                fun _ -> ok (comments [ marker 901 "kite-461" "" ])
+                fun request ->
+                    exactDraft <- postedCommentBody request
+                    Error(Http(503, "POST response lost"))
+                fun _ -> ok (comments [ marker 901 "kite-461" ""; markerWithExactBody 902 exactDraft ])
+                fun _ -> Error(Http(500, "cleanup failed"))
+                fun _ -> ok (comments [ marker 901 "kite-461" ""; markerWithExactBody 902 exactDraft ])
+            ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(CleanupRequired(replacement, removed, failed, failedMarkerId, reason, censuses)) ->
@@ -1098,15 +1191,19 @@ let ``#2772 a response-lost POST with failed cleanup retains both markers for de
 [<Fact>]
 let ``#2772 response-lost POST rejects a same-fields marker whose exact renewal token differs`` () =
     let mutable differentDraft = ""
+
     let transport =
         scriptedSteps
-            [ fun _ -> ok (comments [ marker 901 "kite-461" "" ])
-              fun request ->
-                  differentDraft <-
-                      postedCommentBody request
-                      |> fun body -> System.Text.RegularExpressions.Regex.Replace(body, "renewed=[0-9]+", "renewed=0")
-                  Error(Http(503, "POST response lost"))
-              fun _ -> ok (comments [ marker 901 "kite-461" ""; markerWithExactBody 902 differentDraft ]) ]
+            [
+                fun _ -> ok (comments [ marker 901 "kite-461" "" ])
+                fun request ->
+                    differentDraft <-
+                        postedCommentBody request
+                        |> fun body -> System.Text.RegularExpressions.Regex.Replace(body, "renewed=[0-9]+", "renewed=0")
+
+                    Error(Http(503, "POST response lost"))
+                fun _ -> ok (comments [ marker 901 "kite-461" ""; markerWithExactBody 902 differentDraft ])
+            ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(ReplacementPostFailed(holder, holderMarkerId, _, censuses)) ->
@@ -1125,12 +1222,14 @@ let ``#1620 a steal that LOSES the fresh race still announces the eviction it pe
 
     let transport =
         scripted
-            [ ok (comments [ marker 901 "kite-461" "" ])
-              ok """{"id":903}"""
-              ok "" // evict 901
-              ok (comments [ marker 902 "otter-77" ""; marker 903 "vole-418" "" ]) // a newcomer beat us
-              ok "" // withdraw ours
-              ok (comments [ marker 902 "otter-77" "" ]) ] // final census
+            [
+                ok (comments [ marker 901 "kite-461" "" ])
+                ok """{"id":903}"""
+                ok "" // evict 901
+                ok (comments [ marker 902 "otter-77" ""; marker 903 "vole-418" "" ]) // a newcomer beat us
+                ok "" // withdraw ours
+                ok (comments [ marker 902 "otter-77" "" ])
+            ] // final census
 
     match claim transport 120 StealLiveHolder evicted.AddRange me itsMe None aRef (fun () -> None) with
     | Ok(ForcedClaimLost(w, _)) -> Assert.Equal(WorkerId "otter-77", w)
@@ -1161,11 +1260,15 @@ let ``#1620 a steal does NOT evict past a live marker carrying OUR OWN id - the 
     // marker — a live lock destroyed, and nothing taken. Refuse before deleting anything.
     let transport =
         scripted
-            [ ok (
-                  comments
-                      [ marker 901 "kite-461" "" // the live HOLDER
-                        marker 902 "vole-418" " session=79b9e347" ] // our id, another session, queued behind
-              ) ]
+            [
+                ok (
+                    comments
+                        [
+                            marker 901 "kite-461" "" // the live HOLDER
+                            marker 902 "vole-418" " session=79b9e347"
+                        ] // our id, another session, queued behind
+                )
+            ]
 
     match claim transport 120 StealLiveHolder ignore me itsMe (Some(SessionId "ed60050b")) aRef (fun () -> None) with
     | Ok(Twin(SessionId theirs)) -> Assert.Equal("79b9e347", theirs)
@@ -1207,7 +1310,12 @@ let ``#1620 --force re-claiming our OWN live marker renews it - it does not stea
 [<Fact>]
 let ``#481 the claim RECORDS the column it overwrote, so release can put it back`` () =
     let transport =
-        scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" " prev=In%20review" ]) ]
+        scripted
+            [
+                ok "[]"
+                ok """{"id":901}"""
+                ok (comments [ marker 901 "vole-418" " prev=In%20review" ])
+            ]
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> Some InReview) with
     | Ok(Won(held, _)) ->
@@ -1220,7 +1328,13 @@ let ``#481 the claim RECORDS the column it overwrote, so release can put it back
 [<Fact>]
 let ``#481 a column NOBODY recorded is not restored - release says so rather than inventing one`` () =
     let transport =
-        scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" "" ]); ok "" ]
+        scripted
+            [
+                ok "[]"
+                ok """{"id":901}"""
+                ok (comments [ marker 901 "vole-418" "" ])
+                ok ""
+            ]
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, _)) ->
@@ -1265,9 +1379,11 @@ let ``#550 ...and it re-emits the column it overwrote, so a long-lived claim doe
     // column somebody had deliberately chosen.
     let transport =
         scripted
-            [ ok (comments [ marker 901 "vole-418" " prev=In%20review" ]) // acquire
-              ok "" // the heartbeat's PATCH
-              ok "" ] // the release's DELETE
+            [
+                ok (comments [ marker 901 "vole-418" " prev=In%20review" ]) // acquire
+                ok "" // the heartbeat's PATCH
+                ok ""
+            ] // the release's DELETE
 
     let held = acquire transport
 
@@ -1314,8 +1430,10 @@ let private holdAs (session: string) (transport: Fake.Recorder) =
 let ``#1149 heartbeat re-emits session= so the marker does not go SESSIONLESS`` () =
     let transport, bodies =
         capturing
-            [ ok (comments [ marker 901 "vole-418" " session=S1" ]) // acquire, as session S1
-              ok "" ] // the heartbeat's PATCH
+            [
+                ok (comments [ marker 901 "vole-418" " session=S1" ]) // acquire, as session S1
+                ok ""
+            ] // the heartbeat's PATCH
 
     let held = holdAs "S1" transport
 
@@ -1329,9 +1447,7 @@ let ``#2217 heartbeat changes the marker body so GitHub advances the server leas
     // original claim time and the lease expires while heartbeat reports green.  The renewal token is the
     // deliberately unparsed changing field that turns this into a real server-side update.
     let transport, bodies =
-        capturing
-            [ ok (comments [ marker 901 "vole-418" " session=S1" ])
-              ok "" ]
+        capturing [ ok (comments [ marker 901 "vole-418" " session=S1" ]); ok "" ]
 
     let held = holdAs "S1" transport
 
@@ -1345,12 +1461,21 @@ let ``#2217 two heartbeats renew a lapsed server lease only when each PATCH chan
     // PATCH is a no-op and leaves `updated_at` untouched.  Start with a capability acquired while live,
     // advance that stored server clock beyond the 120-minute window, then beat twice.  The final scan is
     // the lease fact the operator depends on, not merely a request-shape assertion.
-    let mutable stored = "<!-- fsgg:claim worker=vole-418 lease=120 renewed=constant session=S1 -->"
+    let mutable stored =
+        "<!-- fsgg:claim worker=vole-418 lease=120 renewed=constant session=S1 -->"
+
     let mutable updatedAt = System.DateTimeOffset.UtcNow
     let patches = System.Collections.Generic.List<string>()
 
     let comments () =
-        System.Text.Json.JsonSerializer.Serialize [ {| id = 901; body = stored; updated_at = updatedAt.ToString("o") |} ]
+        System.Text.Json.JsonSerializer.Serialize
+            [
+                {|
+                    id = 901
+                    body = stored
+                    updated_at = updatedAt.ToString("o")
+                |}
+            ]
 
     let transport =
         Fake.Recorder(fun request ->
@@ -1389,8 +1514,10 @@ let ``#2217 two heartbeats renew a lapsed server lease only when each PATCH chan
 let ``#1732 heartbeat re-emits marker path scope`` () =
     let transport, bodies =
         capturing
-            [ ok (comments [ marker 901 "vole-418" " session=S1 pathRepo=FS.GG.Rendering" ])
-              ok "" ]
+            [
+                ok (comments [ marker 901 "vole-418" " session=S1 pathRepo=FS.GG.Rendering" ])
+                ok ""
+            ]
 
     let held = holdAs "S1" transport
 
@@ -1407,8 +1534,10 @@ let ``#1149 a twin's claim AFTER a heartbeat is refused Twin, not Renewed`` () =
     // was sessionless and B got `Renewed`, the double-hold ADR-0027's CAS exists to prevent.
     let transport, bodies =
         capturing
-            [ ok (comments [ marker 901 "vole-418" " session=S1" ]) // A acquires as S1
-              ok "" ] // A's heartbeat PATCH
+            [
+                ok (comments [ marker 901 "vole-418" " session=S1" ]) // A acquires as S1
+                ok ""
+            ] // A's heartbeat PATCH
 
     let held = holdAs "S1" transport
 
@@ -1422,7 +1551,8 @@ let ``#1149 a twin's claim AFTER a heartbeat is refused Twin, not Renewed`` () =
     let beatenComment =
         System.Text.Json.JsonDocument.Parse(Seq.last bodies).RootElement.GetProperty("body").GetString()
 
-    let beatenMarker = $"""{{"id":901,"body":"%s{beatenComment}","updated_at":"%s{now}"}}"""
+    let beatenMarker =
+        $"""{{"id":901,"body":"%s{beatenComment}","updated_at":"%s{now}"}}"""
 
     let twinTransport = scripted [ ok (comments [ beatenMarker ]) ]
 
@@ -1475,7 +1605,8 @@ let ``#1507 a FLAG-SHAPED token is refused at the write, even though the parser 
         // grammar blurb the message quotes (which uses `src/Foo`). A trailing-period spelling of this
         // assertion would have been vacuous — it can never match regardless of which tokens were blamed.
         Assert.DoesNotContain("src/Audio", message)
-    | Ok _ -> failwith "a flag must never validate as a touch-set token — this is how `--json` reached a live `Paths:` line"
+    | Ok _ ->
+        failwith "a flag must never validate as a touch-set token — this is how `--json` reached a live `Paths:` line"
 
 [<Fact>]
 let ``an EMPTY touch-set is refused - it reserves nothing, and 'none' is a different decision`` () =
@@ -1650,8 +1781,7 @@ let ``#706 widen takes the HELD claim - the ownership check is an ARGUMENT, not 
     // (re-read and confirm). The line `widen transport aRef rewritten` is not a test that fails; it is a
     // program that does not build. What this test pins is that the capability is genuinely REQUIRED and
     // genuinely THREADED: the PATCH goes to the item the capability names, and to no other.
-    let transport =
-        scripted [ ok (comments [ marker 901 "vole-418" "" ]); ok "" ]
+    let transport = scripted [ ok (comments [ marker 901 "vole-418" "" ]); ok "" ]
 
     let held = acquire transport
     let v = validate [ "src/new/**" ] |> Result.defaultWith failwith
@@ -1722,7 +1852,8 @@ let ``#1031 verifyHeld REFUSES the capability over a TWIN's marker - our id, ano
     // the WORKER ID alone, and it is the only door to `Held`: a deliberately mis-targeted ref matched a
     // twin's marker here and was handed the capability that authorises PATCHing and DELETING it. The id was
     // the last place this invariant was asserted by convention rather than construction (#839 residual 2/4).
-    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
+    let transport =
+        Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
 
     match verifyHeld transport 120 me itsMe (Some(SessionId "ed60050b")) aRef with
     | Ok(TwinHolds(SessionId theirs)) -> Assert.Equal("79b9e347", theirs)
@@ -1734,7 +1865,8 @@ let ``#1031 a twin is a case of its OWN - collapsing it into DoesNotHold would m
     // the worker id, finds OUR id on the live winner — and concludes the only other thing that fits: "your
     // lease expired, re-claim it". That is advice to go take a lock a twin is working behind. The outcome
     // has to carry the twin, because no id-keyed question downstream can recover it.
-    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
+    let transport =
+        Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
 
     match verifyHeld transport 120 me itsMe (Some(SessionId "ed60050b")) aRef with
     | Ok DoesNotHold -> failwith "a twin must not be reported as a plain non-hold — the caller cannot tell"
@@ -1755,7 +1887,8 @@ let ``#1031 a SESSIONLESS marker with our id still verifies - the boundary of th
 
 [<Fact>]
 let ``#1031 our OWN session verifies its own marker - or no worker could ever renew`` () =
-    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
+    let transport =
+        Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
 
     match verifyHeld transport 120 me itsMe (Some(SessionId "79b9e347")) aRef with
     | Ok(Holds held) -> Assert.Equal(901L, held.MarkerId)
@@ -1765,7 +1898,8 @@ let ``#1031 our OWN session verifies its own marker - or no worker could ever re
 let ``#1031 a SESSIONLESS caller keeps the old behaviour over a marker that carries one`` () =
     // The other half of "both sessions must be known": a worker whose own session is unknown cannot call
     // anything a twin, because it has nothing to compare. `claim` treats this as ours; so must this.
-    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
+    let transport =
+        Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
 
     match verifyHeld transport 120 me itsMe None aRef with
     | Ok(Holds held) -> Assert.Equal(901L, held.MarkerId)
@@ -1796,7 +1930,8 @@ let private impersonator = Derives them
 let ``#1646 verifyHeld REFUSES the capability when the caller NAMES another worker whose marker is live`` () =
     // THE HOLE, AT ITS OWN LEVEL. `me` (vole-418) holds the live marker; the caller is `kite-461` and has
     // passed `--worker vole-418`. Sessions are IDENTICAL, so #1031's predicate has nothing to say.
-    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=624f304a" ]))
+    let transport =
+        Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=624f304a" ]))
 
     match verifyHeld transport 120 me impersonator (Some(SessionId "624f304a")) aRef with
     | Ok(ImpersonatesHolder(derived, named)) ->
@@ -1816,7 +1951,8 @@ let ``#1646 the session is not what decides it - a DIFFERING session reaches the
     // else's id, and they have a twin. Reporting `TwinHolds` would tell this caller to `whoami --mint` over
     // an identity collision it does not have, and #1031's own case doc is the argument — an outcome that
     // sends the reader to the wrong remedy is the defect that case exists to prevent.
-    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
+    let transport =
+        Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
 
     match verifyHeld transport 120 me impersonator (Some(SessionId "ed60050b")) aRef with
     | Ok(TwinHolds _) -> failwith "we do not share an id with anybody — `whoami --mint` is the wrong remedy here"
@@ -1830,10 +1966,12 @@ let ``#1646 it is NOT DoesNotHold - a typo and an impersonation need different m
     // that id on the live winner and reports "your lease EXPIRED, re-claim it" — about somebody else's
     // lease, as though it were ours. And `TwinHolds` would be worse: it prescribes `whoami --mint` for an
     // identity collision this caller does not have. Neither remedy is the one that fits.
-    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=624f304a" ]))
+    let transport =
+        Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=624f304a" ]))
 
     match verifyHeld transport 120 me impersonator (Some(SessionId "624f304a")) aRef with
-    | Ok DoesNotHold -> failwith "an impersonation reported as a plain non-hold sends the caller to 'your lease expired'"
+    | Ok DoesNotHold ->
+        failwith "an impersonation reported as a plain non-hold sends the caller to 'your lease expired'"
     | Ok(TwinHolds _) -> failwith "this is not a shared id — prescribing `whoami --mint` would be the wrong remedy"
     | Ok(ImpersonatesHolder _) -> ()
     | other -> failwith $"expected the impersonation refusal — got %A{other}"
@@ -1844,19 +1982,23 @@ let ``#1646 a MISTYPED --worker is not an accusation - an id that holds nothing 
     // vole-418 holds NOTHING here — the live marker is somebody else's entirely. There is no lock to take,
     // so there is nothing to accuse anybody of: this is a flag to re-check, and the caller must be told so
     // rather than told it is impersonating. The refusal fires only where the named id owns the live lock.
-    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "smew-f31" " session=624f304a" ]))
+    let transport =
+        Fake.Recorder(fun _ -> ok (comments [ marker 901 "smew-f31" " session=624f304a" ]))
 
     match verifyHeld transport 120 me impersonator (Some(SessionId "624f304a")) aRef with
     | Ok DoesNotHold -> ()
     | other -> failwith $"a named id that holds nothing is a typo, not an impersonation — got %A{other}"
 
 [<Fact>]
-let ``#1646 a worker still operates its OWN claim across processes - including after a heartbeat rewrote the marker`` () =
+let ``#1646 a worker still operates its OWN claim across processes - including after a heartbeat rewrote the marker``
+    ()
+    =
     // THE REGRESSION THIS MUST NOT CAUSE, and it is `verifyHeld`'s whole reason for existing: every command
     // after `claim` is a fresh process, so the capability has to survive one. Here the marker was written by
     // an EARLIER process of the same worker — and `heartbeat` rewrites the whole body (#1149), so this is
     // the post-heartbeat marker, session and all. Same id, same self, and it still verifies.
-    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=624f304a prev=Ready" ]))
+    let transport =
+        Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=624f304a prev=Ready" ]))
 
     match verifyHeld transport 120 me itsMe (Some(SessionId "624f304a")) aRef with
     | Ok(Holds held) ->
@@ -1884,7 +2026,8 @@ let ``#1646 a caller that derives NOTHING is not refused - the human operator --
     // out exactly the callers the flag exists for, which is #1031's boundary reached from one fact further
     // out. #1646 records this as residue rather than a clean close: a caller that unsets its own identity
     // before impersonating lands here too, and the tool cannot tell it from the operator.
-    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=624f304a" ]))
+    let transport =
+        Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=624f304a" ]))
 
     match verifyHeld transport 120 me DerivesNothing (Some(SessionId "624f304a")) aRef with
     | Ok(Holds held) -> Assert.Equal(901L, held.MarkerId)
@@ -1914,7 +2057,10 @@ let ``#1646 the --force STEAL under a foreign id is refused - and it is the shar
     let beneficiary = WorkerId "smew-f31"
     let transport = scripted []
 
-    match claim transport 120 StealLiveHolder ignore beneficiary impersonator (Some(SessionId "624f304a")) aRef (fun () -> None) with
+    match
+        claim transport 120 StealLiveHolder ignore beneficiary impersonator (Some(SessionId "624f304a")) aRef (fun () ->
+            None)
+    with
     | Ok(Impersonates(derived, named)) ->
         Assert.Equal(them, derived)
         Assert.Equal(beneficiary, named)
@@ -1952,9 +2098,12 @@ let ``#1646 claim is the OTHER door and it refuses too - a re-claim under a fore
     // ONE TRANSPORT RESPONSE IS SCRIPTED, and that is an assertion: `scripted` fails the moment it is called
     // a second time, so the refusal must happen on the READ, before the PATCH. A refusal that renewed the
     // lease first would be no refusal at all.
-    let transport = scripted [ ok (comments [ marker 901 "vole-418" " session=624f304a" ]) ]
+    let transport =
+        scripted [ ok (comments [ marker 901 "vole-418" " session=624f304a" ]) ]
 
-    match claim transport 120 RefuseLiveHolder ignore me impersonator (Some(SessionId "624f304a")) aRef (fun () -> None) with
+    match
+        claim transport 120 RefuseLiveHolder ignore me impersonator (Some(SessionId "624f304a")) aRef (fun () -> None)
+    with
     | Ok(Impersonates(derived, named)) ->
         Assert.Equal(them, derived)
         Assert.Equal(me, named)
@@ -1971,7 +2120,10 @@ let ``#1646 the two doors agree - claim and verifyHeld answer the SAME question 
     let forVerify = Fake.Recorder(fun _ -> ok markerSet)
 
     let claimSaidNo =
-        match claim forClaim 120 RefuseLiveHolder ignore me impersonator (Some(SessionId "624f304a")) aRef (fun () -> None) with
+        match
+            claim forClaim 120 RefuseLiveHolder ignore me impersonator (Some(SessionId "624f304a")) aRef (fun () ->
+                None)
+        with
         | Ok(Impersonates _) -> true
         | _ -> false
 
@@ -2025,25 +2177,42 @@ let ``a follow-up disposition is a durable issue comment, not a worker mailbox m
 [<Fact>]
 let ``delivery completion receipt appends once and refuses contradictory authority`` () =
     let completionFacts: FS.GG.Coord.Delivery.CompletionFacts =
-        { HeadSha = "head-a"
-          Merged = true
-          MergeReachable = true
-          PostMergeVerification = FS.GG.Coord.Delivery.NotObserved
-          IssueClosed = true
-          BoardDone = false
-          ClaimReleased = false
-          PendingWrites = 0
-          CleanupEligible = false
-          ObligationsDeclared = true
-          Obligations = [] }
+        {
+            HeadSha = "head-a"
+            Merged = true
+            MergeReachable = true
+            PostMergeVerification = FS.GG.Coord.Delivery.NotObserved
+            IssueClosed = true
+            BoardDone = false
+            ClaimReleased = false
+            PendingWrites = 0
+            CleanupEligible = false
+            ObligationsDeclared = true
+            Obligations = []
+        }
+
     let mint mergeSha completedAt =
         let verification =
             FS.GG.Coord.Delivery.Verified
-                { MergeSha = mergeSha
-                  DefaultBranch = "main"
-                  Runs =
-                    [ { Id = 2905L; Attempt = 1; Workflow = "CI"; Event = "push"; Branch = "main"
-                        Sha = mergeSha; Status = "completed"; Conclusion = "success"; Url = "https://run/2905" } ] }
+                {
+                    MergeSha = mergeSha
+                    DefaultBranch = "main"
+                    Runs =
+                        [
+                            {
+                                Id = 2905L
+                                Attempt = 1
+                                Workflow = "CI"
+                                Event = "push"
+                                Branch = "main"
+                                Sha = mergeSha
+                                Status = "completed"
+                                Conclusion = "success"
+                                Url = "https://run/2905"
+                            }
+                        ]
+                }
+
         FS.GG.Coord.Delivery.createCompletionReceipt
             aRef.Canonical
             99
@@ -2051,13 +2220,20 @@ let ``delivery completion receipt appends once and refuses contradictory authori
             completedAt
             "freshness"
             "action"
-            { completionFacts with PostMergeVerification = verification }
+            { completionFacts with
+                PostMergeVerification = verification
+            }
         |> Result.defaultWith (String.concat "; " >> failwith)
+
     let first = mint "merge-a" (System.DateTimeOffset.Parse("2026-08-22T15:00:00Z"))
     let retry = mint "merge-a" (System.DateTimeOffset.Parse("2026-08-22T15:01:00Z"))
-    let contradiction = mint "merge-b" (System.DateTimeOffset.Parse("2026-08-22T15:02:00Z"))
+
+    let contradiction =
+        mint "merge-b" (System.DateTimeOffset.Parse("2026-08-22T15:02:00Z"))
+
     let mutable stored: string option = None
     let mutable posts = 0
+
     let transport =
         Fake.Recorder(fun request ->
             match request.Method with
@@ -2067,20 +2243,24 @@ let ``delivery completion receipt appends once and refuses contradictory authori
                 | Some body -> ok (comments [ markerWithExactBody 950 body ])
             | "POST" ->
                 posts <- posts + 1
+
                 match request.Body with
                 | Json payload ->
                     use document = System.Text.Json.JsonDocument.Parse payload
                     stored <- Some(document.RootElement.GetProperty("body").GetString())
                 | _ -> failwith "completion receipt POST carried no JSON body"
+
                 ok "{\"id\":950}"
             | method -> failwithf "unexpected method %s" method)
 
-    Assert.Equal(Ok (), deliveryCompletionReceipt transport aRef first)
-    Assert.Equal(Ok (), deliveryCompletionReceipt transport aRef retry)
+    Assert.Equal(Ok(), deliveryCompletionReceipt transport aRef first)
+    Assert.Equal(Ok(), deliveryCompletionReceipt transport aRef retry)
     Assert.Equal(1, posts)
+
     match deliveryCompletionReceipt transport aRef contradiction with
     | Error(Malformed(_, reason)) -> Assert.Contains("contradictory", reason)
     | other -> failwithf "expected contradictory receipt refusal, got %A" other
+
     Assert.Equal(1, posts)
 
 [<Fact>]
@@ -2088,11 +2268,19 @@ let ``completion correction receipt appends once and refuses a changed safe dest
     let mint destination observedAt =
         FS.GG.Coord.Delivery.createCompletionCorrectionReceipt aRef.Canonical destination observedAt
         |> Result.defaultWith (String.concat "; " >> failwith)
-    let first = mint BoardStatus.InReview (System.DateTimeOffset.Parse("2026-08-22T16:00:00Z"))
-    let retry = mint BoardStatus.InReview (System.DateTimeOffset.Parse("2026-08-22T16:01:00Z"))
-    let contradiction = mint BoardStatus.Blocked (System.DateTimeOffset.Parse("2026-08-22T16:02:00Z"))
+
+    let first =
+        mint BoardStatus.InReview (System.DateTimeOffset.Parse("2026-08-22T16:00:00Z"))
+
+    let retry =
+        mint BoardStatus.InReview (System.DateTimeOffset.Parse("2026-08-22T16:01:00Z"))
+
+    let contradiction =
+        mint BoardStatus.Blocked (System.DateTimeOffset.Parse("2026-08-22T16:02:00Z"))
+
     let mutable stored: string option = None
     let mutable posts = 0
+
     let transport =
         Fake.Recorder(fun request ->
             match request.Method with
@@ -2102,20 +2290,24 @@ let ``completion correction receipt appends once and refuses a changed safe dest
                 | Some body -> ok (comments [ markerWithExactBody 951 body ])
             | "POST" ->
                 posts <- posts + 1
+
                 match request.Body with
                 | Json payload ->
                     use document = System.Text.Json.JsonDocument.Parse payload
                     stored <- Some(document.RootElement.GetProperty("body").GetString())
                 | _ -> failwith "correction receipt POST carried no JSON body"
+
                 ok "{\"id\":951}"
             | method -> failwithf "unexpected method %s" method)
 
-    Assert.Equal(Ok (), completionCorrectionReceipt transport aRef first)
-    Assert.Equal(Ok (), completionCorrectionReceipt transport aRef retry)
+    Assert.Equal(Ok(), completionCorrectionReceipt transport aRef first)
+    Assert.Equal(Ok(), completionCorrectionReceipt transport aRef retry)
     Assert.Equal(1, posts)
+
     match completionCorrectionReceipt transport aRef contradiction with
     | Error(Malformed(_, reason)) -> Assert.Contains("contradictory", reason)
     | other -> failwithf "expected contradictory correction refusal, got %A" other
+
     Assert.Equal(1, posts)
 
 [<Fact>]
@@ -2126,9 +2318,11 @@ let ``legacy done evidence can be corrected but cannot block typed migration`` (
             BoardStatus.InReview
             (System.DateTimeOffset.Parse("2026-08-22T16:00:00Z"))
         |> Result.defaultWith (String.concat "; " >> failwith)
+
     let legacy = "<!-- fsgg:done-receipt v=1 -->\nverified"
     let mutable correction: string option = None
     let mutable posts = 0
+
     let transport =
         Fake.Recorder(fun request ->
             match request.Method with
@@ -2137,52 +2331,83 @@ let ``legacy done evidence can be corrected but cannot block typed migration`` (
                     match correction with
                     | None -> [ markerWithExactBody 950 legacy ]
                     | Some body -> [ markerWithExactBody 950 legacy; markerWithExactBody 951 body ]
+
                 ok (comments bodies)
             | "POST" ->
                 posts <- posts + 1
+
                 match request.Body with
                 | Json payload ->
                     use document = System.Text.Json.JsonDocument.Parse payload
                     correction <- Some(document.RootElement.GetProperty("body").GetString())
                 | _ -> failwith "correction receipt POST carried no JSON body"
+
                 ok "{\"id\":951}"
             | method -> failwithf "unexpected method %s" method)
 
-    Assert.Equal(Ok (), completionCorrectionReceipt transport aRef receipt)
-    Assert.Equal(Ok (), completionCorrectionReceipt transport aRef receipt)
+    Assert.Equal(Ok(), completionCorrectionReceipt transport aRef receipt)
+    Assert.Equal(Ok(), completionCorrectionReceipt transport aRef receipt)
     Assert.Equal(1, posts)
 
 [<Fact>]
 let ``self-host bootstrap authority appends once and refuses contradiction`` () =
     let evidence: FS.GG.Coord.SelfHost.Evidence =
-        { Build = "build"; Unit = "unit"; FocusedProductionRoute = "route"; Provenance = "provenance"; Inversion = "inversion" }
+        {
+            Build = "build"
+            Unit = "unit"
+            FocusedProductionRoute = "route"
+            Provenance = "provenance"
+            Inversion = "inversion"
+        }
+
     let acceptance: FS.GG.Coord.SelfHost.HostAcceptance =
-        { Actor = "host/ron000"; AcceptedAt = System.DateTimeOffset.Parse("2026-08-22T18:00:00Z") }
+        {
+            Actor = "host/ron000"
+            AcceptedAt = System.DateTimeOffset.Parse("2026-08-22T18:00:00Z")
+        }
+
     let mint action =
-        FS.GG.Coord.SelfHost.createReceipt "base" "head" (String.replicate 64 "a") "version" "refusal" (String.replicate 64 "c")
-            FS.GG.Coord.SelfHost.BootstrapReason.NewSchemaCase evidence "decision" action acceptance
+        FS.GG.Coord.SelfHost.createReceipt
+            "base"
+            "head"
+            (String.replicate 64 "a")
+            "version"
+            "refusal"
+            (String.replicate 64 "c")
+            FS.GG.Coord.SelfHost.BootstrapReason.NewSchemaCase
+            evidence
+            "decision"
+            action
+            acceptance
         |> Result.defaultWith (String.concat "; " >> failwith)
+
     let receipt = mint "action"
     let mutable stored: string option = None
     let mutable posts = 0
+
     let transport =
         Fake.Recorder(fun request ->
             match request.Method with
             | "GET" ->
-                match stored with None -> ok "[]" | Some body -> ok (comments [ markerWithExactBody 960 body ])
+                match stored with
+                | None -> ok "[]"
+                | Some body -> ok (comments [ markerWithExactBody 960 body ])
             | "POST" ->
                 posts <- posts + 1
+
                 match request.Body with
                 | Json payload ->
                     use document = System.Text.Json.JsonDocument.Parse payload
                     stored <- Some(document.RootElement.GetProperty("body").GetString())
                 | _ -> failwith "self-host receipt POST carried no JSON body"
+
                 ok "{\"id\":960}"
             | method -> failwithf "unexpected method %s" method)
 
-    Assert.Equal(Ok (), selfHostBootstrapReceipt transport aRef receipt)
-    Assert.Equal(Ok (), selfHostBootstrapReceipt transport aRef receipt)
+    Assert.Equal(Ok(), selfHostBootstrapReceipt transport aRef receipt)
+    Assert.Equal(Ok(), selfHostBootstrapReceipt transport aRef receipt)
     Assert.Equal(1, posts)
+
     match selfHostBootstrapReceipt transport aRef (mint "different-action") with
     | Error(Malformed(_, reason)) -> Assert.Contains("contradictory", reason)
     | other -> failwithf "expected contradictory self-host refusal, got %A" other
@@ -2190,37 +2415,73 @@ let ``self-host bootstrap authority appends once and refuses contradiction`` () 
 [<Fact>]
 let ``self-host replay appends once only after matching durable bootstrap`` () =
     let evidence: FS.GG.Coord.SelfHost.Evidence =
-        { Build = "build"; Unit = "unit"; FocusedProductionRoute = "route"; Provenance = "provenance"; Inversion = "inversion" }
+        {
+            Build = "build"
+            Unit = "unit"
+            FocusedProductionRoute = "route"
+            Provenance = "provenance"
+            Inversion = "inversion"
+        }
+
     let bootstrap =
-        FS.GG.Coord.SelfHost.createReceipt "base" "head" (String.replicate 64 "a") "version" "refusal" (String.replicate 64 "c")
-            FS.GG.Coord.SelfHost.BootstrapReason.NewSchemaCase evidence "decision" "action"
-            { Actor = "host/ron000"; AcceptedAt = System.DateTimeOffset.Parse("2026-08-22T18:00:00Z") }
+        FS.GG.Coord.SelfHost.createReceipt
+            "base"
+            "head"
+            (String.replicate 64 "a")
+            "version"
+            "refusal"
+            (String.replicate 64 "c")
+            FS.GG.Coord.SelfHost.BootstrapReason.NewSchemaCase
+            evidence
+            "decision"
+            "action"
+            {
+                Actor = "host/ron000"
+                AcceptedAt = System.DateTimeOffset.Parse("2026-08-22T18:00:00Z")
+            }
         |> Result.defaultWith (String.concat "; " >> failwith)
+
     let replay =
-        FS.GG.Coord.SelfHost.createReplayReceipt bootstrap bootstrap.SnapshotSha256
-            { DecisionKey = "decision"; ActionKey = "action" }
+        FS.GG.Coord.SelfHost.createReplayReceipt
+            bootstrap
+            bootstrap.SnapshotSha256
+            {
+                DecisionKey = "decision"
+                ActionKey = "action"
+            }
             (System.DateTimeOffset.Parse("2026-08-22T19:00:00Z"))
         |> Result.defaultWith (String.concat "; " >> failwith)
+
     let mutable bodies = [ FS.GG.Coord.SelfHost.encodeReceipt bootstrap ]
     let mutable posts = 0
+
     let transport =
         Fake.Recorder(fun request ->
             match request.Method with
             | "GET" -> ok (comments (bodies |> List.mapi (fun index body -> markerWithExactBody (970 + index) body)))
             | "POST" ->
                 posts <- posts + 1
+
                 match request.Body with
                 | Json payload ->
                     use document = System.Text.Json.JsonDocument.Parse payload
                     bodies <- bodies @ [ document.RootElement.GetProperty("body").GetString() ]
                 | _ -> failwith "self-host replay POST carried no JSON body"
+
                 ok "{\"id\":971}"
             | method -> failwithf "unexpected method %s" method)
-    Assert.Equal(Ok (), selfHostReplayReceipt transport aRef replay)
-    Assert.Equal(Ok (), selfHostReplayReceipt transport aRef replay)
+
+    Assert.Equal(Ok(), selfHostReplayReceipt transport aRef replay)
+    Assert.Equal(Ok(), selfHostReplayReceipt transport aRef replay)
     Assert.Equal(1, posts)
 
-    let withoutBootstrap = Fake.Recorder(fun request -> if request.Method = "GET" then ok "[]" else failwith "unexpected write")
+    let withoutBootstrap =
+        Fake.Recorder(fun request ->
+            if request.Method = "GET" then
+                ok "[]"
+            else
+                failwith "unexpected write")
+
     match selfHostReplayReceipt withoutBootstrap aRef replay with
     | Error(Malformed(_, reason)) -> Assert.Contains("without durable bootstrap", reason)
     | other -> failwithf "expected missing-bootstrap refusal, got %A" other
@@ -2229,19 +2490,24 @@ let ``self-host replay appends once only after matching durable bootstrap`` () =
 let ``reopenIssue requires fresh OPEN state and recovers a lost PATCH response`` () =
     let mutable state = "closed"
     let mutable loseResponse = false
+
     let transport =
         Fake.Recorder(fun request ->
             match request.Method with
             | "PATCH" ->
                 state <- "open"
-                if loseResponse then Error(Transport "response lost") else ok "{}"
+
+                if loseResponse then
+                    Error(Transport "response lost")
+                else
+                    ok "{}"
             | "GET" -> ok ($"{{\"state\":\"%s{state}\"}}")
             | method -> failwithf "unexpected method %s" method)
 
-    Assert.Equal(Ok (), reopenIssue transport aRef)
+    Assert.Equal(Ok(), reopenIssue transport aRef)
     state <- "closed"
     loseResponse <- true
-    Assert.Equal(Ok (), reopenIssue transport aRef)
+    Assert.Equal(Ok(), reopenIssue transport aRef)
 
     let unverified =
         Fake.Recorder(fun request ->
@@ -2249,6 +2515,7 @@ let ``reopenIssue requires fresh OPEN state and recovers a lost PATCH response``
             | "PATCH" -> ok "{}"
             | "GET" -> ok "{\"state\":\"closed\"}"
             | method -> failwithf "unexpected method %s" method)
+
     match reopenIssue unverified aRef with
     | Error(Malformed(_, reason)) -> Assert.Contains("still CLOSED", reason)
     | other -> failwithf "expected fresh-state refusal, got %A" other
@@ -2256,6 +2523,7 @@ let ``reopenIssue requires fresh OPEN state and recovers a lost PATCH response``
 [<Fact>]
 let ``closeIssueCompleted requires fresh CLOSED state`` () =
     let mutable state = "open"
+
     let transport =
         Fake.Recorder(fun request ->
             match request.Method with
@@ -2265,23 +2533,26 @@ let ``closeIssueCompleted requires fresh CLOSED state`` () =
                     Assert.Contains("\"state_reason\":\"completed\"", payload)
                     state <- "closed"
                 | _ -> failwith "issue close carried no JSON body"
+
                 ok "{}"
             | "GET" -> ok ($"{{\"state\":\"%s{state}\"}}")
             | method -> failwithf "unexpected method %s" method)
 
-    Assert.Equal(Ok (), closeIssueCompleted transport aRef)
+    Assert.Equal(Ok(), closeIssueCompleted transport aRef)
 
 // ---- reap: an expired lease is EVIDENCE of abandonment, not PROOF (#581) ----------------------------
 
 let private staleMarker =
-    { Reads.Id = 880L
-      Reads.Worker = WorkerId "ghost-222"
-      Reads.Session = None
-      Reads.AgeSeconds = 10800 // 3h — well past a 120-minute lease
-      Reads.PreviousStatus = None
-      Reads.PathRepo = None
-      Reads.AgentContract = None
-      Reads.Raw = "<!-- fsgg:claim worker=ghost-222 lease=120 -->" }
+    {
+        Reads.Id = 880L
+        Reads.Worker = WorkerId "ghost-222"
+        Reads.Session = None
+        Reads.AgeSeconds = 10800 // 3h — well past a 120-minute lease
+        Reads.PreviousStatus = None
+        Reads.PathRepo = None
+        Reads.AgentContract = None
+        Reads.Raw = "<!-- fsgg:claim worker=ghost-222 lease=120 -->"
+    }
 
 [<Fact>]
 let ``#581 reapable is GREEN only when the lease lapsed AND no PR is open`` () =
@@ -2335,8 +2606,10 @@ let ``#581 reap RE-VERIFIES the marker is still stale, then DELETES it by its co
     // the marker is STILL stale on the fresh read.
     let transport =
         scripted
-            [ ok (comments [ staleClaimJson 880 "ghost-222" "" ]) // 1. re-verify: still stale
-              ok "" ] // 2. DELETE lands
+            [
+                ok (comments [ staleClaimJson 880 "ghost-222" "" ]) // 1. re-verify: still stale
+                ok ""
+            ] // 2. DELETE lands
 
     match reapable aRef staleMarker LeaseExpiredNoPr with
     | Error e -> failwith $"the fixture marker is reapable — got %A{e}"
@@ -2348,7 +2621,10 @@ let ``#581 reap RE-VERIFIES the marker is still stale, then DELETES it by its co
 [<Fact>]
 let ``#1896 reap refuses an incomplete re-verification and deletes no marker`` () =
     let transport =
-        scripted [ ok (comments [ staleClaimJson 880 "ghost-222" ""; unclassifiableComment 902 ]) ]
+        scripted
+            [
+                ok (comments [ staleClaimJson 880 "ghost-222" ""; unclassifiableComment 902 ])
+            ]
 
     match reapable aRef staleMarker LeaseExpiredNoPr with
     | Error e -> failwith $"the fixture marker is reapable — got %A{e}"
@@ -2414,9 +2690,11 @@ let ``reap treats a marker a peer already collected as AlreadyGone, deleting not
 let ``#895 the LOCK ITSELF goes over REST - the winning CAS never spends a GraphQL point`` () =
     let transport =
         scripted
-            [ ok "[]" // 1. read the live markers
-              ok """{"id":901}""" // 2. POST our marker — the linearisation point
-              ok (comments [ marker 901 "vole-418" "" ]) ] // 3. re-read: we are the lowest live id
+            [
+                ok "[]" // 1. read the live markers
+                ok """{"id":901}""" // 2. POST our marker — the linearisation point
+                ok (comments [ marker 901 "vole-418" "" ])
+            ] // 3. re-read: we are the lowest live id
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, _)) -> Assert.Equal(901L, held.MarkerId)
@@ -2439,10 +2717,12 @@ let ``#895 the WITHDRAW is on the lock's budget too - a lost race never reaches 
     // advice that cannot be followed.
     let transport =
         scripted
-            [ ok "[]"
-              ok """{"id":902}""" // ours
-              ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) // 901 beat us
-              ok "" ] // DELETE our 902
+            [
+                ok "[]"
+                ok """{"id":902}""" // ours
+                ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) // 901 beat us
+                ok ""
+            ] // DELETE our 902
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Lost w) -> Assert.Equal(them, w)
@@ -2460,8 +2740,10 @@ let ``#895 the RENEW is on the lock's budget too - holding a claim never spends 
     // an item it never stopped working, to a budget it never spent on the work.
     let transport =
         scripted
-            [ ok (comments [ marker 901 "vole-418" "" ]) // 1. read: our own live marker
-              ok """{"id":901}""" ] // 2. PATCH: renew in place
+            [
+                ok (comments [ marker 901 "vole-418" "" ]) // 1. read: our own live marker
+                ok """{"id":901}"""
+            ] // 2. PATCH: renew in place
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Renewed(held, _)) -> Assert.Equal(901L, held.MarkerId)
@@ -2487,7 +2769,12 @@ let ``#895 the pre-claim column read is the CALLER's - the CAS routes no board r
     //
     // So: a callback that answers (the #481 path, `prev=In%20review` on the wire), and the counters unmoved.
     let transport =
-        scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" " prev=In%20review" ]) ]
+        scripted
+            [
+                ok "[]"
+                ok """{"id":901}"""
+                ok (comments [ marker 901 "vole-418" " prev=In%20review" ])
+            ]
 
     match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> Some InReview) with
     | Ok(Won(held, _)) -> Assert.Equal(Some InReview, held.PreviousStatus)
@@ -2505,8 +2792,15 @@ let ``appendRoomLine appends a Rooms line the parser can read back`` () =
     let body = appendRoomLine "An ordinary issue body.\n\nPaths: src/A" "#42"
     // The written line must be a REAL declaration to `Rooms.parse` — resolved against the item's own repo.
     Assert.Equal<FS.GG.Coord.Types.Ref list>(
-        [ { Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 42 } ],
-        FS.GG.Coord.Rooms.parse "FS-GG" "FS.GG.SDD" body)
+        [
+            {
+                Owner = "FS-GG"
+                Repo = "FS.GG.SDD"
+                Number = 42
+            }
+        ],
+        FS.GG.Coord.Rooms.parse "FS-GG" "FS.GG.SDD" body
+    )
 
 [<Fact>]
 let ``appendRoomLine is additive — a second room keeps the first`` () =
@@ -2514,9 +2808,20 @@ let ``appendRoomLine is additive — a second room keeps the first`` () =
     let twice = appendRoomLine once "#13"
 
     Assert.Equal<FS.GG.Coord.Types.Ref list>(
-        [ { Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 12 }
-          { Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 13 } ],
-        FS.GG.Coord.Rooms.parse "FS-GG" "FS.GG.SDD" twice)
+        [
+            {
+                Owner = "FS-GG"
+                Repo = "FS.GG.SDD"
+                Number = 12
+            }
+            {
+                Owner = "FS-GG"
+                Repo = "FS.GG.SDD"
+                Number = 13
+            }
+        ],
+        FS.GG.Coord.Rooms.parse "FS-GG" "FS.GG.SDD" twice
+    )
 
 [<Fact>]
 let ``#2801 appendRoomLine is idempotent for the same automatic room`` () =
@@ -2531,8 +2836,15 @@ let ``appendRoomLine closes an unterminated fence FIRST, so the line is not swal
     let body = appendRoomLine "See the grammar:\n\n```\nRooms: #99\n" "#42"
 
     Assert.Equal<FS.GG.Coord.Types.Ref list>(
-        [ { Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 42 } ],
-        FS.GG.Coord.Rooms.parse "FS-GG" "FS.GG.SDD" body)
+        [
+            {
+                Owner = "FS-GG"
+                Repo = "FS.GG.SDD"
+                Number = 42
+            }
+        ],
+        FS.GG.Coord.Rooms.parse "FS-GG" "FS.GG.SDD" body
+    )
 
 // ---- room WRITES (ADR-0051, #1215): create the issue, back-ref members, close on roll-up ------------
 
@@ -2542,15 +2854,45 @@ let ``createRoom POSTs to the issues endpoint and returns the new room's ref`` (
 
     match createRoom transport "FS-GG" "FS.GG.SDD" "coordination room over FS.GG.SDD#302" "Paths: none" with
     | Ok r ->
-        Assert.Equal({ Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 220 }, r)
+        Assert.Equal(
+            {
+                Owner = "FS-GG"
+                Repo = "FS.GG.SDD"
+                Number = 220
+            },
+            r
+        )
+
         Assert.True(transport.Logged "issue-list FS-GG/FS.GG.SDD", "createRoom did not hit the repo's issues endpoint")
     | Error e -> failwith $"createRoom must return the new room's ref — got %A{e}"
 
 [<Fact>]
 let ``#2134 createIntake refuses an invalid draft before any issue POST`` () =
     let transport = scripted []
+
     let draft: FS.GG.Coord.Intake.Draft =
-        { Schema = FS.GG.Coord.Intake.Schema; Id = "intake-42"; Owner = "FS-GG"; Repository = "FS.GG.SDD"; Title = "t"; Observed = "o"; RootCause = "r"; Acceptance = "a"; Verification = "v"; Paths = []; Class = "hardening"; Status = "Backlog"; Disposition = Some FS.GG.Coord.Intake.Create; Phase = None; Severity = None; BlockedBy = None; BlockedOn = None; BacklogReason = Some "not-yet-actionable"; JudgementQuestion = None }
+        {
+            Schema = FS.GG.Coord.Intake.Schema
+            Id = "intake-42"
+            Owner = "FS-GG"
+            Repository = "FS.GG.SDD"
+            Title = "t"
+            Observed = "o"
+            RootCause = "r"
+            Acceptance = "a"
+            Verification = "v"
+            Paths = []
+            Class = "hardening"
+            Status = "Backlog"
+            Disposition = Some FS.GG.Coord.Intake.Create
+            Phase = None
+            Severity = None
+            BlockedBy = None
+            BlockedOn = None
+            BacklogReason = Some "not-yet-actionable"
+            JudgementQuestion = None
+        }
+
     match createIntake transport draft with
     | Error _ -> Assert.False(transport.Logged "issue-list FS-GG/FS.GG.SDD")
     | Ok _ -> failwith "invalid intake must refuse"
@@ -2570,7 +2912,11 @@ let ``writeRoomRef PATCHes the member issue with the appended Rooms line`` () =
     let transport = scripted [ ok "{}" ]
 
     match writeRoomRef transport aRef "Paths: src/A" "#220" with
-    | Ok() -> Assert.True(transport.Logged $"issue-patch FS-GG/FS.GG.SDD %d{aRef.Number}", "writeRoomRef did not PATCH the member body")
+    | Ok() ->
+        Assert.True(
+            transport.Logged $"issue-patch FS-GG/FS.GG.SDD %d{aRef.Number}",
+            "writeRoomRef did not PATCH the member body"
+        )
     | Error e -> failwith $"writeRoomRef must succeed on a 200 — got %A{e}"
 
 [<Fact>]
@@ -2578,7 +2924,11 @@ let ``closeRoom PATCHes the room issue (the derived roll-up close)`` () =
     let transport = scripted [ ok "{}" ]
 
     match closeRoom transport aRef with
-    | Ok() -> Assert.True(transport.Logged $"issue-patch FS-GG/FS.GG.SDD %d{aRef.Number}", "closeRoom did not PATCH the room issue")
+    | Ok() ->
+        Assert.True(
+            transport.Logged $"issue-patch FS-GG/FS.GG.SDD %d{aRef.Number}",
+            "closeRoom did not PATCH the room issue"
+        )
     | Error e -> failwith $"closeRoom must succeed on a 200 — got %A{e}"
 
 // ---- #2801 mutual-overlap writer recovery ----------------------------------------------------------
@@ -2587,11 +2937,9 @@ let ``closeRoom PATCHes the room issue (the derived roll-up close)`` () =
 let ``#2801 durable wait receipt is observed after its comment write`` () =
     let marker = "<!-- fsgg:overlap-wait/v1 key=a-b -->"
     let body = marker + "\n{\"schema\":\"fsgg.coord.overlap-wait/v1\"}"
+
     let transport =
-        scripted
-            [ ok "[]"
-              ok "{\"id\":901}"
-              ok (comments [ markerWithExactBody 901 body ]) ]
+        scripted [ ok "[]"; ok "{\"id\":901}"; ok (comments [ markerWithExactBody 901 body ]) ]
 
     match writeDurableComment transport aRef marker body with
     | Ok(CommentWritten 901L) -> Assert.Equal(3, transport.RestCalls)
@@ -2601,11 +2949,14 @@ let ``#2801 durable wait receipt is observed after its comment write`` () =
 let ``#2801 response-lost wait receipt converges from the authoritative re-read`` () =
     let marker = "<!-- fsgg:overlap-wait/v1 key=a-b -->"
     let body = marker + "\n{\"schema\":\"fsgg.coord.overlap-wait/v1\"}"
+
     let transport =
         scripted
-            [ ok "[]"
-              Error(Transport "response lost")
-              ok (comments [ markerWithExactBody 901 body ]) ]
+            [
+                ok "[]"
+                Error(Transport "response lost")
+                ok (comments [ markerWithExactBody 901 body ])
+            ]
 
     match writeDurableComment transport aRef marker body with
     | Ok CommentAlreadyPresent -> Assert.Equal(3, transport.RestCalls)
@@ -2638,28 +2989,38 @@ let ``#2801 exact existing wait receipt is an idempotent no-write`` () =
 
 [<Fact>]
 let ``#2801 first board-orchestrator contender wins its immutable generation`` () =
-    let marker = "<!-- fsgg:board-orchestrator-lease-key/v1 board=coord generation=3 -->"
+    let marker =
+        "<!-- fsgg:board-orchestrator-lease-key/v1 board=coord generation=3 -->"
+
     let body = marker + "\n<!-- fsgg:board-orchestrator-lease/v1 -->\n{}"
+
     let transport =
-        scripted
-            [ ok "[]"
-              ok "{\"id\":901}"
-              ok (comments [ durableLeaseComment 901 body ]) ]
+        scripted [ ok "[]"; ok "{\"id\":901}"; ok (comments [ durableLeaseComment 901 body ]) ]
+
     match acquireDurableLease transport aRef marker body with
     | Ok(LeaseAcquired 901L) -> Assert.Equal(3, transport.RestCalls)
     | other -> failwith $"first contender should acquire the generation, got %A{other}"
 
 [<Fact>]
 let ``#2801 losing board-orchestrator race removes only its own candidate`` () =
-    let marker = "<!-- fsgg:board-orchestrator-lease-key/v1 board=coord generation=3 -->"
-    let winner = marker + "\n<!-- fsgg:board-orchestrator-lease/v1 -->\n{\"holder\":\"B1\"}"
-    let mine = marker + "\n<!-- fsgg:board-orchestrator-lease/v1 -->\n{\"holder\":\"B2\"}"
+    let marker =
+        "<!-- fsgg:board-orchestrator-lease-key/v1 board=coord generation=3 -->"
+
+    let winner =
+        marker + "\n<!-- fsgg:board-orchestrator-lease/v1 -->\n{\"holder\":\"B1\"}"
+
+    let mine =
+        marker + "\n<!-- fsgg:board-orchestrator-lease/v1 -->\n{\"holder\":\"B2\"}"
+
     let transport =
         scripted
-            [ ok "[]"
-              ok "{\"id\":902}"
-              ok (comments [ durableLeaseComment 901 winner; durableLeaseComment 902 mine ])
-              ok "{}" ]
+            [
+                ok "[]"
+                ok "{\"id\":902}"
+                ok (comments [ durableLeaseComment 901 winner; durableLeaseComment 902 mine ])
+                ok "{}"
+            ]
+
     match acquireDurableLease transport aRef marker mine with
     | Ok(LeaseContended 901L) ->
         Assert.Equal(4, transport.RestCalls)
@@ -2671,7 +3032,10 @@ let ``#2801 losing board-orchestrator race removes only its own candidate`` () =
 let ``#2801 automatic room is created once and confirmed by cycle marker`` () =
     let marker = "<!-- fsgg:mutual-overlap-room/v1 cycle=abc -->"
     let body = marker + "\n\nPaths: none"
-    let after = System.Text.Json.JsonSerializer.Serialize [ {| number = 220; body = body |} ]
+
+    let after =
+        System.Text.Json.JsonSerializer.Serialize [ {| number = 220; body = body |} ]
+
     let transport = scripted [ ok "[]"; ok "{\"number\":220}"; ok after ]
 
     match ensureRoom transport "FS-GG" "FS.GG.SDD" marker "automatic room" body with
@@ -2684,7 +3048,10 @@ let ``#2801 automatic room is created once and confirmed by cycle marker`` () =
 let ``#2801 response-lost room create reuses the one observed cycle room`` () =
     let marker = "<!-- fsgg:mutual-overlap-room/v1 cycle=abc -->"
     let body = marker + "\n\nPaths: none"
-    let after = System.Text.Json.JsonSerializer.Serialize [ {| number = 220; body = body |} ]
+
+    let after =
+        System.Text.Json.JsonSerializer.Serialize [ {| number = 220; body = body |} ]
+
     let transport = scripted [ ok "[]"; Error(Transport "response lost"); ok after ]
 
     match ensureRoom transport "FS-GG" "FS.GG.SDD" marker "automatic room" body with
@@ -2695,15 +3062,14 @@ let ``#2801 response-lost room create reuses the one observed cycle room`` () =
 let ``#2801 duplicate cycle rooms fail closed before create`` () =
     let marker = "<!-- fsgg:mutual-overlap-room/v1 cycle=abc -->"
     let body = marker + "\n\nPaths: none"
+
     let existing =
-        System.Text.Json.JsonSerializer.Serialize
-            [ {| number = 220; body = body |}
-              {| number = 221; body = body |} ]
+        System.Text.Json.JsonSerializer.Serialize [ {| number = 220; body = body |}; {| number = 221; body = body |} ]
+
     let transport = scripted [ ok existing ]
 
     match ensureRoom transport "FS-GG" "FS.GG.SDD" marker "automatic room" body with
-    | Error(Malformed _) ->
-        Assert.Equal(1, transport.RestCalls)
+    | Error(Malformed _) -> Assert.Equal(1, transport.RestCalls)
     | other -> failwith $"duplicate marker-keyed rooms must fail closed, got %A{other}"
 
 [<Fact>]
@@ -2720,9 +3086,11 @@ let ``#2801 unreadable room census refuses rather than inventing absence`` () =
 let ``#2801 response-lost room back-reference PATCH is accepted only after readback`` () =
     let transport =
         scripted
-            [ ok "{\"body\":\"Paths: src/A\"}"
-              Error(Transport "response lost")
-              ok "{\"body\":\"Paths: src/A\\n\\nRooms: #220\"}" ]
+            [
+                ok "{\"body\":\"Paths: src/A\"}"
+                Error(Transport "response lost")
+                ok "{\"body\":\"Paths: src/A\\n\\nRooms: #220\"}"
+            ]
 
     match ensureRoomRef transport aRef "#220" with
     | Ok() -> Assert.Equal(3, transport.RestCalls)
@@ -2733,18 +3101,26 @@ let ``#2801 precedence narrows the loser without releasing its held claim`` () =
     let receiptMarker = "<!-- fsgg:overlap-precedence/v1 cycle=abc revision=1 -->"
     let receiptBody = receiptMarker + "\n{\"winner\":43,\"loser\":42}"
     let narrowedBody = "Paths: tests/loser-only.fs"
-    let narrowed = validate [ "tests/loser-only.fs" ] |> Result.map (rewrite "Paths: src/shared.fs tests/loser-only.fs") |> Result.defaultWith failwith
+
+    let narrowed =
+        validate [ "tests/loser-only.fs" ]
+        |> Result.map (rewrite "Paths: src/shared.fs tests/loser-only.fs")
+        |> Result.defaultWith failwith
+
     let transport =
         scripted
-            [ ok (comments [ marker 901 "vole-418" "" ]) // acquire losing claim
-              ok "[]" // precedence pre-census
-              ok "{\"id\":902}" // precedence post
-              ok (comments [ markerWithExactBody 902 receiptBody ]) // precedence post-census
-              ok "{\"body\":\"Paths: src/shared.fs tests/loser-only.fs\"}" // path pre-census
-              ok "{}" // narrow PATCH
-              ok (System.Text.Json.JsonSerializer.Serialize {| body = narrowedBody |}) ] // path post-census
+            [
+                ok (comments [ marker 901 "vole-418" "" ]) // acquire losing claim
+                ok "[]" // precedence pre-census
+                ok "{\"id\":902}" // precedence post
+                ok (comments [ markerWithExactBody 902 receiptBody ]) // precedence post-census
+                ok "{\"body\":\"Paths: src/shared.fs tests/loser-only.fs\"}" // path pre-census
+                ok "{}" // narrow PATCH
+                ok (System.Text.Json.JsonSerializer.Serialize {| body = narrowedBody |})
+            ] // path post-census
 
     let held = acquire transport
+
     match applyArbitration transport held aRef receiptMarker receiptBody narrowed with
     | Ok LoserNarrowed ->
         Assert.True(transport.Logged "issue-patch FS-GG/FS.GG.SDD 42")
@@ -2756,16 +3132,24 @@ let ``#2801 response-lost loser narrow converges without a second precedence rec
     let receiptMarker = "<!-- fsgg:overlap-precedence/v1 cycle=abc revision=1 -->"
     let receiptBody = receiptMarker + "\n{\"winner\":43,\"loser\":42}"
     let narrowedBody = "Paths: tests/loser-only.fs"
-    let narrowed = validate [ "tests/loser-only.fs" ] |> Result.map (rewrite "Paths: src/shared.fs tests/loser-only.fs") |> Result.defaultWith failwith
+
+    let narrowed =
+        validate [ "tests/loser-only.fs" ]
+        |> Result.map (rewrite "Paths: src/shared.fs tests/loser-only.fs")
+        |> Result.defaultWith failwith
+
     let transport =
         scripted
-            [ ok (comments [ marker 901 "vole-418" "" ])
-              ok (comments [ markerWithExactBody 902 receiptBody ]) // receipt already durable
-              ok "{\"body\":\"Paths: src/shared.fs tests/loser-only.fs\"}"
-              Error(Transport "response lost after PATCH")
-              ok (System.Text.Json.JsonSerializer.Serialize {| body = narrowedBody |}) ]
+            [
+                ok (comments [ marker 901 "vole-418" "" ])
+                ok (comments [ markerWithExactBody 902 receiptBody ]) // receipt already durable
+                ok "{\"body\":\"Paths: src/shared.fs tests/loser-only.fs\"}"
+                Error(Transport "response lost after PATCH")
+                ok (System.Text.Json.JsonSerializer.Serialize {| body = narrowedBody |})
+            ]
 
     let held = acquire transport
+
     match applyArbitration transport held aRef receiptMarker receiptBody narrowed with
     | Ok LoserNarrowed ->
         Assert.Equal(1, transport.Count "issue-patch")

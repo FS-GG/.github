@@ -34,10 +34,13 @@ module AddStatusDefaultTests =
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None; Headers = Map.empty }
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            }
 
     /// What the board's `Status` column holds for FS.GG.SDD#42 before `add` runs.
     type private Column =
@@ -66,7 +69,10 @@ module AddStatusDefaultTests =
         """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_backlog","name":"Backlog"},{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"}]}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
 
     let private FieldsAnswer =
-        FieldsAnswerWithoutBlocked.Replace("\"In progress\"", "\"In progress\"},{\"id\":\"opt_blocked\",\"name\":\"Blocked\"")
+        FieldsAnswerWithoutBlocked.Replace(
+            "\"In progress\"",
+            "\"In progress\"},{\"id\":\"opt_blocked\",\"name\":\"Blocked\""
+        )
 
     let private ProjectAnswer =
         """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
@@ -120,40 +126,53 @@ module AddStatusDefaultTests =
         elif document.Contains "\"Blocked by\"" then
             match blockedBy with
             | Some value ->
-                ok $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"project":{{"number":12}},"fieldValueByName":{{"text":"%s{value}"}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-            | None -> ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                ok
+                    $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"project":{{"number":12}},"fieldValueByName":{{"text":"%s{value}"}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+            | None ->
+                ok
+                    """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
         elif document.Contains "fieldValueByName" then
             // `Board.itemStatus` — the read that decides whether the default may fire.
             match board.Column with
             | OnBoardUnreadable -> Error(Errors.Http(502, "the Status column could not be read"))
             | NotOnBoard
             | OnBoardHiddenFromLookup _ ->
-                ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                ok
+                    """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
             | OnBoardUnset ->
-                ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"project":{"number":12},"fieldValueByName":null}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                ok
+                    """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"project":{"number":12},"fieldValueByName":null}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
             | OnBoardSet name ->
                 ok
                     $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"project":{{"number":12}},"fieldValueByName":{{"name":"%s{name}"}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
         elif document.Contains "projectItems" then
             // `Board.itemId` — presence on THIS board, and the whole of #421's guard.
             match board.ItemId with
-            | None -> ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+            | None ->
+                ok
+                    """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
             | Some id ->
                 ok
                     $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"id":"%s{id}","project":{{"number":12}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
         elif document.Contains "addProjectV2ItemById" then
             let id = board.Added()
-            ok $"""{{"data":{{"addProjectV2ItemById":{{"item":{{"id":"%s{id}"}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+
+            ok
+                $"""{{"data":{{"addProjectV2ItemById":{{"item":{{"id":"%s{id}"}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
         elif document.Contains "issue(number: $number) { id }" then
             ok """{"data":{"repository":{"issue":{"id":"I_issue42"}}},"rateLimit":{"cost":1,"remaining":4977}}"""
         elif document.Contains "updateProjectV2ItemFieldValue" then
-            ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
+            ok
+                """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
         else
-            Error(Errors.NotFound $"the fixture serves no such document: {document.Substring(0, min 80 document.Length)}")
+            Error(
+                Errors.NotFound $"the fixture serves no such document: {document.Substring(0, min 80 document.Length)}"
+            )
 
     /// The issue's own text. `Class: defect` keeps the #1651 vocabulary gate quiet — that gate is a
     /// different rule and a refusal there would stop these legs before they reached the board at all.
-    let private IssueBody = """{"number":42,"body":"Paths: src/Thing.fs\n\nClass: defect"}"""
+    let private IssueBody =
+        """{"number":42,"body":"Paths: src/Thing.fs\n\nClass: defect"}"""
 
     /// .github#2690: `add`'s Status write now also records a lifecycle intent, and that receipt is a
     /// comment POST on the row. `posted` is where this fixture keeps it, so a leg can anchor on the
@@ -168,12 +187,17 @@ module AddStatusDefaultTests =
     /// through this same seam, and the presence corpus is deliberately more than one spelling.
     let private commentsJson (bodies: string list) =
         bodies
-        |> List.mapi (fun i body ->
-            System.Text.Json.JsonSerializer.Serialize {| id = 9000 + i; body = body |})
+        |> List.mapi (fun i body -> System.Text.Json.JsonSerializer.Serialize {| id = 9000 + i; body = body |})
         |> String.concat ","
         |> sprintf "[%s]"
 
-    let private worldCapturingWithComments (posted: ResizeArray<string>) (column: Column) issueBody blockedBy (comments: string list) =
+    let private worldCapturingWithComments
+        (posted: ResizeArray<string>)
+        (column: Column)
+        issueBody
+        blockedBy
+        (comments: string list)
+        =
         let board = Board column
 
         Fake.Recorder(fun (req: Request) ->
@@ -183,7 +207,8 @@ module AddStatusDefaultTests =
             | "POST", "graphql" ->
                 match req.Body with
                 | Query(document, _) when document.Contains "items(first: 100" ->
-                    ok """{"data":{"organization":{"projectV2":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"status":{"name":"Ready"},"blockedBy":null,"class":null,"severity":null,"phase":null,"repoScope":null,"content":{"__typename":"Issue","number":9,"title":"narrow sibling","state":"OPEN","createdAt":"2026-07-30T00:00:00Z","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    ok
+                        """{"data":{"organization":{"projectV2":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"status":{"name":"Ready"},"blockedBy":null,"class":null,"severity":null,"phase":null,"repoScope":null,"content":{"__typename":"Issue","number":9,"title":"narrow sibling","state":"OPEN","createdAt":"2026-07-30T00:00:00Z","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                 | Query(document, _) -> graphqlAnswer board blockedBy document
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
@@ -211,7 +236,8 @@ module AddStatusDefaultTests =
     let private worldWithBodyAndBlockedBy (column: Column) issueBody blockedBy =
         worldCapturing (ResizeArray()) column issueBody blockedBy
 
-    let private worldWithBody (column: Column) issueBody = worldWithBodyAndBlockedBy column issueBody None
+    let private worldWithBody (column: Column) issueBody =
+        worldWithBodyAndBlockedBy column issueBody None
 
     let private world (column: Column) = worldWithBody column IssueBody
 
@@ -256,18 +282,25 @@ module AddStatusDefaultTests =
         "<!-- fsgg:claim worker=vole-418 lease=120 renewed=1 session=s prev=Ready pathRepo=FS.GG.SDD -->"
 
     let private context (transport: Fake.Recorder) : Kernel.Context =
-        { Transport = transport
-          Owner = "FS-GG"
-          Title = "Coordination"
-          DefaultRepo = Some "FS.GG.SDD"
-          ChoreLocks = [] }
+        {
+            Transport = transport
+            Owner = "FS-GG"
+            Title = "Coordination"
+            DefaultRepo = Some "FS.GG.SDD"
+            ChoreLocks = []
+        }
 
     /// The identity ladder is pinned for `ForceStealTests`' reason: `Identity.resolve` reads the harness's
     /// session id out of the environment, so a test that says nothing about it asserts something different
     /// inside an agent shell than in CI. `add` takes no lock, so nothing here turns on WHICH worker we are
     /// — only that the answer is the same on both machines.
     let private sessionVars =
-        [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
+        [
+            "CLAUDE_CODE_SESSION_ID"
+            "OPENCODE_SESSION_ID"
+            "FSGG_AGENT_SESSION_ID"
+            "FSGG_WORKER"
+        ]
 
     /// Drive ONE CLI verb as a real command line, isolated on its own cache and pinned identity.
     ///
@@ -275,11 +308,20 @@ module AddStatusDefaultTests =
     /// scaffolding for `set-field` and `release`, because the refusal it adds is ONE shared gate reached
     /// through four doors, and a gate proven at one door is a gate a scheduled job walks around — which is
     /// exactly what the host measured on 2026-08-16, seven times, at doors this module did not drive.
-    let private runVerbWithStderr (invoke: Kernel.Context -> Options.Options -> int) (transport: Fake.Recorder) (args: string list) : int * string * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-1823-" + Guid.NewGuid().ToString "n")
+    let private runVerbWithStderr
+        (invoke: Kernel.Context -> Options.Options -> int)
+        (transport: Fake.Recorder)
+        (args: string list)
+        : int * string * string =
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-1823-" + Guid.NewGuid().ToString "n")
+
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
-        let previousSessions = sessionVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+
+        let previousSessions =
+            sessionVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+
         let stdout = Console.Out
         let stderr = Console.Error
         use captured = new StringWriter()
@@ -319,7 +361,8 @@ module AddStatusDefaultTests =
             with _ ->
                 ()
 
-    let private runAddWithStderr (transport: Fake.Recorder) (args: string list) = runVerbWithStderr Handlers.addCmd transport args
+    let private runAddWithStderr (transport: Fake.Recorder) (args: string list) =
+        runVerbWithStderr Handlers.addCmd transport args
 
     let private runAdd transport args =
         let code, stdout, _ = runAddWithStderr transport args
@@ -350,14 +393,20 @@ module AddStatusDefaultTests =
 
     [<Fact>]
     let ``#1843 add scans a narrow sibling, warns, and still boards the broad declaration`` () =
-        let transport = worldWithBody NotOnBoard """{"number":42,"body":"Paths: docs/reports\n\nClass: defect"}"""
+        let transport =
+            worldWithBody NotOnBoard """{"number":42,"body":"Paths: docs/reports\n\nClass: defect"}"""
 
         let code, out, err = runAddWithStderr transport [ "add"; "FS.GG.SDD#42" ]
 
         Assert.Equal(0, code)
         Assert.Equal(NewItemId, out.Trim())
         Assert.True(transport.Logged("item-add"), $"advisory must not suppress the board mutation: %A{transport.Log}")
-        Assert.True(transport.Logged("issue-get FS-GG/FS.GG.SDD 9"), $"the real sibling body must be scanned: %A{transport.Log}")
+
+        Assert.True(
+            transport.Logged("issue-get FS-GG/FS.GG.SDD 9"),
+            $"the real sibling body must be scanned: %A{transport.Log}"
+        )
+
         Assert.True(err.Contains("FS.GG.SDD#9"), err)
         Assert.Contains("lane of one", err)
         Assert.Contains("holding declaration", err)
@@ -427,7 +476,8 @@ module AddStatusDefaultTests =
         // .github#2698: `--status Ready` now requires a current delivery-route receipt, so this leg — and
         // every other `--status Ready` leg in this module — supplies one. That is not fixture upkeep: it
         // is the PRESENCE half of the new gate's corpus, and it reds if the receipt reader stops reading.
-        let transport = worldCapturingWithComments (ResizeArray()) NotOnBoard IssueBody None [ LightweightReceipt ]
+        let transport =
+            worldCapturingWithComments (ResizeArray()) NotOnBoard IssueBody None [ LightweightReceipt ]
 
         let code, _ = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
 
@@ -500,7 +550,9 @@ module AddStatusDefaultTests =
 
     [<Fact>]
     let ``#2109 add --status Blocked proceeds for a human sentinel park`` () =
-        let body = """{"number":42,"body":"Paths: src/Thing.fs\n\nBlocked on: human/action\n\nClass: defect"}"""
+        let body =
+            """{"number":42,"body":"Paths: src/Thing.fs\n\nBlocked on: human/action\n\nClass: defect"}"""
+
         let transport = worldWithBody NotOnBoard body
 
         let code, out = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Blocked" ]
@@ -515,7 +567,8 @@ module AddStatusDefaultTests =
         // A live board field exists only on an already-boarded item.  This is the explicit override
         // route that previously held `In progress`, so the assertion proves both coherence and that
         // `add --status Blocked` still wins over an existing column once the reason is real.
-        let transport = worldWithBodyAndBlockedBy (OnBoardSet "In progress") body (Some "FS-GG/FS.GG.SDD#9")
+        let transport =
+            worldWithBodyAndBlockedBy (OnBoardSet "In progress") body (Some "FS-GG/FS.GG.SDD#9")
 
         let code, out = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Blocked" ]
 
@@ -542,10 +595,18 @@ module AddStatusDefaultTests =
     let ``#1823 --status is accepted by add and still refused by a command that ignores it`` () =
         // The scope table's two halves. Widening `FStatus` to a third command must not widen it to all of
         // them — that was #867's mechanism, where `--status` was global and every command swallowed it.
-        Assert.Equal(Some "Ready", (Options.parse [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ] |> Result.toOption |> Option.get).Status)
+        Assert.Equal(
+            Some "Ready",
+            (Options.parse [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+             |> Result.toOption
+             |> Option.get)
+                .Status
+        )
 
         match Options.parse [ "heartbeat"; "FS.GG.SDD#42"; "--status"; "Ready" ] with
-        | Ok _ -> failwith "`heartbeat --status` must still be REFUSED — widening the scope table by one command may not widen it to all"
+        | Ok _ ->
+            failwith
+                "`heartbeat --status` must still be REFUSED — widening the scope table by one command may not widen it to all"
         | Error e -> Assert.Contains("--status", e)
 
     // ---- .github#2690 DIRECTION C: THE #1823 DEFAULT HAD TO BE RECORDED, NOT ONLY WRITTEN -------------
@@ -603,7 +664,9 @@ module AddStatusDefaultTests =
         // `--status` is the caller naming the column — `set-field <ref> Status <S>` reached from `add`
         // (#1823 AC2) — so it carries the channel for the same reason the default does.
         let posted = ResizeArray<string>()
-        let transport = worldCapturingWithComments posted NotOnBoard IssueBody None [ LightweightReceipt ]
+
+        let transport =
+            worldCapturingWithComments posted NotOnBoard IssueBody None [ LightweightReceipt ]
 
         let code, _ = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
 
@@ -663,7 +726,8 @@ module AddStatusDefaultTests =
             | "POST", "graphql" ->
                 match req.Body with
                 | Query(document, _) when document.Contains "items(first: 100" ->
-                    ok """{"data":{"organization":{"projectV2":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    ok
+                        """{"data":{"organization":{"projectV2":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                 | Query(document, _) -> graphqlAnswer board None document
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
@@ -675,8 +739,11 @@ module AddStatusDefaultTests =
     let private worldWithUnreadableLedger (column: Column) =
         worldWithLedgerFailure column (Errors.Http(502, "the receipt ledger could not be read"))
 
-    let private runSetField transport args = runVerbWithStderr Handlers.setField transport args
-    let private runRelease transport args = runVerbWithStderr Client.release transport args
+    let private runSetField transport args =
+        runVerbWithStderr Handlers.setField transport args
+
+    let private runRelease transport args =
+        runVerbWithStderr Client.release transport args
 
     let private addReady (comments: string list) =
         worldCapturingWithComments (ResizeArray()) NotOnBoard IssueBody None comments
@@ -693,7 +760,8 @@ module AddStatusDefaultTests =
     let ``.github#2698 AC1 add --status Ready is REFUSED when the row has no route receipt`` () =
         let transport = addReady []
 
-        let code, out, err = runAddWithStderr transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+        let code, out, err =
+            runAddWithStderr transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
 
         Assert.NotEqual(0, code)
         // BEFORE ANY WRITE, exactly as `--status Redy` and `--status Blocked` already refuse: nothing on
@@ -712,7 +780,8 @@ module AddStatusDefaultTests =
         // refusal in this section and ship the gate evadable — `.github#2312`'s exact failure.
         let transport = addReady [ LightweightReceipt ]
 
-        let code, out, err = runAddWithStderr transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+        let code, out, err =
+            runAddWithStderr transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
 
         Assert.Equal(0, code)
         Assert.Equal(NewItemId, out.Trim())
@@ -735,7 +804,14 @@ module AddStatusDefaultTests =
         // A real row's ledger is mostly claim markers, messages and review records. A reader that only
         // inspected the first (or the last) comment would pass every other presence leg here and fail on
         // every live row, which is the shape `structuredRouteLedger`'s complete paginated read exists for.
-        let transport = addReady [ ClaimMarkerComment; "an ordinary human comment"; LightweightReceipt; "a later reply" ]
+        let transport =
+            addReady
+                [
+                    ClaimMarkerComment
+                    "an ordinary human comment"
+                    LightweightReceipt
+                    "a later reply"
+                ]
 
         let code, _ = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
 
@@ -766,7 +842,8 @@ module AddStatusDefaultTests =
 
         let transport = addReady [ comment ]
 
-        let code, out, _ = runAddWithStderr transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+        let code, out, _ =
+            runAddWithStderr transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
 
         Assert.NotEqual(0, code)
         Assert.Equal("", out.Trim())
@@ -807,7 +884,8 @@ module AddStatusDefaultTests =
         // would board it without any decision at all. Neither is an answer this engine may give.
         let transport = worldWithUnreadableLedger NotOnBoard
 
-        let code, out, _ = runAddWithStderr transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+        let code, out, _ =
+            runAddWithStderr transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
 
         Assert.NotEqual(0, code)
         Assert.Equal("", out.Trim())
@@ -828,7 +906,8 @@ module AddStatusDefaultTests =
         let transport =
             worldWithLedgerFailure NotOnBoard (Errors.RateLimited(Errors.RestBudget(Some "core"), None))
 
-        let code, out, _ = runAddWithStderr transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+        let code, out, _ =
+            runAddWithStderr transport [ "add"; "FS.GG.SDD#42"; "--status"; "Ready" ]
 
         Assert.Equal(Errors.ExRate, code)
         // And it is still a refusal before any write — the back-off classification must not cost the
@@ -845,7 +924,8 @@ module AddStatusDefaultTests =
         // measured reached `Ready` through exactly this command.
         let transport = setFieldWorld []
 
-        let code, out, err = runSetField transport [ "set-field"; "FS.GG.SDD#42"; "Status"; "Ready" ]
+        let code, out, err =
+            runSetField transport [ "set-field"; "FS.GG.SDD#42"; "Status"; "Ready" ]
 
         Assert.NotEqual(0, code)
         Assert.Equal("", out.Trim())
@@ -856,7 +936,8 @@ module AddStatusDefaultTests =
     let ``.github#2698 AC5 set-field Status Ready PROCEEDS on a current receipt`` () =
         let transport = setFieldWorld [ LightweightReceipt ]
 
-        let code, out, _ = runSetField transport [ "set-field"; "FS.GG.SDD#42"; "Status"; "Ready" ]
+        let code, out, _ =
+            runSetField transport [ "set-field"; "FS.GG.SDD#42"; "Status"; "Ready" ]
 
         Assert.Equal(0, code)
         Assert.Contains("Status", out)
@@ -875,7 +956,8 @@ module AddStatusDefaultTests =
         // its worst answer, reached by a gate meant to prevent a write.
         let transport = setFieldWorld []
 
-        let code, out, err = runSetField transport [ "set-field"; "--batch"; "FS.GG.SDD#42"; "Status=Ready" ]
+        let code, out, err =
+            runSetField transport [ "set-field"; "--batch"; "FS.GG.SDD#42"; "Status=Ready" ]
 
         Assert.NotEqual(0, code)
         Assert.Equal("", out.Trim())
@@ -887,7 +969,8 @@ module AddStatusDefaultTests =
     let ``.github#2698 AC5 set-field --batch Status=Ready PROCEEDS on a current receipt`` () =
         let transport = setFieldWorld [ LightweightReceipt ]
 
-        let code, _, _ = runSetField transport [ "set-field"; "--batch"; "FS.GG.SDD#42"; "Status=Ready" ]
+        let code, _, _ =
+            runSetField transport [ "set-field"; "--batch"; "FS.GG.SDD#42"; "Status=Ready" ]
 
         Assert.Equal(0, code)
         Assert.True(transport.Logged "opt_ready", $"log: %A{transport.Log}")
@@ -899,7 +982,8 @@ module AddStatusDefaultTests =
         // require the very decision parking it defers.
         let transport = setFieldWorld []
 
-        let code, _, _ = runSetField transport [ "set-field"; "FS.GG.SDD#42"; "Status"; "Backlog" ]
+        let code, _, _ =
+            runSetField transport [ "set-field"; "FS.GG.SDD#42"; "Status"; "Backlog" ]
 
         Assert.Equal(0, code)
         Assert.True(transport.Logged(statusWrite ItemId "opt_backlog"), $"log: %A{transport.Log}")
@@ -915,7 +999,8 @@ module AddStatusDefaultTests =
         let transport =
             worldCapturingWithComments (ResizeArray()) (OnBoardSet "In progress") IssueBody None [ LiveClaimMarker ]
 
-        let code, _, _ = runRelease transport [ "release"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+        let code, _, _ =
+            runRelease transport [ "release"; "FS.GG.SDD#42"; "--status"; "Ready" ]
 
         Assert.NotEqual(0, code)
         Assert.Equal(0, transport.Count "comment-delete")
@@ -931,7 +1016,8 @@ module AddStatusDefaultTests =
                 None
                 [ LiveClaimMarker; LightweightReceipt ]
 
-        let code, _, _ = runRelease transport [ "release"; "FS.GG.SDD#42"; "--status"; "Ready" ]
+        let code, _, _ =
+            runRelease transport [ "release"; "FS.GG.SDD#42"; "--status"; "Ready" ]
 
         Assert.Equal(0, code)
         Assert.True(transport.Logged "comment-delete", $"the lock must actually drop here: %A{transport.Log}")
@@ -954,14 +1040,22 @@ module AddStatusDefaultTests =
         /// `#42` is `Blocked`; its `Blocked by` field names `#8`, which is CLOSED. That satisfies the
         /// reducer's precondition on the field alone, so the lifecycle projection computes `Ready` — the
         /// exact chore the host watched promote three parked rows.
-        let private itemJson (n: int) (status: string) (blockedBy: string option) (state: string) (body: string option) =
+        let private itemJson
+            (n: int)
+            (status: string)
+            (blockedBy: string option)
+            (state: string)
+            (body: string option)
+            =
             let blockedByJson =
                 match blockedBy with
                 | Some b -> $"""{{"text":"%s{b}"}}"""
                 | None -> "null"
 
             let bodyJson =
-                body |> Option.map System.Text.Json.JsonSerializer.Serialize |> Option.defaultValue "null"
+                body
+                |> Option.map System.Text.Json.JsonSerializer.Serialize
+                |> Option.defaultValue "null"
 
             $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blockedByJson},"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","body":%s{bodyJson},"state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
 
@@ -993,19 +1087,29 @@ module AddStatusDefaultTests =
 
             let threadJson () =
                 let now = DateTimeOffset.UtcNow.ToString("o")
+
                 thread
-                |> Seq.map (fun entry -> {| id = entry.Key; body = entry.Value; updated_at = now |})
+                |> Seq.map (fun entry ->
+                    {|
+                        id = entry.Key
+                        body = entry.Value
+                        updated_at = now
+                    |})
                 |> Seq.toArray
                 |> System.Text.Json.JsonSerializer.Serialize
 
             let items =
                 match mode with
                 | PromoteReady ->
-                    [ itemJson 42 "Blocked" (Some "FS-GG/FS.GG.SDD#8") "OPEN" (Some body42)
-                      itemJson 8 "Done" None "CLOSED" None ]
+                    [
+                        itemJson 42 "Blocked" (Some "FS-GG/FS.GG.SDD#8") "OPEN" (Some body42)
+                        itemJson 8 "Done" None "CLOSED" None
+                    ]
                 | StaleBlockedPark ->
-                    [ itemJson 42 "Ready" (Some "FS-GG/FS.GG.SDD#8") "OPEN" (Some body42)
-                      itemJson 8 "Ready" None "OPEN" None ]
+                    [
+                        itemJson 42 "Ready" (Some "FS-GG/FS.GG.SDD#8") "OPEN" (Some body42)
+                        itemJson 8 "Ready" None "OPEN" None
+                    ]
                 |> String.concat ","
 
             Fake.Recorder(fun (req: Request) ->
@@ -1021,21 +1125,28 @@ module AddStatusDefaultTests =
                             // `Status=Ready` and an emptied `Blocked by` in one aliased document, so this
                             // board must carry the text field; the `add` legs' board deliberately does not,
                             // and widening theirs would change what their own #2109 legs measure.
-                            ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_backlog","name":"Backlog"},{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_wip","name":"In progress"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_backlog","name":"Backlog"},{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_wip","name":"In progress"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                         elif document.Contains "items(first" then
                             ok
                                 $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                        elif document.Contains "updateProjectV2ItemFieldValue" || document.Contains "clearProjectV2ItemFieldValue" then
+                        elif
+                            document.Contains "updateProjectV2ItemFieldValue"
+                            || document.Contains "clearProjectV2ItemFieldValue"
+                        then
                             if document.Contains "f0:" then
-                                ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                                ok
+                                    """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
                             else
-                                ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                                ok
+                                    """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
                         elif document.Contains "\"Blocked by\"" then
                             // `Board.itemBlockedBy`, the LIVE re-read the coherence gate makes immediately
                             // before the mutation. EMPTY in both modes: in `StaleBlockedPark` that is the
                             // whole point, and in `PromoteReady` the gate never asks (the resolved status
                             // is not `Blocked`), so one answer serves both without ambiguity.
-                            ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                            ok
+                                """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                         elif document.Contains "projectItems" then
                             ok
                                 $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"id":"%s{ItemId}","project":{{"number":12}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
@@ -1055,8 +1166,12 @@ module AddStatusDefaultTests =
                                     | _ -> None)
 
                             match field with
-                            | Some "Status" -> ok """{"data":{"node":{"fieldValueByName":{"name":"Ready"}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                            | _ -> ok """{"data":{"node":{"fieldValueByName":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                            | Some "Status" ->
+                                ok
+                                    """{"data":{"node":{"fieldValueByName":{"name":"Ready"}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                            | _ ->
+                                ok
+                                    """{"data":{"node":{"fieldValueByName":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
                         else
                             Error(Errors.NotFound $"the reducer fixture serves no answer for: %s{document}")
                     | _ -> Error(Errors.NotFound "a graphql call with no document")
@@ -1076,7 +1191,13 @@ module AddStatusDefaultTests =
                     thread.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1))) |> ignore
                     ok "{}"
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues/8" ->
-                    ok (System.Text.Json.JsonSerializer.Serialize {| number = 8; body = "Paths: src/B.fs" |})
+                    ok (
+                        System.Text.Json.JsonSerializer.Serialize
+                            {|
+                                number = 8
+                                body = "Paths: src/B.fs"
+                            |}
+                    )
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues/8/comments" -> ok "[]"
                 | "POST", "repos/FS-GG/FS.GG.SDD/issues/8/comments" -> ok """{"id":9008}"""
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
@@ -1087,7 +1208,10 @@ module AddStatusDefaultTests =
 
     let private runReconcileMode (comments: string list) (mode: ReducerPromotionFixture.Mode) =
         let transport = ReducerPromotionFixture.transport comments mode
-        let code, out, err = runVerbWithStderr Client.reconcile transport [ "reconcile"; "--repo"; "FS.GG.SDD"; "--apply"; "--json" ]
+
+        let code, out, err =
+            runVerbWithStderr Client.reconcile transport [ "reconcile"; "--repo"; "FS.GG.SDD"; "--apply"; "--json" ]
+
         transport, code, out, err
 
     let private runReconcileApply (comments: string list) =
@@ -1121,7 +1245,9 @@ module AddStatusDefaultTests =
     let ``.github#2698 reconcile --apply promotes the SAME row once it carries a receipt`` () =
         // THE CONTROL, and it is what makes the leg above evidence about the gate rather than about the
         // fixture. One input differs — the ledger — and the mutation appears.
-        let receipt = StructuredFixtures.routeComment Subject (Some DeliveryRoute.Lightweight) "fixture-rook" None
+        let receipt =
+            StructuredFixtures.routeComment Subject (Some DeliveryRoute.Lightweight) "fixture-rook" None
+
         let transport, code, out, err = runReconcileApply [ receipt ]
 
         Assert.Equal(0, code)
@@ -1146,7 +1272,8 @@ module AddStatusDefaultTests =
         // through a new guard is still a new claim about that behaviour, and this file's own two-sided
         // discipline ran over the DECISION that had just been made rather than over the BOOLEAN that had
         // just been written.
-        let transport, code, out, err = runReconcileMode [] ReducerPromotionFixture.StaleBlockedPark
+        let transport, code, out, err =
+            runReconcileMode [] ReducerPromotionFixture.StaleBlockedPark
 
         // The projection really did compute `Blocked` — otherwise this leg would be asserting a refusal
         // that never happened, and would pass against a fixture that derived nothing at all.

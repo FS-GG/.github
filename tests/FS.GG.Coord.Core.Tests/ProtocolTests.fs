@@ -53,11 +53,10 @@ module ProtocolTests =
         for v in Protocol.verdicts do
             Assert.False(
                 System.String.IsNullOrWhiteSpace v.Kind,
-                "a verdict is documented under an empty kind — ungreppable by construction")
+                "a verdict is documented under an empty kind — ungreppable by construction"
+            )
 
-            Assert.False(
-                System.String.IsNullOrWhiteSpace v.Meaning,
-                $"verdict '%s{v.Kind}' means nothing")
+            Assert.False(System.String.IsNullOrWhiteSpace v.Meaning, $"verdict '%s{v.Kind}' means nothing")
 
     /// THE DOC'S KIND IS THE WIRE'S KIND — the same function, not two spellings that agree today.
     ///
@@ -78,28 +77,31 @@ module ProtocolTests =
         // be complete, it is FORCED to be, by the set assertion below. Its coverage rests on `documented`,
         // which reflection has already pinned to the union.
         let samples: (Schedulability.Schedulability * string) list =
-            [ Schedulability.Startable, "startable"
-              Schedulability.IssueClosed, "issue-closed"
-              Schedulability.WrongStatus Backlog, "wrong-status"
-              Schedulability.BlockedBy [], "blocked-by"
-              Schedulability.AwaitingHuman AwaitingHumanDecision, "awaiting-human"
-              Schedulability.AwaitingDeliveryRouteDecision [], "awaiting-delivery-route-decision"
-              Schedulability.NoTouchSet, "no-touch-set"
-              Schedulability.DeliberatelyNoTouchSet, "deliberately-no-touch-set"
-              Schedulability.UnusableTouchSet [ "**/x" ], "unusable-touch-set"
-              Schedulability.HeldBy(WorkerId "w"), "held-by"
-              Schedulability.HeldByLiveWork(WorkerId "w", 1), "held-by-live-work"
-              Schedulability.ItemPrOpen 1, "item-pr-open"
-              Schedulability.OverlapsInFlight [], "overlaps-in-flight"
-              Schedulability.Undetermined "r", "undetermined"
-              Schedulability.NotAUnitOfWork Register, "not-a-unit-of-work" ]
+            [
+                Schedulability.Startable, "startable"
+                Schedulability.IssueClosed, "issue-closed"
+                Schedulability.WrongStatus Backlog, "wrong-status"
+                Schedulability.BlockedBy [], "blocked-by"
+                Schedulability.AwaitingHuman AwaitingHumanDecision, "awaiting-human"
+                Schedulability.AwaitingDeliveryRouteDecision [], "awaiting-delivery-route-decision"
+                Schedulability.NoTouchSet, "no-touch-set"
+                Schedulability.DeliberatelyNoTouchSet, "deliberately-no-touch-set"
+                Schedulability.UnusableTouchSet [ "**/x" ], "unusable-touch-set"
+                Schedulability.HeldBy(WorkerId "w"), "held-by"
+                Schedulability.HeldByLiveWork(WorkerId "w", 1), "held-by-live-work"
+                Schedulability.ItemPrOpen 1, "item-pr-open"
+                Schedulability.OverlapsInFlight [], "overlaps-in-flight"
+                Schedulability.Undetermined "r", "undetermined"
+                Schedulability.NotAUnitOfWork Register, "not-a-unit-of-work"
+            ]
 
         for case, wire in samples do
             Assert.Equal<string>(wire, Schedulability.kind case)
 
             Assert.True(
                 documented.Contains wire,
-                $"the scheduler can emit '%s{wire}' and no documented verdict explains it — a worker greps it and finds nothing")
+                $"the scheduler can emit '%s{wire}' and no documented verdict explains it — a worker greps it and finds nothing"
+            )
 
         // EVERY documented kind is pinned above, and nothing else is. A new union case reaches `documented`
         // by construction (the compiler forces a kind and a meaning; reflection forces the enumeration) —
@@ -121,7 +123,8 @@ module ProtocolTests =
 
         Assert.False(
             documented.Contains "held",
-            "'held' is `who`'s CLAIM-STATE vocabulary, not a schedulability verdict — documenting it here sends a grep into the wrong answer set (#865)")
+            "'held' is `who`'s CLAIM-STATE vocabulary, not a schedulability verdict — documenting it here sends a grep into the wrong answer set (#865)"
+        )
 
     /// `ItemPrOpen` (#651) reached the wire and never reached the docs, behind a green test. It is the
     /// case that proves the point, so it is asserted by name.
@@ -175,8 +178,7 @@ module ProtocolTests =
     /// same mistake, wearing a test's clothes. So the invariants attach to the TYPE, and a third table
     /// is covered the moment it is declared.
     let private exitTables: (string * Protocol.ExitCodeDoc list) list =
-        let m =
-            typeof<Protocol.Rule>.Assembly.GetType "FS.GG.Coord.Protocol"
+        let m = typeof<Protocol.Rule>.Assembly.GetType "FS.GG.Coord.Protocol"
 
         // The module type is found by NAME, so a rename would otherwise silently yield zero tables and
         // pass every invariant vacuously. That is the exact failure this reflection exists to refuse.
@@ -206,13 +208,12 @@ module ProtocolTests =
     let ``every exit code says what it saw and what to do`` () =
         for cmd, codes in exitTables do
             for c in codes do
-                Assert.False(
-                    System.String.IsNullOrWhiteSpace c.Meaning,
-                    $"%s{cmd} exit %d{c.Code} means nothing")
+                Assert.False(System.String.IsNullOrWhiteSpace c.Meaning, $"%s{cmd} exit %d{c.Code} means nothing")
 
                 Assert.False(
                     System.String.IsNullOrWhiteSpace c.Action,
-                    $"%s{cmd} exit %d{c.Code} tells the caller to do nothing")
+                    $"%s{cmd} exit %d{c.Code} tells the caller to do nothing"
+                )
 
     /// Two rows for one code is two remedies for one observation, and the worker reads whichever it
     /// meets first. The old hand-written `take` table had exactly this defect: its `≠0, ≠2` row also
@@ -231,13 +232,12 @@ module ProtocolTests =
         for cmd, codes in exitTables do
             Assert.Equal(0, (List.head codes).Code)
 
-            Assert.Equal(
-                1,
-                codes |> List.filter (fun c -> c.Code = 0) |> List.length)
+            Assert.Equal(1, codes |> List.filter (fun c -> c.Code = 0) |> List.length)
 
             Assert.True(
                 codes |> List.forall (fun c -> c.Code >= 0),
-                $"%s{cmd} documents a negative exit code, which no shell can report")
+                $"%s{cmd} documents a negative exit code, which no shell can report"
+            )
 
     /// `landable`'s CONTRACT IS THE POLL LOOP, and #900 was that the recipe got the two codes the loop
     /// reads backwards: it called 3 "pending" (3 is RED — so the loop waits forever on a PR that will
@@ -263,10 +263,16 @@ module ProtocolTests =
         | None -> Assert.Fail "landable exit 3 (red/conflicted) is not documented"
         | Some m ->
             Assert.True(m.StartsWith "RED", "landable exit 3 does not say it is RED — #900 is that it said 'pending'")
-            Assert.False(m.StartsWith "PENDING", "landable exit 3 is documented as PENDING — that is #900 exactly, and a loop built on it hangs")
+
+            Assert.False(
+                m.StartsWith "PENDING",
+                "landable exit 3 is documented as PENDING — that is #900 exactly, and a loop built on it hangs"
+            )
 
         match meaningOf 7 with
-        | None -> Assert.Fail "landable exit 7 (pending) is not documented — the recipe's table had no 7, so a loop stops waiting on a PR that is still running"
+        | None ->
+            Assert.Fail
+                "landable exit 7 (pending) is not documented — the recipe's table had no 7, so a loop stops waiting on a PR that is still running"
         | Some m -> Assert.True(m.StartsWith "PENDING", "landable exit 7 does not say it is PENDING")
 
     /// #1680 — THE SAME DEFECT, ONE STATE OVER. #900 was "3 is documented as pending"; this is "a MERGED
@@ -290,11 +296,13 @@ module ProtocolTests =
         | Some m ->
             Assert.True(
                 m.StartsWith "MERGED",
-                "landable exit 10 does not open with MERGED — the caller must be able to tell 'already landed' from 'still running' from the verdict alone (#1680 AC2)")
+                "landable exit 10 does not open with MERGED — the caller must be able to tell 'already landed' from 'still running' from the verdict alone (#1680 AC2)"
+            )
 
             Assert.False(
                 m.StartsWith "PENDING",
-                "landable exit 10 is documented as PENDING — that is #1680 exactly, and --wait burns its full 600s budget on a settled fact")
+                "landable exit 10 is documented as PENDING — that is #1680 exactly, and --wait burns its full 600s budget on a settled fact"
+            )
 
             // AC4: the neighbouring case is DECIDED and STATED on the same row, not left to chance.
             Assert.Contains("CLOSED", m)
@@ -348,7 +356,8 @@ module ProtocolTests =
                 (domain = documented),
                 $"%s{cmd} does not document exactly the codes its command returns (#918): "
                 + $"missing %A{Set.difference domain documented |> Set.toList}, "
-                + $"invented %A{Set.difference documented domain |> Set.toList}")
+                + $"invented %A{Set.difference documented domain |> Set.toList}"
+            )
 
     // ================================================================================================
     // `releaseColumns` — `release`/`reap`'s column precedence (#1099), the third table in the class
@@ -365,8 +374,16 @@ module ProtocolTests =
     let ``every release-column row states a condition, an end state and a stdout tell`` () =
         for c in Protocol.releaseColumns do
             Assert.False(System.String.IsNullOrWhiteSpace c.Condition, "a release-column row has no condition")
-            Assert.False(System.String.IsNullOrWhiteSpace c.EndState, $"release-column row '%s{c.Condition}' has no end state")
-            Assert.False(System.String.IsNullOrWhiteSpace c.Stdout, $"release-column row '%s{c.Condition}' has no stdout tell")
+
+            Assert.False(
+                System.String.IsNullOrWhiteSpace c.EndState,
+                $"release-column row '%s{c.Condition}' has no end state"
+            )
+
+            Assert.False(
+                System.String.IsNullOrWhiteSpace c.Stdout,
+                $"release-column row '%s{c.Condition}' has no stdout tell"
+            )
 
     /// THE PRECEDENCE, AND IT IS THE WHOLE POINT (#867/#914). An explicit `--status` beats the recorded
     /// restore and the `Ready` fallback alike, and the table is ordered as `release` EVALUATES it — so
@@ -375,7 +392,12 @@ module ProtocolTests =
     [<Fact>]
     let ``the explicit --status row leads the precedence`` () =
         let lead = List.head Protocol.releaseColumns
-        Assert.True(lead.Condition.Contains "--status", "the first release-column row is not the explicit --status case — the precedence #867/#914 restored is stated out of order")
+
+        Assert.True(
+            lead.Condition.Contains "--status",
+            "the first release-column row is not the explicit --status case — the precedence #867/#914 restored is stated out of order"
+        )
+
         Assert.True(lead.Writes, "the explicit --status row does not write the column it names")
 
     /// THE #331 OBSERVABLE. A PRESERVE writes NOTHING — the absence of the write is what tells
@@ -386,10 +408,12 @@ module ProtocolTests =
     let ``a row whose stdout reports no column write is a preserve, not a write`` () =
         for c in Protocol.releaseColumns do
             let namesASetColumn = c.Stdout.Contains "→"
+
             if not namesASetColumn then
                 Assert.False(
                     c.Writes,
-                    $"release-column row '%s{c.Stdout}' claims to WRITE the board but its stdout names no column set (`→`) — a preserve/no-op writes nothing (#331/#911)")
+                    $"release-column row '%s{c.Stdout}' claims to WRITE the board but its stdout names no column set (`→`) — a preserve/no-op writes nothing (#331/#911)"
+                )
 
     /// AT LEAST ONE PRESERVE ROW, or the table has lost #331 entirely: the whole reason `release` reads
     /// the LIVE column is to preserve one a worker chose during the lease rather than revert it.
@@ -397,7 +421,8 @@ module ProtocolTests =
     let ``the precedence documents at least one preserve`` () =
         Assert.True(
             Protocol.releaseColumns |> List.exists (fun c -> not c.Writes),
-            "no release-column row preserves — the table has lost #331, the reason release reads the live column at all")
+            "no release-column row preserves — the table has lost #331, the reason release reads the live column at all"
+        )
 
     // ================================================================================================
     // `blockerStates` — the wire vocabulary `check-board` §1 restated by hand (#889).
@@ -442,7 +467,8 @@ module ProtocolTests =
             | Some parsed ->
                 Assert.True(
                     blockerStateWireName parsed = b.Wire,
-                    $"'%s{b.Wire}' does not round-trip through the engine's own vocabulary")
+                    $"'%s{b.Wire}' does not round-trip through the engine's own vocabulary"
+                )
 
     /// THE `holds?` COLUMN IS THE SCHEDULER'S ANSWER, NOT THE DOC'S.
     ///
@@ -463,7 +489,8 @@ module ProtocolTests =
 
             Assert.True(
                 (b.Holds = engineSaysHolds),
-                $"'%s{b.Wire}': the generated table says holds=%b{b.Holds}, the engine says holds=%b{engineSaysHolds} — the row a reconciler acts on disagrees with the predicate that schedules")
+                $"'%s{b.Wire}': the generated table says holds=%b{b.Holds}, the engine says holds=%b{engineSaysHolds} — the row a reconciler acts on disagrees with the predicate that schedules"
+            )
 
     /// THE FAIL-CLOSED CASES, NAMED. The two that read like non-answers and BLOCK (#266).
     ///
@@ -473,7 +500,9 @@ module ProtocolTests =
     [<Fact>]
     let ``unknown and unparseable are documented as HOLDING`` () =
         let holdsOf w =
-            Protocol.blockerStates |> List.tryFind (fun b -> b.Wire = w) |> Option.map (fun b -> b.Holds)
+            Protocol.blockerStates
+            |> List.tryFind (fun b -> b.Wire = w)
+            |> Option.map (fun b -> b.Holds)
 
         Assert.Equal(Some true, holdsOf "unknown")
         Assert.Equal(Some true, holdsOf "unparseable")
@@ -498,10 +527,12 @@ module ProtocolTests =
         let owner, repo = "FS-GG", ".github"
 
         let tokens =
-            [ "#8" // bare #n → owner AND repo default to the epic's own
-              "FS.GG.SDD#8" // repo#n → repo carried, owner defaults
-              "FS-GG/FS.GG.Rendering#12" // owner/repo#n → both carried
-              "https://github.com/FS-GG/FS.GG.Audio/issues/9" ] // a full issue URL
+            [
+                "#8" // bare #n → owner AND repo default to the epic's own
+                "FS.GG.SDD#8" // repo#n → repo carried, owner defaults
+                "FS-GG/FS.GG.Rendering#12" // owner/repo#n → both carried
+                "https://github.com/FS-GG/FS.GG.Audio/issues/9"
+            ] // a full issue URL
 
         for tok in tokens do
             let viaEpic = EpicBody.childRefs owner repo $"- [ ] {tok} a child"
@@ -518,11 +549,13 @@ module ProtocolTests =
 
             Assert.True(
                 (viaEpic = viaBlockers),
-                $"'%s{tok}': EpicBody canonicalizes to %A{viaEpic}, Blockers to %A{viaBlockers} — ref parsers drifted (#1153)")
+                $"'%s{tok}': EpicBody canonicalizes to %A{viaEpic}, Blockers to %A{viaBlockers} — ref parsers drifted (#1153)"
+            )
 
             Assert.True(
                 (viaEpic = viaRooms),
-                $"'%s{tok}': EpicBody canonicalizes to %A{viaEpic}, Rooms to %A{viaRooms} — ref parsers drifted (#1153, ADR-0051)")
+                $"'%s{tok}': EpicBody canonicalizes to %A{viaEpic}, Rooms to %A{viaRooms} — ref parsers drifted (#1153, ADR-0051)"
+            )
 
     /// A STATE DOCUMENTED UNDER AN EMPTY STRING IS UNGREPPABLE BY CONSTRUCTION, and a state that means
     /// nothing is a row a reader skips.
@@ -531,7 +564,8 @@ module ProtocolTests =
         for b in Protocol.blockerStates do
             Assert.False(
                 System.String.IsNullOrWhiteSpace b.Wire,
-                "a blocker state is documented under an empty wire name")
+                "a blocker state is documented under an empty wire name"
+            )
 
             Assert.False(System.String.IsNullOrWhiteSpace b.Meaning, $"blocker state '%s{b.Wire}' means nothing")
 
@@ -547,29 +581,49 @@ module ProtocolTests =
     /// `Status` and on nothing else. Every other field is the benign case: open issue, declared paths,
     /// no blockers, no claim, no in-flight PR.
     let private columnProbe (status: BoardStatus) : Item =
-        { Ref =
-            { Owner = "FS-GG"
-              Repo = "FS.GG.SDD"
-              Number = 1 }
-          PathRepo = "FS.GG.SDD"
-          Status = status
-          State = Open
-          TouchSet = Declared [ Matchable "src/Scene/**" ]
-          Blockers = []
-          Claim = None
-          ItemPr = None
-          ItemPrUnreadable = false
-          HumanBlock = None
-          Predicate = None
-          Class = None
-          Kind = None
-          BoardKind = None
-          CommentCount = None
-          BoardClass = None
-          DeliveryRoute = DeliveryRoute.Current { Schema = DeliveryRoute.Schema; Subject = "test"; SubjectRevision = "test"; Route = Some DeliveryRoute.Lightweight; Agent = "test"; Timestamp = "2026-01-01T00:00:00Z"; ReasonCodes = [ "test" ]; Rationale = "test"; DeclaredImpacts = [ "test" ]; ObservedFacts = [ "test" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
-          Severity = Unset
-          Phase = None
-          AgeDays = None }
+        {
+            Ref =
+                {
+                    Owner = "FS-GG"
+                    Repo = "FS.GG.SDD"
+                    Number = 1
+                }
+            PathRepo = "FS.GG.SDD"
+            Status = status
+            State = Open
+            TouchSet = Declared [ Matchable "src/Scene/**" ]
+            Blockers = []
+            Claim = None
+            ItemPr = None
+            ItemPrUnreadable = false
+            HumanBlock = None
+            Predicate = None
+            Class = None
+            Kind = None
+            BoardKind = None
+            CommentCount = None
+            BoardClass = None
+            DeliveryRoute =
+                DeliveryRoute.Current
+                    {
+                        Schema = DeliveryRoute.Schema
+                        Subject = "test"
+                        SubjectRevision = "test"
+                        Route = Some DeliveryRoute.Lightweight
+                        Agent = "test"
+                        Timestamp = "2026-01-01T00:00:00Z"
+                        ReasonCodes = [ "test" ]
+                        Rationale = "test"
+                        DeclaredImpacts = [ "test" ]
+                        ObservedFacts = [ "test" ]
+                        SddWorkId = None
+                        SpecHome = None
+                        RequiredGates = []
+                    }
+            Severity = Unset
+            Phase = None
+            AgeDays = None
+        }
 
     /// REFLECTION CAN SEE THE UNION — so the guards below are not vacuous (#266), and the count is
     /// asserted against `BoardStatus` rather than against `6`.
@@ -601,7 +655,8 @@ module ProtocolTests =
         for s in Protocol.boardStatuses do
             Assert.True(
                 List.contains s.Wire engineSpellings,
-                $"the docs publish '%s{s.Wire}' as a board Status option and `statusWireName` never writes it — `set-field` would refuse it, and a reconciler selecting it in jq matches nothing and reports a clean board (#476)")
+                $"the docs publish '%s{s.Wire}' as a board Status option and `statusWireName` never writes it — `set-field` would refuse it, and a reconciler selecting it in jq matches nothing and reports a clean board (#476)"
+            )
 
     /// THE `startable?` COLUMN IS THE SCHEDULER'S ANSWER, NOT THE DOC'S — and this is the pin that is
     /// NOT vacuous.
@@ -636,11 +691,13 @@ module ProtocolTests =
 
             Assert.True(
                 (offered false = expectedPlain),
-                $"'%s{s.Wire}': the generated table says startable=%A{s.Startable}, but a plain `take` %s{saidPlain} offer it")
+                $"'%s{s.Wire}': the generated table says startable=%A{s.Startable}, but a plain `take` %s{saidPlain} offer it"
+            )
 
             Assert.True(
                 (offered true = expectedOptIn),
-                $"'%s{s.Wire}': the generated table says startable=%A{s.Startable}, but `take --include-backlog` %s{saidOptIn} offer it")
+                $"'%s{s.Wire}': the generated table says startable=%A{s.Startable}, but `take --include-backlog` %s{saidOptIn} offer it"
+            )
 
     /// THE THREE-STATE CASES, NAMED. The property above is relative — it would hold just as well if the
     /// doc and the scheduler were wrong together in the same direction. This one is absolute, and it is
@@ -650,7 +707,9 @@ module ProtocolTests =
     [<Fact>]
     let ``Ready is always startable, Backlog only on opt-in, and the rest never`` () =
         let startabilityOf w =
-            Protocol.boardStatuses |> List.tryFind (fun s -> s.Wire = w) |> Option.map (fun s -> s.Startable)
+            Protocol.boardStatuses
+            |> List.tryFind (fun s -> s.Wire = w)
+            |> Option.map (fun s -> s.Startable)
 
         Assert.Equal(Some "always", startabilityOf "Ready")
         Assert.Equal(Some "with-backlog-opt-in", startabilityOf "Backlog")
@@ -672,7 +731,11 @@ module ProtocolTests =
     [<Fact>]
     let ``the startability wire words are exactly the three generate-projections selects on`` () =
         let spelled =
-            [ Schedulability.AlwaysStartable; Schedulability.WithBacklogOptIn; Schedulability.NeverStartable ]
+            [
+                Schedulability.AlwaysStartable
+                Schedulability.WithBacklogOptIn
+                Schedulability.NeverStartable
+            ]
             |> List.map Schedulability.columnStartabilityWireName
 
         Assert.Equal<string list>([ "always"; "with-backlog-opt-in"; "never" ], spelled)
@@ -690,7 +753,8 @@ module ProtocolTests =
         for s in Protocol.boardStatuses do
             Assert.False(
                 System.String.IsNullOrWhiteSpace s.Wire,
-                "a board status is documented under an empty option name")
+                "a board status is documented under an empty option name"
+            )
 
             Assert.False(System.String.IsNullOrWhiteSpace s.Meaning, $"board status '%s{s.Wire}' means nothing")
 
@@ -756,21 +820,23 @@ module ProtocolTests =
         let keys = Protocol.factsDocument |> List.map keyOf
 
         Assert.Equal<string list>(
-            [ "rules"
-              "filingRules"
-              "reconcileRules"
-              "driverRules"
-              "verdicts"
-              "blockerStates"
-              "boardStatuses"
-              "takeExitCodes"
-              "landableExitCodes"
-              "releaseColumns"
-              "wavePolicy"
-              "reviewPolicy"
-              "lifecyclePolicy"
-              "ledgerPolicy"
-              "snapshotDocument" ],
+            [
+                "rules"
+                "filingRules"
+                "reconcileRules"
+                "driverRules"
+                "verdicts"
+                "blockerStates"
+                "boardStatuses"
+                "takeExitCodes"
+                "landableExitCodes"
+                "releaseColumns"
+                "wavePolicy"
+                "reviewPolicy"
+                "lifecyclePolicy"
+                "ledgerPolicy"
+                "snapshotDocument"
+            ],
             keys
         )
 
@@ -804,4 +870,5 @@ module ProtocolTests =
         for section in Protocol.factsDocument do
             Assert.False(
                 System.String.IsNullOrWhiteSpace(keyOf section),
-                "the facts document states a section under an empty key — no projection can select it")
+                "the facts document states a section under an empty key — no projection can select it"
+            )

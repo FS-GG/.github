@@ -10,22 +10,37 @@ module QualificationEvidence =
     [<Literal>]
     val ObligationReadbackSchema: string = "fsgg.qualification.obligation-readback/1"
 
-    type HostedScope = WorkflowRun | Job | CheckRun
-    type HostedState = Queued | InProgress | Completed of conclusion: string
+    type HostedScope =
+        | WorkflowRun
+        | Job
+        | CheckRun
+
+    type HostedState =
+        | Queued
+        | InProgress
+        | Completed of conclusion: string
+
     type HostedItem =
-        { Scope: HostedScope
-          Id: string
-          HeadSha: string
-          State: HostedState }
+        {
+            Scope: HostedScope
+            Id: string
+            HeadSha: string
+            State: HostedState
+        }
+
     type HostedSnapshot =
-        { Complete: bool
-          Items: HostedItem list }
+        {
+            Complete: bool
+            Items: HostedItem list
+        }
 
     type ObligationComment =
-        { CommentId: int64
-          Url: string
-          Author: string
-          Body: string }
+        {
+            CommentId: int64
+            Url: string
+            Author: string
+            Body: string
+        }
 
     val observeHosted: HostedSnapshot -> Qualification.HostedObservation
     val parseHostedSnapshot: bytes: byte array -> Result<HostedSnapshot, string list>

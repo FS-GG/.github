@@ -54,9 +54,11 @@ module Writes =
     /// Proof that GitHub's complete issue-comment collection contains the exact UTF-8 bytes supplied
     /// to a create or explicit-id amendment. A successful HTTP response alone is never this receipt.
     type VerifiedCommentMutation =
-        { CommentId: int64
-          ByteLength: int
-          Sha256: string }
+        {
+            CommentId: int64
+            ByteLength: int
+            Sha256: string
+        }
 
     val createVerifiedComment:
         transport: Transport.IGitHubTransport ->
@@ -111,7 +113,10 @@ module Writes =
             Errors.IoResult<'value>
 
     /// Validate an intake draft before issuing its REST issue-create request. Invalid drafts spend no IO.
-    val createIntake: transport: Transport.IGitHubTransport -> draft: FS.GG.Coord.Intake.Draft -> Errors.IoResult<FS.GG.Coord.Types.Ref>
+    val createIntake:
+        transport: Transport.IGitHubTransport ->
+        draft: FS.GG.Coord.Intake.Draft ->
+            Errors.IoResult<FS.GG.Coord.Types.Ref>
 
     /// Canonicalize an issue created from one explicitly supported predecessor draft. The receipt and
     /// exact generated predecessor body jointly authorize the PATCH; arbitrary edits fail closed.
@@ -233,20 +238,26 @@ module Writes =
 
     /// One marker in a complete authoritative census surrounding a forced-claim transition.
     type ClaimMarkerObservation =
-        { MarkerId: int64
-          Worker: WorkerId
-          Live: bool }
+        {
+            MarkerId: int64
+            Worker: WorkerId
+            Live: bool
+        }
 
     /// The complete ordered marker set and its existing comment-order winner.
     type ClaimMarkerCensus =
-        { WinnerMarkerId: int64 option
-          Markers: ClaimMarkerObservation list }
+        {
+            WinnerMarkerId: int64 option
+            Markers: ClaimMarkerObservation list
+        }
 
     /// The authoritative observations governing a forced-claim result. `After = None` means the
     /// post-operation census was unreadable; it never means the item was empty.
     type ForcedClaimCensuses =
-        { Before: ClaimMarkerCensus
-          After: ClaimMarkerCensus option }
+        {
+            Before: ClaimMarkerCensus
+            After: ClaimMarkerCensus option
+        }
 
     /// What happened when we went for the lock.
     ///
@@ -300,28 +311,50 @@ module Writes =
 
         /// Replacement creation failed, a complete post-census proves the incumbent still wins, and no
         /// incumbent deletion was attempted. This is a typed old-holder-standing result, not raw transport.
-        | ReplacementPostFailed of holder: WorkerId * holderMarkerId: int64 * reason: string * censuses: ForcedClaimCensuses
+        | ReplacementPostFailed of
+            holder: WorkerId *
+            holderMarkerId: int64 *
+            reason: string *
+            censuses: ForcedClaimCensuses
 
         /// The replacement marker was posted before destructive cleanup began, but deleting one incumbent
         /// failed. `replacement` remains on the item; `removed` names only deletions observed successful;
         /// `failed`/`failedMarkerId` name the marker that still stands. Re-running `claim --force` with the
         /// same identity reconciles this deterministic two-marker state instead of posting another marker.
-        | CleanupRequired of replacement: Held * removed: WorkerId list * failed: WorkerId * failedMarkerId: int64 * reason: string * censuses: ForcedClaimCensuses
+        | CleanupRequired of
+            replacement: Held *
+            removed: WorkerId list *
+            failed: WorkerId *
+            failedMarkerId: int64 *
+            reason: string *
+            censuses: ForcedClaimCensuses
 
         /// Incumbent cleanup completed, but the complete post-operation census could not be read. The
         /// replacement is deliberately retained: withdrawing it after destructive cleanup could create the
         /// zero-marker state this transition forbids. Retry is authorized only to re-read/reconcile.
-        | PostStateUnreadable of replacement: Held option * removed: WorkerId list * reason: string * censuses: ForcedClaimCensuses
+        | PostStateUnreadable of
+            replacement: Held option *
+            removed: WorkerId list *
+            reason: string *
+            censuses: ForcedClaimCensuses
 
         /// The post-operation census is complete, the replacement marker is absent, and a foreign live
         /// holder remains authoritative. The caller may report that the old holder stands; it may not infer
         /// that retry is safe merely from a transport error.
-        | OldHolderStands of replacementMarkerId: int64 * holder: WorkerId * holderMarkerId: int64 * removed: WorkerId list * censuses: ForcedClaimCensuses
+        | OldHolderStands of
+            replacementMarkerId: int64 *
+            holder: WorkerId *
+            holderMarkerId: int64 *
+            removed: WorkerId list *
+            censuses: ForcedClaimCensuses
 
         /// The complete post-census was readable and contained no live marker, including no replacement.
         /// This is an observed anomaly rather than an ordinary loss; the marker id names the capability that
         /// vanished so the caller can report the exact failed transition.
-        | NoHolderRemaining of replacementMarkerId: int64 option * removed: WorkerId list * censuses: ForcedClaimCensuses
+        | NoHolderRemaining of
+            replacementMarkerId: int64 option *
+            removed: WorkerId list *
+            censuses: ForcedClaimCensuses
 
         /// Cleanup completed, but a fresh foreign marker won the unchanged comment-order election. The
         /// complete pre/post census makes this distinct from an ordinary refusal by the original holder.
@@ -439,7 +472,7 @@ module Writes =
         pr: int ->
         headSha: string ->
         method: OperationalGraphQl.MergeMethod ->
-        IoResult<bool>
+            IoResult<bool>
 
     /// What re-reading the markers says about whether WE hold the lock.
     ///
@@ -715,11 +748,18 @@ module Writes =
     /// Does NOT take a `Held` — deliberately. A worker who has just LOST a race, or who is warning the
     /// holder about an overlap, must still be able to speak. Requiring the lock to send a message would
     /// silence exactly the worker with something urgent to say.
-    val say: transport: IGitHubTransport -> from: WorkerId -> toWorker: WorkerId -> ref: Ref -> text: string -> IoResult<unit>
+    val say:
+        transport: IGitHubTransport ->
+        from: WorkerId ->
+        toWorker: WorkerId ->
+        ref: Ref ->
+        text: string ->
+            IoResult<unit>
 
     /// Record a follow-up disposition on the owed issue itself. Unlike a worker message this is durable
     /// evidence for a driver that later audits an abandoned queue.
-    val followupDisposition: transport: IGitHubTransport -> ref: Ref -> worker: WorkerId -> text: string -> IoResult<unit>
+    val followupDisposition:
+        transport: IGitHubTransport -> ref: Ref -> worker: WorkerId -> text: string -> IoResult<unit>
 
     /// Append a digest-verified delivery completion receipt before mutable terminal projections.
     val deliveryCompletionReceipt:
@@ -737,10 +777,7 @@ module Writes =
 
     /// Append post-merge shared-engine agreement bound to the one durable bootstrap authority.
     val selfHostReplayReceipt:
-        transport: IGitHubTransport ->
-        ref: Ref ->
-        receipt: FS.GG.Coord.SelfHost.SelfHostReplayReceipt ->
-            IoResult<unit>
+        transport: IGitHubTransport -> ref: Ref -> receipt: FS.GG.Coord.SelfHost.SelfHostReplayReceipt -> IoResult<unit>
 
     /// Append the subject-bound premature-closure correction authority once. Retries with the same safe
     /// destination are idempotent; malformed, duplicate, or contradictory evidence fails closed.
@@ -777,7 +814,8 @@ module Writes =
     /// Write a `Rooms: <roomRef>` back-reference onto an item's body (ADR-0051). Does NOT take a `Held`:
     /// `room open` writes onto the items of a contended cluster it need not itself hold, exactly like `say`
     /// and `child`. The caller passes the current body (already read), so the append is pure.
-    val writeRoomRef: transport: IGitHubTransport -> ref: Ref -> currentBody: string -> roomRef: string -> IoResult<unit>
+    val writeRoomRef:
+        transport: IGitHubTransport -> ref: Ref -> currentBody: string -> roomRef: string -> IoResult<unit>
 
     /// Ensure one room back-reference from live state. The write is skipped when already present and is
     /// re-read after both success and failure, making a response-lost PATCH retry-idempotent.
@@ -807,7 +845,8 @@ module Writes =
     /// Create the room ISSUE (ADR-0051), returning its `Ref`. A net-new write — no other verb POSTs an
     /// issue. The room is created OFF the board (nothing calls `add`): coordination scaffolding, not
     /// deliverable work.
-    val createRoom: transport: IGitHubTransport -> owner: string -> repo: string -> title: string -> body: string -> IoResult<Ref>
+    val createRoom:
+        transport: IGitHubTransport -> owner: string -> repo: string -> title: string -> body: string -> IoResult<Ref>
 
     /// Close the room ISSUE (ADR-0051 §4). A room's lifecycle is derived — it dies when every currently
     /// referencing item is done — so this only PATCHes the issue closed; a room carries no lock or lease.
