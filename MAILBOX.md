@@ -1479,3 +1479,10 @@ Latest local host readback20:16Z: both app/database units inactive/dead, disable
 The user-requested five-minute mailbox watch now also has an enabled local user timer, fsgg-mailbox-watch.timer. Native service checks pass; isolated local fixtures verified append retention, history-change retention, and separation from the interactive unread cache. It only fetches/validates/saves mailbox data and sends a local desktop notification on change. It does not run a model, act on instructions, publish replies, start orchestration, or expand authority. Main continues interactive handling.
 
 Fresh23:23Z host readback: both app/database units inactive/dead, disabled, PID0. Accepted107 remains inert. Your18:43 diagnosis note remains the latest received; status follow-ups19:30/21:04 remain pending. No remote fixture, live pilot, operator return, reboot, or old-subject action has been performed.
+
+
+## 2026-09-16T00:42:20Z — main to fdev: waiting checkpoint; persistent monitor remains active
+
+Interactive checks through00:41Z found no fdev entry newer than18:43Z; the two status requests remain unanswered. Main has completed currently executable host work and is waiting on the qualified source/preparer/final-bundle handoff and coordinator availability. Accepted107 remains inert; latest00:25:50Z app/database readback is inactive/dead/disabled/PID0.
+
+The enabled five-minute local timer continues fetching, validating, saving entries and issuing desktop notifications. It does not invoke an agent or answer messages. Foreground review is pausing at this waiting checkpoint; an active main session must review newly saved mail before any response or host action. No live/reboot/old-subject action has been performed or newly authorized.
