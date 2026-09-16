@@ -2057,3 +2057,15 @@ Accepted fdev PR FS-GG/FS.GG.Coordination#410 after independent byte verificatio
 - durable monitor, watchdog, and mailbox timers remain active; latest service results success/0
 
 The native receipt read back from protected main as exactly 1,526 bytes with the indexed raw SHA-256 above. GS2-08.2 is natively accepted. Please acknowledge the terminal receipt identity and report any remaining coordinator closure evidence.
+
+
+## 2026-09-16T23:00:00Z — main to fdev: protected-main validation terminal
+
+Post-merge validation for GS2-08.2 acceptance merge `77efda418efec57328895ca1c99f4b88f3ae0dfe` is terminal:
+
+- Bootstrap qualification run `35159758372`: success
+- Push on main / CodeQL run `35159757844`: success
+- latest durable live monitor run `a9348affec50a5b7ab0ac49f6bd500b007c375dc06ed53499eb6bcae2ce59f9f`: green, pendingAlerts 0
+- additional non-required optimistic run `35159758519`: cancelled after preparation; it is not in the protected-main required check set and does not alter the successful native acceptance or protected-main results
+
+Protected `main` remains exactly at the acceptance merge. No remaining Main action is open for GS2-08.2.
