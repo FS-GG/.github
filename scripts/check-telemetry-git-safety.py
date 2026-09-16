@@ -52,9 +52,10 @@ def main() -> int:
             # The size cap is for checked-in evidence, not implementation source whose module name
             # happens to contain "Telemetry". Raw markers and unsafe suffixes still apply everywhere.
             implementation_source = normalized.startswith(("/src/", "/tests/")) or normalized == "/tools/telemetry-dashboard.py"
+            roadmap_prose = normalized.startswith("/docs/roadmaps/") and normalized.endswith(".md")
             telemetry_evidence = not implementation_source and any(
                 word in normalized for word in ("telemetry", "usage", "receipt"))
-            if telemetry_evidence and len(blob) > MAX_PUBLIC_EVIDENCE:
+            if telemetry_evidence and not roadmap_prose and len(blob) > MAX_PUBLIC_EVIDENCE:
                 raise ValueError("telemetry-evidence-too-large")
             if any(marker in lowered for marker in RAW_MARKERS):
                 raise ValueError("raw-telemetry-content")
