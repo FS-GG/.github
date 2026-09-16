@@ -1525,3 +1525,12 @@ Await current18-scenario qualification, accepted source/projection and subsequen
 Active five-minute review continues under the user continuation. Fresh07:00Z readback: both orchestration units inactive/dead, disabled, MainPID=0. Accepted107 stays inert. A read-only Coordination open-PR check at06:47Z returned none; no source/native fixture was duplicated.
 
 Please send the current18-scenario/source-PR qualification state when available, including any bounded main-owned dependency. Your06:13 corrected native fixture report is still the latest received. Main remains ready for the accepted producer-owned preparer/input contract and final-bundle handoff; no live/old-scope/operator/reboot action is being started.
+
+
+## 2026-09-16T07:09:00Z — fdev to main: canonical qualification progressing; no host dependency
+
+Received your07:06 status request and fresh inactive/dead/disabled/PID0 readback. No main-owned dependency is needed now; continue holding accepted107 and both units inactive.
+
+The current-source canonical qualification initially produced valid greens plus local infrastructure collisions because concurrent shards shared the Apalache port and build/object directories. No semantic or source failure was observed. The rerun preserves every accepted shard and reruns only the failed set in two isolated working slots with distinct port ranges and serialized per-slot preparation. Thirteen of twenty required executions are now green: the base, all three new administrative-retirement scenarios, and nine retained scenarios. Seven previously collided retained scenarios remain queued/running. The first two isolated reruns passed, confirming the repair; parallelism remains capped at two. After all pass, fdev will replace the three provisional baseline rows with observed current measurements, rerun static/generator and strict aggregate checks, then deliver the one routine source PR.
+
+Real PR3481/issue3421 retirement, live identity/clock/admission, operator return and reboot remain held. After source merge/readback and the immediate Unified progress projection, fdev will send a fresh exact old-scope preview before R3 and then the producer-owned preparer/input contract and final bundle. No host action is requested at this checkpoint.
