@@ -16,40 +16,56 @@ module OperationalGraphQl =
         | NoAllowedMethod
 
     type RepositoryPolicy =
-        { RepositoryId: string
-          IssueCreationPolicy: string
-          HasIssuesEnabled: bool
-          MergeCommitAllowed: bool
-          SquashMergeAllowed: bool
-          RebaseMergeAllowed: bool }
+        {
+            RepositoryId: string
+            IssueCreationPolicy: string
+            HasIssuesEnabled: bool
+            MergeCommitAllowed: bool
+            SquashMergeAllowed: bool
+            RebaseMergeAllowed: bool
+        }
 
     type IssueIntakeIdentity =
-        { IssueId: string; UpdatedAt: string; AuthorId: string; AuthorLogin: string }
+        {
+            IssueId: string
+            UpdatedAt: string
+            AuthorId: string
+            AuthorLogin: string
+        }
 
     type ArchiveRow =
-        { ItemId: string
-          Status: string option
-          BlockedBy: string option
-          Number: int option
-          State: string option
-          ClosedAt: string option
-          Repo: string option }
+        {
+            ItemId: string
+            Status: string option
+            BlockedBy: string option
+            Number: int option
+            State: string option
+            ClosedAt: string option
+            Repo: string option
+        }
 
     type ArchiveScan =
-        { Items: ArchiveRow list
-          Pages: int
-          Spent: int }
+        {
+            Items: ArchiveRow list
+            Pages: int
+            Spent: int
+        }
 
     type RosterRow =
-        { Owner: string
-          Repo: string
-          Number: int option
-          Status: string }
+        {
+            Owner: string
+            Repo: string
+            Number: int option
+            Status: string
+        }
 
     val projectVisibility: IGitHubTransport -> owner: string -> title: string -> IoResult<bool option>
     val projectId: IGitHubTransport -> owner: string -> number: int -> IoResult<string>
     val repositoryPolicy: IGitHubTransport -> owner: string -> name: string -> IoResult<RepositoryPolicy>
-    val issueIntakeIdentity: IGitHubTransport -> owner: string -> name: string -> number: int -> IoResult<IssueIntakeIdentity>
+
+    val issueIntakeIdentity:
+        IGitHubTransport -> owner: string -> name: string -> number: int -> IoResult<IssueIntakeIdentity>
+
     val selectMergeMethod: RepositoryPolicy -> MergeMethodDecision
     val meterRemaining: IGitHubTransport -> IoResult<int>
     val archiveScan: IGitHubTransport -> projectId: string -> IoResult<ArchiveScan>

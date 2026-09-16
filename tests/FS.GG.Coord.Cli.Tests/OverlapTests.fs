@@ -43,11 +43,13 @@ module OverlapTests =
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None
-              Headers = Map.empty }
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            }
 
     // ---- the board: one project, one Status field, and the rows a test supplies ------------------------
 
@@ -118,11 +120,13 @@ module OverlapTests =
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
     let private context (transport: Fake.Recorder) : Kernel.Context =
-        { Transport = transport
-          Owner = "FS-GG"
-          Title = "Coordination"
-          DefaultRepo = Some ".github"
-          ChoreLocks = [] }
+        {
+            Transport = transport
+            Owner = "FS-GG"
+            Title = "Coordination"
+            DefaultRepo = Some ".github"
+            ChoreLocks = []
+        }
 
     let private options (args: string list) : Options.Options =
         match Options.parse args with
@@ -154,7 +158,8 @@ module OverlapTests =
             Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", previousKitRoot)
 
     let private runOverlap (transport: Fake.Recorder) (args: string list) : int * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2351-" + Guid.NewGuid().ToString "n")
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-2351-" + Guid.NewGuid().ToString "n")
 
         try
             runOverlapIn dir transport args
@@ -180,7 +185,8 @@ module OverlapTests =
                 (Some "cross-repo")
                 "Paths: docs/architecture.md"
 
-        let code, out = runOverlap world [ "overlap"; "FS-GG/.github#2345"; "FS-GG/.github#2070" ]
+        let code, out =
+            runOverlap world [ "overlap"; "FS-GG/.github#2345"; "FS-GG/.github#2070" ]
 
         Assert.Equal(Kernel.ExitContended, code)
         Assert.Contains("OVERLAP", out)
@@ -204,7 +210,8 @@ module OverlapTests =
                 (Some "cross-repo")
                 "Paths: docs/architecture.md"
 
-        let code, out = runOverlap world [ "overlap"; "FS-GG/.github#2345"; "FS-GG/.github#2070" ]
+        let code, out =
+            runOverlap world [ "overlap"; "FS-GG/.github#2345"; "FS-GG/.github#2070" ]
 
         Assert.Equal(Kernel.ExitContended, code)
         Assert.Contains("OVERLAP", out)
@@ -226,7 +233,8 @@ module OverlapTests =
                 None
                 "Paths: docs/architecture.md"
 
-        let code, out = runOverlap world [ "overlap"; "FS-GG/.github#2345"; "FS-GG/FS.GG.SDD#74" ]
+        let code, out =
+            runOverlap world [ "overlap"; "FS-GG/.github#2345"; "FS-GG/FS.GG.SDD#74" ]
 
         Assert.Equal(Kernel.ExitGreen, code)
         Assert.Contains("DISJOINT", out)
@@ -248,9 +256,7 @@ module OverlapTests =
         let ts = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
 
         let pathRepoAttr =
-            otherScope
-            |> Option.map (fun s -> $" pathRepo=%s{s}")
-            |> Option.defaultValue ""
+            otherScope |> Option.map (fun s -> $" pathRepo=%s{s}") |> Option.defaultValue ""
 
         Fake.Recorder(fun (req: Request) ->
             match req.Method, req.Path.Trim '/' with
@@ -260,13 +266,23 @@ module OverlapTests =
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "GET", p when p = $"repos/%s{owner}/%s{repo}/issues" ->
-                [ {| number = otherNumber
-                     state = "open"
-                     body = sharedBody |} ]
+                [
+                    {|
+                        number = otherNumber
+                        state = "open"
+                        body = sharedBody
+                    |}
+                ]
                 |> JsonSerializer.Serialize
                 |> ok
             | "GET", p when p = $"repos/%s{owner}/%s{repo}/issues/%d{selfNumber}" ->
-                ok (JsonSerializer.Serialize {| number = selfNumber; body = sharedBody |})
+                ok (
+                    JsonSerializer.Serialize
+                        {|
+                            number = selfNumber
+                            body = sharedBody
+                        |}
+                )
             | "GET", p when p = $"repos/%s{owner}/%s{repo}/issues/%d{selfNumber}/comments" ->
                 // NO CLAIM OF ITS OWN — `targetPathRepo` reads `None` and falls back to `ref.Repo`.
                 ok "[]"
@@ -276,7 +292,9 @@ module OverlapTests =
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
     [<Fact>]
-    let ``#2351 AC3: activeCollisions (overlap --active / widen / claim's shared scan) reports OVERLAP against a cross-repo-scoped holder`` () =
+    let ``#2351 AC3: activeCollisions (overlap --active / widen / claim's shared scan) reports OVERLAP against a cross-repo-scoped holder``
+        ()
+        =
         let world = activeWorld (Some "cross-repo")
 
         let code, out = runOverlap world [ "overlap"; "FS-GG/.github#2345"; "--active" ]
@@ -286,7 +304,9 @@ module OverlapTests =
         Assert.Contains("smew-e1d9", out)
 
     [<Fact>]
-    let ``#2351 AC3 control: activeCollisions still reports OVERLAP when the holder's scope is unset (unaffected by the fix)`` () =
+    let ``#2351 AC3 control: activeCollisions still reports OVERLAP when the holder's scope is unset (unaffected by the fix)``
+        ()
+        =
         // Not the sentinel at all — pins that `pathRepoOrFallback` changed nothing about the ordinary,
         // never-buggy case: a holder with no `pathRepo` on its marker defaults to its own repo exactly as
         // it always has, and still collides.

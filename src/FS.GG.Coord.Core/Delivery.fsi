@@ -3,6 +3,7 @@ namespace FS.GG.Coord
 /// Pure, fail-closed lifecycle decisions for a single claimed coordination item.
 module Delivery =
     open Types
+
     /// The durable stage established by the facts currently available for an item.
     ///
     /// `ReviewActive` and `Landable` divide the post-handoff window on ONE question, and .github#2575
@@ -35,11 +36,13 @@ module Delivery =
 
     /// A release, publication, registry, dispatch, or deployment receipt required after merge.
     type Obligation =
-        { Id: string
-          Kind: string
-          Evidence: string option
-          HeadSha: string
-          Verified: bool }
+        {
+            Id: string
+            Kind: string
+            Evidence: string option
+            HeadSha: string
+            Verified: bool
+        }
 
     /// A decision-boundary touch-set fact, drawing the same three-way distinction
     /// `Schedulability.NoTouchSet`/`DeliberatelyNoTouchSet` already draws for scheduling, so a
@@ -71,10 +74,12 @@ module Delivery =
         | UnknownPath
 
     type PathClassification =
-        { Path: string
-          Admission: PathAdmission
-          Reason: string
-          AuthorityRevisions: string list }
+        {
+            Path: string
+            Admission: PathAdmission
+            Reason: string
+            AuthorityRevisions: string list
+        }
 
     /// Classify changed paths once for every delivery-path consumer. Unknown authority never authorizes.
     val classifyPaths:
@@ -89,39 +94,43 @@ module Delivery =
 
     /// Facts which must stay identical between inspection and a following mutating transition.
     type Freshness =
-        { ItemRef: string
-          ClaimGeneration: string
-          Executor: string
-          Branch: string
-          Worktree: string
-          /// None while the claimed work has not reached a reviewable pull request.
-          PullRequest: int option
-          HeadSha: string
-          DeclaredPaths: DeclaredPaths
-          BoardState: string }
+        {
+            ItemRef: string
+            ClaimGeneration: string
+            Executor: string
+            Branch: string
+            Worktree: string
+            /// None while the claimed work has not reached a reviewable pull request.
+            PullRequest: int option
+            HeadSha: string
+            DeclaredPaths: DeclaredPaths
+            BoardState: string
+        }
 
     /// The complete delivery fact set read by the application/GitHub boundary.
     type Snapshot =
-        { Freshness: Freshness
-          ItemBranchCanonical: bool
-          ClosingLinkageCanonical: bool
-          PathsVerified: bool
-          InReview: bool
-          Review: Driver.ReviewChain option
-          /// Parser failures are evidence that review was attempted but is malformed; retaining the
-          /// diagnostic keeps delivery from misdirecting the holder to wait for a review that exists.
-          ReviewProblem: string option
-          Landable: bool
-          Merged: bool
-          MergeReachable: bool
-          IssueClosed: bool
-          BoardDone: bool
-          ClaimReleased: bool
-          PendingWrites: int
-          CleanupEligible: bool
-          ObligationsDeclared: bool
-          Obligations: Obligation list
-          ParkedReason: string option }
+        {
+            Freshness: Freshness
+            ItemBranchCanonical: bool
+            ClosingLinkageCanonical: bool
+            PathsVerified: bool
+            InReview: bool
+            Review: Driver.ReviewChain option
+            /// Parser failures are evidence that review was attempted but is malformed; retaining the
+            /// diagnostic keeps delivery from misdirecting the holder to wait for a review that exists.
+            ReviewProblem: string option
+            Landable: bool
+            Merged: bool
+            MergeReachable: bool
+            IssueClosed: bool
+            BoardDone: bool
+            ClaimReleased: bool
+            PendingWrites: int
+            CleanupEligible: bool
+            ObligationsDeclared: bool
+            Obligations: Obligation list
+            ParkedReason: string option
+        }
 
     /// Whether freshly read linkage/item/obligation authority permits guarded landing. Canonical
     /// linkage passes ordinarily; markerless delivery passes only for the exact live two-phase shape.
@@ -129,21 +138,25 @@ module Delivery =
 
     /// One completed Actions execution observed on the repository default branch at the exact merge SHA.
     type PostMergeRun =
-        { Id: int64
-          Attempt: int
-          Workflow: string
-          Event: string
-          Branch: string
-          Sha: string
-          Status: string
-          Conclusion: string
-          Url: string }
+        {
+            Id: int64
+            Attempt: int
+            Workflow: string
+            Event: string
+            Branch: string
+            Sha: string
+            Status: string
+            Conclusion: string
+            Url: string
+        }
 
     /// Immutable complete-set evidence for the post-merge execution gate.
     type PostMergeVerificationReceipt =
-        { MergeSha: string
-          DefaultBranch: string
-          Runs: PostMergeRun list }
+        {
+            MergeSha: string
+            DefaultBranch: string
+            Runs: PostMergeRun list
+        }
 
     /// Merged is deliberately not Verified. Every non-verified arm remains visible and retryable.
     type PostMergeVerification =
@@ -156,17 +169,19 @@ module Delivery =
     /// Complete facts for deciding whether a merged delivery must verify an obligation, project
     /// completion, refuse, or may proceed to cleanup.
     type CompletionFacts =
-        { HeadSha: string
-          Merged: bool
-          MergeReachable: bool
-          PostMergeVerification: PostMergeVerification
-          IssueClosed: bool
-          BoardDone: bool
-          ClaimReleased: bool
-          PendingWrites: int
-          CleanupEligible: bool
-          ObligationsDeclared: bool
-          Obligations: Obligation list }
+        {
+            HeadSha: string
+            Merged: bool
+            MergeReachable: bool
+            PostMergeVerification: PostMergeVerification
+            IssueClosed: bool
+            BoardDone: bool
+            ClaimReleased: bool
+            PendingWrites: int
+            CleanupEligible: bool
+            ObligationsDeclared: bool
+            Obligations: Obligation list
+        }
 
     [<RequireQualifiedAccess>]
     type CompletionDecision =
@@ -178,32 +193,38 @@ module Delivery =
         | CleanupCompletedDelivery
 
     type VerifiedObligationReceipt =
-        { Id: string
-          Kind: string
-          Evidence: string
-          HeadSha: string }
+        {
+            Id: string
+            Kind: string
+            Evidence: string
+            HeadSha: string
+        }
 
     /// Durable authority written before issue, board, claim, and cleanup projections.
     type DeliveryCompletionReceipt =
-        { Item: string
-          PullRequest: int
-          MergeSha: string
-          MergeReachable: bool
-          ObligationReceipts: VerifiedObligationReceipt list
-          PostMergeVerification: PostMergeVerificationReceipt option
-          PendingBoardWrites: int
-          FreshnessToken: string
-          ActionKey: string
-          CompletedAt: System.DateTimeOffset
-          Digest: string }
+        {
+            Item: string
+            PullRequest: int
+            MergeSha: string
+            MergeReachable: bool
+            ObligationReceipts: VerifiedObligationReceipt list
+            PostMergeVerification: PostMergeVerificationReceipt option
+            PendingBoardWrites: int
+            FreshnessToken: string
+            ActionKey: string
+            CompletedAt: System.DateTimeOffset
+            Digest: string
+        }
 
     /// Durable nonterminal authority emitted after premature closure is observed. This receipt never
     /// authorizes Done; it preserves the safe correction across the issue reopen it requests.
     type CompletionCorrectionReceipt =
-        { Item: string
-          Destination: BoardStatus
-          ObservedAt: System.DateTimeOffset
-          Digest: string }
+        {
+            Item: string
+            Destination: BoardStatus
+            ObservedAt: System.DateTimeOffset
+            Digest: string
+        }
 
     [<Literal>]
     val CompletionReceiptMarker: string = "<!-- fsgg:delivery-completion/v1 -->"
@@ -281,11 +302,13 @@ module Delivery =
 
     /// A transition carries the exact fact token and a deterministic idempotency key.
     type Transition =
-        { Stage: Stage
-          Action: Action
-          FreshnessToken: string
-          ActionKey: string
-          PostMergeVerification: PostMergeVerification }
+        {
+            Stage: Stage
+            Action: Action
+            FreshnessToken: string
+            ActionKey: string
+            PostMergeVerification: PostMergeVerification
+        }
 
     type Verdict =
         | Next of Transition
@@ -302,7 +325,7 @@ module Delivery =
         freshnessToken: string ->
         actionKey: string ->
         Snapshot ->
-        Verdict
+            Verdict
 
     /// Inspect delivery with an exact-merge verification observation supplied by the IO boundary.
     val inspectWithPostMergeVerification: PostMergeVerification -> Snapshot -> Verdict

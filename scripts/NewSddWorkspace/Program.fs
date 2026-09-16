@@ -50,77 +50,81 @@ type Outcome =
 type StepResult = { Title: string; Outcome: Outcome }
 
 type Options =
-    { Target: string
-      Product: string
-      /// The SDD scaffold provider selected by --template. Omitted selection remains rendering.
-      Template: string
-      /// The representation backend selected by --lifecycle. Omission remains Standard SDD.
-      /// The token is forwarded unchanged to the provider; typed-sdd is never aliased to sdd.
-      Lifecycle: string
-      Ref: string
-      Upgrade: bool
-      Governance: bool
-      /// Skip the pre-scaffold `fsgg-sdd` self-update (step 2) and scaffold with the installed
-      /// CLI. Default false = self-update to the newest coherent set first (ADR-0030); set true
-      /// (via `--pinned`) for a reproducible, pinned scaffold, ideally with `--ref <tag>`.
-      Pinned: bool
-      /// The `fs-gg-ui` render profile (game/app/headless-scene/governed/sample-pack).
-      /// None = pass no `--param profile`, deferring to the scaffold-provider default (game) —
-      /// keeps the bare-CLI invocation byte-identical to before this flag existed.
-      Profile: string option
-      /// The fable-game composition bundle. The provider default is player; the option remains
-      /// absent for every other provider so bundle never becomes a Rendering profile alias.
-      Bundle: string option
-      /// The npm package/version closure a fable-bindings provider materializes. Both are required
-      /// for that provider and meaningless for every other provider.
-      NpmPackage: string option
-      NpmVersion: string option
-      BindingTarget: string option
-      /// Wire the workspace to a coordination board (default ON): vendor the coordination kit and
-      /// write the `FSGG_COORD_*` env so `/pnext-item` and `/check-board` work out of the box.
-      /// `--no-coordination` skips the whole step. (Opens ADR-0019's deferred product-mirror slice.)
-      Coordinate: bool
-      /// This workspace's own repo (`owner/repo`) — its identity on the board and the basis for its
-      /// chore-lock ref. Not consumed as env (the engine resolves the repo from the git remote); it
-      /// defaults the wizard's board-org prompt and drives the chore-lock next-step hint. `--repo`.
-      WorkspaceRepo: string option
-      /// The board this workspace coordinates against — `FSGG_COORD_OWNER` / `FSGG_COORD_PROJECT`.
-      /// Default `FS-GG` / `Coordination` (the org board); `--board <owner>/<title>` overrides.
-      BoardOwner: string
-      BoardTitle: string
-      /// Explicit public/private intent for a product Project. None preserves an existing board.
-      PublicBoard: bool option
-      /// Named team/user writer identities. Required whenever `--public-board` is requested.
-      TrustedWriters: string list
-      /// The per-repo chore-lock roster for a NON-FS-GG board (`FSGG_COORD_CHORE_LOCKS`). None for the
-      /// FS-GG board, which uses the engine's embedded table. Set with `--chore-locks owner/repo#n,…`.
-      ChoreLocks: string option }
+    {
+        Target: string
+        Product: string
+        /// The SDD scaffold provider selected by --template. Omitted selection remains rendering.
+        Template: string
+        /// The representation backend selected by --lifecycle. Omission remains Standard SDD.
+        /// The token is forwarded unchanged to the provider; typed-sdd is never aliased to sdd.
+        Lifecycle: string
+        Ref: string
+        Upgrade: bool
+        Governance: bool
+        /// Skip the pre-scaffold `fsgg-sdd` self-update (step 2) and scaffold with the installed
+        /// CLI. Default false = self-update to the newest coherent set first (ADR-0030); set true
+        /// (via `--pinned`) for a reproducible, pinned scaffold, ideally with `--ref <tag>`.
+        Pinned: bool
+        /// The `fs-gg-ui` render profile (game/app/headless-scene/governed/sample-pack).
+        /// None = pass no `--param profile`, deferring to the scaffold-provider default (game) —
+        /// keeps the bare-CLI invocation byte-identical to before this flag existed.
+        Profile: string option
+        /// The fable-game composition bundle. The provider default is player; the option remains
+        /// absent for every other provider so bundle never becomes a Rendering profile alias.
+        Bundle: string option
+        /// The npm package/version closure a fable-bindings provider materializes. Both are required
+        /// for that provider and meaningless for every other provider.
+        NpmPackage: string option
+        NpmVersion: string option
+        BindingTarget: string option
+        /// Wire the workspace to a coordination board (default ON): vendor the coordination kit and
+        /// write the `FSGG_COORD_*` env so `/pnext-item` and `/check-board` work out of the box.
+        /// `--no-coordination` skips the whole step. (Opens ADR-0019's deferred product-mirror slice.)
+        Coordinate: bool
+        /// This workspace's own repo (`owner/repo`) — its identity on the board and the basis for its
+        /// chore-lock ref. Not consumed as env (the engine resolves the repo from the git remote); it
+        /// defaults the wizard's board-org prompt and drives the chore-lock next-step hint. `--repo`.
+        WorkspaceRepo: string option
+        /// The board this workspace coordinates against — `FSGG_COORD_OWNER` / `FSGG_COORD_PROJECT`.
+        /// Default `FS-GG` / `Coordination` (the org board); `--board <owner>/<title>` overrides.
+        BoardOwner: string
+        BoardTitle: string
+        /// Explicit public/private intent for a product Project. None preserves an existing board.
+        PublicBoard: bool option
+        /// Named team/user writer identities. Required whenever `--public-board` is requested.
+        TrustedWriters: string list
+        /// The per-repo chore-lock roster for a NON-FS-GG board (`FSGG_COORD_CHORE_LOCKS`). None for the
+        /// FS-GG board, which uses the engine's embedded table. Set with `--chore-locks owner/repo#n,…`.
+        ChoreLocks: string option
+    }
 
 /// Assemble the no-argument wizard's deliberately small, always-answerable decision set. Facts that
 /// commonly do not exist at creation time (repository, board, collaborators, chore locks and provider
 /// package closures) belong to the in-repository initialize skill. The full CLI keeps its explicit
 /// flags for automation and advanced providers.
 let assembleWizardOptions (target: string) (product: string) : Options =
-    { Target = target
-      Product = product
-      Template = "rendering"
-      Lifecycle = "sdd"
-      Ref = "main"
-      Upgrade = false
-      Governance = true
-      Pinned = false
-      Profile = None
-      Bundle = None
-      NpmPackage = None
-      NpmVersion = None
-      BindingTarget = None
-      Coordinate = false
-      WorkspaceRepo = None
-      BoardOwner = "FS-GG"
-      BoardTitle = "Coordination"
-      PublicBoard = None
-      TrustedWriters = []
-      ChoreLocks = None }
+    {
+        Target = target
+        Product = product
+        Template = "rendering"
+        Lifecycle = "sdd"
+        Ref = "main"
+        Upgrade = false
+        Governance = true
+        Pinned = false
+        Profile = None
+        Bundle = None
+        NpmPackage = None
+        NpmVersion = None
+        BindingTarget = None
+        Coordinate = false
+        WorkspaceRepo = None
+        BoardOwner = "FS-GG"
+        BoardTitle = "Coordination"
+        PublicBoard = None
+        TrustedWriters = []
+        ChoreLocks = None
+    }
 
 /// Apply the provider-specific answers gathered by the interactive wizard to its stable defaults.
 /// Kept as a pure boundary so the selected template (and the bindings closure it requires) can be
@@ -137,11 +141,14 @@ let assembleWizardTemplateOptions
     { assembleWizardOptions target product with
         Template = template
         Bundle =
-            if template = "fable-game" then Some(bundle |> Option.defaultValue "player")
-            else None
+            if template = "fable-game" then
+                Some(bundle |> Option.defaultValue "player")
+            else
+                None
         NpmPackage = npmPackage
         NpmVersion = npmVersion
-        BindingTarget = bindingTarget }
+        BindingTarget = bindingTarget
+    }
 
 // ── Effects ──────────────────────────────────────────────────────────────────
 
@@ -167,13 +174,18 @@ let private runProcessIn (workingDir: string option) (echo: bool) (exe: string) 
     use p = new Process()
     p.StartInfo <- psi
     let sb = System.Text.StringBuilder()
+
     let sink (data: string) =
         if not (isNull data) then
             lock consoleGate (fun () ->
                 sb.AppendLine data |> ignore
-                if echo then AnsiConsole.MarkupLine(sprintf "[grey37]  │ %s[/]" (Markup.Escape data)))
+
+                if echo then
+                    AnsiConsole.MarkupLine(sprintf "[grey37]  │ %s[/]" (Markup.Escape data)))
+
     p.OutputDataReceived.Add(fun e -> sink e.Data)
     p.ErrorDataReceived.Add(fun e -> sink e.Data)
+
     try
         p.Start() |> ignore
         p.BeginOutputReadLine()
@@ -183,8 +195,7 @@ let private runProcessIn (workingDir: string option) (echo: bool) (exe: string) 
     with :? System.ComponentModel.Win32Exception ->
         127, sprintf "%s: command not found" exe
 
-let private runProcess (echo: bool) (exe: string) (args: string list) : int * string =
-    runProcessIn None echo exe args
+let private runProcess (echo: bool) (exe: string) (args: string list) : int * string = runProcessIn None echo exe args
 
 /// The org GitHub Packages feed. It authenticates ALL reads, including PUBLIC packages
 /// (FS-GG/FS.GG.Templates#82), so a bare `dotnet new install FS.GG.Templates` against a config
@@ -201,7 +212,8 @@ let private feedToken () =
     [ "FSGG_PACKAGES_TOKEN"; "GH_TOKEN"; "GITHUB_TOKEN" ]
     |> List.tryPick (fun name ->
         match Environment.GetEnvironmentVariable name with
-        | null | "" -> None
+        | null
+        | "" -> None
         | v -> Some v)
 
 /// Run `dotnet new install FS.GG.Templates` from a temp dir carrying `configXml` as its
@@ -210,43 +222,57 @@ let private feedToken () =
 /// that no ambient source can widen — a 401-on-read org feed in the caller's global config then
 /// can't poison the restore (one source hard-failing fails the whole restore).
 let private installFromTempConfig (configXml: string) : int * string =
-    let dir = Path.Combine(Path.GetTempPath(), "new-sdd-workspace-" + Guid.NewGuid().ToString "N")
+    let dir =
+        Path.Combine(Path.GetTempPath(), "new-sdd-workspace-" + Guid.NewGuid().ToString "N")
+
     Directory.CreateDirectory dir |> ignore
+
     try
         File.WriteAllText(Path.Combine(dir, "nuget.config"), configXml)
         runProcessIn (Some dir) false "dotnet" [ "new"; "install"; "FS.GG.Templates" ]
     finally
-        try Directory.Delete(dir, true) with _ -> ()
+        try
+            Directory.Delete(dir, true)
+        with _ ->
+            ()
 
 /// An isolated nuget.config exposing only nuget.org (anonymous).
 let private nugetOrgConfig () =
-    String.concat "\n"
-        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-          "<configuration>"
-          "  <packageSources>"
-          "    <clear />"
-          sprintf "    <add key=\"nuget.org\" value=\"%s\" />" nugetOrg
-          "  </packageSources>"
-          "</configuration>" ]
+    String.concat
+        "\n"
+        [
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<configuration>"
+            "  <packageSources>"
+            "    <clear />"
+            sprintf "    <add key=\"nuget.org\" value=\"%s\" />" nugetOrg
+            "  </packageSources>"
+            "</configuration>"
+        ]
 
 /// An isolated nuget.config exposing the credentialed org feed (may carry a newer build) with
 /// nuget.org as a same-restore fallback.
 let private orgFeedConfig (token: string) =
-    String.concat "\n"
-        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-          "<configuration>"
-          "  <packageSources>"
-          "    <clear />"
-          sprintf "    <add key=\"fs-gg-github\" value=\"%s\" />" orgFeed
-          sprintf "    <add key=\"nuget.org\" value=\"%s\" />" nugetOrg
-          "  </packageSources>"
-          "  <packageSourceCredentials>"
-          "    <fs-gg-github>"
-          "      <add key=\"Username\" value=\"fs-gg\" />"
-          sprintf "      <add key=\"ClearTextPassword\" value=\"%s\" />" (System.Security.SecurityElement.Escape token)
-          "    </fs-gg-github>"
-          "  </packageSourceCredentials>"
-          "</configuration>" ]
+    String.concat
+        "\n"
+        [
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<configuration>"
+            "  <packageSources>"
+            "    <clear />"
+            sprintf "    <add key=\"fs-gg-github\" value=\"%s\" />" orgFeed
+            sprintf "    <add key=\"nuget.org\" value=\"%s\" />" nugetOrg
+            "  </packageSources>"
+            "  <packageSourceCredentials>"
+            "    <fs-gg-github>"
+            "      <add key=\"Username\" value=\"fs-gg\" />"
+            sprintf
+                "      <add key=\"ClearTextPassword\" value=\"%s\" />"
+                (System.Security.SecurityElement.Escape token)
+            "    </fs-gg-github>"
+            "  </packageSourceCredentials>"
+            "</configuration>"
+        ]
 
 /// Install the FS.GG.Templates template package (which carries the `fs-gg-governance` template).
 /// FS.GG.Templates is published anonymously on nuget.org AND (possibly a newer build) on the
@@ -260,6 +286,7 @@ let private installGovernanceTemplate () : int * string =
     | None -> installFromTempConfig (nugetOrgConfig ())
     | Some token ->
         let code, log = installFromTempConfig (orgFeedConfig token)
+
         if code = 0 then
             code, log
         else
@@ -271,14 +298,20 @@ let private installGovernanceTemplate () : int * string =
 /// `<clear />` stops an ambient 401-on-read org feed in the caller's global config from poisoning
 /// the restore (one source hard-failing fails the whole restore). Mirrors `installFromTempConfig`.
 let private updateCliFromTempConfig (configXml: string) : int * string =
-    let dir = Path.Combine(Path.GetTempPath(), "new-sdd-workspace-upd-" + Guid.NewGuid().ToString "N")
+    let dir =
+        Path.Combine(Path.GetTempPath(), "new-sdd-workspace-upd-" + Guid.NewGuid().ToString "N")
+
     Directory.CreateDirectory dir |> ignore
+
     try
         let cfg = Path.Combine(dir, "nuget.config")
         File.WriteAllText(cfg, configXml)
         runProcess true "dotnet" [ "tool"; "update"; "--global"; "FS.GG.SDD.Cli"; "--configfile"; cfg ]
     finally
-        try Directory.Delete(dir, true) with _ -> ()
+        try
+            Directory.Delete(dir, true)
+        with _ ->
+            ()
 
 /// Self-update the `fsgg-sdd` global tool to the newest published build BEFORE scaffolding, so a
 /// fresh workspace is produced by the current coherent set's tooling — the DEFAULT (ADR-0030, the
@@ -296,22 +329,31 @@ let private selfUpdateCli () : Outcome =
         | None -> updateCliFromTempConfig (nugetOrgConfig ())
         | Some token ->
             let code, log = updateCliFromTempConfig (orgFeedConfig token)
-            if code = 0 then code, log
+
+            if code = 0 then
+                code, log
             else
                 let code2, log2 = updateCliFromTempConfig (nugetOrgConfig ())
                 code2, log + "\n" + log2
-    if code = 0 then Succeeded
-    else Warned(sprintf "update failed (exit %d) — scaffolding with the installed CLI" code)
+
+    if code = 0 then
+        Succeeded
+    else
+        Warned(sprintf "update failed (exit %d) — scaffolding with the installed CLI" code)
 
 /// `command -v <cmd>` — is the executable resolvable on PATH? (dotnet global tools install
 /// to a directory that is itself on PATH, so this finds `fsgg-sdd`.)
 let private onPath (cmd: string) =
     match Environment.GetEnvironmentVariable "PATH" with
-    | null | "" -> false
+    | null
+    | "" -> false
     | path ->
         let exts =
-            if RuntimeInformation.IsOSPlatform OSPlatform.Windows then [ ".exe"; ".cmd"; ".bat"; "" ]
-            else [ "" ]
+            if RuntimeInformation.IsOSPlatform OSPlatform.Windows then
+                [ ".exe"; ".cmd"; ".bat"; "" ]
+            else
+                [ "" ]
+
         path.Split(Path.PathSeparator)
         |> Array.exists (fun dir ->
             not (String.IsNullOrWhiteSpace dir)
@@ -324,23 +366,30 @@ let private fetchDescriptor (template: string) (gitRef: string) (dest: string) :
     try
         let baseUrl =
             match Environment.GetEnvironmentVariable "FSGG_TEMPLATES_RAW_BASE" with
-            | null | "" -> "https://raw.githubusercontent.com/FS-GG/FS.GG.Templates"
+            | null
+            | "" -> "https://raw.githubusercontent.com/FS-GG/FS.GG.Templates"
             | value -> value.TrimEnd('/')
-        let url =
-            sprintf "%s/%s/providers/%s.providers.yml" baseUrl gitRef template
+
+        let url = sprintf "%s/%s/providers/%s.providers.yml" baseUrl gitRef template
         use client = new HttpClient()
         client.Timeout <- TimeSpan.FromSeconds 30.0
         use resp = client.GetAsync(url).GetAwaiter().GetResult()
+
         if not resp.IsSuccessStatusCode then
             Error(sprintf "HTTP %d fetching %s" (int resp.StatusCode) url)
         else
             let content = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
+
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest))
+            |> ignore
+
             File.WriteAllText(dest, content)
+
             let pinned =
                 content.Replace("\r\n", "\n").Split('\n')
                 |> Array.tryFind (fun l -> l.TrimStart().StartsWith "source:")
                 |> Option.map (fun l -> l.Trim())
+
             Ok pinned
     with ex ->
         Error ex.Message
@@ -350,7 +399,12 @@ let private fetchDescriptor (template: string) (gitRef: string) (dest: string) :
 /// Legacy fallback for refs predating the v2 directory manifest. Once all supported refs publish
 /// `coordination-kit-skill-manifest.json`, this list can retire in the reader-removal phase.
 let private legacyCoordinationSkills =
-    [ "cross-repo-coordination"; "intra-repo-parallel-work"; "check-board"; "pnext-item" ]
+    [
+        "cross-repo-coordination"
+        "intra-repo-parallel-work"
+        "check-board"
+        "pnext-item"
+    ]
 
 /// `owner/title` → (owner, title). No `/` ⇒ that owner's default `Coordination` board.
 let private parseBoard (value: string) : string * string =
@@ -373,26 +427,41 @@ type private RepositoryPolicyReceipt =
     | RepositoryPending of repository: string * reason: string
 
 type private ResolvedProjectWriter =
-    { Requested: string
-      ActorKind: string
-      ActorId: string }
+    {
+        Requested: string
+        ActorKind: string
+        ActorId: string
+    }
 
 type private ProjectAccessReceipt =
     | ProjectObserved of project: string * projectId: string * isPublic: bool * actor: string
-    | ProjectPartiallyVerified of project: string * projectId: string * isPublic: bool * actor: string * writers: ResolvedProjectWriter list
+    | ProjectPartiallyVerified of
+        project: string *
+        projectId: string *
+        isPublic: bool *
+        actor: string *
+        writers: ResolvedProjectWriter list
     | ProjectPending of project: string * reason: string
 
 type private SecurityReport =
-    { Repository: RepositoryPolicyReceipt option
-      Project: ProjectAccessReceipt
-      Outcome: Outcome }
+    {
+        Repository: RepositoryPolicyReceipt option
+        Project: ProjectAccessReceipt
+        Outcome: Outcome
+    }
 
 let private graphql (query: string) (variables: (string * string) list) =
     let args =
-        [ yield "api"; yield "graphql"; yield "-f"; yield "query=" + query
-          for name, value in variables do
-              yield "-F"
-              yield sprintf "%s=%s" name value ]
+        [
+            yield "api"
+            yield "graphql"
+            yield "-f"
+            yield "query=" + query
+            for name, value in variables do
+                yield "-F"
+                yield sprintf "%s=%s" name value
+        ]
+
     runProcess false "gh" args
 
 /// Send the collaborator list as GraphQL variables. `gh api -F` understands the documented
@@ -401,17 +470,26 @@ let private graphql (query: string) (variables: (string * string) list) =
 /// to tests and prevents a future fallback to interpolation.
 let private graphqlProjectCollaborators (query: string) (projectId: string) (writers: ResolvedProjectWriter list) =
     let args =
-        [ yield "api"
-          yield "graphql"
-          yield "-f"
-          yield "query=" + query
-          yield "-F"
-          yield "id=" + projectId
-          for writer in writers do
-              yield "-F"
-              yield sprintf "collaborators[][%s]=%s" (if writer.ActorKind = "team" then "teamId" else "userId") writer.ActorId
-              yield "-F"
-              yield "collaborators[][role]=WRITER" ]
+        [
+            yield "api"
+            yield "graphql"
+            yield "-f"
+            yield "query=" + query
+            yield "-F"
+            yield "id=" + projectId
+            for writer in writers do
+                yield "-F"
+
+                yield
+                    sprintf
+                        "collaborators[][%s]=%s"
+                        (if writer.ActorKind = "team" then "teamId" else "userId")
+                        writer.ActorId
+
+                yield "-F"
+                yield "collaborators[][role]=WRITER"
+        ]
+
     runProcess false "gh" args
 
 /// Apply the repository's typed `IssueCreationPolicy` only after reading it, then re-read the
@@ -421,32 +499,57 @@ let private secureRepository (repository: string) : RepositoryPolicyReceipt =
     match parseRepository repository with
     | Error reason -> RepositoryPending(repository, reason)
     | Ok(owner, name) ->
-        let read = "query($owner:String!,$name:String!){viewer{login} repository(owner:$owner,name:$name){id issueCreationPolicy}}"
+        let read =
+            "query($owner:String!,$name:String!){viewer{login} repository(owner:$owner,name:$name){id issueCreationPolicy}}"
+
         let code, output = graphql read [ "owner", owner; "name", name ]
+
         if code <> 0 then
-            RepositoryPending(repository, "repository policy could not be read (missing repository or administration permission)")
+            RepositoryPending(
+                repository,
+                "repository policy could not be read (missing repository or administration permission)"
+            )
         else
             try
                 let root = JsonNode.Parse(output).AsObject()
                 let repo = root.["data"].AsObject().["repository"].AsObject()
                 let id = repo.["id"].GetValue<string>()
                 let prior = repo.["issueCreationPolicy"].GetValue<string>()
-                let actor = root.["data"].AsObject().["viewer"].AsObject().["login"].GetValue<string>()
+
+                let actor =
+                    root.["data"].AsObject().["viewer"].AsObject().["login"].GetValue<string>()
+
                 if prior = "COLLABORATORS_ONLY" then
                     RepositorySecured(repository, prior, actor)
                 else
-                    let mutation = "mutation($id:ID!){updateRepository(input:{repositoryId:$id,issueCreationPolicy:COLLABORATORS_ONLY}){repository{issueCreationPolicy}}}"
+                    let mutation =
+                        "mutation($id:ID!){updateRepository(input:{repositoryId:$id,issueCreationPolicy:COLLABORATORS_ONLY}){repository{issueCreationPolicy}}}"
+
                     let changed, _ = graphql mutation [ "id", id ]
+
                     if changed <> 0 then
                         RepositoryPending(repository, "IssueCreationPolicy mutation failed")
                     else
                         let reread, verified = graphql read [ "owner", owner; "name", name ]
+
                         if reread <> 0 then
                             RepositoryPending(repository, "post-write repository policy read failed")
                         else
-                            let finalPolicy = JsonNode.Parse(verified).AsObject().["data"].AsObject().["repository"].AsObject().["issueCreationPolicy"].GetValue<string>()
-                            if finalPolicy = "COLLABORATORS_ONLY" then RepositorySecured(repository, prior, actor)
-                            else RepositoryPending(repository, sprintf "post-write policy was %s, not COLLABORATORS_ONLY" finalPolicy)
+                            let finalPolicy =
+                                JsonNode
+                                    .Parse(verified)
+                                    .AsObject()
+                                    .["data"].AsObject()
+                                    .["repository"].AsObject()
+                                    .["issueCreationPolicy"].GetValue<string>()
+
+                            if finalPolicy = "COLLABORATORS_ONLY" then
+                                RepositorySecured(repository, prior, actor)
+                            else
+                                RepositoryPending(
+                                    repository,
+                                    sprintf "post-write policy was %s, not COLLABORATORS_ONLY" finalPolicy
+                                )
             with _ ->
                 RepositoryPending(repository, "repository policy response was not a typed GitHub result")
 
@@ -458,17 +561,41 @@ let private inspectProject (owner: string) (title: string) : ProjectAccessReceip
     // Project owners may be organizations or personal accounts. Resolve the common
     // RepositoryOwner interface first so the default active-user quickstart does not
     // send a user login through organization(login:), which GitHub rejects outright.
-    let query = "query($owner:String!){viewer{login} repositoryOwner(login:$owner){__typename ... on Organization{projectsV2(first:100){nodes{id title public}}} ... on User{projectsV2(first:100){nodes{id title public}}}}}"
+    let query =
+        "query($owner:String!){viewer{login} repositoryOwner(login:$owner){__typename ... on Organization{projectsV2(first:100){nodes{id title public}}} ... on User{projectsV2(first:100){nodes{id title public}}}}}"
+
     let code, output = graphql query [ "owner", owner ]
-    if code <> 0 then ProjectPending(project, "ProjectV2 visibility could not be read")
+
+    if code <> 0 then
+        ProjectPending(project, "ProjectV2 visibility could not be read")
     else
         try
-            let nodes = JsonNode.Parse(output).AsObject().["data"].AsObject().["repositoryOwner"].AsObject().["projectsV2"].AsObject().["nodes"].AsArray()
-            let actor = JsonNode.Parse(output).AsObject().["data"].AsObject().["viewer"].AsObject().["login"].GetValue<string>()
-            match nodes |> Seq.tryFind (fun n -> n.AsObject().["title"].GetValue<string>() = title) with
+            let nodes =
+                JsonNode
+                    .Parse(output)
+                    .AsObject()
+                    .["data"].AsObject()
+                    .["repositoryOwner"].AsObject()
+                    .["projectsV2"].AsObject()
+                    .["nodes"].AsArray()
+
+            let actor =
+                JsonNode.Parse(output).AsObject().["data"].AsObject().["viewer"].AsObject().["login"].GetValue<string>()
+
+            match
+                nodes
+                |> Seq.tryFind (fun n -> n.AsObject().["title"].GetValue<string>() = title)
+            with
             | None -> ProjectPending(project, "configured Project does not exist yet")
-            | Some node -> ProjectObserved(project, node.AsObject().["id"].GetValue<string>(), node.AsObject().["public"].GetValue<bool>(), actor)
-        with _ -> ProjectPending(project, "ProjectV2 response was not a typed GitHub result")
+            | Some node ->
+                ProjectObserved(
+                    project,
+                    node.AsObject().["id"].GetValue<string>(),
+                    node.AsObject().["public"].GetValue<bool>(),
+                    actor
+                )
+        with _ ->
+            ProjectPending(project, "ProjectV2 response was not a typed GitHub result")
 
 /// Update only the visibility fact GitHub exposes and then re-read it. Access base permission and
 /// collaborators are intentionally outside this success result: their absence from the read model
@@ -479,14 +606,21 @@ let private applyProjectVisibility (owner: string) (title: string) (desired: boo
     | ProjectPending _ as receipt, _ -> receipt
     | (ProjectObserved(_, _, current, _) as receipt), Some wanted when current = wanted -> receipt
     | ProjectObserved(project, id, _, _), Some wanted ->
-        let mutation = "mutation($id:ID!,$public:Boolean!){updateProjectV2(input:{projectId:$id,public:$public}){projectV2{public}}}"
-        let code, _ = graphql mutation [ "id", id; "public", if wanted then "true" else "false" ]
-        if code <> 0 then ProjectPending(project, "Project visibility mutation failed")
+        let mutation =
+            "mutation($id:ID!,$public:Boolean!){updateProjectV2(input:{projectId:$id,public:$public}){projectV2{public}}}"
+
+        let code, _ =
+            graphql mutation [ "id", id; "public", if wanted then "true" else "false" ]
+
+        if code <> 0 then
+            ProjectPending(project, "Project visibility mutation failed")
         else
             match inspectProject owner title with
-            | ProjectObserved(_, verifiedId, actual, actor) when actual = wanted -> ProjectObserved(project, verifiedId, actual, actor)
+            | ProjectObserved(_, verifiedId, actual, actor) when actual = wanted ->
+                ProjectObserved(project, verifiedId, actual, actor)
             | ProjectObserved(_, _, actual, _) -> ProjectPending(project, sprintf "post-write visibility was %b" actual)
-            | ProjectPending(_, reason) -> ProjectPending(project, "post-write Project visibility read failed: " + reason)
+            | ProjectPending(_, reason) ->
+                ProjectPending(project, "post-write Project visibility read failed: " + reason)
             | ProjectPartiallyVerified _ -> ProjectPending(project, "unexpected nested Project receipt")
     | ProjectPartiallyVerified _ as receipt, _ -> receipt
 
@@ -502,51 +636,85 @@ let private applyProjectWriters (owner: string) (title: string) (desired: string
         let resolve (writer: string) =
             let isTeam = writer.StartsWith("team:", StringComparison.OrdinalIgnoreCase)
             let name = if isTeam then writer.Substring("team:".Length) else writer
-            let query = if isTeam then "query($owner:String!){organization(login:$owner){teams(first:100){nodes{id slug}}}}" else "query($login:String!){user(login:$login){id}}"
+
+            let query =
+                if isTeam then
+                    "query($owner:String!){organization(login:$owner){teams(first:100){nodes{id slug}}}}"
+                else
+                    "query($login:String!){user(login:$login){id}}"
+
             let variables = if isTeam then [ "owner", owner ] else [ "login", name ]
             let code, output = graphql query variables
-            if code <> 0 then None
+
+            if code <> 0 then
+                None
             else
                 try
                     let data = JsonNode.Parse(output).AsObject().["data"].AsObject()
+
                     if isTeam then
                         data.["organization"].AsObject().["teams"].AsObject().["nodes"].AsArray()
                         |> Seq.tryFind (fun team -> team.AsObject().["slug"].GetValue<string>() = name)
                         |> Option.map (fun team ->
-                            { Requested = writer
-                              ActorKind = "team"
-                              ActorId = team.AsObject().["id"].GetValue<string>() })
+                            {
+                                Requested = writer
+                                ActorKind = "team"
+                                ActorId = team.AsObject().["id"].GetValue<string>()
+                            })
                     else
                         Some
-                            { Requested = writer
-                              ActorKind = "user"
-                              ActorId = data.["user"].AsObject().["id"].GetValue<string>() }
-                with _ -> None
+                            {
+                                Requested = writer
+                                ActorKind = "user"
+                                ActorId = data.["user"].AsObject().["id"].GetValue<string>()
+                            }
+                with _ ->
+                    None
+
         let collaborators = desired |> List.map resolve
+
         if collaborators |> List.exists Option.isNone then
             ProjectPending(project, "one or more trusted writers could not be resolved through the typed GitHub API")
         else
             let resolved = collaborators |> List.choose (fun writer -> writer)
-            let mutation = "mutation($id:ID!,$collaborators:[ProjectV2Collaborator!]!){updateProjectV2Collaborators(input:{projectId:$id,collaborators:$collaborators}){collaborators(first:100){totalCount nodes{... on User{id login} ... on Team{id slug}}}}}"
+
+            let mutation =
+                "mutation($id:ID!,$collaborators:[ProjectV2Collaborator!]!){updateProjectV2Collaborators(input:{projectId:$id,collaborators:$collaborators}){collaborators(first:100){totalCount nodes{... on User{id login} ... on Team{id slug}}}}}"
+
             let code, output = graphqlProjectCollaborators mutation id resolved
-            if code <> 0 then ProjectPending(project, "Project writer allowlist mutation failed")
+
+            if code <> 0 then
+                ProjectPending(project, "Project writer allowlist mutation failed")
             else
                 try
                     let collaborators =
-                        JsonNode.Parse(output).AsObject().["data"].AsObject().["updateProjectV2Collaborators"].AsObject().["collaborators"].AsObject()
+                        JsonNode
+                            .Parse(output)
+                            .AsObject()
+                            .["data"].AsObject()
+                            .["updateProjectV2Collaborators"].AsObject()
+                            .["collaborators"].AsObject()
+
                     let count = collaborators.["totalCount"].GetValue<int>()
+
                     let actualIds =
                         collaborators.["nodes"].AsArray()
                         |> Seq.map (fun node -> node.AsObject().["id"].GetValue<string>())
                         |> Set.ofSeq
+
                     let expectedIds = resolved |> Seq.map (fun writer -> writer.ActorId) |> Set.ofSeq
+
                     if count <> resolved.Length || actualIds <> expectedIds then
-                        ProjectPending(project, "post-write Project collaborators did not match the requested writer allowlist")
+                        ProjectPending(
+                            project,
+                            "post-write Project collaborators did not match the requested writer allowlist"
+                        )
                     else
                         match inspectProject owner title with
                         | ProjectObserved(_, verifiedId, verifiedPublic, actor) ->
                             ProjectPartiallyVerified(project, verifiedId, verifiedPublic, actor, resolved)
-                        | ProjectPending(_, reason) -> ProjectPending(project, "post-write Project access read failed: " + reason)
+                        | ProjectPending(_, reason) ->
+                            ProjectPending(project, "post-write Project access read failed: " + reason)
                         | ProjectPartiallyVerified _ -> ProjectPending(project, "unexpected nested Project receipt")
                 with _ ->
                     ProjectPending(project, "Project writer mutation response was not a typed collaborator receipt")
@@ -557,41 +725,84 @@ let private applyProjectWriters (owner: string) (title: string) (desired: string
 /// in the run summary instead of inferring safety from `viewerCanUpdate` or scraping GitHub's UI.
 let private workspaceSecurity (opts: Options) : SecurityReport =
     let repository = opts.WorkspaceRepo |> Option.map secureRepository
+
     let project =
         match applyProjectVisibility opts.BoardOwner opts.BoardTitle opts.PublicBoard with
         | ProjectObserved _ as visible when List.isEmpty opts.TrustedWriters -> visible
         | ProjectObserved _ -> applyProjectWriters opts.BoardOwner opts.BoardTitle opts.TrustedWriters
         | ProjectPartiallyVerified _ as partial -> partial
         | ProjectPending _ as pending -> pending
+
     let repositoryMessage =
         match repository with
         | None -> "repository security pending — pass --repo owner/repository after the repository exists"
-        | Some(RepositorySecured(repo, prior, actor)) -> sprintf "repository %s issue policy verified as COLLABORATORS_ONLY (prior %s; actor %s)" repo prior actor
-        | Some(RepositoryPending(repo, reason)) -> sprintf "repository security pending for %s — %s; re-run new-sdd-workspace secure after creation/permission is available" repo reason
+        | Some(RepositorySecured(repo, prior, actor)) ->
+            sprintf "repository %s issue policy verified as COLLABORATORS_ONLY (prior %s; actor %s)" repo prior actor
+        | Some(RepositoryPending(repo, reason)) ->
+            sprintf
+                "repository security pending for %s — %s; re-run new-sdd-workspace secure after creation/permission is available"
+                repo
+                reason
+
     let projectMessage =
         match project with
-        | ProjectObserved(project, _, true, _) -> sprintf "Project %s is public-readable; base Read and explicit writer allowlist require the recorded human verification" project
-        | ProjectObserved(project, _, false, _) -> sprintf "Project %s is private; base access and explicit writer allowlist require the recorded human verification" project
-        | ProjectPartiallyVerified(project, _, _, _, _) -> sprintf "Project %s visibility and writer allowlist are verified; base Read requires the recorded human verification" project
+        | ProjectObserved(project, _, true, _) ->
+            sprintf
+                "Project %s is public-readable; base Read and explicit writer allowlist require the recorded human verification"
+                project
+        | ProjectObserved(project, _, false, _) ->
+            sprintf
+                "Project %s is private; base access and explicit writer allowlist require the recorded human verification"
+                project
+        | ProjectPartiallyVerified(project, _, _, _, _) ->
+            sprintf
+                "Project %s visibility and writer allowlist are verified; base Read requires the recorded human verification"
+                project
         | ProjectPending(project, reason) -> sprintf "Project access pending for %s — %s" project reason
-    { Repository = repository; Project = project; Outcome = Warned(repositoryMessage + "; " + projectMessage) }
 
-let private upsertSecurityReceipt (root: JsonObject) (kind: string) (targetField: string) (target: string) (receipt: JsonObject) =
+    {
+        Repository = repository
+        Project = project
+        Outcome = Warned(repositoryMessage + "; " + projectMessage)
+    }
+
+let private upsertSecurityReceipt
+    (root: JsonObject)
+    (kind: string)
+    (targetField: string)
+    (target: string)
+    (receipt: JsonObject)
+    =
     let receipts = JsonArray()
+
     match root.["verifiedSecurityReceipts"] with
     | :? JsonArray as existing ->
         existing
         |> Seq.filter (fun entry ->
             try
                 let row = entry.AsObject()
-                not (row.["kind"].GetValue<string>() = kind && row.[targetField].GetValue<string>() = target)
-            with _ -> true)
+
+                not (
+                    row.["kind"].GetValue<string>() = kind
+                    && row.[targetField].GetValue<string>() = target
+                )
+            with _ ->
+                true)
         |> Seq.iter (fun entry -> receipts.Add(entry.DeepClone()))
     | _ -> ()
+
     receipts.Add receipt
     root.["verifiedSecurityReceipts"] <- receipts
 
-let private projectReceiptJson (project: string) (projectId: string) (isPublic: bool) (actor: string) (writers: ResolvedProjectWriter list) (basePermission: string option) (effectiveWriters: string list option) =
+let private projectReceiptJson
+    (project: string)
+    (projectId: string)
+    (isPublic: bool)
+    (actor: string)
+    (writers: ResolvedProjectWriter list)
+    (basePermission: string option)
+    (effectiveWriters: string list option)
+    =
     let receipt = JsonObject()
     receipt.["kind"] <- JsonValue.Create "project-access"
     receipt.["project"] <- JsonValue.Create project
@@ -599,25 +810,47 @@ let private projectReceiptJson (project: string) (projectId: string) (isPublic: 
     receipt.["observedVisibility"] <- JsonValue.Create(if isPublic then "public" else "private")
     receipt.["actor"] <- JsonValue.Create actor
     receipt.["source"] <- JsonValue.Create "GitHub GraphQL requested-grant payload and ProjectV2 visibility re-read"
-    receipt.["verificationState"] <- JsonValue.Create(if basePermission.IsSome && effectiveWriters.IsSome then "verified-with-human-access-review" else "partial")
+
+    receipt.["verificationState"] <-
+        JsonValue.Create(
+            if basePermission.IsSome && effectiveWriters.IsSome then
+                "verified-with-human-access-review"
+            else
+                "partial"
+        )
+
     receipt.["basePermission"] <- JsonValue.Create(basePermission |> Option.defaultValue "unverified")
-    let verifiedFacts = JsonArray(JsonValue.Create "visibility", JsonValue.Create "requested-writer-grant-payload")
+
+    let verifiedFacts =
+        JsonArray(JsonValue.Create "visibility", JsonValue.Create "requested-writer-grant-payload")
+
     receipt.["verifiedFacts"] <- verifiedFacts
     let unverifiedFacts = JsonArray()
-    if basePermission.IsNone then unverifiedFacts.Add(JsonValue.Create "organization-base-permission")
-    if effectiveWriters.IsNone then unverifiedFacts.Add(JsonValue.Create "effective-exclusive-writer-set")
+
+    if basePermission.IsNone then
+        unverifiedFacts.Add(JsonValue.Create "organization-base-permission")
+
+    if effectiveWriters.IsNone then
+        unverifiedFacts.Add(JsonValue.Create "effective-exclusive-writer-set")
+
     receipt.["unverifiedFacts"] <- unverifiedFacts
+
     match effectiveWriters with
     | Some values ->
         let humanFacts = JsonObject()
         humanFacts.["source"] <- JsonValue.Create "human verification at Project → Settings → Manage access"
-        humanFacts.["organizationBasePermission"] <- JsonValue.Create(basePermission |> Option.defaultValue "unverified")
+
+        humanFacts.["organizationBasePermission"] <-
+            JsonValue.Create(basePermission |> Option.defaultValue "unverified")
+
         let observed = JsonArray()
         values |> List.iter (fun writer -> observed.Add(JsonValue.Create writer))
         humanFacts.["effectiveExclusiveWriters"] <- observed
         receipt.["humanVerifiedFacts"] <- humanFacts
     | None -> ()
+
     let writerRows = JsonArray()
+
     writers
     |> List.iter (fun writer ->
         let row = JsonObject()
@@ -625,6 +858,7 @@ let private projectReceiptJson (project: string) (projectId: string) (isPublic: 
         row.["actorKind"] <- JsonValue.Create writer.ActorKind
         row.["actorId"] <- JsonValue.Create writer.ActorId
         writerRows.Add row)
+
     receipt.["trustedWriters"] <- writerRows
     receipt
 
@@ -644,18 +878,37 @@ let private projectBaseAccessObligation (workspace: string) (project: string) (w
     obligation.["kind"] <- JsonValue.Create "project-base-access-human-verification"
     obligation.["target"] <- JsonValue.Create project
     obligation.["expectedBasePermission"] <- JsonValue.Create "READ"
-    let requested = writers |> List.map (fun writer -> writer.Requested) |> String.concat ","
+
+    let requested =
+        writers |> List.map (fun writer -> writer.Requested) |> String.concat ","
+
     let trustedWriters = JsonArray()
-    writers |> List.iter (fun writer -> trustedWriters.Add(JsonValue.Create writer.Requested))
+
+    writers
+    |> List.iter (fun writer -> trustedWriters.Add(JsonValue.Create writer.Requested))
+
     obligation.["trustedWriters"] <- trustedWriters
-    obligation.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify organization base permission Read AND that the effective/exclusive Write actor set exactly equals the explicit trusted writer allowlist."
+
+    obligation.["humanVerification"] <-
+        JsonValue.Create
+            "Project → Settings → Manage access; verify organization base permission Read AND that the effective/exclusive Write actor set exactly equals the explicit trusted writer allowlist."
+
     obligation.["resume"] <-
         JsonValue.Create(
-            securityResumeCommand workspace
-                [ "--project"; project
-                  "--trusted-writers"; requested
-                  "--verified-base-permission"; "READ"
-                  "--verified-exclusive-writers"; requested ])
+            securityResumeCommand
+                workspace
+                [
+                    "--project"
+                    project
+                    "--trusted-writers"
+                    requested
+                    "--verified-base-permission"
+                    "READ"
+                    "--verified-exclusive-writers"
+                    requested
+                ]
+        )
+
     obligation.["state"] <- JsonValue.Create "pending-human-verification"
     obligation
 
@@ -666,23 +919,32 @@ let private projectBaseAccessObligation (workspace: string) (project: string) (w
 /// `viewerCanUpdate` cannot safely clear it.
 let private recordSecurityObligations (opts: Options) (report: SecurityReport) =
     let dest = Path.Combine(opts.Target, ".fsgg", "scaffold-provenance.json")
+
     try
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest))
+        |> ignore
+
         let root =
             if File.Exists dest then
                 match JsonNode.Parse(File.ReadAllText dest) with
                 | :? JsonObject as o -> o
                 | _ -> JsonObject()
-            else JsonObject()
+            else
+                JsonObject()
+
         let obligations = JsonArray()
         let repo = JsonObject()
         repo.["kind"] <- JsonValue.Create "repository-issue-policy"
         repo.["target"] <- JsonValue.Create(opts.WorkspaceRepo |> Option.defaultValue "repository-not-yet-created")
         repo.["targetPolicy"] <- JsonValue.Create "COLLABORATORS_ONLY"
+
         repo.["resume"] <-
             JsonValue.Create(
-                securityResumeCommand opts.Target
-                    [ "--repo"; opts.WorkspaceRepo |> Option.defaultValue "owner/repository" ])
+                securityResumeCommand
+                    opts.Target
+                    [ "--repo"; opts.WorkspaceRepo |> Option.defaultValue "owner/repository" ]
+            )
+
         match report.Repository with
         | Some(RepositorySecured(repository, prior, actor)) ->
             let receipt = JsonObject()
@@ -696,32 +958,65 @@ let private recordSecurityObligations (opts: Options) (report: SecurityReport) =
         | _ ->
             repo.["state"] <- JsonValue.Create "pending"
             obligations.Add repo
+
         let projectTarget = sprintf "%s/%s" opts.BoardOwner opts.BoardTitle
+
         match report.Project with
         | ProjectPartiallyVerified(project, id, isPublic, actor, writers) ->
-            upsertSecurityReceipt root "project-access" "project" project (projectReceiptJson project id isPublic actor writers None None)
+            upsertSecurityReceipt
+                root
+                "project-access"
+                "project"
+                project
+                (projectReceiptJson project id isPublic actor writers None None)
+
             obligations.Add(projectBaseAccessObligation opts.Target project writers)
         | _ ->
             let project = JsonObject()
             project.["kind"] <- JsonValue.Create "project-access"
             project.["target"] <- JsonValue.Create projectTarget
-            project.["requestedVisibility"] <- JsonValue.Create(match opts.PublicBoard with Some true -> "public" | Some false -> "private" | None -> "preserve")
+
+            project.["requestedVisibility"] <-
+                JsonValue.Create(
+                    match opts.PublicBoard with
+                    | Some true -> "public"
+                    | Some false -> "private"
+                    | None -> "preserve"
+                )
+
             project.["expectedBasePermission"] <- JsonValue.Create "READ"
             let writers = JsonArray()
-            opts.TrustedWriters |> List.iter (fun writer -> writers.Add(JsonValue.Create writer))
+
+            opts.TrustedWriters
+            |> List.iter (fun writer -> writers.Add(JsonValue.Create writer))
+
             project.["trustedWriters"] <- writers
-            project.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify base permission Read and that the effective/exclusive Write actor set exactly equals the explicit trusted writer allowlist. Run the recorded secure command after supported visibility/requested-grant verification, then its exact two-fact resume command."
+
+            project.["humanVerification"] <-
+                JsonValue.Create
+                    "Project → Settings → Manage access; verify base permission Read and that the effective/exclusive Write actor set exactly equals the explicit trusted writer allowlist. Run the recorded secure command after supported visibility/requested-grant verification, then its exact two-fact resume command."
+
             let retryArgs =
                 [ "--project"; projectTarget ]
-                @ (match opts.PublicBoard with Some true -> [ "--public-board" ] | Some false -> [ "--private-board" ] | None -> [])
+                @ (match opts.PublicBoard with
+                   | Some true -> [ "--public-board" ]
+                   | Some false -> [ "--private-board" ]
+                   | None -> [])
                 @ [ "--trusted-writers"; String.concat "," opts.TrustedWriters ]
+
             project.["resume"] <- JsonValue.Create(securityResumeCommand opts.Target retryArgs)
             project.["state"] <- JsonValue.Create "pending-human-verification"
             obligations.Add project
+
         root.["securityObligations"] <- obligations
         File.WriteAllText(dest, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
     with ex ->
-        raise (InvalidOperationException("security provenance persistence failed; no verified or pending security state was recorded", ex))
+        raise (
+            InvalidOperationException(
+                "security provenance persistence failed; no verified or pending security state was recorded",
+                ex
+            )
+        )
 
 /// Fetch one text file from a raw URL. `Error` on any non-2xx or transport failure — the coordination
 /// step is best-effort, so the caller downgrades a miss to a warning rather than failing the scaffold.
@@ -730,6 +1025,7 @@ let private fetchText (url: string) : Result<string, string> =
         use client = new HttpClient()
         client.Timeout <- TimeSpan.FromSeconds 30.0
         use resp = client.GetAsync(url).GetAwaiter().GetResult()
+
         if resp.IsSuccessStatusCode then
             Ok(resp.Content.ReadAsStringAsync().GetAwaiter().GetResult())
         else
@@ -739,7 +1035,10 @@ let private fetchText (url: string) : Result<string, string> =
 
 let private writeUnder (target: string) (relPath: string) (content: string) =
     let dest = Path.Combine(target, relPath)
-    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest))
+    |> ignore
+
     File.WriteAllText(dest, content)
 
 // ── In-repository initialization handoff ─────────────────────────────────────
@@ -747,15 +1046,18 @@ let private writeUnder (target: string) (relPath: string) (content: string) =
 let private initializationMarker = ".fsgg/workspace-initialization.json"
 
 let private initializationGuidance =
-    String.concat "\n"
-        [ "<!-- fsgg:workspace-initialization:start -->"
-          "## Workspace initialization"
-          ""
-          "Before doing repository work, read `.fsgg/workspace-initialization.json`. If it is missing"
-          "or its `status` is not `initialized`, warn the user that setup is incomplete and run"
-          "`$initialize-sdd-workspace` with them. Do not guess repository, board, collaborator, or"
-          "package configuration."
-          "<!-- fsgg:workspace-initialization:end -->" ]
+    String.concat
+        "\n"
+        [
+            "<!-- fsgg:workspace-initialization:start -->"
+            "## Workspace initialization"
+            ""
+            "Before doing repository work, read `.fsgg/workspace-initialization.json`. If it is missing"
+            "or its `status` is not `initialized`, warn the user that setup is incomplete and run"
+            "`$initialize-sdd-workspace` with them. Do not guess repository, board, collaborator, or"
+            "package configuration."
+            "<!-- fsgg:workspace-initialization:end -->"
+        ]
 
 let private upsertInitializationGuidance (target: string) (fileName: string) =
     let dest = Path.Combine(target, fileName)
@@ -763,21 +1065,34 @@ let private upsertInitializationGuidance (target: string) (fileName: string) =
     let endMarker = "<!-- fsgg:workspace-initialization:end -->"
     let existing = if File.Exists dest then File.ReadAllText dest else ""
     let startAt = existing.IndexOf(startMarker, StringComparison.Ordinal)
+
     let withoutOld =
-        if startAt < 0 then existing.TrimEnd()
+        if startAt < 0 then
+            existing.TrimEnd()
         else
             let endAt = existing.IndexOf(endMarker, startAt, StringComparison.Ordinal)
-            if endAt < 0 then existing.Substring(0, startAt).TrimEnd()
+
+            if endAt < 0 then
+                existing.Substring(0, startAt).TrimEnd()
             else
                 let after = endAt + endMarker.Length
                 (existing.Substring(0, startAt) + existing.Substring(after)).Trim()
-    let prefix = if String.IsNullOrWhiteSpace withoutOld then "" else withoutOld + "\n\n"
+
+    let prefix =
+        if String.IsNullOrWhiteSpace withoutOld then
+            ""
+        else
+            withoutOld + "\n\n"
+
     File.WriteAllText(dest, prefix + initializationGuidance + "\n")
 
 let private embeddedText (name: string) =
     let assembly = System.Reflection.Assembly.GetExecutingAssembly()
     use stream = assembly.GetManifestResourceStream name
-    if isNull stream then failwithf "embedded initialization resource is missing: %s" name
+
+    if isNull stream then
+        failwithf "embedded initialization resource is missing: %s" name
+
     use reader = new StreamReader(stream)
     reader.ReadToEnd()
 
@@ -787,32 +1102,47 @@ let private embeddedText (name: string) =
 let private installInitializationHandoff (opts: Options) : Outcome =
     try
         let files =
-            [ "SKILL.md", embeddedText "NewSddWorkspace.InitializeSkill.SKILL.md"
-              "agents/openai.yaml", embeddedText "NewSddWorkspace.InitializeSkill.agents.openai.yaml" ]
+            [
+                "SKILL.md", embeddedText "NewSddWorkspace.InitializeSkill.SKILL.md"
+                "agents/openai.yaml", embeddedText "NewSddWorkspace.InitializeSkill.agents.openai.yaml"
+            ]
+
         for root in [ ".claude/skills"; ".agents/skills" ] do
             for rel, content in files do
                 writeUnder opts.Target (sprintf "%s/initialize-sdd-workspace/%s" root rel) content
 
         let markerPath = Path.Combine(opts.Target, initializationMarker)
+
         let alreadyInitialized =
-            if not (File.Exists markerPath) then false
+            if not (File.Exists markerPath) then
+                false
             else
                 try
                     JsonNode.Parse(File.ReadAllText markerPath).AsObject().["status"].GetValue<string>() = "initialized"
-                with _ -> false
+                with _ ->
+                    false
+
         if not alreadyInitialized then
             let marker = JsonObject()
             marker.["schemaVersion"] <- JsonValue.Create 1
             marker.["status"] <- JsonValue.Create "pending"
             marker.["createdAt"] <- JsonValue.Create(DateTimeOffset.UtcNow.ToString "O")
             marker.["next"] <- JsonValue.Create "$initialize-sdd-workspace"
-            marker.["reason"] <- JsonValue.Create "repository-specific configuration is intentionally deferred until an agent enters the workspace"
-            writeUnder opts.Target initializationMarker (marker.ToJsonString(JsonSerializerOptions(WriteIndented = true)) + "\n")
+
+            marker.["reason"] <-
+                JsonValue.Create
+                    "repository-specific configuration is intentionally deferred until an agent enters the workspace"
+
+            writeUnder
+                opts.Target
+                initializationMarker
+                (marker.ToJsonString(JsonSerializerOptions(WriteIndented = true)) + "\n")
 
         upsertInitializationGuidance opts.Target "AGENTS.md"
         upsertInitializationGuidance opts.Target "CLAUDE.md"
         Succeeded
-    with ex -> Failed ex.Message
+    with ex ->
+        Failed ex.Message
 
 /// Add the owner/group/other execute bits to a file (the `fsgg-coord` shim must be runnable).
 /// Best-effort at the call site — a filesystem that rejects the mode (or Windows) leaves the file
@@ -829,29 +1159,43 @@ let private setExecutable (dest: string) =
 let private setExecutableState (dest: string) (executable: bool) =
     if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
         let current = File.GetUnixFileMode dest
+
         let executeBits =
-            UnixFileMode.UserExecute ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherExecute
-        File.SetUnixFileMode(dest, (if executable then current ||| executeBits else current &&& ~~~executeBits))
+            UnixFileMode.UserExecute
+            ||| UnixFileMode.GroupExecute
+            ||| UnixFileMode.OtherExecute
+
+        File.SetUnixFileMode(
+            dest,
+            (if executable then
+                 current ||| executeBits
+             else
+                 current &&& ~~~executeBits)
+        )
 
 let private isExecutable (dest: string) =
-    if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then false
+    if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then
+        false
     else
         let executeBits =
-            UnixFileMode.UserExecute ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherExecute
+            UnixFileMode.UserExecute
+            ||| UnixFileMode.GroupExecute
+            ||| UnixFileMode.OtherExecute
+
         (File.GetUnixFileMode(dest) &&& executeBits) <> enum<UnixFileMode> 0
 
 /// Fetch the generated closed-set directory index. Old refs have no index, so they retain the
 /// SKILL.md-only reader during publish-before-flip.
 let private coordinationSkillFiles (raw: string -> string) =
     match fetchText (raw "registry/coordination-kit-skill-manifest.json") with
-    | Error _ ->
-        false, (legacyCoordinationSkills |> List.map (fun id -> id, "SKILL.md", false))
+    | Error _ -> false, (legacyCoordinationSkills |> List.map (fun id -> id, "SKILL.md", false))
     | Ok json ->
         true,
         (JsonNode.Parse(json).AsObject().["skills"].AsArray()
          |> Seq.collect (fun skill ->
              let row = skill.AsObject()
              let id = row.["id"].GetValue<string>()
+
              row.["files"].AsArray()
              |> Seq.map (fun file ->
                  let f = file.AsObject()
@@ -863,7 +1207,10 @@ let private coordinationSkillFiles (raw: string -> string) =
 /// `dist/dotnet/.config/dotnet-tools.json` — we lift only the coord entry out of it.
 let private mergeToolManifest (target: string) (manifestJson: string) =
     let dest = Path.Combine(target, ".config", "dotnet-tools.json")
-    let coord = JsonNode.Parse(manifestJson).AsObject().["tools"].AsObject().["fs.gg.coord.cli"]
+
+    let coord =
+        JsonNode.Parse(manifestJson).AsObject().["tools"].AsObject().["fs.gg.coord.cli"]
+
     let root =
         if File.Exists dest then
             JsonNode.Parse(File.ReadAllText dest).AsObject()
@@ -873,6 +1220,7 @@ let private mergeToolManifest (target: string) (manifestJson: string) =
             o.["isRoot"] <- JsonValue.Create true
             o.["tools"] <- JsonObject()
             o
+
     let tools =
         match root.["tools"] with
         | :? JsonObject as t -> t
@@ -880,8 +1228,12 @@ let private mergeToolManifest (target: string) (manifestJson: string) =
             let t = JsonObject()
             root.["tools"] <- t
             t
+
     tools.["fs.gg.coord.cli"] <- coord.DeepClone()
-    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest))
+    |> ignore
+
     File.WriteAllText(dest, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
 
 /// Write/MERGE the coordination env into the workspace's `.claude/settings.json` — where Claude Code
@@ -889,6 +1241,7 @@ let private mergeToolManifest (target: string) (manifestJson: string) =
 /// have written a settings.json (hooks, etc.), so we touch only the `env` keys we own.
 let private writeCoordinationEnv (target: string) (owner: string) (title: string) (choreLocks: string option) =
     let dest = Path.Combine(target, ".claude", "settings.json")
+
     let root =
         if File.Exists dest then
             match JsonNode.Parse(File.ReadAllText dest) with
@@ -896,6 +1249,7 @@ let private writeCoordinationEnv (target: string) (owner: string) (title: string
             | _ -> JsonObject()
         else
             JsonObject()
+
     let env =
         match root.["env"] with
         | :? JsonObject as e -> e
@@ -903,19 +1257,26 @@ let private writeCoordinationEnv (target: string) (owner: string) (title: string
             let e = JsonObject()
             root.["env"] <- e
             e
+
     env.["FSGG_COORD_OWNER"] <- JsonValue.Create owner
     env.["FSGG_COORD_PROJECT"] <- JsonValue.Create title
+
     match choreLocks with
     | Some cl -> env.["FSGG_COORD_CHORE_LOCKS"] <- JsonValue.Create cl
     | None -> ()
-    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest))
+    |> ignore
+
     File.WriteAllText(dest, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
 
 /// Vendor the coordination kit from FS-GG/.github@<ref> into the workspace and write the board env.
 /// Best-effort (mirrors governance): a file that 404s becomes a Warning — the env still lands, and the
 /// rest is fetchable by hand — never a fatal that would strand a good scaffold.
 let private wireCoordination (kitRef: string) (opts: Options) : Outcome =
-    let raw p = sprintf "https://raw.githubusercontent.com/FS-GG/.github/%s/%s" kitRef p
+    let raw p =
+        sprintf "https://raw.githubusercontent.com/FS-GG/.github/%s/%s" kitRef p
+
     let problems = ResizeArray<string>()
     let _, skillFiles = coordinationSkillFiles raw
     // 1 · complete skill directories → every agent-skill root, byte- and mode-identical.
@@ -928,24 +1289,36 @@ let private wireCoordination (kitRef: string) (opts: Options) : Outcome =
             for root in [ ".claude/skills"; ".agents/skills" ] do
                 let destRel = sprintf "%s/%s/%s" root s rel
                 writeUnder opts.Target destRel content
-                try setExecutableState (Path.Combine(opts.Target, destRel)) executable with _ -> ()
+
+                try
+                    setExecutableState (Path.Combine(opts.Target, destRel)) executable
+                with _ ->
+                    ()
         | Error e -> problems.Add e
     // 2 · the fsgg-coord shim (executable)
     (match fetchText (raw "scripts/fsgg-coord") with
      | Ok content ->
          writeUnder opts.Target "scripts/fsgg-coord" content
-         try setExecutable (Path.Combine(opts.Target, "scripts", "fsgg-coord"))
-         with _ -> ()
+
+         try
+             setExecutable (Path.Combine(opts.Target, "scripts", "fsgg-coord"))
+         with _ ->
+             ()
      | Error e -> problems.Add e)
     // 3 · the engine tool manifest (merge the coord tool)
     (match fetchText (raw "dist/dotnet/.config/dotnet-tools.json") with
      | Ok content ->
-         try mergeToolManifest opts.Target content
-         with ex -> problems.Add ex.Message
+         try
+             mergeToolManifest opts.Target content
+         with ex ->
+             problems.Add ex.Message
      | Error e -> problems.Add e)
     // 4 · the board env (no network — always writable)
-    (try writeCoordinationEnv opts.Target opts.BoardOwner opts.BoardTitle opts.ChoreLocks
-     with ex -> problems.Add ex.Message)
+    (try
+        writeCoordinationEnv opts.Target opts.BoardOwner opts.BoardTitle opts.ChoreLocks
+     with ex ->
+         problems.Add ex.Message)
+
     if problems.Count = 0 then
         Succeeded
     else
@@ -968,13 +1341,15 @@ let private wireCoordination (kitRef: string) (opts: Options) : Outcome =
 /// The retrofit invocation surface. A subset of `Options` — only the coordination inputs are
 /// meaningful here; the SDD/render/governance steps do not re-run on an existing workspace.
 type RetrofitOptions =
-    { Target: string
-      /// The FS-GG/.github ref to vendor the kit from (default `main`). Mirrors `--ref` on scaffold.
-      Ref: string
-      WorkspaceRepo: string option
-      BoardOwner: string
-      BoardTitle: string
-      ChoreLocks: string option }
+    {
+        Target: string
+        /// The FS-GG/.github ref to vendor the kit from (default `main`). Mirrors `--ref` on scaffold.
+        Ref: string
+        WorkspaceRepo: string option
+        BoardOwner: string
+        BoardTitle: string
+        ChoreLocks: string option
+    }
 
 /// One file's reconciliation outcome. `Wrote(rel, wasMissing)` distinguishes a fresh materialization
 /// (`wasMissing = true`) from a drift repair (`false`); `Kept` means present-and-identical (no write);
@@ -990,17 +1365,29 @@ type private DriftAction =
 /// is never rewritten, so re-running the retrofit on a coherent workspace is a pure no-op.
 let private reconcileFile (target: string) (rel: string) (desired: string) (makeExec: bool) : DriftAction =
     let dest = Path.Combine(target, rel)
-    let existing = if File.Exists dest then Some(File.ReadAllText dest) else None
+
+    let existing =
+        if File.Exists dest then
+            Some(File.ReadAllText dest)
+        else
+            None
+
     let modeMatches =
         not (File.Exists dest)
         || RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
         || isExecutable dest = makeExec
+
     match existing with
     | Some cur when cur = desired && modeMatches -> Kept rel
     | _ ->
         try
             writeUnder target rel desired
-            try setExecutableState dest makeExec with _ -> ()
+
+            try
+                setExecutableState dest makeExec
+            with _ ->
+                ()
+
             Wrote(rel, existing.IsNone)
         with ex ->
             Errored ex.Message
@@ -1012,9 +1399,11 @@ let private reconcileFile (target: string) (rel: string) (desired: string) (make
 let private reconcileToolManifest (target: string) (manifestJson: string) : DriftAction =
     let rel = ".config/dotnet-tools.json"
     let dest = Path.Combine(target, ".config", "dotnet-tools.json")
+
     try
         let desiredCoord =
             JsonNode.Parse(manifestJson).AsObject().["tools"].AsObject().["fs.gg.coord.cli"]
+
         let currentCoord =
             if File.Exists dest then
                 try
@@ -1031,10 +1420,12 @@ let private reconcileToolManifest (target: string) (manifestJson: string) : Drif
                     None
             else
                 None
+
         let identical =
             match currentCoord with
             | Some c -> c.ToJsonString() = desiredCoord.ToJsonString()
             | None -> false
+
         if identical then
             Kept rel
         else
@@ -1046,6 +1437,7 @@ let private reconcileToolManifest (target: string) (manifestJson: string) : Drif
 /// The current value of one `env` key in `.claude/settings.json`, or None if the file/key is absent.
 let private currentEnvValue (target: string) (name: string) : string option =
     let dest = Path.Combine(target, ".claude", "settings.json")
+
     if not (File.Exists dest) then
         None
     else
@@ -1069,14 +1461,17 @@ let private currentEnvValue (target: string) (name: string) : string option =
 let private reconcileEnv (target: string) (owner: string) (title: string) (choreLocks: string option) : DriftAction =
     let rel = ".claude/settings.json (env)"
     let curOwner = currentEnvValue target "FSGG_COORD_OWNER"
+
     let choreMatches =
         match choreLocks with
         | None -> true // not asked for ⇒ nothing to reconcile on this key
         | Some cl -> currentEnvValue target "FSGG_COORD_CHORE_LOCKS" = Some cl
+
     let identical =
         curOwner = Some owner
         && currentEnvValue target "FSGG_COORD_PROJECT" = Some title
         && choreMatches
+
     if identical then
         Kept rel
     else
@@ -1088,20 +1483,25 @@ let private reconcileEnv (target: string) (owner: string) (title: string) (chore
 
 /// What the retrofit did, aggregated across every kit file + the env.
 type private RetrofitReport =
-    { Wrote: (string * bool) list // (rel, wasMissing) — wasMissing=true ⇒ fresh; false ⇒ drift repair
-      Kept: string list
-      Problems: string list }
+    {
+        Wrote: (string * bool) list // (rel, wasMissing) — wasMissing=true ⇒ fresh; false ⇒ drift repair
+        Kept: string list
+        Problems: string list
+    }
 
 /// Idempotently materialize the coordination kit + board env into an already-scaffolded workspace,
 /// touching ONLY what is missing or drifted. Same fetch surface as `wireCoordination` (the four skills
 /// into all three agent-skill roots, the `fsgg-coord` shim, the `fs.gg.coord.cli` tool manifest, the
 /// board env) — but every write goes through a reconcile so a coherent kit is left byte-for-byte intact.
 let private retrofitCoordination (opts: RetrofitOptions) : RetrofitReport =
-    let raw p = sprintf "https://raw.githubusercontent.com/FS-GG/.github/%s/%s" opts.Ref p
+    let raw p =
+        sprintf "https://raw.githubusercontent.com/FS-GG/.github/%s/%s" opts.Ref p
+
     let wrote = ResizeArray<string * bool>()
     let kept = ResizeArray<string>()
     let problems = ResizeArray<string>()
     let hasDirectoryManifest, skillFiles = coordinationSkillFiles raw
+
     let record =
         function
         | Wrote(rel, m) -> wrote.Add(rel, m)
@@ -1114,19 +1514,24 @@ let private retrofitCoordination (opts: RetrofitOptions) : RetrofitReport =
             for root in [ ".claude/skills"; ".agents/skills" ] do
                 record (reconcileFile opts.Target (sprintf "%s/%s/%s" root s rel) content executable)
         | Error e -> problems.Add e
+
     if hasDirectoryManifest then
         let expected = skillFiles |> Seq.map (fun (id, rel, _) -> id, rel) |> Set.ofSeq
+
         for root in [ ".claude/skills"; ".agents/skills" ] do
             for id in skillFiles |> Seq.map (fun (id, _, _) -> id) |> Seq.distinct do
                 let dir = Path.Combine(opts.Target, root, id)
+
                 if Directory.Exists dir then
                     for file in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories) do
                         let rel = Path.GetRelativePath(dir, file).Replace(Path.DirectorySeparatorChar, '/')
+
                         if not (Set.contains (id, rel) expected) then
                             try
                                 File.Delete file
                                 wrote.Add(sprintf "%s/%s/%s" root id rel, false)
-                            with ex -> problems.Add ex.Message
+                            with ex ->
+                                problems.Add ex.Message
     // 2 · the fsgg-coord shim (executable)
     (match fetchText (raw "scripts/fsgg-coord") with
      | Ok content -> record (reconcileFile opts.Target "scripts/fsgg-coord" content true)
@@ -1137,9 +1542,12 @@ let private retrofitCoordination (opts: RetrofitOptions) : RetrofitReport =
      | Error e -> problems.Add e)
     // 4 · the board env (no network — always reconcilable)
     record (reconcileEnv opts.Target opts.BoardOwner opts.BoardTitle opts.ChoreLocks)
-    { Wrote = List.ofSeq wrote
-      Kept = List.ofSeq kept
-      Problems = List.ofSeq problems }
+
+    {
+        Wrote = List.ofSeq wrote
+        Kept = List.ofSeq kept
+        Problems = List.ofSeq problems
+    }
 
 /// Append a `coordination` entry to the `retrofits` array in `.fsgg/scaffold-provenance.json`, naming
 /// what was freshly materialized vs re-emitted as drift. Additive and read-safe: a `retrofits` key is
@@ -1149,6 +1557,7 @@ let private retrofitCoordination (opts: RetrofitOptions) : RetrofitReport =
 /// the retrofit log.
 let private recordRetrofit (target: string) (opts: RetrofitOptions) (materialized: string list) (drift: string list) =
     let dest = Path.Combine(target, ".fsgg", "scaffold-provenance.json")
+
     let root =
         if File.Exists dest then
             match JsonNode.Parse(File.ReadAllText dest) with
@@ -1156,6 +1565,7 @@ let private recordRetrofit (target: string) (opts: RetrofitOptions) (materialize
             | _ -> JsonObject()
         else
             JsonObject()
+
     let retrofits =
         match root.["retrofits"] with
         | :? JsonArray as a -> a
@@ -1163,22 +1573,32 @@ let private recordRetrofit (target: string) (opts: RetrofitOptions) (materialize
             let a = JsonArray()
             root.["retrofits"] <- a
             a
+
     let entry = JsonObject()
     entry.["kind"] <- JsonValue.Create "coordination"
     entry.["tool"] <- JsonValue.Create "new-sdd-workspace"
     entry.["at"] <- JsonValue.Create(DateTime.UtcNow.ToString "o")
     entry.["ref"] <- JsonValue.Create opts.Ref
     entry.["board"] <- JsonValue.Create(sprintf "%s/%s" opts.BoardOwner opts.BoardTitle)
-    opts.ChoreLocks |> Option.iter (fun cl -> entry.["choreLocks"] <- JsonValue.Create cl)
+
+    opts.ChoreLocks
+    |> Option.iter (fun cl -> entry.["choreLocks"] <- JsonValue.Create cl)
+
     let arrOf (xs: string list) =
         let a = JsonArray()
+
         for x in xs do
             a.Add(JsonValue.Create x)
+
         a
+
     entry.["materialized"] <- arrOf materialized
     entry.["reMaterializedDrift"] <- arrOf drift
     retrofits.Add entry
-    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest))
+    |> ignore
+
     File.WriteAllText(dest, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
 
 // ── Rendering (presentation edge) ────────────────────────────────────────────
@@ -1199,33 +1619,52 @@ let private header (opts: Options) =
     let grid = Grid()
     grid.AddColumn() |> ignore
     grid.AddColumn() |> ignore
-    grid.AddRow("[grey]product[/]", sprintf "[bold]%s[/]" (Markup.Escape opts.Product)) |> ignore
+
+    grid.AddRow("[grey]product[/]", sprintf "[bold]%s[/]" (Markup.Escape opts.Product))
+    |> ignore
+
     grid.AddRow("[grey]target[/]", Markup.Escape opts.Target) |> ignore
     grid.AddRow("[grey]template[/]", Markup.Escape opts.Template) |> ignore
     grid.AddRow("[grey]lifecycle[/]", Markup.Escape opts.Lifecycle) |> ignore
+
     match opts.Profile with
     | Some profile -> grid.AddRow("[grey]profile[/]", Markup.Escape profile) |> ignore
     | None -> ()
+
     match opts.Bundle with
     | Some bundle -> grid.AddRow("[grey]bundle[/]", Markup.Escape bundle) |> ignore
     | None -> ()
+
     match opts.NpmPackage, opts.NpmVersion with
-    | Some packageName, Some version -> grid.AddRow("[grey]npm[/]", Markup.Escape(sprintf "%s@%s" packageName version)) |> ignore
+    | Some packageName, Some version ->
+        grid.AddRow("[grey]npm[/]", Markup.Escape(sprintf "%s@%s" packageName version))
+        |> ignore
     | _ -> ()
+
     match opts.BindingTarget with
     | Some bindingTarget -> grid.AddRow("[grey]binding target[/]", Markup.Escape bindingTarget) |> ignore
     | None -> ()
+
     grid.AddRow("[grey]descriptor ref[/]", Markup.Escape opts.Ref) |> ignore
+
     grid.AddRow(
         "[grey]currency[/]",
-        (if opts.Pinned then "[dim]pinned — installed CLI (--pinned)[/]" else "update fsgg-sdd before scaffold")
+        (if opts.Pinned then
+             "[dim]pinned — installed CLI (--pinned)[/]"
+         else
+             "update fsgg-sdd before scaffold")
     )
     |> ignore
+
     grid.AddRow(
         "[grey]governance[/]",
-        (if opts.Governance then "light / non-blocking" else "[dim]disabled (--no-governance)[/]")
+        (if opts.Governance then
+             "light / non-blocking"
+         else
+             "[dim]disabled (--no-governance)[/]")
     )
     |> ignore
+
     grid.AddRow(
         "[grey]coordination[/]",
         (if opts.Coordinate then
@@ -1234,8 +1673,10 @@ let private header (opts: Options) =
              "[dim]disabled (--no-coordination)[/]")
     )
     |> ignore
+
     if opts.Upgrade then
         grid.AddRow("[grey]upgrade[/]", "reconcile if behind") |> ignore
+
     let panel = Panel(grid)
     panel.Header <- PanelHeader "[bold]new-sdd-workspace[/]"
     panel.Border <- BoxBorder.Rounded
@@ -1249,17 +1690,28 @@ let private summary (results: StepResult seq) (opts: Options) (fatal: bool) =
     table.AddColumn "[bold]Step[/]" |> ignore
     table.AddColumn "[bold]Result[/]" |> ignore
     table.AddColumn "[bold]Detail[/]" |> ignore
+
     for r in results do
         let result, detail = outcomeCell r.Outcome
         table.AddRow(Markup.Escape r.Title, result, Markup.Escape detail) |> ignore
+
     let panel = Panel(table)
+
     panel.Header <-
-        PanelHeader(if fatal then "[red]scaffold summary — incomplete[/]" else "[green]scaffold summary[/]")
+        PanelHeader(
+            if fatal then
+                "[red]scaffold summary — incomplete[/]"
+            else
+                "[green]scaffold summary[/]"
+        )
+
     panel.Border <- BoxBorder.Rounded
     AnsiConsole.Write panel
+
     if not fatal then
         AnsiConsole.WriteLine()
         AnsiConsole.MarkupLine(sprintf "[bold]Done:[/] workspace in [green]%s[/]" (Markup.Escape opts.Target))
+
         AnsiConsole.MarkupLine(
             sprintf
                 "[bold yellow]Initialization required:[/] first start your agent in [green]%s[/], then ask it to run [aqua]$initialize-sdd-workspace[/]. The wizard does not run initialization."
@@ -1268,7 +1720,10 @@ let private summary (results: StepResult seq) (opts: Options) (fatal: bool) =
         // The chore queue needs a per-repo lock issue, and this workspace's repo does not exist on GitHub
         // yet — so the one thing the scaffolder cannot do for a NON-FS-GG board is name it in the summary.
         if opts.Coordinate && opts.BoardOwner.ToLowerInvariant() <> "fs-gg" then
-            let repo = opts.WorkspaceRepo |> Option.defaultValue (sprintf "%s/%s" opts.BoardOwner opts.Product)
+            let repo =
+                opts.WorkspaceRepo
+                |> Option.defaultValue (sprintf "%s/%s" opts.BoardOwner opts.Product)
+
             AnsiConsole.MarkupLine(
                 sprintf
                     "[bold]Coord:[/] for [aqua]offer[/]/chores, create a closed [grey]`[[chore-lock]]`[/] issue in [green]%s[/] and add [grey]%s#<n>[/] to [grey]FSGG_COORD_CHORE_LOCKS[/] (.claude/settings.json)"
@@ -1279,27 +1734,33 @@ let private summary (results: StepResult seq) (opts: Options) (fatal: bool) =
 /// The `fs-gg-ui` render profiles, in menu order — id + one-line gloss. `game` is the
 /// scaffold-provider default (a minimal Pong-style starter); the rest are the sibling lanes.
 let private profiles =
-    [ "game", "minimal Pong-style starter (default)"
-      "app", "controls-showcase MVU/Elmish app"
-      "headless-scene", "scene render, no interactive shell"
-      "governed", "scene/app pre-wired for the governance gates"
-      "sample-pack", "a pack of sample scenes" ]
+    [
+        "game", "minimal Pong-style starter (default)"
+        "app", "controls-showcase MVU/Elmish app"
+        "headless-scene", "scene render, no interactive shell"
+        "governed", "scene/app pre-wired for the governance gates"
+        "sample-pack", "a pack of sample scenes"
+    ]
 
 /// Fable-game compositions are distinct from Rendering profiles. Player is the provider default;
 /// the other values add Studio and/or editable examples without changing lifecycle selection.
 let private bundles =
-    [ "player", "playable SVG arena (default)"
-      "studio", "arena with Create/Arrange/Play/Review tools"
-      "tactical", "Studio plus the editable tactical example"
-      "arcade", "Studio plus the editable arcade example"
-      "complete", "Studio and every editable example" ]
+    [
+        "player", "playable SVG arena (default)"
+        "studio", "arena with Create/Arrange/Play/Review tools"
+        "tactical", "Studio plus the editable tactical example"
+        "arcade", "Studio plus the editable arcade example"
+        "complete", "Studio and every editable example"
+    ]
 
 let private templates =
-    [ "rendering", "FS.GG.Rendering application (supports --profile)"
-      "console", "minimal F# executable"
-      "web", "ASP.NET Core + TypeScript/Vite workspace"
-      "fable-game", "Fable/Elmish game workspace"
-      "fable-bindings", "Fable interop library (requires an exact npm package/version and target)" ]
+    [
+        "rendering", "FS.GG.Rendering application (supports --profile)"
+        "console", "minimal F# executable"
+        "web", "ASP.NET Core + TypeScript/Vite workspace"
+        "fable-game", "Fable/Elmish game workspace"
+        "fable-bindings", "Fable interop library (requires an exact npm package/version and target)"
+    ]
 
 let private supportsProfile template = template = "rendering"
 let private requiresNpmClosure template = template = "fable-bindings"
@@ -1318,25 +1779,53 @@ let private hasAudio (profile: string) =
 let private usage () =
     AnsiConsole.MarkupLine
         "[bold]new-sdd-workspace[/] — scaffold an FS.GG workspace (SDD + Rendering + optional Governance)"
+
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Usage[/]"
     AnsiConsole.MarkupLine "  new-sdd-workspace [grey]<target-dir> <product-name>[/] [[options]]"
-    AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]retrofit[/] [grey]<target-dir>[/] [[--board owner/title]] [[--repo owner/repo]] [[--chore-locks refs]] [[--ref git-ref]]"
-    AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]secure[/] [grey][[workspace]] --repo owner/repository | --project owner/title (--public-board|--private-board) --trusted-writers ids[/]"
-    AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]secure[/] [grey]<workspace> --project owner/title --trusted-writers ids --verified-base-permission READ --verified-exclusive-writers ids[/]"
-    AnsiConsole.MarkupLine "  [dim](from a checkout: dotnet run --project scripts/NewSddWorkspace -- <target-dir> <product-name>)[/]"
+
+    AnsiConsole.MarkupLine
+        "  new-sdd-workspace [aqua]retrofit[/] [grey]<target-dir>[/] [[--board owner/title]] [[--repo owner/repo]] [[--chore-locks refs]] [[--ref git-ref]]"
+
+    AnsiConsole.MarkupLine
+        "  new-sdd-workspace [aqua]secure[/] [grey][[workspace]] --repo owner/repository | --project owner/title (--public-board|--private-board) --trusted-writers ids[/]"
+
+    AnsiConsole.MarkupLine
+        "  new-sdd-workspace [aqua]secure[/] [grey]<workspace> --project owner/title --trusted-writers ids --verified-base-permission READ --verified-exclusive-writers ids[/]"
+
+    AnsiConsole.MarkupLine
+        "  [dim](from a checkout: dotnet run --project scripts/NewSddWorkspace -- <target-dir> <product-name>)[/]"
+
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Subcommands[/]"
-    AnsiConsole.MarkupLine "  [aqua]retrofit[/] <target-dir>   idempotently wire coordination ONTO an existing workspace (the"
-    AnsiConsole.MarkupLine "                        inverse of the scaffold-time step): vendor the kit + write the board"
-    AnsiConsole.MarkupLine "                        env, re-emit only what drifted, and record it in scaffold-provenance.json"
-    AnsiConsole.MarkupLine "  [aqua]secure[/] --repo <owner/repo>  apply and verify collaborator-only repository issue intake"
-    AnsiConsole.MarkupLine "  [aqua]secure[/] <workspace> --project <owner/title> (--public-board|--private-board) --trusted-writers <ids>"
-    AnsiConsole.MarkupLine "  [aqua]secure[/] <workspace> --project <owner/title> --trusted-writers <ids> --verified-base-permission READ --verified-exclusive-writers <ids>"
-    AnsiConsole.MarkupLine "                        apply/re-read observable Project visibility and writers; retain base-Read human verification"
+
+    AnsiConsole.MarkupLine
+        "  [aqua]retrofit[/] <target-dir>   idempotently wire coordination ONTO an existing workspace (the"
+
+    AnsiConsole.MarkupLine
+        "                        inverse of the scaffold-time step): vendor the kit + write the board"
+
+    AnsiConsole.MarkupLine
+        "                        env, re-emit only what drifted, and record it in scaffold-provenance.json"
+
+    AnsiConsole.MarkupLine
+        "  [aqua]secure[/] --repo <owner/repo>  apply and verify collaborator-only repository issue intake"
+
+    AnsiConsole.MarkupLine
+        "  [aqua]secure[/] <workspace> --project <owner/title> (--public-board|--private-board) --trusted-writers <ids>"
+
+    AnsiConsole.MarkupLine
+        "  [aqua]secure[/] <workspace> --project <owner/title> --trusted-writers <ids> --verified-base-permission READ --verified-exclusive-writers <ids>"
+
+    AnsiConsole.MarkupLine
+        "                        apply/re-read observable Project visibility and writers; retain base-Read human verification"
+
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Options[/]"
-    AnsiConsole.MarkupLine "  [green]--template[/] <name>  provider/template (default: rendering; omitted for compatibility)"
+
+    AnsiConsole.MarkupLine
+        "  [green]--template[/] <name>  provider/template (default: rendering; omitted for compatibility)"
+
     AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", templates |> List.map fst)))
     AnsiConsole.MarkupLine "  [green]--lifecycle[/] <name> representation backend (default: sdd)"
     AnsiConsole.MarkupLine "                    [dim]none, sdd, typed-sdd, spec-kit (legacy/frozen)[/]"
@@ -1345,72 +1834,108 @@ let private usage () =
     AnsiConsole.MarkupLine "  [green]--bundle[/] <name>    fable-game composition bundle (default: player)"
     AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", bundles |> List.map fst)))
     AnsiConsole.MarkupLine "  [green]--npm-package[/] <name>  fable-bindings package name (requires --npm-version)"
-    AnsiConsole.MarkupLine "  [green]--npm-version[/] <exact> fable-bindings exact package version (requires --npm-package)"
-    AnsiConsole.MarkupLine "  [green]--binding-target[/] <target> fable-bindings runtime target: browser, node, or universal"
-    AnsiConsole.MarkupLine "  [green]--ref[/] <git-ref>    FS.GG.Templates ref for the descriptor (default: main = newest)"
-    AnsiConsole.MarkupLine "  [green]--board[/] <owner/title>  coordination board to wire the workspace to (default: FS-GG/Coordination)"
-    AnsiConsole.MarkupLine "  [green]--repo[/] <owner/repo>    this workspace's own repo (its board identity + chore-lock basis)"
-    AnsiConsole.MarkupLine "  [green]--public-board[/]        request a public-readable product Project (requires --trusted-writers)"
+
+    AnsiConsole.MarkupLine
+        "  [green]--npm-version[/] <exact> fable-bindings exact package version (requires --npm-package)"
+
+    AnsiConsole.MarkupLine
+        "  [green]--binding-target[/] <target> fable-bindings runtime target: browser, node, or universal"
+
+    AnsiConsole.MarkupLine
+        "  [green]--ref[/] <git-ref>    FS.GG.Templates ref for the descriptor (default: main = newest)"
+
+    AnsiConsole.MarkupLine
+        "  [green]--board[/] <owner/title>  coordination board to wire the workspace to (default: FS-GG/Coordination)"
+
+    AnsiConsole.MarkupLine
+        "  [green]--repo[/] <owner/repo>    this workspace's own repo (its board identity + chore-lock basis)"
+
+    AnsiConsole.MarkupLine
+        "  [green]--public-board[/]        request a public-readable product Project (requires --trusted-writers)"
+
     AnsiConsole.MarkupLine "  [green]--private-board[/]       request a private product Project"
-    AnsiConsole.MarkupLine "  [green]--trusted-writers[/] <ids> comma-separated explicit Project team/user writer allowlist"
-    AnsiConsole.MarkupLine "  [green]--verified-base-permission[/] READ and [green]--verified-exclusive-writers[/] <ids> record both Manage access facts after re-validating observable Project facts"
-    AnsiConsole.MarkupLine "  [green]--chore-locks[/] <refs>   FSGG_COORD_CHORE_LOCKS for a non-FS-GG board (owner/repo#n,… — comma-separated)"
-    AnsiConsole.MarkupLine "  [green]--no-coordination[/]  skip wiring the workspace to a coordination board (no kit, no env)"
-    AnsiConsole.MarkupLine "  [green]--pinned[/]           skip the pre-scaffold fsgg-sdd self-update (scaffold with the installed CLI)"
-    AnsiConsole.MarkupLine "                    [dim]default: self-update to the newest coherent set first; pair --pinned with --ref <tag> for a reproducible scaffold[/]"
-    AnsiConsole.MarkupLine "  [green]--upgrade[/]          also run `fsgg-sdd upgrade` after scaffolding (reconcile an existing project)"
+
+    AnsiConsole.MarkupLine
+        "  [green]--trusted-writers[/] <ids> comma-separated explicit Project team/user writer allowlist"
+
+    AnsiConsole.MarkupLine
+        "  [green]--verified-base-permission[/] READ and [green]--verified-exclusive-writers[/] <ids> record both Manage access facts after re-validating observable Project facts"
+
+    AnsiConsole.MarkupLine
+        "  [green]--chore-locks[/] <refs>   FSGG_COORD_CHORE_LOCKS for a non-FS-GG board (owner/repo#n,… — comma-separated)"
+
+    AnsiConsole.MarkupLine
+        "  [green]--no-coordination[/]  skip wiring the workspace to a coordination board (no kit, no env)"
+
+    AnsiConsole.MarkupLine
+        "  [green]--pinned[/]           skip the pre-scaffold fsgg-sdd self-update (scaffold with the installed CLI)"
+
+    AnsiConsole.MarkupLine
+        "                    [dim]default: self-update to the newest coherent set first; pair --pinned with --ref <tag> for a reproducible scaffold[/]"
+
+    AnsiConsole.MarkupLine
+        "  [green]--upgrade[/]          also run `fsgg-sdd upgrade` after scaffolding (reconcile an existing project)"
+
     AnsiConsole.MarkupLine "  [green]--no-governance[/]    skip the governance overlay"
     AnsiConsole.WriteLine()
-    AnsiConsole.MarkupLine "[dim]Run with no arguments on an interactive terminal to build the invocation with prompts.[/]"
+
+    AnsiConsole.MarkupLine
+        "[dim]Run with no arguments on an interactive terminal to build the invocation with prompts.[/]"
 
 // ── Interactive wizard (no-arg invocation) ────────────────────────────────────
 
 /// The answers gathered so far — every field optional so the live preview can render a
 /// half-built invocation and fill in as the user answers, step by step.
 type private Draft =
-    { Product: string option
-      Target: string option
-      Template: string option
-      Lifecycle: string option
-      Profile: string option
-      Bundle: string option
-      NpmPackage: string option
-      NpmVersion: string option
-      BindingTarget: string option
-      Governance: bool option
-      Ref: string option
-      Pinned: bool option
-      WorkspaceRepo: string option
-      BoardOwner: string option
-      BoardTitle: string option
-      PublicBoard: bool option
-      TrustedWriters: string list option
-      ChoreLocks: string option }
+    {
+        Product: string option
+        Target: string option
+        Template: string option
+        Lifecycle: string option
+        Profile: string option
+        Bundle: string option
+        NpmPackage: string option
+        NpmVersion: string option
+        BindingTarget: string option
+        Governance: bool option
+        Ref: string option
+        Pinned: bool option
+        WorkspaceRepo: string option
+        BoardOwner: string option
+        BoardTitle: string option
+        PublicBoard: bool option
+        TrustedWriters: string list option
+        ChoreLocks: string option
+    }
 
 let private emptyDraft =
-    { Product = None
-      Target = None
-      Template = None
-      Lifecycle = None
-      Profile = None
-      Bundle = None
-      NpmPackage = None
-      NpmVersion = None
-      BindingTarget = None
-      Governance = None
-      Ref = None
-      Pinned = None
-      WorkspaceRepo = None
-      BoardOwner = None
-      BoardTitle = None
-      PublicBoard = None
-      TrustedWriters = None
-      ChoreLocks = None }
+    {
+        Product = None
+        Target = None
+        Template = None
+        Lifecycle = None
+        Profile = None
+        Bundle = None
+        NpmPackage = None
+        NpmVersion = None
+        BindingTarget = None
+        Governance = None
+        Ref = None
+        Pinned = None
+        WorkspaceRepo = None
+        BoardOwner = None
+        BoardTitle = None
+        PublicBoard = None
+        TrustedWriters = None
+        ChoreLocks = None
+    }
 
 /// Require a non-blank answer — the shared validator for the text prompts.
 let private required (label: string) (s: string) =
-    if String.IsNullOrWhiteSpace s then ValidationResult.Error(sprintf "[red]%s is required[/]" label)
-    else ValidationResult.Success()
+    if String.IsNullOrWhiteSpace s then
+        ValidationResult.Error(sprintf "[red]%s is required[/]" label)
+    else
+        ValidationResult.Success()
 
 let private pendingCell = "[grey37]· pending[/]"
 
@@ -1419,41 +1944,80 @@ let private paramsPanel (d: Draft) =
     let grid = Grid()
     grid.AddColumn() |> ignore
     grid.AddColumn() |> ignore
-    let row (k: string) (v: string) = grid.AddRow(sprintf "[grey]%s[/]" k, v) |> ignore
-    row "product" (d.Product |> Option.map (fun p -> sprintf "[bold green]%s[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell)
-    row "target" (d.Target |> Option.map (fun t -> sprintf "[green]%s[/]" (Markup.Escape t)) |> Option.defaultValue pendingCell)
-    row "template" (d.Template |> Option.map (fun p -> sprintf "[magenta]%s[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell)
-    row "lifecycle" (d.Lifecycle |> Option.map (fun p -> sprintf "[aqua]%s[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell)
+
+    let row (k: string) (v: string) =
+        grid.AddRow(sprintf "[grey]%s[/]" k, v) |> ignore
+
+    row
+        "product"
+        (d.Product
+         |> Option.map (fun p -> sprintf "[bold green]%s[/]" (Markup.Escape p))
+         |> Option.defaultValue pendingCell)
+
+    row
+        "target"
+        (d.Target
+         |> Option.map (fun t -> sprintf "[green]%s[/]" (Markup.Escape t))
+         |> Option.defaultValue pendingCell)
+
+    row
+        "template"
+        (d.Template
+         |> Option.map (fun p -> sprintf "[magenta]%s[/]" (Markup.Escape p))
+         |> Option.defaultValue pendingCell)
+
+    row
+        "lifecycle"
+        (d.Lifecycle
+         |> Option.map (fun p -> sprintf "[aqua]%s[/]" (Markup.Escape p))
+         |> Option.defaultValue pendingCell)
+
     match d.Template, d.Profile with
-    | Some "rendering", _ -> row "profile" (d.Profile |> Option.map (fun p -> sprintf "[magenta]%s[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell)
+    | Some "rendering", _ ->
+        row
+            "profile"
+            (d.Profile
+             |> Option.map (fun p -> sprintf "[magenta]%s[/]" (Markup.Escape p))
+             |> Option.defaultValue pendingCell)
     | _ -> ()
+
     match d.Template, d.Bundle with
     | Some "fable-game", Some bundle -> row "bundle" (sprintf "[magenta]%s[/]" (Markup.Escape bundle))
     | Some "fable-game", None -> row "bundle" pendingCell
     | _ -> ()
+
     match d.Template, d.NpmPackage, d.NpmVersion with
-    | Some "fable-bindings", Some packageName, Some version -> row "npm" (sprintf "[magenta]%s@%s[/]" (Markup.Escape packageName) (Markup.Escape version))
+    | Some "fable-bindings", Some packageName, Some version ->
+        row "npm" (sprintf "[magenta]%s@%s[/]" (Markup.Escape packageName) (Markup.Escape version))
     | Some "fable-bindings", _, _ -> row "npm" pendingCell
     | _ -> ()
+
     match d.Template, d.BindingTarget with
     | Some "fable-bindings", Some bindingTarget -> row "binding target" (Markup.Escape bindingTarget)
     | Some "fable-bindings", None -> row "binding target" pendingCell
     | _ -> ()
-    row "governance"
+
+    row
+        "governance"
         (match d.Governance with
          | Some true -> "[green]light[/] [grey]overlay[/]"
          | Some false -> "[grey]none (skipped)[/]"
          | None -> pendingCell)
-    row "descriptor ref"
+
+    row
+        "descriptor ref"
         (match d.Ref with
          | Some "main" -> "[aqua]main[/] [grey](newest set)[/]"
          | Some r -> sprintf "[aqua]%s[/] [grey](pinned)[/]" (Markup.Escape r)
          | None -> pendingCell)
-    row "currency"
+
+    row
+        "currency"
         (match d.Pinned with
          | Some true -> "[grey]pinned (installed CLI)[/]"
          | Some false -> "[green]update[/] [grey]fsgg-sdd first[/]"
          | None -> pendingCell)
+
     row "repository setup" "[yellow]deferred to $initialize-sdd-workspace[/]"
     let panel = Panel(grid)
     panel.Header <- PanelHeader "[bold]parameters[/]"
@@ -1465,7 +2029,11 @@ let private paramsPanel (d: Draft) =
 /// nodes are always present (a workspace always has them); their annotations and the
 /// optional leaves (game-core, governance) concretise as the draft fills in.
 let private previewPanel (d: Draft) =
-    let root = d.Target |> Option.map Markup.Escape |> Option.defaultValue "[grey37]<target>[/]"
+    let root =
+        d.Target
+        |> Option.map Markup.Escape
+        |> Option.defaultValue "[grey37]<target>[/]"
+
     let tree = Tree(sprintf "[bold]%s[/]  [grey]· new workspace[/]" root)
     tree.Guide <- TreeGuide.BoldLine
 
@@ -1477,34 +2045,59 @@ let private previewPanel (d: Draft) =
      | None -> tree.AddNode(sprintf "fsgg-sdd currency  %s" pendingCell))
     |> ignore
 
-    let refAnno = d.Ref |> Option.map (fun r -> sprintf "[aqua]@ %s[/]" (Markup.Escape r)) |> Option.defaultValue pendingCell
+    let refAnno =
+        d.Ref
+        |> Option.map (fun r -> sprintf "[aqua]@ %s[/]" (Markup.Escape r))
+        |> Option.defaultValue pendingCell
+
     let template = d.Template |> Option.defaultValue "<template>"
-    tree.AddNode(sprintf "[grey].fsgg/providers.yml[/]  %s descriptor %s" (Markup.Escape template) refAnno) |> ignore
+
+    tree.AddNode(sprintf "[grey].fsgg/providers.yml[/]  %s descriptor %s" (Markup.Escape template) refAnno)
+    |> ignore
 
     let prodAnno =
-        d.Product |> Option.map (fun p -> sprintf "[grey](productName=[/][green]%s[/][grey])[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell
+        d.Product
+        |> Option.map (fun p -> sprintf "[grey](productName=[/][green]%s[/][grey])[/]" (Markup.Escape p))
+        |> Option.defaultValue pendingCell
+
     let lifecycle = d.Lifecycle |> Option.defaultValue "sdd"
-    let sdd = tree.AddNode(sprintf "%s lifecycle skeleton  %s" (Markup.Escape lifecycle) prodAnno)
+
+    let sdd =
+        tree.AddNode(sprintf "%s lifecycle skeleton  %s" (Markup.Escape lifecycle) prodAnno)
+
     sdd.AddNode "[grey37]charter · spec · plan · tasks[/]" |> ignore
 
     let appLabel, profileAnno =
         match d.Template with
-        | Some "rendering" -> "runnable Rendering app", d.Profile |> Option.map (fun p -> sprintf "[grey](fs-gg-ui · profile [/][magenta]%s[/][grey])[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell
+        | Some "rendering" ->
+            "runnable Rendering app",
+            d.Profile
+            |> Option.map (fun p -> sprintf "[grey](fs-gg-ui · profile [/][magenta]%s[/][grey])[/]" (Markup.Escape p))
+            |> Option.defaultValue pendingCell
         | Some "console" -> "F# console executable", "[grey](no npm lane)[/]"
         | Some "web" -> "web workspace", "[grey](ASP.NET Core + TypeScript/Vite)[/]"
         | Some "fable-game" -> "Fable game workspace", "[grey](Elmish + game provider)[/]"
-        | Some "fable-bindings" -> "Fable bindings library", d.BindingTarget |> Option.map (fun target -> sprintf "[grey](%s target)[/]" (Markup.Escape target)) |> Option.defaultValue pendingCell
+        | Some "fable-bindings" ->
+            "Fable bindings library",
+            d.BindingTarget
+            |> Option.map (fun target -> sprintf "[grey](%s target)[/]" (Markup.Escape target))
+            |> Option.defaultValue pendingCell
         | _ -> "generated workspace", pendingCell
+
     let app = tree.AddNode(sprintf "%s  %s" appLabel profileAnno)
     app.AddNode "[grey37]dotnet build && dotnet run[/]" |> ignore
     // The simulation core materializes only for the game-family profiles (game, sample-pack).
     match d.Template, d.Profile with
-    | Some "rendering", Some p when hasGameCore p -> app.AddNode "[grey37]+ fs-gg-game-core (fixed-step · seeded RNG · AABB)[/]" |> ignore
+    | Some "rendering", Some p when hasGameCore p ->
+        app.AddNode "[grey37]+ fs-gg-game-core (fixed-step · seeded RNG · AABB)[/]"
+        |> ignore
     | _ -> ()
     // The standalone FS.GG.Audio component ships on the same simulation profiles (own repo/axis;
     // the real host-side realization behind the pure AudioEffect edge). See ADR-0024.
     match d.Template, d.Profile with
-    | Some "rendering", Some p when hasAudio p -> app.AddNode "[grey37]+ fs-gg-audio (buses · fades/ducking · 3D · device backend)[/]" |> ignore
+    | Some "rendering", Some p when hasAudio p ->
+        app.AddNode "[grey37]+ fs-gg-audio (buses · fades/ducking · 3D · device backend)[/]"
+        |> ignore
     | _ -> ()
 
     (match d.Governance with
@@ -1513,9 +2106,16 @@ let private previewPanel (d: Draft) =
      | None -> tree.AddNode(sprintf "governance overlay  %s" pendingCell))
     |> ignore
 
-    let initialization = tree.AddNode "[yellow]initialization handoff[/]  [grey](after the first agent starts in the repository)[/]"
-    initialization.AddNode "[grey37]$initialize-sdd-workspace · not run by this wizard · conditional AGENTS.md/CLAUDE.md warning[/]" |> ignore
-    initialization.AddNode "[grey37]repository, board, collaborators and provider extras are asked only if applicable[/]" |> ignore
+    let initialization =
+        tree.AddNode "[yellow]initialization handoff[/]  [grey](after the first agent starts in the repository)[/]"
+
+    initialization.AddNode
+        "[grey37]$initialize-sdd-workspace · not run by this wizard · conditional AGENTS.md/CLAUDE.md warning[/]"
+    |> ignore
+
+    initialization.AddNode
+        "[grey37]repository, board, collaborators and provider extras are asked only if applicable[/]"
+    |> ignore
 
     let panel = Panel(tree)
     panel.Header <- PanelHeader "[bold]scaffold preview[/]"
@@ -1530,24 +2130,66 @@ let private equivalentCommand (d: Draft) =
     parts.Add "new-sdd-workspace"
     parts.Add(d.Target |> Option.defaultValue "<target>")
     parts.Add(d.Product |> Option.defaultValue "<product>")
-    (match d.Template with Some t when t <> "rendering" -> parts.Add(sprintf "--template %s" t) | _ -> ())
-    (match d.Lifecycle with Some lifecycle when lifecycle <> "sdd" -> parts.Add(sprintf "--lifecycle %s" lifecycle) | _ -> ())
-    (match d.Template, d.Profile with Some "rendering", Some p when p <> "game" -> parts.Add(sprintf "--profile %s" p) | _ -> ())
-    (match d.Template, d.Bundle with Some "fable-game", Some b when b <> "player" -> parts.Add(sprintf "--bundle %s" b) | _ -> ())
-    (match d.NpmPackage, d.NpmVersion with Some packageName, Some version -> parts.Add(sprintf "--npm-package %s --npm-version %s" packageName version) | _ -> ())
-    (match d.BindingTarget with Some bindingTarget -> parts.Add(sprintf "--binding-target %s" bindingTarget) | _ -> ())
-    (match d.Ref with Some r when r <> "main" -> parts.Add(sprintf "--ref %s" r) | _ -> ())
+
+    (match d.Template with
+     | Some t when t <> "rendering" -> parts.Add(sprintf "--template %s" t)
+     | _ -> ())
+
+    (match d.Lifecycle with
+     | Some lifecycle when lifecycle <> "sdd" -> parts.Add(sprintf "--lifecycle %s" lifecycle)
+     | _ -> ())
+
+    (match d.Template, d.Profile with
+     | Some "rendering", Some p when p <> "game" -> parts.Add(sprintf "--profile %s" p)
+     | _ -> ())
+
+    (match d.Template, d.Bundle with
+     | Some "fable-game", Some b when b <> "player" -> parts.Add(sprintf "--bundle %s" b)
+     | _ -> ())
+
+    (match d.NpmPackage, d.NpmVersion with
+     | Some packageName, Some version -> parts.Add(sprintf "--npm-package %s --npm-version %s" packageName version)
+     | _ -> ())
+
+    (match d.BindingTarget with
+     | Some bindingTarget -> parts.Add(sprintf "--binding-target %s" bindingTarget)
+     | _ -> ())
+
+    (match d.Ref with
+     | Some r when r <> "main" -> parts.Add(sprintf "--ref %s" r)
+     | _ -> ())
+
     let owner = d.BoardOwner |> Option.defaultValue "FS-GG"
     let title = d.BoardTitle |> Option.defaultValue "Coordination"
-    if owner <> "FS-GG" || title <> "Coordination" then parts.Add(sprintf "--board %s/%s" owner title)
+
+    if owner <> "FS-GG" || title <> "Coordination" then
+        parts.Add(sprintf "--board %s/%s" owner title)
+
     (match d.WorkspaceRepo with
      | Some r when r <> sprintf "FS-GG/%s" (d.Product |> Option.defaultValue "") -> parts.Add(sprintf "--repo %s" r)
      | _ -> ())
-    (match d.PublicBoard with Some true -> parts.Add "--public-board" | Some false -> parts.Add "--private-board" | None -> ())
-    (match d.TrustedWriters with Some writers -> parts.Add(sprintf "--trusted-writers %s" (String.Join(",", writers))) | None -> ())
-    (match d.ChoreLocks with Some cl -> parts.Add(sprintf "--chore-locks %s" cl) | None -> ())
-    (match d.Pinned with Some true -> parts.Add "--pinned" | _ -> ())
-    (match d.Governance with Some false -> parts.Add "--no-governance" | _ -> ())
+
+    (match d.PublicBoard with
+     | Some true -> parts.Add "--public-board"
+     | Some false -> parts.Add "--private-board"
+     | None -> ())
+
+    (match d.TrustedWriters with
+     | Some writers -> parts.Add(sprintf "--trusted-writers %s" (String.Join(",", writers)))
+     | None -> ())
+
+    (match d.ChoreLocks with
+     | Some cl -> parts.Add(sprintf "--chore-locks %s" cl)
+     | None -> ())
+
+    (match d.Pinned with
+     | Some true -> parts.Add "--pinned"
+     | _ -> ())
+
+    (match d.Governance with
+     | Some false -> parts.Add "--no-governance"
+     | _ -> ())
+
     String.Join(" ", parts)
 
 /// Clear and repaint the whole preview — the "getting fuller and fuller" frame the prompts
@@ -1575,59 +2217,79 @@ let private interactive () : Options option =
     let mutable draft = emptyDraft
 
     draftView draft
+
     let product =
-        AnsiConsole.Prompt(
-            TextPrompt<string>("[green]Product[/] name?")
-                .Validate(fun (s: string) -> required "product name" s)).Trim()
+        AnsiConsole
+            .Prompt(
+                TextPrompt<string>("[green]Product[/] name?").Validate(fun (s: string) -> required "product name" s)
+            )
+            .Trim()
+
     draft <- { draft with Product = Some product }
 
     draftView draft
+
     let target =
-        AnsiConsole.Prompt(
-            TextPrompt<string>("[green]Target[/] directory?")
-                .DefaultValue("./" + product)
-                .Validate(fun (s: string) -> required "target directory" s)).Trim()
+        AnsiConsole
+            .Prompt(
+                TextPrompt<string>("[green]Target[/] directory?")
+                    .DefaultValue("./" + product)
+                    .Validate(fun (s: string) -> required "target directory" s)
+            )
+            .Trim()
+
     draft <-
         { draft with
             Target = Some target
             Lifecycle = Some "sdd"
             Governance = Some true
             Ref = Some "main"
-            Pinned = Some false }
+            Pinned = Some false
+        }
 
     draftView draft
+
     let templateChoices =
         templates
         |> List.map (fun (name, description) -> sprintf "%s — %s" name description)
+
     let templateChoice =
         AnsiConsole.Prompt(
             SelectionPrompt<string>()
                 .Title("Which [green]template[/] should this workspace use?")
                 .PageSize(templateChoices.Length)
-                .AddChoices(templateChoices))
+                .AddChoices(templateChoices)
+        )
+
     let template =
         (templates, templateChoices)
         ||> List.zip
         |> List.find (fun (_, choice) -> choice = templateChoice)
         |> fst
         |> fst
+
     draft <- { draft with Template = Some template }
 
     let mutable npmPackage = None
     let mutable npmVersion = None
     let mutable bindingTarget = None
     let mutable bundle = None
+
     if template = "fable-game" then
         draftView draft
+
         let bundleChoices =
             bundles
             |> List.map (fun (name, description) -> sprintf "%s — %s" name description)
+
         let bundleChoice =
             AnsiConsole.Prompt(
                 SelectionPrompt<string>()
                     .Title("Which [green]bundle[/] should this game use?")
                     .PageSize(bundleChoices.Length)
-                    .AddChoices(bundleChoices))
+                    .AddChoices(bundleChoices)
+            )
+
         bundle <-
             (bundles, bundleChoices)
             ||> List.zip
@@ -1635,43 +2297,70 @@ let private interactive () : Options option =
             |> fst
             |> fst
             |> Some
+
         draft <- { draft with Bundle = bundle }
+
     if requiresNpmClosure template then
         draftView draft
+
         let packageName =
-            AnsiConsole.Prompt(
-                TextPrompt<string>("Exact [green]npm package[/] name?")
-                    .Validate(fun (s: string) -> required "npm package" s)).Trim()
+            AnsiConsole
+                .Prompt(
+                    TextPrompt<string>("Exact [green]npm package[/] name?")
+                        .Validate(fun (s: string) -> required "npm package" s)
+                )
+                .Trim()
+
         npmPackage <- Some packageName
         draft <- { draft with NpmPackage = npmPackage }
 
         draftView draft
+
         let version =
-            AnsiConsole.Prompt(
-                TextPrompt<string>("Exact [green]npm version[/]?")
-                    .Validate(fun (s: string) ->
-                        if String.IsNullOrWhiteSpace s
-                           || s.Equals("latest", StringComparison.OrdinalIgnoreCase)
-                           || s.IndexOfAny([| '*'; '^'; '~'; '>'; '<'; '|'; ' ' |]) >= 0 then
-                            ValidationResult.Error("[red]an exact npm version is required (not latest or a range)[/]")
-                        else
-                            ValidationResult.Success())).Trim()
+            AnsiConsole
+                .Prompt(
+                    TextPrompt<string>("Exact [green]npm version[/]?")
+                        .Validate(fun (s: string) ->
+                            if
+                                String.IsNullOrWhiteSpace s
+                                || s.Equals("latest", StringComparison.OrdinalIgnoreCase)
+                                || s.IndexOfAny([| '*'; '^'; '~'; '>'; '<'; '|'; ' ' |]) >= 0
+                            then
+                                ValidationResult.Error(
+                                    "[red]an exact npm version is required (not latest or a range)[/]"
+                                )
+                            else
+                                ValidationResult.Success())
+                )
+                .Trim()
+
         npmVersion <- Some version
         draft <- { draft with NpmVersion = npmVersion }
 
         draftView draft
+
         let targetChoice =
             AnsiConsole.Prompt(
                 SelectionPrompt<string>()
                     .Title("Which [green]binding target[/] should be generated?")
-                    .AddChoices([ "browser"; "node"; "universal" ]))
+                    .AddChoices([ "browser"; "node"; "universal" ])
+            )
+
         bindingTarget <- Some targetChoice
-        draft <- { draft with BindingTarget = bindingTarget }
+
+        draft <-
+            { draft with
+                BindingTarget = bindingTarget
+            }
 
     // Final full preview, then a go/no-go before anything touches disk.
     draftView draft
-    AnsiConsole.MarkupLine "[yellow]Initialization runs only after you start an agent in the new workspace for the first time; this wizard installs the handoff but does not initialize the repository.[/]"
+
+    AnsiConsole.MarkupLine
+        "[yellow]Initialization runs only after you start an agent in the new workspace for the first time; this wizard installs the handoff but does not initialize the repository.[/]"
+
     AnsiConsole.WriteLine()
+
     if AnsiConsole.Confirm("[bold]Create this scaffold now?[/]", true) then
         Some(assembleWizardTemplateOptions target product template bundle npmPackage npmVersion bindingTarget)
     else
@@ -1684,25 +2373,50 @@ let private parse (argv: string list) : Result<Options, string> =
     let knownBundles = bundles |> List.map fst
     let knownTemplates = templates |> List.map fst
     let knownLifecycles = [ "none"; "sdd"; "typed-sdd"; "spec-kit" ]
+
     let validate (opts: Options) =
         match opts.Profile, opts.Template with
         | Some _, template when not (supportsProfile template) ->
             Error(sprintf "--profile is only supported by the rendering template (selected: %s)" template)
         | _, template when opts.Bundle.IsSome && template <> "fable-game" ->
             Error(sprintf "--bundle is only supported by the fable-game template (selected: %s)" template)
-        | _, template when requiresNpmClosure template && (opts.NpmPackage.IsNone || opts.NpmVersion.IsNone) ->
+        | _, template when
+            requiresNpmClosure template
+            && (opts.NpmPackage.IsNone || opts.NpmVersion.IsNone)
+            ->
             Error "--template fable-bindings requires both --npm-package and --npm-version"
         | _, template when requiresNpmClosure template && opts.BindingTarget.IsNone ->
             Error "--template fable-bindings requires --binding-target (browser, node, or universal)"
-        | _, template when (opts.NpmPackage.IsSome || opts.NpmVersion.IsSome) && not (requiresNpmClosure template) ->
-            Error(sprintf "--npm-package/--npm-version are only supported by the fable-bindings template (selected: %s)" template)
+        | _, template when
+            (opts.NpmPackage.IsSome || opts.NpmVersion.IsSome)
+            && not (requiresNpmClosure template)
+            ->
+            Error(
+                sprintf
+                    "--npm-package/--npm-version are only supported by the fable-bindings template (selected: %s)"
+                    template
+            )
         | _, template when opts.BindingTarget.IsSome && not (requiresNpmClosure template) ->
             Error(sprintf "--binding-target is only supported by the fable-bindings template (selected: %s)" template)
-        | _, _ when opts.BindingTarget |> Option.exists (fun target -> not (List.contains target [ "browser"; "node"; "universal" ])) ->
+        | _, _ when
+            opts.BindingTarget
+            |> Option.exists (fun target -> not (List.contains target [ "browser"; "node"; "universal" ]))
+            ->
             Error "--binding-target must be browser, node, or universal"
-        | _, template when requiresNpmClosure template && (opts.NpmVersion |> Option.exists (fun version -> String.IsNullOrWhiteSpace version || version.Equals("latest", StringComparison.OrdinalIgnoreCase) || version.IndexOfAny([| '*'; '^'; '~'; '>'; '<'; '|'; ' ' |]) >= 0)) ->
+        | _, template when
+            requiresNpmClosure template
+            && (opts.NpmVersion
+                |> Option.exists (fun version ->
+                    String.IsNullOrWhiteSpace version
+                    || version.Equals("latest", StringComparison.OrdinalIgnoreCase)
+                    || version.IndexOfAny([| '*'; '^'; '~'; '>'; '<'; '|'; ' ' |]) >= 0))
+            ->
             Error "--npm-version must be an exact version (not latest or a range)"
-        | _ when opts.Template = "fable-game" -> Ok { opts with Bundle = Some(opts.Bundle |> Option.defaultValue "player") }
+        | _ when opts.Template = "fable-game" ->
+            Ok
+                { opts with
+                    Bundle = Some(opts.Bundle |> Option.defaultValue "player")
+                }
         | _ -> Ok opts
     // A `--flag`-looking token is a missing value, not a value — the same guard repos.sh's
     // `need_val` applies. Without it, `new-sdd-workspace ./x P --profile --ref v1` swallows
@@ -1716,14 +2430,18 @@ let private parse (argv: string list) : Result<Options, string> =
         | "--template" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--template needs a value (got flag '%s')" value)
         | "--template" :: value :: t ->
-            if List.contains value knownTemplates then flags { acc with Template = value } t
-            else Error(sprintf "unknown template '%s' (choose one of: %s)" value (String.Join(", ", knownTemplates)))
+            if List.contains value knownTemplates then
+                flags { acc with Template = value } t
+            else
+                Error(sprintf "unknown template '%s' (choose one of: %s)" value (String.Join(", ", knownTemplates)))
         | [ "--template" ] -> Error "--template needs a value"
         | "--lifecycle" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--lifecycle needs a value (got flag '%s')" value)
         | "--lifecycle" :: value :: t ->
-            if List.contains value knownLifecycles then flags { acc with Lifecycle = value } t
-            else Error(sprintf "unknown lifecycle '%s' (choose one of: %s)" value (String.Join(", ", knownLifecycles)))
+            if List.contains value knownLifecycles then
+                flags { acc with Lifecycle = value } t
+            else
+                Error(sprintf "unknown lifecycle '%s' (choose one of: %s)" value (String.Join(", ", knownLifecycles)))
         | [ "--lifecycle" ] -> Error "--lifecycle needs a value"
         | "--profile" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--profile needs a value (got flag '%s')" value)
@@ -1753,15 +2471,20 @@ let private parse (argv: string list) : Result<Options, string> =
             Error(sprintf "--binding-target needs a value (got flag '%s')" value)
         | "--binding-target" :: value :: t -> flags { acc with BindingTarget = Some value } t
         | [ "--binding-target" ] -> Error "--binding-target needs a value"
-        | "--ref" :: value :: _ when value.StartsWith "--" ->
-            Error(sprintf "--ref needs a value (got flag '%s')" value)
+        | "--ref" :: value :: _ when value.StartsWith "--" -> Error(sprintf "--ref needs a value (got flag '%s')" value)
         | "--ref" :: value :: t -> flags { acc with Ref = value } t
         | [ "--ref" ] -> Error "--ref needs a value"
         | "--board" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--board needs a value (got flag '%s')" value)
         | "--board" :: value :: t ->
             let owner, title = parseBoard value
-            flags { acc with BoardOwner = owner; BoardTitle = title } t
+
+            flags
+                { acc with
+                    BoardOwner = owner
+                    BoardTitle = title
+                }
+                t
         | [ "--board" ] -> Error "--board needs a value"
         | "--repo" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--repo needs a value (got flag '%s')" value)
@@ -1772,9 +2495,16 @@ let private parse (argv: string list) : Result<Options, string> =
         | "--trusted-writers" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--trusted-writers needs a value (got flag '%s')" value)
         | "--trusted-writers" :: value :: t ->
-            let writers = value.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun v -> v.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray
-            if List.isEmpty writers then Error "--trusted-writers needs at least one team or user"
-            else flags { acc with TrustedWriters = writers } t
+            let writers =
+                value.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                |> Array.map (fun v -> v.Trim())
+                |> Array.filter (String.IsNullOrWhiteSpace >> not)
+                |> List.ofArray
+
+            if List.isEmpty writers then
+                Error "--trusted-writers needs at least one team or user"
+            else
+                flags { acc with TrustedWriters = writers } t
         | [ "--trusted-writers" ] -> Error "--trusted-writers needs a value"
         | "--chore-locks" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--chore-locks needs a value (got flag '%s')" value)
@@ -1785,33 +2515,37 @@ let private parse (argv: string list) : Result<Options, string> =
         | "--upgrade" :: t -> flags { acc with Upgrade = true } t
         | "--no-governance" :: t -> flags { acc with Governance = false } t
         | other :: _ -> Error(sprintf "unknown argument: %s" other)
+
     match argv with
     | target :: product :: rest when not (target.StartsWith "--") && not (product.StartsWith "--") ->
         flags
-            { Options.Target = target
-              Product = product
-              Template = "rendering"
-              Lifecycle = "sdd"
-              Ref = "main"
-              Upgrade = false
-              Governance = true
-              Pinned = false
-              Profile = None
-              Bundle = None
-              NpmPackage = None
-              NpmVersion = None
-              BindingTarget = None
-              Coordinate = true
-              WorkspaceRepo = None
-              BoardOwner = "FS-GG"
-              BoardTitle = "Coordination"
-              PublicBoard = None
-              TrustedWriters = []
-              ChoreLocks = None }
+            {
+                Options.Target = target
+                Product = product
+                Template = "rendering"
+                Lifecycle = "sdd"
+                Ref = "main"
+                Upgrade = false
+                Governance = true
+                Pinned = false
+                Profile = None
+                Bundle = None
+                NpmPackage = None
+                NpmVersion = None
+                BindingTarget = None
+                Coordinate = true
+                WorkspaceRepo = None
+                BoardOwner = "FS-GG"
+                BoardTitle = "Coordination"
+                PublicBoard = None
+                TrustedWriters = []
+                ChoreLocks = None
+            }
             rest
         |> Result.bind (fun opts ->
             match opts.PublicBoard with
-            | Some true when List.isEmpty opts.TrustedWriters -> Error "--public-board requires an explicit --trusted-writers allowlist"
+            | Some true when List.isEmpty opts.TrustedWriters ->
+                Error "--public-board requires an explicit --trusted-writers allowlist"
             | _ -> Ok opts)
     | _ -> Error "target dir and product name are required"
 
@@ -1827,7 +2561,13 @@ let private parseRetrofit (argv: string list) : Result<RetrofitOptions, string> 
             Error(sprintf "--board needs a value (got flag '%s')" value)
         | "--board" :: value :: t ->
             let owner, title = parseBoard value
-            flags { acc with BoardOwner = owner; BoardTitle = title } t
+
+            flags
+                { acc with
+                    BoardOwner = owner
+                    BoardTitle = title
+                }
+                t
         | [ "--board" ] -> Error "--board needs a value"
         | "--repo" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--repo needs a value (got flag '%s')" value)
@@ -1837,20 +2577,22 @@ let private parseRetrofit (argv: string list) : Result<RetrofitOptions, string> 
             Error(sprintf "--chore-locks needs a value (got flag '%s')" value)
         | "--chore-locks" :: value :: t -> flags { acc with ChoreLocks = Some value } t
         | [ "--chore-locks" ] -> Error "--chore-locks needs a value"
-        | "--ref" :: value :: _ when value.StartsWith "--" ->
-            Error(sprintf "--ref needs a value (got flag '%s')" value)
+        | "--ref" :: value :: _ when value.StartsWith "--" -> Error(sprintf "--ref needs a value (got flag '%s')" value)
         | "--ref" :: value :: t -> flags { acc with Ref = value } t
         | [ "--ref" ] -> Error "--ref needs a value"
         | other :: _ -> Error(sprintf "unknown argument: %s" other)
+
     match argv with
     | target :: rest when not (target.StartsWith "--") ->
         flags
-            { RetrofitOptions.Target = target
-              Ref = "main"
-              WorkspaceRepo = None
-              BoardOwner = "FS-GG"
-              BoardTitle = "Coordination"
-              ChoreLocks = None }
+            {
+                RetrofitOptions.Target = target
+                Ref = "main"
+                WorkspaceRepo = None
+                BoardOwner = "FS-GG"
+                BoardTitle = "Coordination"
+                ChoreLocks = None
+            }
             rest
     | _ -> Error "retrofit needs a target directory (the workspace to wire): retrofit <target> [--board owner/title]"
 
@@ -1866,6 +2608,7 @@ let private run (opts: Options) : int =
             Panel(
                 "[red]fsgg-sdd is not on PATH.[/]\n\nInstall the CLI first, then re-run:\n  [bold]dotnet tool install --global FS.GG.SDD.Cli[/]"
             )
+
         panel.Header <- PanelHeader "[red]preflight failed[/]"
         panel.Border <- BoxBorder.Rounded
         panel.Padding <- Padding(1, 0, 1, 0)
@@ -1878,6 +2621,7 @@ let private run (opts: Options) : int =
         // 1 · fetch descriptor (fatal on failure)
         step 1 "fetch provider descriptor"
         let descriptorPath = Path.Combine(opts.Target, ".fsgg", "providers.yml")
+
         let fetched =
             AnsiConsole
                 .Status()
@@ -1885,31 +2629,53 @@ let private run (opts: Options) : int =
                     sprintf "fetching %s descriptor from FS.GG.Templates@%s…" opts.Template opts.Ref,
                     fun _ -> fetchDescriptor opts.Template opts.Ref descriptorPath
                 )
+
         match fetched with
         | Ok pinned ->
             match pinned with
             | Some line -> AnsiConsole.MarkupLine(sprintf "  [green]✓[/] pinned: [grey]%s[/]" (Markup.Escape line))
             | None -> AnsiConsole.MarkupLine "  [green]✓[/] descriptor fetched"
-            results.Add { Title = "fetch descriptor"; Outcome = Succeeded }
+
+            results.Add
+                {
+                    Title = "fetch descriptor"
+                    Outcome = Succeeded
+                }
         | Error e ->
             AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape e))
-            results.Add { Title = "fetch descriptor"; Outcome = Failed e }
+
+            results.Add
+                {
+                    Title = "fetch descriptor"
+                    Outcome = Failed e
+                }
+
             fatal <- true
 
         // 2 · update fsgg-sdd to the newest coherent set BEFORE scaffolding — the DEFAULT
         //     (ADR-0030, the creation-time carve-out to ADR-0009); --pinned skips it. Non-fatal:
         //     an offline/failed update warns and scaffolding proceeds with the installed CLI.
         if opts.Pinned then
-            results.Add { Title = "update fsgg-sdd"; Outcome = Skipped "--pinned (installed CLI)" }
+            results.Add
+                {
+                    Title = "update fsgg-sdd"
+                    Outcome = Skipped "--pinned (installed CLI)"
+                }
         elif not fatal then
             step 2 "update fsgg-sdd"
             let outcome = selfUpdateCli ()
+
             (match outcome with
              | Succeeded -> AnsiConsole.MarkupLine "  [green]✓[/] fsgg-sdd is at the newest published build"
              | Warned n -> AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] %s" (Markup.Escape n))
              | Skipped r -> AnsiConsole.MarkupLine(sprintf "  [yellow]⊘[/] %s" (Markup.Escape r))
              | Failed n -> AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape n)))
-            results.Add { Title = "update fsgg-sdd"; Outcome = outcome }
+
+            results.Add
+                {
+                    Title = "update fsgg-sdd"
+                    Outcome = outcome
+                }
 
         // 3 · fsgg-sdd scaffold (fatal on failure)
         if not fatal then
@@ -1920,17 +2686,34 @@ let private run (opts: Options) : int =
                 match opts.Profile with
                 | Some p -> [ "--param"; sprintf "profile=%s" p ]
                 | None -> []
+
             let npmParams =
                 match opts.NpmPackage, opts.NpmVersion with
-                | Some packageName, Some version -> [ "--param"; sprintf "npmPackage=%s" packageName; "--param"; sprintf "npmVersion=%s" version ]
+                | Some packageName, Some version ->
+                    [
+                        "--param"
+                        sprintf "npmPackage=%s" packageName
+                        "--param"
+                        sprintf "npmVersion=%s" version
+                    ]
                 | _ -> []
+
             let bundleParam =
-                opts.Bundle |> Option.map (fun bundle -> [ "--param"; sprintf "bundle=%s" bundle ]) |> Option.defaultValue []
+                opts.Bundle
+                |> Option.map (fun bundle -> [ "--param"; sprintf "bundle=%s" bundle ])
+                |> Option.defaultValue []
+
             let bindingTargetParam =
-                opts.BindingTarget |> Option.map (fun target -> [ "--param"; sprintf "target=%s" target ]) |> Option.defaultValue []
+                opts.BindingTarget
+                |> Option.map (fun target -> [ "--param"; sprintf "target=%s" target ])
+                |> Option.defaultValue []
+
             let lifecycleParam = [ "--param"; sprintf "lifecycle=%s" opts.Lifecycle ]
+
             let code, _ =
-                runProcess true "fsgg-sdd"
+                runProcess
+                    true
+                    "fsgg-sdd"
                     ([ "scaffold"; "--root"; opts.Target; "--provider"; opts.Template ]
                      @ profileParam
                      @ bundleParam
@@ -1938,41 +2721,86 @@ let private run (opts: Options) : int =
                      @ bindingTargetParam
                      @ lifecycleParam
                      @ [ "--param"; sprintf "productName=%s" opts.Product ])
+
             if code = 0 then
-                AnsiConsole.MarkupLine(sprintf "  [green]✓[/] SDD skeleton + %s workspace scaffolded" (Markup.Escape opts.Template))
-                results.Add { Title = "scaffold"; Outcome = Succeeded }
+                AnsiConsole.MarkupLine(
+                    sprintf "  [green]✓[/] SDD skeleton + %s workspace scaffolded" (Markup.Escape opts.Template)
+                )
+
+                results.Add
+                    {
+                        Title = "scaffold"
+                        Outcome = Succeeded
+                    }
             else
                 AnsiConsole.MarkupLine(sprintf "  [red]✗[/] scaffold failed (exit %d)" code)
-                results.Add { Title = "scaffold"; Outcome = Failed(sprintf "exit %d" code) }
+
+                results.Add
+                    {
+                        Title = "scaffold"
+                        Outcome = Failed(sprintf "exit %d" code)
+                    }
+
                 fatal <- true
 
         // 4 · governance overlay (non-fatal; best-effort — needs the published template on a reachable feed)
         if not opts.Governance then
-            results.Add { Title = "governance overlay"; Outcome = Skipped "--no-governance" }
+            results.Add
+                {
+                    Title = "governance overlay"
+                    Outcome = Skipped "--no-governance"
+                }
         elif not fatal then
             step 4 "governance overlay"
             let installCode, installLog = installGovernanceTemplate ()
+
             if installCode = 0 then
                 let govCode, _ =
-                    runProcess true "dotnet"
-                        [ "new"; "fs-gg-governance"; "-o"; opts.Target; "--appName"; opts.Product; "--defaultProfile"; "light" ]
+                    runProcess
+                        true
+                        "dotnet"
+                        [
+                            "new"
+                            "fs-gg-governance"
+                            "-o"
+                            opts.Target
+                            "--appName"
+                            opts.Product
+                            "--defaultProfile"
+                            "light"
+                        ]
+
                 if govCode = 0 then
                     AnsiConsole.MarkupLine "  [green]✓[/] governance overlay applied (profile: light / non-blocking)"
-                    results.Add { Title = "governance overlay"; Outcome = Succeeded }
+
+                    results.Add
+                        {
+                            Title = "governance overlay"
+                            Outcome = Succeeded
+                        }
                 else
                     AnsiConsole.MarkupLine "  [yellow]⚠[/] overlay command failed — the product is fine without it"
-                    results.Add { Title = "governance overlay"; Outcome = Warned "overlay command failed; product is fine without it" }
+
+                    results.Add
+                        {
+                            Title = "governance overlay"
+                            Outcome = Warned "overlay command failed; product is fine without it"
+                        }
             else
                 let reason =
                     match feedToken () with
-                    | Some _ ->
-                        "could not install the FS.GG.Templates template from the org feed or nuget.org"
+                    | Some _ -> "could not install the FS.GG.Templates template from the org feed or nuget.org"
                     | None ->
                         "could not install the FS.GG.Templates template from nuget.org (network?) — "
                         + "set FSGG_PACKAGES_TOKEN (or GH_TOKEN) to a read:packages token to try the org feed too"
+
                 AnsiConsole.MarkupLine(sprintf "  [yellow]⊘[/] %s — skipped" reason)
+
                 installLog.Replace("\r\n", "\n").Split('\n')
-                |> Array.iter (fun l -> if not (String.IsNullOrWhiteSpace l) then dim l)
+                |> Array.iter (fun l ->
+                    if not (String.IsNullOrWhiteSpace l) then
+                        dim l)
+
                 AnsiConsole.MarkupLine(
                     sprintf
                         "  add later: [grey]dotnet new install FS.GG.Templates --nuget-source %s && dotnet new fs-gg-governance -o %s --appName %s[/]"
@@ -1980,16 +2808,26 @@ let private run (opts: Options) : int =
                         (Markup.Escape opts.Target)
                         (Markup.Escape opts.Product)
                 )
-                results.Add { Title = "governance overlay"; Outcome = Skipped "FS.GG.Templates template feed not reachable" }
+
+                results.Add
+                    {
+                        Title = "governance overlay"
+                        Outcome = Skipped "FS.GG.Templates template feed not reachable"
+                    }
 
         // 5 · wire the workspace to its coordination board — vendor the kit + write the FSGG_COORD_*
         //     env (default ON; --no-coordination skips). Best-effort like governance: a 404 on a kit file
         //     warns and the env still lands. Opens ADR-0019's deferred product-mirror slice; unblocked by
         //     the env-multi-tenant engine (#1140).
         if not opts.Coordinate then
-            results.Add { Title = "coordination"; Outcome = Skipped "--no-coordination" }
+            results.Add
+                {
+                    Title = "coordination"
+                    Outcome = Skipped "--no-coordination"
+                }
         elif not fatal then
             step 5 "coordination"
+
             let outcome =
                 AnsiConsole
                     .Status()
@@ -1997,6 +2835,7 @@ let private run (opts: Options) : int =
                         sprintf "vendoring the coordination kit for %s/%s…" opts.BoardOwner opts.BoardTitle,
                         fun _ -> wireCoordination "main" opts
                     )
+
             (match outcome with
              | Succeeded ->
                  AnsiConsole.MarkupLine(
@@ -2005,13 +2844,19 @@ let private run (opts: Options) : int =
                          (Markup.Escape opts.BoardOwner)
                          (Markup.Escape opts.BoardTitle)
                  )
+
                  if opts.BoardOwner.ToLowerInvariant() <> "fs-gg" then
                      AnsiConsole.MarkupLine
                          "  [grey]note: offer/chores on a non-FS-GG board need an engine build with #1140 (post-0.4.0)[/]"
              | Warned n -> AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] %s" (Markup.Escape n))
              | Skipped r -> AnsiConsole.MarkupLine(sprintf "  [yellow]⊘[/] %s" (Markup.Escape r))
              | Failed n -> AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape n)))
-            results.Add { Title = "coordination"; Outcome = outcome }
+
+            results.Add
+                {
+                    Title = "coordination"
+                    Outcome = outcome
+                }
 
         // 5b · repository issue-intake policy. This is intentionally a distinct, typed step from
         // board wiring: a board can be readable while its repository has not been created yet, and
@@ -2021,23 +2866,40 @@ let private run (opts: Options) : int =
             let report = workspaceSecurity opts
             let outcome = report.Outcome
             recordSecurityObligations opts report
+
             match outcome with
             | Succeeded -> AnsiConsole.MarkupLine "  [green]✓[/] repository issue policy verified"
             | Warned note -> AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] %s" (Markup.Escape note))
             | Skipped reason -> AnsiConsole.MarkupLine(sprintf "  [yellow]⊘[/] %s" (Markup.Escape reason))
             | Failed note -> AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape note))
-            results.Add { Title = "repository security"; Outcome = outcome }
+
+            results.Add
+                {
+                    Title = "repository security"
+                    Outcome = outcome
+                }
 
         // 6 · fsgg-sdd doctor (read-only, non-fatal — matches the shell's `|| true`)
         if not fatal then
             step 6 "fsgg-sdd doctor"
             let code, _ = runProcess true "fsgg-sdd" [ "doctor"; "--root"; opts.Target ]
+
             if code = 0 then
                 AnsiConsole.MarkupLine "  [green]✓[/] product is coherent with its set"
-                results.Add { Title = "doctor"; Outcome = Succeeded }
+
+                results.Add
+                    {
+                        Title = "doctor"
+                        Outcome = Succeeded
+                    }
             else
                 AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] doctor reported issues (exit %d) — non-blocking" code)
-                results.Add { Title = "doctor"; Outcome = Warned(sprintf "reported issues (exit %d)" code) }
+
+                results.Add
+                    {
+                        Title = "doctor"
+                        Outcome = Warned(sprintf "reported issues (exit %d)" code)
+                    }
 
         // 7 · fsgg-sdd upgrade (optional; fatal on failure, matching the shell's set -e). With the
         //     default pre-scaffold self-update this is largely redundant on a fresh scaffold; it
@@ -2045,12 +2907,24 @@ let private run (opts: Options) : int =
         if opts.Upgrade && not fatal then
             step 7 "fsgg-sdd upgrade"
             let code, _ = runProcess true "fsgg-sdd" [ "upgrade"; "--root"; opts.Target ]
+
             if code = 0 then
                 AnsiConsole.MarkupLine "  [green]✓[/] reconciled to the current coherent set"
-                results.Add { Title = "upgrade"; Outcome = Succeeded }
+
+                results.Add
+                    {
+                        Title = "upgrade"
+                        Outcome = Succeeded
+                    }
             else
                 AnsiConsole.MarkupLine(sprintf "  [red]✗[/] upgrade failed (exit %d)" code)
-                results.Add { Title = "upgrade"; Outcome = Failed(sprintf "exit %d" code) }
+
+                results.Add
+                    {
+                        Title = "upgrade"
+                        Outcome = Failed(sprintf "exit %d" code)
+                    }
+
                 fatal <- true
 
         // Final authored step · install the creation-time agent handoff after every provider and
@@ -2060,16 +2934,25 @@ let private run (opts: Options) : int =
         if not fatal then
             step 8 "initialization handoff"
             let outcome = installInitializationHandoff opts
+
             match outcome with
             | Succeeded ->
                 AnsiConsole.MarkupLine
                     "  [green]✓[/] installed $initialize-sdd-workspace + pending initialization warning"
             | Failed note ->
-                AnsiConsole.MarkupLine(sprintf "  [red]✗[/] could not install initialization handoff: %s" (Markup.Escape note))
+                AnsiConsole.MarkupLine(
+                    sprintf "  [red]✗[/] could not install initialization handoff: %s" (Markup.Escape note)
+                )
+
                 fatal <- true
             | Warned note -> AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] %s" (Markup.Escape note))
             | Skipped reason -> AnsiConsole.MarkupLine(sprintf "  [yellow]⊘[/] %s" (Markup.Escape reason))
-            results.Add { Title = "initialization handoff"; Outcome = outcome }
+
+            results.Add
+                {
+                    Title = "initialization handoff"
+                    Outcome = outcome
+                }
 
         summary results opts fatal
         if fatal then 1 else 0
@@ -2081,13 +2964,16 @@ let private retrofitHeader (opts: RetrofitOptions) =
     grid.AddColumn() |> ignore
     grid.AddColumn() |> ignore
     grid.AddRow("[grey]target[/]", Markup.Escape opts.Target) |> ignore
+
     grid.AddRow(
         "[grey]board[/]",
         sprintf "[aqua]%s/%s[/]" (Markup.Escape opts.BoardOwner) (Markup.Escape opts.BoardTitle)
     )
     |> ignore
+
     opts.WorkspaceRepo
     |> Option.iter (fun r -> grid.AddRow("[grey]repo[/]", Markup.Escape r) |> ignore)
+
     grid.AddRow("[grey]kit ref[/]", Markup.Escape opts.Ref) |> ignore
     let panel = Panel(grid)
     panel.Header <- PanelHeader "[bold]new-sdd-workspace[/] [grey]· retrofit coordination[/]"
@@ -2103,12 +2989,14 @@ let private retrofitHeader (opts: RetrofitOptions) =
 let private runRetrofit (opts: RetrofitOptions) : int =
     retrofitHeader opts
     let fsggDir = Path.Combine(opts.Target, ".fsgg")
+
     if not (Directory.Exists fsggDir) then
         // The precondition the issue names: a workspace has a `.fsgg/` config. No `.fsgg/` ⇒ this is not
         // a scaffolded workspace, so there is nothing to retrofit ONTO — refuse cleanly, naming the fix.
         // A concise leading line (no target path) so the refusal is greppable on one line at any width.
         AnsiConsole.WriteLine()
         AnsiConsole.MarkupLine "[red]retrofit refused:[/] not a scaffolded workspace (no .fsgg/ directory)"
+
         let panel =
             Panel(
                 sprintf
@@ -2116,6 +3004,7 @@ let private runRetrofit (opts: RetrofitOptions) : int =
                     (Markup.Escape opts.Target)
                     (Markup.Escape opts.Target)
             )
+
         panel.Header <- PanelHeader "[red]nothing to retrofit[/]"
         panel.Border <- BoxBorder.Rounded
         panel.Padding <- Padding(1, 0, 1, 0)
@@ -2123,6 +3012,7 @@ let private runRetrofit (opts: RetrofitOptions) : int =
         2
     else
         step 1 "retrofit coordination kit"
+
         let report =
             AnsiConsole
                 .Status()
@@ -2130,7 +3020,10 @@ let private runRetrofit (opts: RetrofitOptions) : int =
                     sprintf "reconciling the coordination kit for %s/%s…" opts.BoardOwner opts.BoardTitle,
                     fun _ -> retrofitCoordination opts
                 )
-        let materialized = report.Wrote |> List.choose (fun (r, m) -> if m then Some r else None)
+
+        let materialized =
+            report.Wrote |> List.choose (fun (r, m) -> if m then Some r else None)
+
         let drift = report.Wrote |> List.choose (fun (r, m) -> if m then None else Some r)
         let changed = not (List.isEmpty report.Wrote)
 
@@ -2141,33 +3034,47 @@ let private runRetrofit (opts: RetrofitOptions) : int =
         if changed then
             // Fresh materialization and/or drift repair happened → record it in the provenance log.
             recordRetrofit opts.Target opts materialized drift
+
             if not (List.isEmpty materialized) then
                 AnsiConsole.MarkupLine(
-                    sprintf "  [green]✓[/] materialized %d missing kit piece(s): [grey]%s[/]"
-                        materialized.Length (Markup.Escape(String.Join(", ", materialized)))
+                    sprintf
+                        "  [green]✓[/] materialized %d missing kit piece(s): [grey]%s[/]"
+                        materialized.Length
+                        (Markup.Escape(String.Join(", ", materialized)))
                 )
+
             if not (List.isEmpty drift) then
                 AnsiConsole.MarkupLine(
-                    sprintf "  [green]✓[/] re-emitted %d drifted kit piece(s): [grey]%s[/]"
-                        drift.Length (Markup.Escape(String.Join(", ", drift)))
+                    sprintf
+                        "  [green]✓[/] re-emitted %d drifted kit piece(s): [grey]%s[/]"
+                        drift.Length
+                        (Markup.Escape(String.Join(", ", drift)))
                 )
+
             if not (List.isEmpty report.Kept) then
                 AnsiConsole.MarkupLine(
                     sprintf "  [grey]· %d piece(s) already coherent — left untouched[/]" report.Kept.Length
                 )
+
             AnsiConsole.MarkupLine(
                 sprintf
                     "  [green]✓[/] recorded retrofit in [grey].fsgg/scaffold-provenance.json[/] — board [aqua]%s/%s[/]"
                     (Markup.Escape opts.BoardOwner)
                     (Markup.Escape opts.BoardTitle)
             )
+
             if opts.BoardOwner.ToLowerInvariant() <> "fs-gg" then
                 AnsiConsole.MarkupLine
                     "  [grey]note: offer/chores on a non-FS-GG board need an engine build with #1140 (post-0.4.0)[/]"
+
             AnsiConsole.WriteLine()
+
             AnsiConsole.MarkupLine(
-                sprintf "[bold]Done:[/] [green]%s[/] is now wired for coordination — /pnext-item and /check-board work." (Markup.Escape opts.Target)
+                sprintf
+                    "[bold]Done:[/] [green]%s[/] is now wired for coordination — /pnext-item and /check-board work."
+                    (Markup.Escape opts.Target)
             )
+
             0
         elif not (List.isEmpty report.Kept) then
             // Nothing written, but pieces are present → already wired. Refuse cleanly (no partial state):
@@ -2175,13 +3082,19 @@ let private runRetrofit (opts: RetrofitOptions) : int =
             AnsiConsole.MarkupLine(
                 sprintf "  [green]✓[/] already wired — %d kit piece(s) coherent, no drift to re-emit" report.Kept.Length
             )
+
             if not (List.isEmpty report.Problems) then
                 AnsiConsole.MarkupLine
                     "  [yellow]⚠[/] some kit files could not be fetched to verify — re-run when the network is reachable"
+
             AnsiConsole.WriteLine()
+
             AnsiConsole.MarkupLine(
-                sprintf "[bold]Already wired:[/] [green]%s[/] carries the coordination kit + board env." (Markup.Escape opts.Target)
+                sprintf
+                    "[bold]Already wired:[/] [green]%s[/] carries the coordination kit + board env."
+                    (Markup.Escape opts.Target)
             )
+
             0
         else
             // Nothing present and nothing written — every fetch failed on an unwired workspace. Nothing
@@ -2190,6 +3103,7 @@ let private runRetrofit (opts: RetrofitOptions) : int =
                 Panel(
                     "[red]could not vendor the coordination kit[/] — every fetch from FS-GG/.github failed.\n\nCheck network reachability and re-run; nothing was written, so the workspace is unchanged."
                 )
+
             panel.Header <- PanelHeader "[red]retrofit failed[/]"
             panel.Border <- BoxBorder.Rounded
             panel.Padding <- Padding(1, 0, 1, 0)
@@ -2199,23 +3113,37 @@ let private runRetrofit (opts: RetrofitOptions) : int =
 /// Re-run just the repository policy after a freshly scaffolded repository has been created or
 /// an operator has received the required administration grant. This is the resumable half of the
 /// scaffold-time pending receipt; it has no filesystem side effects and never prints credentials.
-let private clearRepositorySecurityObligation (target: string) (repository: string) (prior: string) (actor: string) : Result<unit, string> =
+let private clearRepositorySecurityObligation
+    (target: string)
+    (repository: string)
+    (prior: string)
+    (actor: string)
+    : Result<unit, string> =
     let path = Path.Combine(target, ".fsgg", "scaffold-provenance.json")
+
     try
-        if not (File.Exists path) then Error(sprintf "security provenance is missing at %s" path)
+        if not (File.Exists path) then
+            Error(sprintf "security provenance is missing at %s" path)
         else
             let root = JsonNode.Parse(File.ReadAllText path).AsObject()
             let kept = JsonArray()
+
             match root.["securityObligations"] with
             | :? JsonArray as obligations ->
                 obligations
                 |> Seq.filter (fun entry ->
                     try
                         let row = entry.AsObject()
-                        not (row.["kind"].GetValue<string>() = "repository-issue-policy" && row.["target"].GetValue<string>() = repository)
-                    with _ -> true)
+
+                        not (
+                            row.["kind"].GetValue<string>() = "repository-issue-policy"
+                            && row.["target"].GetValue<string>() = repository
+                        )
+                    with _ ->
+                        true)
                 |> Seq.iter (fun entry -> kept.Add(entry.DeepClone()))
             | _ -> ()
+
             root.["securityObligations"] <- kept
             let receipt = JsonObject()
             receipt.["kind"] <- JsonValue.Create "repository-issue-policy"
@@ -2227,16 +3155,28 @@ let private clearRepositorySecurityObligation (target: string) (repository: stri
             upsertSecurityReceipt root "repository-issue-policy" "repository" repository receipt
             File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
             Ok()
-    with ex -> Error("security provenance persistence failed: " + ex.Message)
+    with ex ->
+        Error("security provenance persistence failed: " + ex.Message)
 
-let private persistProjectSecurityReceipt (target: string) (project: string) (projectId: string) (isPublic: bool) (actor: string) (writers: ResolvedProjectWriter list) (basePermission: string option) (effectiveWriters: string list option) : Result<unit, string> =
+let private persistProjectSecurityReceipt
+    (target: string)
+    (project: string)
+    (projectId: string)
+    (isPublic: bool)
+    (actor: string)
+    (writers: ResolvedProjectWriter list)
+    (basePermission: string option)
+    (effectiveWriters: string list option)
+    : Result<unit, string> =
     let path = Path.Combine(target, ".fsgg", "scaffold-provenance.json")
+
     try
         if not (File.Exists path) then
             Error(sprintf "security provenance is missing at %s" path)
         else
             let root = JsonNode.Parse(File.ReadAllText path).AsObject()
             let kept = JsonArray()
+
             match root.["securityObligations"] with
             | :? JsonArray as obligations ->
                 obligations
@@ -2245,16 +3185,32 @@ let private persistProjectSecurityReceipt (target: string) (project: string) (pr
                         let row = entry.AsObject()
                         let kind = row.["kind"].GetValue<string>()
                         let sameTarget = row.["target"].GetValue<string>() = project
-                        not (sameTarget && (kind = "project-access" || kind = "project-base-access-human-verification"))
-                    with _ -> true)
+
+                        not (
+                            sameTarget
+                            && (kind = "project-access" || kind = "project-base-access-human-verification")
+                        )
+                    with _ ->
+                        true)
                 |> Seq.iter (fun entry -> kept.Add(entry.DeepClone()))
             | _ -> ()
-            if basePermission.IsNone || effectiveWriters.IsNone then kept.Add(projectBaseAccessObligation target project writers)
+
+            if basePermission.IsNone || effectiveWriters.IsNone then
+                kept.Add(projectBaseAccessObligation target project writers)
+
             root.["securityObligations"] <- kept
-            upsertSecurityReceipt root "project-access" "project" project (projectReceiptJson project projectId isPublic actor writers basePermission effectiveWriters)
+
+            upsertSecurityReceipt
+                root
+                "project-access"
+                "project"
+                project
+                (projectReceiptJson project projectId isPublic actor writers basePermission effectiveWriters)
+
             File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
             Ok()
-    with ex -> Error("security provenance persistence failed: " + ex.Message)
+    with ex ->
+        Error("security provenance persistence failed: " + ex.Message)
 
 let private runSecure (target: string option) (repository: string) : int =
     match secureRepository repository with
@@ -2263,20 +3219,48 @@ let private runSecure (target: string option) (repository: string) : int =
         | Some workspace ->
             match clearRepositorySecurityObligation workspace repo prior actor with
             | Error reason ->
-                AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s policy verified but durable receipt failed — %s" (Markup.Escape repo) (Markup.Escape reason))
+                AnsiConsole.MarkupLine(
+                    sprintf
+                        "[yellow]pending:[/] %s policy verified but durable receipt failed — %s"
+                        (Markup.Escape repo)
+                        (Markup.Escape reason)
+                )
+
                 1
             | Ok() ->
-                AnsiConsole.MarkupLine(sprintf "[green]verified:[/] %s IssueCreationPolicy is COLLABORATORS_ONLY (prior %s; actor %s)" (Markup.Escape repo) (Markup.Escape prior) (Markup.Escape actor))
+                AnsiConsole.MarkupLine(
+                    sprintf
+                        "[green]verified:[/] %s IssueCreationPolicy is COLLABORATORS_ONLY (prior %s; actor %s)"
+                        (Markup.Escape repo)
+                        (Markup.Escape prior)
+                        (Markup.Escape actor)
+                )
+
                 0
         | None ->
-            AnsiConsole.MarkupLine(sprintf "[green]verified:[/] %s IssueCreationPolicy is COLLABORATORS_ONLY (prior %s; actor %s)" (Markup.Escape repo) (Markup.Escape prior) (Markup.Escape actor))
+            AnsiConsole.MarkupLine(
+                sprintf
+                    "[green]verified:[/] %s IssueCreationPolicy is COLLABORATORS_ONLY (prior %s; actor %s)"
+                    (Markup.Escape repo)
+                    (Markup.Escape prior)
+                    (Markup.Escape actor)
+            )
+
             0
     | RepositoryPending(repo, reason) ->
         AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape repo) (Markup.Escape reason))
         1
 
-let private runSecureProject (target: string) (board: string) (visibility: bool option) (writers: string list) (verifiedBasePermission: string option) (verifiedExclusiveWriters: string list option) : int =
+let private runSecureProject
+    (target: string)
+    (board: string)
+    (visibility: bool option)
+    (writers: string list)
+    (verifiedBasePermission: string option)
+    (verifiedExclusiveWriters: string list option)
+    : int =
     let owner, title = parseBoard board
+
     match applyProjectVisibility owner title visibility with
     | ProjectPending(project, reason) ->
         AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape project) (Markup.Escape reason))
@@ -2286,6 +3270,7 @@ let private runSecureProject (target: string) (board: string) (visibility: bool 
         | ProjectPartiallyVerified(_, id, isPublic, actor, resolved) ->
             let requestedSet = writers |> Set.ofList
             let verifiedSet = verifiedExclusiveWriters |> Option.map Set.ofList
+
             let humanVerification =
                 match verifiedBasePermission, verifiedExclusiveWriters with
                 | None, None -> Ok(None, None)
@@ -2293,25 +3278,54 @@ let private runSecureProject (target: string) (board: string) (visibility: bool 
                 | Some permission, _ when permission <> "READ" -> Error "--verified-base-permission must be READ"
                 | Some _, None -> Error "--verified-base-permission requires --verified-exclusive-writers"
                 | None, Some _ -> Error "--verified-exclusive-writers requires --verified-base-permission READ"
-                | Some _, Some _ -> Error "the human-verified effective/exclusive writer set must exactly match --trusted-writers"
+                | Some _, Some _ ->
+                    Error "the human-verified effective/exclusive writer set must exactly match --trusted-writers"
+
             match humanVerification with
             | Error reason ->
-                persistProjectSecurityReceipt target project id isPublic actor resolved None None |> ignore
-                AnsiConsole.MarkupLine(sprintf "[yellow]pending human verification:[/] %s — %s; the base/effective-writer obligation remains" (Markup.Escape project) (Markup.Escape reason))
+                persistProjectSecurityReceipt target project id isPublic actor resolved None None
+                |> ignore
+
+                AnsiConsole.MarkupLine(
+                    sprintf
+                        "[yellow]pending human verification:[/] %s — %s; the base/effective-writer obligation remains"
+                        (Markup.Escape project)
+                        (Markup.Escape reason)
+                )
+
                 1
             | Ok(permission, effectiveWriters) ->
-                match persistProjectSecurityReceipt target project id isPublic actor resolved permission effectiveWriters with
+                match
+                    persistProjectSecurityReceipt target project id isPublic actor resolved permission effectiveWriters
+                with
                 | Error reason ->
-                    AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape project) (Markup.Escape reason))
+                    AnsiConsole.MarkupLine(
+                        sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape project) (Markup.Escape reason)
+                    )
+
                     1
                 | Ok() when permission.IsSome && effectiveWriters.IsSome ->
-                    AnsiConsole.MarkupLine(sprintf "[green]verified:[/] %s visibility/requested grants plus human-verified base READ and effective/exclusive writer set converged" (Markup.Escape project))
+                    AnsiConsole.MarkupLine(
+                        sprintf
+                            "[green]verified:[/] %s visibility/requested grants plus human-verified base READ and effective/exclusive writer set converged"
+                            (Markup.Escape project)
+                    )
+
                     0
                 | Ok() ->
-                    AnsiConsole.MarkupLine(sprintf "[yellow]partial verified receipt:[/] %s; requested writers [[%s]]; verify base Read at Project → Settings → Manage access, then run the receipt's resume command" (Markup.Escape project) (Markup.Escape(String.Join(",", writers))))
+                    AnsiConsole.MarkupLine(
+                        sprintf
+                            "[yellow]partial verified receipt:[/] %s; requested writers [[%s]]; verify base Read at Project → Settings → Manage access, then run the receipt's resume command"
+                            (Markup.Escape project)
+                            (Markup.Escape(String.Join(",", writers)))
+                    )
+
                     1
         | ProjectObserved _ ->
-            AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — writer allowlist was not verified" (Markup.Escape project))
+            AnsiConsole.MarkupLine(
+                sprintf "[yellow]pending:[/] %s — writer allowlist was not verified" (Markup.Escape project)
+            )
+
             1
         | ProjectPending(_, reason) ->
             AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape project) (Markup.Escape reason))
@@ -2323,7 +3337,8 @@ let private runSecureProject (target: string) (board: string) (visibility: bool 
 [<EntryPoint>]
 let main argv =
     match List.ofArray argv with
-    | [ "-h" ] | [ "--help" ] ->
+    | [ "-h" ]
+    | [ "--help" ] ->
         usage ()
         0
     // No arguments on an interactive terminal → prompt for the parameters. A redirected/CI
@@ -2349,15 +3364,67 @@ let main argv =
     | [ "secure"; "--repo"; repository ] -> runSecure None repository
     | [ "secure"; target; "--repo"; repository ] -> runSecure (Some target) repository
     | [ "secure"; target; "--project"; board; "--public-board"; "--trusted-writers"; writers ] ->
-        runSecureProject target board (Some true) (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) None None
+        runSecureProject
+            target
+            board
+            (Some true)
+            (writers.Split(',', StringSplitOptions.RemoveEmptyEntries)
+             |> Array.map (fun writer -> writer.Trim())
+             |> Array.filter (String.IsNullOrWhiteSpace >> not)
+             |> List.ofArray)
+            None
+            None
     | [ "secure"; target; "--project"; board; "--private-board"; "--trusted-writers"; writers ] ->
-        runSecureProject target board (Some false) (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) None None
+        runSecureProject
+            target
+            board
+            (Some false)
+            (writers.Split(',', StringSplitOptions.RemoveEmptyEntries)
+             |> Array.map (fun writer -> writer.Trim())
+             |> Array.filter (String.IsNullOrWhiteSpace >> not)
+             |> List.ofArray)
+            None
+            None
     | [ "secure"; target; "--project"; board; "--trusted-writers"; writers ] ->
-        runSecureProject target board None (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) None None
-    | [ "secure"; target; "--project"; board; "--trusted-writers"; writers; "--verified-base-permission"; permission; "--verified-exclusive-writers"; exclusiveWriters ] ->
-        runSecureProject target board None (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) (Some permission) (Some(exclusiveWriters.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray))
+        runSecureProject
+            target
+            board
+            None
+            (writers.Split(',', StringSplitOptions.RemoveEmptyEntries)
+             |> Array.map (fun writer -> writer.Trim())
+             |> Array.filter (String.IsNullOrWhiteSpace >> not)
+             |> List.ofArray)
+            None
+            None
+    | [ "secure"
+        target
+        "--project"
+        board
+        "--trusted-writers"
+        writers
+        "--verified-base-permission"
+        permission
+        "--verified-exclusive-writers"
+        exclusiveWriters ] ->
+        runSecureProject
+            target
+            board
+            None
+            (writers.Split(',', StringSplitOptions.RemoveEmptyEntries)
+             |> Array.map (fun writer -> writer.Trim())
+             |> Array.filter (String.IsNullOrWhiteSpace >> not)
+             |> List.ofArray)
+            (Some permission)
+            (Some(
+                exclusiveWriters.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                |> Array.map (fun writer -> writer.Trim())
+                |> Array.filter (String.IsNullOrWhiteSpace >> not)
+                |> List.ofArray
+            ))
     | "secure" :: _ ->
-        AnsiConsole.MarkupLine "[red]error:[/] secure requires a workspace target plus --repo owner/repository, or a complete --project recovery route"
+        AnsiConsole.MarkupLine
+            "[red]error:[/] secure requires a workspace target plus --repo owner/repository, or a complete --project recovery route"
+
         2
     | args ->
         match parse args with

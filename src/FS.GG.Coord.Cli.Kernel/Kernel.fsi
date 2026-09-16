@@ -146,10 +146,7 @@ module Kernel =
     ///
     /// Public under rule 4: `let private boardWriteNote` in `Client`.
     val boardWriteNote:
-      ref: Ref ->
-        field: string ->
-        value: string ->
-        outcome: Result<Board.WriteOutcome,Errors.IoError> -> unit
+        ref: Ref -> field: string -> value: string -> outcome: Result<Board.WriteOutcome, Errors.IoError> -> unit
 
     /// An environment variable, or the supplied fallback when it is unset OR empty. The empty case is the
     /// point: an exported-but-blank variable is an absent value, not a value of `""`.
@@ -173,18 +170,18 @@ module Kernel =
     /// arguments for the extraction programme (.github#2725 onward) rather than as designs.
     type Context =
         {
-          Transport: FS.GG.Coord.GitHub.Transport.IGitHubTransport
-          Owner: string
-          Title: string
+            Transport: FS.GG.Coord.GitHub.Transport.IGitHubTransport
+            Owner: string
+            Title: string
 
-          /// The board's default repo scope, for a bare `repo#n` ref and the candidate filter.
-          DefaultRepo: string option
+            /// The board's default repo scope, for a bare `repo#n` ref and the candidate filter.
+            DefaultRepo: string option
 
-          /// The per-deployment chore-lock roster a VENDORED tenant injects by env
-          /// (`FSGG_COORD_CHORE_LOCKS`, parsed by `parseChoreLocks`). Matched on (owner, repo) under ANY
-          /// owner and consulted BEFORE the engine's embedded FS-GG table — empty for the default FS-GG
-          /// deployment, so its behaviour is unchanged. See `Options.choreLockRef`.
-          ChoreLocks: FS.GG.Coord.Types.Ref list
+            /// The per-deployment chore-lock roster a VENDORED tenant injects by env
+            /// (`FSGG_COORD_CHORE_LOCKS`, parsed by `parseChoreLocks`). Matched on (owner, repo) under ANY
+            /// owner and consulted BEFORE the engine's embedded FS-GG table — empty for the default FS-GG
+            /// deployment, so its behaviour is unchanged. See `Options.choreLockRef`.
+            ChoreLocks: FS.GG.Coord.Types.Ref list
         }
 
     /// Whether this context's transport is the real HTTP one.
@@ -220,16 +217,13 @@ module Kernel =
     /// The bare form matches `Blockers.canonToken`, which has always accepted `#n` by adopting the item's
     /// own owner/repo. `#?` here so `548` and `#548` both parse and the two ref readers in this codebase
     /// stop disagreeing about what a ref is.
-    val parseRefIn:
-      owner: string ->
-        defaultRepo: string option ->
-        raw: string -> Result<FS.GG.Coord.Types.Ref,string>
+    val parseRefIn: owner: string -> defaultRepo: string option -> raw: string -> Result<FS.GG.Coord.Types.Ref, string>
 
     /// Parse a `<ref>` against the ambient context. See `parseRefIn` — this only supplies the defaults,
     /// and it is the entry point every IO command actually uses.
     ///
     /// Public under rule 4: `let private parseRef` in `Client`.
-    val parseRef: ctx: Context -> raw: string -> Result<Ref,string>
+    val parseRef: ctx: Context -> raw: string -> Result<Ref, string>
 
     /// Resolve the worker, printing the shared-session warning to stderr but PROCEEDING — the id is still
     /// this worker's in the common single-worker case, and the warning is for the fan-out that needs to
@@ -237,11 +231,11 @@ module Kernel =
     /// copies is an id agents collide on (#551).
     ///
     /// Public under rule 4: `let private worker` in `Client`.
-    val worker: opts: Options.Options -> Result<Identity.Worker,int>
+    val worker: opts: Options.Options -> Result<Identity.Worker, int>
 
     /// Exactly one positional argument, or the usage refusal that names what was expected and how many
     /// arrived. Public under rule 4: `let private oneArg` in `Client`.
-    val oneArg: opts: Options.Options -> what: string -> Result<string,int>
+    val oneArg: opts: Options.Options -> what: string -> Result<string, int>
 
     /// OUR SESSION, for the twin predicate — the same one `claim` rides into the marker it posts.
     ///

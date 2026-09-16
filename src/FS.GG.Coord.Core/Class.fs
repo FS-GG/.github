@@ -20,8 +20,7 @@ module Class =
     // a `Class: P1` or a `Class: blocker` somebody wrote by hand is a vocabulary this engine does not
     // speak, and mapping it onto the nearest of three would be the guess AC3 forbids. `itemClassOfWireName`
     // is the parse, DERIVED from the renderer, so the vocabulary is spelled exactly once (#1012).
-    let private classify (value: string) : ItemClass option =
-        itemClassOfWireName value
+    let private classify (value: string) : ItemClass option = itemClassOfWireName value
 
     // Every `ItemClass` case, by reflection — `Protocol.everyBlockerState`'s shape exactly, and for its
     // reason. All three cases are NULLARY, so the list can be DERIVED, and a list nobody writes is a

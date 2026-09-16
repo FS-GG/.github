@@ -55,9 +55,11 @@ let ``staleSources skips an entry whose file this tree does not carry - not a st
 [<Fact>]
 let ``divergedRoots names a skill whose two roots differ, and one whose mirror is missing`` () =
     let roots =
-        [ "same", Some [| 1uy; 2uy |], Some [| 1uy; 2uy |] // byte-identical → clean
-          "diverged", Some [| 1uy |], Some [| 9uy |] // edited one root only
-          "no-mirror", Some [| 1uy |], None ] // the .agents root is missing the file
+        [
+            "same", Some [| 1uy; 2uy |], Some [| 1uy; 2uy |] // byte-identical → clean
+            "diverged", Some [| 1uy |], Some [| 9uy |] // edited one root only
+            "no-mirror", Some [| 1uy |], None
+        ] // the .agents root is missing the file
 
     Assert.Equal<string list>([ "diverged"; "no-mirror" ], Kit.divergedRoots roots)
 
@@ -72,7 +74,10 @@ let private lane = [ ".claude/skills"; ".agents/skills" ]
 
 [<Fact>]
 let ``skillMirror pairs a declared skill source with its opposite root`` () =
-    Assert.Equal(Some(".claude/skills/pnext-item", ".agents/skills/pnext-item"), Kit.skillMirror lane ".claude/skills/pnext-item")
+    Assert.Equal(
+        Some(".claude/skills/pnext-item", ".agents/skills/pnext-item"),
+        Kit.skillMirror lane ".claude/skills/pnext-item"
+    )
 
 [<Fact>]
 let ``skillMirror mirrors FROM whichever root the registry declared - never a hardcoded direction`` () =
@@ -116,11 +121,14 @@ let ``skillMirror over a LOCK reaches the kit's skills and NOTHING else`` () =
          cccc  scripts/fsgg-coord\n"
 
     let governed =
-        Kit.parseLock lockText |> List.choose (fun (_w, src) -> Kit.skillMirror lane src)
+        Kit.parseLock lockText
+        |> List.choose (fun (_w, src) -> Kit.skillMirror lane src)
 
     Assert.Equal<(string * string) list>(
-        [ ".claude/skills/pnext-item", ".agents/skills/pnext-item"
-          ".claude/skills/check-board", ".agents/skills/check-board" ],
+        [
+            ".claude/skills/pnext-item", ".agents/skills/pnext-item"
+            ".claude/skills/check-board", ".agents/skills/check-board"
+        ],
         governed
     )
 
@@ -148,7 +156,8 @@ let ``declaredSources names a kit source a SUBTREE token reaches - either direct
     // it just as effectively — a parent RESERVES the subtree (#309), so it incurs the same obligation. Both
     // directions, because `TouchSet.tokensOverlap` is containment either way and erring toward naming an
     // obligation costs a line of advice, where missing one costs a red `main`.
-    let sources (token: string) = Kit.declaredSources (Kit.parseLock lock) [ token ]
+    let sources (token: string) =
+        Kit.declaredSources (Kit.parseLock lock) [ token ]
 
     Assert.Equal<string list>([ ".claude/skills/pnext-item" ], sources ".claude/skills/pnext-item/**")
     Assert.Equal<string list>([ ".claude/skills/pnext-item" ], sources ".claude/skills/pnext-item")

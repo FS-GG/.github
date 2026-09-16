@@ -40,24 +40,30 @@ module private Fixtures =
     let serving (body: string) =
         Fake.Recorder(fun _ ->
             Ok
-                { Status = 200
-                  Body = body
-                  ETag = None
-                  NextLink = None
-                  Headers = Map.empty })
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                })
 
     /// GitHub's primary-budget wording, as it arrives inside a 200's `errors` array.
-    let [<Literal>] RateLimitMessage = "API rate limit exceeded for installation ID 1234."
+    [<Literal>]
+    let RateLimitMessage = "API rate limit exceeded for installation ID 1234."
 
     /// GitHub's secondary (abuse-detection) wording — a DIFFERENT fact, and #1666 is the cost of
     /// conflating them.
-    let [<Literal>] SecondaryMessage = "You have exceeded a secondary rate limit."
+    [<Literal>]
+    let SecondaryMessage = "You have exceeded a secondary rate limit."
 
     /// A generic partial-field failure: not a budget, still not a complete answer.
-    let [<Literal>] PartialMessage = "Could not resolve to a node with the global id of 'abc'."
+    [<Literal>]
+    let PartialMessage = "Could not resolve to a node with the global id of 'abc'."
 
     /// `errors`, rendered as GitHub renders it.
-    let errorsArray (message: string) = $""""errors":[{{"message":"{message}","path":["repository"]}}]"""
+    let errorsArray (message: string) =
+        $""""errors":[{{"message":"{message}","path":["repository"]}}]"""
 
     // ---- the four GraphQL reads in `Reads.fs`, each as a COMPLETE payload -------------------------
     //
@@ -65,28 +71,34 @@ module private Fixtures =
     // `errors` key is the ONLY difference between the partial fixtures below and these, so a test that
     // passes on both has proved nothing, and one that fails on both has broken the read.
 
-    let [<Literal>] CommentsData =
+    [<Literal>]
+    let CommentsData =
         """"data":{"repository":{"issue":{"comments":{"nodes":[{"body":"first"},{"body":"second"}]}}}}"""
 
-    let [<Literal>] SubIssuesData =
+    [<Literal>]
+    let SubIssuesData =
         """"data":{"repository":{"issue":{"subIssues":{"totalCount":1,"nodes":[{"number":398,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}"""
 
     /// A PR that genuinely closes ONE issue.
-    let [<Literal>] ClosingRefData =
+    [<Literal>]
+    let ClosingRefData =
         """"data":{"repository":{"pullRequest":{"closingIssuesReferences":{"nodes":[{"number":2534,"repository":{"nameWithOwner":"FS-GG/.github"}}]}}}}"""
 
     /// A PR that genuinely closes NOTHING — the one state `Ok None` is entitled to describe.
-    let [<Literal>] ClosingRefEmptyData =
+    [<Literal>]
+    let ClosingRefEmptyData =
         """"data":{"repository":{"pullRequest":{"closingIssuesReferences":{"nodes":[]}}}}"""
 
-    let [<Literal>] ContentEditsData =
+    [<Literal>]
+    let ContentEditsData =
         """"data":{"repository":{"issueOrPullRequest":{"userContentEdits":{"totalCount":1,"nodes":[{"editedAt":"2026-08-13T10:00:00Z","editor":{"login":"EHotwagner"}}]}}}}"""
 
     /// The complete payload, alone — a clean 200 with no `errors` key at all.
     let clean (data: string) = "{" + data + "}"
 
     /// The SAME complete payload, with `errors` beside it — GitHub's partial 200.
-    let partial (data: string) (message: string) = "{" + data + "," + errorsArray message + "}"
+    let partial (data: string) (message: string) =
+        "{" + data + "," + errorsArray message + "}"
 
 open Fixtures
 
@@ -202,7 +214,8 @@ let ``.github#2534 prClosingRef refuses a reference it cannot NAME`` () =
     // A node is PRESENT and unreadable. The connection reported a closing reference and we could not name
     // it — the opposite of "it closes nothing", so it may not borrow that answer's value.
     let transport =
-        serving """{"data":{"repository":{"pullRequest":{"closingIssuesReferences":{"nodes":[{"number":null,"repository":{}}]}}}}}"""
+        serving
+            """{"data":{"repository":{"pullRequest":{"closingIssuesReferences":{"nodes":[{"number":null,"repository":{}}]}}}}}"""
 
     match Reads.prClosingRef transport "FS-GG" ".github" 2540 with
     | Error(Malformed(_, detail)) -> Assert.Contains("FAILED READ", detail)
@@ -254,7 +267,13 @@ let ``.github#2534 a response carrying neither data nor errors is a failed read`
 module private Ordering =
 
     /// One place a GraphQL response's root `data` is opened.
-    type Site = { File: string; Line: int; Fn: string; Text: string }
+    type Site =
+        {
+            File: string
+            Line: int
+            Fn: string
+            Text: string
+        }
 
     /// `.GetProperty("data")`, `.GetProperty "data"`, `.TryGetProperty "data"` — every spelling the layer
     /// actually uses, and the space form is not hypothetical: `Scan.fs` uses it.
@@ -271,7 +290,8 @@ module private Ordering =
     /// inside a paging read, a lambda's binding) sit deeper and deliberately do NOT reset the enclosing
     /// function: the ordering is a property of the whole read, and `Scan.fs`'s paging loop checks
     /// `errors` in the outer scope of the extraction it guards.
-    let private topLevelLet = Regex(@"^    let\s+(?:private\s+|rec\s+|inline\s+)*([^\s(:]+)", RegexOptions.Compiled)
+    let private topLevelLet =
+        Regex(@"^    let\s+(?:private\s+|rec\s+|inline\s+)*([^\s(:]+)", RegexOptions.Compiled)
 
     /// Every site in one file's text, paired with whether its enclosing binding asked about `errors`
     /// FIRST. Whole-line comments are skipped — the corpus is full of prose about this very rule, and
@@ -301,8 +321,18 @@ module private Ordering =
                     errorsSeenInFn <- true
 
                 if dataExtraction.IsMatch line then
-                    let site = { File = file; Line = i + 1; Fn = fn; Text = trimmed }
-                    if errorsSeenInFn then guarded.Add site else unguarded.Add site
+                    let site =
+                        {
+                            File = file
+                            Line = i + 1
+                            Fn = fn
+                            Text = trimmed
+                        }
+
+                    if errorsSeenInFn then
+                        guarded.Add site
+                    else
+                        unguarded.Add site
 
         List.ofSeq guarded, List.ofSeq unguarded
 
@@ -310,7 +340,10 @@ module private Ordering =
         let rec walk (d: DirectoryInfo) =
             if isNull (box d) then
                 failwith "walked past the filesystem root without finding a .git — cannot locate the layer's sources"
-            elif File.Exists(Path.Combine(d.FullName, ".git")) || Directory.Exists(Path.Combine(d.FullName, ".git")) then
+            elif
+                File.Exists(Path.Combine(d.FullName, ".git"))
+                || Directory.Exists(Path.Combine(d.FullName, ".git"))
+            then
                 d.FullName
             else
                 walk d.Parent
@@ -389,12 +422,14 @@ let ``.github#2534 the ordering gate FIRES on a data extraction that skips the e
     let drifted =
         String.concat
             "\n"
-            [ "module Reads ="
-              "    let subIssues (transport: IGitHubTransport) ="
-              "        match parse subject response.Body with"
-              "        | Ok doc ->"
-              "            let nodes = doc.RootElement.GetProperty(\"data\").GetProperty(\"repository\")"
-              "            Ok nodes" ]
+            [
+                "module Reads ="
+                "    let subIssues (transport: IGitHubTransport) ="
+                "        match parse subject response.Body with"
+                "        | Ok doc ->"
+                "            let nodes = doc.RootElement.GetProperty(\"data\").GetProperty(\"repository\")"
+                "            Ok nodes"
+            ]
 
     let _, unguarded = Ordering.scan "Drifted.fs" drifted
     let site = Assert.Single unguarded
@@ -408,21 +443,25 @@ let ``.github#2534 the ordering gate ACCEPTS the errors-first shape, in both spe
     let repairedByInspection =
         String.concat
             "\n"
-            [ "module Reads ="
-              "    let subIssues (transport: IGitHubTransport) ="
-              "        match doc.RootElement.TryGetProperty \"errors\" with"
-              "        | true, errs -> Error(GraphQlErrors [])"
-              "        | _ -> Ok(doc.RootElement.GetProperty(\"data\"))" ]
+            [
+                "module Reads ="
+                "    let subIssues (transport: IGitHubTransport) ="
+                "        match doc.RootElement.TryGetProperty \"errors\" with"
+                "        | true, errs -> Error(GraphQlErrors [])"
+                "        | _ -> Ok(doc.RootElement.GetProperty(\"data\"))"
+            ]
 
     // `Done.fs`'s spelling: the classifier call, without a literal `"errors"` on the same line.
     let repairedByClassifier =
         String.concat
             "\n"
-            [ "module Reads ="
-              "    let subIssues (transport: IGitHubTransport) ="
-              "        match Budget.ofGraphQlErrors messages with"
-              "        | Some limited -> Error limited"
-              "        | None -> Ok(doc.RootElement.GetProperty \"data\")" ]
+            [
+                "module Reads ="
+                "    let subIssues (transport: IGitHubTransport) ="
+                "        match Budget.ofGraphQlErrors messages with"
+                "        | Some limited -> Error limited"
+                "        | None -> Ok(doc.RootElement.GetProperty \"data\")"
+            ]
 
     for source in [ repairedByInspection; repairedByClassifier ] do
         let guarded, unguarded = Ordering.scan "Repaired.fs" source
@@ -437,12 +476,14 @@ let ``.github#2534 a data extraction in a LATER function does not inherit an ear
     let twoReads =
         String.concat
             "\n"
-            [ "module Reads ="
-              "    let good (transport: IGitHubTransport) ="
-              "        match doc.RootElement.TryGetProperty \"errors\" with"
-              "        | _ -> Ok(doc.RootElement.GetProperty(\"data\"))"
-              "    let drifted (transport: IGitHubTransport) ="
-              "        Ok(doc.RootElement.GetProperty(\"data\"))" ]
+            [
+                "module Reads ="
+                "    let good (transport: IGitHubTransport) ="
+                "        match doc.RootElement.TryGetProperty \"errors\" with"
+                "        | _ -> Ok(doc.RootElement.GetProperty(\"data\"))"
+                "    let drifted (transport: IGitHubTransport) ="
+                "        Ok(doc.RootElement.GetProperty(\"data\"))"
+            ]
 
     let guarded, unguarded = Ordering.scan "TwoReads.fs" twoReads
     Assert.Equal("good", (Assert.Single guarded).Fn)
@@ -492,36 +533,46 @@ module private NodeFacts =
 
     let private response (body: string) =
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None
-              Headers = Map.empty }
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            }
 
     /// One board candidate carrying a node id — the shape `freshNodeFacts` actually reads for. A row with
     /// `NodeId = None` takes the legacy REST path (#2308) and never reaches this query at all, so the id
     /// is what puts the fixture on the hot path rather than beside it.
     let row (n: int) : Scan.Row =
-        { Ref = { Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = n }
-          Title = $"item %d{n}"
-          Status = BoardStatus.Ready
-          BlockedByRaw = ""
-          State = IssueState.Open
-          IsPullRequest = false
-          PathRepo = "FS.GG.SDD"
-          BoardClass = None
-          BoardKind = None
-          CommentCount = None
-          Severity = Unset
-          Phase = None
-          CreatedAt = None
-          SweptBody = None
-          NodeId = Some $"I_node_%d{n}" }
+        {
+            Ref =
+                {
+                    Owner = "FS-GG"
+                    Repo = "FS.GG.SDD"
+                    Number = n
+                }
+            Title = $"item %d{n}"
+            Status = BoardStatus.Ready
+            BlockedByRaw = ""
+            State = IssueState.Open
+            IsPullRequest = false
+            PathRepo = "FS.GG.SDD"
+            BoardClass = None
+            BoardKind = None
+            CommentCount = None
+            Severity = Unset
+            Phase = None
+            CreatedAt = None
+            SweptBody = None
+            NodeId = Some $"I_node_%d{n}"
+        }
 
     /// The node-facts payload for `row 99`, COMPLETE and well-formed — zero comments, a real touch-set.
     /// Every partial fixture below is this exact body plus an `errors` key, so the `errors` array is the
     /// only difference between a refusal and a clean scan.
-    let [<Literal>] CompleteData =
+    [<Literal>]
+    let CompleteData =
         """"data":{"n0":{"id":"I_node_99","body":"Paths: src/Board/**","comments":{"totalCount":0}}}"""
 
     /// `errors` with MORE THAN ONE entry — what proves the messages stay a list rather than one
@@ -627,7 +678,8 @@ let ``.github#2542 the claim scan tells a SECONDARY limit from the primary budge
     // #1666, on this site. A secondary limit is account-wide, carries NO reset, and its remedy is "reduce
     // concurrency" — printing the primary's reset sends the fleet back in at full concurrency the moment
     // it elapses. `isRateLimited` cannot make this distinction; `ofGraphQlErrors` is what can.
-    let result = NodeFacts.scan (NodeFacts.servingNodeFacts (NodeFacts.partialMany [ SecondaryMessage ]))
+    let result =
+        NodeFacts.scan (NodeFacts.servingNodeFacts (NodeFacts.partialMany [ SecondaryMessage ]))
 
     match result with
     | Error(RateLimited(SecondaryLimit(None, None), None)) -> ()
@@ -640,7 +692,8 @@ let ``.github#2542 a genuine field error is still GraphQlErrors, and still exits
     // THE CONTROLLED COUNTERPART FOR THE CLASSIFIER. If every `errors` payload became a rate limit the
     // repair would be a different bug — a permanent failure retried forever — so the arm that must NOT
     // move is asserted beside the one that must.
-    let result = NodeFacts.scan (NodeFacts.servingNodeFacts (NodeFacts.partialMany [ PartialMessage ]))
+    let result =
+        NodeFacts.scan (NodeFacts.servingNodeFacts (NodeFacts.partialMany [ PartialMessage ]))
 
     match result with
     | Error(GraphQlErrors messages) -> Assert.Equal<string list>([ PartialMessage ], messages)
@@ -681,7 +734,8 @@ let ``.github#2542 a non-object 200 at the node-facts read is a typed refusal, n
     for body in [ "[]"; "\"text\""; "7"; "true"; "null" ] do
         match NodeFacts.scan (NodeFacts.servingNodeFacts body) with
         | Error(Malformed(_, detail)) -> Assert.Contains("FAILED READ", detail)
-        | other -> failwith $"a non-object root is a failed read, never a crash and never facts — %s{body} gave %A{other}"
+        | other ->
+            failwith $"a non-object root is a failed read, never a crash and never facts — %s{body} gave %A{other}"
 
 [<Fact>]
 let ``.github#2542 a clean 200 still assembles the claim-scan snapshot`` () =
@@ -700,7 +754,13 @@ let ``.github#2542 a clean 200 still assembles the claim-scan snapshot`` () =
 /// `.github#2542` exists as a distinct cause.
 module private Classification =
 
-    type Site = { File: string; Line: int; Fn: string; Text: string }
+    type Site =
+        {
+            File: string
+            Line: int
+            Fn: string
+            Text: string
+        }
 
     /// `GraphQlErrors` in EXPRESSION position — a value being CONSTRUCTED.
     ///
@@ -724,7 +784,8 @@ module private Classification =
     /// for you. `Board.setFieldBatch` is the reason the helper form is accepted — `GraphQl.decode` already
     /// classified the rate limit before its partial-apply arm rebuilds a `GraphQlErrors` from the failing
     /// aliases, and flagging it would be a false positive repaired by weakening the gate.
-    let private classifier = Regex(@"ofGraphQlErrors|GraphQl.decode", RegexOptions.Compiled)
+    let private classifier =
+        Regex(@"ofGraphQlErrors|GraphQl.decode", RegexOptions.Compiled)
 
     let private topLevelLet =
         Regex(@"^    let\s+(?:private\s+|rec\s+|inline\s+)*([^\s(:]+)", RegexOptions.Compiled)
@@ -757,8 +818,18 @@ module private Classification =
                     classifiedInFn <- true
 
                 if construction.IsMatch line then
-                    let site = { File = file; Line = i + 1; Fn = fn; Text = trimmed }
-                    if classifiedInFn then classified.Add site else unclassified.Add site
+                    let site =
+                        {
+                            File = file
+                            Line = i + 1
+                            Fn = fn
+                            Text = trimmed
+                        }
+
+                    if classifiedInFn then
+                        classified.Add site
+                    else
+                        unclassified.Add site
 
         List.ofSeq classified, List.ofSeq unclassified
 
@@ -766,7 +837,7 @@ module private Classification =
     /// is a read or a write reporting a GraphQL failure, and every one of them can be rate-limited. If a
     /// site ever genuinely needs one, add it here WITH its reason and `.github#2534`'s
     /// `no exemption outlives its reason` discipline — an empty set needs no such upkeep.
-    let exemptions : Set<string * string> = Set.empty
+    let exemptions: Set<string * string> = Set.empty
 
 [<Fact>]
 let ``.github#2542 every GraphQlErrors construction in the GitHub layer is preceded by the classifier`` () =
@@ -813,13 +884,15 @@ let ``.github#2542 the classification gate FIRES on the exact pre-repair freshNo
     let preRepair =
         String.concat
             "\n"
-            [ "module Scan ="
-              "    let private freshNodeFacts (transport: IGitHubTransport) (rows: Row list) ="
-              "        match doc.RootElement.TryGetProperty \"errors\" with"
-              "        | true, errors when errors.GetArrayLength() > 0 ->"
-              "            let messages = errors.EnumerateArray() |> Seq.map msg |> String.concat \"; \""
-              "            Error(GraphQlErrors [ messages ])"
-              "        | _ -> Ok(doc.RootElement.GetProperty \"data\")" ]
+            [
+                "module Scan ="
+                "    let private freshNodeFacts (transport: IGitHubTransport) (rows: Row list) ="
+                "        match doc.RootElement.TryGetProperty \"errors\" with"
+                "        | true, errors when errors.GetArrayLength() > 0 ->"
+                "            let messages = errors.EnumerateArray() |> Seq.map msg |> String.concat \"; \""
+                "            Error(GraphQlErrors [ messages ])"
+                "        | _ -> Ok(doc.RootElement.GetProperty \"data\")"
+            ]
 
     // `.github#2534`'s gate is SILENT on this input — which is precisely why a second gate was needed.
     Assert.Empty(Ordering.scan "PreRepair.fs" preRepair |> snd)
@@ -837,24 +910,28 @@ let ``.github#2542 the classification gate ACCEPTS the repaired shape, direct an
     let repairedDirect =
         String.concat
             "\n"
-            [ "module Scan ="
-              "    let private freshNodeFacts (transport: IGitHubTransport) (rows: Row list) ="
-              "        let messages = errors.EnumerateArray() |> Seq.map msg |> List.ofSeq"
-              "        match Budget.ofGraphQlErrors messages with"
-              "        | Some limited -> Error limited"
-              "        | None -> Error(GraphQlErrors messages)" ]
+            [
+                "module Scan ="
+                "    let private freshNodeFacts (transport: IGitHubTransport) (rows: Row list) ="
+                "        let messages = errors.EnumerateArray() |> Seq.map msg |> List.ofSeq"
+                "        match Budget.ofGraphQlErrors messages with"
+                "        | Some limited -> Error limited"
+                "        | None -> Error(GraphQlErrors messages)"
+            ]
 
     // `Board.setFieldBatch`'s spelling: the shared helper classified upstream, and this arm rebuilds the
     // generic error from the failing aliases knowing the budget was not the cause.
     let repairedViaHelper =
         String.concat
             "\n"
-            [ "module Board ="
-              "    let setFieldBatch (transport: IGitHubTransport) ="
-              "        match GraphQl.decode subject response.Body with"
-              "        | Ok _ -> Ok()"
-              "        | Error(RateLimited _ as e) -> Error e"
-              "        | Error(GraphQlErrors _) -> Error(GraphQlErrors(failedAliases |> List.map snd))" ]
+            [
+                "module Board ="
+                "    let setFieldBatch (transport: IGitHubTransport) ="
+                "        match GraphQl.decode subject response.Body with"
+                "        | Ok _ -> Ok()"
+                "        | Error(RateLimited _ as e) -> Error e"
+                "        | Error(GraphQlErrors _) -> Error(GraphQlErrors(failedAliases |> List.map snd))"
+            ]
 
     for source in [ repairedDirect; repairedViaHelper ] do
         let classified, unclassified = Classification.scan "Repaired.fs" source
@@ -869,11 +946,13 @@ let ``.github#2542 a function merely NAMED GraphQl.decode does not absolve itsel
     let impostor =
         String.concat
             "\n"
-            [ "module Reads ="
-              "    let private GraphQl.decode (subject: string) (root: JsonElement) ="
-              "        match root.TryGetProperty \"errors\" with"
-              "        | true, e -> Error(GraphQlErrors (messages e))"
-              "        | _ -> Ok(root.GetProperty \"data\")" ]
+            [
+                "module Reads ="
+                "    let private GraphQl.decode (subject: string) (root: JsonElement) ="
+                "        match root.TryGetProperty \"errors\" with"
+                "        | true, e -> Error(GraphQlErrors (messages e))"
+                "        | _ -> Ok(root.GetProperty \"data\")"
+            ]
 
     let _, unclassified = Classification.scan "Impostor.fs" impostor
     Assert.Equal("GraphQl.decode", (Assert.Single unclassified).Fn)
@@ -881,7 +960,11 @@ let ``.github#2542 a function merely NAMED GraphQl.decode does not absolve itsel
 [<Fact>]
 let ``.github#2542 the helpers the gate TRUSTS actually classify`` () =
     // M2 replaced the two compatibility helpers with one authoritative envelope implementation.
-    let graphQl = Ordering.layerSources () |> Array.find (fun (file, _) -> file = "GraphQl.fs") |> snd
+    let graphQl =
+        Ordering.layerSources ()
+        |> Array.find (fun (file, _) -> file = "GraphQl.fs")
+        |> snd
+
     Assert.Contains("let private envelope", graphQl)
     Assert.Contains("Budget.ofGraphQlErrors", graphQl)
 
@@ -893,12 +976,14 @@ let ``.github#2542 a construction in a LATER function does not inherit an earlie
     let twoSites =
         String.concat
             "\n"
-            [ "module Reads ="
-              "    let good (transport: IGitHubTransport) ="
-              "        match Budget.ofGraphQlErrors messages with"
-              "        | None -> Error(GraphQlErrors messages)"
-              "    let drifted (transport: IGitHubTransport) ="
-              "        Error(GraphQlErrors messages)" ]
+            [
+                "module Reads ="
+                "    let good (transport: IGitHubTransport) ="
+                "        match Budget.ofGraphQlErrors messages with"
+                "        | None -> Error(GraphQlErrors messages)"
+                "    let drifted (transport: IGitHubTransport) ="
+                "        Error(GraphQlErrors messages)"
+            ]
 
     let classified, unclassified = Classification.scan "TwoSites.fs" twoSites
     Assert.Equal("good", (Assert.Single classified).Fn)
@@ -911,15 +996,18 @@ let ``.github#2542 the construction regex tells building a GraphQlErrors from ma
     // that must never be outside it. Each excluded shape is asserted individually so a regex edit that
     // loses one is named rather than absorbed.
     let notConstructions =
-        [ "        | GraphQlErrors of messages: string list", "the union declaration"
-          "        | GraphQlErrors _", "a wildcard destructuring"
-          "        | Error(GraphQlErrors _) ->", "a wildcard destructuring inside a wrapper"
-          "        | GraphQlErrors messages -> \"GraphQL refused the query: \"", "a named destructuring"
-          "    let ofGraphQlErrors (messages: string list) =", "the classifier's own definition" ]
+        [
+            "        | GraphQlErrors of messages: string list", "the union declaration"
+            "        | GraphQlErrors _", "a wildcard destructuring"
+            "        | Error(GraphQlErrors _) ->", "a wildcard destructuring inside a wrapper"
+            "        | GraphQlErrors messages -> \"GraphQL refused the query: \"", "a named destructuring"
+            "    let ofGraphQlErrors (messages: string list) =", "the classifier's own definition"
+        ]
 
     for line, what in notConstructions do
         let source = String.concat "\n" [ "module M ="; "    let f () ="; line ]
         let classified, unclassified = Classification.scan "Shapes.fs" source
+
         Assert.True(
             List.isEmpty classified && List.isEmpty unclassified,
             $"{what} is not a construction site, but the gate counted it: {line}"
@@ -927,9 +1015,11 @@ let ``.github#2542 the construction regex tells building a GraphQlErrors from ma
 
     // ...and the shapes that ARE constructions, in every spelling the layer writes.
     let constructions =
-        [ "        | None -> Error(GraphQlErrors messages)"
-          "        Error(GraphQlErrors [ messages ])"
-          "        Error(GraphQlErrors(failedAliases |> List.map snd))" ]
+        [
+            "        | None -> Error(GraphQlErrors messages)"
+            "        Error(GraphQlErrors [ messages ])"
+            "        Error(GraphQlErrors(failedAliases |> List.map snd))"
+        ]
 
     for line in constructions do
         let source = String.concat "\n" [ "module M ="; "    let f () ="; line ]

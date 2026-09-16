@@ -109,39 +109,43 @@ module Done =
     /// The merge facts travel WITH the candidate, whichever record produced it: a closer named only by the
     /// close event is still held to `Merged` (#928), so admitting it cannot launder an unmerged PR (#543).
     type ClosingPr =
-        { Number: int
-          Merged: bool
-          /// ISO-8601 merge time, "" if unknown — the LATEST-merged among true closers wins (#342), but only
-          /// among closers that share a repository preference tier (.github#2427).
-          MergedAt: string
-          /// The merge commit's abbreviated oid, "" if unknown — named in the stamp.
-          Oid: string
-          /// This candidate's OWN `owner/repo`, "" if unknown — NOT the repository of an issue it claims to
-          /// close. Lets a same-repository closer be preferred over a foreign one (.github#2427).
-          Repo: string
-          /// Its own `closingIssuesReferences` names THIS issue (the `Closes #N` in the PR body).
-          ClosesThis: bool }
+        {
+            Number: int
+            Merged: bool
+            /// ISO-8601 merge time, "" if unknown — the LATEST-merged among true closers wins (#342), but only
+            /// among closers that share a repository preference tier (.github#2427).
+            MergedAt: string
+            /// The merge commit's abbreviated oid, "" if unknown — named in the stamp.
+            Oid: string
+            /// This candidate's OWN `owner/repo`, "" if unknown — NOT the repository of an issue it claims to
+            /// close. Lets a same-repository closer be preferred over a foreign one (.github#2427).
+            Repo: string
+            /// Its own `closingIssuesReferences` names THIS issue (the `Closes #N` in the PR body).
+            ClosesThis: bool
+        }
 
     /// Everything the stamp needs, read in ONE query.
     ///
     /// One query, because eight separate reads is eight chances for one of them to fail and be mistaken for
     /// a satisfied precondition — and because it is metered on the budget the whole fleet shares.
     type Facts =
-        { Ref: Ref
-          State: IssueState
-          /// Every PR GitHub associates with closing this issue — a SUPERSET that also lists mere mentions.
-          /// Which one closed it is decided by `ClosesThis` OR `CloserPrs`, latest-merged first (#342).
-          ClosingPrs: ClosingPr list
-          /// The PRs the issue's own `CLOSED_EVENT` names as the closer — a PullRequest directly, or the PR(s)
-          /// associated with the closing Commit (#558, a commit-subject keyword). The record of the ACT.
-          ///
-          /// A SOURCE of candidates, not merely a filter over `ClosingPrs` (#928): neither record contains the
-          /// other, and a PR whose body never named the issue is absent from `ClosingPrs` entirely — which is
-          /// exactly the case this leg exists for.
-          CloserPrs: ClosingPr list
-          Children: Children
-          BoardStatus: BoardStatus
-          Parent: Ref option }
+        {
+            Ref: Ref
+            State: IssueState
+            /// Every PR GitHub associates with closing this issue — a SUPERSET that also lists mere mentions.
+            /// Which one closed it is decided by `ClosesThis` OR `CloserPrs`, latest-merged first (#342).
+            ClosingPrs: ClosingPr list
+            /// The PRs the issue's own `CLOSED_EVENT` names as the closer — a PullRequest directly, or the PR(s)
+            /// associated with the closing Commit (#558, a commit-subject keyword). The record of the ACT.
+            ///
+            /// A SOURCE of candidates, not merely a filter over `ClosingPrs` (#928): neither record contains the
+            /// other, and a PR whose body never named the issue is absent from `ClosingPrs` entirely — which is
+            /// exactly the case this leg exists for.
+            CloserPrs: ClosingPr list
+            Children: Children
+            BoardStatus: BoardStatus
+            Parent: Ref option
+        }
 
     /// Exhaustive durable completion evidence. Legacy evidence is classified for migration diagnostics,
     /// but only a verified typed receipt is terminal authority.

@@ -76,9 +76,11 @@ module Types =
     /// A reference to another item, canonicalised. `Blocked by` is free TEXT only because Projects v2
     /// has no typed dependency field — so the type has to be recovered here.
     type Ref =
-        { Owner: string
-          Repo: string
-          Number: int }
+        {
+            Owner: string
+            Repo: string
+            Number: int
+        }
 
         /// The compact repo-qualified spelling. Deliberately omits the owner.
         member Short: string
@@ -97,9 +99,11 @@ module Types =
     ///
     /// `Raw` is what the field actually SAID, and it is always present.
     type Blocker =
-        { Ref: Ref option
-          Raw: string
-          State: BlockerState }
+        {
+            Ref: Ref option
+            Raw: string
+            State: BlockerState
+        }
 
         /// The canonical ref when we have one, else the prose we were given.
         member Display: string
@@ -239,13 +243,15 @@ module Types =
 
     /// A live claim on an item.
     type Claim =
-        { Worker: WorkerId
-          Session: SessionId option
-          /// Seconds since the marker was last heartbeated.
-          AgeSeconds: int
-          /// The board column this claim OVERWROTE, so that releasing it can put that column back
-          /// rather than guessing `Ready` (#481). A value nobody recorded cannot be restored.
-          PreviousStatus: BoardStatus option }
+        {
+            Worker: WorkerId
+            Session: SessionId option
+            /// Seconds since the marker was last heartbeated.
+            AgeSeconds: int
+            /// The board column this claim OVERWROTE, so that releasing it can put that column back
+            /// rather than guessing `Ready` (#481). A value nobody recorded cannot be restored.
+            PreviousStatus: BoardStatus option
+        }
 
     /// Whether the WORK is alive — which is not the same question as whether the LEASE is.
     ///
@@ -325,150 +331,152 @@ module Types =
 
     /// An item, as the scheduler must see it.
     type Item =
-        { Ref: Ref
-          /// The repository whose tree the item's `Paths:` tokens name.  `Ref` remains the issue to
-          /// claim and close; `PathRepo` is the independent reservation scope (#1732).
-          PathRepo: string
-          Status: BoardStatus
-          /// The ISSUE's state. Separate from Status on purpose — see IssueState.
-          State: IssueState
-          TouchSet: TouchSet
-          Blockers: Blocker list
-          /// The live claim, if any — plus what we know about whether its work is alive.
-          Claim: (Claim * Liveness) option
-          /// The open `item/<n>-*` PR when this item carries NO live-held claim marker — a duplicate
-          /// implementation already in flight (#651). `None` when there is no such PR, or when a claim
-          /// marker already governs liveness (there the open PR is the claim's `LeaseExpiredPrOpen`).
-          ItemPr: int option
-          /// `true` when the markerless item-PR probe could not be completed. `ItemPr = None` alone
-          /// never carries that fact; the mutation path therefore reads this receipt and fails closed.
-          ItemPrUnreadable: bool
-          /// A `Blocked on: human/...` sentinel parsed from the body (#1103 leg 2). `None` when the item
-          /// declares no such line. When present, it refuses scheduling regardless of `TouchSet`.
-          ///
-          /// TWO READERS, NOT ONE (.github#1644). `Schedulability` step 3b refuses to HAND the item out, and
-          /// `Chore`'s `BLOCKER-CLEARED` refuses to PROMOTE it — a scheduler that withholds a row while a
-          /// mechanical chore writes `Ready` onto it is one mechanism arguing with the other, and the write
-          /// wins because it is what the board then shows everybody.
-          ///
-          /// `None` IS AMBIGUOUS AND ITS READERS MUST TREAT IT SO. It means "declares no sentinel" and "the
-          /// body was never read" alike, because this option has nowhere to put the second. The
-          /// disambiguating fact is `TouchSet.Unreadable` on the same item, off the same body — which is why
-          /// the chore gate consults it and `Client.enrichBoardFacts` consults it for `Class`.
-          HumanBlock: HumanBlock option
-          /// The item's declared machine-checkable registry predicate, ALREADY RESOLVED against the owning
-          /// producer's manifest (ADR-0050 call-site B / .github#1203). This is a FACT on the item, the
-          /// way `Blocker.State` is — resolved at the impure edge (the Cli reads `registry/skills.yml` and
-          /// the owner checkout), never by `Chore.derive`, which stays pure and cannot mistake a failed
-          /// read for a verdict (#266).
-          ///
-          /// `None` is the common case: the item declares NO machine-checkable predicate (its body carries
-          /// no `RegistryPredicate` assertion), so the `BLOCKER-CLEARED` flip is not gated on one and fires
-          /// on blockers-cleared exactly as today (ADR-0050 boundary decision 5 — a general prose predicate
-          /// is not mechanically evaluable, and inventing one is out of scope).
-          ///
-          /// When `Some`, the resolved verdict gates the flip: `Agrees` lets it proceed; `Contradicts` and
-          /// `Unknown` HOLD the item `Blocked` — fail closed, exactly as one `BlockerUnknown` already keeps
-          /// `BLOCKER-CLEARED` from firing (#266, #421). "Could not evaluate the predicate" is not "the
-          /// predicate holds."
-          Predicate: RegistryPredicate.Verdict option
+        {
+            Ref: Ref
+            /// The repository whose tree the item's `Paths:` tokens name.  `Ref` remains the issue to
+            /// claim and close; `PathRepo` is the independent reservation scope (#1732).
+            PathRepo: string
+            Status: BoardStatus
+            /// The ISSUE's state. Separate from Status on purpose — see IssueState.
+            State: IssueState
+            TouchSet: TouchSet
+            Blockers: Blocker list
+            /// The live claim, if any — plus what we know about whether its work is alive.
+            Claim: (Claim * Liveness) option
+            /// The open `item/<n>-*` PR when this item carries NO live-held claim marker — a duplicate
+            /// implementation already in flight (#651). `None` when there is no such PR, or when a claim
+            /// marker already governs liveness (there the open PR is the claim's `LeaseExpiredPrOpen`).
+            ItemPr: int option
+            /// `true` when the markerless item-PR probe could not be completed. `ItemPr = None` alone
+            /// never carries that fact; the mutation path therefore reads this receipt and fails closed.
+            ItemPrUnreadable: bool
+            /// A `Blocked on: human/...` sentinel parsed from the body (#1103 leg 2). `None` when the item
+            /// declares no such line. When present, it refuses scheduling regardless of `TouchSet`.
+            ///
+            /// TWO READERS, NOT ONE (.github#1644). `Schedulability` step 3b refuses to HAND the item out, and
+            /// `Chore`'s `BLOCKER-CLEARED` refuses to PROMOTE it — a scheduler that withholds a row while a
+            /// mechanical chore writes `Ready` onto it is one mechanism arguing with the other, and the write
+            /// wins because it is what the board then shows everybody.
+            ///
+            /// `None` IS AMBIGUOUS AND ITS READERS MUST TREAT IT SO. It means "declares no sentinel" and "the
+            /// body was never read" alike, because this option has nowhere to put the second. The
+            /// disambiguating fact is `TouchSet.Unreadable` on the same item, off the same body — which is why
+            /// the chore gate consults it and `Client.enrichBoardFacts` consults it for `Class`.
+            HumanBlock: HumanBlock option
+            /// The item's declared machine-checkable registry predicate, ALREADY RESOLVED against the owning
+            /// producer's manifest (ADR-0050 call-site B / .github#1203). This is a FACT on the item, the
+            /// way `Blocker.State` is — resolved at the impure edge (the Cli reads `registry/skills.yml` and
+            /// the owner checkout), never by `Chore.derive`, which stays pure and cannot mistake a failed
+            /// read for a verdict (#266).
+            ///
+            /// `None` is the common case: the item declares NO machine-checkable predicate (its body carries
+            /// no `RegistryPredicate` assertion), so the `BLOCKER-CLEARED` flip is not gated on one and fires
+            /// on blockers-cleared exactly as today (ADR-0050 boundary decision 5 — a general prose predicate
+            /// is not mechanically evaluable, and inventing one is out of scope).
+            ///
+            /// When `Some`, the resolved verdict gates the flip: `Agrees` lets it proceed; `Contradicts` and
+            /// `Unknown` HOLD the item `Blocked` — fail closed, exactly as one `BlockerUnknown` already keeps
+            /// `BLOCKER-CLEARED` from firing (#266, #421). "Could not evaluate the predicate" is not "the
+            /// predicate holds."
+            Predicate: RegistryPredicate.Verdict option
 
-          /// **WHAT THE ITEM'S OWN TEXT SAYS IT IS** — a `Class:` body line, a `[decision]` title prefix,
-          /// or ADR-0045's `Blocked on: human/decision` sentinel (.github#1588, ADR-0066).
-          ///
-          /// `None` is a REAL answer and the common one today: the item's text carries no evidence of its
-          /// severity. It is never a default class. A default here would be #266's fail-open one axis
-          /// over — a row nobody triaged reading as a row that is fine — and it is the exact failure
-          /// #1588's AC3 names when it says "derived or reported, never guessed".
-          Class: ItemClass option
+            /// **WHAT THE ITEM'S OWN TEXT SAYS IT IS** — a `Class:` body line, a `[decision]` title prefix,
+            /// or ADR-0045's `Blocked on: human/decision` sentinel (.github#1588, ADR-0066).
+            ///
+            /// `None` is a REAL answer and the common one today: the item's text carries no evidence of its
+            /// severity. It is never a default class. A default here would be #266's fail-open one axis
+            /// over — a row nobody triaged reading as a row that is fine — and it is the exact failure
+            /// #1588's AC3 names when it says "derived or reported, never guessed".
+            Class: ItemClass option
 
-          /// **WHAT THE BOARD COLUMN CURRENTLY RENDERS** — the projection, observed, never derived.
-          ///
-          /// TWO FIELDS, BECAUSE THEY ARE TWO FACTS, and the reconciliation lives in the gap between them.
-          /// `Class` is the item's claim about itself; this is what the board says today;
-          /// `CLASS-PROJECTION-LAG` is derived exactly where they disagree. Collapsed into one field the
-          /// disagreement would be inexpressible, so nothing could reconcile it and the chore could never
-          /// retire — `Chore.isRetired` would answer "still owed" forever against a write that landed.
-          ///
-          /// Resolved at the impure edge (`Scan` reads the column), never by `Chore.derive`, on exactly
-          /// `Predicate`'s terms: the pure derivation reads FACTS and cannot mistake a failed read for a
-          /// verdict. A context that never resolves it keeps `None` and derives no projection chore,
-          /// which is the fail-closed answer — a projection we could not observe is not one we may write.
-          BoardClass: ItemClass option
+            /// **WHAT THE BOARD COLUMN CURRENTLY RENDERS** — the projection, observed, never derived.
+            ///
+            /// TWO FIELDS, BECAUSE THEY ARE TWO FACTS, and the reconciliation lives in the gap between them.
+            /// `Class` is the item's claim about itself; this is what the board says today;
+            /// `CLASS-PROJECTION-LAG` is derived exactly where they disagree. Collapsed into one field the
+            /// disagreement would be inexpressible, so nothing could reconcile it and the chore could never
+            /// retire — `Chore.isRetired` would answer "still owed" forever against a write that landed.
+            ///
+            /// Resolved at the impure edge (`Scan` reads the column), never by `Chore.derive`, on exactly
+            /// `Predicate`'s terms: the pure derivation reads FACTS and cannot mistake a failed read for a
+            /// verdict. A context that never resolves it keeps `None` and derives no projection chore,
+            /// which is the fail-closed answer — a projection we could not observe is not one we may write.
+            BoardClass: ItemClass option
 
-          /// **WHAT THE ITEM'S OWN TEXT SAYS IT IS FOR** — a `Kind:` body line (.github#2712).
-          ///
-          /// THE SOLE AUTHORITY FOR THE REDUCER EXEMPTION AND THE SCHEDULER REFUSAL, and `BoardKind`
-          /// below is deliberately not consulted by either. That is `Schedulability`'s existing rule for
-          /// `Class` (*"the column is a projection and can lag"*) and ADR-0066's direction, and here it
-          /// also closes a hazard `Class` does not have: were the column allowed to decide, anyone with
-          /// board-edit rights could make a real work row silently unschedulable and invisible to the
-          /// lifecycle reducer by changing one dropdown.
-          ///
-          /// `None` MEANS `Work`. That is the opposite reading from `Class`'s `None`, and it is the whole
-          /// safety property of this change: every row on the board today declares no kind, so every row
-          /// on the board today keeps exactly the behaviour it has now, and the exemption can only be
-          /// reached by somebody writing the line.
-          Kind: ItemKind option
+            /// **WHAT THE ITEM'S OWN TEXT SAYS IT IS FOR** — a `Kind:` body line (.github#2712).
+            ///
+            /// THE SOLE AUTHORITY FOR THE REDUCER EXEMPTION AND THE SCHEDULER REFUSAL, and `BoardKind`
+            /// below is deliberately not consulted by either. That is `Schedulability`'s existing rule for
+            /// `Class` (*"the column is a projection and can lag"*) and ADR-0066's direction, and here it
+            /// also closes a hazard `Class` does not have: were the column allowed to decide, anyone with
+            /// board-edit rights could make a real work row silently unschedulable and invisible to the
+            /// lifecycle reducer by changing one dropdown.
+            ///
+            /// `None` MEANS `Work`. That is the opposite reading from `Class`'s `None`, and it is the whole
+            /// safety property of this change: every row on the board today declares no kind, so every row
+            /// on the board today keeps exactly the behaviour it has now, and the exemption can only be
+            /// reached by somebody writing the line.
+            Kind: ItemKind option
 
-          /// **WHAT THE BOARD'S `Kind` COLUMN CURRENTLY RENDERS** — the projection, observed, never
-          /// derived, on `BoardClass`'s exact terms.
-          ///
-          /// TWO FIELDS BECAUSE THEY ARE TWO FACTS, and `KIND-PROJECTION-LAG` is derived exactly where
-          /// they disagree. Resolved at the impure edge (the scan reads the column); a context that never
-          /// resolves it keeps `None` and derives no projection chore, which is the fail-closed answer.
-          BoardKind: ItemKind option
+            /// **WHAT THE BOARD'S `Kind` COLUMN CURRENTLY RENDERS** — the projection, observed, never
+            /// derived, on `BoardClass`'s exact terms.
+            ///
+            /// TWO FIELDS BECAUSE THEY ARE TWO FACTS, and `KIND-PROJECTION-LAG` is derived exactly where
+            /// they disagree. Resolved at the impure edge (the scan reads the column); a context that never
+            /// resolves it keeps `None` and derives no projection chore, which is the fail-closed answer.
+            BoardKind: ItemKind option
 
-          /// **REGISTER DEPTH** — how many comments the ISSUE carries, as observed by the board scan
-          /// (.github#2712).
-          ///
-          /// The row this comes from exists because *nothing measured register depth*: `.github#2691` was
-          /// 57 comments and nothing on the board said whether that was a healthy inbox or a six-week
-          /// backlog, so the decision to dispatch the analyst was made by whoever happened to be looking.
-          /// It rides the board page query as a connection `totalCount`, which selects no nodes and
-          /// therefore costs nothing on top of the existing 7-point board read — the same argument
-          /// `Scan`'s own query comment makes for `class`, `phase` and `createdAt`.
-          ///
-          /// `None` means THIS READER DID NOT LOOK, never "no comments". Collapsing them would report an
-          /// unread register as an empty one, which is the reading that would send a host away from a
-          /// full inbox.
-          CommentCount: int option
+            /// **REGISTER DEPTH** — how many comments the ISSUE carries, as observed by the board scan
+            /// (.github#2712).
+            ///
+            /// The row this comes from exists because *nothing measured register depth*: `.github#2691` was
+            /// 57 comments and nothing on the board said whether that was a healthy inbox or a six-week
+            /// backlog, so the decision to dispatch the analyst was made by whoever happened to be looking.
+            /// It rides the board page query as a connection `totalCount`, which selects no nodes and
+            /// therefore costs nothing on top of the existing 7-point board read — the same argument
+            /// `Scan`'s own query comment makes for `class`, `phase` and `createdAt`.
+            ///
+            /// `None` means THIS READER DID NOT LOOK, never "no comments". Collapsing them would report an
+            /// unread register as an empty one, which is the reading that would send a host away from a
+            /// full inbox.
+            CommentCount: int option
 
-          /// The mandatory, source-bound delivery-route verdict observed for this item. Missing, stale,
-          /// or unreadable evidence is a scheduling hold, never an inferred lightweight route.
-          DeliveryRoute: DeliveryRoute.Verdict
+            /// The mandatory, source-bound delivery-route verdict observed for this item. Missing, stale,
+            /// or unreadable evidence is a scheduling hold, never an inferred lightweight route.
+            DeliveryRoute: DeliveryRoute.Verdict
 
-          /// The observed `Severity` column. Missing/unrecognised values are represented as `Unset`.
-          Severity: Severity
+            /// The observed `Severity` column. Missing/unrecognised values are represented as `Unset`.
+            Severity: Severity
 
-          /// **WHAT THE BOARD'S `Phase` COLUMN CURRENTLY RENDERS** (.github#1598) — observed, never derived.
-          ///
-          /// The board has carried `Phase` since the project existed and NOTHING IN THE SCHEDULER READ IT:
-          /// `batch` and `take` sorted by issue number, so the only lever a driver had for priority was
-          /// `Status`, and on 2026-07-27 that meant parking nineteen items in `Backlog` to move five to the
-          /// front. This field is what makes the column mean something to a scheduler.
-          ///
-          /// Resolved at the impure edge on `BoardClass`'s exact terms — the scan reads the column, the
-          /// pure core never does. `None` means this reader did not look, or the row genuinely has no
-          /// phase, and the two collapse deliberately: both mean "no priority evidence here", and
-          /// `Rank.ofItem` sorts such an item LAST. That is the direction that cannot hurt — an unread
-          /// column deprioritises an item, it never promotes one over work somebody did classify.
-          Phase: Phase option
+            /// **WHAT THE BOARD'S `Phase` COLUMN CURRENTLY RENDERS** (.github#1598) — observed, never derived.
+            ///
+            /// The board has carried `Phase` since the project existed and NOTHING IN THE SCHEDULER READ IT:
+            /// `batch` and `take` sorted by issue number, so the only lever a driver had for priority was
+            /// `Status`, and on 2026-07-27 that meant parking nineteen items in `Backlog` to move five to the
+            /// front. This field is what makes the column mean something to a scheduler.
+            ///
+            /// Resolved at the impure edge on `BoardClass`'s exact terms — the scan reads the column, the
+            /// pure core never does. `None` means this reader did not look, or the row genuinely has no
+            /// phase, and the two collapse deliberately: both mean "no priority evidence here", and
+            /// `Rank.ofItem` sorts such an item LAST. That is the direction that cannot hurt — an unread
+            /// column deprioritises an item, it never promotes one over work somebody did classify.
+            Phase: Phase option
 
-          /// **HOW MANY WHOLE DAYS AGO THE ISSUE WAS CREATED**, measured at the impure edge (.github#1598).
-          ///
-          /// An `int` rather than a timestamp, for exactly the reason `Claim.AgeSeconds` is one: the pure
-          /// core owns no clock, so a rank computed here is reproducible from its inputs and a test can
-          /// state an age instead of mocking a clock.
-          ///
-          /// It is TWO rank inputs at once, and they pull the same way: the stable oldest-first tie-break,
-          /// and the starvation escalation that lifts a long-displaced item above the class and phase terms
-          /// entirely (`Rank.StarvationDays`).
-          ///
-          /// `None` means the reader did not learn it — never "created just now". A zero default would make
-          /// every unread age the YOUNGEST, which is the one reading that can never trigger escalation: an
-          /// item starving because nothing could read its timestamp would starve silently forever.
-          AgeDays: int option }
+            /// **HOW MANY WHOLE DAYS AGO THE ISSUE WAS CREATED**, measured at the impure edge (.github#1598).
+            ///
+            /// An `int` rather than a timestamp, for exactly the reason `Claim.AgeSeconds` is one: the pure
+            /// core owns no clock, so a rank computed here is reproducible from its inputs and a test can
+            /// state an age instead of mocking a clock.
+            ///
+            /// It is TWO rank inputs at once, and they pull the same way: the stable oldest-first tie-break,
+            /// and the starvation escalation that lifts a long-displaced item above the class and phase terms
+            /// entirely (`Rank.StarvationDays`).
+            ///
+            /// `None` means the reader did not learn it — never "created just now". A zero default would make
+            /// every unread age the YOUNGEST, which is the one reading that can never trigger escalation: an
+            /// item starving because nothing could read its timestamp would starve silently forever.
+            AgeDays: int option
+        }
 
     /// A three-valued verdict. There is no `bool` in this domain.
     ///

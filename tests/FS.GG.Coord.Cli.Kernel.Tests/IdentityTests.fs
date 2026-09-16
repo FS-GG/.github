@@ -62,7 +62,9 @@ module IdentityTests =
         | Ok w -> failwith $"an id that slugs to nothing must be refused — got Ok with Id = '%s{w.Id}'"
 
     [<Fact>]
-    let ``#1070 the refusal NAMES the offending input, so the reader is not sent to look at a variable they did set`` () =
+    let ``#1070 the refusal NAMES the offending input, so the reader is not sent to look at a variable they did set``
+        ()
+        =
         // #611's rule: a diagnostic that names the wrong cause sends the reader somewhere there is nothing
         // to find. "could not derive a worker id" is TRUE here and useless — the flag was passed.
         match Identity.resolve (Some "///") with
@@ -190,7 +192,11 @@ module IdentityTests =
                 | Ok w ->
                     Assert.Equal("vole-418", w.Id)
                     Assert.NotEqual(Some "vole-418", w.Derived)
-                    Assert.True(w.Derived.IsSome, "a shared session still derives an id — it is the id the fan-out COLLIDES on")
+
+                    Assert.True(
+                        w.Derived.IsSome,
+                        "a shared session still derives an id — it is the id the fan-out COLLIDES on"
+                    )
                 | Error msg -> failwith $"--worker over a shared session must resolve — got: %s{msg}"))
 
     [<Fact>]
@@ -207,7 +213,9 @@ module IdentityTests =
                 | Error msg -> failwith $"a human operator must still resolve — got: %s{msg}"))
 
     [<Fact>]
-    let ``#1646 a $FSGG_WORKER that slugs to NOTHING derives NOTHING - a malformed variable must not lock a worker out`` () =
+    let ``#1646 a $FSGG_WORKER that slugs to NOTHING derives NOTHING - a malformed variable must not lock a worker out``
+        ()
+        =
         // #1070's input, asked of the NEW field. An empty id is not an identity — it is the one every
         // annihilating input shares — so deriving `""` would make it disagree with every `--worker` and read
         // as an impersonation. That would turn a malformed variable into a lockout, which is the opposite of
@@ -226,9 +234,12 @@ module IdentityTests =
         withSessionEnv None (fun () ->
             withWorkerEnv (Some "kite-461") (fun () ->
                 let impersonating =
-                    Identity.resolve (Some "vole-418") |> Result.defaultWith failwith |> Identity.explain
+                    Identity.resolve (Some "vole-418")
+                    |> Result.defaultWith failwith
+                    |> Identity.explain
 
-                let ordinary = Identity.resolve None |> Result.defaultWith failwith |> Identity.explain
+                let ordinary =
+                    Identity.resolve None |> Result.defaultWith failwith |> Identity.explain
 
                 Assert.Contains(impersonating, fun (line: string) -> line.StartsWith "self: kite-461")
                 Assert.DoesNotContain(ordinary, fun (line: string) -> line.StartsWith "self:")))

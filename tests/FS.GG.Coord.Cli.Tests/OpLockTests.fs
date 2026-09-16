@@ -25,11 +25,13 @@ let private now = System.DateTimeOffset.UtcNow.ToString("o")
 
 let private ok (body: string) =
     Ok
-        { Status = 200
-          Body = body
-          ETag = None
-          NextLink = None
-          Headers = Map.empty }
+        {
+            Status = 200
+            Body = body
+            ETag = None
+            NextLink = None
+            Headers = Map.empty
+        }
 
 let private scripted (responses: IoResult<Response> list) =
     let queue = System.Collections.Generic.Queue<IoResult<Response>>(responses)
@@ -185,10 +187,12 @@ let ``the roster parser is independent of inline-map field order`` () =
 [<Fact>]
 let ``a legal block-style roster receiver FAILS CLOSED instead of escaping the proof`` () =
     let blockStyle =
-        [| "  - id: future"
-           "    full: FS-GG/FS.GG.Future"
-           "    role: framework"
-           "    receives: []" |]
+        [|
+            "  - id: future"
+            "    full: FS-GG/FS.GG.Future"
+            "    role: framework"
+            "    receives: []"
+        |]
 
     let parsed, unparsed = parseRosterBlock blockStyle
     Assert.Empty(parsed)
@@ -281,9 +285,11 @@ let ``acquire REFUSES a receiver with no lock ref - and spends nothing doing it`
 [<Fact>]
 let ``a vendored deployment may inject its own lock, and it is consulted FIRST`` () =
     let injected =
-        { Owner = "acme"
-          Repo = "Product.X"
-          Number = 42 }
+        {
+            Owner = "acme"
+            Repo = "Product.X"
+            Number = 42
+        }
 
     Assert.Equal(Some injected, Options.opLockRef [ injected ] "acme" "Product.X")
     // ...and it does not leak to a repo it does not name.
@@ -311,9 +317,11 @@ let ``acquire is the item CAS on the op-lock subject - and NEVER touches the boa
     // read as certifying something no unit test can observe.
     let transport =
         scripted
-            [ ok "[]" // 1. read: the lock is free
-              ok """{"id":901}""" // 2. post our marker
-              ok (comments [ marker 901 "snipe-383c" ]) ] // 3. re-read: we hold it
+            [
+                ok "[]" // 1. read: the lock is free
+                ok """{"id":901}""" // 2. post our marker
+                ok (comments [ marker 901 "snipe-383c" ])
+            ] // 3. re-read: we hold it
 
     match Client.OpLock.acquire transport me itsMe None [] "FS-GG" "FS.GG.Net" with
     | Ok held ->
@@ -355,11 +363,13 @@ let ``every refusal describes itself without deciding anything`` () =
     // A caller that cannot dispatch must be able to say WHY. Collapsing these into one `None` is what makes
     // an unroutable receiver indistinguishable from a busy one, and those need opposite responses.
     let lines =
-        [ Client.OpLock.NoLockRef("FS-GG", "FS.GG.NotARepo")
-          Client.OpLock.HeldByAnother them
-          Client.OpLock.Twin(SessionId "other-session")
-          Client.OpLock.Impersonates(me, them)
-          Client.OpLock.Undetermined "the re-read failed" ]
+        [
+            Client.OpLock.NoLockRef("FS-GG", "FS.GG.NotARepo")
+            Client.OpLock.HeldByAnother them
+            Client.OpLock.Twin(SessionId "other-session")
+            Client.OpLock.Impersonates(me, them)
+            Client.OpLock.Undetermined "the re-read failed"
+        ]
         |> List.map Client.OpLock.describe
 
     for line in lines do
@@ -437,25 +447,28 @@ let private orderingIdiom =
 /// assert an ABSENCE, and an absence is equally satisfied by a rule that matches nothing at all. Widening
 /// a regex until the tree is clean is not evidence that the widened regex binds — this is.
 let private mustMatch =
-    [ "the canonical explicit lambda", "markers |> List.sortBy (fun m -> m.Id) |> List.tryHead"
-      // THE DEMONSTRATED EVASION (critic, round 1, head c680145c).
-      "the `_.` shorthand", "markers |> List.sortBy _.Id |> List.tryHead"
-      "shorthand taking head rather than tryHead", "markers |> List.sortBy _.Id |> List.head"
-      "minBy shorthand", "markers |> List.minBy _.Id"
-      "minBy explicit lambda", "markers |> List.minBy (fun m -> m.Id)"
-      "the Seq flavour", "markers |> Seq.sortBy _.Id |> Seq.tryHead"
-      "the Array flavour", "markers |> Array.sortBy _.Id |> Array.tryHead"
-      "a hand-rolled comparator", "markers |> List.sortWith (fun a b -> compare a.Id b.Id) |> List.tryHead"
-      "split across lines, as a formatter would leave it", "markers\n    |> List.sortBy _.Id\n    |> List.tryHead" ]
+    [
+        "the canonical explicit lambda", "markers |> List.sortBy (fun m -> m.Id) |> List.tryHead"
+        // THE DEMONSTRATED EVASION (critic, round 1, head c680145c).
+        "the `_.` shorthand", "markers |> List.sortBy _.Id |> List.tryHead"
+        "shorthand taking head rather than tryHead", "markers |> List.sortBy _.Id |> List.head"
+        "minBy shorthand", "markers |> List.minBy _.Id"
+        "minBy explicit lambda", "markers |> List.minBy (fun m -> m.Id)"
+        "the Seq flavour", "markers |> Seq.sortBy _.Id |> Seq.tryHead"
+        "the Array flavour", "markers |> Array.sortBy _.Id |> Array.tryHead"
+        "a hand-rolled comparator", "markers |> List.sortWith (fun a b -> compare a.Id b.Id) |> List.tryHead"
+        "split across lines, as a formatter would leave it", "markers\n    |> List.sortBy _.Id\n    |> List.tryHead"
+    ]
 
 let private mustNotMatch =
     [ // `Reads.fs`'s own marker scan: it returns the WHOLE sorted list, which is ordering, not election.
-      "a sort with no take-first", "markers |> List.sortBy _.Id"
-      "Reads.fs's Seq sort into a list", "found |> Seq.sortBy (fun m -> m.Id) |> List.ofSeq"
-      // A different field is a different question entirely.
-      "ordering by another field", "markers |> List.sortBy _.Worker |> List.tryHead"
-      // A different RULE, not a copy of this one.
-      "highest id wins", "markers |> List.sortByDescending _.Id |> List.tryHead" ]
+        "a sort with no take-first", "markers |> List.sortBy _.Id"
+        "Reads.fs's Seq sort into a list", "found |> Seq.sortBy (fun m -> m.Id) |> List.ofSeq"
+        // A different field is a different question entirely.
+        "ordering by another field", "markers |> List.sortBy _.Worker |> List.tryHead"
+        // A different RULE, not a copy of this one.
+        "highest id wins", "markers |> List.sortByDescending _.Id |> List.tryHead"
+    ]
 
 [<Fact>]
 let ``the ordering-idiom gate BINDS - every known spelling matches, and lookalikes do not`` () =

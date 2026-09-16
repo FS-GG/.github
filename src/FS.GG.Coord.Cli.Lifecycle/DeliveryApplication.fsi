@@ -19,15 +19,19 @@ module DeliveryApplication =
         | MergeRefused of reason: string
 
     type LandingReceipt<'result> =
-        { HeadSha: string
-          BaseSha: string
-          Result: 'result }
+        {
+            HeadSha: string
+            BaseSha: string
+            Result: 'result
+        }
 
     /// A live equivalence proof bound to the accepted base, current base, and inspected head.
     type BaseAdvanceEvidence =
-        { AcceptedBaseSha: string
-          CurrentBaseSha: string
-          HeadSha: string }
+        {
+            AcceptedBaseSha: string
+            CurrentBaseSha: string
+            HeadSha: string
+        }
 
     /// Render one lifecycle verdict from facts observed by either the snapshot or live adapter. Actions
     /// carrying a problem preserve it in JSON and text rather than reducing it to the action token.
@@ -35,10 +39,7 @@ module DeliveryApplication =
 
     /// Render a lifecycle verdict with the exact-merge protected/default-branch verification fact.
     val renderWithPostMergeVerification:
-        Options.Options ->
-        FS.GG.Coord.Delivery.PostMergeVerification ->
-        FS.GG.Coord.Delivery.Snapshot ->
-            int
+        Options.Options -> FS.GG.Coord.Delivery.PostMergeVerification -> FS.GG.Coord.Delivery.Snapshot -> int
 
     /// Parse only exact, head-bound v1 delivery obligation declarations and receipts from PR comments.
     val obligationsFromComments:
@@ -54,15 +55,18 @@ module DeliveryApplication =
     /// decorative one. `Fields` is raw and unvalidated on purpose — the fence tolerates fields it
     /// does not require, and a producer that could not even PARSE an election written by another
     /// engine version would post a duplicate rather than reuse it.
-    type Election = { Id: int64; Fields: Map<string, string> }
+    type Election =
+        {
+            Id: int64
+            Fields: Map<string, string>
+        }
 
     /// The exact `fsgg:merge-election` text `delivery` appends to the item — the six fields
     /// `scripts/check-claim-fence.py` requires, plus `pr=`, this producer's idempotence
     /// discriminator. See the implementation's own comment for why `pr=` is load-bearing in BOTH
     /// directions: without it a repeated call denies its own pull request, and with a laxer rule two
     /// executors under one generation would both pass check 4.
-    val electionMarker:
-        opkey: string -> item: string -> gen: string -> receiver: string -> pr: int -> string
+    val electionMarker: opkey: string -> item: string -> gen: string -> receiver: string -> pr: int -> string
 
     /// Every election on the item, one per comment whose body OPENS with the marker at byte 0 —
     /// the fence's own anchoring, which does not trim, so a comment that merely quotes an election

@@ -55,8 +55,7 @@ let private renderText (leaseMinutes: int) (decision: Verdict<Batch.BatchResult>
         // do". A queue that shrinks without explanation is #440: `take` reported "no schedulable
         // item" over a board full of work, and the worker went home.
         let passed =
-            result.Decisions
-            |> List.filter (fun d -> d.Result <> Schedulability.Startable)
+            result.Decisions |> List.filter (fun d -> d.Result <> Schedulability.Startable)
 
         if not (List.isEmpty passed) then
             eprint "passed over:"
@@ -87,8 +86,7 @@ let private readInput (opts: Options) =
 /// rule exists once, and the prose is a build artifact.
 let private facts (opts: Options) =
     match opts.Render with
-    | Json ->
-        printfn "%s" (Snapshot.renderFacts Protocol.factsDocument)
+    | Json -> printfn "%s" (Snapshot.renderFacts Protocol.factsDocument)
     | Text ->
         for r in Protocol.rules do
             printfn "## %s" r.Title
@@ -121,42 +119,44 @@ let private lanes (opts: Options) =
     let json = readInput opts
 
     if String.IsNullOrWhiteSpace json then
-        eprint "fsgg-coord-engine: the snapshot is empty. That is a failed read, not an empty board — refusing to decide."
+        eprint
+            "fsgg-coord-engine: the snapshot is empty. That is a failed read, not an empty board — refusing to decide."
+
         ExitError
     else
 
-    match Snapshot.parse json with
-    | Error errors ->
-        eprint "fsgg-coord-engine: the snapshot is malformed, so no partition was computed:"
+        match Snapshot.parse json with
+        | Error errors ->
+            eprint "fsgg-coord-engine: the snapshot is malformed, so no partition was computed:"
 
-        for e in errors do
-            eprint $"  %s{e.Path}: %s{e.Message}"
+            for e in errors do
+                eprint $"  %s{e.Path}: %s{e.Message}"
 
-        ExitError
+            ExitError
 
-    | Ok request ->
-        let items = request.Candidates |> List.map (fun c -> c.Item)
+        | Ok request ->
+            let items = request.Candidates |> List.map (fun c -> c.Item)
 
-        // .github#2305/ADR-0044 — `lanes` reads a caller-SUPPLIED snapshot from stdin and has no
-        // filesystem of its own to ask `scripts/generated-paths` of (this command is in the pure
-        // DECISION half of the CLI, alongside `decide`; see the module header). `Set.empty` is the
-        // documented, always-safe answer for a caller with no roster to hand — it reproduces the
-        // pre-#2305 partition exactly, never a MORE permissive one. The live, IO-backed `take`/`batch`/
-        // `next` path (`Client.renderLiveDecision`) resolves and passes the real roster instead.
-        let partition = Lanes.partition Set.empty items
+            // .github#2305/ADR-0044 — `lanes` reads a caller-SUPPLIED snapshot from stdin and has no
+            // filesystem of its own to ask `scripts/generated-paths` of (this command is in the pure
+            // DECISION half of the CLI, alongside `decide`; see the module header). `Set.empty` is the
+            // documented, always-safe answer for a caller with no roster to hand — it reproduces the
+            // pre-#2305 partition exactly, never a MORE permissive one. The live, IO-backed `take`/`batch`/
+            // `next` path (`Client.renderLiveDecision`) resolves and passes the real roster instead.
+            let partition = Lanes.partition Set.empty items
 
-        // STARTABILITY IS THE SCHEDULER'S CALL, NOT THE LANE MODULE'S. `Lanes.free` takes the predicate
-        // rather than deriving one, so "is this item startable?" keeps exactly one implementation.
-        let startable (item: Item) =
-            Schedulability.schedulable Set.empty request.AllowBacklog [] item = Schedulability.Startable
+            // STARTABILITY IS THE SCHEDULER'S CALL, NOT THE LANE MODULE'S. `Lanes.free` takes the predicate
+            // rather than deriving one, so "is this item startable?" keeps exactly one implementation.
+            let startable (item: Item) =
+                Schedulability.schedulable Set.empty request.AllowBacklog [] item = Schedulability.Startable
 
-        match opts.Render with
-        | Json -> printfn "%s" (Snapshot.renderLanes startable partition)
-        | Text ->
-            for line in Lanes.explain startable partition do
-                printfn "%s" line
+            match opts.Render with
+            | Json -> printfn "%s" (Snapshot.renderLanes startable partition)
+            | Text ->
+                for line in Lanes.explain startable partition do
+                    printfn "%s" line
 
-        ExitGreen
+            ExitGreen
 
 /// THE ONE COMMAND THAT PERFORMS IO — and the thing ADR-0034 said the IO layer was FOR.
 ///
@@ -208,65 +208,65 @@ let private scan (opts: Options) =
 
     | Some token ->
 
-    use transport =
-        new GitHub.Transport.HttpTransport(GitHub.Transport.apiBaseFromEnv (), token)
+        use transport =
+            new GitHub.Transport.HttpTransport(GitHub.Transport.apiBaseFromEnv (), token)
 
-    let github = transport :> GitHub.Transport.IGitHubTransport
+        let github = transport :> GitHub.Transport.IGitHubTransport
 
-    // SCHEDULING vs RECONCILING is a TYPE (`Cache.ReadIntent`), and `scan` is a SCHEDULING read: it may be
-    // served a stale board, because the worst a stale scan can do is offer an item somebody just claimed —
-    // and the claim CAS, which reads markers over REST and never from this cache, is what actually decides
-    // who holds it. Staleness costs a retry; it cannot cost a double-claim. `--fresh` opts out.
-    let intent =
-        if opts.Fresh then
-            GitHub.Cache.Reconciling
-        else
-            GitHub.Cache.Scheduling
+        // SCHEDULING vs RECONCILING is a TYPE (`Cache.ReadIntent`), and `scan` is a SCHEDULING read: it may be
+        // served a stale board, because the worst a stale scan can do is offer an item somebody just claimed —
+        // and the claim CAS, which reads markers over REST and never from this cache, is what actually decides
+        // who holds it. Staleness costs a retry; it cannot cost a double-claim. `--fresh` opts out.
+        let intent =
+            if opts.Fresh then
+                GitHub.Cache.Reconciling
+            else
+                GitHub.Cache.Scheduling
 
-    let result =
-        GitHub.Board.bootstrap github owner title
-        |> Result.bind (fun board -> GitHub.Scan.board github intent owner title board.Number)
-        |> Result.bind (fun rows ->
-            GitHub.Scan.snapshot github rows opts.Repo opts.AllowBacklog opts.Limit opts.LeaseMinutes)
+        let result =
+            GitHub.Board.bootstrap github owner title
+            |> Result.bind (fun board -> GitHub.Scan.board github intent owner title board.Number)
+            |> Result.bind (fun rows ->
+                GitHub.Scan.snapshot github rows opts.Repo opts.AllowBacklog opts.Limit opts.LeaseMinutes)
 
-    match result with
-    | Error e ->
-        eprint $"fsgg-coord-engine: scan: %s{GitHub.Errors.explain e}"
+        match result with
+        | Error e ->
+            eprint $"fsgg-coord-engine: scan: %s{GitHub.Errors.explain e}"
 
-        // THE EXIT CODE IS THE BACK-OFF SIGNAL. `EX_RATE` (75) means "try again later", and a caller that
-        // saw a generic 1 would treat a temporary condition as a permanent one — retrying a budget failure
-        // three times just spends three more calls confirming the same 403.
-        GitHub.Errors.exitCode e
+            // THE EXIT CODE IS THE BACK-OFF SIGNAL. `EX_RATE` (75) means "try again later", and a caller that
+            // saw a generic 1 would treat a temporary condition as a permanent one — retrying a budget failure
+            // three times just spends three more calls confirming the same 403.
+            GitHub.Errors.exitCode e
 
-    | Ok(document, receipt) ->
-        // The snapshot document is `scan`'s only projection. `scan` is JsonOnly, so `--text` is
-        // refused before this handler; keeping a second Render branch here advertised a pipeline the
-        // parser no longer permits. Stdout stays the machine document and receipts stay on stderr.
-        printfn "%s" document
+        | Ok(document, receipt) ->
+            // The snapshot document is `scan`'s only projection. `scan` is JsonOnly, so `--text` is
+            // refused before this handler; keeping a second Render branch here advertised a pipeline the
+            // parser no longer permits. Stdout stays the machine document and receipts stay on stderr.
+            printfn "%s" document
 
-        // WHAT THE SCAN COULD NOT DO IS SAID, NOT IMPLIED. A number that only ever reports what it looked at
-        // is how "we agreed" and "we never checked" come to print the same sentence — which is the sentence
-        // ADR-0034 opens with.
-        eprint
-            $"scan: %d{receipt.Candidates} candidate(s); %d{receipt.OffBoardResolved} off-board blocker(s) resolved"
-
-        // #979 — the same rule, one line up: `scan --repo <typo>` reported `0 candidate(s)` over a full
-        // board, which reads as an empty queue rather than a name nothing matched. `Options.fs` cites
-        // exactly this line as the bug #962 would have left behind had resolution stayed out of the parser.
-        receipt.RepoAdvisory |> Option.iter eprint
-
-        if receipt.OffBoardSkipped > 0 then
-            // THE CAP IS ANNOUNCED, NEVER SILENT. A silent cap leaves the overflow blocked-forever with no
-            // trace — reported blocked by something nobody looked up, which is indistinguishable from being
-            // genuinely blocked.
+            // WHAT THE SCAN COULD NOT DO IS SAID, NOT IMPLIED. A number that only ever reports what it looked at
+            // is how "we agreed" and "we never checked" come to print the same sentence — which is the sentence
+            // ADR-0034 opens with.
             eprint
-                $"scan: WARNING — %d{receipt.OffBoardSkipped} off-board blocker(s) were NOT resolved (cap: %d{GitHub.Scan.OffBoardCap}). They are reported UNKNOWN, which BLOCKS. This is a cap, not a verdict."
+                $"scan: %d{receipt.Candidates} candidate(s); %d{receipt.OffBoardResolved} off-board blocker(s) resolved"
 
-        if receipt.BodiesUnreadable > 0 then
-            eprint
-                $"scan: WARNING — %d{receipt.BodiesUnreadable} candidate body(ies) could not be read. They carry `bodyUnreadable` and will be UNDETERMINED, never 'no touch-set declared'."
+            // #979 — the same rule, one line up: `scan --repo <typo>` reported `0 candidate(s)` over a full
+            // board, which reads as an empty queue rather than a name nothing matched. `Options.fs` cites
+            // exactly this line as the bug #962 would have left behind had resolution stayed out of the parser.
+            receipt.RepoAdvisory |> Option.iter eprint
 
-        ExitGreen
+            if receipt.OffBoardSkipped > 0 then
+                // THE CAP IS ANNOUNCED, NEVER SILENT. A silent cap leaves the overflow blocked-forever with no
+                // trace — reported blocked by something nobody looked up, which is indistinguishable from being
+                // genuinely blocked.
+                eprint
+                    $"scan: WARNING — %d{receipt.OffBoardSkipped} off-board blocker(s) were NOT resolved (cap: %d{GitHub.Scan.OffBoardCap}). They are reported UNKNOWN, which BLOCKS. This is a cap, not a verdict."
+
+            if receipt.BodiesUnreadable > 0 then
+                eprint
+                    $"scan: WARNING — %d{receipt.BodiesUnreadable} candidate body(ies) could not be read. They carry `bodyUnreadable` and will be UNDETERMINED, never 'no touch-set declared'."
+
+            ExitGreen
 
 let private decide (opts: Options) =
     let json = readInput opts
@@ -276,40 +276,42 @@ let private decide (opts: Options) =
         // if it handed us nothing, we did not observe an empty queue — we failed to observe anything.
         // Deciding "nothing is schedulable" from that is the exact substitution this engine exists to
         // make impossible.
-        eprint "fsgg-coord-engine: the snapshot is empty. That is a failed read, not an empty board — refusing to decide."
+        eprint
+            "fsgg-coord-engine: the snapshot is empty. That is a failed read, not an empty board — refusing to decide."
+
         ExitError
     else
 
-    match Snapshot.parse json with
-    | Error errors ->
-        eprint "fsgg-coord-engine: the snapshot is malformed, so no decision was reached:"
+        match Snapshot.parse json with
+        | Error errors ->
+            eprint "fsgg-coord-engine: the snapshot is malformed, so no decision was reached:"
 
-        for e in errors do
-            eprint $"  %s{e.Path}: %s{e.Message}"
+            for e in errors do
+                eprint $"  %s{e.Path}: %s{e.Message}"
 
-        ExitError
+            ExitError
 
-    | Ok request ->
-        // .github#2305/ADR-0044 — `decide` is the pure, snapshot-only counterpart of `lanes` (see its
-        // comment above): no filesystem to ask `scripts/generated-paths` of, so `Set.empty` is the
-        // documented, always-safe answer. The live `take`/`batch`/`next` path resolves the real roster
-        // in `Client.renderLiveDecision` instead.
-        let decision =
-            Batch.schedule
-                Set.empty
-                request.AllowBacklog
-                request.Limit
-                request.InFlight
-                (request.Candidates |> List.map (fun c -> c.Item))
+        | Ok request ->
+            // .github#2305/ADR-0044 — `decide` is the pure, snapshot-only counterpart of `lanes` (see its
+            // comment above): no filesystem to ask `scripts/generated-paths` of, so `Set.empty` is the
+            // documented, always-safe answer. The live `take`/`batch`/`next` path resolves the real roster
+            // in `Client.renderLiveDecision` instead.
+            let decision =
+                Batch.schedule
+                    Set.empty
+                    request.AllowBacklog
+                    request.Limit
+                    request.InFlight
+                    (request.Candidates |> List.map (fun c -> c.Item))
 
-        match opts.Render with
-        | Json -> printfn "%s" (Snapshot.render request.LeaseMinutes request.Candidates decision)
-        | Text -> renderText request.LeaseMinutes decision
+            match opts.Render with
+            | Json -> printfn "%s" (Snapshot.render request.LeaseMinutes request.Candidates decision)
+            | Text -> renderText request.LeaseMinutes decision
 
-        match decision with
-        | Green _ -> ExitGreen
-        | Red _ -> ExitRed
-        | NoVerdict _ -> ExitNoVerdict
+            match decision with
+            | Green _ -> ExitGreen
+            | Red _ -> ExitRed
+            | NoVerdict _ -> ExitNoVerdict
 
 let private selfHost (opts: Options) =
     let readReceipt path =
@@ -319,7 +321,8 @@ let private selfHost (opts: Options) =
             |> Result.bind (function
                 | Some receipt -> Ok receipt
                 | None -> Error [ "file does not contain a self-host bootstrap receipt" ])
-        with ex -> Error [ $"could not read self-host receipt '%s{path}': %s{ex.Message}" ]
+        with ex ->
+            Error [ $"could not read self-host receipt '%s{path}': %s{ex.Message}" ]
 
     let refuse errors =
         eprint ("fsgg-coord-engine: self-host refused: " + String.concat "; " errors)
@@ -331,11 +334,18 @@ let private selfHost (opts: Options) =
         start.UseShellExecute <- false
         start.RedirectStandardOutput <- true
         start.RedirectStandardError <- true
-        for argument in arguments do start.ArgumentList.Add argument
+
+        for argument in arguments do
+            start.ArgumentList.Add argument
+
         use git = Process.Start start
         let value = git.StandardOutput.ReadToEnd().Trim()
         git.WaitForExit()
-        if git.ExitCode = 0 && not (String.IsNullOrWhiteSpace value) then Some value else None
+
+        if git.ExitCode = 0 && not (String.IsNullOrWhiteSpace value) then
+            Some value
+        else
+            None
 
     match opts.Args with
     | [ "mint"; proposalPath; candidatePath; snapshotPath; outputPath ] ->
@@ -343,11 +353,13 @@ let private selfHost (opts: Options) =
             use proposal = System.Text.Json.JsonDocument.Parse(File.ReadAllText proposalPath)
             let root = proposal.RootElement
             let text (name: string) (element: System.Text.Json.JsonElement) = element.GetProperty(name).GetString()
+
             let reason =
                 match text "reason" root with
                 | "new-schema-case" -> Ok SelfHost.BootstrapReason.NewSchemaCase
                 | "relocated-decision-boundary" -> Ok SelfHost.BootstrapReason.RelocatedDecisionBoundary
                 | value -> Error [ $"unknown self-host bootstrap reason '%s{value}'" ]
+
             match reason with
             | Error errors -> refuse errors
             | Ok reason ->
@@ -355,8 +367,17 @@ let private selfHost (opts: Options) =
                 let host = root.GetProperty "hostAcceptance"
                 use candidateStream = File.OpenRead candidatePath
                 use snapshotStream = File.OpenRead snapshotPath
-                let candidateHash = Security.Cryptography.SHA256.HashData candidateStream |> Convert.ToHexString |> _.ToLowerInvariant()
-                let snapshotHash = Security.Cryptography.SHA256.HashData snapshotStream |> Convert.ToHexString |> _.ToLowerInvariant()
+
+                let candidateHash =
+                    Security.Cryptography.SHA256.HashData candidateStream
+                    |> Convert.ToHexString
+                    |> _.ToLowerInvariant()
+
+                let snapshotHash =
+                    Security.Cryptography.SHA256.HashData snapshotStream
+                    |> Convert.ToHexString
+                    |> _.ToLowerInvariant()
+
                 let start = ProcessStartInfo(candidatePath)
                 start.UseShellExecute <- false
                 start.RedirectStandardOutput <- true
@@ -365,7 +386,9 @@ let private selfHost (opts: Options) =
                 use candidate = Process.Start start
                 let version = candidate.StandardOutput.ReadToEnd().Trim()
                 candidate.WaitForExit()
-                if candidate.ExitCode <> 0 then refuse [ "candidate engine could not report its version" ]
+
+                if candidate.ExitCode <> 0 then
+                    refuse [ "candidate engine could not report its version" ]
                 else
                     SelfHost.createReceipt
                         (text "baseSha" root)
@@ -375,29 +398,39 @@ let private selfHost (opts: Options) =
                         (text "sharedRefusal" root)
                         snapshotHash
                         reason
-                        { Build = text "build" evidence
-                          Unit = text "unit" evidence
-                          FocusedProductionRoute = text "focusedProductionRoute" evidence
-                          Provenance = text "provenance" evidence
-                          Inversion = text "inversion" evidence }
+                        {
+                            Build = text "build" evidence
+                            Unit = text "unit" evidence
+                            FocusedProductionRoute = text "focusedProductionRoute" evidence
+                            Provenance = text "provenance" evidence
+                            Inversion = text "inversion" evidence
+                        }
                         (text "candidateDecisionKey" root)
                         (text "candidateActionKey" root)
-                        { Actor = text "actor" host
-                          AcceptedAt = host.GetProperty("acceptedAt").GetDateTimeOffset() }
+                        {
+                            Actor = text "actor" host
+                            AcceptedAt = host.GetProperty("acceptedAt").GetDateTimeOffset()
+                        }
                     |> function
                         | Error errors -> refuse errors
                         | Ok receipt ->
                             File.WriteAllText(outputPath, SelfHost.encodeReceipt receipt)
                             printfn "SELF-HOST-RECEIPT %s" receipt.Digest
                             ExitGreen
-        with ex -> refuse [ "could not mint self-host receipt: " + ex.Message ]
+        with ex ->
+            refuse [ "could not mint self-host receipt: " + ex.Message ]
     | "verify" :: receiptPath :: candidatePath :: repoPaths when List.length repoPaths <= 1 ->
         match readReceipt receiptPath with
         | Error errors -> refuse errors
         | Ok receipt ->
             try
                 use stream = File.OpenRead candidatePath
-                let actual = Security.Cryptography.SHA256.HashData stream |> Convert.ToHexString |> _.ToLowerInvariant()
+
+                let actual =
+                    Security.Cryptography.SHA256.HashData stream
+                    |> Convert.ToHexString
+                    |> _.ToLowerInvariant()
+
                 if actual <> receipt.CandidateBinarySha256.ToLowerInvariant() then
                     refuse [ "candidate binary SHA-256 does not match the bootstrap receipt" ]
                 else
@@ -409,53 +442,81 @@ let private selfHost (opts: Options) =
                     use candidate = Process.Start start
                     let reportedVersion = candidate.StandardOutput.ReadToEnd().Trim()
                     candidate.WaitForExit()
+
                     if candidate.ExitCode <> 0 then
                         refuse [ "candidate engine could not report its version" ]
                     elif reportedVersion <> receipt.CandidateVersion then
                         refuse
-                            [ $"candidate reported version '%s{reportedVersion}', not receipt version '%s{receipt.CandidateVersion}'" ]
+                            [
+                                $"candidate reported version '%s{reportedVersion}', not receipt version '%s{receipt.CandidateVersion}'"
+                            ]
                     else
                         let gitErrors =
                             match repoPaths with
                             | [] -> []
                             | [ repo ] ->
-                                [ match gitValue repo [ "rev-parse"; "HEAD" ] with
-                                  | Some head when head = receipt.CandidateHeadSha -> ()
-                                  | Some head -> yield $"candidate checkout HEAD '%s{head}' does not match receipt head '%s{receipt.CandidateHeadSha}'"
-                                  | None -> yield "candidate checkout HEAD could not be read"
-                                  let baseValue =
-                                      gitValue repo [ "merge-base"; "HEAD"; "refs/remotes/origin/main" ]
-                                      |> Option.orElseWith (fun () -> gitValue repo [ "merge-base"; "HEAD"; "refs/remotes/origin/master" ])
-                                  match baseValue with
-                                  | Some actual when actual = receipt.BaseSha -> ()
-                                  | Some actual -> yield $"candidate checkout base '%s{actual}' does not match receipt base '%s{receipt.BaseSha}'"
-                                  | None -> yield "candidate checkout base could not be established" ]
+                                [
+                                    match gitValue repo [ "rev-parse"; "HEAD" ] with
+                                    | Some head when head = receipt.CandidateHeadSha -> ()
+                                    | Some head ->
+                                        yield
+                                            $"candidate checkout HEAD '%s{head}' does not match receipt head '%s{receipt.CandidateHeadSha}'"
+                                    | None -> yield "candidate checkout HEAD could not be read"
+                                    let baseValue =
+                                        gitValue repo [ "merge-base"; "HEAD"; "refs/remotes/origin/main" ]
+                                        |> Option.orElseWith (fun () ->
+                                            gitValue repo [ "merge-base"; "HEAD"; "refs/remotes/origin/master" ])
+
+                                    match baseValue with
+                                    | Some actual when actual = receipt.BaseSha -> ()
+                                    | Some actual ->
+                                        yield
+                                            $"candidate checkout base '%s{actual}' does not match receipt base '%s{receipt.BaseSha}'"
+                                    | None -> yield "candidate checkout base could not be established"
+                                ]
                             | _ -> []
+
                         match gitErrors, SelfHost.authorizeWrite receipt with
                         | _ :: _, _ -> refuse gitErrors
                         | [], Error errors -> refuse errors
-                        | [], Ok () ->
+                        | [], Ok() ->
                             printfn "SELF-HOST-AUTHORIZED %s %s" receipt.CandidateHeadSha receipt.Digest
                             ExitGreen
-            with ex -> refuse [ $"could not hash candidate binary '%s{candidatePath}': %s{ex.Message}" ]
+            with ex ->
+                refuse [ $"could not hash candidate binary '%s{candidatePath}': %s{ex.Message}" ]
     | [ "replay"; receiptPath; snapshotPath; decisionKey; actionKey ] ->
         match readReceipt receiptPath with
         | Error errors -> refuse errors
         | Ok receipt ->
             try
                 use stream = File.OpenRead snapshotPath
-                let actual = Security.Cryptography.SHA256.HashData stream |> Convert.ToHexString |> _.ToLowerInvariant()
+
+                let actual =
+                    Security.Cryptography.SHA256.HashData stream
+                    |> Convert.ToHexString
+                    |> _.ToLowerInvariant()
+
                 if actual <> receipt.SnapshotSha256.ToLowerInvariant() then
                     refuse [ "replay snapshot SHA-256 does not match the bootstrap receipt" ]
                 else
-                    match SelfHost.verifyReplay receipt { DecisionKey = decisionKey; ActionKey = actionKey } with
+                    match
+                        SelfHost.verifyReplay
+                            receipt
+                            {
+                                DecisionKey = decisionKey
+                                ActionKey = actionKey
+                            }
+                    with
                     | Error errors -> refuse errors
-                    | Ok () ->
+                    | Ok() ->
                         printfn "SELF-HOST-REPLAY-AGREES %s" receipt.Digest
                         ExitGreen
-            with ex -> refuse [ $"could not hash replay snapshot '%s{snapshotPath}': %s{ex.Message}" ]
+            with ex ->
+                refuse [ $"could not hash replay snapshot '%s{snapshotPath}': %s{ex.Message}" ]
     | _ ->
-        eprint "fsgg-coord-engine: self-host needs `mint <proposal> <candidate> <snapshot> <output>`, `verify <receipt> <candidate> [repo]`, or `replay <receipt> <snapshot> <decision-key> <action-key>`."
+        eprint
+            "fsgg-coord-engine: self-host needs `mint <proposal> <candidate> <snapshot> <output>`, `verify <receipt> <candidate> [repo]`, or `replay <receipt> <snapshot> <decision-key> <action-key>`."
+
         ExitError
 
 let private legacyHandler (opts: Options) =
@@ -476,7 +537,12 @@ let private legacyHandler (opts: Options) =
     | Decide -> decide opts
     | DeliveryCmd when opts.SnapshotFile.IsSome -> DeliveryApplication.run opts
     | DeliveryCmd -> runClient opts
-    | SelfHostCmd when opts.Args |> List.tryHead |> Option.exists (fun value -> value = "record" || value = "replay-record") -> runClient opts
+    | SelfHostCmd when
+        opts.Args
+        |> List.tryHead
+        |> Option.exists (fun value -> value = "record" || value = "replay-record")
+        ->
+        runClient opts
     | SelfHostCmd -> selfHost opts
     | ReviewCmd when opts.SnapshotFile.IsSome -> ReviewApplication.run opts
     | ReviewCmd -> runClient opts
@@ -522,37 +588,42 @@ let private lifecycleProgramRegistrations =
     let live handler = Client.executeWithContext handler
 
     FS.GG.Coord.Cli.Lifecycle.Handlers.handlers
-        { Delivery =
-            fun opts ->
-                if opts.SnapshotFile.IsSome then
-                    DeliveryApplication.run opts
-                else
-                    live
-                        (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.delivery
-                            (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.completeDelivery Client.offerChoreAfterDone)
-                            Client.classifyDeliveryPaths
-                            (Client.projectPathVerdict Client.DeliveryReceiptProjection)
-                            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.requireCurrentDeliveryRoute
-                            Client.scanAndDecide)
-                        opts
-          Review =
-            fun opts ->
-                if opts.SnapshotFile.IsSome then ReviewApplication.run opts
-                else live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.review opts
-          Route = live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.deliveryRouteCmd
-          Landable = live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.landable
-          Done = live (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.doneCmd Client.offerChoreAfterDone)
-          VerifyPaths =
-            live
-                (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.verifyPaths
-                    Client.classifyDeliveryPaths
-                    (Client.projectPathVerdict Client.VerifyPathsProjection)
-                    KitDigest.digestWarn)
-          Followup =
-            fun opts ->
-                match Followups.parse opts.Args with
-                | Ok Followups.Audit -> live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.followupAudit opts
-                | _ -> Followups.run opts }
+        {
+            Delivery =
+                fun opts ->
+                    if opts.SnapshotFile.IsSome then
+                        DeliveryApplication.run opts
+                    else
+                        live
+                            (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.delivery
+                                (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.completeDelivery Client.offerChoreAfterDone)
+                                Client.classifyDeliveryPaths
+                                (Client.projectPathVerdict Client.DeliveryReceiptProjection)
+                                FS.GG.Coord.Cli.Lifecycle.LiveHandlers.requireCurrentDeliveryRoute
+                                Client.scanAndDecide)
+                            opts
+            Review =
+                fun opts ->
+                    if opts.SnapshotFile.IsSome then
+                        ReviewApplication.run opts
+                    else
+                        live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.review opts
+            Route = live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.deliveryRouteCmd
+            Landable = live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.landable
+            Done = live (FS.GG.Coord.Cli.Lifecycle.LiveHandlers.doneCmd Client.offerChoreAfterDone)
+            VerifyPaths =
+                live (
+                    FS.GG.Coord.Cli.Lifecycle.LiveHandlers.verifyPaths
+                        Client.classifyDeliveryPaths
+                        (Client.projectPathVerdict Client.VerifyPathsProjection)
+                        KitDigest.digestWarn
+                )
+            Followup =
+                fun opts ->
+                    match Followups.parse opts.Args with
+                    | Ok Followups.Audit -> live FS.GG.Coord.Cli.Lifecycle.LiveHandlers.followupAudit opts
+                    | _ -> Followups.run opts
+        }
 
 let private lifecycleHandlers =
     FS.GG.Coord.Cli.Lifecycle.HandlerRegistration.validate
@@ -566,45 +637,49 @@ let private lifecycleHandlers =
 /// `Options.allCommands`: validation must detect a newly parsed command that no production family
 /// registered, rather than auto-registering it through the same reflected inventory used as oracle.
 let private legacyCommands =
-    [ Help
-      Version
-      Scan
-      Decide
-      SelfHostCmd
-      LanesView
-      Facts
-      CommandContractCmd
-      PacketCmd
-      DriverCmd
-      CycleCmd
-      WhoAmI
-      Predicate
-      DiffAudit
-      Next
-      BatchCmd
-      Ready
-      Reconcile
-      Who
-      Reap
-      Budget
-      Claim
-      Adopt
-      Take
-      Release
-      Heartbeat
-      Widen
-      SetPaths
-      Overlap
-      GraphQlOps
-      LintCmd
-      OpLockAcquire
-      OpLockRelease ]
+    [
+        Help
+        Version
+        Scan
+        Decide
+        SelfHostCmd
+        LanesView
+        Facts
+        CommandContractCmd
+        PacketCmd
+        DriverCmd
+        CycleCmd
+        WhoAmI
+        Predicate
+        DiffAudit
+        Next
+        BatchCmd
+        Ready
+        Reconcile
+        Who
+        Reap
+        Budget
+        Claim
+        Adopt
+        Take
+        Release
+        Heartbeat
+        Widen
+        SetPaths
+        Overlap
+        GraphQlOps
+        LintCmd
+        OpLockAcquire
+        OpLockRelease
+    ]
 
-let private legacyProgramRegistrations = legacyCommands |> List.map (fun command -> command, legacyHandler)
+let private legacyProgramRegistrations =
+    legacyCommands |> List.map (fun command -> command, legacyHandler)
 
 /// The production composition subject used by the producer-agreement test. Each family contributes
 /// registrations; the reflection-derived command inventory remains the independent expected set.
-let commandRegistrations = boardOpsProgramRegistrations @ lifecycleHandlers @ legacyProgramRegistrations
+let commandRegistrations =
+    boardOpsProgramRegistrations @ lifecycleHandlers @ legacyProgramRegistrations
 
 let private commandHandlers =
     match HandlerRegistration.validate Options.allCommands commandRegistrations with
@@ -624,17 +699,27 @@ let main argv =
     try
         try
             let arguments = List.ofArray argv
+
             match arguments with
             | "roadmap" :: "unit" :: "prepare" :: "apply" :: args ->
                 invoked <- "roadmap-unit-prepare-apply"
+
                 match Options.parse [ "intake"; "apply"; "/dev/null" ] with
-                | Error message -> eprint $"fsgg-coord-engine: internal roadmap apply options: %s{message}"; ExitDefect
+                | Error message ->
+                    eprint $"fsgg-coord-engine: internal roadmap apply options: %s{message}"
+                    ExitDefect
                 | Ok opts -> Client.executeWithContext Handlers.roadmapUnitPrepareApply { opts with Args = args }
             | "roadmap" :: "unit" :: "accept" :: "seal" :: args ->
                 invoked <- "roadmap-unit-accept"
+
                 match Options.parse [ "intake"; "apply"; "/dev/null" ] with
-                | Error message -> eprint $"fsgg-coord-engine: internal roadmap acceptance options: %s{message}"; ExitDefect
-                | Ok opts -> Client.executeWithContext (Handlers.roadmapUnitAccept QualificationApplication.runBoundToTree) { opts with Args = "seal" :: args }
+                | Error message ->
+                    eprint $"fsgg-coord-engine: internal roadmap acceptance options: %s{message}"
+                    ExitDefect
+                | Ok opts ->
+                    Client.executeWithContext
+                        (Handlers.roadmapUnitAccept QualificationApplication.runBoundToTree)
+                        { opts with Args = "seal" :: args }
             | _ ->
                 match TelemetryApplication.tryRun arguments with
                 | Some exitCode ->

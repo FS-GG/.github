@@ -17,7 +17,10 @@ module HandlerRegistrationTests =
     [<Fact>]
     let ``registration validation rejects a duplicate handler`` () =
         let registrations = Handlers.handlers
-        let result = HandlerRegistration.validate HandlerRegistration.commands (registrations.Head :: registrations)
+
+        let result =
+            HandlerRegistration.validate HandlerRegistration.commands (registrations.Head :: registrations)
+
         Assert.True(Result.isError result)
 
     [<Fact>]
@@ -30,7 +33,10 @@ module HandlerRegistrationTests =
     let ``registration validation rejects an unexpected handler`` () =
         let registrations = Handlers.handlers
         let unexpected = Options.Help, inert
-        let result = HandlerRegistration.validate HandlerRegistration.commands (unexpected :: registrations)
+
+        let result =
+            HandlerRegistration.validate HandlerRegistration.commands (unexpected :: registrations)
+
         Assert.True(Result.isError result)
 
     [<Fact>]
@@ -43,8 +49,7 @@ module HandlerRegistrationTests =
     [<Fact>]
     let ``production inventory rejects a parsed command with no registered producer`` () =
         let registrations =
-            Program.commandRegistrations
-            |> List.filter (fst >> ((<>) Options.Help))
+            Program.commandRegistrations |> List.filter (fst >> ((<>) Options.Help))
 
         let result = HandlerRegistration.validate Options.allCommands registrations
 

@@ -53,59 +53,105 @@ module Cache =
         Directory.CreateDirectory r |> ignore
         r
 
-    let private intakeReceiptFile draftId = Path.Combine(ensureRoot (), $"intake-%s{slug draftId}.json")
-    let private intakeIntentFile draftId = Path.Combine(ensureRoot (), $"intake-intent-%s{slug draftId}.json")
+    let private intakeReceiptFile draftId =
+        Path.Combine(ensureRoot (), $"intake-%s{slug draftId}.json")
 
-    type IntakeIntent = { DraftId: string; Owner: string; Repository: string; DraftDigest: string }
+    let private intakeIntentFile draftId =
+        Path.Combine(ensureRoot (), $"intake-intent-%s{slug draftId}.json")
+
+    type IntakeIntent =
+        {
+            DraftId: string
+            Owner: string
+            Repository: string
+            DraftDigest: string
+        }
 
     let getIntakeIntent draftId =
         let file = intakeIntentFile draftId
-        if not (File.Exists file) then Ok None else
-        try
-            use doc = JsonDocument.Parse(File.ReadAllText file)
-            let root = doc.RootElement
-            let read (name: string) = root.GetProperty(name).GetString()
-            Ok(Some { DraftId = read "draftId"; Owner = read "owner"; Repository = read "repository"; DraftDigest = read "draftDigest" })
-        with ex -> Error $"intake intent '%s{file}' is unreadable: %s{ex.Message}"
+
+        if not (File.Exists file) then
+            Ok None
+        else
+            try
+                use doc = JsonDocument.Parse(File.ReadAllText file)
+                let root = doc.RootElement
+                let read (name: string) = root.GetProperty(name).GetString()
+
+                Ok(
+                    Some
+                        {
+                            DraftId = read "draftId"
+                            Owner = read "owner"
+                            Repository = read "repository"
+                            DraftDigest = read "draftDigest"
+                        }
+                )
+            with ex ->
+                Error $"intake intent '%s{file}' is unreadable: %s{ex.Message}"
 
     let putIntakeIntent (intent: IntakeIntent) =
         try
             let file = intakeIntentFile intent.DraftId
-            let json = $"{{\"draftId\":{JsonSerializer.Serialize intent.DraftId},\"owner\":{JsonSerializer.Serialize intent.Owner},\"repository\":{JsonSerializer.Serialize intent.Repository},\"draftDigest\":{JsonSerializer.Serialize intent.DraftDigest}}}"
+
+            let json =
+                $"{{\"draftId\":{JsonSerializer.Serialize intent.DraftId},\"owner\":{JsonSerializer.Serialize intent.Owner},\"repository\":{JsonSerializer.Serialize intent.Repository},\"draftDigest\":{JsonSerializer.Serialize intent.DraftDigest}}}"
+
             File.WriteAllText(file + ".tmp", json)
             File.Move(file + ".tmp", file, true)
             Ok()
-        with ex -> Error $"could not persist intake intent: %s{ex.Message}"
+        with ex ->
+            Error $"could not persist intake intent: %s{ex.Message}"
 
     let withIntakeLock draftId action =
         try
             let file = Path.Combine(ensureRoot (), $"intake-lock-%s{slug draftId}")
-            use _lock = new FileStream(file, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+
+            use _lock =
+                new FileStream(file, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+
             Ok(action ())
         with :? IOException ->
             Error $"intake '%s{draftId}' is already being applied; retry after the active transaction finishes"
 
     let getIntakeReceipt draftId =
         let file = intakeReceiptFile draftId
-        if not (File.Exists file) then Ok None else
-        try
-            use doc = JsonDocument.Parse(File.ReadAllText file)
-            let root = doc.RootElement
-            let read (name: string) = root.GetProperty(name).GetString()
-            let number = root.GetProperty("issueNumber").GetInt32()
-            let receipt: FS.GG.Coord.IntakeReceipt.Receipt = { DraftId = read "draftId"; Owner = read "owner"; Repository = read "repository"; IssueNumber = number; DraftDigest = read "draftDigest" }
-            Ok(Some receipt)
-        with ex -> Error $"intake receipt '%s{file}' is unreadable: %s{ex.Message}"
+
+        if not (File.Exists file) then
+            Ok None
+        else
+            try
+                use doc = JsonDocument.Parse(File.ReadAllText file)
+                let root = doc.RootElement
+                let read (name: string) = root.GetProperty(name).GetString()
+                let number = root.GetProperty("issueNumber").GetInt32()
+
+                let receipt: FS.GG.Coord.IntakeReceipt.Receipt =
+                    {
+                        DraftId = read "draftId"
+                        Owner = read "owner"
+                        Repository = read "repository"
+                        IssueNumber = number
+                        DraftDigest = read "draftDigest"
+                    }
+
+                Ok(Some receipt)
+            with ex ->
+                Error $"intake receipt '%s{file}' is unreadable: %s{ex.Message}"
 
     let putIntakeReceipt (receipt: FS.GG.Coord.IntakeReceipt.Receipt) =
         try
             let file = intakeReceiptFile receipt.DraftId
             let temp = file + ".tmp"
-            let json = $"{{\"draftId\":{JsonSerializer.Serialize receipt.DraftId},\"owner\":{JsonSerializer.Serialize receipt.Owner},\"repository\":{JsonSerializer.Serialize receipt.Repository},\"issueNumber\":%d{receipt.IssueNumber},\"draftDigest\":{JsonSerializer.Serialize receipt.DraftDigest}}}"
+
+            let json =
+                $"{{\"draftId\":{JsonSerializer.Serialize receipt.DraftId},\"owner\":{JsonSerializer.Serialize receipt.Owner},\"repository\":{JsonSerializer.Serialize receipt.Repository},\"issueNumber\":%d{receipt.IssueNumber},\"draftDigest\":{JsonSerializer.Serialize receipt.DraftDigest}}}"
+
             File.WriteAllText(temp, json)
             File.Move(temp, file, true)
             Ok()
-        with ex -> Error $"could not persist intake receipt: %s{ex.Message}"
+        with ex ->
+            Error $"could not persist intake receipt: %s{ex.Message}"
 
     let private scanFile (owner: string) (title: string) =
         Path.Combine(ensureRoot (), $"scan-%s{slug owner}-%s{slug title}.json")
@@ -125,39 +171,40 @@ module Cache =
         | Offering -> None
         | Scheduling ->
 
-        let ttl = scanTtlSeconds ()
+            let ttl = scanTtlSeconds ()
 
-        if ttl <= 0 then
-            None
-        else
-
-        let file = scanFile owner title
-
-        if not (File.Exists file) then
-            None
-        else
-
-        let info = FileInfo file
-
-        // A ZERO-BYTE cache file is not an empty board. It is a torn write, or a `putScan` that was killed
-        // between `Create` and `Write`. Serving it would be the confident-empty-board again, arriving
-        // through the file system instead of through the network.
-        if info.Length = 0L then
-            None
-        else
-
-        let age = DateTimeOffset.UtcNow - DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero)
-
-        if age.TotalSeconds >= float ttl then
-            None
-        else
-            try
-                Some(File.ReadAllText file)
-            with :? IOException ->
-                // A cache we cannot read is a MISS, never a failure. The whole point of a cache is that it
-                // is optional — failing the caller's read because our optimisation broke would make the
-                // cache strictly worse than not having one.
+            if ttl <= 0 then
                 None
+            else
+
+                let file = scanFile owner title
+
+                if not (File.Exists file) then
+                    None
+                else
+
+                    let info = FileInfo file
+
+                    // A ZERO-BYTE cache file is not an empty board. It is a torn write, or a `putScan` that was killed
+                    // between `Create` and `Write`. Serving it would be the confident-empty-board again, arriving
+                    // through the file system instead of through the network.
+                    if info.Length = 0L then
+                        None
+                    else
+
+                        let age =
+                            DateTimeOffset.UtcNow - DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero)
+
+                        if age.TotalSeconds >= float ttl then
+                            None
+                        else
+                            try
+                                Some(File.ReadAllText file)
+                            with :? IOException ->
+                                // A cache we cannot read is a MISS, never a failure. The whole point of a cache is that it
+                                // is optional — failing the caller's read because our optimisation broke would make the
+                                // cache strictly worse than not having one.
+                                None
 
     // Does this scan document actually carry items?
     //
@@ -222,67 +269,67 @@ module Cache =
         | None -> ()
         | Some key ->
 
-        let file = scanFile owner title
+            let file = scanFile owner title
 
-        if not (File.Exists file) then
-            ()
-        else
-            try
-                let text = File.ReadAllText file
-
-                // THE TTL IS MEASURED FROM THIS FILE'S MTIME (`getScan`), AND A PATCH IS NOT A READ. A patch
-                // folds a board write we just made into a cache whose FRESHNESS is otherwise unchanged — the
-                // board was last actually read at `putScan` time, not now. Rewriting the file stamps `now` and
-                // restarts the TTL clock, so a worker in the take → claim → …writes… → done loop keeps
-                // resetting its own cache to fresh and never sees another worker's board changes until it
-                // idles out the window or runs `--fresh` (#1152). Capture the pre-fold mtime and restore it
-                // after the rewrite: only a real read (`putScan`) may restart the clock.
-                let preFoldWriteTimeUtc = File.GetLastWriteTimeUtc file
-                let node = JsonNode.Parse text
-
-                match node with
-                | :? JsonArray as items ->
-                    for item in items do
-                        match item with
-                        | :? JsonObject as o ->
-                            let matches =
-                                let o' = o.["owner"]
-                                let r = o.["repo"]
-                                let n = o.["number"]
-
-                                // Older cache records predate the owner field. They are necessarily
-                                // ambiguous, so retain their historic same-repository fold only when the
-                                // write itself names the board owner; an explicit external owner must
-                                // never cross-fold a default-owner same-name row (#2143).
-                                not (isNull r)
-                                && not (isNull n)
-                                && ((not (isNull o') && o'.GetValue<string>() = issueOwner)
-                                    || (isNull o' && issueOwner = owner))
-                                && r.GetValue<string>() = repo
-                                && n.GetValue<int>() = number
-
-                            if matches then
-                                // An empty value CLEARS the field. It does not write an empty string —
-                                // those are different states on the board, and conflating them is how a
-                                // cleared `Blocked by` came back as the literal text "".
-                                o.[key] <- if value = "" then null else JsonValue.Create value
-
-                        | _ -> ()
-
-                    let temp = file + ".tmp." + string (Environment.ProcessId)
-                    File.WriteAllText(temp, items.ToJsonString())
-                    File.Move(temp, file, overwrite = true)
-                    File.SetLastWriteTimeUtc(file, preFoldWriteTimeUtc)
-
-                | _ -> ()
-
-            with
-            | :? JsonException
-            | :? IOException ->
-                // A cache we could not fold is a cache that is now STALE about our own write. That is a
-                // miss on the next read, which is safe. It is not a reason to fail the write that
-                // succeeded.
+            if not (File.Exists file) then
                 ()
+            else
+                try
+                    let text = File.ReadAllText file
+
+                    // THE TTL IS MEASURED FROM THIS FILE'S MTIME (`getScan`), AND A PATCH IS NOT A READ. A patch
+                    // folds a board write we just made into a cache whose FRESHNESS is otherwise unchanged — the
+                    // board was last actually read at `putScan` time, not now. Rewriting the file stamps `now` and
+                    // restarts the TTL clock, so a worker in the take → claim → …writes… → done loop keeps
+                    // resetting its own cache to fresh and never sees another worker's board changes until it
+                    // idles out the window or runs `--fresh` (#1152). Capture the pre-fold mtime and restore it
+                    // after the rewrite: only a real read (`putScan`) may restart the clock.
+                    let preFoldWriteTimeUtc = File.GetLastWriteTimeUtc file
+                    let node = JsonNode.Parse text
+
+                    match node with
+                    | :? JsonArray as items ->
+                        for item in items do
+                            match item with
+                            | :? JsonObject as o ->
+                                let matches =
+                                    let o' = o.["owner"]
+                                    let r = o.["repo"]
+                                    let n = o.["number"]
+
+                                    // Older cache records predate the owner field. They are necessarily
+                                    // ambiguous, so retain their historic same-repository fold only when the
+                                    // write itself names the board owner; an explicit external owner must
+                                    // never cross-fold a default-owner same-name row (#2143).
+                                    not (isNull r)
+                                    && not (isNull n)
+                                    && ((not (isNull o') && o'.GetValue<string>() = issueOwner)
+                                        || (isNull o' && issueOwner = owner))
+                                    && r.GetValue<string>() = repo
+                                    && n.GetValue<int>() = number
+
+                                if matches then
+                                    // An empty value CLEARS the field. It does not write an empty string —
+                                    // those are different states on the board, and conflating them is how a
+                                    // cleared `Blocked by` came back as the literal text "".
+                                    o.[key] <- if value = "" then null else JsonValue.Create value
+
+                            | _ -> ()
+
+                        let temp = file + ".tmp." + string (Environment.ProcessId)
+                        File.WriteAllText(temp, items.ToJsonString())
+                        File.Move(temp, file, overwrite = true)
+                        File.SetLastWriteTimeUtc(file, preFoldWriteTimeUtc)
+
+                    | _ -> ()
+
+                with
+                | :? JsonException
+                | :? IOException ->
+                    // A cache we could not fold is a cache that is now STALE about our own write. That is a
+                    // miss on the next read, which is safe. It is not a reason to fail the write that
+                    // succeeded.
+                    ()
 
     let dropScan (owner: string) (title: string) =
         try
@@ -389,28 +436,29 @@ module Cache =
             None
         else
 
-        let file = boardMapFile owner title
+            let file = boardMapFile owner title
 
-        if not (File.Exists file) then
-            None
-        else
-
-        let info = FileInfo file
-
-        // A zero-byte file is a torn write, not a cached board — the same discipline `getScan` keeps.
-        if info.Length = 0L then
-            None
-        else
-
-        let age = DateTimeOffset.UtcNow - DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero)
-
-        if age.TotalSeconds >= float ttl then
-            None
-        else
-            try
-                Some(File.ReadAllText file)
-            with :? IOException ->
+            if not (File.Exists file) then
                 None
+            else
+
+                let info = FileInfo file
+
+                // A zero-byte file is a torn write, not a cached board — the same discipline `getScan` keeps.
+                if info.Length = 0L then
+                    None
+                else
+
+                    let age =
+                        DateTimeOffset.UtcNow - DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero)
+
+                    if age.TotalSeconds >= float ttl then
+                        None
+                    else
+                        try
+                            Some(File.ReadAllText file)
+                        with :? IOException ->
+                            None
 
     let putBoardMap (owner: string) (title: string) (board: string) =
         if not (isUsableBoardMap board) then
@@ -493,17 +541,19 @@ module Cache =
     // ---- the deferred board-write queue -----------------------------------------------------------
 
     type Deferred =
-        { Ref: string
-          Field: string
-          Value: string
-          At: string
-          Worker: string
-          Board: (string * string) option }
+        {
+            Ref: string
+            Field: string
+            Value: string
+            At: string
+            Worker: string
+            Board: (string * string) option
+        }
 
-    let sameBoard ((ao, at): string * string) ((bo, bt): string * string) =
-        slug ao = slug bo && slug at = slug bt
+    let sameBoard ((ao, at): string * string) ((bo, bt): string * string) = slug ao = slug bo && slug at = slug bt
 
-    let private pendingFile () = Path.Combine(ensureRoot (), "pending.jsonl")
+    let private pendingFile () =
+        Path.Combine(ensureRoot (), "pending.jsonl")
 
     // THE QUEUE IS ONE FILE, SHARED BY EVERY WORKER ON THE MACHINE. `root ()` is keyed on neither the
     // worktree, the worker, nor the board, so `pending.jsonl` is exactly the fan-out this protocol exists to
@@ -521,7 +571,8 @@ module Cache =
     // a name, and the next worker through `OpenOrCreate` would create a NEW file and take an uncontended
     // lock on it. Two workers, two inodes, one queue, no exclusion. The lock file is therefore never
     // unlinked; it is a mutex, not a queue.
-    let private pendingLockFile () = Path.Combine(ensureRoot (), "pending.lock")
+    let private pendingLockFile () =
+        Path.Combine(ensureRoot (), "pending.lock")
 
     [<Literal>]
     let private LockPollMs = 25
@@ -646,12 +697,14 @@ module Cache =
             match get "ref", get "field", get "value", get "at", get "worker", board with
             | Some rf, Some f, Some v, Some a, Some w, Ok b ->
                 Some
-                    { Ref = rf
-                      Field = f
-                      Value = v
-                      At = a
-                      Worker = w
-                      Board = b }
+                    {
+                        Ref = rf
+                        Field = f
+                        Value = v
+                        At = a
+                        Worker = w
+                        Board = b
+                    }
             | _ -> None
         with :? JsonException ->
             None
@@ -712,7 +765,8 @@ module Cache =
         with :? IOException ->
             ()
 
-    let clearPending () = withPendingLock clearPendingUnlocked |> ignore
+    let clearPending () =
+        withPendingLock clearPendingUnlocked |> ignore
 
     let dropPending (entry: Deferred) =
         // READ AND REWRITE UNDER ONE LOCK. This is the whole fix: the window that destroyed a concurrent
@@ -740,8 +794,7 @@ module Cache =
                     clearPendingUnlocked ()
                 else
                     try
-                        let text =
-                            remaining |> List.map renderDeferred |> String.concat "\n"
+                        let text = remaining |> List.map renderDeferred |> String.concat "\n"
 
                         File.WriteAllText(pendingFile (), text + "\n")
                     with :? IOException ->

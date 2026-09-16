@@ -14,7 +14,11 @@ module TelemetryBudget =
         | Pass of numerator: int64 * denominator: int64
         | Breach of numerator: int64 * denominator: int64 * severe: bool
 
-    type Interval = { StartNanoseconds: int64; EndNanoseconds: int64 }
+    type Interval =
+        {
+            StartNanoseconds: int64
+            EndNanoseconds: int64
+        }
 
     // BigInteger makes the exact cross-products immune to Int64 overflow. There is no
     // percentage rounding at either boundary: 10*n>d and 4*n>d are the definitions.
@@ -27,39 +31,62 @@ module TelemetryBudget =
         | Usable(_, 0L) -> UnknownVerdict "missing-denominator"
         | Usable(numerator, denominator) ->
             let n, d = bigint numerator, bigint denominator
-            if 10I * n > d then Breach(numerator, denominator, 4I * n > d)
-            else Pass(numerator, denominator)
+
+            if 10I * n > d then
+                Breach(numerator, denominator, 4I * n > d)
+            else
+                Pass(numerator, denominator)
 
     let private merge intervals =
         intervals
-        |> List.filter (fun interval -> interval.StartNanoseconds >= 0L && interval.EndNanoseconds >= interval.StartNanoseconds)
+        |> List.filter (fun interval ->
+            interval.StartNanoseconds >= 0L
+            && interval.EndNanoseconds >= interval.StartNanoseconds)
         |> List.sortBy _.StartNanoseconds
-        |> List.fold (fun state next ->
-            match state with
-            | current :: tail when next.StartNanoseconds <= current.EndNanoseconds ->
-                { current with EndNanoseconds = max current.EndNanoseconds next.EndNanoseconds } :: tail
-            | _ -> next :: state) []
+        |> List.fold
+            (fun state next ->
+                match state with
+                | current :: tail when next.StartNanoseconds <= current.EndNanoseconds ->
+                    { current with
+                        EndNanoseconds = max current.EndNanoseconds next.EndNanoseconds
+                    }
+                    :: tail
+                | _ -> next :: state)
+            []
         |> List.rev
 
     let unionNanoseconds intervals =
-        if List.isEmpty intervals then None
+        if List.isEmpty intervals then
+            None
         else
             try
                 merge intervals
-                |> List.fold (fun total interval -> Checked.(+) total (interval.EndNanoseconds - interval.StartNanoseconds)) 0L
+                |> List.fold
+                    (fun total interval -> Checked.(+) total (interval.EndNanoseconds - interval.StartNanoseconds))
+                    0L
                 |> Some
-            with :? OverflowException -> None
+            with :? OverflowException ->
+                None
 
     let subtractNanoseconds source excluded =
         match unionNanoseconds source with
         | None -> None
         | Some sourceTotal ->
             let intersections =
-                [ for included in merge source do
-                    for removed in merge excluded do
-                        let startAt = max included.StartNanoseconds removed.StartNanoseconds
-                        let endAt = min included.EndNanoseconds removed.EndNanoseconds
-                        if endAt > startAt then yield { StartNanoseconds = startAt; EndNanoseconds = endAt } ]
+                [
+                    for included in merge source do
+                        for removed in merge excluded do
+                            let startAt = max included.StartNanoseconds removed.StartNanoseconds
+                            let endAt = min included.EndNanoseconds removed.EndNanoseconds
+
+                            if endAt > startAt then
+                                yield
+                                    {
+                                        StartNanoseconds = startAt
+                                        EndNanoseconds = endAt
+                                    }
+                ]
+
             match unionNanoseconds intersections with
             | None when not intersections.IsEmpty -> None
             | excludedTotal -> Some(sourceTotal - Option.defaultValue 0L excludedTotal)

@@ -66,24 +66,28 @@ module Board =
     /// re-resolve the whole field map on every call (two GraphQL points, per worker, per invocation) or
     /// serve day-old item state. They are different facts with different lifetimes.
     type BoardMap =
-        { Number: int
-          Id: string
+        {
+            Number: int
+            Id: string
 
-          /// The owner and title this board was resolved FROM.
-          ///
-          /// They are carried because the scan cache is keyed on them, and a write that folds itself into
-          /// the cache must fold into the RIGHT one. `FSGG_COORD_OWNER` / `FSGG_COORD_PROJECT` can point
-          /// this client at a different board — so a hardcoded title is not a shortcut, it is a write
-          /// landing in another board's cache file, or in none. Neither is visible to anybody.
-          Owner: string
-          Title: string
+            /// The owner and title this board was resolved FROM.
+            ///
+            /// They are carried because the scan cache is keyed on them, and a write that folds itself into
+            /// the cache must fold into the RIGHT one. `FSGG_COORD_OWNER` / `FSGG_COORD_PROJECT` can point
+            /// this client at a different board — so a hardcoded title is not a shortcut, it is a write
+            /// landing in another board's cache file, or in none. Neither is visible to anybody.
+            Owner: string
+            Title: string
 
-          Fields: Map<string, Field> }
+            Fields: Map<string, Field>
+        }
 
     /// A dependency-edge value bound to the Projects-v2 item revision that produced it.
     type BlockedByObservation =
-        { Value: string option
-          Revision: string option }
+        {
+            Value: string option
+            Revision: string option
+        }
 
     /// A write to one field.
     ///
@@ -372,28 +376,30 @@ module Board =
     /// concurrent `defer` in that window made the inference WRONG — reporting "nothing replayed" over
     /// writes that had landed. The counts belong to the pass that made them.
     type FlushOutcome =
-        { /// What the queue held when this pass started reading it.
-          Queued: int
+        {
+            /// What the queue held when this pass started reading it.
+            Queued: int
 
-          /// Replayed, and landed.
-          Written: int
+            /// Replayed, and landed.
+            Written: int
 
-          /// Permanently un-writable — an unparseable ref, or an item no longer on this board. Dropped,
-          /// never retried, and NEVER counted as written: `Written` is what a caller renders as "replayed
-          /// N of M", and counting a drop there reports a write that never happened (#266).
-          Dropped: int
+            /// Permanently un-writable — an unparseable ref, or an item no longer on this board. Dropped,
+            /// never retried, and NEVER counted as written: `Written` is what a caller renders as "replayed
+            /// N of M", and counting a drop there reports a write that never happened (#266).
+            Dropped: int
 
-          /// Queued against a DIFFERENT board, and therefore left alone (#882).
-          ///
-          /// THE OPPOSITE OF `Dropped`, and the distinction is the whole of #882: a dropped write will never
-          /// land, a skipped one is still owed and still landable — just not by this pass, against this
-          /// board. They are counted apart because "we discarded your write" and "your write is waiting for
-          /// its own board" are opposite things to tell a worker.
-          Skipped: int
+            /// Queued against a DIFFERENT board, and therefore left alone (#882).
+            ///
+            /// THE OPPOSITE OF `Dropped`, and the distinction is the whole of #882: a dropped write will never
+            /// land, a skipped one is still owed and still landable — just not by this pass, against this
+            /// board. They are counted apart because "we discarded your write" and "your write is waiting for
+            /// its own board" are opposite things to tell a worker.
+            Skipped: int
 
-          /// A fresh rate limit STOPPED the pass. The remainder — `Queued - Written - Dropped - Skipped` —
-          /// is still queued, untouched and not re-appended, and the caller must back off (`EX_RATE`).
-          Stopped: IoError option }
+            /// A fresh rate limit STOPPED the pass. The remainder — `Queued - Written - Dropped - Skipped` —
+            /// is still queued, untouched and not re-appended, and the caller must back off (`EX_RATE`).
+            Stopped: IoError option
+        }
 
     /// Replay the deferred queue.
     ///

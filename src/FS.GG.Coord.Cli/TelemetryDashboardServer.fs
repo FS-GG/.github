@@ -14,26 +14,30 @@ open System.Threading
 open System.Threading.Tasks
 
 type DashboardAsset =
-    { ContentType: string
-      Content: byte array }
+    {
+        ContentType: string
+        Content: byte array
+    }
 
 type TelemetryDashboardServerOptions =
-    { WorkspaceId: string
-      AssetProvider: string -> DashboardAsset option
-      SnapshotProvider: string -> CancellationToken -> Task<Result<byte array, string list>>
-      BootstrapLifetime: TimeSpan
-      SessionIdleTimeout: TimeSpan
-      SessionAbsoluteTimeout: TimeSpan
-      RequestTimeout: TimeSpan
-      SnapshotTimeout: TimeSpan
-      ShutdownTimeout: TimeSpan
-      MaxSessions: int
-      MaxConcurrentRequests: int
-      MaxConcurrentQueries: int
-      MaxRequestBodyBytes: int
-      MaxResponseBodyBytes: int
-      MaxHeaderBytes: int
-      BindAttempts: int }
+    {
+        WorkspaceId: string
+        AssetProvider: string -> DashboardAsset option
+        SnapshotProvider: string -> CancellationToken -> Task<Result<byte array, string list>>
+        BootstrapLifetime: TimeSpan
+        SessionIdleTimeout: TimeSpan
+        SessionAbsoluteTimeout: TimeSpan
+        RequestTimeout: TimeSpan
+        SnapshotTimeout: TimeSpan
+        ShutdownTimeout: TimeSpan
+        MaxSessions: int
+        MaxConcurrentRequests: int
+        MaxConcurrentQueries: int
+        MaxRequestBodyBytes: int
+        MaxResponseBodyBytes: int
+        MaxHeaderBytes: int
+        BindAttempts: int
+    }
 
 type RunningTelemetryDashboardServer =
     inherit IDisposable
@@ -47,13 +51,15 @@ module private DashboardServerInternals =
     let utf8 = UTF8Encoding(false)
 
     let securityHeaders =
-        [ "Content-Security-Policy",
-          "default-src 'self'; base-uri 'none'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; object-src 'none'"
-          "Referrer-Policy", "no-referrer"
-          "X-Content-Type-Options", "nosniff"
-          "X-Frame-Options", "DENY"
-          "Cache-Control", "private, no-store"
-          "Pragma", "no-cache" ]
+        [
+            "Content-Security-Policy",
+            "default-src 'self'; base-uri 'none'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; object-src 'none'"
+            "Referrer-Policy", "no-referrer"
+            "X-Content-Type-Options", "nosniff"
+            "X-Frame-Options", "DENY"
+            "Cache-Control", "private, no-store"
+            "Pragma", "no-cache"
+        ]
 
     let base64Url (bytes: byte array) =
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
@@ -110,12 +116,14 @@ module private DashboardServerInternals =
 
     let hasAmbiguousHeaders (request: HttpListenerRequest) =
         let duplicateOrCombined =
-            [ "Host"
-              "Origin"
-              "Cookie"
-              "Content-Length"
-              "Content-Type"
-              "Transfer-Encoding" ]
+            [
+                "Host"
+                "Origin"
+                "Cookie"
+                "Content-Length"
+                "Content-Type"
+                "Transfer-Encoding"
+            ]
             |> List.exists (fun name ->
                 let values =
                     request.Headers.GetValues(name)
@@ -159,7 +167,7 @@ module private DashboardServerInternals =
                 return Error "request body is too large"
             else
                 use buffer = new MemoryStream()
-                let chunk = Array.zeroCreate<byte> (min 8192 (limit + 1))
+                let chunk = Array.zeroCreate<byte>(min 8192 (limit + 1))
                 let mutable total = 0
                 let mutable finished = false
 
@@ -470,8 +478,10 @@ module private DashboardServerInternals =
             task {
                 let bytes =
                     JsonSerializer.SerializeToUtf8Bytes(
-                        {| schema = "fsgg.telemetry.browser-session/1"
-                           workspaces = [| options.WorkspaceId |] |}
+                        {|
+                            schema = "fsgg.telemetry.browser-session/1"
+                            workspaces = [| options.WorkspaceId |]
+                        |}
                     )
 
                 do! writeBytes response 200 "application/json; charset=utf-8" bytes cancellationToken
@@ -484,8 +494,7 @@ module private DashboardServerInternals =
                 let response = context.Response
                 response.StatusCode <- 503
 
-                use timeoutAbort =
-                    cancellationToken.Register(fun () -> abortResponse response)
+                use timeoutAbort = cancellationToken.Register(fun () -> abortResponse response)
 
                 try
                     try
@@ -672,22 +681,24 @@ module TelemetryDashboardServer =
         (assetProvider: string -> DashboardAsset option)
         (snapshotProvider: string -> CancellationToken -> Task<Result<byte array, string list>>)
         =
-        { WorkspaceId = workspaceId
-          AssetProvider = assetProvider
-          SnapshotProvider = snapshotProvider
-          BootstrapLifetime = TimeSpan.FromMinutes 2.0
-          SessionIdleTimeout = TimeSpan.FromMinutes 10.0
-          SessionAbsoluteTimeout = TimeSpan.FromMinutes 30.0
-          RequestTimeout = TimeSpan.FromSeconds 15.0
-          SnapshotTimeout = TimeSpan.FromSeconds 10.0
-          ShutdownTimeout = TimeSpan.FromSeconds 5.0
-          MaxSessions = 8
-          MaxConcurrentRequests = 16
-          MaxConcurrentQueries = 2
-          MaxRequestBodyBytes = 4096
-          MaxResponseBodyBytes = 4 * 1024 * 1024
-          MaxHeaderBytes = 16384
-          BindAttempts = 8 }
+        {
+            WorkspaceId = workspaceId
+            AssetProvider = assetProvider
+            SnapshotProvider = snapshotProvider
+            BootstrapLifetime = TimeSpan.FromMinutes 2.0
+            SessionIdleTimeout = TimeSpan.FromMinutes 10.0
+            SessionAbsoluteTimeout = TimeSpan.FromMinutes 30.0
+            RequestTimeout = TimeSpan.FromSeconds 15.0
+            SnapshotTimeout = TimeSpan.FromSeconds 10.0
+            ShutdownTimeout = TimeSpan.FromSeconds 5.0
+            MaxSessions = 8
+            MaxConcurrentRequests = 16
+            MaxConcurrentQueries = 2
+            MaxRequestBodyBytes = 4096
+            MaxResponseBodyBytes = 4 * 1024 * 1024
+            MaxHeaderBytes = 16384
+            BindAttempts = 8
+        }
 
     let start (options: TelemetryDashboardServerOptions) (cancellationToken: CancellationToken) =
         task {

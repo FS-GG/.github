@@ -11,10 +11,13 @@ open FS.GG.Coord.GitHub.Transport
 let private serving (body: string) =
     Fake.Recorder(fun _ ->
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None; Headers = Map.empty })
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            })
 
 /// A transport that fails every request.
 let private failing (error: IoError) = Fake.Recorder(fun _ -> Error error)
@@ -37,16 +40,26 @@ let ``#2360 effective base reads the live branch tip not the stale PR base snaps
                 else
                     failwith $"unexpected effective-base request: %s{req.Path}"
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+            Ok
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                })
 
     match Reads.prBaseTipSha transport "FS-GG" ".github" 801 with
     | Ok actual -> Assert.Equal(liveTip, actual)
     | Error e -> failwith $"the live base tip must resolve: %A{e}"
 
     Assert.Equal<string list>(
-        [ "repos/FS-GG/.github/pulls/801"
-          "repos/FS-GG/.github/git/ref/heads/release%2Fnext" ],
-        List.ofSeq paths)
+        [
+            "repos/FS-GG/.github/pulls/801"
+            "repos/FS-GG/.github/git/ref/heads/release%2Fnext"
+        ],
+        List.ofSeq paths
+    )
 
 [<Fact>]
 let ``#2360 effective base fails closed when the live base ref cannot be read`` () =
@@ -54,11 +67,13 @@ let ``#2360 effective base fails closed when the live base ref cannot be read`` 
         Fake.Recorder(fun req ->
             if req.Path.EndsWith("pulls/801", System.StringComparison.Ordinal) then
                 Ok
-                    { Status = 200
-                      Body = """{"base":{"ref":"main","sha":"stale-snapshot"}}"""
-                      ETag = None
-                      NextLink = None
-                      Headers = Map.empty }
+                    {
+                        Status = 200
+                        Body = """{"base":{"ref":"main","sha":"stale-snapshot"}}"""
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             else
                 Error(NotFound "live base branch tip"))
 
@@ -68,7 +83,10 @@ let ``#2360 effective base fails closed when the live base ref cannot be read`` 
 
 [<Fact>]
 let ``#2134 duplicate candidates retain both closed issues and PRs`` () =
-    let transport = serving """[{"number":7,"state":"closed","title":"same","body":"x"},{"number":8,"state":"open","title":"same","body":"y","pull_request":{}}]"""
+    let transport =
+        serving
+            """[{"number":7,"state":"closed","title":"same","body":"x"},{"number":8,"state":"open","title":"same","body":"y","pull_request":{}}]"""
+
     match Reads.duplicateCandidates transport "FS-GG" ".github" with
     | Ok candidates ->
         Assert.Equal<int list>([ 7; 8 ], candidates |> List.map _.Number)
@@ -83,7 +101,17 @@ let ``#2134 duplicate inventory refuses an unmerged continuation page`` () =
     // produce this (it follows the link and concatenates), which is exactly why the guard must be stated
     // against the SHAPE rather than against the flag: see the `.github#2735` block below for what
     // happened when the flag alone was read as the answer.
-    let transport = Fake.Recorder(fun _ -> Ok { Status = 200; Body = "[]"; ETag = None; NextLink = Some "https://api.github.test/page=2"; Headers = Map.empty })
+    let transport =
+        Fake.Recorder(fun _ ->
+            Ok
+                {
+                    Status = 200
+                    Body = "[]"
+                    ETag = None
+                    NextLink = Some "https://api.github.test/page=2"
+                    Headers = Map.empty
+                })
+
     match Reads.duplicateCandidates transport "FS-GG" ".github" with
     | Error(Malformed(_, detail)) -> Assert.Contains("incomplete", detail)
     | other -> failwithf "an incomplete inventory must refuse: %A" other
@@ -166,11 +194,13 @@ let private queryOf (pathAndQuery: string) =
 /// `Body` is recorded as text — empty when none was sent — which is what makes `Body = NoBody` a pinned
 /// component rather than an assumption.
 type private WireRequest =
-    { Method: string
-      Path: string
-      Query: Map<string, string>
-      Headers: Map<string, string>
-      Body: string }
+    {
+        Method: string
+        Path: string
+        Query: Map<string, string>
+        Headers: Map<string, string>
+        Body: string
+    }
 
 /// A loopback HTTP server: a free port, a settable handler, and the request log the assertions read.
 ///
@@ -214,7 +244,10 @@ type private Loopback() =
         let headers =
             req.Headers.AllKeys
             |> Array.choose (fun k ->
-                if isNull k || System.String.Equals(k, "Host", System.StringComparison.OrdinalIgnoreCase) then
+                if
+                    isNull k
+                    || System.String.Equals(k, "Host", System.StringComparison.OrdinalIgnoreCase)
+                then
                     None
                 else
                     Some(k, req.Headers.[k]))
@@ -227,11 +260,13 @@ type private Loopback() =
             else
                 ""
 
-        { Method = req.HttpMethod
-          Path = req.Url.AbsolutePath
-          Query = queryOf req.Url.PathAndQuery
-          Headers = headers
-          Body = body }
+        {
+            Method = req.HttpMethod
+            Path = req.Url.AbsolutePath
+            Query = queryOf req.Url.PathAndQuery
+            Headers = headers
+            Body = body
+        }
 
     do
         listener.Prefixes.Add prefix
@@ -260,7 +295,12 @@ type private Loopback() =
     member _.Requests = lock seen (fun () -> List.ofSeq seen)
     member _.On(f) = handler <- f
 
-    member _.Send (response: System.Net.HttpListenerResponse) (status: int) (body: string) (headers: (string * string) list) =
+    member _.Send
+        (response: System.Net.HttpListenerResponse)
+        (status: int)
+        (body: string)
+        (headers: (string * string) list)
+        =
         response.StatusCode <- status
         response.ContentType <- "application/json"
 
@@ -300,7 +340,11 @@ let private expectedPath = "/repos/FS-GG/.github/issues"
 /// A fixture that answers ANY path cannot detect a WRONG one, so these two helpers answer exactly one
 /// path and refuse the rest with the 404 production would give. This is the structural half of F5's
 /// repair; the whole-request oracle in the wire test is the assertive half.
-let private refuseWrongPath (server: Loopback) (req: System.Net.HttpListenerRequest) (res: System.Net.HttpListenerResponse) =
+let private refuseWrongPath
+    (server: Loopback)
+    (req: System.Net.HttpListenerRequest)
+    (res: System.Net.HttpListenerResponse)
+    =
     server.Send
         res
         404
@@ -326,9 +370,11 @@ let private paginatingListing (server: Loopback) (pageTwoStatus: int) (pageTwoBo
                 res
                 200
                 (issuePage [ 1..pageOneSize ])
-                [ "Link",
-                  $"<%s{server.Base}/repos/FS-GG/.github/issues?state=all&per_page=%d{pageOneSize}&page=2>; rel=\"next\", "
-                  + $"<%s{server.Base}/repos/FS-GG/.github/issues?state=all&per_page=%d{pageOneSize}&page=2>; rel=\"last\"" ])
+                [
+                    "Link",
+                    $"<%s{server.Base}/repos/FS-GG/.github/issues?state=all&per_page=%d{pageOneSize}&page=2>; rel=\"next\", "
+                    + $"<%s{server.Base}/repos/FS-GG/.github/issues?state=all&per_page=%d{pageOneSize}&page=2>; rel=\"last\""
+                ])
 
 /// One page, no continuation link: the shape a listing that genuinely has nothing produces. Same
 /// refusal discipline as `paginatingListing`.
@@ -360,7 +406,9 @@ let ``.github#2735 the duplicate inventory MERGES the continuation page`` () =
     | Error e -> failwithf "a listing that paginates must yield a COMPLETE inventory, not a refusal: %A" e
 
 [<Fact>]
-let ``.github#2735 the duplicate inventory's REQUEST — method, collection path, query, headers and body — is pinned WHOLE`` () =
+let ``.github#2735 the duplicate inventory's REQUEST — method, collection path, query, headers and body — is pinned WHOLE``
+    ()
+    =
     // THE WIRE IS ITS OWN GATE, UNDER ITS OWN NAME, and that separation is half the repair (.github#2735,
     // review round 1). These assertions used to ride along inside the merge test above, where a `per_page`
     // drift reddened a test titled `... MERGES the continuation page` — a red whose NAME describes a
@@ -426,20 +474,26 @@ let ``.github#2735 the duplicate inventory's REQUEST — method, collection path
     server.On(fun _ res -> server.Send res 200 "[]" [])
 
     use transport = new HttpTransport(server.Base, "t")
-    Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" |> ignore
+
+    Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github"
+    |> ignore
 
     Assert.Equal(1, List.length server.Requests)
 
     Assert.Equal<WireRequest>(
-        { Method = "GET"
-          Path = expectedPath
-          Query = Map.ofList [ "state", "all"; "per_page", string pageOneSize ]
-          Headers =
-            Map.ofList
-                [ "Accept", "application/vnd.github+json"
-                  "Authorization", "Bearer t"
-                  "User-Agent", "fsgg-coord" ]
-          Body = "" },
+        {
+            Method = "GET"
+            Path = expectedPath
+            Query = Map.ofList [ "state", "all"; "per_page", string pageOneSize ]
+            Headers =
+                Map.ofList
+                    [
+                        "Accept", "application/vnd.github+json"
+                        "Authorization", "Bearer t"
+                        "User-Agent", "fsgg-coord"
+                    ]
+            Body = ""
+        },
         List.head server.Requests
     )
 
@@ -481,8 +535,7 @@ let ``.github#2735 a continuation page that ERRORS is a failed read, not a short
 
     match Reads.duplicateCandidates (transport :> IGitHubTransport) "FS-GG" ".github" with
     | Error(Http(500, _)) -> ()
-    | other ->
-        failwithf "an unreachable continuation page must refuse with the status it answered: %A" other
+    | other -> failwithf "an unreachable continuation page must refuse with the status it answered: %A" other
 
 [<Fact>]
 let ``.github#2735 a listing that genuinely has nothing reads as an EMPTY inventory, not a failure`` () =
@@ -568,8 +621,7 @@ let ``.github#2735 a merged total ONE PAST the page size is a complete inventory
     | Ok candidates ->
         Assert.Equal(pageOneSize + 1, List.length candidates)
         Assert.Contains(candidates, fun c -> c.Number = pageOneSize + 1)
-    | other ->
-        failwithf "a merged total one element past the page size is complete and must be answered: %A" other
+    | other -> failwithf "a merged total one element past the page size is complete and must be answered: %A" other
 
 /// A transport for `prAlive`'s TWO reads (#1055): the open-PR list, then — when no PR matches — the
 /// `git/matching-refs/heads/item/<n>-` branch probe. `pulls` answers the first, `refs` the second.
@@ -581,10 +633,13 @@ let private prAndRefs (pulls: string) (refs: string) =
             else "[]"
 
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None; Headers = Map.empty })
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            })
 
 /// `prAlive` finds no PR, then the branch probe itself FAILS — the #1055 fail-closed case. The open-PR
 /// read succeeds (empty), the `matching-refs` read errors.
@@ -594,10 +649,13 @@ let private prNoneRefsFail (error: IoError) =
             Error error
         else
             Ok
-                { Status = 200
-                  Body = "[]"
-                  ETag = None
-                  NextLink = None; Headers = Map.empty })
+                {
+                    Status = 200
+                    Body = "[]"
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                })
 
 // ---- #461: the lock is never guessed at ------------------------------------------------------------
 
@@ -676,8 +734,7 @@ let ``a marker we cannot parse a WORKER out of is held by nobody - and it BLOCKS
     // and a second worker would be handed it — which is the one thing a lock exists to prevent. So it
     // becomes a claim held by `unparsed-marker`: nobody can heartbeat it, nobody can release it by name,
     // and it holds the item until somebody reaps it deliberately.
-    let recorder =
-        serving $"""[{comment 901 "<!-- fsgg:claim lease=120 -->" now}]"""
+    let recorder = serving $"""[{comment 901 "<!-- fsgg:claim lease=120 -->" now}]"""
 
     match Reads.markerScan recorder "FS-GG" "FS.GG.SDD" 42 with
     | Ok { Markers = [ m ]; Unreadable = [] } -> Assert.Equal(WorkerId "unparsed-marker", m.Worker)
@@ -688,8 +745,7 @@ let ``the marker's prev= column is decoded, and %% comes out LAST`` () =
     // `enc_status` encodes `%` FIRST, so it must be decoded LAST — otherwise a status containing a literal
     // `%20` decodes into a space that was never there. It is the classic escaping-order bug, and the board
     // column it corrupts is the one `release` puts back (#481).
-    let body =
-        "<!-- fsgg:claim worker=vole-418 lease=120 prev=In%20progress -->"
+    let body = "<!-- fsgg:claim worker=vole-418 lease=120 prev=In%20progress -->"
 
     let recorder = serving $"[{comment 901 body now}]"
 
@@ -702,13 +758,15 @@ let ``#1732 a marker carries path scope while legacy markers remain readable`` (
     let scoped =
         "<!-- fsgg:claim worker=vole-418 lease=120 pathRepo=FS.GG.Rendering -->"
 
-    let legacy =
-        "<!-- fsgg:claim worker=kite-461 lease=120 -->"
+    let legacy = "<!-- fsgg:claim worker=kite-461 lease=120 -->"
 
     let recorder = serving $"[{comment 901 scoped now},{comment 902 legacy now}]"
 
     match Reads.markerScan recorder "FS-GG" ".github" 1732 with
-    | Ok { Markers = [ first; second ]; Unreadable = [] } ->
+    | Ok {
+             Markers = [ first; second ]
+             Unreadable = []
+         } ->
         Assert.Equal(Some "FS.GG.Rendering", first.PathRepo)
         Assert.Equal(None, second.PathRepo)
     | other -> failwith $"both new and legacy markers must parse — got %A{other}"
@@ -721,22 +779,28 @@ let ``the CAS winner is the LOWEST LIVE comment id`` () =
     // every racer observes identically. That is what makes this a real compare-and-swap with a real
     // linearisation point, rather than a hopeful convention — and ADR-0040 C4 keeps it exactly as it is.
     let markers =
-        [ { Reads.Id = 903L
-            Reads.Worker = WorkerId "late"
-            Reads.Session = None
-            Reads.AgeSeconds = 10
-            Reads.PreviousStatus = None
-            Reads.PathRepo = None
-            Reads.AgentContract = None
-            Reads.Raw = "" }
-          { Reads.Id = 901L
-            Reads.Worker = WorkerId "first"
-            Reads.Session = None
-            Reads.AgeSeconds = 10
-            Reads.PreviousStatus = None
-            Reads.PathRepo = None
-            Reads.AgentContract = None
-            Reads.Raw = "" } ]
+        [
+            {
+                Reads.Id = 903L
+                Reads.Worker = WorkerId "late"
+                Reads.Session = None
+                Reads.AgeSeconds = 10
+                Reads.PreviousStatus = None
+                Reads.PathRepo = None
+                Reads.AgentContract = None
+                Reads.Raw = ""
+            }
+            {
+                Reads.Id = 901L
+                Reads.Worker = WorkerId "first"
+                Reads.Session = None
+                Reads.AgeSeconds = 10
+                Reads.PreviousStatus = None
+                Reads.PathRepo = None
+                Reads.AgentContract = None
+                Reads.Raw = ""
+            }
+        ]
 
     match Reads.winner 120 markers with
     | Some m -> Assert.Equal(WorkerId "first", m.Worker)
@@ -748,20 +812,23 @@ let ``a STALE marker does not win - but an unreadable AGE is not stale`` () =
     // reap a live claim on the strength of a field we failed to parse — a failed read deciding a lock,
     // which is the exact substitution this layer exists to make impossible.
     let stale =
-        { Reads.Id = 901L
-          Reads.Worker = WorkerId "dead"
-          Reads.Session = None
-          Reads.AgeSeconds = 99999
-          Reads.PreviousStatus = None
-          Reads.PathRepo = None
-          Reads.AgentContract = None
-          Reads.Raw = "" }
+        {
+            Reads.Id = 901L
+            Reads.Worker = WorkerId "dead"
+            Reads.Session = None
+            Reads.AgeSeconds = 99999
+            Reads.PreviousStatus = None
+            Reads.PathRepo = None
+            Reads.AgentContract = None
+            Reads.Raw = ""
+        }
 
     let ageUnknown =
         { stale with
             Reads.Id = 902L
             Reads.Worker = WorkerId "unknown-age"
-            Reads.AgeSeconds = -1 }
+            Reads.AgeSeconds = -1
+        }
 
     Assert.True(Reads.isStale 120 stale)
     Assert.False(Reads.isStale 120 ageUnknown)
@@ -787,8 +854,7 @@ let ``#476 a MERGED pull request resolves as BlockerMerged, not BlockerClosed`` 
 
 [<Fact>]
 let ``#476 ...and an ABANDONED pull request is BlockerClosed`` () =
-    let recorder =
-        serving """{"state":"closed","pull_request":{"merged_at":null}}"""
+    let recorder = serving """{"state":"closed","pull_request":{"merged_at":null}}"""
 
     match Reads.blockerState recorder "FS-GG" "FS.GG.SDD" 8 with
     | Ok BlockerClosed -> ()
@@ -847,8 +913,7 @@ let ``#581 an OPEN item PR is proof of life - the lease lapsed, the WORK did not
     // Lease expiry is EVIDENCE of abandonment, never PROOF, and its false positive is systematic: work that
     // simply takes longer than the lease. An open PR on the item's own `item/<n>-*` branch is the worktree
     // protocol's own artifact and is server-side proof that the worker is still there.
-    let recorder =
-        serving """[{"number":77,"head":{"ref":"item/42-the-thing"}}]"""
+    let recorder = serving """[{"number":77,"head":{"ref":"item/42-the-thing"}}]"""
 
     match Reads.prAlive recorder "FS-GG" "FS.GG.SDD" 42 with
     | Ok(LeaseExpiredPrOpen 77) -> ()
@@ -986,7 +1051,10 @@ let ``#1794 a NULL body is BodyRead empty - a real, observed, empty declaration`
     let recorder = serving """[{"number":42,"body":null}]"""
 
     match Reads.openIssues recorder "FS-GG" "FS.GG.SDD" with
-    | Ok [ { Number = 42; Body = Reads.BodyRead "" } ] -> ()
+    | Ok [ {
+               Number = 42
+               Body = Reads.BodyRead ""
+           } ] -> ()
     | other -> failwith $"a null body is a successfully-observed EMPTY body — got %A{other}"
 
 [<Fact>]
@@ -998,7 +1066,10 @@ let ``#1794 an ABSENT body field is BodyUnread - NOT an issue that declares noth
     let recorder = serving """[{"number":42,"title":"no body field"}]"""
 
     match Reads.openIssues recorder "FS-GG" "FS.GG.SDD" with
-    | Ok [ { Number = 42; Body = Reads.BodyUnread _ } ] -> ()
+    | Ok [ {
+               Number = 42
+               Body = Reads.BodyUnread _
+           } ] -> ()
     | Ok [ { Body = Reads.BodyRead b } ] ->
         failwith $"an absent `body` must NOT read as a body — got BodyRead %A{b}, which parses to Undeclared"
     | other -> failwith $"an absent `body` must be BodyUnread — got %A{other}"
@@ -1012,7 +1083,10 @@ let ``#1794 an ILL-TYPED body is BodyUnread - and it still names the issue, so i
     let recorder = serving """[{"number":42,"body":{"rewritten":"by a proxy"}}]"""
 
     match Reads.openIssues recorder "FS-GG" "FS.GG.SDD" with
-    | Ok [ { Number = 42; Body = Reads.BodyUnread _ } ] -> ()
+    | Ok [ {
+               Number = 42
+               Body = Reads.BodyUnread _
+           } ] -> ()
     | other -> failwith $"an ill-typed `body` must be BodyUnread, keyed by its still-readable number — got %A{other}"
 
 [<Fact>]
@@ -1129,9 +1203,19 @@ let ``subIssues reads the total apart from the visible nodes, with each child's 
     match Reads.subIssues transport "FS-GG" "FS.GG.SDD" 50 with
     | Ok set ->
         Assert.Equal(2, set.Total)
+
         Assert.Equal<Reads.SubIssue list>(
-            [ ({ Ref = "FS-GG/FS.GG.SDD#51"; Open = true }: Reads.SubIssue)
-              { Ref = "FS-GG/FS.GG.SDD#52"; Open = false } ],
+            [
+                ({
+                    Ref = "FS-GG/FS.GG.SDD#51"
+                    Open = true
+                }
+                : Reads.SubIssue)
+                {
+                    Ref = "FS-GG/FS.GG.SDD#52"
+                    Open = false
+                }
+            ],
             set.Children
         )
     | Error e -> failwith $"the graph must resolve — got %A{e}"
@@ -1186,10 +1270,17 @@ let ``contentEditProvenance reads the total apart from the visible edits, with e
         Assert.Equal(2, provenance.Total)
 
         Assert.Equal<Reads.ContentEdit list>(
-            [ ({ EditedAt = System.DateTimeOffset.Parse "2026-08-01T10:00:00Z"
-                 EditorLogin = Some "alice" }: Reads.ContentEdit)
-              { EditedAt = System.DateTimeOffset.Parse "2026-08-02T11:30:00Z"
-                EditorLogin = Some "bob" } ],
+            [
+                ({
+                    EditedAt = System.DateTimeOffset.Parse "2026-08-01T10:00:00Z"
+                    EditorLogin = Some "alice"
+                }
+                : Reads.ContentEdit)
+                {
+                    EditedAt = System.DateTimeOffset.Parse "2026-08-02T11:30:00Z"
+                    EditorLogin = Some "bob"
+                }
+            ],
             provenance.Edits
         )
     | Error e -> failwith $"the provenance must resolve — got %A{e}"
@@ -1230,8 +1321,13 @@ let ``contentEditProvenance tolerates a deleted editor - a null actor is not a p
         Assert.Equal(1, provenance.Total)
 
         Assert.Equal<Reads.ContentEdit list>(
-            [ ({ EditedAt = System.DateTimeOffset.Parse "2026-08-01T10:00:00Z"
-                 EditorLogin = None }: Reads.ContentEdit) ],
+            [
+                ({
+                    EditedAt = System.DateTimeOffset.Parse "2026-08-01T10:00:00Z"
+                    EditorLogin = None
+                }
+                : Reads.ContentEdit)
+            ],
             provenance.Edits
         )
     | Error e -> failwith $"a deleted editor must not fail the read — got %A{e}"
@@ -1326,7 +1422,9 @@ let ``#2477 contentEditProvenance FAILS CLOSED - a transport failure propagates 
 /// One `fsgg:msg` comment, rendered exactly as `Writes.say` writes the body: REAL newlines separating the
 /// marker comment, the `**from → to**` header, and the text.
 let private msgComment (cid: int) (fromW: string) (dest: string) (text: string) =
-    let body = $"<!-- fsgg:msg from={fromW} to={dest} -->\n**{fromW} → {dest}**\n\n{text}"
+    let body =
+        $"<!-- fsgg:msg from={fromW} to={dest} -->\n**{fromW} → {dest}**\n\n{text}"
+
     let jbody = System.Text.Json.JsonSerializer.Serialize body
     $"""{{"id":{cid},"body":{jbody},"created_at":"2026-07-16T00:00:0{cid}Z"}}"""
 
@@ -1347,7 +1445,11 @@ let ``messages parses an fsgg:msg comment - id, from, to, and the text with the 
 [<Fact>]
 let ``messages keeps a broadcast (to=*) and orders by comment id`` () =
     let page =
-        "[" + msgComment 9 "finch-a3f" "*" "second" + "," + msgComment 4 "finch-a3f" "smew-f31" "first" + "]"
+        "["
+        + msgComment 9 "finch-a3f" "*" "second"
+        + ","
+        + msgComment 4 "finch-a3f" "smew-f31" "first"
+        + "]"
 
     match Reads.messages (serving page) "FS-GG" "FS.GG.SDD" 42 with
     | Ok [ a; b ] ->
@@ -1362,11 +1464,18 @@ let ``messages keeps a broadcast (to=*) and orders by comment id`` () =
 let ``messages ignores a claim marker and any non-message comment`` () =
     // A comments page carries claim markers and plain comments too. `messages` reads ONLY `fsgg:msg`, so a
     // lock marker on the same issue never surfaces as mail.
-    let marker =
-        comment 1 "<!-- fsgg:claim worker=ghost -->" now
+    let marker = comment 1 "<!-- fsgg:claim worker=ghost -->" now
 
     let plain = comment 2 "just a normal human comment" now
-    let page = "[" + marker + "," + plain + "," + msgComment 3 "finch-a3f" "smew-f31" "the only message" + "]"
+
+    let page =
+        "["
+        + marker
+        + ","
+        + plain
+        + ","
+        + msgComment 3 "finch-a3f" "smew-f31" "the only message"
+        + "]"
 
     match Reads.messages (serving page) "FS-GG" "FS.GG.SDD" 42 with
     | Ok [ m ] -> Assert.Equal("the only message", m.Text)
@@ -1418,8 +1527,24 @@ type private IssuesCache() =
 let private etagServer (body: string) (etag: string) =
     Fake.Recorder(fun (req: Request) ->
         match req.IfNoneMatch with
-        | Some e when e = etag -> Ok { Status = 304; Body = ""; ETag = Some etag; NextLink = None; Headers = Map.empty }
-        | _ -> Ok { Status = 200; Body = body; ETag = Some etag; NextLink = None; Headers = Map.empty })
+        | Some e when e = etag ->
+            Ok
+                {
+                    Status = 304
+                    Body = ""
+                    ETag = Some etag
+                    NextLink = None
+                    Headers = Map.empty
+                }
+        | _ ->
+            Ok
+                {
+                    Status = 200
+                    Body = body
+                    ETag = Some etag
+                    NextLink = None
+                    Headers = Map.empty
+                })
 
 [<Fact>]
 let ``issues returns the raw body, then revalidates with the stored ETag and serves the 304 from cache (#418)`` () =
@@ -1519,13 +1644,15 @@ type private LandableServer(sha: string, ?runs: int, ?nextLink: string) =
         $"""{{"total_count":%d{runCount},"workflow_runs":[%s{items}]}}"""
 
     let bodies =
-        [ "repos/FS-GG/FS.GG.SDD/pulls/801",
-          "{\"number\":801,\"state\":\"open\",\"mergeable\":true,\"head\":{\"ref\":\"item/42-x\",\"sha\":\""
-          + sha
-          + "\"}}"
-          "repos/FS-GG/FS.GG.SDD/actions/runs", runsBody
-          "repos/FS-GG/FS.GG.SDD/commits/" + sha + "/check-runs",
-          """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}""" ]
+        [
+            "repos/FS-GG/FS.GG.SDD/pulls/801",
+            "{\"number\":801,\"state\":\"open\",\"mergeable\":true,\"head\":{\"ref\":\"item/42-x\",\"sha\":\""
+            + sha
+            + "\"}}"
+            "repos/FS-GG/FS.GG.SDD/actions/runs", runsBody
+            "repos/FS-GG/FS.GG.SDD/commits/" + sha + "/check-runs",
+            """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+        ]
 
     /// The validator is derived from the path AND the sha, so a test can prove one subject's body is never
     /// served as another's — a WRONG answer, not merely a stale one, feeding a decision to merge.
@@ -1544,19 +1671,32 @@ type private LandableServer(sha: string, ?runs: int, ?nextLink: string) =
                 let etag = etagOf req.Path
 
                 match req.IfNoneMatch with
-                | Some e when e = etag -> Ok { Status = 304; Body = ""; ETag = Some etag; NextLink = None; Headers = Map.empty }
+                | Some e when e = etag ->
+                    Ok
+                        {
+                            Status = 304
+                            Body = ""
+                            ETag = Some etag
+                            NextLink = None
+                            Headers = Map.empty
+                        }
                 | _ ->
                     Ok
-                        { Status = 200
-                          Body = body
-                          ETag = Some etag
-                          NextLink = nextLink; Headers = Map.empty })
+                        {
+                            Status = 200
+                            Body = body
+                            ETag = Some etag
+                            NextLink = nextLink
+                            Headers = Map.empty
+                        })
 
 /// The three reads of one `landable` poll.
 let private pollPaths (sha: string) =
-    [ "repos/FS-GG/FS.GG.SDD/pulls/801"
-      "repos/FS-GG/FS.GG.SDD/actions/runs"
-      $"repos/FS-GG/FS.GG.SDD/commits/%s{sha}/check-runs" ]
+    [
+        "repos/FS-GG/FS.GG.SDD/pulls/801"
+        "repos/FS-GG/FS.GG.SDD/actions/runs"
+        $"repos/FS-GG/FS.GG.SDD/commits/%s{sha}/check-runs"
+    ]
 
 [<Fact>]
 let ``every read of the landable poll revalidates on the second look, and the 304s reach the SAME verdict`` () =
@@ -1588,7 +1728,8 @@ let ``a page with NO headroom is never memoised - the boundary the whole rule ex
     Reads.prLandable server.Recorder "FS-GG" "FS.GG.SDD" 801 |> ignore
 
     let conditional =
-        server.Validators "repos/FS-GG/FS.GG.SDD/actions/runs" |> List.filter Option.isSome
+        server.Validators "repos/FS-GG/FS.GG.SDD/actions/runs"
+        |> List.filter Option.isSome
 
     if not conditional.IsEmpty then
         failwith $"a FULL page cannot prove headroom and must not be memoised — got %A{conditional}"
@@ -1604,7 +1745,9 @@ let ``a response that PAGINATES stores no validator, whatever its shape`` () =
     // A merged response's ETag is page one's alone. Storing it would revalidate a two-page set against its
     // first page — the hazard headroom exists to make unreachable, and this is the backstop under it.
     use _cache = new IssuesCache()
-    let server = LandableServer("sha-green", nextLink = "https://api.github.com/x?page=2")
+
+    let server =
+        LandableServer("sha-green", nextLink = "https://api.github.com/x?page=2")
 
     Reads.prLandable server.Recorder "FS-GG" "FS.GG.SDD" 801 |> ignore
     Reads.prLandable server.Recorder "FS-GG" "FS.GG.SDD" 801 |> ignore
@@ -1622,7 +1765,8 @@ let ``the runs cache is keyed on the head SHA - one commit's green is never serv
     // it decides is whether to merge. So the cache key carries the query.
     use _cache = new IssuesCache()
 
-    Reads.prLandable (LandableServer "sha-one").Recorder "FS-GG" "FS.GG.SDD" 801 |> ignore
+    Reads.prLandable (LandableServer "sha-one").Recorder "FS-GG" "FS.GG.SDD" 801
+    |> ignore
 
     let second = LandableServer "sha-two"
     Assert.Equal(PrGreen, Reads.prLandable second.Recorder "FS-GG" "FS.GG.SDD" 801)
@@ -1643,7 +1787,9 @@ let ``issues judges headroom on the RAW page, not on the filtered projection (#6
 
     let raw =
         let issue (i: int) = "{\"number\":" + string i + "}"
-        let pr (i: int) = "{\"number\":" + string i + ",\"pull_request\":{\"url\":\"u\"}}"
+
+        let pr (i: int) =
+            "{\"number\":" + string i + ",\"pull_request\":{\"url\":\"u\"}}"
         // 60 issues + 40 PRs = a full page of 100.
         let items = [ for i in 1..60 -> issue i ] @ [ for i in 61..100 -> pr i ]
         "[" + String.concat "," items + "]"
@@ -1653,7 +1799,15 @@ let ``issues judges headroom on the RAW page, not on the filtered projection (#6
     let recorder =
         Fake.Recorder(fun (req: Request) ->
             seen.Add req.IfNoneMatch
-            Ok { Status = 200; Body = raw; ETag = Some "W/\"full-page\""; NextLink = None; Headers = Map.empty })
+
+            Ok
+                {
+                    Status = 200
+                    Body = raw
+                    ETag = Some "W/\"full-page\""
+                    NextLink = None
+                    Headers = Map.empty
+                })
 
     match Reads.issues recorder "FS-GG" "FS.GG.SDD" "open" None false with
     | Ok body -> Assert.DoesNotContain("pull_request", body) // the projection still drops PRs
@@ -1687,7 +1841,14 @@ let ``a page we cannot COUNT is never memoised - headroom unproven is headroom r
                 else
                     "{\"number\":801,\"state\":\"open\",\"mergeable\":true,\"head\":{\"ref\":\"item/42-x\",\"sha\":\"sha-x\"}}"
 
-            Ok { Status = 200; Body = body; ETag = Some "W/\"v1\""; NextLink = None; Headers = Map.empty })
+            Ok
+                {
+                    Status = 200
+                    Body = body
+                    ETag = Some "W/\"v1\""
+                    NextLink = None
+                    Headers = Map.empty
+                })
 
     Reads.prLandable recorder "FS-GG" "FS.GG.SDD" 801 |> ignore
     Reads.prLandable recorder "FS-GG" "FS.GG.SDD" 801 |> ignore
@@ -1739,7 +1900,14 @@ type private MergeablePrServer(tokenFor: int -> string) =
                 else
                     """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+            Ok
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                })
 
 [<Fact>]
 let ``a mergeable still COMPUTING past the re-read budget is pending, not unknown — so --wait waits`` () =
@@ -1753,7 +1921,8 @@ let ``a mergeable still COMPUTING past the re-read budget is pending, not unknow
     use _fast = new NoMergeableRetryDelay()
     let server = MergeablePrServer(fun _ -> "null")
 
-    let state, n, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, n, unmet =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrPending, state)
     Assert.Equal(0, n)
@@ -1789,7 +1958,14 @@ let ``an ABSENT mergeable field is still unknown, and still settles — the fail
                 else
                     """{"total_count":0,"workflow_runs":[]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+            Ok
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                })
 
     let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
@@ -1806,7 +1982,8 @@ let ``a mergeable that lands WITHIN the budget is still scored on the spot, not 
     use _fast = new NoMergeableRetryDelay()
     let server = MergeablePrServer(fun reads -> if reads = 1 then "null" else "true")
 
-    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrGreen, state)
     Assert.Equal(2, server.PrReads)
@@ -1831,7 +2008,14 @@ type private MergeablePrAtSha(token: string, headSha: string) =
                 else
                     """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+            Ok
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                })
 
 [<Fact>]
 let ``a CONFLICTED about the commit you replaced is pending, not a verdict — the false arm reaches --sha`` () =
@@ -1900,7 +2084,8 @@ let ``without --sha a conflicted stays terminal — an ASSERTION nobody made dem
     use _fast = new NoMergeableRetryDelay()
     let server = MergeablePrAtSha("false", "sha-OLD")
 
-    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrConflicted, state)
 
@@ -1938,7 +2123,14 @@ type private ConflictedPrWithBranch(headSha: string, tipSha: string) =
                 else
                     """{"total_count":0,"workflow_runs":[]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+            Ok
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                })
 
 [<Fact>]
 let ``a conflicted whose PR head LAGS the branch tip is pending — no --sha, and none needed`` () =
@@ -1958,7 +2150,8 @@ let ``a conflicted whose PR head LAGS the branch tip is pending — no --sha, an
     use _fast = new NoMergeableRetryDelay()
     let server = ConflictedPrWithBranch(headSha = "sha-OLD", tipSha = "sha-NEW")
 
-    let state, n, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, n, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrPending, state)
     Assert.Equal(0, n)
@@ -1980,7 +2173,8 @@ let ``a conflicted whose PR head IS the branch tip stays terminal — a real con
     use _fast = new NoMergeableRetryDelay()
     let server = ConflictedPrWithBranch(headSha = "sha-SAME", tipSha = "sha-SAME")
 
-    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrConflicted, state)
     Assert.True(Landable.settled state 0 0, "a conflict about the branch's real head is real — it must settle")
@@ -1997,16 +2191,33 @@ let ``a branch tip we cannot READ leaves the conflict standing — fail-closed, 
         Fake.Recorder(fun (req: Request) ->
             if req.Path.Contains "git/ref/heads/" then
                 // The ref read fails. It must not manufacture a verdict in either direction.
-                Ok { Status = 404; Body = """{"message":"Not Found"}"""; ETag = None; NextLink = None; Headers = Map.empty }
+                Ok
+                    {
+                        Status = 404
+                        Body = """{"message":"Not Found"}"""
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             elif req.Path.EndsWith "pulls/801" then
                 Ok
-                    { Status = 200
-                      Body =
-                        """{"number":801,"state":"open","mergeable":false,"head":{"ref":"item/42-x","sha":"sha-x"}}"""
-                      ETag = None
-                      NextLink = None; Headers = Map.empty }
+                    {
+                        Status = 200
+                        Body =
+                            """{"number":801,"state":"open","mergeable":false,"head":{"ref":"item/42-x","sha":"sha-x"}}"""
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             else
-                Ok { Status = 200; Body = """{"total_count":0,"workflow_runs":[]}"""; ETag = None; NextLink = None; Headers = Map.empty })
+                Ok
+                    {
+                        Status = 200
+                        Body = """{"total_count":0,"workflow_runs":[]}"""
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    })
 
     let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
@@ -2059,7 +2270,14 @@ let ``the green path reconciles ONCE — #989's bound, as #995 revised it`` () =
                 else
                     """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+            Ok
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                })
 
     let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
@@ -2088,7 +2306,14 @@ type private GreenPrWithBranch(headSha: string, tipSha: string, conclusion: stri
                 else
                     $"""{{"total_count":1,"check_runs":[{{"name":"build","check_suite":{{"id":1}},"status":"completed","conclusion":"%s{conclusion}"}}]}}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+            Ok
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                })
 
 [<Fact>]
 let ``a GREEN scored over the commit you REPLACED is pending, not green — the fail-OPEN twin of #955`` () =
@@ -2101,9 +2326,12 @@ let ``a GREEN scored over the commit you REPLACED is pending, not green — the 
     // Measured on PR #993: `ref-tip=NEW  pr.head=OLD  mergeable=true` the instant the push returned.
     use _cache = new IssuesCache()
     use _fast = new NoMergeableRetryDelay()
-    let server = GreenPrWithBranch(headSha = "sha-OLD", tipSha = "sha-NEW", conclusion = "success")
 
-    let state, n, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let server =
+        GreenPrWithBranch(headSha = "sha-OLD", tipSha = "sha-NEW", conclusion = "success")
+
+    let state, n, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrPending, state)
 
@@ -2119,9 +2347,12 @@ let ``a GREEN whose PR head IS the branch tip still settles green — the gate m
     // cap and §5's `|| exit 1` would walk every worker away from every item.
     use _cache = new IssuesCache()
     use _fast = new NoMergeableRetryDelay()
-    let server = GreenPrWithBranch(headSha = "sha-SAME", tipSha = "sha-SAME", conclusion = "success")
 
-    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let server =
+        GreenPrWithBranch(headSha = "sha-SAME", tipSha = "sha-SAME", conclusion = "success")
+
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrGreen, state)
 
@@ -2140,9 +2371,12 @@ let ``a RED never reads the ref — a PR that is not merging need not prove whic
     // is already not merging, so reconciling it buys nothing and would spend a request on every failing poll.
     use _cache = new IssuesCache()
     use _fast = new NoMergeableRetryDelay()
-    let server = GreenPrWithBranch(headSha = "sha-OLD", tipSha = "sha-NEW", conclusion = "failure")
 
-    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let server =
+        GreenPrWithBranch(headSha = "sha-OLD", tipSha = "sha-NEW", conclusion = "failure")
+
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrRed, state)
     Assert.Equal(0, server.RefReads)
@@ -2155,7 +2389,9 @@ let ``--sha suppresses the green guard too — the caller asserted the commit an
     // budget the claim lock lives on, to re-answer a settled question.
     use _cache = new IssuesCache()
     use _fast = new NoMergeableRetryDelay()
-    let server = GreenPrWithBranch(headSha = "sha-SAME", tipSha = "sha-MOVED-ON", conclusion = "success")
+
+    let server =
+        GreenPrWithBranch(headSha = "sha-SAME", tipSha = "sha-MOVED-ON", conclusion = "success")
 
     let state, _, _ =
         Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] (Some "sha-SAME")
@@ -2175,28 +2411,44 @@ let ``a ref we cannot read leaves the GREEN standing — fail-closed must not st
     let recorder =
         Fake.Recorder(fun (req: Request) ->
             if req.Path.Contains "git/ref/heads/" then
-                Ok { Status = 404; Body = """{"message":"Not Found"}"""; ETag = None; NextLink = None; Headers = Map.empty }
+                Ok
+                    {
+                        Status = 404
+                        Body = """{"message":"Not Found"}"""
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             elif req.Path.EndsWith "pulls/801" then
                 Ok
-                    { Status = 200
-                      Body =
-                        """{"number":801,"state":"open","mergeable":true,"head":{"ref":"item/42-x","sha":"sha-x"}}"""
-                      ETag = None
-                      NextLink = None; Headers = Map.empty }
+                    {
+                        Status = 200
+                        Body =
+                            """{"number":801,"state":"open","mergeable":true,"head":{"ref":"item/42-x","sha":"sha-x"}}"""
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             elif req.Path.EndsWith "actions/runs" then
                 Ok
-                    { Status = 200
-                      Body =
-                        """{"total_count":1,"workflow_runs":[{"path":".github/workflows/b.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
-                      ETag = None
-                      NextLink = None; Headers = Map.empty }
+                    {
+                        Status = 200
+                        Body =
+                            """{"total_count":1,"workflow_runs":[{"path":".github/workflows/b.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             else
                 Ok
-                    { Status = 200
-                      Body =
-                        """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
-                      ETag = None
-                      NextLink = None; Headers = Map.empty })
+                    {
+                        Status = 200
+                        Body =
+                            """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    })
 
     let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
@@ -2259,34 +2511,52 @@ type private MergeStatePrServer
                 | Some e -> Error e
                 | None ->
                     Ok
-                        { Status = 200
-                          Body = protectionRequiring (defaultArg demanded [])
-                          ETag = None
-                          NextLink = None; Headers = Map.empty }
+                        {
+                            Status = 200
+                            Body = protectionRequiring (defaultArg demanded [])
+                            ETag = None
+                            NextLink = None
+                            Headers = Map.empty
+                        }
             elif isRulesetRead req.Path then
                 policyReads <- policyReads + 1
-                Ok { Status = 200; Body = defaultArg rules "[]"; ETag = None; NextLink = None; Headers = Map.empty }
+
+                Ok
+                    {
+                        Status = 200
+                        Body = defaultArg rules "[]"
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             else
 
-            let body =
-                if req.Path.Contains "git/ref/heads/" then
-                    """{"ref":"refs/heads/item/42-x","object":{"sha":"sha-head","type":"commit"}}"""
-                elif req.Path.EndsWith "pulls/801" then
-                    // `mergeable_state` rides in the SAME object as `mergeable` — same lazy background
-                    // job, same request. That is what makes the guard free.
-                    $"""{{"number":801,"state":"open","mergeable":true,"mergeable_state":"%s{state}","base":{{"ref":"main"}},"head":{{"ref":"item/42-x","sha":"sha-head"}}}}"""
-                elif req.Path.EndsWith "actions/runs" then
-                    $"""{{"total_count":1,"workflow_runs":[{{"path":".github/workflows/gate.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"%s{concl}","check_suite_id":1,"pull_requests":[{{"number":801}}]}}]}}"""
-                else
-                    let runs =
-                        reported
-                        |> List.map (fun n ->
-                            $"""{{"name":"%s{n}","check_suite":{{"id":1}},"status":"completed","conclusion":"%s{concl}"}}""")
-                        |> String.concat ","
+                let body =
+                    if req.Path.Contains "git/ref/heads/" then
+                        """{"ref":"refs/heads/item/42-x","object":{"sha":"sha-head","type":"commit"}}"""
+                    elif req.Path.EndsWith "pulls/801" then
+                        // `mergeable_state` rides in the SAME object as `mergeable` — same lazy background
+                        // job, same request. That is what makes the guard free.
+                        $"""{{"number":801,"state":"open","mergeable":true,"mergeable_state":"%s{state}","base":{{"ref":"main"}},"head":{{"ref":"item/42-x","sha":"sha-head"}}}}"""
+                    elif req.Path.EndsWith "actions/runs" then
+                        $"""{{"total_count":1,"workflow_runs":[{{"path":".github/workflows/gate.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"%s{concl}","check_suite_id":1,"pull_requests":[{{"number":801}}]}}]}}"""
+                    else
+                        let runs =
+                            reported
+                            |> List.map (fun n ->
+                                $"""{{"name":"%s{n}","check_suite":{{"id":1}},"status":"completed","conclusion":"%s{concl}"}}""")
+                            |> String.concat ","
 
-                    $"""{{"total_count":%d{List.length reported},"check_runs":[%s{runs}]}}"""
+                        $"""{{"total_count":%d{List.length reported},"check_runs":[%s{runs}]}}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+                Ok
+                    {
+                        Status = 200
+                        Body = body
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    })
 
 [<Fact>]
 let ``#1575 a BLOCKED PR whose reporting checks are all green is pending — the green GitHub refused`` () =
@@ -2300,7 +2570,8 @@ let ``#1575 a BLOCKED PR whose reporting checks are all green is pending — the
             demanded = [ "skill-union / skill-union" ]
         )
 
-    let state, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, _, unmet =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrPending, state)
 
@@ -2332,7 +2603,8 @@ let ``#1575 ...and the SAME world reported CLEAN is green — the gate must stil
             demanded = [ "skill-union / skill-union" ]
         )
 
-    let state, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, _, unmet =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrGreen, state)
     Assert.Empty unmet
@@ -2361,13 +2633,13 @@ let ``#1575 a policy we may not READ still REFUSES — the verdict never rested 
             protection = Unauthorized "FS-GG/FS.GG.SDD branch main protection"
         )
 
-    let state, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, _, unmet =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrPending, state)
 
     match unmet with
-    | [ Reads.Refused("blocked", "main"); Reads.PolicyUnreadable why ] ->
-        Assert.Contains("administration: read", why)
+    | [ Reads.Refused("blocked", "main"); Reads.PolicyUnreadable why ] -> Assert.Contains("administration: read", why)
     | other -> failwith $"a 403 must degrade the SENTENCE and leave the refusal standing — got %A{other}"
 
 [<Fact>]
@@ -2386,7 +2658,8 @@ let ``#1575 a RULESET's required check is named too — protection and rulesets 
                 """[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"coherence","integration_id":15368}]}}]"""
         )
 
-    let _, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let _, _, unmet =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Contains(
         unmet,
@@ -2405,7 +2678,8 @@ let ``#1575 UNSTABLE is not a refusal — a non-required check failing is a merg
     use _fast = new NoMergeableRetryDelay()
     let server = MergeStatePrServer(state = "unstable", reported = [ "build" ])
 
-    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrGreen, state)
     Assert.Equal(0, server.PolicyReads)
@@ -2424,31 +2698,43 @@ let ``#1575 an ABSENT mergeable_state is NO OPINION, not a refusal — it must n
                 failwith "a PR GitHub has no opinion about must not cost a policy read"
             elif req.Path.Contains "git/ref/heads/" then
                 Ok
-                    { Status = 200
-                      Body = """{"ref":"refs/heads/item/42-x","object":{"sha":"sha-head","type":"commit"}}"""
-                      ETag = None
-                      NextLink = None; Headers = Map.empty }
+                    {
+                        Status = 200
+                        Body = """{"ref":"refs/heads/item/42-x","object":{"sha":"sha-head","type":"commit"}}"""
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             elif req.Path.EndsWith "pulls/801" then
                 Ok
-                    { Status = 200
-                      Body =
-                        """{"number":801,"state":"open","mergeable":true,"base":{"ref":"main"},"head":{"ref":"item/42-x","sha":"sha-head"}}"""
-                      ETag = None
-                      NextLink = None; Headers = Map.empty }
+                    {
+                        Status = 200
+                        Body =
+                            """{"number":801,"state":"open","mergeable":true,"base":{"ref":"main"},"head":{"ref":"item/42-x","sha":"sha-head"}}"""
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             elif req.Path.EndsWith "actions/runs" then
                 Ok
-                    { Status = 200
-                      Body =
-                        """{"total_count":1,"workflow_runs":[{"path":".github/workflows/gate.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
-                      ETag = None
-                      NextLink = None; Headers = Map.empty }
+                    {
+                        Status = 200
+                        Body =
+                            """{"total_count":1,"workflow_runs":[{"path":".github/workflows/gate.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             else
                 Ok
-                    { Status = 200
-                      Body =
-                        """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
-                      ETag = None
-                      NextLink = None; Headers = Map.empty })
+                    {
+                        Status = 200
+                        Body =
+                            """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    })
 
     let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
@@ -2461,7 +2747,9 @@ let ``#1575 BEHIND and DRAFT refuse too — the other two states GitHub will not
 
     for refusing in [ "behind"; "draft" ] do
         let server = MergeStatePrServer(state = refusing, reported = [ "build" ])
-        let state, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+        let state, _, unmet =
+            Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
         Assert.Equal(PrPending, state)
 
@@ -2485,7 +2773,8 @@ let ``#1575/#2517 a RED that GitHub also refuses reads no policy — it is alrea
     let server =
         MergeStatePrServer(state = "blocked", reported = [ "build" ], conclusion = "failure")
 
-    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrRed, state)
     Assert.Equal(0, server.PolicyReads)
@@ -2541,30 +2830,48 @@ type private DerivedAdvisoryPrServer(state: string, ?demanded: string list, ?pro
                 | Some e -> Error e
                 | None ->
                     Ok
-                        { Status = 200
-                          Body = protectionRequiring (defaultArg demanded [])
-                          ETag = None
-                          NextLink = None; Headers = Map.empty }
+                        {
+                            Status = 200
+                            Body = protectionRequiring (defaultArg demanded [])
+                            ETag = None
+                            NextLink = None
+                            Headers = Map.empty
+                        }
             elif isRulesetRead req.Path then
                 policyReads <- policyReads + 1
-                Ok { Status = 200; Body = "[]"; ETag = None; NextLink = None; Headers = Map.empty }
+
+                Ok
+                    {
+                        Status = 200
+                        Body = "[]"
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             else
 
-            let body =
-                if req.Path.Contains "git/ref/heads/" then
-                    """{"ref":"refs/heads/item/42-x","object":{"sha":"sha-head","type":"commit"}}"""
-                elif req.Path.EndsWith "pulls/801" then
-                    $"""{{"number":801,"state":"open","mergeable":true,"mergeable_state":"%s{state}","base":{{"ref":"main"}},"head":{{"ref":"item/42-x","sha":"sha-head"}}}}"""
-                elif req.Path.EndsWith "actions/runs" then
-                    """{"total_count":2,"workflow_runs":[
+                let body =
+                    if req.Path.Contains "git/ref/heads/" then
+                        """{"ref":"refs/heads/item/42-x","object":{"sha":"sha-head","type":"commit"}}"""
+                    elif req.Path.EndsWith "pulls/801" then
+                        $"""{{"number":801,"state":"open","mergeable":true,"mergeable_state":"%s{state}","base":{{"ref":"main"}},"head":{{"ref":"item/42-x","sha":"sha-head"}}}}"""
+                    elif req.Path.EndsWith "actions/runs" then
+                        """{"total_count":2,"workflow_runs":[
                          {"path":".github/workflows/coherence.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]},
                          {"path":".github/workflows/feed.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"failure","check_suite_id":2,"pull_requests":[{"number":801}]}]}"""
-                else
-                    """{"total_count":2,"check_runs":[
+                    else
+                        """{"total_count":2,"check_runs":[
                          {"name":"projection","check_suite":{"id":1},"status":"completed","conclusion":"success"},
                          {"name":"feed","check_suite":{"id":2},"status":"completed","conclusion":"failure"}]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+                Ok
+                    {
+                        Status = 200
+                        Body = body
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    })
 
 [<Fact>]
 let ``#2517 AC3: a PR whose ONLY failing check is NON-required is GREEN — PR #2514's own shape`` () =
@@ -2574,9 +2881,12 @@ let ``#2517 AC3: a PR whose ONLY failing check is NON-required is GREEN — PR #
     // gate operators learn to override.
     use _cache = new IssuesCache()
     use _fast = new NoMergeableRetryDelay()
-    let server = DerivedAdvisoryPrServer(state = "unstable", demanded = [ "projection" ])
 
-    let state, n, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let server =
+        DerivedAdvisoryPrServer(state = "unstable", demanded = [ "projection" ])
+
+    let state, n, unmet =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrGreen, state)
     Assert.Equal(2, n)
@@ -2592,9 +2902,12 @@ let ``#2517 AC4: the same PR is RED when the failing check IS required — the f
     // declaration — and the gate refuses, exactly as it must.
     use _cache = new IssuesCache()
     use _fast = new NoMergeableRetryDelay()
-    let server = DerivedAdvisoryPrServer(state = "unstable", demanded = [ "projection"; "feed" ])
 
-    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let server =
+        DerivedAdvisoryPrServer(state = "unstable", demanded = [ "projection"; "feed" ])
+
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrRed, state)
 
@@ -2614,7 +2927,8 @@ let ``#2517 AC5: a policy we may not READ fails CLOSED — the verdict is what i
             protection = Unauthorized "FS-GG/FS.GG.SDD branch main protection"
         )
 
-    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrRed, state)
     // ONE read, not two: `requiredContexts` short-circuits on the classic store's failure — a list we
@@ -2638,7 +2952,8 @@ let ``#2517 AC6: an EMPTY required set fails closed on the SAME rule as an unrea
     use _fast = new NoMergeableRetryDelay()
     let server = DerivedAdvisoryPrServer(state = "unstable", demanded = [])
 
-    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrRed, state)
     Assert.Equal(2, server.PolicyReads)
@@ -2650,9 +2965,12 @@ let ``#2517 AC2: --require overrides the derivation — the flag still binds a n
     // would break the one caller the flag exists for, so the flag is tested BEFORE the derivation.
     use _cache = new IssuesCache()
     use _fast = new NoMergeableRetryDelay()
-    let server = DerivedAdvisoryPrServer(state = "unstable", demanded = [ "projection" ])
 
-    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [ "feed" ] None
+    let server =
+        DerivedAdvisoryPrServer(state = "unstable", demanded = [ "projection" ])
+
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [ "feed" ] None
 
     Assert.Equal(PrRed, state)
 
@@ -2672,7 +2990,8 @@ let ``#2517: a red GitHub itself REFUSES pays no policy read — the derivation 
     use _fast = new NoMergeableRetryDelay()
     let server = DerivedAdvisoryPrServer(state = "blocked", demanded = [ "projection" ])
 
-    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrRed, state)
     Assert.Equal(0, server.PolicyReads)
@@ -2716,7 +3035,14 @@ type private ClosedPrServer(state: string, merged: bool) =
                     otherReads <- otherReads + 1
                     """{"total_count":0,"workflow_runs":[]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+            Ok
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                })
 
 [<Fact>]
 let ``#1680 AC1 a MERGED pr is NOT pending and NOT exit 7`` () =
@@ -2724,7 +3050,8 @@ let ``#1680 AC1 a MERGED pr is NOT pending and NOT exit 7`` () =
     use _fast = new NoMergeableRetryDelay()
     let server = ClosedPrServer("closed", true)
 
-    let state, n, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, n, unmet =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     // AC1, asserted as the issue words it: whatever it returns, it must not be the retryable verdict.
     Assert.NotEqual(PrPending, state)
@@ -2741,11 +3068,15 @@ let ``#1680 AC3 --wait never polls a merged pr — it settles, and costs ONE rea
     use _fast = new NoMergeableRetryDelay()
     let server = ClosedPrServer("closed", true)
 
-    let state, n, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, n, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     // The 600s: `Client.landable`'s poll loop consults `settled` and nothing else, so this IS "--wait does
     // not poll it". `prev = 0` is deliberately the value a first poll passes.
-    Assert.True(Landable.settled state n 0, "a merged PR must SETTLE — this is the 600s of --wait budget the issue measured")
+    Assert.True(
+        Landable.settled state n 0,
+        "a merged PR must SETTLE — this is the 600s of --wait budget the issue measured"
+    )
 
     // The quieter wait, and the one a single-shot caller pays: GitHub stops computing mergeability once a
     // PR leaves `open`, so the bounded `mergeable` re-read (3 tries, ~1s apart) waits on a job that will
@@ -2762,7 +3093,8 @@ let ``#1680 AC4 a CLOSED-UNMERGED pr is decided too, and says so`` () =
     use _fast = new NoMergeableRetryDelay()
     let server = ClosedPrServer("closed", false)
 
-    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     // NOT `PrMerged`: nothing landed, so a recovery path must not stamp the item done. The two states
     // share a shape and differ in the act they call for, which is why they are held apart.
@@ -2787,7 +3119,10 @@ let ``#1680 AC5 the four fixtures side by side — open+green, open+pending, mer
 
     // open + pending: `mergeable` still computing past the re-read budget (#950).
     let pending = MergeablePrServer(fun _ -> "null")
-    let pendingState, _, _ = Reads.prLandableRequire pending.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    let pendingState, _, _ =
+        Reads.prLandableRequire pending.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
     Assert.Equal(PrPending, pendingState)
 
     // merged, and closed-unmerged.
@@ -2801,7 +3136,9 @@ let ``#1680 AC5 the four fixtures side by side — open+green, open+pending, mer
     Assert.Equal(PrClosed, closedState)
 
     // All four DISTINCT — the property the issue is about. `merged` rendering as `pending` is the defect.
-    let verdicts = [ PrGreen; pendingState; mergedState; closedState ] |> List.map Landable.name
+    let verdicts =
+        [ PrGreen; pendingState; mergedState; closedState ] |> List.map Landable.name
+
     Assert.Equal<string list>([ "green"; "pending"; "merged"; "closed" ], verdicts)
     Assert.Equal<string list>(verdicts |> List.distinct, verdicts)
 
@@ -2824,7 +3161,14 @@ let ``#1680 an OPEN pr carrying merged:false is untouched — the guard reads st
                 else
                     """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+            Ok
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                })
 
     let state, n, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
@@ -2847,7 +3191,14 @@ let ``#1680 a PR body with no `merged` field at all is NOT read as merged`` () =
                 else
                     """{"total_count":0,"workflow_runs":[]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+            Ok
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                })
 
     let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
@@ -2884,7 +3235,8 @@ let ``#1680 a merged pr whose head IS the asserted sha reports nothing extra`` (
     use _fast = new NoMergeableRetryDelay()
     let server = ClosedPrServer("closed", true)
 
-    let state, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] (Some "sha-x")
+    let state, _, unmet =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] (Some "sha-x")
 
     Assert.Equal(PrMerged, state)
     Assert.Empty unmet
@@ -2967,30 +3319,46 @@ let ``#2365 prClosingRef treats a null repository the same as an unreadable grap
 [<Fact>]
 let ``#2906 prLandableRequire binds distinct red run and check reasons to the evaluated head`` () =
     let sha = "sha-2906-red"
+
     let transport =
         Fake.Recorder(fun (req: Request) ->
             let body =
                 if req.Path.EndsWith "pulls/801" then
-                    Some $"""{{"number":801,"state":"open","merged":false,"mergeable":true,"mergeable_state":"unstable","head":{{"ref":"item/2906-x","sha":"%s{sha}"}},"base":{{"ref":"main"}}}}"""
+                    Some
+                        $"""{{"number":801,"state":"open","merged":false,"mergeable":true,"mergeable_state":"unstable","head":{{"ref":"item/2906-x","sha":"%s{sha}"}},"base":{{"ref":"main"}}}}"""
                 elif req.Path.EndsWith "actions/runs" then
-                    Some """{"total_count":1,"workflow_runs":[{"path":".github/workflows/coherence.yml","event":"pull_request","head_branch":"item/2906-x","run_number":17,"status":"completed","conclusion":"failure","check_suite_id":17,"pull_requests":[{"number":801}]}]}"""
+                    Some
+                        """{"total_count":1,"workflow_runs":[{"path":".github/workflows/coherence.yml","event":"pull_request","head_branch":"item/2906-x","run_number":17,"status":"completed","conclusion":"failure","check_suite_id":17,"pull_requests":[{"number":801}]}]}"""
                 elif req.Path.EndsWith "/check-runs" then
-                    Some """{"total_count":2,"check_runs":[{"name":"external-safety","check_suite":{"id":99},"status":"completed","conclusion":"timed_out"},{"name":"claim-generation","check_suite":{"id":17},"status":"completed","conclusion":"failure"}]}"""
+                    Some
+                        """{"total_count":2,"check_runs":[{"name":"external-safety","check_suite":{"id":99},"status":"completed","conclusion":"timed_out"},{"name":"claim-generation","check_suite":{"id":17},"status":"completed","conclusion":"failure"}]}"""
                 else
                     None
 
             match body with
-            | Some b -> Ok { Status = 200; Body = b; ETag = None; NextLink = None; Headers = Map.empty }
+            | Some b ->
+                Ok
+                    {
+                        Status = 200
+                        Body = b
+                        ETag = None
+                        NextLink = None
+                        Headers = Map.empty
+                    }
             | None -> Error(Errors.NotFound req.Path))
 
-    let state, count, reasons = Reads.prLandableRequire transport "FS-GG" "FS.GG.SDD" 801 [] None
+    let state, count, reasons =
+        Reads.prLandableRequire transport "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrRed, state)
     Assert.Equal(3, count)
+
     Assert.Equal<Reads.Unmet list>(
-        [ Reads.RedWorkflowRun(sha, ".github/workflows/coherence.yml", 17, Some "failure")
-          Reads.RedCheckRun(sha, "external-safety", Some 99L, Some "timed_out")
-          Reads.RedCheckRun(sha, "claim-generation", Some 17L, Some "failure") ],
+        [
+            Reads.RedWorkflowRun(sha, ".github/workflows/coherence.yml", 17, Some "failure")
+            Reads.RedCheckRun(sha, "external-safety", Some 99L, Some "timed_out")
+            Reads.RedCheckRun(sha, "claim-generation", Some 17L, Some "failure")
+        ],
         reasons
     )
 
@@ -3007,7 +3375,15 @@ let private postMergeTransport runsBody =
                 runsBody
             else
                 failwith $"unexpected post-merge request: %s{req.Path}"
-        Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
+
+        Ok
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            })
 
 let private postMergeRun status conclusion =
     $"""{{"total_count":1,"workflow_runs":[{{"id":2905,"run_attempt":1,"path":".github/workflows/ci.yml","event":"push","head_branch":"main","head_sha":"merge-2905","status":"%s{status}","conclusion":%s{conclusion},"html_url":"https://github.example/runs/2905"}}]}}"""
@@ -3021,6 +3397,7 @@ let private postMergeRuns (runs: string list) =
 [<Fact>]
 let ``#2905 exact merge green push on the default branch verifies`` () =
     let transport = postMergeTransport (postMergeRun "completed" "\"success\"")
+
     match Reads.postMergeVerification transport "FS-GG" ".github" 2905 with
     | Ok(Delivery.Verified receipt) ->
         Assert.Equal("merge-2905", receipt.MergeSha)
@@ -3031,10 +3408,19 @@ let ``#2905 exact merge green push on the default branch verifies`` () =
 [<Fact>]
 let ``#2905 one exact green verifies a mixed inventory and retains unrelated diagnostics`` () =
     let runs =
-        [ postMergeRunObject 2908 ".github/workflows/pending.yml" "push" "main" "merge-2905" "in_progress" "null"
-          postMergeRunObject 2907 ".github/workflows/red.yml" "push" "main" "merge-2905" "completed" "\"failure\""
-          postMergeRunObject 2905 ".github/workflows/green.yml" "push" "main" "merge-2905" "completed" "\"success\""
-          postMergeRunObject 2906 ".github/workflows/cancelled.yml" "push" "main" "merge-2905" "completed" "\"cancelled\"" ]
+        [
+            postMergeRunObject 2908 ".github/workflows/pending.yml" "push" "main" "merge-2905" "in_progress" "null"
+            postMergeRunObject 2907 ".github/workflows/red.yml" "push" "main" "merge-2905" "completed" "\"failure\""
+            postMergeRunObject 2905 ".github/workflows/green.yml" "push" "main" "merge-2905" "completed" "\"success\""
+            postMergeRunObject
+                2906
+                ".github/workflows/cancelled.yml"
+                "push"
+                "main"
+                "merge-2905"
+                "completed"
+                "\"cancelled\""
+        ]
 
     match Reads.postMergeVerification (postMergeTransport (postMergeRuns runs)) "FS-GG" ".github" 2905 with
     | Ok(Delivery.Verified receipt) ->
@@ -3047,8 +3433,10 @@ let ``#2905 one exact green verifies a mixed inventory and retains unrelated dia
 [<Fact>]
 let ``#2905 production completion admission accepts the mixed adapter receipt`` () =
     let runs =
-        [ postMergeRunObject 2905 ".github/workflows/green.yml" "push" "main" "merge-2905" "completed" "\"success\""
-          postMergeRunObject 2906 ".github/workflows/red.yml" "push" "main" "merge-2905" "completed" "\"failure\"" ]
+        [
+            postMergeRunObject 2905 ".github/workflows/green.yml" "push" "main" "merge-2905" "completed" "\"success\""
+            postMergeRunObject 2906 ".github/workflows/red.yml" "push" "main" "merge-2905" "completed" "\"failure\""
+        ]
 
     let verification =
         match Reads.postMergeVerification (postMergeTransport (postMergeRuns runs)) "FS-GG" ".github" 2905 with
@@ -3056,17 +3444,19 @@ let ``#2905 production completion admission accepts the mixed adapter receipt`` 
         | Error error -> failwithf "production adapter read failed: %A" error
 
     let facts: Delivery.CompletionFacts =
-        { HeadSha = "pr-head"
-          Merged = true
-          MergeReachable = true
-          PostMergeVerification = verification
-          IssueClosed = false
-          BoardDone = false
-          ClaimReleased = false
-          PendingWrites = 0
-          CleanupEligible = false
-          ObligationsDeclared = true
-          Obligations = [] }
+        {
+            HeadSha = "pr-head"
+            Merged = true
+            MergeReachable = true
+            PostMergeVerification = verification
+            IssueClosed = false
+            BoardDone = false
+            ClaimReleased = false
+            PendingWrites = 0
+            CleanupEligible = false
+            ObligationsDeclared = true
+            Obligations = []
+        }
 
     match Delivery.decideCompletion facts with
     | Delivery.CompletionDecision.ProjectCompletion -> ()
@@ -3075,6 +3465,7 @@ let ``#2905 production completion admission accepts the mixed adapter receipt`` 
 [<Fact>]
 let ``#2905 no qualifying run cannot verify completion`` () =
     let transport = postMergeTransport """{"total_count":0,"workflow_runs":[]}"""
+
     match Reads.postMergeVerification transport "FS-GG" ".github" 2905 with
     | Ok(Delivery.Awaiting reason) -> Assert.Contains("no exact-merge", reason)
     | result -> failwithf "expected an observable wait, got %A" result
@@ -3082,9 +3473,18 @@ let ``#2905 no qualifying run cannot verify completion`` () =
 [<Fact>]
 let ``#2905 mismatched success does not qualify`` () =
     let runs =
-        [ postMergeRunObject 2905 ".github/workflows/pr.yml" "pull_request" "main" "merge-2905" "completed" "\"success\""
-          postMergeRunObject 2906 ".github/workflows/branch.yml" "push" "other" "merge-2905" "completed" "\"success\""
-          postMergeRunObject 2907 ".github/workflows/sha.yml" "push" "main" "other-sha" "completed" "\"success\"" ]
+        [
+            postMergeRunObject
+                2905
+                ".github/workflows/pr.yml"
+                "pull_request"
+                "main"
+                "merge-2905"
+                "completed"
+                "\"success\""
+            postMergeRunObject 2906 ".github/workflows/branch.yml" "push" "other" "merge-2905" "completed" "\"success\""
+            postMergeRunObject 2907 ".github/workflows/sha.yml" "push" "main" "other-sha" "completed" "\"success\""
+        ]
 
     match Reads.postMergeVerification (postMergeTransport (postMergeRuns runs)) "FS-GG" ".github" 2905 with
     | Ok(Delivery.Awaiting reason) -> Assert.Contains("no exact-merge", reason)
@@ -3093,8 +3493,10 @@ let ``#2905 mismatched success does not qualify`` () =
 [<Fact>]
 let ``#2905 pending and red exact-merge runs stay nonterminal`` () =
     for body, expected in
-        [ postMergeRun "in_progress" "null", "still running"
-          postMergeRun "completed" "\"failure\"", "failure" ] do
+        [
+            postMergeRun "in_progress" "null", "still running"
+            postMergeRun "completed" "\"failure\"", "failure"
+        ] do
         match Reads.postMergeVerification (postMergeTransport body) "FS-GG" ".github" 2905 with
         | Ok(Delivery.Awaiting reason)
         | Ok(Delivery.Rejected reason) -> Assert.Contains(expected, reason)
@@ -3103,20 +3505,27 @@ let ``#2905 pending and red exact-merge runs stay nonterminal`` () =
 [<Fact>]
 let ``#2905 incomplete Actions inventory fails closed`` () =
     let transport = postMergeTransport """{"total_count":2,"workflow_runs":[]}"""
+
     match Reads.postMergeVerification transport "FS-GG" ".github" 2905 with
     | Error(Malformed(_, reason)) -> Assert.Contains("incomplete evidence", reason)
     | result -> failwithf "expected unreadable inventory refusal, got %A" result
 
 [<Fact>]
 let ``#3210 authority comment reader retains edit timestamps and rejects incomplete evidence`` () =
-    let valid = serving """[{"id":7,"html_url":"https://github.com/FS-GG/.github/issues/3210#issuecomment-7","body":"ledger","created_at":"2026-09-05T00:00:00Z","updated_at":"2026-09-05T00:00:00Z"}]"""
+    let valid =
+        serving
+            """[{"id":7,"html_url":"https://github.com/FS-GG/.github/issues/3210#issuecomment-7","body":"ledger","created_at":"2026-09-05T00:00:00Z","updated_at":"2026-09-05T00:00:00Z"}]"""
+
     match Reads.authorityComments valid "FS-GG" ".github" 3210 with
     | Ok [ comment ] ->
         Assert.Equal(7L, comment.Id)
         Assert.Equal(comment.CreatedAt, comment.UpdatedAt)
     | result -> failwithf "expected exact authority comment: %A" result
 
-    let incomplete = serving """[{"id":7,"html_url":"https://github.com/FS-GG/.github/issues/3210#issuecomment-7","body":"ledger"}]"""
+    let incomplete =
+        serving
+            """[{"id":7,"html_url":"https://github.com/FS-GG/.github/issues/3210#issuecomment-7","body":"ledger"}]"""
+
     match Reads.authorityComments incomplete "FS-GG" ".github" 3210 with
     | Error(Malformed(_, reason)) -> Assert.Contains("created_at", reason)
     | result -> failwithf "incomplete authority must fail closed: %A" result
@@ -3125,6 +3534,7 @@ let ``#3210 authority comment reader retains edit timestamps and rejects incompl
 let ``#3210 remote commit tree observation is independent of local Git`` () =
     let tree = String.replicate 40 "a"
     let transport = serving ($"{{\"tree\":{{\"sha\":\"%s{tree}\"}}}}")
+
     match Reads.commitTreeSha transport "FS-GG" ".github" (String.replicate 40 "b") with
     | Ok observed -> Assert.Equal(tree, observed)
     | result -> failwithf "expected remote tree identity: %A" result
@@ -3133,6 +3543,7 @@ let ``#3210 remote commit tree observation is independent of local Git`` () =
 let ``#3274 comparison paths include both rename names and report complete below the cap`` () =
     let ancestor = String.replicate 40 "a"
     let descendant = String.replicate 40 "b"
+
     let body =
         $"""{{"status":"ahead","ahead_by":1,"merge_base_commit":{{"sha":"%s{ancestor}"}},"files":[{{"filename":"src/New.fs","previous_filename":"src/Old.fs","status":"renamed"}},{{"filename":"docs/note.md","status":"modified"}}]}}"""
 
@@ -3146,10 +3557,12 @@ let ``#3274 comparison paths include both rename names and report complete below
 let ``#3274 exactly 300 comparison files is explicitly incomplete`` () =
     let ancestor = String.replicate 40 "a"
     let descendant = String.replicate 40 "b"
+
     let files =
         [ 1..300 ]
         |> List.map (fun index -> $"""{{"filename":"src/File%d{index}.fs","status":"modified"}}""")
         |> String.concat ","
+
     let body =
         $"""{{"status":"ahead","ahead_by":1,"merge_base_commit":{{"sha":"%s{ancestor}"}},"files":[%s{files}]}}"""
 
@@ -3163,6 +3576,7 @@ let ``#3274 exactly 300 comparison files is explicitly incomplete`` () =
 let ``#3274 renamed comparison row without its previous name fails closed`` () =
     let ancestor = String.replicate 40 "a"
     let descendant = String.replicate 40 "b"
+
     let body =
         $"""{{"status":"ahead","ahead_by":1,"merge_base_commit":{{"sha":"%s{ancestor}"}},"files":[{{"filename":"src/New.fs","status":"renamed"}}]}}"""
 

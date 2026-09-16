@@ -9,7 +9,10 @@ module Kit =
         content.Replace("\r\n", "\n").Split('\n')
         |> Array.toList
         |> List.choose (fun raw ->
-            match raw.Split([| ' '; '\t' |], System.StringSplitOptions.RemoveEmptyEntries) |> Array.toList with
+            match
+                raw.Split([| ' '; '\t' |], System.StringSplitOptions.RemoveEmptyEntries)
+                |> Array.toList
+            with
             | want :: _ when want.StartsWith "#" -> None // a comment line
             | _want :: src :: _ -> Some(_want, src)
             | _ -> None) // blank, or a digest with no source field
@@ -44,7 +47,8 @@ module Kit =
         // ORDINAL, like every other path comparison in the engine (`TouchSet.tokensOverlap`). A path is
         // bytes, not prose: the culture-sensitive default can match across ignorable characters.
         let sourceRoot =
-            lane |> List.tryFind (fun r -> src.StartsWith(r + "/", System.StringComparison.Ordinal))
+            lane
+            |> List.tryFind (fun r -> src.StartsWith(r + "/", System.StringComparison.Ordinal))
 
         match sourceRoot with
         | None -> None // not under a root of this kit lane: no mirror this rule can name

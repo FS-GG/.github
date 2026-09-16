@@ -26,32 +26,39 @@ open FS.GG.Coord.GitHub.Transport
 
 let private ok (body: string) =
     Ok
-        { Status = 200
-          Body = body
-          ETag = None
-          NextLink = None; Headers = Map.empty }
+        {
+            Status = 200
+            Body = body
+            ETag = None
+            NextLink = None
+            Headers = Map.empty
+        }
 
 let private ref' repo n : Ref =
-    { Owner = "FS-GG"
-      Repo = repo
-      Number = n }
+    {
+        Owner = "FS-GG"
+        Repo = repo
+        Number = n
+    }
 
 let private row repo n blockedBy state isPr : Scan.Row =
-    { Ref = ref' repo n
-      Title = $"%s{repo} item %d{n}"
-      Status = Ready
-      BlockedByRaw = blockedBy
-      State = state
-      IsPullRequest = isPr
-      PathRepo = repo
-      BoardClass = None
-      BoardKind = None
-      CommentCount = None
-      Severity = Unset
-      Phase = None
-      CreatedAt = None
-      SweptBody = None
-      NodeId = None }
+    {
+        Ref = ref' repo n
+        Title = $"%s{repo} item %d{n}"
+        Status = Ready
+        BlockedByRaw = blockedBy
+        State = state
+        IsPullRequest = isPr
+        PathRepo = repo
+        BoardClass = None
+        BoardKind = None
+        CommentCount = None
+        Severity = Unset
+        Phase = None
+        CreatedAt = None
+        SweptBody = None
+        NodeId = None
+    }
 
 /// The hub — one `.github` item — and its three OPEN dependents, all in the OTHER repo. Nothing else on
 /// the board names it, so under a `--repo .github` scope every one of those edges used to vanish.
@@ -66,13 +73,15 @@ let private row repo n blockedBy state isPr : Scan.Row =
 ///   would credit a dependent the candidate-set spelling never could — a NEW disagreement between the
 ///   scoped and unscoped answers, introduced by the fix for a disagreement.
 let private board =
-    [ row ".github" 10 "" Open false
-      row ".github" 11 "" Open false
-      row "FS.GG.SDD" 200 "FS-GG/.github#10" Open false
-      row "FS.GG.SDD" 201 "FS-GG/.github#10" Open false
-      row "FS.GG.SDD" 202 "FS-GG/.github#10" Open false
-      row "FS.GG.SDD" 203 "FS-GG/.github#10" Closed false
-      row "FS.GG.SDD" 204 "FS-GG/.github#10" Open true ]
+    [
+        row ".github" 10 "" Open false
+        row ".github" 11 "" Open false
+        row "FS.GG.SDD" 200 "FS-GG/.github#10" Open false
+        row "FS.GG.SDD" 201 "FS-GG/.github#10" Open false
+        row "FS.GG.SDD" 202 "FS-GG/.github#10" Open false
+        row "FS.GG.SDD" 203 "FS-GG/.github#10" Closed false
+        row "FS.GG.SDD" 204 "FS-GG/.github#10" Open true
+    ]
 
 /// Answers by ENDPOINT, like `ScanRoundTripTests`: the off-board open-issue sweep, the marker read, and
 /// the body read are three different questions and one fake must not collapse them.
@@ -101,9 +110,9 @@ let private scopedBatch (transport: Fake.Recorder) =
     | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
     | Ok(document, receipt) ->
 
-    match Client.renderDecision (options [ "batch"; "--repo"; ".github" ]) board document with
-    | Result.Error code -> failwith $"the batch must be schedulable — got exit %d{code}"
-    | Ok result -> document, receipt, result
+        match Client.renderDecision (options [ "batch"; "--repo"; ".github" ]) board document with
+        | Result.Error code -> failwith $"the batch must be schedulable — got exit %d{code}"
+        | Ok result -> document, receipt, result
 
 let private decisionFor (result: Batch.BatchResult) (n: int) =
     result.Decisions |> List.find (fun d -> d.Item.Ref.Number = n)
@@ -135,11 +144,11 @@ let ``#1628 the SCOPED candidate list still cannot see those edges — the fixtu
     | Error errors -> failwith $"the engine's own snapshot must parse: %A{errors}"
     | Ok request ->
 
-    let candidates = request.Candidates |> List.map (fun c -> c.Item)
+        let candidates = request.Candidates |> List.map (fun c -> c.Item)
 
-    match Batch.schedule Set.empty request.AllowBacklog request.Limit request.InFlight candidates with
-    | Green r -> Assert.Equal(0, (decisionFor r 10).Rank.Blocking)
-    | other -> failwith $"the batch must be schedulable — got %A{other}"
+        match Batch.schedule Set.empty request.AllowBacklog request.Limit request.InFlight candidates with
+        | Green r -> Assert.Equal(0, (decisionFor r 10).Rank.Blocking)
+        | other -> failwith $"the batch must be schedulable — got %A{other}"
 
 [<Fact>]
 let ``#1628 AC1 the scoped count equals the unscoped count, on one board at one instant`` () =
@@ -169,22 +178,22 @@ let ``#1628 AC3 the whole-board count costs the transport NOTHING`` () =
     | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
     | Ok(document, _) ->
 
-    // The scan is the only thing that spends. Snapshot it here, then decide, then compare — a delta of
-    // zero is the claim, and it is a claim about CALL SHAPE that no assertion on the returned rank could
-    // make (ADR-0040 C1: the fake counts calls precisely so budget claims stay checkable after the port).
-    let restAfterScan = transport.RestCalls
-    let graphQlAfterScan = transport.GraphQlCalls
+        // The scan is the only thing that spends. Snapshot it here, then decide, then compare — a delta of
+        // zero is the claim, and it is a claim about CALL SHAPE that no assertion on the returned rank could
+        // make (ADR-0040 C1: the fake counts calls precisely so budget claims stay checkable after the port).
+        let restAfterScan = transport.RestCalls
+        let graphQlAfterScan = transport.GraphQlCalls
 
-    match Client.renderDecision (options [ "batch"; "--repo"; ".github" ]) board document with
-    | Result.Error code -> failwith $"the batch must be schedulable — got exit %d{code}"
-    | Ok result ->
+        match Client.renderDecision (options [ "batch"; "--repo"; ".github" ]) board document with
+        | Result.Error code -> failwith $"the batch must be schedulable — got exit %d{code}"
+        | Ok result ->
 
-    Assert.Equal(3, (decisionFor result 10).Rank.Blocking)
+            Assert.Equal(3, (decisionFor result 10).Rank.Blocking)
 
-    // AC3. `Scan.blockerGraph` is pure over rows already in hand (#1090), so the whole board's edges are
-    // free — the same reason `Blockers.cycles` gets its graph for nothing.
-    Assert.Equal(restAfterScan, transport.RestCalls)
-    Assert.Equal(graphQlAfterScan, transport.GraphQlCalls)
+            // AC3. `Scan.blockerGraph` is pure over rows already in hand (#1090), so the whole board's edges are
+            // free — the same reason `Blockers.cycles` gets its graph for nothing.
+            Assert.Equal(restAfterScan, transport.RestCalls)
+            Assert.Equal(graphQlAfterScan, transport.GraphQlCalls)
 
 [<Fact>]
 let ``#1628 AC3 the SCAN's own cost is unchanged — the wider count reads no wider`` () =
@@ -201,13 +210,13 @@ let ``#1628 AC3 the SCAN's own cost is unchanged — the wider count reads no wi
     | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
     | Ok _ ->
 
-    // The `gh` stub's own log grammar (`issue-get FS-GG/.github 10`, `comment-list FS-GG/.github 10`),
-    // which is what ADR-0040 C1's budget assertions are written against.
-    Assert.Equal(2, transport.Count "FS-GG/.github 10")
-    Assert.Equal(2, transport.Count "FS-GG/.github 11")
+        // The `gh` stub's own log grammar (`issue-get FS-GG/.github 10`, `comment-list FS-GG/.github 10`),
+        // which is what ADR-0040 C1's budget assertions are written against.
+        Assert.Equal(2, transport.Count "FS-GG/.github 10")
+        Assert.Equal(2, transport.Count "FS-GG/.github 11")
 
-    for dependent in [ 200; 201; 202; 203; 204 ] do
-        Assert.Equal(0, transport.Count $"FS-GG/FS.GG.SDD %d{dependent}")
+        for dependent in [ 200; 201; 202; 203; 204 ] do
+            Assert.Equal(0, transport.Count $"FS-GG/FS.GG.SDD %d{dependent}")
 
 // ---- AC4 — the source set widened; what counts as an EDGE did not ------------------------------------
 

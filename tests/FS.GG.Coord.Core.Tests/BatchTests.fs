@@ -15,44 +15,67 @@ open FS.GG.Coord.Batch
 module BatchTests =
 
     let private refIn owner repo n =
-        { Owner = owner
-          Repo = repo
-          Number = n }
+        {
+            Owner = owner
+            Repo = repo
+            Number = n
+        }
 
     let private ref n = refIn "FS-GG" "FS.GG.SDD" n
 
     let private item n paths =
-        { Ref = ref n
-          PathRepo = (ref n).Repo
-          Status = Ready
-          State = Open
-          TouchSet = Declared(paths |> List.map Matchable)
-          Blockers = []
-          Claim = None
-          ItemPr = None
-          ItemPrUnreadable = false
-          HumanBlock = None
-          Predicate = None
-          Class = None
-          Kind = None
-          BoardKind = None
-          CommentCount = None
-          BoardClass = None
-          DeliveryRoute = DeliveryRoute.Current { Schema = DeliveryRoute.Schema; Subject = "test"; SubjectRevision = "test"; Route = Some DeliveryRoute.Lightweight; Agent = "test"; Timestamp = "2026-01-01T00:00:00Z"; ReasonCodes = [ "test" ]; Rationale = "test"; DeclaredImpacts = [ "test" ]; ObservedFacts = [ "test" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
-          Severity = Unset
-          Phase = None
-          AgeDays = None }
+        {
+            Ref = ref n
+            PathRepo = (ref n).Repo
+            Status = Ready
+            State = Open
+            TouchSet = Declared(paths |> List.map Matchable)
+            Blockers = []
+            Claim = None
+            ItemPr = None
+            ItemPrUnreadable = false
+            HumanBlock = None
+            Predicate = None
+            Class = None
+            Kind = None
+            BoardKind = None
+            CommentCount = None
+            BoardClass = None
+            DeliveryRoute =
+                DeliveryRoute.Current
+                    {
+                        Schema = DeliveryRoute.Schema
+                        Subject = "test"
+                        SubjectRevision = "test"
+                        Route = Some DeliveryRoute.Lightweight
+                        Agent = "test"
+                        Timestamp = "2026-01-01T00:00:00Z"
+                        ReasonCodes = [ "test" ]
+                        Rationale = "test"
+                        DeclaredImpacts = [ "test" ]
+                        ObservedFacts = [ "test" ]
+                        SddWorkId = None
+                        SpecHome = None
+                        RequiredGates = []
+                    }
+            Severity = Unset
+            Phase = None
+            AgeDays = None
+        }
 
     let private held w ageSeconds it =
         { it with
             Claim =
                 Some(
-                    { Worker = WorkerId w
-                      Session = None
-                      AgeSeconds = ageSeconds
-                      PreviousStatus = Some Backlog },
+                    {
+                        Worker = WorkerId w
+                        Session = None
+                        AgeSeconds = ageSeconds
+                        PreviousStatus = Some Backlog
+                    },
                     LeaseHeld
-                ) }
+                )
+        }
 
     let private ok =
         function
@@ -60,14 +83,16 @@ module BatchTests =
         | Red reasons -> failwithf "expected a batch, got Red: %A" reasons
         | NoVerdict reason -> failwithf "expected a batch, got NoVerdict: %s" reason
 
-    let private chosenNumbers r = r.Chosen |> List.map (fun i -> i.Ref.Number)
+    let private chosenNumbers r =
+        r.Chosen |> List.map (fun i -> i.Ref.Number)
 
     let private verdictOf r n =
         r.Decisions
         |> List.tryFind (fun d -> d.Item.Ref.Number = n)
         |> Option.map (fun d -> d.Result)
 
-    let private run inFlight candidates = schedule Set.empty false None inFlight candidates |> ok
+    let private run inFlight candidates =
+        schedule Set.empty false None inFlight candidates |> ok
 
     // ================================================================================================
     // THE FOLD. An item chosen into the batch RESERVES its touch-set against every later candidate.
@@ -98,7 +123,8 @@ module BatchTests =
 
     [<Fact>]
     let ``disjoint candidates all schedule — the fold must not invent a collision`` () =
-        let r = run [] [ item 1 [ "src/A.fs" ]; item 2 [ "src/B.fs" ]; item 3 [ "src/C.fs" ] ]
+        let r =
+            run [] [ item 1 [ "src/A.fs" ]; item 2 [ "src/B.fs" ]; item 3 [ "src/C.fs" ] ]
 
         Assert.Equal<int list>([ 1; 2; 3 ], chosenNumbers r)
 
@@ -125,8 +151,10 @@ module BatchTests =
         let r =
             run
                 []
-                [ item 1 [ "scripts/fsgg-coord" ] |> held "w-alice" 60
-                  item 2 [ "scripts/fsgg-coord" ] ]
+                [
+                    item 1 [ "scripts/fsgg-coord" ] |> held "w-alice" 60
+                    item 2 [ "scripts/fsgg-coord" ]
+                ]
 
         Assert.Empty(r.Chosen)
         Assert.Equal(Some(HeldBy(WorkerId "w-alice")), verdictOf r 1)
@@ -140,8 +168,10 @@ module BatchTests =
         let r =
             run
                 []
-                [ item 1 [ "scripts/fsgg-coord" ] |> held "w-alice" 900
-                  item 2 [ "scripts/fsgg-coord" ] ]
+                [
+                    item 1 [ "scripts/fsgg-coord" ] |> held "w-alice" 900
+                    item 2 [ "scripts/fsgg-coord" ]
+                ]
 
         let d = r.Decisions |> List.find (fun d -> d.Item.Ref.Number = 2)
 
@@ -150,13 +180,18 @@ module BatchTests =
     [<Fact>]
     let ``#2229 a passed-over overlap names only the selected holder's collision pair`` () =
         let reservation token holder =
-            { Owner = "FS-GG"
-              Repo = "FS.GG.SDD"
-              Paths = Declared [ Matchable token ]
-              Holder = holder }
+            {
+                Owner = "FS-GG"
+                Repo = "FS.GG.SDD"
+                Paths = Declared [ Matchable token ]
+                Holder = holder
+            }
 
-        let first = reservation "src/first.fs" (LiveClaim(WorkerId "w-first", ref 41, 60, None))
-        let second = reservation "src/second.fs" (LiveClaim(WorkerId "w-second", ref 42, 60, None))
+        let first =
+            reservation "src/first.fs" (LiveClaim(WorkerId "w-first", ref 41, 60, None))
+
+        let second =
+            reservation "src/second.fs" (LiveClaim(WorkerId "w-second", ref 42, 60, None))
 
         let r = run [ first; second ] [ item 43 [ "src/first.fs"; "src/second.fs" ] ]
         let d = r.Decisions |> List.exactlyOne
@@ -177,12 +212,15 @@ module BatchTests =
             { item 1 [ "scripts/fsgg-coord" ] with
                 Claim =
                     Some(
-                        { Worker = WorkerId "w-alice"
-                          Session = None
-                          AgeSeconds = 99999
-                          PreviousStatus = None },
+                        {
+                            Worker = WorkerId "w-alice"
+                            Session = None
+                            AgeSeconds = 99999
+                            PreviousStatus = None
+                        },
                         LeaseExpiredPrOpen 4242
-                    ) }
+                    )
+            }
 
         let r = run [] [ expired; item 2 [ "scripts/fsgg-coord" ] ]
 
@@ -201,9 +239,14 @@ module BatchTests =
         let blocked =
             { item 1 [ "src/Scene/Types.fs" ] with
                 Blockers =
-                    [ { Ref = Some(ref 999)
-                        Raw = (ref 999).Short
-                        State = BlockerOpen } ] }
+                    [
+                        {
+                            Ref = Some(ref 999)
+                            Raw = (ref 999).Short
+                            State = BlockerOpen
+                        }
+                    ]
+            }
 
         let r = run [] [ blocked; item 2 [ "src/Scene/Types.fs" ] ]
 
@@ -223,7 +266,8 @@ module BatchTests =
         let rendering =
             { item 2 [ "scripts/build.sh" ] with
                 Ref = refIn "FS-GG" "FS.GG.Rendering" 2
-                PathRepo = "FS.GG.Rendering" }
+                PathRepo = "FS.GG.Rendering"
+            }
 
         let r = run [] [ sdd; rendering ]
 
@@ -232,10 +276,12 @@ module BatchTests =
     [<Fact>]
     let ``#353 an in-flight reservation in ANOTHER repo does not hold this repo's files`` () =
         let elsewhere =
-            { Owner = "FS-GG"
-              Repo = "FS.GG.Rendering"
-              Paths = Declared [ Matchable "scripts/build.sh" ]
-              Holder = LiveClaim(WorkerId "w-bob", refIn "FS-GG" "FS.GG.Rendering" 9, 60, None) }
+            {
+                Owner = "FS-GG"
+                Repo = "FS.GG.Rendering"
+                Paths = Declared [ Matchable "scripts/build.sh" ]
+                Holder = LiveClaim(WorkerId "w-bob", refIn "FS-GG" "FS.GG.Rendering" 9, 60, None)
+            }
 
         let r = run [ elsewhere ] [ item 1 [ "scripts/build.sh" ] ]
 
@@ -244,10 +290,12 @@ module BatchTests =
     [<Fact>]
     let ``an in-flight reservation in the SAME repo does hold them`` () =
         let here =
-            { Owner = "FS-GG"
-              Repo = "FS.GG.SDD"
-              Paths = Declared [ Matchable "scripts/build.sh" ]
-              Holder = LiveClaim(WorkerId "w-bob", ref 9, 60, None) }
+            {
+                Owner = "FS-GG"
+                Repo = "FS.GG.SDD"
+                Paths = Declared [ Matchable "scripts/build.sh" ]
+                Holder = LiveClaim(WorkerId "w-bob", ref 9, 60, None)
+            }
 
         let r = run [ here ] [ item 1 [ "scripts/build.sh" ] ]
 
@@ -278,15 +326,18 @@ module BatchTests =
         // (RepoScopeTests.fs). This is the shape a real `sir`/`S.I.R.` collision takes by the time it
         // reaches `schedule`, and it is excluded exactly like any other same-repo collision.
         let here =
-            { Owner = "FS-GG"
-              Repo = "S.I.R."
-              Paths = Declared [ Matchable "scripts/foo" ]
-              Holder = LiveClaim(WorkerId "tern-bac3", refIn "FS-GG" "S.I.R." 9, 60, None) }
+            {
+                Owner = "FS-GG"
+                Repo = "S.I.R."
+                Paths = Declared [ Matchable "scripts/foo" ]
+                Holder = LiveClaim(WorkerId "tern-bac3", refIn "FS-GG" "S.I.R." 9, 60, None)
+            }
 
         let candidate =
             { item 1 [ "scripts/foo" ] with
                 Ref = refIn "FS-GG" "S.I.R." 1
-                PathRepo = "S.I.R." }
+                PathRepo = "S.I.R."
+            }
 
         let r = run [ here ] [ candidate ]
 
@@ -308,7 +359,6 @@ module BatchTests =
     /// colliding, so this stronger inversion — `<>` rather than deletion — is the one that actually
     /// isolates this test's own claim). Restoring `inRepo` reran the full `BatchTests` suite green:
     /// `Failed: 0, Passed: 60`.
-
     /// NOT the same claim as the test above, recorded so a reader does not conflate them: this test shows
     /// the scheduler correctly excludes once PathRepo is canonical. It does NOT show `schedule`/
     /// `scheduleWith` independently resolves a `sir`-vs-`S.I.R.` raw spelling difference on its own — it
@@ -328,10 +378,12 @@ module BatchTests =
     [<Fact>]
     let ``#273 an in-flight claim with an UNMATCHABLE touch-set refuses the batch — it reserves nothing`` () =
         let blind =
-            { Owner = "FS-GG"
-              Repo = "FS.GG.SDD"
-              Paths = Declared [ Unmatchable "**/*.fs" ]
-              Holder = LiveClaim(WorkerId "w-bob", ref 9, 60, None) }
+            {
+                Owner = "FS-GG"
+                Repo = "FS.GG.SDD"
+                Paths = Declared [ Unmatchable "**/*.fs" ]
+                Holder = LiveClaim(WorkerId "w-bob", ref 9, 60, None)
+            }
 
         match schedule Set.empty false None [ blind ] [ item 1 [ "src/A.fs" ] ] with
         | Red reasons ->
@@ -346,7 +398,8 @@ module BatchTests =
         // schedules straight into occupied files.
         let bad =
             { item 1 [] with
-                TouchSet = Declared [ Unmatchable "**/*.fs" ] }
+                TouchSet = Declared [ Unmatchable "**/*.fs" ]
+            }
 
         let r = run [] [ bad; item 2 [ "src/A.fs" ] ]
 
@@ -376,14 +429,18 @@ module BatchTests =
     let ``a cap that did not bite does NOT report truncation`` () =
         // Reporting a cap that never fired would be its own small lie — and it is the signal a caller
         // uses to decide whether "nothing else is startable" is a fact or an artefact.
-        let r = schedule Set.empty false (Some 2) [] [ item 1 [ "src/A.fs" ]; item 2 [ "src/B.fs" ] ] |> ok
+        let r =
+            schedule Set.empty false (Some 2) [] [ item 1 [ "src/A.fs" ]; item 2 [ "src/B.fs" ] ]
+            |> ok
 
         Assert.Equal<int list>([ 1; 2 ], chosenNumbers r)
         Assert.False(r.Truncated, "the cap was reached on the LAST candidate — nothing was left unseen")
 
     [<Fact>]
     let ``the candidates a cap never reached get NO verdict — silence is not a skip`` () =
-        let r = schedule Set.empty false (Some 1) [] [ item 1 [ "src/A.fs" ]; item 2 [ "src/B.fs" ] ] |> ok
+        let r =
+            schedule Set.empty false (Some 1) [] [ item 1 [ "src/A.fs" ]; item 2 [ "src/B.fs" ] ]
+            |> ok
 
         Assert.Equal<int list>([ 1 ], chosenNumbers r)
         Assert.True(r.Truncated)
@@ -402,9 +459,14 @@ module BatchTests =
         let blocked n =
             { item n [ $"src/%d{n}.fs" ] with
                 Blockers =
-                    [ { Ref = Some(ref 999)
-                        Raw = (ref 999).Short
-                        State = BlockerOpen } ] }
+                    [
+                        {
+                            Ref = Some(ref 999)
+                            Raw = (ref 999).Short
+                            State = BlockerOpen
+                        }
+                    ]
+            }
 
         let r = run [] [ blocked 1; blocked 2; blocked 3 ]
 
@@ -439,10 +501,12 @@ module BatchTests =
     // a reap, not a wait. A markerless reserver reserves, but it is NOT a holder — no worker, no lease.
 
     let private resv repo paths holder : Reservation =
-        { Owner = "FS-GG"
-          Repo = repo
-          Paths = Declared(paths |> List.map Matchable)
-          Holder = holder }
+        {
+            Owner = "FS-GG"
+            Repo = repo
+            Paths = Declared(paths |> List.map Matchable)
+            Holder = holder
+        }
 
     let private anyLine (needle: string) (lines: string list) =
         lines |> List.exists (fun (l: string) -> l.Contains needle)
@@ -452,15 +516,19 @@ module BatchTests =
     /// #225 overlapping a MARKERLESS In-progress reserver (#226) — reserved, but no holder to name.
     let private starvedResult () =
         let inFlight =
-            [ resv "FS.GG.SDD" [ "src/Starve" ] (LiveClaim(WorkerId "tern-y99", ref 223, 0, None))
-              resv "FS.GG.SDD" [ "src/Dead" ] (LiveClaim(WorkerId "ghost-222", ref 216, 99999, None))
-              resv "FS.GG.SDD" [ "src/Ghostly" ] (Unowned(ref 226)) ]
+            [
+                resv "FS.GG.SDD" [ "src/Starve" ] (LiveClaim(WorkerId "tern-y99", ref 223, 0, None))
+                resv "FS.GG.SDD" [ "src/Dead" ] (LiveClaim(WorkerId "ghost-222", ref 216, 99999, None))
+                resv "FS.GG.SDD" [ "src/Ghostly" ] (Unowned(ref 226))
+            ]
 
         let candidates =
-            [ item 221 [ "src/Starve/Sub" ]
-              item 222 [ "src/Solo" ] |> held "kite-z01" 0
-              item 224 [ "src/Dead/Sub" ]
-              item 225 [ "src/Ghostly/Sub" ] ]
+            [
+                item 221 [ "src/Starve/Sub" ]
+                item 222 [ "src/Solo" ] |> held "kite-z01" 0
+                item 224 [ "src/Dead/Sub" ]
+                item 225 [ "src/Ghostly/Sub" ]
+            ]
 
         run inFlight candidates
 
@@ -485,10 +553,15 @@ module BatchTests =
 
         // ghost-222's lease has lapsed, so it frees NOW — the soonest of all — and the advice points at
         // `reap`, the one blocker a worker clears themselves. Exactly one lease has expired.
-        Assert.True(anyLine "soonest: lease EXPIRED — reapable" banner, $"expected the EXPIRED soonest line, got %A{banner}")
+        Assert.True(
+            anyLine "soonest: lease EXPIRED — reapable" banner,
+            $"expected the EXPIRED soonest line, got %A{banner}"
+        )
 
         Assert.True(
-            anyLine "1 of those lease(s) have EXPIRED — collect them: scripts/fsgg-coord reap --repo FS.GG.SDD --apply" banner,
+            anyLine
+                "1 of those lease(s) have EXPIRED — collect them: scripts/fsgg-coord reap --repo FS.GG.SDD --apply"
+                banner,
             $"expected the reap advice for the one expired lease, got %A{banner}"
         )
 
@@ -498,8 +571,15 @@ module BatchTests =
         // worker and no lease, so it must NOT inflate the queued-behind-claims count nor appear as "held by —".
         let banner = starvedBanner 120 (starvedResult ())
 
-        Assert.False(anyLine "held by —" banner, $"a markerless reserver must never be a holder named '—', got %A{banner}")
-        Assert.False(anyLine "4 item(s)" banner, $"the markerless #225 must not be counted as queued behind a claim, got %A{banner}")
+        Assert.False(
+            anyLine "held by —" banner,
+            $"a markerless reserver must never be a holder named '—', got %A{banner}"
+        )
+
+        Assert.False(
+            anyLine "4 item(s)" banner,
+            $"the markerless #225 must not be counted as queued behind a claim, got %A{banner}"
+        )
 
     [<Fact>]
     let ``#428 a queue that HANDED OUT WORK prints no starved banner`` () =
@@ -517,9 +597,14 @@ module BatchTests =
         let blocked n =
             { item n [ $"src/%d{n}.fs" ] with
                 Blockers =
-                    [ { Ref = Some(ref 999)
-                        Raw = (ref 999).Short
-                        State = BlockerOpen } ] }
+                    [
+                        {
+                            Ref = Some(ref 999)
+                            Raw = (ref 999).Short
+                            State = BlockerOpen
+                        }
+                    ]
+            }
 
         let r = run [] [ blocked 1; blocked 2 ]
         Assert.Empty(r.Chosen)
@@ -529,14 +614,22 @@ module BatchTests =
     let ``#428 when every lease is FRESH the soonest is a countdown, and no reap advice fires`` () =
         // No expired lease means nothing to reap — the advice must not appear (there is nothing to collect),
         // and the soonest lease is a real countdown a worker can decide against.
-        let inFlight = [ resv "FS.GG.SDD" [ "src/Starve" ] (LiveClaim(WorkerId "tern-y99", ref 223, 60, None)) ]
+        let inFlight =
+            [
+                resv "FS.GG.SDD" [ "src/Starve" ] (LiveClaim(WorkerId "tern-y99", ref 223, 60, None))
+            ]
+
         let r = run inFlight [ item 221 [ "src/Starve/Sub" ] ]
         Assert.Empty(r.Chosen)
 
         let banner = starvedBanner 120 r
         Assert.True(anyLine "soonest: lease frees in ~" banner, $"expected a countdown, got %A{banner}")
         Assert.False(anyLine "EXPIRED" banner, $"no lease has expired, so no EXPIRED line, got %A{banner}")
-        Assert.False(anyLine "collect them: fsgg-coord reap" banner, $"no reap advice when nothing expired, got %A{banner}")
+
+        Assert.False(
+            anyLine "collect them: fsgg-coord reap" banner,
+            $"no reap advice when nothing expired, got %A{banner}"
+        )
 
     // ================================================================================================
     // #636 — THE UNTRIAGED QUEUE. A queue starved at the COLUMN is not busy, and it is not empty either.
@@ -572,7 +665,11 @@ module BatchTests =
         let r = run [] [ backlogItem 1 [ "src/A.fs" ] ]
         let banner = starvedBanner 120 r
 
-        Assert.True(anyLine "this queue is UNTRIAGED, not empty" banner, $"expected the UNTRIAGED headline, got %A{banner}")
+        Assert.True(
+            anyLine "this queue is UNTRIAGED, not empty" banner,
+            $"expected the UNTRIAGED headline, got %A{banner}"
+        )
+
         Assert.False(anyLine "BUSY" banner, $"nobody holds this queue, so it is not BUSY, got %A{banner}")
         Assert.False(anyLine "QUEUED BEHIND LIVE CLAIMS" banner, $"no claim is queued behind, got %A{banner}")
         Assert.False(anyLine "soonest" banner, $"no lease exists to name a window for, got %A{banner}")
@@ -586,36 +683,67 @@ module BatchTests =
         let blockedToo =
             { backlogItem 2 [ "src/B.fs" ] with
                 Blockers =
-                    [ { Ref = Some(ref 999)
-                        Raw = (ref 999).Short
-                        State = BlockerOpen } ] }
+                    [
+                        {
+                            Ref = Some(ref 999)
+                            Raw = (ref 999).Short
+                            State = BlockerOpen
+                        }
+                    ]
+            }
 
         let r = run [] [ backlogItem 1 [ "src/A.fs" ]; blockedToo ]
         let banner = starvedBanner 120 r
 
-        Assert.True(anyLine "2 item(s) are in BACKLOG" banner, $"the column is checked first, so BOTH are withheld there, got %A{banner}")
+        Assert.True(
+            anyLine "2 item(s) are in BACKLOG" banner,
+            $"the column is checked first, so BOTH are withheld there, got %A{banner}"
+        )
+
         Assert.True(anyLine "UNASKED, not no" banner, $"expected the honesty hedge, got %A{banner}")
 
         // The defect would be a PROMISED COUNT — "2 item(s) are startable" / "would be startable" — which is
         // a claim about #2 the scheduler never evaluated (it stopped at #2's column, before its blocker).
         // The hedge above legitimately contains the words "are startable"; what must never appear is the
         // assertion.
-        Assert.False(anyLine "item(s) are startable" banner, $"the banner may not promise a startable count it never computed, got %A{banner}")
-        Assert.False(anyLine "would be startable" banner, $"the banner may not promise startability it never computed, got %A{banner}")
+        Assert.False(
+            anyLine "item(s) are startable" banner,
+            $"the banner may not promise a startable count it never computed, got %A{banner}"
+        )
+
+        Assert.False(
+            anyLine "would be startable" banner,
+            $"the banner may not promise startability it never computed, got %A{banner}"
+        )
 
     [<Fact>]
     let ``#636 a BUSY and UNTRIAGED queue reports BOTH — the claim must not hide the flag`` () =
         // The live board's exact shape, and the whole defect: reporting only the claims left the worker
         // waiting ~120m over items that needed a flag, not a lease.
-        let inFlight = [ resv "FS.GG.SDD" [ "src/Starve" ] (LiveClaim(WorkerId "tern-y99", ref 223, 60, None)) ]
-        let r = run inFlight [ item 221 [ "src/Starve/Sub" ]; backlogItem 300 [ "src/Untriaged.fs" ] ]
+        let inFlight =
+            [
+                resv "FS.GG.SDD" [ "src/Starve" ] (LiveClaim(WorkerId "tern-y99", ref 223, 60, None))
+            ]
+
+        let r =
+            run inFlight [ item 221 [ "src/Starve/Sub" ]; backlogItem 300 [ "src/Untriaged.fs" ] ]
+
         Assert.Empty(r.Chosen)
 
         let banner = starvedBanner 120 r
 
-        Assert.True(anyLine "1 item(s) are QUEUED BEHIND LIVE CLAIMS" banner, $"the claim fact survives, got %A{banner}")
+        Assert.True(
+            anyLine "1 item(s) are QUEUED BEHIND LIVE CLAIMS" banner,
+            $"the claim fact survives, got %A{banner}"
+        )
+
         Assert.True(anyLine "soonest: lease frees in ~" banner, $"the lease window survives, got %A{banner}")
-        Assert.True(anyLine "1 item(s) are in BACKLOG" banner, $"the column fact must NOT be hidden by the claim, got %A{banner}")
+
+        Assert.True(
+            anyLine "1 item(s) are in BACKLOG" banner,
+            $"the column fact must NOT be hidden by the claim, got %A{banner}"
+        )
+
         Assert.True(anyLine "--include-backlog" banner, $"the remedy must survive alongside the wait, got %A{banner}")
 
     [<Fact>]
@@ -638,14 +766,23 @@ module BatchTests =
             { item n paths with
                 Ref = refIn "FS-GG" "FS.GG.Game" n
                 PathRepo = "FS.GG.Game"
-                Status = Backlog }
+                Status = Backlog
+            }
 
         let r = run [] [ backlogItem 1 [ "src/A.fs" ]; other 2 [ "src/B.fs" ] ]
         let banner = starvedBanner 120 r
 
         Assert.True(anyLine "2 item(s) are in BACKLOG" banner, $"both repos' items are counted, got %A{banner}")
-        Assert.True(anyLine "fsgg-coord take --repo FS.GG.SDD --include-backlog" banner, $"expected the SDD remedy, got %A{banner}")
-        Assert.True(anyLine "fsgg-coord take --repo FS.GG.Game --include-backlog" banner, $"expected the Game remedy, got %A{banner}")
+
+        Assert.True(
+            anyLine "fsgg-coord take --repo FS.GG.SDD --include-backlog" banner,
+            $"expected the SDD remedy, got %A{banner}"
+        )
+
+        Assert.True(
+            anyLine "fsgg-coord take --repo FS.GG.Game --include-backlog" banner,
+            $"expected the Game remedy, got %A{banner}"
+        )
 
     [<Fact>]
     let ``#636 an ORG-WIDE reap advice names EVERY repo with a dead lease`` () =
@@ -653,21 +790,31 @@ module BatchTests =
         // construction") that generated both. Two expired leases in two repos must yield two reap commands;
         // naming only the first leaves the other repo's lease uncollected under a line that counted it.
         let deadIn repo n =
-            resv repo [ $"src/Dead%d{n}" ] (LiveClaim(WorkerId $"ghost-%d{n}", refIn "FS-GG" repo (900 + n), 99999, None))
+            resv
+                repo
+                [ $"src/Dead%d{n}" ]
+                (LiveClaim(WorkerId $"ghost-%d{n}", refIn "FS-GG" repo (900 + n), 99999, None))
 
         let cand repo n =
             { item n [ $"src/Dead%d{n}/Sub" ] with
                 Ref = refIn "FS-GG" repo n
-                PathRepo = repo }
+                PathRepo = repo
+            }
 
-        let r = run [ deadIn "FS.GG.SDD" 1; deadIn "FS.GG.Game" 2 ] [ cand "FS.GG.SDD" 1; cand "FS.GG.Game" 2 ]
+        let r =
+            run [ deadIn "FS.GG.SDD" 1; deadIn "FS.GG.Game" 2 ] [ cand "FS.GG.SDD" 1; cand "FS.GG.Game" 2 ]
+
         Assert.Empty(r.Chosen)
 
         let banner = starvedBanner 120 r
 
         Assert.True(anyLine "2 of those lease(s) have EXPIRED" banner, $"both dead leases are counted, got %A{banner}")
         Assert.True(anyLine "fsgg-coord reap --repo FS.GG.SDD --apply" banner, $"expected the SDD reap, got %A{banner}")
-        Assert.True(anyLine "fsgg-coord reap --repo FS.GG.Game --apply" banner, $"expected the Game reap, got %A{banner}")
+
+        Assert.True(
+            anyLine "fsgg-coord reap --repo FS.GG.Game --apply" banner,
+            $"expected the Game reap, got %A{banner}"
+        )
 
     [<Fact>]
     let ``#636 a Ready-starved queue gains no untriaged noise`` () =
@@ -676,9 +823,14 @@ module BatchTests =
         let blocked =
             { item 1 [ "src/A.fs" ] with
                 Blockers =
-                    [ { Ref = Some(ref 999)
-                        Raw = (ref 999).Short
-                        State = BlockerOpen } ] }
+                    [
+                        {
+                            Ref = Some(ref 999)
+                            Raw = (ref 999).Short
+                            State = BlockerOpen
+                        }
+                    ]
+            }
 
         let r = run [] [ blocked ]
         Assert.Empty(r.Chosen)
@@ -693,12 +845,15 @@ module BatchTests =
             { item 1 [ "scripts/fsgg-coord" ] with
                 Claim =
                     Some(
-                        { Worker = WorkerId "w-alice"
-                          Session = None
-                          AgeSeconds = 99999
-                          PreviousStatus = None },
+                        {
+                            Worker = WorkerId "w-alice"
+                            Session = None
+                            AgeSeconds = 99999
+                            PreviousStatus = None
+                        },
                         LeaseExpiredPrOpen 4242
-                    ) }
+                    )
+            }
 
         // The item is HELD by its own live work — the ONLY thing queued. (A separate candidate OVERLAPPING
         // it would see a plain `LiveClaim` reservation, which carries no PR-liveness; that case is the
@@ -709,9 +864,18 @@ module BatchTests =
 
         let banner = starvedBanner 120 r
         Assert.True(anyLine "this queue is BUSY, not empty" banner, $"still BUSY, got %A{banner}")
-        Assert.False(anyLine "EXPIRED" banner, $"a live-work over-run is not reapable, so no EXPIRED line, got %A{banner}")
+
+        Assert.False(
+            anyLine "EXPIRED" banner,
+            $"a live-work over-run is not reapable, so no EXPIRED line, got %A{banner}"
+        )
+
         Assert.False(anyLine "collect them: fsgg-coord reap" banner, $"no reap advice for live work, got %A{banner}")
-        Assert.True(anyLine "soonest: lease unknown" banner, $"no live lease to wait on, so 'lease unknown', got %A{banner}")
+
+        Assert.True(
+            anyLine "soonest: lease unknown" banner,
+            $"no live lease to wait on, so 'lease unknown', got %A{banner}"
+        )
 
     // ================================================================================================
     // #1092 — THE DEADLOCK BANNER. A ring is the one starved cause that waiting cannot fix.
@@ -728,20 +892,26 @@ module BatchTests =
             Blockers =
                 blockedBy
                 |> List.map (fun b ->
-                    { Ref = Some(refIn "FS-GG" ".github" b)
-                      Raw = (refIn "FS-GG" ".github" b).Short
-                      State = BlockerOpen }) }
+                    {
+                        Ref = Some(refIn "FS-GG" ".github" b)
+                        Raw = (refIn "FS-GG" ".github" b).Short
+                        State = BlockerOpen
+                    })
+        }
 
     [<Fact>]
     let ``#1092 a `Blocked by` ring is named as a DEADLOCK, not swallowed by 'BUSY'`` () =
-        let r = run [] [ ringItem 1059 [ 1063 ]; ringItem 1063 [ 1073 ]; ringItem 1073 [ 1059 ] ]
+        let r =
+            run [] [ ringItem 1059 [ 1063 ]; ringItem 1063 [ 1073 ]; ringItem 1073 [ 1059 ] ]
+
         Assert.Empty(r.Chosen)
 
         let banner = starvedBanner 120 r
 
         Assert.True(
             anyLine "DEADLOCKED: 3 item(s) form a `Blocked by` CYCLE" banner,
-            $"expected the deadlock line naming all three, got %A{banner}")
+            $"expected the deadlock line naming all three, got %A{banner}"
+        )
 
         // Every member and its in-ring edge is named — the worker has to pick an edge to cut.
         Assert.True(anyLine ".github#1059 — Blocked by .github#1063" banner, $"%A{banner}")
@@ -757,9 +927,12 @@ module BatchTests =
         // cause nothing else clears), and the BUSY line still appears for the drainable part. #636's
         // composition rule, extended.
         let held' = item 900 [ "src/held.fs" ] |> held "otter-1" 0
+
         let r =
             run
-                [ resv "FS.GG.SDD" [ "src/held.fs" ] (LiveClaim(WorkerId "otter-1", ref 900, 0, None)) ]
+                [
+                    resv "FS.GG.SDD" [ "src/held.fs" ] (LiveClaim(WorkerId "otter-1", ref 900, 0, None))
+                ]
                 [ ringItem 1 [ 2 ]; ringItem 2 [ 1 ]; held'; item 901 [ "src/held.fs" ] ]
 
         let banner = starvedBanner 120 r
@@ -777,7 +950,15 @@ module BatchTests =
         // the deadlock section adds nothing there.
         let blocked n =
             { item n [ $"src/%d{n}.fs" ] with
-                Blockers = [ { Ref = Some(ref 999); Raw = (ref 999).Short; State = BlockerOpen } ] }
+                Blockers =
+                    [
+                        {
+                            Ref = Some(ref 999)
+                            Raw = (ref 999).Short
+                            State = BlockerOpen
+                        }
+                    ]
+            }
 
         let banner = starvedBanner 120 (run [] [ blocked 1; blocked 2 ])
         Assert.False(anyLine "DEADLOCKED" banner, $"off-board blockers draw no edge, so no ring, got %A{banner}")
@@ -804,34 +985,62 @@ module BatchTests =
     /// reason, plus two disjoint startables and one that overlaps a batch member. Numbered so the greedy
     /// fold reaches #14 (chosen) before #15 (which then overlaps it).
     let private mixedBoard =
-        let blockerOpen = { Ref = Some(ref 999); Raw = (ref 999).Short; State = BlockerOpen }
+        let blockerOpen =
+            {
+                Ref = Some(ref 999)
+                Raw = (ref 999).Short
+                State = BlockerOpen
+            }
 
         let withClaim liveness it =
             { it with
                 Claim =
                     Some(
-                        { Worker = WorkerId "wren-1"
-                          Session = None
-                          AgeSeconds = 60
-                          PreviousStatus = None },
+                        {
+                            Worker = WorkerId "wren-1"
+                            Session = None
+                            AgeSeconds = 60
+                            PreviousStatus = None
+                        },
                         liveness
-                    ) }
+                    )
+            }
 
-        [ item 1 [ "src/a1.fs" ] // Startable
-          { item 2 [ "src/a2.fs" ] with Status = Backlog } // WrongStatus Backlog (allowBacklog=false)
-          { item 3 [ "src/a3.fs" ] with Status = NoStatus } // WrongStatus NoStatus — #669's named dead-code arm
-          { item 4 [ "src/a4.fs" ] with Status = InProgress } // WrongStatus InProgress
-          { item 5 [ "src/a5.fs" ] with State = Closed } // IssueClosed
-          { item 6 [] with TouchSet = Undeclared } // NoTouchSet
-          { item 7 [] with TouchSet = DeclaredNone } // DeliberatelyNoTouchSet
-          { item 8 [] with TouchSet = Declared [ Unmatchable "**/*.fs" ] } // UnusableTouchSet
-          { item 9 [ "src/a9.fs" ] with Blockers = [ blockerOpen ] } // BlockedBy
-          item 10 [ "src/a10.fs" ] |> held "otter-2" 60 // HeldBy
-          item 11 [ "src/a11.fs" ] |> withClaim (LeaseExpiredPrOpen 4242) // HeldByLiveWork
-          { item 12 [ "src/a12.fs" ] with ItemPr = Some 777 } // ItemPrOpen
-          { item 13 [] with TouchSet = Unreadable "the issue body returned HTTP 500" } // Undetermined
-          item 14 [ "src/shared.fs" ] // Startable
-          item 15 [ "src/shared.fs" ] ] // OverlapsInFlight — collides with #14, chosen first
+        [
+            item 1 [ "src/a1.fs" ] // Startable
+            { item 2 [ "src/a2.fs" ] with
+                Status = Backlog
+            } // WrongStatus Backlog (allowBacklog=false)
+            { item 3 [ "src/a3.fs" ] with
+                Status = NoStatus
+            } // WrongStatus NoStatus — #669's named dead-code arm
+            { item 4 [ "src/a4.fs" ] with
+                Status = InProgress
+            } // WrongStatus InProgress
+            { item 5 [ "src/a5.fs" ] with
+                State = Closed
+            } // IssueClosed
+            { item 6 [] with TouchSet = Undeclared } // NoTouchSet
+            { item 7 [] with
+                TouchSet = DeclaredNone
+            } // DeliberatelyNoTouchSet
+            { item 8 [] with
+                TouchSet = Declared [ Unmatchable "**/*.fs" ]
+            } // UnusableTouchSet
+            { item 9 [ "src/a9.fs" ] with
+                Blockers = [ blockerOpen ]
+            } // BlockedBy
+            item 10 [ "src/a10.fs" ] |> held "otter-2" 60 // HeldBy
+            item 11 [ "src/a11.fs" ] |> withClaim (LeaseExpiredPrOpen 4242) // HeldByLiveWork
+            { item 12 [ "src/a12.fs" ] with
+                ItemPr = Some 777
+            } // ItemPrOpen
+            { item 13 [] with
+                TouchSet = Unreadable "the issue body returned HTTP 500"
+            } // Undetermined
+            item 14 [ "src/shared.fs" ] // Startable
+            item 15 [ "src/shared.fs" ]
+        ] // OverlapsInFlight — collides with #14, chosen first
 
     [<Fact>]
     let ``#669 every candidate is chosen or explained — the partition has no gap`` () =
@@ -885,7 +1094,8 @@ module BatchTests =
 
                 Assert.True(
                     sentence.Contains d.Item.Ref.Short,
-                    $"the reason for %A{d.Result} does not name the item it is about: %s{sentence}")
+                    $"the reason for %A{d.Result} does not name the item it is about: %s{sentence}"
+                )
 
     // ================================================================================================
     // PRIORITY-GREEDY LANE PACKING (.github#1598)
@@ -911,7 +1121,8 @@ module BatchTests =
                 BoardKind = None
                 CommentCount = None
                 BoardClass = Some Hardening
-                HumanBlock = None }
+                HumanBlock = None
+            }
 
         let ordinary = item 1888 [ "src/Ordinary" ] |> classed Hardening
         let r = run [] [ decision; ordinary ]
@@ -928,7 +1139,8 @@ module BatchTests =
                 BoardKind = None
                 CommentCount = None
                 BoardClass = Some Decision
-                HumanBlock = None }
+                HumanBlock = None
+            }
 
         Assert.Equal<int list>([ 1887 ], chosenNumbers (run [] [ ordinary ]))
 
@@ -939,7 +1151,9 @@ module BatchTests =
         // precisely why it used to lose. Under the old ordering this returned [ 1 ]; there is no board
         // state that made it return [ 2 ].
         let hardening =
-            item 1 [ "scripts/coordination-sync" ] |> classed Hardening |> phased P0Decisions
+            item 1 [ "scripts/coordination-sync" ]
+            |> classed Hardening
+            |> phased P0Decisions
 
         let p0 =
             item 2 [ "scripts/coordination-sync" ] |> classed Defect |> phased P0Decisions
@@ -956,16 +1170,17 @@ module BatchTests =
     let ``#1598 the highest-ranked schedulable item is ALWAYS admitted, never merely usually`` () =
         // The property, over a board where the top-ranked item collides with several others. Whatever the
         // pack does with the rest, the head of the ranking must be in it.
-        let hub =
-            item 90 [ "src/Shared" ] |> classed Defect |> phased P0Decisions
+        let hub = item 90 [ "src/Shared" ] |> classed Defect |> phased P0Decisions
 
         let r =
             run
                 []
-                [ item 1 [ "src/Shared/A.fs" ]
-                  item 2 [ "src/Shared/B.fs" ]
-                  item 3 [ "src/Shared/C.fs" ]
-                  hub ]
+                [
+                    item 1 [ "src/Shared/A.fs" ]
+                    item 2 [ "src/Shared/B.fs" ]
+                    item 3 [ "src/Shared/C.fs" ]
+                    hub
+                ]
 
         Assert.Contains(90, chosenNumbers r)
 
@@ -976,9 +1191,11 @@ module BatchTests =
         let r =
             run
                 []
-                [ item 1 [ "src/A.fs" ] |> classed Hardening
-                  item 2 [ "src/A.fs" ] |> classed Defect
-                  item 3 [ "src/B.fs" ] ]
+                [
+                    item 1 [ "src/A.fs" ] |> classed Hardening
+                    item 2 [ "src/A.fs" ] |> classed Defect
+                    item 3 [ "src/B.fs" ]
+                ]
 
         Assert.Equal<int list>([ 2; 3 ], List.sort (chosenNumbers r))
 
@@ -989,8 +1206,10 @@ module BatchTests =
         let r =
             run
                 []
-                [ item 1 [ "src/A.fs" ] |> classed Hardening
-                  item 2 [ "src/B.fs" ] |> classed Defect ]
+                [
+                    item 1 [ "src/A.fs" ] |> classed Hardening
+                    item 2 [ "src/B.fs" ] |> classed Defect
+                ]
 
         Assert.Equal<int list>([ 2; 1 ], chosenNumbers r)
 
@@ -1005,9 +1224,11 @@ module BatchTests =
                 false
                 (Some 1)
                 []
-                [ item 1 [ "src/A.fs" ]
-                  item 2 [ "src/B.fs" ] |> classed Defect
-                  item 3 [ "src/C.fs" ] ]
+                [
+                    item 1 [ "src/A.fs" ]
+                    item 2 [ "src/B.fs" ] |> classed Defect
+                    item 3 [ "src/C.fs" ]
+                ]
             |> ok
 
         Assert.Equal<int list>([ 2 ], chosenNumbers r)
@@ -1020,8 +1241,7 @@ module BatchTests =
         // with a better-classed one would never run again.
         let contendedPath = [ "src/Contended.fs" ]
 
-        let winner =
-            item 1 contendedPath |> classed Defect |> phased P0Decisions |> aged 0
+        let winner = item 1 contendedPath |> classed Defect |> phased P0Decisions |> aged 0
 
         let displaced fresh =
             item 2 contendedPath |> aged (if fresh then 1 else Rank.StarvationDays + 1)
@@ -1041,8 +1261,10 @@ module BatchTests =
         let r =
             run
                 []
-                [ item 1 [ "src/A.fs" ] |> classed Hardening
-                  item 2 [ "src/A.fs" ] |> classed Defect |> phased P0Decisions ]
+                [
+                    item 1 [ "src/A.fs" ] |> classed Hardening
+                    item 2 [ "src/A.fs" ] |> classed Defect |> phased P0Decisions
+                ]
 
         let lines = explainRanking r
         let text = String.concat "\n" lines
@@ -1065,37 +1287,32 @@ module BatchTests =
         let wide = item 9 [ "src" ] |> classed Defect
 
         let r =
-            run
-                []
-                [ item 1 [ "src/A.fs" ]
-                  item 2 [ "src/B.fs" ]
-                  item 3 [ "src/C.fs" ]
-                  wide ]
+            run [] [ item 1 [ "src/A.fs" ]; item 2 [ "src/B.fs" ]; item 3 [ "src/C.fs" ]; wide ]
 
         Assert.Equal(3, displacedBy r wide.Ref)
 
-        let admitted =
-            explainRanking r |> List.find (fun l -> l.Contains "ADMITTED")
+        let admitted = explainRanking r |> List.find (fun l -> l.Contains "ADMITTED")
 
         Assert.Contains("displaced 3", admitted)
 
     [<Fact>]
     let ``#1598 AC5 an item with no priority evidence is told it SORTS LAST, not that it was penalised`` () =
-        let r =
-            run [] [ item 1 [ "src/A.fs" ] |> classed Defect; item 2 [ "src/A.fs" ] ]
+        let r = run [] [ item 1 [ "src/A.fs" ] |> classed Defect; item 2 [ "src/A.fs" ] ]
 
-        let refused =
-            explainRanking r |> List.find (fun l -> l.Contains "refused")
+        let refused = explainRanking r |> List.find (fun l -> l.Contains "refused")
 
         Assert.Contains("no priority evidence: sorts last", refused)
 
     [<Fact>]
     let ``#1985 explainRanking names the actual overlap holder category without inventing one`` () =
-        let refused (lines: string list) = lines |> List.find (fun l -> l.Contains "refused")
+        let refused (lines: string list) =
+            lines |> List.find (fun l -> l.Contains "refused")
 
         let live =
             run
-                [ resv "FS.GG.SDD" [ "src/Live" ] (LiveClaim(WorkerId "wren-1985", ref 90, 60, None)) ]
+                [
+                    resv "FS.GG.SDD" [ "src/Live" ] (LiveClaim(WorkerId "wren-1985", ref 90, 60, None))
+                ]
                 [ item 1 [ "src/Live/File.fs" ] ]
             |> explainRanking
             |> refused
@@ -1201,9 +1418,11 @@ module BatchTests =
         // old `c.Item.Claim.IsSome || c.Item.ItemPr.IsSome` admitted. #3 is a plain Ready row.
         let slots =
             implementerSlots
-                [ item 1 [ "src/A.fs" ] |> held "wren-a272" 60
-                  item 2 [ "src/B.fs" ] |> withItemPr 2655
-                  item 3 [ "src/C.fs" ] ]
+                [
+                    item 1 [ "src/A.fs" ] |> held "wren-a272" 60
+                    item 2 [ "src/B.fs" ] |> withItemPr 2655
+                    item 3 [ "src/C.fs" ]
+                ]
                 []
 
         Assert.Equal<int list>([ 1 ], numbersOf slots.Occupying)
@@ -1220,18 +1439,18 @@ module BatchTests =
             { item 2 [ "src/B.fs" ] with
                 Claim =
                     Some(
-                        { Worker = WorkerId "ghost-222"
-                          Session = None
-                          AgeSeconds = 60 * 60 * 9
-                          PreviousStatus = Some Ready },
+                        {
+                            Worker = WorkerId "ghost-222"
+                            Session = None
+                            AgeSeconds = 60 * 60 * 9
+                            PreviousStatus = Some Ready
+                        },
                         LeaseExpiredNoPr
-                    ) }
+                    )
+            }
 
         let slots =
-            implementerSlots
-                [ item 1 [ "src/A.fs" ] |> held "wren-a272" 60 |> withItemPr 2650
-                  lapsed ]
-                []
+            implementerSlots [ item 1 [ "src/A.fs" ] |> held "wren-a272" 60 |> withItemPr 2650; lapsed ] []
 
         Assert.Equal<int list>([ 1; 2 ], numbersOf slots.Occupying)
         Assert.Equal<int list>([], numbersOf slots.WorkWithoutClaim)
@@ -1244,9 +1463,11 @@ module BatchTests =
         let slots =
             implementerSlots
                 []
-                [ resv "FS.GG.SDD" [ "src/A.fs" ] (LiveClaim(WorkerId "rook-7f26", ref 1, 60, None))
-                  resv "FS.GG.SDD" [ "src/B.fs" ] (Unowned(ref 91))
-                  resv "FS.GG.SDD" [ "src/C.fs" ] UnknownHolder ]
+                [
+                    resv "FS.GG.SDD" [ "src/A.fs" ] (LiveClaim(WorkerId "rook-7f26", ref 1, 60, None))
+                    resv "FS.GG.SDD" [ "src/B.fs" ] (Unowned(ref 91))
+                    resv "FS.GG.SDD" [ "src/C.fs" ] UnknownHolder
+                ]
 
         Assert.Equal<int list>([ 1 ], numbersOf slots.Occupying)
 
@@ -1274,11 +1495,15 @@ module BatchTests =
         // downstream guard, so it must arrive distinct.
         let slots =
             implementerSlots
-                [ item 1 [ "src/A.fs" ] |> held "wren-a272" 60
-                  item 2 [ "src/B.fs" ] |> withItemPr 2655 ]
-                [ resv "FS.GG.SDD" [ "src/A.fs" ] (Unowned(ref 1))
-                  resv "FS.GG.SDD" [ "src/B.fs" ] (Unowned(ref 2))
-                  resv "FS.GG.SDD" [ "src/A.fs" ] (LiveClaim(WorkerId "wren-a272", ref 1, 60, None)) ]
+                [
+                    item 1 [ "src/A.fs" ] |> held "wren-a272" 60
+                    item 2 [ "src/B.fs" ] |> withItemPr 2655
+                ]
+                [
+                    resv "FS.GG.SDD" [ "src/A.fs" ] (Unowned(ref 1))
+                    resv "FS.GG.SDD" [ "src/B.fs" ] (Unowned(ref 2))
+                    resv "FS.GG.SDD" [ "src/A.fs" ] (LiveClaim(WorkerId "wren-a272", ref 1, 60, None))
+                ]
 
         Assert.Equal<int list>([ 1 ], numbersOf slots.Occupying)
         Assert.Equal<int list>([ 2 ], numbersOf slots.WorkWithoutClaim)
@@ -1295,12 +1520,14 @@ module BatchTests =
 
         let slots =
             implementerSlots
-                [ item 2664 [ "src/A.fs" ] |> held "finch-85f3" 60
-                  item 2667 [ "src/B.fs" ] |> held "rook-7f26" 60
-                  item 2668 [ "src/C.fs" ] |> held "wren-a272" 60
-                  item 2642 [ "src/D.fs" ] |> withItemPr 2655
-                  item 2581 [ "src/E.fs" ] |> withItemPr 2651
-                  item 2645 [ "src/F.fs" ] |> withItemPr 2650 ]
+                [
+                    item 2664 [ "src/A.fs" ] |> held "finch-85f3" 60
+                    item 2667 [ "src/B.fs" ] |> held "rook-7f26" 60
+                    item 2668 [ "src/C.fs" ] |> held "wren-a272" 60
+                    item 2642 [ "src/D.fs" ] |> withItemPr 2655
+                    item 2581 [ "src/E.fs" ] |> withItemPr 2651
+                    item 2645 [ "src/F.fs" ] |> withItemPr 2650
+                ]
                 []
 
         let occupancy = waveOccupancy model slots.Occupying
@@ -1321,7 +1548,6 @@ module BatchTests =
 
     [<Fact>]
     let ``#2678 the work-without-claim line is emitted only when such a row exists`` () =
-        let clean =
-            implementerSlots [ item 1 [ "src/A.fs" ] |> held "wren-a272" 60 ] []
+        let clean = implementerSlots [ item 1 [ "src/A.fs" ] |> held "wren-a272" 60 ] []
 
         Assert.Equal(None, renderWorkWithoutClaim clean)

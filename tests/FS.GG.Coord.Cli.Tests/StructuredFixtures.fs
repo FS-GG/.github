@@ -6,17 +6,33 @@ open FS.GG.Coord.GitHub.Transport
 
 module StructuredFixtures =
     let intakeResponse (request: Request) =
-        let ok body = Some(Ok { Status = 200; Body = body; Headers = Map.empty; ETag = None; NextLink = None })
+        let ok body =
+            Some(
+                Ok
+                    {
+                        Status = 200
+                        Body = body
+                        Headers = Map.empty
+                        ETag = None
+                        NextLink = None
+                    }
+            )
+
         match request.Body with
-        | Query(document,_) when document.Contains "issueCreationPolicy" ->
-            ok """{"data":{"repository":{"id":"R_fixture","issueCreationPolicy":"COLLABORATORS_ONLY","hasIssuesEnabled":true,"mergeCommitAllowed":true,"squashMergeAllowed":true,"rebaseMergeAllowed":true},"rateLimit":{"cost":1,"remaining":99}}}"""
-        | Query(document,_) when document.Contains "IntakeIdentity" ->
-            ok """{"data":{"repository":{"issue":{"id":"I_fixture","updatedAt":"2026-09-10T00:00:00Z","author":{"id":"U_fixture","login":"maintainer"}}},"rateLimit":{"cost":1,"remaining":98}}}"""
-        | _ when request.Path.Contains "/collaborators/" -> ok """{"permission":"write","user":{"node_id":"U_fixture"}}"""
+        | Query(document, _) when document.Contains "issueCreationPolicy" ->
+            ok
+                """{"data":{"repository":{"id":"R_fixture","issueCreationPolicy":"COLLABORATORS_ONLY","hasIssuesEnabled":true,"mergeCommitAllowed":true,"squashMergeAllowed":true,"rebaseMergeAllowed":true},"rateLimit":{"cost":1,"remaining":99}}}"""
+        | Query(document, _) when document.Contains "IntakeIdentity" ->
+            ok
+                """{"data":{"repository":{"issue":{"id":"I_fixture","updatedAt":"2026-09-10T00:00:00Z","author":{"id":"U_fixture","login":"maintainer"}}},"rateLimit":{"cost":1,"remaining":98}}}"""
+        | _ when request.Path.Contains "/collaborators/" ->
+            ok """{"permission":"write","user":{"node_id":"U_fixture"}}"""
         | _ -> None
 
     let withIntake fallback request =
-        match intakeResponse request with Some response -> response | None -> fallback request
+        match intakeResponse request with
+        | Some response -> response
+        | None -> fallback request
 
     let routeJson subject route agent workId =
         let specHome, gates =
@@ -26,80 +42,94 @@ module StructuredFixtures =
             | _ -> None, []
 
         let draft: StructuredDecision.RouteRecord =
-            { Schema = StructuredDecision.RouteSchema
-              Subject = subject
-              Revision = 1
-              PreviousDigest = None
-              Scope = [ "fixture scope" ]
-              Dependencies = [ "none" ]
-              TouchSet = [ "src/**" ]
-              PolicyVersion = StructuredDecision.PolicyVersion
-              Route = route
-              Agent = agent
-              Timestamp = "2026-08-15T00:00:00Z"
-              ReasonCodes = [ "fixture" ]
-              Rationale = "structured fixture route"
-              SddWorkId = workId
-              SpecHome = specHome
-              RequiredGates = gates
-              Digest = "" }
+            {
+                Schema = StructuredDecision.RouteSchema
+                Subject = subject
+                Revision = 1
+                PreviousDigest = None
+                Scope = [ "fixture scope" ]
+                Dependencies = [ "none" ]
+                TouchSet = [ "src/**" ]
+                PolicyVersion = StructuredDecision.PolicyVersion
+                Route = route
+                Agent = agent
+                Timestamp = "2026-08-15T00:00:00Z"
+                ReasonCodes = [ "fixture" ]
+                Rationale = "structured fixture route"
+                SddWorkId = workId
+                SpecHome = specHome
+                RequiredGates = gates
+                Digest = ""
+            }
 
-        let record = { draft with Digest = StructuredDecision.routeDigest draft }
+        let record =
+            { draft with
+                Digest = StructuredDecision.routeDigest draft
+            }
+
         JsonSerializer.Serialize
-            {| schema = record.Schema
-               subject = record.Subject
-               revision = record.Revision
-               previousDigest = record.PreviousDigest
-               scope = record.Scope
-               dependencies = record.Dependencies
-               touchSet = record.TouchSet
-               policyVersion = record.PolicyVersion
-               route =
-                   match record.Route with
-                   | Some DeliveryRoute.Lightweight -> "lightweight"
-                   | Some DeliveryRoute.SddRequired -> "sdd-required"
-                   | None -> null
-               agent = record.Agent
-               timestamp = record.Timestamp
-               reasonCodes = record.ReasonCodes
-               rationale = record.Rationale
-               sddWorkId = record.SddWorkId
-               specHome = record.SpecHome
-               requiredGates = record.RequiredGates
-               digest = record.Digest |}
+            {|
+                schema = record.Schema
+                subject = record.Subject
+                revision = record.Revision
+                previousDigest = record.PreviousDigest
+                scope = record.Scope
+                dependencies = record.Dependencies
+                touchSet = record.TouchSet
+                policyVersion = record.PolicyVersion
+                route =
+                    match record.Route with
+                    | Some DeliveryRoute.Lightweight -> "lightweight"
+                    | Some DeliveryRoute.SddRequired -> "sdd-required"
+                    | None -> null
+                agent = record.Agent
+                timestamp = record.Timestamp
+                reasonCodes = record.ReasonCodes
+                rationale = record.Rationale
+                sddWorkId = record.SddWorkId
+                specHome = record.SpecHome
+                requiredGates = record.RequiredGates
+                digest = record.Digest
+            |}
 
     let routeComment subject route agent workId =
         "<!-- fsgg:route-decision/v2 -->\n" + routeJson subject route agent workId
 
-    let private reviewJson (record: StructuredDecision.ReviewRecord) =
-        Driver.encodeStructuredReview record
+    let private reviewJson (record: StructuredDecision.ReviewRecord) = Driver.encodeStructuredReview record
 
     let acceptedReviewComments subject head critic =
         let initialDraft: StructuredDecision.ReviewRecord =
-            { Schema = StructuredDecision.ReviewSchema
-              Subject = subject
-              Revision = 1
-              PreviousDigest = None
-              HeadSha = head
-              ClaimGeneration = None
-              BaseSha = None
-              Critic = critic
-              Verdict = StructuredDecision.Pass
-              AcceptedExceptions = []
-              RouteApplicability = "not-meaningful"
-              RouteEvidence = [ "fixture has no runtime route comparison" ]
-              PolicyVersion = StructuredDecision.PolicyVersion
-              Kind = StructuredDecision.Initial
-              Round = 0
-              InitialReview = None
-              PrecedingReview = None
-              DiffAuditRequired = false
-              DiffAuditReceipts = []
-              Succession = None
-              RepairPhaseReceipt = None
-              Timestamp = "2026-08-15T00:00:00Z"
-              Digest = "" }
-        let initial = { initialDraft with Digest = StructuredDecision.reviewDigest initialDraft }
+            {
+                Schema = StructuredDecision.ReviewSchema
+                Subject = subject
+                Revision = 1
+                PreviousDigest = None
+                HeadSha = head
+                ClaimGeneration = None
+                BaseSha = None
+                Critic = critic
+                Verdict = StructuredDecision.Pass
+                AcceptedExceptions = []
+                RouteApplicability = "not-meaningful"
+                RouteEvidence = [ "fixture has no runtime route comparison" ]
+                PolicyVersion = StructuredDecision.PolicyVersion
+                Kind = StructuredDecision.Initial
+                Round = 0
+                InitialReview = None
+                PrecedingReview = None
+                DiffAuditRequired = false
+                DiffAuditReceipts = []
+                Succession = None
+                RepairPhaseReceipt = None
+                Timestamp = "2026-08-15T00:00:00Z"
+                Digest = ""
+            }
+
+        let initial =
+            { initialDraft with
+                Digest = StructuredDecision.reviewDigest initialDraft
+            }
+
         let acceptedDraft =
             { initial with
                 Revision = 2
@@ -110,37 +140,52 @@ module StructuredFixtures =
                 BaseSha = Some(String.replicate 40 "b")
                 InitialReview = Some "https://reviews/1"
                 PrecedingReview = Some "https://reviews/1"
-                Digest = "" }
-        let accepted = { acceptedDraft with Digest = StructuredDecision.reviewDigest acceptedDraft }
-        [ 1L, "https://reviews/1", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson initial
-          2L, "https://reviews/2", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson accepted ]
+                Digest = ""
+            }
+
+        let accepted =
+            { acceptedDraft with
+                Digest = StructuredDecision.reviewDigest acceptedDraft
+            }
+
+        [
+            1L, "https://reviews/1", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson initial
+            2L, "https://reviews/2", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson accepted
+        ]
 
     let movedHeadRepairComments subject reviewedHead critic =
         let initialDraft: StructuredDecision.ReviewRecord =
-            { Schema = StructuredDecision.ReviewSchema
-              Subject = subject
-              Revision = 1
-              PreviousDigest = None
-              HeadSha = reviewedHead
-              ClaimGeneration = None
-              BaseSha = None
-              Critic = critic
-              Verdict = StructuredDecision.ChangesRequired
-              AcceptedExceptions = []
-              RouteApplicability = "not-meaningful"
-              RouteEvidence = [ "fixture has no runtime route comparison" ]
-              PolicyVersion = StructuredDecision.PolicyVersion
-              Kind = StructuredDecision.Initial
-              Round = 0
-              InitialReview = None
-              PrecedingReview = None
-              DiffAuditRequired = false
-              DiffAuditReceipts = []
-              Succession = None
-              RepairPhaseReceipt = None
-              Timestamp = "2026-08-15T00:00:00Z"
-              Digest = "" }
-        let initial = { initialDraft with Digest = StructuredDecision.reviewDigest initialDraft }
+            {
+                Schema = StructuredDecision.ReviewSchema
+                Subject = subject
+                Revision = 1
+                PreviousDigest = None
+                HeadSha = reviewedHead
+                ClaimGeneration = None
+                BaseSha = None
+                Critic = critic
+                Verdict = StructuredDecision.ChangesRequired
+                AcceptedExceptions = []
+                RouteApplicability = "not-meaningful"
+                RouteEvidence = [ "fixture has no runtime route comparison" ]
+                PolicyVersion = StructuredDecision.PolicyVersion
+                Kind = StructuredDecision.Initial
+                Round = 0
+                InitialReview = None
+                PrecedingReview = None
+                DiffAuditRequired = false
+                DiffAuditReceipts = []
+                Succession = None
+                RepairPhaseReceipt = None
+                Timestamp = "2026-08-15T00:00:00Z"
+                Digest = ""
+            }
+
+        let initial =
+            { initialDraft with
+                Digest = StructuredDecision.reviewDigest initialDraft
+            }
+
         let confirmationDraft =
             { initial with
                 Revision = 2
@@ -150,38 +195,54 @@ module StructuredFixtures =
                 Round = 1
                 InitialReview = Some "https://reviews/1"
                 PrecedingReview = Some "https://reviews/1"
-                Digest = "" }
-        let confirmation = { confirmationDraft with Digest = StructuredDecision.reviewDigest confirmationDraft }
-        [ 1L, "https://reviews/1", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson initial
-          2L, "https://reviews/2", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson confirmation ]
+                Digest = ""
+            }
+
+        let confirmation =
+            { confirmationDraft with
+                Digest = StructuredDecision.reviewDigest confirmationDraft
+            }
+
+        [
+            1L, "https://reviews/1", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson initial
+            2L, "https://reviews/2", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson confirmation
+        ]
 
     let ordinaryRoundThreePassCommentsWithInitialVerdict subject terminalHead critic initialVerdict =
         let head round = String.replicate 40 (string round)
+
         let initialDraft: StructuredDecision.ReviewRecord =
-            { Schema = StructuredDecision.ReviewSchema
-              Subject = subject
-              Revision = 1
-              PreviousDigest = None
-              HeadSha = head 0
-              ClaimGeneration = None
-              BaseSha = None
-              Critic = critic
-              Verdict = initialVerdict
-              AcceptedExceptions = []
-              RouteApplicability = "not-meaningful"
-              RouteEvidence = [ "fixture has no runtime route comparison" ]
-              PolicyVersion = StructuredDecision.PolicyVersion
-              Kind = StructuredDecision.Initial
-              Round = 0
-              InitialReview = None
-              PrecedingReview = None
-              DiffAuditRequired = false
-              DiffAuditReceipts = []
-              Succession = None
-              RepairPhaseReceipt = None
-              Timestamp = "2026-08-22T00:00:00Z"
-              Digest = "" }
-        let initial = { initialDraft with Digest = StructuredDecision.reviewDigest initialDraft }
+            {
+                Schema = StructuredDecision.ReviewSchema
+                Subject = subject
+                Revision = 1
+                PreviousDigest = None
+                HeadSha = head 0
+                ClaimGeneration = None
+                BaseSha = None
+                Critic = critic
+                Verdict = initialVerdict
+                AcceptedExceptions = []
+                RouteApplicability = "not-meaningful"
+                RouteEvidence = [ "fixture has no runtime route comparison" ]
+                PolicyVersion = StructuredDecision.PolicyVersion
+                Kind = StructuredDecision.Initial
+                Round = 0
+                InitialReview = None
+                PrecedingReview = None
+                DiffAuditRequired = false
+                DiffAuditReceipts = []
+                Succession = None
+                RepairPhaseReceipt = None
+                Timestamp = "2026-08-22T00:00:00Z"
+                Digest = ""
+            }
+
+        let initial =
+            { initialDraft with
+                Digest = StructuredDecision.reviewDigest initialDraft
+            }
+
         let next revision previous round reviewedHead preceding verdict =
             let draft =
                 { initial with
@@ -193,38 +254,61 @@ module StructuredFixtures =
                     Round = round
                     InitialReview = Some "https://reviews/1"
                     PrecedingReview = Some preceding
-                    Digest = "" }
-            { draft with Digest = StructuredDecision.reviewDigest draft }
-        let round1 = next 2 initial.Digest 1 (head 1) "https://reviews/1" StructuredDecision.ChangesRequired
-        let round2 = next 3 round1.Digest 2 (head 2) "https://reviews/2" StructuredDecision.ChangesRequired
-        let round3 = next 4 round2.Digest 3 terminalHead "https://reviews/3" StructuredDecision.Pass
-        [ 1L, "https://reviews/1", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson initial
-          2L, "https://reviews/2", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson round1
-          3L, "https://reviews/3", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson round2
-          4L, "https://reviews/4", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson round3 ]
+                    Digest = ""
+                }
+
+            { draft with
+                Digest = StructuredDecision.reviewDigest draft
+            }
+
+        let round1 =
+            next 2 initial.Digest 1 (head 1) "https://reviews/1" StructuredDecision.ChangesRequired
+
+        let round2 =
+            next 3 round1.Digest 2 (head 2) "https://reviews/2" StructuredDecision.ChangesRequired
+
+        let round3 =
+            next 4 round2.Digest 3 terminalHead "https://reviews/3" StructuredDecision.Pass
+
+        [
+            1L, "https://reviews/1", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson initial
+            2L, "https://reviews/2", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson round1
+            3L, "https://reviews/3", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson round2
+            4L, "https://reviews/4", "<!-- fsgg:review-decision/v2 -->\n" + reviewJson round3
+        ]
 
     let ordinaryRoundThreePassComments subject terminalHead critic =
-        ordinaryRoundThreePassCommentsWithInitialVerdict
-            subject terminalHead critic StructuredDecision.ChangesRequired
+        ordinaryRoundThreePassCommentsWithInitialVerdict subject terminalHead critic StructuredDecision.ChangesRequired
 
     let ordinaryRoundThreePassCommentsWithRetiredGeneration subject terminalHead critic =
         let marker = "<!-- fsgg:review-decision/v2 -->"
+
         let seal (record: StructuredDecision.ReviewRecord) =
             let draft = { record with Digest = "" }
-            { draft with Digest = StructuredDecision.reviewDigest draft }
+
+            { draft with
+                Digest = StructuredDecision.reviewDigest draft
+            }
+
         let live = ordinaryRoundThreePassComments subject terminalHead critic
+
         let liveRecords =
             live
             |> List.map (fun (_, _, body) ->
                 Driver.decodeStructuredReview (body.Substring(marker.Length).Trim())
-                |> function Ok record -> record | Error error -> failwith error)
+                |> function
+                    | Ok record -> record
+                    | Error error -> failwith error)
+
         let retiredInitial =
             seal
                 { liveRecords.Head with
                     Revision = 1
                     PreviousDigest = None
                     HeadSha = String.replicate 40 "a"
-                    Verdict = StructuredDecision.Pass }
+                    Verdict = StructuredDecision.Pass
+                }
+
         let retiredAcceptance =
             seal
                 { retiredInitial with
@@ -233,14 +317,25 @@ module StructuredFixtures =
                     Kind = StructuredDecision.Acceptance
                     Verdict = StructuredDecision.Accepted
                     InitialReview = Some "https://reviews/retired/1"
-                    PrecedingReview = Some "https://reviews/retired/1" }
+                    PrecedingReview = Some "https://reviews/retired/1"
+                }
+
         let rebuilt, _ =
-            List.mapFold (fun previousDigest (id, url, _, (record: StructuredDecision.ReviewRecord)) ->
-                let rewritten =
-                    seal { record with Revision = int id; PreviousDigest = Some previousDigest }
-                (id, url, marker + "\n" + reviewJson rewritten), rewritten.Digest)
+            List.mapFold
+                (fun previousDigest (id, url, _, (record: StructuredDecision.ReviewRecord)) ->
+                    let rewritten =
+                        seal
+                            { record with
+                                Revision = int id
+                                PreviousDigest = Some previousDigest
+                            }
+
+                    (id, url, marker + "\n" + reviewJson rewritten), rewritten.Digest)
                 retiredAcceptance.Digest
                 (List.map2 (fun (id, url, _) record -> id + 2L, url, (), record) live liveRecords)
-        [ 1L, "https://reviews/retired/1", marker + "\n" + reviewJson retiredInitial
-          2L, "https://reviews/retired/2", marker + "\n" + reviewJson retiredAcceptance
-          yield! rebuilt ]
+
+        [
+            1L, "https://reviews/retired/1", marker + "\n" + reviewJson retiredInitial
+            2L, "https://reviews/retired/2", marker + "\n" + reviewJson retiredAcceptance
+            yield! rebuilt
+        ]

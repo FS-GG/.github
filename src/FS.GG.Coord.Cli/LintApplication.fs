@@ -7,14 +7,14 @@ module LintApplication =
     open FS.GG.Coord.GitHub
 
     type EpicFinding =
-        { Code: string
-          Severity: string
-          Detail: string }
+        {
+            Code: string
+            Severity: string
+            Detail: string
+        }
 
     type Summary =
-        { Errors: int
-          Notes: int
-          Fails: bool }
+        { Errors: int; Notes: int; Fails: bool }
 
     let badTouchSetDetail (status: string) (usability: TouchSet.Usability) : string option =
         match usability with
@@ -145,15 +145,25 @@ module LintApplication =
     /// `lint`'s Severity verdict. `Unset` is representable so unread/untriaged rows rank last, but it is
     /// not a completed triage decision and remains an error on every open, non-Done row.
     let severityVerdict (state: IssueState) (status: BoardStatus) (severity: Severity) : string option =
-        if state = IssueState.Open && status <> BoardStatus.Done && severity = Severity.Unset then
+        if
+            state = IssueState.Open
+            && status <> BoardStatus.Done
+            && severity = Severity.Unset
+        then
             Some
                 "Severity is `Unset` — this row ranks last until a human triages it. Set the board's `Severity` field to one of `Critical`, `High`, `Medium`, or `Low` from evidence in the row's own text (.github#1901)."
         else
             None
 
     let blockedNoReasonVerdict state status (blockedBy: string) (body: string) : string option =
-        if state = IssueState.Open && status = BoardStatus.Blocked && System.String.IsNullOrWhiteSpace blockedBy && (HumanBlock.parse body).IsNone then
-            Some "Status is Blocked with an empty Blocked by field and no human-block sentinel; record the machine blocker or the human reason."
+        if
+            state = IssueState.Open
+            && status = BoardStatus.Blocked
+            && System.String.IsNullOrWhiteSpace blockedBy
+            && (HumanBlock.parse body).IsNone
+        then
+            Some
+                "Status is Blocked with an empty Blocked by field and no human-block sentinel; record the machine blocker or the human reason."
         else
             None
 
@@ -173,6 +183,7 @@ module LintApplication =
 
         for line in body.Replace("\r\n", "\n").Split('\n') do
             let trimmed = line.TrimStart()
+
             let marker =
                 if trimmed.StartsWith("```") then Some "```"
                 elif trimmed.StartsWith("~~~") then Some "~~~"
@@ -183,11 +194,17 @@ module LintApplication =
             | Some opened, Some closed when opened = closed -> fence <- None
             | None, None ->
                 let prefix = "Blocked by:"
+
                 if trimmed.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase) then
                     projections.Add(trimmed.Substring(prefix.Length).Trim())
             | _ -> ()
 
-        let render value = if System.String.IsNullOrWhiteSpace value then "<empty>" else value
+        let render value =
+            if System.String.IsNullOrWhiteSpace value then
+                "<empty>"
+            else
+                value
+
         let canonicalSet (value: string) =
             value.Split(',') |> Array.map (fun part -> part.Trim()) |> Set.ofArray
 
@@ -217,10 +234,22 @@ module LintApplication =
 
     let humanParkResolvedVerdict state status (blockers: Blocker list) (body: string) : string option =
         match HumanBlock.parse body with
-        | Some AwaitingHumanDecision when state = IssueState.Open && status = BoardStatus.Blocked && not (List.isEmpty blockers) && (blockers |> List.forall Blockers.isResolved) ->
-            Some "all machine blockers are resolved; only a human decision remains. Keep the row Blocked until a human chooses."
-        | Some AwaitingHumanAction when state = IssueState.Open && status = BoardStatus.Blocked && not (List.isEmpty blockers) && (blockers |> List.forall Blockers.isResolved) ->
-            Some "all machine blockers are resolved; only a human action remains. Keep the row Blocked until that action is complete."
+        | Some AwaitingHumanDecision when
+            state = IssueState.Open
+            && status = BoardStatus.Blocked
+            && not (List.isEmpty blockers)
+            && (blockers |> List.forall Blockers.isResolved)
+            ->
+            Some
+                "all machine blockers are resolved; only a human decision remains. Keep the row Blocked until a human chooses."
+        | Some AwaitingHumanAction when
+            state = IssueState.Open
+            && status = BoardStatus.Blocked
+            && not (List.isEmpty blockers)
+            && (blockers |> List.forall Blockers.isResolved)
+            ->
+            Some
+                "all machine blockers are resolved; only a human action remains. Keep the row Blocked until that action is complete."
         | _ -> None
 
     let blockerCycleVerdicts (graph: (Ref * Blocker list) list) : (Ref * string) list =
@@ -229,11 +258,13 @@ module LintApplication =
         Blockers.cycles graph
         |> List.collect (fun ring ->
             let members = ring |> List.map (fun r -> r.Short) |> String.concat ", "
+
             ring
             |> List.choose (fun r ->
                 Map.tryFind r byRef
                 |> Option.map (fun _ ->
-                    r, $"on a blocked-by cycle that can never become startable; a human must break one edge. The ring: %s{members}")))
+                    r,
+                    $"on a blocked-by cycle that can never become startable; a human must break one edge. The ring: %s{members}")))
 
     let private shortRef (ref: string) =
         match ref.IndexOf '/' with
@@ -248,36 +279,47 @@ module LintApplication =
         (unlinked: string list)
         : EpicFinding list =
         let mk code severity detail =
-            { Code = code
-              Severity = severity
-              Detail = detail }
+            {
+                Code = code
+                Severity = severity
+                Detail = detail
+            }
 
         let visible = List.length graph.Children
 
         let noChildren =
             if state = IssueState.Open && graph.Total = 0 then
-                [ mk "EPIC-NO-CHILDREN" "error" "open [epic] with zero sub-issues — nothing rolls up" ]
+                [
+                    mk "EPIC-NO-CHILDREN" "error" "open [epic] with zero sub-issues — nothing rolls up"
+                ]
             else
                 []
 
         let truncated =
             if graph.Total > visible then
-                [ mk
-                      "EPIC-CHILDREN-TRUNCATED"
-                      "error"
-                      $"%d{graph.Total} sub-issues, only %d{visible} visible — cannot verify rollup" ]
+                [
+                    mk
+                        "EPIC-CHILDREN-TRUNCATED"
+                        "error"
+                        $"%d{graph.Total} sub-issues, only %d{visible} visible — cannot verify rollup"
+                ]
             else
                 []
 
         let doneOpenChild =
-            if status = BoardStatus.Done && graph.Children |> List.exists (fun child -> child.Open) then
+            if
+                status = BoardStatus.Done
+                && graph.Children |> List.exists (fun child -> child.Open)
+            then
                 let openRefs =
                     graph.Children
                     |> List.filter (fun child -> child.Open)
                     |> List.map (fun child -> shortRef child.Ref)
                     |> String.concat ", "
 
-                [ mk "EPIC-DONE-OPEN-CHILD" "error" $"board says Done, but open child: %s{openRefs}" ]
+                [
+                    mk "EPIC-DONE-OPEN-CHILD" "error" $"board says Done, but open child: %s{openRefs}"
+                ]
             else
                 []
 
@@ -297,17 +339,21 @@ module LintApplication =
                                 $"\"%s{line.Substring(0, 90)}…\"")
                         |> String.concat "; "
 
-                    [ mk
-                          "EPIC-UNDELEGATED-ACCEPTANCE"
-                          "error"
-                          $"%d{List.length lines} acceptance line(s) delegate to no child, so no child can ever discharge them and the rollup would close them unread: %s{named}. An epic's acceptance IS its children (#965) — make each one a child, or drop it from the body." ]
+                    [
+                        mk
+                            "EPIC-UNDELEGATED-ACCEPTANCE"
+                            "error"
+                            $"%d{List.length lines} acceptance line(s) delegate to no child, so no child can ever discharge them and the rollup would close them unread: %s{named}. An epic's acceptance IS its children (#965) — make each one a child, or drop it from the body."
+                    ]
 
         let noAcceptance =
             if state = IssueState.Open && not (EpicBody.statesAcceptance body) then
-                [ mk
-                      "EPIC-NO-STATED-ACCEPTANCE"
-                      "error"
-                      "body states NO task-line acceptance, so nothing in it can be checked against the sub-issue graph and this epic can never roll up — closing it on the strength of that graph would close an unread body (#1003). State each criterion as a task line naming its child — `- [ ] #123 the thing` — and link it with `child`." ]
+                [
+                    mk
+                        "EPIC-NO-STATED-ACCEPTANCE"
+                        "error"
+                        "body states NO task-line acceptance, so nothing in it can be checked against the sub-issue graph and this epic can never roll up — closing it on the strength of that graph would close an unread body (#1003). State each criterion as a task line naming its child — `- [ ] #123 the thing` — and link it with `child`."
+                ]
             else
                 []
 
@@ -318,13 +364,20 @@ module LintApplication =
             | kept ->
                 let named = kept |> List.map shortRef |> String.concat ", "
 
-                [ mk
-                      "EPIC-UNLINKED-CHILD"
-                      "error"
-                      $"body declares child(ren) absent from the sub-issue graph, so rollup cannot see them: %s{named}" ]
+                [
+                    mk
+                        "EPIC-UNLINKED-CHILD"
+                        "error"
+                        $"body declares child(ren) absent from the sub-issue graph, so rollup cannot see them: %s{named}"
+                ]
 
         let refusals =
-            noChildren @ truncated @ doneOpenChild @ undelegated @ noAcceptance @ unlinkedFinding
+            noChildren
+            @ truncated
+            @ doneOpenChild
+            @ undelegated
+            @ noAcceptance
+            @ unlinkedFinding
 
         let rollupReady =
             if
@@ -332,10 +385,12 @@ module LintApplication =
                 && state = IssueState.Open
                 && graph.Children |> List.forall (fun child -> not child.Open)
             then
-                [ mk
-                      "EPIC-ROLLUP-READY"
-                      "note"
-                      $"all %d{visible} child(ren) are resolved, the graph is whole, and the body's acceptance is fully delegated — every mechanical precondition to roll up holds, and this epic is still OPEN. Nothing has asked it to: the roll-up climbs only when a worker stamps a child. Whether those children DISCHARGE this epic is an argument only a human can make (#614) — decide it, do not infer it." ]
+                [
+                    mk
+                        "EPIC-ROLLUP-READY"
+                        "note"
+                        $"all %d{visible} child(ren) are resolved, the graph is whole, and the body's acceptance is fully delegated — every mechanical precondition to roll up holds, and this epic is still OPEN. Nothing has asked it to: the roll-up climbs only when a worker stamps a child. Whether those children DISCHARGE this epic is an argument only a human can make (#614) — decide it, do not infer it."
+                ]
             else
                 []
 
@@ -431,34 +486,40 @@ module LintApplication =
 
     /// One board row as the consolidation rule sees it.
     type ConsolidationRow =
-        { /// The row's display ref, as the finding will name it.
-          Ref: string
-          /// The repo the tokens are relative to. Rows from different repos are NEVER compared (#353).
-          Repo: string
-          TouchSet: TouchSet }
+        {
+            /// The row's display ref, as the finding will name it.
+            Ref: string
+            /// The repo the tokens are relative to. Rows from different repos are NEVER compared (#353).
+            Repo: string
+            TouchSet: TouchSet
+        }
 
     /// A candidate set of rows that MAY be one piece of work — never a claim that they are.
     type ConsolidationGroup =
-        { /// Every member's ref, sorted. Never fewer than two.
-          Members: string list
-          /// The subtrees EVERY member declares — the group's shared touch-set, and the evidence the
-          /// runner judges on. Never empty: a set with no common token is not a candidate operation.
-          Shared: string list
-          /// The WEAKEST member pair's coverage (plain Jaccard). Every pair is at least this similar.
-          Coverage: float
-          /// The WEAKEST member pair's hub-discounted shared-token evidence.
-          Evidence: float }
+        {
+            /// Every member's ref, sorted. Never fewer than two.
+            Members: string list
+            /// The subtrees EVERY member declares — the group's shared touch-set, and the evidence the
+            /// runner judges on. Never empty: a set with no common token is not a candidate operation.
+            Shared: string list
+            /// The WEAKEST member pair's coverage (plain Jaccard). Every pair is at least this similar.
+            Coverage: float
+            /// The WEAKEST member pair's hub-discounted shared-token evidence.
+            Evidence: float
+        }
 
     /// What the consolidation rule saw, INCLUDING what it could not see.
     type ConsolidationVerdict =
-        { Groups: ConsolidationGroup list
-          /// Rows whose `Paths:` could not be read, with the reason. Never dropped (#266) — while this
-          /// is non-empty the verdict is a NO-VERDICT, not an absence of clusters.
-          Unreadable: (string * string) list
-          /// How many rows carried a declaration this rule could compare.
-          Compared: int
-          /// The whole population it was handed.
-          Population: int }
+        {
+            Groups: ConsolidationGroup list
+            /// Rows whose `Paths:` could not be read, with the reason. Never dropped (#266) — while this
+            /// is non-empty the verdict is a NO-VERDICT, not an absence of clusters.
+            Unreadable: (string * string) list
+            /// How many rows carried a declaration this rule could compare.
+            Compared: int
+            /// The whole population it was handed.
+            Population: int
+        }
 
     /// Coverage floor: plain Jaccard over declared tokens. The reference measurement's own threshold,
     /// deliberately unchanged — every difference from it is meant to live in the evidence floor.
@@ -536,7 +597,10 @@ module LintApplication =
                 |> List.collect snd
                 |> List.distinct
                 |> List.map (fun token ->
-                    token, population |> List.filter (fun (_, stems) -> overlapsAny token stems) |> List.length)
+                    token,
+                    population
+                    |> List.filter (fun (_, stems) -> overlapsAny token stems)
+                    |> List.length)
                 |> Map.ofList
 
             let weight (token: string) =
@@ -561,14 +625,16 @@ module LintApplication =
                 coverage, shared |> List.sumBy weight
 
             let edges =
-                [ for i in 0 .. pop.Length - 1 do
-                      for j in i + 1 .. pop.Length - 1 do
-                          let refA, stemsA = pop.[i]
-                          let refB, stemsB = pop.[j]
-                          let coverage, evidence = scoreOf stemsA stemsB
+                [
+                    for i in 0 .. pop.Length - 1 do
+                        for j in i + 1 .. pop.Length - 1 do
+                            let refA, stemsA = pop.[i]
+                            let refB, stemsB = pop.[j]
+                            let coverage, evidence = scoreOf stemsA stemsB
 
-                          if coverage >= consolidationCoverageFloor && evidence >= consolidationEvidenceFloor then
-                              yield (min refA refB, max refA refB), (coverage, evidence) ]
+                            if coverage >= consolidationCoverageFloor && evidence >= consolidationEvidenceFloor then
+                                yield (min refA refB, max refA refB), (coverage, evidence)
+                ]
 
             let scores = Map.ofList edges
 
@@ -584,7 +650,9 @@ module LintApplication =
             // the row with the narrowest declaration.
             let commonOf (members: Set<string>) =
                 let stemSets =
-                    members |> Set.toList |> List.map (fun r -> Map.tryFind r byRef |> Option.defaultValue [])
+                    members
+                    |> Set.toList
+                    |> List.map (fun r -> Map.tryFind r byRef |> Option.defaultValue [])
 
                 stemSets
                 |> List.collect id
@@ -623,10 +691,13 @@ module LintApplication =
 
                     for v in Set.toList p do
                         if Set.contains v remaining then
-                            let neighbours =
-                                Map.tryFind v adjacency |> Option.defaultValue Set.empty
+                            let neighbours = Map.tryFind v adjacency |> Option.defaultValue Set.empty
 
-                            expand (Set.add v r) (Set.intersect remaining neighbours) (Set.intersect excluded neighbours)
+                            expand
+                                (Set.add v r)
+                                (Set.intersect remaining neighbours)
+                                (Set.intersect excluded neighbours)
+
                             remaining <- Set.remove v remaining
                             excluded <- Set.add v excluded
 
@@ -642,18 +713,22 @@ module LintApplication =
                 let refs = members |> Set.toList |> List.sort
 
                 let pairs =
-                    [ for i in 0 .. refs.Length - 1 do
-                          for j in i + 1 .. refs.Length - 1 do
-                              match Map.tryFind (min refs.[i] refs.[j], max refs.[i] refs.[j]) scores with
-                              | Some s -> yield s
-                              | None -> () ]
+                    [
+                        for i in 0 .. refs.Length - 1 do
+                            for j in i + 1 .. refs.Length - 1 do
+                                match Map.tryFind (min refs.[i] refs.[j], max refs.[i] refs.[j]) scores with
+                                | Some s -> yield s
+                                | None -> ()
+                    ]
 
-                { Members = refs
-                  Shared = commonOf members
-                  // The WEAKEST pair, so the number a reader sees is a floor over the whole group and
-                  // never an average flattering it.
-                  Coverage = pairs |> List.map fst |> List.fold min 1.0
-                  Evidence = pairs |> List.map snd |> List.fold min infinity })
+                {
+                    Members = refs
+                    Shared = commonOf members
+                    // The WEAKEST pair, so the number a reader sees is a floor over the whole group and
+                    // never an average flattering it.
+                    Coverage = pairs |> List.map fst |> List.fold min 1.0
+                    Evidence = pairs |> List.map snd |> List.fold min infinity
+                })
 
         let groups =
             comparable
@@ -663,10 +738,12 @@ module LintApplication =
                 rowsInRepo |> List.map (fun (_, ref, stems) -> ref, stems) |> groupsForRepo)
             |> List.sortBy (fun g -> -(List.length g.Members), g.Members)
 
-        { Groups = groups
-          Unreadable = unreadable
-          Compared = List.length comparable
-          Population = List.length rows }
+        {
+            Groups = groups
+            Unreadable = unreadable
+            Compared = List.length comparable
+            Population = List.length rows
+        }
 
     /// The `CONSOLIDATION-CANDIDATE` sentence for one group.
     ///
@@ -688,6 +765,8 @@ module LintApplication =
         let errors = severities |> List.filter ((=) "error") |> List.length
         let notes = severities |> List.filter ((=) "note") |> List.length
 
-        { Errors = errors
-          Notes = notes
-          Fails = errors > 0 || (strict && notes > 0) }
+        {
+            Errors = errors
+            Notes = notes
+            Fails = errors > 0 || (strict && notes > 0)
+        }

@@ -37,11 +37,13 @@ module SchedulingCostTests =
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None
-              Headers = Map.empty }
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            }
 
     /// One board candidate. `ForbidComments`, when set, makes the fixture ERROR OUT if this issue's
     /// `/comments` endpoint (REST) is EVER requested — the sharp instrument for "prove growth is gone": a
@@ -54,36 +56,44 @@ module SchedulingCostTests =
     /// exactly as production reads both off the same underlying issue. `None` falls back to the ordinary
     /// `WithRoute` single-marker-or-nothing shape every earlier test in this file already uses.
     type private Row =
-        { Number: int
-          Status: string
-          State: string
-          Body: string
-          IsPullRequest: bool
-          BlockedBy: string option
-          WithRoute: bool
-          ForbidComments: bool
-          Thread: string list option }
+        {
+            Number: int
+            Status: string
+            State: string
+            Body: string
+            IsPullRequest: bool
+            BlockedBy: string option
+            WithRoute: bool
+            ForbidComments: bool
+            Thread: string list option
+        }
 
     /// Each candidate declares a UNIQUE `Paths:` token (`src/item-<n>.fs`) — a shared literal across every
     /// row would make every candidate collide with every other under the OVERLAP check (step 6), which
     /// would refuse the whole batch for a reason that has nothing to do with what this file measures.
     let private candidate number status state =
-        { Number = number
-          Status = status
-          State = state
-          Body = $"Paths: src/item-%d{number}.fs"
-          IsPullRequest = false
-          BlockedBy = None
-          WithRoute = false
-          ForbidComments = false
-          Thread = None }
+        {
+            Number = number
+            Status = status
+            State = state
+            Body = $"Paths: src/item-%d{number}.fs"
+            IsPullRequest = false
+            BlockedBy = None
+            WithRoute = false
+            ForbidComments = false
+            Thread = None
+        }
 
     /// The candidate's full comment history, oldest first — `Thread` if the test set one explicitly,
     /// else the legacy single-marker-or-nothing shape.
     let private effectiveThread (r: Row) =
         match r.Thread with
         | Some t -> t
-        | None -> if r.WithRoute then [ currentRouteComment $"FS-GG/FS.GG.SDD#%d{r.Number}" r.Body ] else []
+        | None ->
+            if r.WithRoute then
+                [ currentRouteComment $"FS-GG/FS.GG.SDD#%d{r.Number}" r.Body ]
+            else
+                []
 
     let private graphqlAnswer (items: string) (query: string) : string option =
         if query.Contains "projectsV2" then
@@ -98,9 +108,18 @@ module SchedulingCostTests =
         else
             None
 
-    let private boardItemIn (status: string) (number: int) (blockedBy: string option) (state: string) (body: string) (isPullRequest: bool) =
+    let private boardItemIn
+        (status: string)
+        (number: int)
+        (blockedBy: string option)
+        (state: string)
+        (body: string)
+        (isPullRequest: bool)
+        =
         let blocked =
-            blockedBy |> Option.map (fun v -> $"{{\"text\":\"%s{v}\"}}") |> Option.defaultValue "null"
+            blockedBy
+            |> Option.map (fun v -> $"{{\"text\":\"%s{v}\"}}")
+            |> Option.defaultValue "null"
 
         let encodedBody = JsonSerializer.Serialize body
 
@@ -120,117 +139,157 @@ module SchedulingCostTests =
             |> List.map (fun r -> boardItemIn r.Status r.Number r.BlockedBy r.State r.Body r.IsPullRequest)
             |> String.concat ","
 
-        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-            let path = req.Path.Trim '/'
+        Fake.Recorder(
+            StructuredFixtures.withIntake
+            <| fun (req: Request) ->
+                let path = req.Path.Trim '/'
 
-            let issueNumber (suffix: string) =
-                let prefix = "repos/FS-GG/FS.GG.SDD/issues/"
+                let issueNumber (suffix: string) =
+                    let prefix = "repos/FS-GG/FS.GG.SDD/issues/"
 
-                if path.StartsWith prefix && path.EndsWith suffix then
-                    let middle = path.Substring(prefix.Length, path.Length - prefix.Length - suffix.Length)
+                    if path.StartsWith prefix && path.EndsWith suffix then
+                        let middle =
+                            path.Substring(prefix.Length, path.Length - prefix.Length - suffix.Length)
 
-                    match Int32.TryParse middle with
-                    | true, n -> Some n
-                    | _ -> None
-                else
-                    None
+                        match Int32.TryParse middle with
+                        | true, n -> Some n
+                        | _ -> None
+                    else
+                        None
 
-            /// The GraphQL body variable helper — `req.Body`'s `Query(document, variables)` carries
-            /// `variables` as a typed `(string * Var) list`, not serialized JSON, so this reads them
-            /// directly rather than re-parsing a payload.
-            let numberVar (variables: (string * Var) list) =
-                variables
-                |> List.tryFind (fun (k, _) -> k = "number")
-                |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
+                /// The GraphQL body variable helper — `req.Body`'s `Query(document, variables)` carries
+                /// `variables` as a typed `(string * Var) list`, not serialized JSON, so this reads them
+                /// directly rather than re-parsing a payload.
+                let numberVar (variables: (string * Var) list) =
+                    variables
+                    |> List.tryFind (fun (k, _) -> k = "number")
+                    |> Option.bind (fun (_, v) ->
+                        match v with
+                        | VNumber n -> Some(int n)
+                        | _ -> None)
 
-            let lastVar (variables: (string * Var) list) =
-                variables
-                |> List.tryFind (fun (k, _) -> k = "last")
-                |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
+                let lastVar (variables: (string * Var) list) =
+                    variables
+                    |> List.tryFind (fun (k, _) -> k = "last")
+                    |> Option.bind (fun (_, v) ->
+                        match v with
+                        | VNumber n -> Some(int n)
+                        | _ -> None)
 
-            match req.Method, path with
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, variables) when document.Contains "comments(last:" ->
-                    queries |> Option.iter (fun captured -> captured.Add document)
-                    // `Reads.recentCommentBodies` — .github#2300 repair 2. Honour `last` for real (a
-                    // fixture that ignored it and always returned everything would validate nothing about
-                    // the fail-closed-beyond-the-bound case), and match the exact "tail of the list"
-                    // semantics the Relay `last:` connection argument has: the most recent `last` items,
-                    // still oldest-of-that-window first.
-                    match numberVar variables, lastVar variables with
-                    | Some n, Some last ->
-                        match Map.tryFind n byNumber with
-                        | Some r when r.ForbidComments ->
-                            Error(Errors.NotFound $"#2300 AC4: the route GraphQL read for #%d{n} must NEVER be requested — this candidate is rejected on locally-known grounds")
-                        | Some r ->
-                            let recent =
-                                effectiveThread r
-                                |> List.rev
-                                |> List.truncate last
-                                |> List.rev
-                                |> List.map (fun body -> {| body = body |})
-                                |> JsonSerializer.Serialize
+                match req.Method, path with
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, variables) when document.Contains "comments(last:" ->
+                        queries |> Option.iter (fun captured -> captured.Add document)
+                        // `Reads.recentCommentBodies` — .github#2300 repair 2. Honour `last` for real (a
+                        // fixture that ignored it and always returned everything would validate nothing about
+                        // the fail-closed-beyond-the-bound case), and match the exact "tail of the list"
+                        // semantics the Relay `last:` connection argument has: the most recent `last` items,
+                        // still oldest-of-that-window first.
+                        match numberVar variables, lastVar variables with
+                        | Some n, Some last ->
+                            match Map.tryFind n byNumber with
+                            | Some r when r.ForbidComments ->
+                                Error(
+                                    Errors.NotFound
+                                        $"#2300 AC4: the route GraphQL read for #%d{n} must NEVER be requested — this candidate is rejected on locally-known grounds"
+                                )
+                            | Some r ->
+                                let recent =
+                                    effectiveThread r
+                                    |> List.rev
+                                    |> List.truncate last
+                                    |> List.rev
+                                    |> List.map (fun body -> {| body = body |})
+                                    |> JsonSerializer.Serialize
 
-                            let payload =
-                                "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
-                                + recent
-                                + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+                                let payload =
+                                    "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                                    + recent
+                                    + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
 
-                            ok payload
-                        | None -> Error(Errors.NotFound $"no thread fixture for #%d{n}")
-                    | _ -> Error(Errors.NotFound $"the recent-comments query is missing owner/repo/number/last variables: %A{variables}")
-                | Query(document, _) ->
-                    queries |> Option.iter (fun captured -> captured.Add document)
-                    match graphqlAnswer itemsDoc document with
-                    | Some answer -> ok answer
-                    | None -> Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues" ->
-                rows
-                |> List.filter (fun r -> r.State = "OPEN")
-                |> List.map (fun r -> {| number = r.Number; state = "open"; body = r.Body |})
-                |> JsonSerializer.Serialize
-                |> ok
-            | "GET", _ when (issueNumber "/comments").IsSome ->
-                let n = (issueNumber "/comments").Value
+                                ok payload
+                            | None -> Error(Errors.NotFound $"no thread fixture for #%d{n}")
+                        | _ ->
+                            Error(
+                                Errors.NotFound
+                                    $"the recent-comments query is missing owner/repo/number/last variables: %A{variables}"
+                            )
+                    | Query(document, _) ->
+                        queries |> Option.iter (fun captured -> captured.Add document)
 
-                match Map.tryFind n byNumber with
-                | Some r when r.ForbidComments ->
-                    Error(Errors.NotFound $"#2300 AC4: /comments for #%d{n} must NEVER be requested — this candidate is rejected on locally-known grounds")
-                | Some r ->
-                    let comments =
-                        effectiveThread r
-                        |> List.mapi (fun i body ->
+                        match graphqlAnswer itemsDoc document with
+                        | Some answer -> ok answer
+                        | None -> Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues" ->
+                    rows
+                    |> List.filter (fun r -> r.State = "OPEN")
+                    |> List.map (fun r ->
+                        {|
+                            number = r.Number
+                            state = "open"
+                            body = r.Body
+                        |})
+                    |> JsonSerializer.Serialize
+                    |> ok
+                | "GET", _ when (issueNumber "/comments").IsSome ->
+                    let n = (issueNumber "/comments").Value
+
+                    match Map.tryFind n byNumber with
+                    | Some r when r.ForbidComments ->
+                        Error(
+                            Errors.NotFound
+                                $"#2300 AC4: /comments for #%d{n} must NEVER be requested — this candidate is rejected on locally-known grounds"
+                        )
+                    | Some r ->
+                        let comments =
+                            effectiveThread r
+                            |> List.mapi (fun i body ->
+                                JsonSerializer.Serialize
+                                    {|
+                                        id = 7000 + n * 1000 + i
+                                        body = body
+                                        user = {| login = "EHotwagner" |}
+                                        created_at = "2026-01-01T00:00:00Z"
+                                        updated_at = "2026-01-01T00:00:00Z"
+                                    |})
+
+                        ok ("[" + String.concat "," comments + "]")
+                    | None -> Error(Errors.NotFound $"no comments fixture for #%d{n}")
+                | ("GET" | "PATCH"), _ when (issueNumber "").IsSome ->
+                    let n = (issueNumber "").Value
+
+                    match Map.tryFind n byNumber with
+                    | Some r when r.ForbidComments ->
+                        Error(
+                            Errors.NotFound
+                                $"#2300 AC4: the body of #%d{n} must NEVER be requested — this candidate is rejected on locally-known grounds"
+                        )
+                    | Some r ->
+                        ok (
                             JsonSerializer.Serialize
-                                {| id = 7000 + n * 1000 + i
-                                   body = body
-                                   user = {| login = "EHotwagner" |}
-                                   created_at = "2026-01-01T00:00:00Z"
-                                   updated_at = "2026-01-01T00:00:00Z" |})
-
-                    ok ("[" + String.concat "," comments + "]")
-                | None -> Error(Errors.NotFound $"no comments fixture for #%d{n}")
-            | ("GET" | "PATCH"), _ when (issueNumber "").IsSome ->
-                let n = (issueNumber "").Value
-
-                match Map.tryFind n byNumber with
-                | Some r when r.ForbidComments ->
-                    Error(Errors.NotFound $"#2300 AC4: the body of #%d{n} must NEVER be requested — this candidate is rejected on locally-known grounds")
-                | Some r ->
-                    ok (JsonSerializer.Serialize {| number = n; state = (if r.State = "OPEN" then "open" else "closed"); body = r.Body |})
-                | None -> Error(Errors.NotFound $"no issue #%d{n}")
-            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+                                {|
+                                    number = n
+                                    state = (if r.State = "OPEN" then "open" else "closed")
+                                    body = r.Body
+                                |}
+                        )
+                    | None -> Error(Errors.NotFound $"no issue #%d{n}")
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+        )
 
     let private world (rows: Row list) = worldWithQueries rows None
 
     let private context (transport: Fake.Recorder) : Kernel.Context =
-        { Transport = transport
-          Owner = "FS-GG"
-          Title = "Coordination"
-          DefaultRepo = Some "FS.GG.SDD"
-          ChoreLocks = [] }
+        {
+            Transport = transport
+            Owner = "FS-GG"
+            Title = "Coordination"
+            DefaultRepo = Some "FS.GG.SDD"
+            ChoreLocks = []
+        }
 
     let private options (args: string list) : Options.Options =
         match Options.parse args with
@@ -244,14 +303,22 @@ module SchedulingCostTests =
     /// issue is about. A fresh `Guid`-named directory per call is what makes that true by construction
     /// rather than by discipline.
     let private runQueue (transport: Fake.Recorder) (args: string list) : int * string * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2300-" + Guid.NewGuid().ToString "n")
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-2300-" + Guid.NewGuid().ToString "n")
+
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
 
         let identityVars =
-            [ "FSGG_WORKER"; "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID" ]
+            [
+                "FSGG_WORKER"
+                "CLAUDE_CODE_SESSION_ID"
+                "OPENCODE_SESSION_ID"
+                "FSGG_AGENT_SESSION_ID"
+            ]
 
-        let previousIdentity = identityVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+        let previousIdentity =
+            identityVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
 
         let stdout = Console.Out
         let stderr = Console.Error
@@ -296,7 +363,9 @@ module SchedulingCostTests =
                 ()
 
     let private schedulableRow number =
-        { candidate number "Ready" "OPEN" with WithRoute = true }
+        { candidate number "Ready" "OPEN" with
+            WithRoute = true
+        }
 
     /// EXACT log-line matching, deliberately not `transport.Count`'s substring match: `Fake.fs`'s
     /// `describe` renders a bare trailing number with no delimiter after it
@@ -306,7 +375,8 @@ module SchedulingCostTests =
         transport.Log |> List.filter (fun l -> l = line) |> List.length
 
     let private readsFor (transport: Fake.Recorder) (n: int) =
-        countExact transport $"issue-get FS-GG/FS.GG.SDD %d{n}", countExact transport $"comment-list FS-GG/FS.GG.SDD %d{n}"
+        countExact transport $"issue-get FS-GG/FS.GG.SDD %d{n}",
+        countExact transport $"comment-list FS-GG/FS.GG.SDD %d{n}"
 
     /// How many times the BOUNDED GraphQL route read (`Reads.recentCommentBodies`, repair 2) fired for
     /// this candidate — the log line `Fake.fs`'s `describe` renders for any GraphQL call it does not
@@ -316,17 +386,21 @@ module SchedulingCostTests =
         countExact transport $"graphql FS-GG/FS.GG.SDD#%d{n} recent comments (last 100)"
 
     [<Fact>]
-    let ``#2313 reconciling carries swept bodies in its board pages, without per-row REST reads or scheduling leakage`` () =
+    let ``#2313 reconciling carries swept bodies in its board pages, without per-row REST reads or scheduling leakage``
+        ()
+        =
         let closed =
             [ 1..3 ]
             |> List.map (fun n ->
                 { candidate n "Done" "CLOSED" with
-                    Body = $"Class: maintenance\nPaths: src/closed-%d{n}.fs" })
+                    Body = $"Class: maintenance\nPaths: src/closed-%d{n}.fs"
+                })
 
         let closed =
             { candidate 4 "Done" "CLOSED" with
                 IsPullRequest = true
-                Body = "Class: maintenance\nPaths: src/closed-pr.fs" }
+                Body = "Class: maintenance\nPaths: src/closed-pr.fs"
+            }
             :: closed
 
         let fixtureTitle = "Coordination-2313-" + Guid.NewGuid().ToString "n"
@@ -349,36 +423,37 @@ module SchedulingCostTests =
 
         try
 
-        let schedulingQueries = ResizeArray<string>()
-        let scheduling = worldWithQueries closed (Some schedulingQueries)
+            let schedulingQueries = ResizeArray<string>()
+            let scheduling = worldWithQueries closed (Some schedulingQueries)
 
-        match Scan.board scheduling Cache.Scheduling "FS-GG" fixtureTitle 12 with
-        | Error e -> failwithf "scheduling board scan failed: %A" e
-        | Ok rows ->
-            Assert.All(rows, fun row -> Assert.Equal(None, row.SweptBody))
+            match Scan.board scheduling Cache.Scheduling "FS-GG" fixtureTitle 12 with
+            | Error e -> failwithf "scheduling board scan failed: %A" e
+            | Ok rows -> Assert.All(rows, fun row -> Assert.Equal(None, row.SweptBody))
 
-        Assert.Single(schedulingQueries) |> ignore
-        Assert.DoesNotContain("... on Issue { number title state createdAt body", schedulingQueries.[0])
+            Assert.Single(schedulingQueries) |> ignore
+            Assert.DoesNotContain("... on Issue { number title state createdAt body", schedulingQueries.[0])
 
-        for row in closed do
-            Assert.Equal(0, countExact scheduling $"issue-get FS-GG/FS.GG.SDD %d{row.Number}")
+            for row in closed do
+                Assert.Equal(0, countExact scheduling $"issue-get FS-GG/FS.GG.SDD %d{row.Number}")
 
-        let reconcilingQueries = ResizeArray<string>()
-        let reconciling = worldWithQueries closed (Some reconcilingQueries)
+            let reconcilingQueries = ResizeArray<string>()
+            let reconciling = worldWithQueries closed (Some reconcilingQueries)
 
-        match Scan.board reconciling Cache.Reconciling "FS-GG" fixtureTitle 12 with
-        | Error e -> failwithf "reconciling board scan failed: %A" e
-        | Ok rows ->
-            Assert.Equal(4, rows.Length)
+            match Scan.board reconciling Cache.Reconciling "FS-GG" fixtureTitle 12 with
+            | Error e -> failwithf "reconciling board scan failed: %A" e
+            | Ok rows ->
+                Assert.Equal(4, rows.Length)
 
-            for row in rows do
-                let expected = closed |> List.find (fun candidate -> candidate.Number = row.Ref.Number)
-                Assert.Equal(Some(Ok expected.Body), row.SweptBody)
-                Assert.Equal(0, countExact reconciling $"issue-get FS-GG/FS.GG.SDD %d{row.Ref.Number}")
+                for row in rows do
+                    let expected =
+                        closed |> List.find (fun candidate -> candidate.Number = row.Ref.Number)
 
-        Assert.Single(reconcilingQueries) |> ignore
-        Assert.Contains("body", reconcilingQueries.[0])
-        Assert.Contains("... on PullRequest { id number title state createdAt body", reconcilingQueries.[0])
+                    Assert.Equal(Some(Ok expected.Body), row.SweptBody)
+                    Assert.Equal(0, countExact reconciling $"issue-get FS-GG/FS.GG.SDD %d{row.Ref.Number}")
+
+            Assert.Single(reconcilingQueries) |> ignore
+            Assert.Contains("body", reconcilingQueries.[0])
+            Assert.Contains("... on PullRequest { id number title state createdAt body", reconcilingQueries.[0])
 
         finally
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCacheRoot)
@@ -397,11 +472,16 @@ module SchedulingCostTests =
         // have failed with the fixture's explicit "#2300 AC4" error the instant the old code ran. Under
         // the fix, `Schedulability.IssueClosed` fires at step 1 and the candidate is never enriched.
         let closedDone =
-            [ 1..40 ] |> List.map (fun n -> { candidate n "Done" "CLOSED" with ForbidComments = true })
+            [ 1..40 ]
+            |> List.map (fun n ->
+                { candidate n "Done" "CLOSED" with
+                    ForbidComments = true
+                })
 
         let transport = world (closedDone @ [ schedulableRow 999 ])
 
-        let code, out, _ = runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
+        let code, out, _ =
+            runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
 
         Assert.Equal(0, code)
         Assert.Contains("FS-GG/FS.GG.SDD#999", out)
@@ -420,7 +500,9 @@ module SchedulingCostTests =
         Assert.Equal(0, routeGraphQlCalls transport 999)
 
     [<Fact>]
-    let ``#2300 AC1/AC2: candidates rejected on column, blocker, or human grounds pay at most ONE issue read each, not two`` () =
+    let ``#2300 AC1/AC2: candidates rejected on column, blocker, or human grounds pay at most ONE issue read each, not two``
+        ()
+        =
         // Before the fix, EVERY one of these paid a SECOND `issue-get` + `comment-list` pair from
         // `enrichDeliveryRoutes`, on top of whatever `Scan.snapshot` already reads to build the board's
         // `inFlight` set (.github#2300's own root-cause section: two REST reads per candidate). The fix
@@ -432,11 +514,15 @@ module SchedulingCostTests =
 
         let blocked =
             [ 11..15 ]
-            |> List.map (fun n -> { candidate n "Ready" "OPEN" with BlockedBy = Some "FS-GG/FS.GG.SDD#1" })
+            |> List.map (fun n ->
+                { candidate n "Ready" "OPEN" with
+                    BlockedBy = Some "FS-GG/FS.GG.SDD#1"
+                })
 
         let transport = world (wrongStatus @ blocked @ [ schedulableRow 999 ])
 
-        let code, out, _ = runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
+        let code, out, _ =
+            runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
 
         Assert.Equal(0, code)
         Assert.Contains("FS-GG/FS.GG.SDD#999", out)
@@ -462,12 +548,17 @@ module SchedulingCostTests =
         // fixture ERROR if its `/comments` endpoint OR its bounded route GraphQL call is ever hit, however
         // large that thread would have been. If the fix regresses to reading it, this fails LOUDLY and
         // immediately rather than merely running slower on a bigger fixture.
-        let hugeThreadClosed = { candidate 500 "Done" "CLOSED" with ForbidComments = true }
+        let hugeThreadClosed =
+            { candidate 500 "Done" "CLOSED" with
+                ForbidComments = true
+            }
+
         let ordinary = [ 1..5 ] |> List.map (fun n -> candidate n "In progress" "OPEN")
 
         let transport = world (ordinary @ [ hugeThreadClosed; schedulableRow 999 ])
 
-        let code, out, _ = runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
+        let code, out, _ =
+            runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
 
         Assert.Equal(0, code)
         Assert.Contains("FS-GG/FS.GG.SDD#999", out)
@@ -477,7 +568,9 @@ module SchedulingCostTests =
         Assert.Equal(0, routeGraphQlCalls transport 500)
 
     [<Fact>]
-    let ``#2300 repair 1: a human-held candidate never pays a delivery-route read, however stale its receipt would be`` () =
+    let ``#2300 repair 1: a human-held candidate never pays a delivery-route read, however stale its receipt would be``
+        ()
+        =
         // Independent review, round 1: `AwaitingHuman` is one of the four verdicts `routeCannotChangeVerdict`
         // matches to skip enrichment, and IS route-independent by `Schedulability.schedulable`'s own order
         // (step 3b, `Blocked on: human/...`, strictly BEFORE step 3c's route check) — the critic confirmed
@@ -494,11 +587,13 @@ module SchedulingCostTests =
         let humanHeld =
             { candidate 77 "Ready" "OPEN" with
                 Body = "Paths: src/item-77.fs\nBlocked on: human/action"
-                WithRoute = false }
+                WithRoute = false
+            }
 
         let transport = world (humanHeld :: [ schedulableRow 999 ])
 
-        let code, out, _ = runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
+        let code, out, _ =
+            runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
 
         Assert.Equal(0, code)
         Assert.Contains("FS-GG/FS.GG.SDD#999", out)
@@ -521,7 +616,8 @@ module SchedulingCostTests =
         let noReceipt = candidate 42 "Ready" "OPEN"
         let transport = world [ noReceipt ]
 
-        let code, out, err = runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
+        let code, out, err =
+            runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
 
         // The real route WAS consulted (one REST marker scan and one complete REST decision-ledger read)
         // though it decided nothing: this is the read AC3 requires, distinct from the reads AC1/AC2
@@ -545,13 +641,17 @@ module SchedulingCostTests =
         let deepButRecent =
             let marker = currentRouteComment "FS-GG/FS.GG.SDD#600" "Paths: src/item-600.fs"
             let noise = List.init 250 (fun i -> $"unrelated discussion comment %d{i}")
-            { candidate 600 "Ready" "OPEN" with Thread = Some(noise @ [ marker ]) }
+
+            { candidate 600 "Ready" "OPEN" with
+                Thread = Some(noise @ [ marker ])
+            }
 
         let shallow = schedulableRow 999
 
         let transport = world [ deepButRecent; shallow ]
 
-        let code, out, _ = runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "2"; "--json" ]
+        let code, out, _ =
+            runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "2"; "--json" ]
 
         Assert.Equal(0, code)
         // BOTH are found and scheduled — the 251-comment thread's marker was still recent enough.
@@ -568,11 +668,15 @@ module SchedulingCostTests =
         let buriedMarker =
             let marker = currentRouteComment "FS-GG/FS.GG.SDD#700" "Paths: src/item-700.fs"
             let noise = List.init 250 (fun i -> $"unrelated discussion comment %d{i}")
-            { candidate 700 "Ready" "OPEN" with Thread = Some(marker :: noise) }
+
+            { candidate 700 "Ready" "OPEN" with
+                Thread = Some(marker :: noise)
+            }
 
         let transport = world [ buriedMarker ]
 
-        let code, out, err = runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
+        let code, out, err =
+            runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
 
         Assert.Equal(0, code)
         Assert.Contains("FS-GG/FS.GG.SDD#700", out)

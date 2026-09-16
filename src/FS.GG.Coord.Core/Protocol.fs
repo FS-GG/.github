@@ -26,33 +26,38 @@ module Protocol =
     open Types
 
     type Rule =
-        { Id: string
-          Title: string
-          Statement: string
-          Because: string }
+        {
+            Id: string
+            Title: string
+            Statement: string
+            Because: string
+        }
 
-    type VerdictDoc =
-        { Kind: string
-          Meaning: string }
+    type VerdictDoc = { Kind: string; Meaning: string }
 
     type ExitCodeDoc =
-        { Code: int
-          Name: string
-          Meaning: string
-          Action: string }
+        {
+            Code: int
+            Name: string
+            Meaning: string
+            Action: string
+        }
 
     type ReleaseColumnDoc =
         {
-          Condition: string
-          EndState: string
-          Writes: bool
-          Stdout: string }
+            Condition: string
+            EndState: string
+            Writes: bool
+            Stdout: string
+        }
 
     type WavePolicyDoc =
-        { Waves: int
-          ImplementerSlotsPerWave: int
-          ReviewSlots: int
-          ConsolidationThreshold: int }
+        {
+            Waves: int
+            ImplementerSlotsPerWave: int
+            ReviewSlots: int
+            ConsolidationThreshold: int
+        }
 
     // ---- MARKER GRAMMAR TYPES (.github#2399) ----------------------------------------------------------
     // See Protocol.fsi for the design rationale. `occurrences` is a fresh, directly-tested
@@ -116,7 +121,9 @@ module Protocol =
             // marker's canonical text — mirrors `Driver.fs`'s `leadingMarkerBlock` exactly (untrimmed
             // line equality), so a family that shares markers with `Driver.fs`'s own family behaves
             // identically.
-            let leadingBlock = lines |> List.takeWhile (fun line -> List.contains line knownMarkerTexts)
+            let leadingBlock =
+                lines |> List.takeWhile (fun line -> List.contains line knownMarkerTexts)
+
             let leadingCount = List.length leadingBlock
             let canonicalInBlock = leadingBlock |> List.filter ((=) wireText) |> List.length
 
@@ -149,7 +156,10 @@ module Protocol =
                     // `takeWhile`, so a line here either IS this marker's canonical text or it is some
                     // OTHER known marker's — never a near-miss.
                     if line = wireText then
-                        if canonicalInBlock > 1 then Some(Competing wireText) else Some(Live wireText)
+                        if canonicalInBlock > 1 then
+                            Some(Competing wireText)
+                        else
+                            Some(Live wireText)
                     else
                         None
                 else
@@ -160,12 +170,9 @@ module Protocol =
                     // occurrence here.
                     let trimmed = line.Trim()
 
-                    if trimmed <> wireText then
-                        None
-                    elif quotedByMarkdown[index] then
-                        Some Quoted
-                    else
-                        Some(Misplaced wireText))
+                    if trimmed <> wireText then None
+                    elif quotedByMarkdown[index] then Some Quoted
+                    else Some(Misplaced wireText))
             |> List.choose id
         | AnywhereInBody ->
             // Legacy/unanchored: every canonical whole-line occurrence anywhere in the body counts, and
@@ -174,12 +181,9 @@ module Protocol =
 
             lines
             |> List.map (fun line ->
-                if line <> wireText then
-                    None
-                elif canonicalCount > 1 then
-                    Some(Competing wireText)
-                else
-                    Some(Live wireText))
+                if line <> wireText then None
+                elif canonicalCount > 1 then Some(Competing wireText)
+                else Some(Live wireText))
             |> List.choose id
 
     let renderMarkerAnchorRule (anchor: MarkerAnchor) : string =
@@ -200,41 +204,50 @@ module Protocol =
              occurring more than once anywhere in the body is a competing marker and is refused."
 
     type ReviewPolicyDoc =
-        { Schema: string
-          Kinds: string list
-          MaxAutomatedRepairRounds: int
-          RepairPhaseMaxRounds: int }
+        {
+            Schema: string
+            Kinds: string list
+            MaxAutomatedRepairRounds: int
+            RepairPhaseMaxRounds: int
+        }
 
     type LifecyclePolicyDoc =
-        { RequiredHousekeeping: string list
-          TerminalActions: string list
-          HostAcceptanceFields: string list }
+        {
+            RequiredHousekeeping: string list
+            TerminalActions: string list
+            HostAcceptanceFields: string list
+        }
 
     type LedgerPolicyDoc =
-        { Schema: string
-          ObservationFields: string list
-          ContentIntakeFields: string list
-          ContentDispositionFields: string list
-          ReceiptFields: string list
-          RequiredObservations: (string * string) list }
+        {
+            Schema: string
+            ObservationFields: string list
+            ContentIntakeFields: string list
+            ContentDispositionFields: string list
+            ReceiptFields: string list
+            RequiredObservations: (string * string) list
+        }
 
     type BlockerStateDoc =
         {
-          Wire: string
-          Holds: bool
-          Meaning: string }
+            Wire: string
+            Holds: bool
+            Meaning: string
+        }
 
     type BoardStatusDoc =
         {
-          Wire: string
-          Startable: string
-          Meaning: string }
+            Wire: string
+            Startable: string
+            Meaning: string
+        }
 
     type SnapshotKeyDoc =
         {
-          Key: string
-          Reconciled: bool
-          Meaning: string }
+            Key: string
+            Reconciled: bool
+            Meaning: string
+        }
 
     // ---- the verdicts ------------------------------------------------------------------------------
     // ONE TOTAL FUNCTION, ONE UNION. Fourteen of the scheduler family's issues were a missing case in
@@ -270,21 +283,23 @@ module Protocol =
     // them); only the set of CASES matters, and `ProtocolTests` pins that against the union by
     // reflection, which does not depend on anybody remembering this list.
     let private everyCase: Schedulability.Schedulability list =
-        [ Schedulability.Startable
-          Schedulability.NotAUnitOfWork Anchor
-          Schedulability.IssueClosed
-          Schedulability.WrongStatus Backlog
-          Schedulability.BlockedBy []
-          Schedulability.AwaitingHuman AwaitingHumanDecision
-          Schedulability.AwaitingDeliveryRouteDecision []
-          Schedulability.NoTouchSet
-          Schedulability.DeliberatelyNoTouchSet
-          Schedulability.UnusableTouchSet []
-          Schedulability.HeldBy(WorkerId "")
-          Schedulability.HeldByLiveWork(WorkerId "", 0)
-          Schedulability.ItemPrOpen 0
-          Schedulability.OverlapsInFlight []
-          Schedulability.Undetermined "" ]
+        [
+            Schedulability.Startable
+            Schedulability.NotAUnitOfWork Anchor
+            Schedulability.IssueClosed
+            Schedulability.WrongStatus Backlog
+            Schedulability.BlockedBy []
+            Schedulability.AwaitingHuman AwaitingHumanDecision
+            Schedulability.AwaitingDeliveryRouteDecision []
+            Schedulability.NoTouchSet
+            Schedulability.DeliberatelyNoTouchSet
+            Schedulability.UnusableTouchSet []
+            Schedulability.HeldBy(WorkerId "")
+            Schedulability.HeldByLiveWork(WorkerId "", 0)
+            Schedulability.ItemPrOpen 0
+            Schedulability.OverlapsInFlight []
+            Schedulability.Undetermined ""
+        ]
 
     // What the verdict MEANS to the worker who is handed it — the one fact the union does not carry.
     // A total match: a new case fails the build here rather than reaching a projection undocumented.
@@ -322,8 +337,10 @@ module Protocol =
     let verdicts: VerdictDoc list =
         everyCase
         |> List.map (fun c ->
-            { Kind = Schedulability.kind c
-              Meaning = meaning c })
+            {
+                Kind = Schedulability.kind c
+                Meaning = meaning c
+            })
 
     // ---- the blocker wire vocabulary ---------------------------------------------------------------
     // `check-board` §1 spelled the five cases by hand, in a sentence that NAMED its source: "the five
@@ -371,9 +388,11 @@ module Protocol =
     let blockerStates: BlockerStateDoc list =
         everyBlockerState
         |> List.map (fun b ->
-            { Wire = blockerStateWireName b
-              Holds = not (Blockers.isResolvedState b)
-              Meaning = blockerMeaning b })
+            {
+                Wire = blockerStateWireName b
+                Holds = not (Blockers.isResolvedState b)
+                Meaning = blockerMeaning b
+            })
 
     // ---- the board's Status vocabulary -------------------------------------------------------------
     // `cross-repo-coordination` spelled the six options by hand, in the field table a filer reads before
@@ -422,17 +441,26 @@ module Protocol =
         | Blocked ->
             Some
                 "Something else must land first, and `Blocked by` names what. Mirrors the `blocked` label. Not offered — and an item sitting here whose blockers have all resolved is startable work no `take` will ever offer, which is why /check-board re-verifies them."
-        | InReview -> Some "The work is written and its PR is open. Not offered: claiming it would duplicate an implementation already in flight."
-        | Done -> Some "Finished and merged, and the stamp says so. `done --flip` sets it once it confirms the merge; setting it by hand is how a board starts lying."
+        | InReview ->
+            Some
+                "The work is written and its PR is open. Not offered: claiming it would duplicate an implementation already in flight."
+        | Done ->
+            Some
+                "Finished and merged, and the stamp says so. `done --flip` sets it once it confirms the merge; setting it by hand is how a board starts lying."
 
     let boardStatuses: BoardStatusDoc list =
         everyBoardStatus
         |> List.choose (fun s ->
             boardOptionMeaning s
             |> Option.map (fun m ->
-                { Wire = statusWireName s
-                  Startable = s |> Schedulability.columnStartability |> Schedulability.columnStartabilityWireName
-                  Meaning = m }))
+                {
+                    Wire = statusWireName s
+                    Startable =
+                        s
+                        |> Schedulability.columnStartability
+                        |> Schedulability.columnStartabilityWireName
+                    Meaning = m
+                }))
 
     // ---- take's exit contract ----------------------------------------------------------------------
     // #585 gave `take` codes that tell "I claimed you an item" apart from the four ways it can claim
@@ -454,44 +482,60 @@ module Protocol =
     // The list is ordered as a worker meets it: the one success first, then the failures by how likely
     // they are to be the reason a loop stopped.
     let takeExitCodes: ExitCodeDoc list =
-        [ { Code = ExitCode.toInt ExitCode.Green
-            Name = ""
-            Meaning = "An item was CLAIMED. This is the ONLY code that means you hold one."
-            Action = "Go work it — and only here." }
-          { Code = ExitCode.toInt ExitCode.NoneStartable
-            Name = "EX_NONE"
-            Meaning =
-              "Looked, and nothing was startable — an empty or all-blocked queue. A LOOK THAT SUCCEEDED and found nothing, which is why it is not 0 and not a read failure."
-            Action =
-              "Nothing to do: stop, or wait for the board to free up. Diagnose before you idle — `batch --include-backlog`, `who`, `next` each name a different reason a full board looks empty." }
-          { Code = ExitCode.toInt ExitCode.Contended
-            Name = "EX_CONTENDED"
-            Meaning =
-              "The item was startable when it was picked and the claim CAS lost every race for it — somebody else got there first."
-            Action = "Back off briefly and retry. The board is busy, not empty." }
-          { Code = ExitCode.toInt ExitCode.Rate
-            Name = "EX_RATE"
-            Meaning =
-              "A rate limit is exhausted. In JSON mode the stderr failure envelope carries `rateLimit: primary|secondary|unknown` (#1892), so drivers do not parse the explanation. A primary REST limit takes `claim`/`take`/`who` with it, because the lock lives there (ADR-0034 §3); GraphQL takes the board reads. A secondary (abuse-detection) limit is different: it may name NO reset, never appears in `gh api rate_limit`, and is triggered by concurrent request bursts. A healthy `gh api rate_limit` reading therefore does not disprove this refusal. For a primary REST limit, the fleet standing down is designed behaviour (#976): answering \"is this item takeable?\" costs the very budget that is gone, and a lock you cannot verify is not a lock."
-            Action =
-              "For a PRIMARY limit, back off until the reset it names — do not loop. For a SECONDARY limit, reduce concurrency and back off; it may name no reset, and waiting alone will not prevent the same request burst from re-triggering it. After either limit clears, run `flush --dry-run`: a board write you made on an exhausted budget is QUEUED, and nothing replays it for you. AND IF YOU ARE HOLDING AN ITEM, `heartbeat` is REST too — an outage that outlives your lease cannot be renewed through, and the moment REST returns your item is startable again and the next `take` hands it to somebody else. Two things save you and neither is the timer: an OPEN `item/<n>-*` PR (#581 — the lease lapsed, the work did not), or a liveness probe that itself fails (which fails closed, #266). Push the branch and open the PR EARLY: it is the only proof of life that does not depend on the budget you just lost." }
-          { Code = ExitCode.toInt ExitCode.Red
-            Name = ""
-            Meaning =
-              "REFUSED — the batch cannot be scheduled at all. Some in-flight claim declares a touch-set that matches no file, so it reserves NOTHING, and scheduling against it would hand its files to a second worker. The message names the item and the offending tokens."
-            Action =
-              "Do NOT retry — it will refuse identically until the declaration is fixed. Fix the claim it names (`widen <issue> --paths '<paths>'`), or talk to its holder." }
-          { Code = ExitCode.toInt ExitCode.Error
-            Name = ""
-            Meaning =
-              "No verdict was reached, for one of two reasons the message tells apart: the engine refused your INPUT before it looked (no worker id resolves; the board document does not parse), or the board READ failed. A read failure is never an empty queue and never EX_NONE (#266) — \"I could not look\" and \"I looked, and it is empty\" keep different codes on purpose."
-            Action =
-              "Read the message. A refused input is not retryable — it names its own remedy. Retry only a read failure, and investigate one that persists." }
-          { Code = ExitCode.toInt ExitCode.Defect
-            Name = ""
-            Meaning =
-              "The ENGINE broke — an unhandled defect, with a stack trace. Its own code, so a broken engine cannot hide behind a stream of what look like bad inputs."
-            Action = "Report it. Do not retry, and do not work an item you were not handed." } ]
+        [
+            {
+                Code = ExitCode.toInt ExitCode.Green
+                Name = ""
+                Meaning = "An item was CLAIMED. This is the ONLY code that means you hold one."
+                Action = "Go work it — and only here."
+            }
+            {
+                Code = ExitCode.toInt ExitCode.NoneStartable
+                Name = "EX_NONE"
+                Meaning =
+                    "Looked, and nothing was startable — an empty or all-blocked queue. A LOOK THAT SUCCEEDED and found nothing, which is why it is not 0 and not a read failure."
+                Action =
+                    "Nothing to do: stop, or wait for the board to free up. Diagnose before you idle — `batch --include-backlog`, `who`, `next` each name a different reason a full board looks empty."
+            }
+            {
+                Code = ExitCode.toInt ExitCode.Contended
+                Name = "EX_CONTENDED"
+                Meaning =
+                    "The item was startable when it was picked and the claim CAS lost every race for it — somebody else got there first."
+                Action = "Back off briefly and retry. The board is busy, not empty."
+            }
+            {
+                Code = ExitCode.toInt ExitCode.Rate
+                Name = "EX_RATE"
+                Meaning =
+                    "A rate limit is exhausted. In JSON mode the stderr failure envelope carries `rateLimit: primary|secondary|unknown` (#1892), so drivers do not parse the explanation. A primary REST limit takes `claim`/`take`/`who` with it, because the lock lives there (ADR-0034 §3); GraphQL takes the board reads. A secondary (abuse-detection) limit is different: it may name NO reset, never appears in `gh api rate_limit`, and is triggered by concurrent request bursts. A healthy `gh api rate_limit` reading therefore does not disprove this refusal. For a primary REST limit, the fleet standing down is designed behaviour (#976): answering \"is this item takeable?\" costs the very budget that is gone, and a lock you cannot verify is not a lock."
+                Action =
+                    "For a PRIMARY limit, back off until the reset it names — do not loop. For a SECONDARY limit, reduce concurrency and back off; it may name no reset, and waiting alone will not prevent the same request burst from re-triggering it. After either limit clears, run `flush --dry-run`: a board write you made on an exhausted budget is QUEUED, and nothing replays it for you. AND IF YOU ARE HOLDING AN ITEM, `heartbeat` is REST too — an outage that outlives your lease cannot be renewed through, and the moment REST returns your item is startable again and the next `take` hands it to somebody else. Two things save you and neither is the timer: an OPEN `item/<n>-*` PR (#581 — the lease lapsed, the work did not), or a liveness probe that itself fails (which fails closed, #266). Push the branch and open the PR EARLY: it is the only proof of life that does not depend on the budget you just lost."
+            }
+            {
+                Code = ExitCode.toInt ExitCode.Red
+                Name = ""
+                Meaning =
+                    "REFUSED — the batch cannot be scheduled at all. Some in-flight claim declares a touch-set that matches no file, so it reserves NOTHING, and scheduling against it would hand its files to a second worker. The message names the item and the offending tokens."
+                Action =
+                    "Do NOT retry — it will refuse identically until the declaration is fixed. Fix the claim it names (`widen <issue> --paths '<paths>'`), or talk to its holder."
+            }
+            {
+                Code = ExitCode.toInt ExitCode.Error
+                Name = ""
+                Meaning =
+                    "No verdict was reached, for one of two reasons the message tells apart: the engine refused your INPUT before it looked (no worker id resolves; the board document does not parse), or the board READ failed. A read failure is never an empty queue and never EX_NONE (#266) — \"I could not look\" and \"I looked, and it is empty\" keep different codes on purpose."
+                Action =
+                    "Read the message. A refused input is not retryable — it names its own remedy. Retry only a read failure, and investigate one that persists."
+            }
+            {
+                Code = ExitCode.toInt ExitCode.Defect
+                Name = ""
+                Meaning =
+                    "The ENGINE broke — an unhandled defect, with a stack trace. Its own code, so a broken engine cannot hide behind a stream of what look like bad inputs."
+                Action = "Report it. Do not retry, and do not work an item you were not handed."
+            }
+        ]
 
     // ---- landable's exit contract ------------------------------------------------------------------
     // #900, and it is #889 one command over: /pnext-item §5 restated `landable`'s codes BY HAND, and
@@ -534,45 +578,61 @@ module Protocol =
     // Ordered as a poll loop meets it: the one green, then the one code worth retrying, then the ways
     // to stop.
     let landableExitCodes: ExitCodeDoc list =
-        [ { Code = ExitCode.toInt ExitCode.Green
-            Name = ""
-            Meaning =
-              "GREEN — the PR is finished work: it merges cleanly, and every workflow run and check-run scored on its head SHA passed. The ONLY code that means merge it."
-            Action = "Merge it. This is the only code that says so." }
-          { Code = ExitCode.toInt ExitCode.Pending
-            Name = ""
-            Meaning =
-              "PENDING — the verdict has not SETTLED: checks are still running, none have registered yet, the run set is still growing, GitHub has not finished computing the PR's mergeability (it does so in a BACKGROUND job, and `null` is the normal first answer for a PR you just opened — #950), GITHUB ITSELF SAYS IT WILL REFUSE THIS MERGE — its `mergeable_state` for the gated head is `blocked` (the base branch policy is not satisfied: a required context that failed, or that has NO CHECK RUN AT ALL because the workflow producing it is not on this branch, or a required review, or an unresolved conversation), `behind` (a strict base moved) or `draft` (#1575) — or an assertion you added (`--require`, `--sha`) is not yet met. The ONE retryable verdict, which is why it has a code of its own rather than sharing one with a way to stop."
-            Action =
-              "Keep waiting — this is the only code that says wait. Prefer `--wait`, which polls until the verdict settles rather than believing an early green. A `pending` that NEVER resolves is a finding, and the remedies are OPPOSITE, so read which one you were handed. GitHub refused the merge (`blocked`/`behind`/`draft`, and the line names the state and the base branch): REBASE onto the current base so the required workflow exists on this head and can fire; mark a DRAFT ready for review; or stop requiring a context nothing on this branch can produce. WAITING CANNOT CREATE A CHECK RUN FOR A WORKFLOW THAT DOES NOT EXIST ON THIS BRANCH — no amount of polling makes an absent producer report, which is why this arm names the context rather than telling you to wait harder. Otherwise: the job was RENAMED, its workflow's `paths:` filter no longer matches, `--sha` named the wrong commit, or GitHub never finished computing mergeability (rare, and not something waiting longer fixes — read the PR yourself)." }
-          { Code = ExitCode.toInt ExitCode.Red
-            Name = ""
-            Meaning =
-              "RED or CONFLICTED — two words, one code, because both mean STOP and neither improves by waiting. Red: a run or check-run failed. Conflicted: the PR does not merge cleanly, so GitHub cannot build `refs/pull/N/merge` and gives it NO CI at all — which is why it is returned immediately rather than polled."
-            Action =
-              "Stop. Do NOT wait — 3 is the code the recipe used to call `pending`, and a loop that waits on it never terminates. A red check is a finding; a conflicted PR needs a rebase, which is AUTHORING, not landing." }
-          { Code = ExitCode.toInt ExitCode.NotOpen
-            Name = ""
-            Meaning =
-              "MERGED, or CLOSED without merging — the PR is NOT OPEN, so there is nothing left to gate (#1680). The word on stdout tells the two apart: `merged` means the work LANDED, `closed` means it was abandoned or rejected and nothing landed. Terminal, and deliberately NOT 7: GitHub reports `mergeable: null` for a merged PR, which used to read as \"still computing\" and return PENDING — the ONE code the contract defines as worth retrying — for the most terminal state there is. `landable <merged-pr> --wait` therefore spent its entire 600s budget (30 tries x 20s) on a settled fact, every time, and the caller that meets this most is the RECOVERY path (`pnext-item` §5, `adopt`), which re-gates a PR whose worker died between merge and stamp. It was told to wait forever on work that was already landed. It is also not 3: `merged` is a success, and folding it into the red/conflicted code would tell that same successor to stop rather than to stamp."
-            Action =
-              "Stop polling — no amount of waiting reopens a PR, and `--wait` does not poll this at all. READ THE WORD, because the next act is opposite. `merged`: the work is LANDED. Do not merge it again and do not treat it as a failure — if you are recovering an item whose worker died mid-flight, complete delivery (`delivery <ref> --pr <pr> --flip --apply`). `closed`: nothing landed, so do NOT project it done; the branch was abandoned or rejected and the item needs re-work or release, not a merge." }
-          { Code = ExitCode.toInt ExitCode.NoVerdict
-            Name = ""
-            Meaning =
-              "UNKNOWN — no verdict, and this is the FAIL-CLOSED one (#266). The read could not be made or its answer was not conclusive: a rate limit, a 404, a PR whose `mergeable` field is ABSENT entirely. Note what it is NOT. An UNREADABLE BRANCH POLICY is NOT one of these causes (#1575): when GitHub says it will refuse the merge, the refusal stands on GitHub's OWN word (`mergeable_state`, already in the PR body) and the policy read is DIAGNOSIS ONLY — a 403 or a rate limit on it costs you the SENTENCE naming which context is unmet, never the verdict, which stays PENDING (7). A gate that failed closed on a read the fleet's token cannot make would not fail closed; it would fail ALWAYS (#463). A `mergeable` GitHub has not computed YET is PENDING (7), not this — it is guaranteed to change, and calling it unknown made `--wait` settle at once and abandon a seconds-old PR (#950). And there is no EX_RATE (75) here, unlike `take`: an exhausted budget arrives as this code, because `landable` has no error channel to carry a budget on."
-            Action =
-              "Do not merge, and do not treat it as a red. An unreachable answer is not a negative one. Look at why the read failed — check `budget` if you suspect a rate limit — and ask again." }
-          { Code = ExitCode.toInt ExitCode.Error
-            Name = ""
-            Meaning =
-              "REFUSED — the engine rejected your INPUT before it ever looked at the PR: no `--repo` (so which repo the PR is in is undefined), a ref that is not a PR number, or the wrong number of arguments. It is not a verdict about the PR, and no word is printed."
-            Action = "Read the message and fix the call. Not retryable — it will refuse identically." }
-          { Code = ExitCode.toInt ExitCode.Defect
-            Name = ""
-            Meaning =
-              "The ENGINE broke — an unhandled defect, with a stack trace. Its own code, so a broken engine cannot hide behind a stream of what look like bad inputs."
-            Action = "Report it. Do not retry, and do not merge a PR you have no verdict on." } ]
+        [
+            {
+                Code = ExitCode.toInt ExitCode.Green
+                Name = ""
+                Meaning =
+                    "GREEN — the PR is finished work: it merges cleanly, and every workflow run and check-run scored on its head SHA passed. The ONLY code that means merge it."
+                Action = "Merge it. This is the only code that says so."
+            }
+            {
+                Code = ExitCode.toInt ExitCode.Pending
+                Name = ""
+                Meaning =
+                    "PENDING — the verdict has not SETTLED: checks are still running, none have registered yet, the run set is still growing, GitHub has not finished computing the PR's mergeability (it does so in a BACKGROUND job, and `null` is the normal first answer for a PR you just opened — #950), GITHUB ITSELF SAYS IT WILL REFUSE THIS MERGE — its `mergeable_state` for the gated head is `blocked` (the base branch policy is not satisfied: a required context that failed, or that has NO CHECK RUN AT ALL because the workflow producing it is not on this branch, or a required review, or an unresolved conversation), `behind` (a strict base moved) or `draft` (#1575) — or an assertion you added (`--require`, `--sha`) is not yet met. The ONE retryable verdict, which is why it has a code of its own rather than sharing one with a way to stop."
+                Action =
+                    "Keep waiting — this is the only code that says wait. Prefer `--wait`, which polls until the verdict settles rather than believing an early green. A `pending` that NEVER resolves is a finding, and the remedies are OPPOSITE, so read which one you were handed. GitHub refused the merge (`blocked`/`behind`/`draft`, and the line names the state and the base branch): REBASE onto the current base so the required workflow exists on this head and can fire; mark a DRAFT ready for review; or stop requiring a context nothing on this branch can produce. WAITING CANNOT CREATE A CHECK RUN FOR A WORKFLOW THAT DOES NOT EXIST ON THIS BRANCH — no amount of polling makes an absent producer report, which is why this arm names the context rather than telling you to wait harder. Otherwise: the job was RENAMED, its workflow's `paths:` filter no longer matches, `--sha` named the wrong commit, or GitHub never finished computing mergeability (rare, and not something waiting longer fixes — read the PR yourself)."
+            }
+            {
+                Code = ExitCode.toInt ExitCode.Red
+                Name = ""
+                Meaning =
+                    "RED or CONFLICTED — two words, one code, because both mean STOP and neither improves by waiting. Red: a run or check-run failed. Conflicted: the PR does not merge cleanly, so GitHub cannot build `refs/pull/N/merge` and gives it NO CI at all — which is why it is returned immediately rather than polled."
+                Action =
+                    "Stop. Do NOT wait — 3 is the code the recipe used to call `pending`, and a loop that waits on it never terminates. A red check is a finding; a conflicted PR needs a rebase, which is AUTHORING, not landing."
+            }
+            {
+                Code = ExitCode.toInt ExitCode.NotOpen
+                Name = ""
+                Meaning =
+                    "MERGED, or CLOSED without merging — the PR is NOT OPEN, so there is nothing left to gate (#1680). The word on stdout tells the two apart: `merged` means the work LANDED, `closed` means it was abandoned or rejected and nothing landed. Terminal, and deliberately NOT 7: GitHub reports `mergeable: null` for a merged PR, which used to read as \"still computing\" and return PENDING — the ONE code the contract defines as worth retrying — for the most terminal state there is. `landable <merged-pr> --wait` therefore spent its entire 600s budget (30 tries x 20s) on a settled fact, every time, and the caller that meets this most is the RECOVERY path (`pnext-item` §5, `adopt`), which re-gates a PR whose worker died between merge and stamp. It was told to wait forever on work that was already landed. It is also not 3: `merged` is a success, and folding it into the red/conflicted code would tell that same successor to stop rather than to stamp."
+                Action =
+                    "Stop polling — no amount of waiting reopens a PR, and `--wait` does not poll this at all. READ THE WORD, because the next act is opposite. `merged`: the work is LANDED. Do not merge it again and do not treat it as a failure — if you are recovering an item whose worker died mid-flight, complete delivery (`delivery <ref> --pr <pr> --flip --apply`). `closed`: nothing landed, so do NOT project it done; the branch was abandoned or rejected and the item needs re-work or release, not a merge."
+            }
+            {
+                Code = ExitCode.toInt ExitCode.NoVerdict
+                Name = ""
+                Meaning =
+                    "UNKNOWN — no verdict, and this is the FAIL-CLOSED one (#266). The read could not be made or its answer was not conclusive: a rate limit, a 404, a PR whose `mergeable` field is ABSENT entirely. Note what it is NOT. An UNREADABLE BRANCH POLICY is NOT one of these causes (#1575): when GitHub says it will refuse the merge, the refusal stands on GitHub's OWN word (`mergeable_state`, already in the PR body) and the policy read is DIAGNOSIS ONLY — a 403 or a rate limit on it costs you the SENTENCE naming which context is unmet, never the verdict, which stays PENDING (7). A gate that failed closed on a read the fleet's token cannot make would not fail closed; it would fail ALWAYS (#463). A `mergeable` GitHub has not computed YET is PENDING (7), not this — it is guaranteed to change, and calling it unknown made `--wait` settle at once and abandon a seconds-old PR (#950). And there is no EX_RATE (75) here, unlike `take`: an exhausted budget arrives as this code, because `landable` has no error channel to carry a budget on."
+                Action =
+                    "Do not merge, and do not treat it as a red. An unreachable answer is not a negative one. Look at why the read failed — check `budget` if you suspect a rate limit — and ask again."
+            }
+            {
+                Code = ExitCode.toInt ExitCode.Error
+                Name = ""
+                Meaning =
+                    "REFUSED — the engine rejected your INPUT before it ever looked at the PR: no `--repo` (so which repo the PR is in is undefined), a ref that is not a PR number, or the wrong number of arguments. It is not a verdict about the PR, and no word is printed."
+                Action = "Read the message and fix the call. Not retryable — it will refuse identically."
+            }
+            {
+                Code = ExitCode.toInt ExitCode.Defect
+                Name = ""
+                Meaning =
+                    "The ENGINE broke — an unhandled defect, with a stack trace. Its own code, so a broken engine cannot hide behind a stream of what look like bad inputs."
+                Action = "Report it. Do not retry, and do not merge a PR you have no verdict on."
+            }
+        ]
 
     // ---- release's column precedence ---------------------------------------------------------------
     // #1099, and it is #889/#900 a THIRD time: `release`'s column semantics is the single most-repaired
@@ -589,102 +649,134 @@ module Protocol =
     // confirm a park and the stdout LINE is the tell — a preserve names no column it set, a bare
     // `released <ref>` means nothing landed and stderr says why (#331/#914).
     let releaseColumns: ReleaseColumnDoc list =
-        [ { Condition =
-              "You pass an explicit `--status <col>`. It BEATS the recorded restore and the `Ready` fallback alike — the caller naming the deliberate end state (#867/#914), which is why parking an item into a column is `release <n> --status <col>`."
-            EndState = "`<col>` — the column you named."
-            Writes = true
-            Stdout = "released <ref> → <col>" }
-          { Condition =
-              "No `--status`; the live column is still the `In progress` the claim wrote, and the marker recorded NO other column (or recorded `In progress` — the same footprint written twice)."
-            EndState = "`Ready` — the fallback for a claim with nothing to restore (#481)."
-            Writes = true
-            Stdout = "released <ref> → Ready" }
-          { Condition =
-              "No `--status`; the live column is the claim's own `In progress`, and the marker recorded a DIFFERENT column at claim time — what the claim overwrote."
-            EndState = "the recorded column, RESTORED — a `Backlog` item returns to `Backlog`, not `Ready` (#481)."
-            Writes = true
-            Stdout = "released <ref> → <recorded>" }
-          { Condition =
-              "No `--status`; the live column is anything OTHER than the claim's `In progress` — it was chosen DURING the lease (you parked it `Blocked`, say). `reap` asks the same question, so a lapsed lease does not revert it either (#331/#911)."
-            EndState = "that column, PRESERVED — the write is skipped, and the absence of the write is what says the column was nobody's to change."
-            Writes = false
-            Stdout = "released <ref> (column left at <col>)" }
-          { Condition = "No `--status`; the item has no `Status` set, or is not on this board — so there is no column to reset."
-            EndState = "nothing to set."
-            Writes = false
-            Stdout = "released <ref> (no column to reset — not on this board, or no Status set)" }
-          { Condition =
-              "The live column could not be READ (unresolvable board, or a transient failure), OR a column `release` chose to write was DEFERRED on an exhausted budget or FAILED. A column it cannot read is one it will not overwrite (#266/#331)."
-            EndState =
-              "UNCHANGED — left exactly as it is; the lock is dropped regardless. The BARE line — no `→`, no `(...)` — is the tell, and stderr immediately above it names the repair."
-            Writes = false
-            Stdout = "released <ref>" } ]
+        [
+            {
+                Condition =
+                    "You pass an explicit `--status <col>`. It BEATS the recorded restore and the `Ready` fallback alike — the caller naming the deliberate end state (#867/#914), which is why parking an item into a column is `release <n> --status <col>`."
+                EndState = "`<col>` — the column you named."
+                Writes = true
+                Stdout = "released <ref> → <col>"
+            }
+            {
+                Condition =
+                    "No `--status`; the live column is still the `In progress` the claim wrote, and the marker recorded NO other column (or recorded `In progress` — the same footprint written twice)."
+                EndState = "`Ready` — the fallback for a claim with nothing to restore (#481)."
+                Writes = true
+                Stdout = "released <ref> → Ready"
+            }
+            {
+                Condition =
+                    "No `--status`; the live column is the claim's own `In progress`, and the marker recorded a DIFFERENT column at claim time — what the claim overwrote."
+                EndState = "the recorded column, RESTORED — a `Backlog` item returns to `Backlog`, not `Ready` (#481)."
+                Writes = true
+                Stdout = "released <ref> → <recorded>"
+            }
+            {
+                Condition =
+                    "No `--status`; the live column is anything OTHER than the claim's `In progress` — it was chosen DURING the lease (you parked it `Blocked`, say). `reap` asks the same question, so a lapsed lease does not revert it either (#331/#911)."
+                EndState =
+                    "that column, PRESERVED — the write is skipped, and the absence of the write is what says the column was nobody's to change."
+                Writes = false
+                Stdout = "released <ref> (column left at <col>)"
+            }
+            {
+                Condition =
+                    "No `--status`; the item has no `Status` set, or is not on this board — so there is no column to reset."
+                EndState = "nothing to set."
+                Writes = false
+                Stdout = "released <ref> (no column to reset — not on this board, or no Status set)"
+            }
+            {
+                Condition =
+                    "The live column could not be READ (unresolvable board, or a transient failure), OR a column `release` chose to write was DEFERRED on an exhausted budget or FAILED. A column it cannot read is one it will not overwrite (#266/#331)."
+                EndState =
+                    "UNCHANGED — left exactly as it is; the lock is dropped regardless. The BARE line — no `→`, no `(...)` — is the tell, and stderr immediately above it names the repair."
+                Writes = false
+                Stdout = "released <ref>"
+            }
+        ]
 
     // ---- the rules ---------------------------------------------------------------------------------
 
     let touchSetGrammar: Rule =
-        { Id = "touch-set-grammar"
-          Title = "The touch-set grammar — it is NOT a glob language"
-          Statement = Schedulability.TouchSetGrammar
-          Because =
-            "#273. Four hand-copied forms of the unmatchable-token predicate existed across two engines. A token that matches no file conflicts with nothing — so an item declaring only such tokens reserves NOTHING, clears every overlap check, and the lock succeeds under exactly the conditions it exists to prevent." }
+        {
+            Id = "touch-set-grammar"
+            Title = "The touch-set grammar — it is NOT a glob language"
+            Statement = Schedulability.TouchSetGrammar
+            Because =
+                "#273. Four hand-copied forms of the unmatchable-token predicate existed across two engines. A token that matches no file conflicts with nothing — so an item declaring only such tokens reserves NOTHING, clears every overlap check, and the lock succeeds under exactly the conditions it exists to prevent."
+        }
 
     let touchSetDeclaration: Rule =
-        { Id = "touch-set-declaration"
-          Title = "`Paths:` is a declaration, and a fenced one is a QUOTATION"
-          Statement =
-            "Declare the touch-set as a `Paths:` line at up to three leading spaces. A `Paths:` line INSIDE a fenced code block is a quotation of the grammar, not a use of it — the protocol docs quote it constantly. `Paths: none` is a SENTINEL meaning \"this item deliberately has no touch-set\", and it is not the same fact as having forgotten one."
-          Because =
-            "#277 (a fenced line read as a declaration would let a doc reserve files) and #496 (an epic and a forgotten touch-set rendered identically, so no gate could be written at all — nine items of real work went invisible, and the surface whose job is board health reported `0 error(s)` over a dead queue)." }
+        {
+            Id = "touch-set-declaration"
+            Title = "`Paths:` is a declaration, and a fenced one is a QUOTATION"
+            Statement =
+                "Declare the touch-set as a `Paths:` line at up to three leading spaces. A `Paths:` line INSIDE a fenced code block is a quotation of the grammar, not a use of it — the protocol docs quote it constantly. `Paths: none` is a SENTINEL meaning \"this item deliberately has no touch-set\", and it is not the same fact as having forgotten one."
+            Because =
+                "#277 (a fenced line read as a declaration would let a doc reserve files) and #496 (an epic and a forgotten touch-set rendered identically, so no gate could be written at all — nine items of real work went invisible, and the surface whose job is board health reported `0 error(s)` over a dead queue)."
+        }
 
     let blockerResolution: Rule =
-        { Id = "blocker-resolution"
-          Title = "A MERGED blocker is RESOLVED; an unreadable one BLOCKS"
-          Statement =
-            "`Blocked by` is a Projects v2 board FIELD, not a body line — the same medium split as `Paths:` and its own fence rule, in reverse: `Paths:` lives in the body and a `Blocked by` FIELD is the only place this dependency is recorded. A `Blocked by:` line written into the issue BODY is inert: nothing that clears a blocker reads the body, so it looks like a declaration and does nothing. Write the edge with `set-field <ref> \"Blocked by\" <ref>`. Once the edge is on the field: `Blocked by` clears on CLOSED **or MERGED**. It does not clear on OPEN, on a blocker whose state could not be read (unverifiable), or on prose that is not an issue ref at all (unparseable) — all three BLOCK."
-          Because =
-            "#476: `Blocked by` may name a PULL REQUEST, whose state is OPEN | CLOSED | MERGED. A rule clearing only on CLOSED unblocks when the blocking work is ABANDONED and blocks forever once it is FINISHED — the gate opened precisely when the work was thrown away and shut precisely when it was done. And #266/#421: \"I could not look\" is not \"I looked and it is fine\"; prose in a dependency field is not permission. And .github#1933: two agents independently read a `Blocked by:` BODY line, found no FIELD edge, and concluded there was none — one filed a false defect (.github#1931) and withheld from promoting a row only because a third worker caught the contradiction by hand. Nothing in the operator-facing docs said which medium held the fact; only the `.fsi` comments did, and filers do not open those." }
+        {
+            Id = "blocker-resolution"
+            Title = "A MERGED blocker is RESOLVED; an unreadable one BLOCKS"
+            Statement =
+                "`Blocked by` is a Projects v2 board FIELD, not a body line — the same medium split as `Paths:` and its own fence rule, in reverse: `Paths:` lives in the body and a `Blocked by` FIELD is the only place this dependency is recorded. A `Blocked by:` line written into the issue BODY is inert: nothing that clears a blocker reads the body, so it looks like a declaration and does nothing. Write the edge with `set-field <ref> \"Blocked by\" <ref>`. Once the edge is on the field: `Blocked by` clears on CLOSED **or MERGED**. It does not clear on OPEN, on a blocker whose state could not be read (unverifiable), or on prose that is not an issue ref at all (unparseable) — all three BLOCK."
+            Because =
+                "#476: `Blocked by` may name a PULL REQUEST, whose state is OPEN | CLOSED | MERGED. A rule clearing only on CLOSED unblocks when the blocking work is ABANDONED and blocks forever once it is FINISHED — the gate opened precisely when the work was thrown away and shut precisely when it was done. And #266/#421: \"I could not look\" is not \"I looked and it is fine\"; prose in a dependency field is not permission. And .github#1933: two agents independently read a `Blocked by:` BODY line, found no FIELD edge, and concluded there was none — one filed a false defect (.github#1931) and withheld from promoting a row only because a third worker caught the contradiction by hand. Nothing in the operator-facing docs said which medium held the fact; only the `.fsi` comments did, and filers do not open those."
+        }
 
     let checkOrder: Rule =
-        { Id = "check-order"
-          Title = "Blockers are checked BEFORE the touch-set"
-          Statement =
-            "The scheduler asks, in order: is the issue closed? is its Status one we hand out? is it BLOCKED? is its touch-set usable? is it HELD? does it overlap work in flight? The first answer that is not \"no\" is the verdict, and it is the one sentence the worker reads."
-          Because =
-            "ADR-0038. A blocked item cannot be started whatever its touch-set says, so reporting \"no `Paths:` declared\" sends a worker to fix something that leaves them exactly where they were. And blockers are FREE — they are board facts already in the scan — where a touch-set costs a body READ per item, on the budget that dies first (#418). That is why bash never fetched a blocked item's body, and how an unreadable one could silently cease to exist." }
+        {
+            Id = "check-order"
+            Title = "Blockers are checked BEFORE the touch-set"
+            Statement =
+                "The scheduler asks, in order: is the issue closed? is its Status one we hand out? is it BLOCKED? is its touch-set usable? is it HELD? does it overlap work in flight? The first answer that is not \"no\" is the verdict, and it is the one sentence the worker reads."
+            Because =
+                "ADR-0038. A blocked item cannot be started whatever its touch-set says, so reporting \"no `Paths:` declared\" sends a worker to fix something that leaves them exactly where they were. And blockers are FREE — they are board facts already in the scan — where a touch-set costs a body READ per item, on the budget that dies first (#418). That is why bash never fetched a blocked item's body, and how an unreadable one could silently cease to exist."
+        }
 
     let claimLock: Rule =
-        { Id = "claim-lock"
-          Title = "The claim lock is a comment-order CAS, and the ASSIGNEE cannot hold it"
-          Statement =
-            "A claim is an `fsgg:claim` marker COMMENT, and the lowest live marker id wins. GitHub issues comment ids from one server-side sequence, so \"lowest live marker\" is a total order every racer observes identically. The GitHub ASSIGNEE cannot be the lock, because N agents share one account. That total order is over MARKERS, and it separates WORKERS only while their ids are DISTINCT: an id two workers share is an id this lock cannot separate, and `release`, `heartbeat`, `say` and `inbox` then act on one another's claims. So a worker id is MINTED, never chosen — a worker asked to pick one is not a random source."
-          Because =
-            "ADR-0027, and #419 for the distinctness half: agents asked to invent an id converge on the same corner of the name space, and this board carried FOUR `finch-*` workers at once — every one of them lifted from the single example id that then sat in the recipe. The attractor is the WORD, not the suffix, which is why the remedy is a mint rather than a reminder to be careful, and why #532/#551/#570 had to remove the pasteable id from the docs twice by hand before a gate asserted it. The lock lives on REST, and the invariant it serves — a lock may never live on the budget that dies first — is unamended. What inverted is WHICH budget that is, so this rule no longer asserts a standing answer. #418 measured GraphQL dying first (five workers looping `take` drained 5,000 pt/hr in ~15 minutes), and REST was chosen as the survivor. #895 measured the reverse, twice on 2026-07-16: REST core hit 0/5,000 and took `claim`/`take`/`who` down with it, while GraphQL stayed healthy through both — 3,639/5,000 at the first of them. This rule used to state \"GraphQL is the first budget to die\" as standing fact, and that premise is what kept regenerating the doctrine that caused the inversion — a recipe steering every worker's reads onto REST to save GraphQL points, on one shared account, spending the lock's own budget to save 7 points of 5,000. #895 decided (2026-07-17) that the lock STAYS and the DOCTRINE moves (#968): REST is metered per request and cannot be batched, so under fan-out it is structurally the scarcer budget with no lever to pull, where GraphQL batches 100 nodes to a query. Discretionary reads belong on GraphQL; REST carries the lock, which has no alternative." }
+        {
+            Id = "claim-lock"
+            Title = "The claim lock is a comment-order CAS, and the ASSIGNEE cannot hold it"
+            Statement =
+                "A claim is an `fsgg:claim` marker COMMENT, and the lowest live marker id wins. GitHub issues comment ids from one server-side sequence, so \"lowest live marker\" is a total order every racer observes identically. The GitHub ASSIGNEE cannot be the lock, because N agents share one account. That total order is over MARKERS, and it separates WORKERS only while their ids are DISTINCT: an id two workers share is an id this lock cannot separate, and `release`, `heartbeat`, `say` and `inbox` then act on one another's claims. So a worker id is MINTED, never chosen — a worker asked to pick one is not a random source."
+            Because =
+                "ADR-0027, and #419 for the distinctness half: agents asked to invent an id converge on the same corner of the name space, and this board carried FOUR `finch-*` workers at once — every one of them lifted from the single example id that then sat in the recipe. The attractor is the WORD, not the suffix, which is why the remedy is a mint rather than a reminder to be careful, and why #532/#551/#570 had to remove the pasteable id from the docs twice by hand before a gate asserted it. The lock lives on REST, and the invariant it serves — a lock may never live on the budget that dies first — is unamended. What inverted is WHICH budget that is, so this rule no longer asserts a standing answer. #418 measured GraphQL dying first (five workers looping `take` drained 5,000 pt/hr in ~15 minutes), and REST was chosen as the survivor. #895 measured the reverse, twice on 2026-07-16: REST core hit 0/5,000 and took `claim`/`take`/`who` down with it, while GraphQL stayed healthy through both — 3,639/5,000 at the first of them. This rule used to state \"GraphQL is the first budget to die\" as standing fact, and that premise is what kept regenerating the doctrine that caused the inversion — a recipe steering every worker's reads onto REST to save GraphQL points, on one shared account, spending the lock's own budget to save 7 points of 5,000. #895 decided (2026-07-17) that the lock STAYS and the DOCTRINE moves (#968): REST is metered per request and cannot be batched, so under fan-out it is structurally the scarcer budget with no lever to pull, where GraphQL batches 100 nodes to a query. Discretionary reads belong on GraphQL; REST carries the lock, which has no alternative."
+        }
 
     let leaseRule: Rule =
-        { Id = "claim-lease"
-          Title = "The lease is a WINDOW, and an unknown age says so"
-          Statement =
-            "A claim's lease is 120 minutes by default (`FSGG_CLAIM_LEASE_MIN`), and `heartbeat` renews it only while it is LIVE. Past it the claim is REAPABLE — not free: only `reap` may break a lock, and an item's touch-set stays reserved until it does. An EXPIRED lease cannot be renewed in place; the holder must re-claim. Evidence that the work is alive — an open `item/<n>-*` PR — withholds the item from `take` and REFUSES a `reap`, but it does not revive the lease. A claim whose age cannot be read reports `lease unknown`, never a window."
-          Because =
-            "#428 (\"nothing schedulable\" and \"queued behind a claim held by <w>, lease frees in ~96m\" are the same fact and two completely different operator instructions — the first reads as an empty queue and sends a worker home) and #440/#488 (inventing \"frees in ~120m\" from a missing timestamp is a confident-but-unfounded sentence, which is the class both were closed for). And the lease is a TIMER, which is why it never decides alone: it cannot see a REST outage, and `heartbeat` is REST, so an outage on the lock's budget spends a lease nobody can renew and silently reads as abandonment (#976, ratifying that the fleet stops there rather than making the clock outage-aware). What answers instead is evidence — an open `item/<n>-*` PR (#581), or a liveness probe that failed and therefore fails closed (#266). Expiry is EVIDENCE of abandonment, never proof." }
+        {
+            Id = "claim-lease"
+            Title = "The lease is a WINDOW, and an unknown age says so"
+            Statement =
+                "A claim's lease is 120 minutes by default (`FSGG_CLAIM_LEASE_MIN`), and `heartbeat` renews it only while it is LIVE. Past it the claim is REAPABLE — not free: only `reap` may break a lock, and an item's touch-set stays reserved until it does. An EXPIRED lease cannot be renewed in place; the holder must re-claim. Evidence that the work is alive — an open `item/<n>-*` PR — withholds the item from `take` and REFUSES a `reap`, but it does not revive the lease. A claim whose age cannot be read reports `lease unknown`, never a window."
+            Because =
+                "#428 (\"nothing schedulable\" and \"queued behind a claim held by <w>, lease frees in ~96m\" are the same fact and two completely different operator instructions — the first reads as an empty queue and sends a worker home) and #440/#488 (inventing \"frees in ~120m\" from a missing timestamp is a confident-but-unfounded sentence, which is the class both were closed for). And the lease is a TIMER, which is why it never decides alone: it cannot see a REST outage, and `heartbeat` is REST, so an outage on the lock's budget spends a lease nobody can renew and silently reads as abandonment (#976, ratifying that the fleet stops there rather than making the clock outage-aware). What answers instead is evidence — an open `item/<n>-*` PR (#581), or a liveness probe that failed and therefore fails closed (#266). Expiry is EVIDENCE of abandonment, never proof."
+        }
 
     let failClosed: Rule =
-        { Id = "fail-closed"
-          Title = "A read that did not happen may never render as a confident answer"
-          Statement =
-            "An error, an empty result, and a legitimate \"no\" are three different facts. A failed board scan is not an empty board; a failed marker read is not an unheld item; an unread issue body is not an undeclared touch-set. Every one of them fails CLOSED and says which it was."
-          Because =
-            "Epic #266, which has 51 children. #461: a failed claim scan read as \"nothing is claimed\", so `take` handed a held item to a second worker. #344: a rate-limited scan exited 0 with no verdict, and a worker read \"nothing to do\" off a board it never managed to read." }
+        {
+            Id = "fail-closed"
+            Title = "A read that did not happen may never render as a confident answer"
+            Statement =
+                "An error, an empty result, and a legitimate \"no\" are three different facts. A failed board scan is not an empty board; a failed marker read is not an unheld item; an unread issue body is not an undeclared touch-set. Every one of them fails CLOSED and says which it was."
+            Because =
+                "Epic #266, which has 51 children. #461: a failed claim scan read as \"nothing is claimed\", so `take` handed a held item to a second worker. #344: a rate-limited scan exited 0 with no verdict, and a worker read \"nothing to do\" off a board it never managed to read."
+        }
 
     let rules: Rule list =
-        [ touchSetDeclaration
-          touchSetGrammar
-          checkOrder
-          blockerResolution
-          claimLock
-          leaseRule
-          failClosed ]
+        [
+            touchSetDeclaration
+            touchSetGrammar
+            checkOrder
+            blockerResolution
+            claimLock
+            leaseRule
+            failClosed
+        ]
 
     // The rules a worker FILING an item must satisfy — the subset `cross-repo-coordination` restates
     // (#889).
@@ -767,33 +859,73 @@ module Protocol =
         [ touchSetDeclaration; touchSetGrammar; claimLock; leaseRule ]
 
     let wavePolicy =
-        { Waves = 2
-          ImplementerSlotsPerWave = 3
-          ReviewSlots = 2
-          ConsolidationThreshold = 3 }
+        {
+            Waves = 2
+            ImplementerSlotsPerWave = 3
+            ReviewSlots = 2
+            ConsolidationThreshold = 3
+        }
 
     let reviewPolicy =
-        { Schema = StructuredDecision.ReviewSchema
-          Kinds = [ "initial"; "confirmation"; "escalation"; "repair-phase"; "acceptance" ]
-          MaxAutomatedRepairRounds = 3
-          RepairPhaseMaxRounds = 10 }
+        {
+            Schema = StructuredDecision.ReviewSchema
+            Kinds = [ "initial"; "confirmation"; "escalation"; "repair-phase"; "acceptance" ]
+            MaxAutomatedRepairRounds = 3
+            RepairPhaseMaxRounds = 10
+        }
 
     let lifecyclePolicy =
-        { RequiredHousekeeping =
-            [ "host-identity"; "stale-claim"; "engine-currency"; "pending-writes"
-              "reconcile"; "triage" ]
-          TerminalActions = [ "merge"; "post-merge-obligations"; "done-stamp" ]
-          HostAcceptanceFields = [ "accepted-head"; "initial-review"; "latest-confirmation" ] }
+        {
+            RequiredHousekeeping =
+                [
+                    "host-identity"
+                    "stale-claim"
+                    "engine-currency"
+                    "pending-writes"
+                    "reconcile"
+                    "triage"
+                ]
+            TerminalActions = [ "merge"; "post-merge-obligations"; "done-stamp" ]
+            HostAcceptanceFields = [ "accepted-head"; "initial-review"; "latest-confirmation" ]
+        }
 
     let ledgerPolicy =
-        { Schema = "fsgg.coord.planning-receipt/3"
-          ObservationFields = [ "kind"; "observedAt"; "sourceSha"; "outcome"; "receiptId" ]
-          ContentIntakeFields = [ "sourceFinding" ]
-          ContentDispositionFields = [ "sourceFinding"; "disposition"; "consumerPaths"; "decisionMaker"; "rationale"; "evidence"; "observedAt"; "sourceSha"; "receiptId" ]
-          ReceiptFields = [ "schema"; "observedAt"; "sourceSha"; "complete"; "consolidationApproved"; "observations"; "contentIntakes"; "contentDispositions" ]
-          RequiredObservations =
-            [ "reconcile-dry-run", "clean"; "reconcile-apply", "applied-or-not-needed"
-              "reconcile-fresh", "clean"; "triage", "fresh"; "engine-currency", "current-scoped" ] }
+        {
+            Schema = "fsgg.coord.planning-receipt/3"
+            ObservationFields = [ "kind"; "observedAt"; "sourceSha"; "outcome"; "receiptId" ]
+            ContentIntakeFields = [ "sourceFinding" ]
+            ContentDispositionFields =
+                [
+                    "sourceFinding"
+                    "disposition"
+                    "consumerPaths"
+                    "decisionMaker"
+                    "rationale"
+                    "evidence"
+                    "observedAt"
+                    "sourceSha"
+                    "receiptId"
+                ]
+            ReceiptFields =
+                [
+                    "schema"
+                    "observedAt"
+                    "sourceSha"
+                    "complete"
+                    "consolidationApproved"
+                    "observations"
+                    "contentIntakes"
+                    "contentDispositions"
+                ]
+            RequiredObservations =
+                [
+                    "reconcile-dry-run", "clean"
+                    "reconcile-apply", "applied-or-not-needed"
+                    "reconcile-fresh", "clean"
+                    "triage", "fresh"
+                    "engine-currency", "current-scoped"
+                ]
+        }
 
     // ================================================================================================
     // THE INVENTORY (#1027) — which facts the document states, and in what order.
@@ -885,39 +1017,54 @@ module Protocol =
     // `limit` and `leaseMinutes` are the SCAN'S OWN PARAMETERS echoed back — a pass that reconciles
     // against them reconciles against its own request, and would report drift that is its own flag.
     let snapshotKeys: SnapshotKeyDoc list =
-        [ { Key = "schema"
-            Reconciled = false
-            Meaning =
-              "The document's contract, `fsgg.coord.snapshot/1`. `Snapshot.parse` REFUSES a document \
-               without it rather than defaulting — a malformed snapshot is an error, never a default." }
-          { Key = "allowBacklog"
-            Reconciled = false
-            Meaning =
-              "Whether the scan was asked to include `Backlog`. The scan's own parameter, echoed back: \
+        [
+            {
+                Key = "schema"
+                Reconciled = false
+                Meaning =
+                    "The document's contract, `fsgg.coord.snapshot/1`. `Snapshot.parse` REFUSES a document \
+               without it rather than defaulting — a malformed snapshot is an error, never a default."
+            }
+            {
+                Key = "allowBacklog"
+                Reconciled = false
+                Meaning =
+                    "Whether the scan was asked to include `Backlog`. The scan's own parameter, echoed back: \
                `lanes` reads it from HERE rather than taking its own flag (#991), which is why it is on \
-               the document at all." }
-          { Key = "limit"
-            Reconciled = false
-            Meaning = "The `-n` cap the scan was asked for, or `null` for uncapped. The scan's parameter, not a board fact." }
-          { Key = "leaseMinutes"
-            Reconciled = false
-            Meaning =
-              "The lease window the scan resolved staleness against (`FSGG_CLAIM_LEASE_MIN`, default \
+               the document at all."
+            }
+            {
+                Key = "limit"
+                Reconciled = false
+                Meaning =
+                    "The `-n` cap the scan was asked for, or `null` for uncapped. The scan's parameter, not a board fact."
+            }
+            {
+                Key = "leaseMinutes"
+                Reconciled = false
+                Meaning =
+                    "The lease window the scan resolved staleness against (`FSGG_CLAIM_LEASE_MIN`, default \
                120). The scan's parameter. The prose this replaced hardcoded `90`, which was neither \
                the default nor a fact — the clearest evidence a reader cannot tell an example from a \
-               contract when both are hand-typed." }
-          { Key = "items"
-            Reconciled = true
-            Meaning =
-              "The board rows — THE reconcilable key, and the only one. Each carries `owner`, `repo`, \
+               contract when both are hand-typed."
+            }
+            {
+                Key = "items"
+                Reconciled = true
+                Meaning =
+                    "The board rows — THE reconcilable key, and the only one. Each carries `owner`, `repo`, \
                `number`, `status`, `state`, `body` and `blockers`. Named `items` on the wire, not \
-               `candidates`: that is what the parser reads." }
-          { Key = "inFlight"
-            Reconciled = false
-            Meaning =
-              "What live claims already reserve, each naming its HOLDER. A scheduler's input, not a \
+               `candidates`: that is what the parser reads."
+            }
+            {
+                Key = "inFlight"
+                Reconciled = false
+                Meaning =
+                    "What live claims already reserve, each naming its HOLDER. A scheduler's input, not a \
                column to reconcile: `check-board` acts on the MARKER through `who`, which carries the \
-               lease state this does not." } ]
+               lease state this does not."
+            }
+        ]
 
     // THE INVENTORY — every fact the document states, under the key it states it, in document order.
     //
@@ -939,18 +1086,20 @@ module Protocol =
     // the JSON's key order — there is nowhere else it could be stated, and no second list to keep in
     // step with this one.
     let factsDocument: FactSection list =
-        [ Rules("rules", rules)
-          Rules("filingRules", filingRules)
-          Rules("reconcileRules", reconcileRules)
-          Rules("driverRules", driverRules)
-          Verdicts("verdicts", verdicts)
-          BlockerStates("blockerStates", blockerStates)
-          BoardStatuses("boardStatuses", boardStatuses)
-          ExitCodes("takeExitCodes", takeExitCodes)
-          ExitCodes("landableExitCodes", landableExitCodes)
-          ReleaseColumns("releaseColumns", releaseColumns)
-          WavePolicy("wavePolicy", wavePolicy)
-          ReviewPolicy("reviewPolicy", reviewPolicy)
-          LifecyclePolicy("lifecyclePolicy", lifecyclePolicy)
-          LedgerPolicy("ledgerPolicy", ledgerPolicy)
-          SnapshotShape("snapshotDocument", snapshotSchema, snapshotKeys) ]
+        [
+            Rules("rules", rules)
+            Rules("filingRules", filingRules)
+            Rules("reconcileRules", reconcileRules)
+            Rules("driverRules", driverRules)
+            Verdicts("verdicts", verdicts)
+            BlockerStates("blockerStates", blockerStates)
+            BoardStatuses("boardStatuses", boardStatuses)
+            ExitCodes("takeExitCodes", takeExitCodes)
+            ExitCodes("landableExitCodes", landableExitCodes)
+            ReleaseColumns("releaseColumns", releaseColumns)
+            WavePolicy("wavePolicy", wavePolicy)
+            ReviewPolicy("reviewPolicy", reviewPolicy)
+            LifecyclePolicy("lifecyclePolicy", lifecyclePolicy)
+            LedgerPolicy("ledgerPolicy", ledgerPolicy)
+            SnapshotShape("snapshotDocument", snapshotSchema, snapshotKeys)
+        ]

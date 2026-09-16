@@ -49,9 +49,11 @@ module TouchSetLintTests =
         // decision, an unread body is a failure to look. Conflating the three is exactly what #496 is
         // about, so BAD-TOUCH-SET must stay silent on all of them rather than claim a clean bill.
         for name, ts in
-            [ "no declaration", Undeclared
-              "the `none` sentinel", DeclaredNone
-              "body never read", Unreadable "boom" ] do
+            [
+                "no declaration", Undeclared
+                "the `none` sentinel", DeclaredNone
+                "body never read", Unreadable "boom"
+            ] do
             Assert.True(
                 (detailFor ts).IsNone,
                 $"%s{name}: BAD-TOUCH-SET spoke about a shape that is not its business (#496)"
@@ -59,8 +61,7 @@ module TouchSetLintTests =
 
     [<Fact>]
     let ``EVERY token dead renders the 'as dead as no touch-set' sentence`` () =
-        let detail =
-            detailFor (Declared [ Unmatchable "**/x"; Unmatchable "**/y" ])
+        let detail = detailFor (Declared [ Unmatchable "**/x"; Unmatchable "**/y" ])
 
         match detail with
         | None -> failwith "an all-unmatchable declaration produced no BAD-TOUCH-SET finding"
@@ -73,15 +74,11 @@ module TouchSetLintTests =
     let ``SOME tokens dead renders the WORSE sentence, and names only the dead ones (#646)`` () =
         // The #864/#646 case, and the one the two sentences exist to tell apart. Naming the matchable
         // token here would send the author to re-spell a path that already works.
-        let detail =
-            detailFor (
-                Declared
-                    [ Matchable "src/A/"
-                      Unmatchable "**/x" ]
-            )
+        let detail = detailFor (Declared [ Matchable "src/A/"; Unmatchable "**/x" ])
 
         match detail with
-        | None -> failwith "a partly-unmatchable declaration produced no BAD-TOUCH-SET finding — this is the #646 defect"
+        | None ->
+            failwith "a partly-unmatchable declaration produced no BAD-TOUCH-SET finding — this is the #646 defect"
         | Some d ->
             Assert.Contains("at least one of its `Paths:` tokens is unmatchable", d)
             Assert.Contains("WORSE than every token being so", d)
@@ -108,12 +105,7 @@ module TouchSetLintTests =
         // backstop for a collapse that leaves no other trace.
         let all = detailFor (Declared [ Unmatchable "**/x" ])
 
-        let some =
-            detailFor (
-                Declared
-                    [ Matchable "src/A/"
-                      Unmatchable "**/x" ]
-            )
+        let some = detailFor (Declared [ Matchable "src/A/"; Unmatchable "**/x" ])
 
         Assert.True(all.IsSome && some.IsSome, "both shapes must produce a finding")
         Assert.NotEqual<string option>(all, some)
@@ -126,25 +118,25 @@ module TouchSetLintTests =
         // Its sibling in Core.Tests (`LANES AND THE SCHEDULER AGREE ABOUT EVERY TOUCH-SET SHAPE`) pins the
         // other two consumers to the same rule, so all three surfaces are tied to one function.
         let shapes =
-            [ "every token live", Declared [ Matchable "src/A/" ]
-              "every token dead", Declared [ Unmatchable "**/x" ]
-              "SOME tokens dead — the #864 case",
-              Declared
-                  [ Matchable "src/A/"
-                    Unmatchable "**/x" ]
-              "some dead, dead one first",
-              Declared
-                  [ Unmatchable "**/x"
-                    Matchable "src/A/" ]
-              "no declaration", Undeclared
-              "the `none` sentinel", DeclaredNone
-              "body never read", Unreadable "boom" ]
+            [
+                "every token live", Declared [ Matchable "src/A/" ]
+                "every token dead", Declared [ Unmatchable "**/x" ]
+                "SOME tokens dead — the #864 case", Declared [ Matchable "src/A/"; Unmatchable "**/x" ]
+                "some dead, dead one first", Declared [ Unmatchable "**/x"; Matchable "src/A/" ]
+                "no declaration", Undeclared
+                "the `none` sentinel", DeclaredNone
+                "body never read", Unreadable "boom"
+            ]
 
         for name, ts in shapes do
             let usable = TouchSet.usability ts = TouchSet.Usable
             let lintSilent = (detailFor ts).IsNone
 
-            let said = if lintSilent then "said nothing" else "raised BAD-TOUCH-SET"
+            let said =
+                if lintSilent then
+                    "said nothing"
+                else
+                    "raised BAD-TOUCH-SET"
 
             Assert.True(
                 (usable = lintSilent),
@@ -177,9 +169,11 @@ module ConsolidationLintTests =
     open System
 
     let private repoRow repo ref tokens : LintApplication.ConsolidationRow =
-        { Ref = ref
-          Repo = repo
-          TouchSet = Declared(tokens |> List.map Matchable) }
+        {
+            Ref = ref
+            Repo = repo
+            TouchSet = Declared(tokens |> List.map Matchable)
+        }
 
     let private row ref tokens = repoRow "r" ref tokens
 
@@ -205,18 +199,22 @@ module ConsolidationLintTests =
     let ``a chain collapses under closure and must resolve into ADJACENT pairs only (AC2)`` () =
         let v =
             verdict
-                [ row "#A" [ "hub"; "ab" ]
-                  row "#B" [ "hub"; "ab"; "bc" ]
-                  row "#C" [ "hub"; "bc"; "cd" ]
-                  row "#D" [ "hub"; "cd" ] ]
+                [
+                    row "#A" [ "hub"; "ab" ]
+                    row "#B" [ "hub"; "ab"; "bc" ]
+                    row "#C" [ "hub"; "bc"; "cd" ]
+                    row "#D" [ "hub"; "cd" ]
+                ]
 
         let sets = memberSets v
 
         Assert.Equal<Set<Set<string>>>(
             Set.ofList
-                [ Set.ofList [ "#A"; "#B" ]
-                  Set.ofList [ "#B"; "#C" ]
-                  Set.ofList [ "#C"; "#D" ] ],
+                [
+                    Set.ofList [ "#A"; "#B" ]
+                    Set.ofList [ "#B"; "#C" ]
+                    Set.ofList [ "#C"; "#D" ]
+                ],
             sets
         )
 
@@ -229,12 +227,14 @@ module ConsolidationLintTests =
     [<Fact>]
     let ``EVERY pair inside EVERY reported group independently clears both floors (AC2)`` () =
         let rows =
-            [ row "#A" [ "hub"; "ab" ]
-              row "#B" [ "hub"; "ab"; "bc" ]
-              row "#C" [ "hub"; "bc"; "cd" ]
-              row "#D" [ "hub"; "cd" ]
-              row "#E" [ "solo/one.fs"; "solo/two.fs" ]
-              row "#F" [ "solo/one.fs"; "solo/two.fs" ] ]
+            [
+                row "#A" [ "hub"; "ab" ]
+                row "#B" [ "hub"; "ab"; "bc" ]
+                row "#C" [ "hub"; "bc"; "cd" ]
+                row "#D" [ "hub"; "cd" ]
+                row "#E" [ "solo/one.fs"; "solo/two.fs" ]
+                row "#F" [ "solo/one.fs"; "solo/two.fs" ]
+            ]
 
         let v = verdict rows
         Assert.NotEmpty v.Groups
@@ -243,7 +243,11 @@ module ConsolidationLintTests =
             rows
             |> List.pick (fun r -> if r.Ref = ref then Some r.TouchSet else None)
             |> function
-                | Declared ts -> ts |> List.choose (function Matchable t -> Some t | Unmatchable _ -> None)
+                | Declared ts ->
+                    ts
+                    |> List.choose (function
+                        | Matchable t -> Some t
+                        | Unmatchable _ -> None)
                 | _ -> []
 
         for g in v.Groups do
@@ -266,10 +270,12 @@ module ConsolidationLintTests =
     let ``every group's Shared touch-set is non-empty and declared by every member`` () =
         let v =
             verdict
-                [ row "#A" [ "hub"; "ab" ]
-                  row "#B" [ "hub"; "ab"; "bc" ]
-                  row "#C" [ "hub"; "bc"; "cd" ]
-                  row "#D" [ "hub"; "cd" ] ]
+                [
+                    row "#A" [ "hub"; "ab" ]
+                    row "#B" [ "hub"; "ab"; "bc" ]
+                    row "#C" [ "hub"; "bc"; "cd" ]
+                    row "#D" [ "hub"; "cd" ]
+                ]
 
         Assert.NotEmpty v.Groups
 
@@ -292,13 +298,15 @@ module ConsolidationLintTests =
     let ``identical touch-sets are judged by WHO ELSE declares them, not by the ratio (AC3)`` () =
         let v =
             verdict
-                [ row "#HubP" [ "hub" ]
-                  row "#HubQ" [ "hub" ]
-                  row "#Other1" [ "hub"; "one/a.fs" ]
-                  row "#Other2" [ "hub"; "two/b.fs" ]
-                  row "#Other3" [ "hub"; "three/c.fs" ]
-                  row "#RareP" [ "rare" ]
-                  row "#RareQ" [ "rare" ] ]
+                [
+                    row "#HubP" [ "hub" ]
+                    row "#HubQ" [ "hub" ]
+                    row "#Other1" [ "hub"; "one/a.fs" ]
+                    row "#Other2" [ "hub"; "two/b.fs" ]
+                    row "#Other3" [ "hub"; "three/c.fs" ]
+                    row "#RareP" [ "rare" ]
+                    row "#RareQ" [ "rare" ]
+                ]
 
         Assert.NotEmpty(groupsWith v [ "#RareP"; "#RareQ" ])
 
@@ -313,8 +321,16 @@ module ConsolidationLintTests =
         Assert.Equal(1.0 / sqrt 2.0, LintApplication.consolidationTokenWeight 3, 9)
 
         // The floor's plain reading, asserted as the inequality a reader would reason with.
-        Assert.True(LintApplication.consolidationTokenWeight 2 >= LintApplication.consolidationEvidenceFloor)
-        Assert.True(LintApplication.consolidationTokenWeight 3 >= LintApplication.consolidationEvidenceFloor)
+        Assert.True(
+            LintApplication.consolidationTokenWeight 2
+            >= LintApplication.consolidationEvidenceFloor
+        )
+
+        Assert.True(
+            LintApplication.consolidationTokenWeight 3
+            >= LintApplication.consolidationEvidenceFloor
+        )
+
         Assert.True(LintApplication.consolidationTokenWeight 4 < LintApplication.consolidationEvidenceFloor)
 
         // STRICTLY decreasing in the number of declaring rows — "a token declared by many rows
@@ -339,13 +355,15 @@ module ConsolidationLintTests =
 
         let v =
             verdict (
-                [ row "#Pair1" [ "hubA"; "hubB" ]
-                  row "#Pair2" [ "hubA"; "hubB" ]
-                  row "#Single1" [ "hubC" ]
-                  row "#Single2" [ "hubC" ]
-                  row "#SingleFill1" [ "hubC"; "s1.fs" ]
-                  row "#SingleFill2" [ "hubC"; "s2.fs" ]
-                  row "#SingleFill3" [ "hubC"; "s3.fs" ] ]
+                [
+                    row "#Pair1" [ "hubA"; "hubB" ]
+                    row "#Pair2" [ "hubA"; "hubB" ]
+                    row "#Single1" [ "hubC" ]
+                    row "#Single2" [ "hubC" ]
+                    row "#SingleFill1" [ "hubC"; "s1.fs" ]
+                    row "#SingleFill2" [ "hubC"; "s2.fs" ]
+                    row "#SingleFill3" [ "hubC"; "s3.fs" ]
+                ]
                 @ others
             )
 
@@ -360,17 +378,21 @@ module ConsolidationLintTests =
     [<Fact>]
     let ``injecting two rows with an IDENTICAL touch-set makes the rule fire and NAME them (AC7)`` () =
         let background =
-            [ row "#Bg1" [ "alpha/one.fs" ]
-              row "#Bg2" [ "beta/two.fs" ]
-              row "#Bg3" [ "gamma/three.fs" ] ]
+            [
+                row "#Bg1" [ "alpha/one.fs" ]
+                row "#Bg2" [ "beta/two.fs" ]
+                row "#Bg3" [ "gamma/three.fs" ]
+            ]
 
         Assert.Empty (verdict background).Groups
 
         let v =
             verdict (
                 background
-                @ [ row "#Planted1" [ "planted/x.fs"; "planted/y.fs" ]
-                    row "#Planted2" [ "planted/x.fs"; "planted/y.fs" ] ]
+                @ [
+                    row "#Planted1" [ "planted/x.fs"; "planted/y.fs" ]
+                    row "#Planted2" [ "planted/x.fs"; "planted/y.fs" ]
+                ]
             )
 
         match groupsWith v [ "#Planted1"; "#Planted2" ] with
@@ -392,11 +414,15 @@ module ConsolidationLintTests =
     let ``a row whose Paths could not be read is REPORTED, and the population records the shortfall (AC5)`` () =
         let v =
             verdict
-                [ row "#Ok1" [ "planted/x.fs"; "planted/y.fs" ]
-                  row "#Ok2" [ "planted/x.fs"; "planted/y.fs" ]
-                  { Ref = "#Blind"
-                    Repo = "r"
-                    TouchSet = Unreadable "boom" } ]
+                [
+                    row "#Ok1" [ "planted/x.fs"; "planted/y.fs" ]
+                    row "#Ok2" [ "planted/x.fs"; "planted/y.fs" ]
+                    {
+                        Ref = "#Blind"
+                        Repo = "r"
+                        TouchSet = Unreadable "boom"
+                    }
+                ]
 
         Assert.Equal<(string * string) list>([ "#Blind", "boom" ], v.Unreadable)
 
@@ -415,12 +441,28 @@ module ConsolidationLintTests =
     /// The three token-less shapes are not unreadable and are not a finding here — each is another
     /// rule's business (#496), and they reserve nothing to compare.
     [<Fact>]
-    let ``Undeclared, the none sentinel and the any chore are compared against nothing and reported by nobody here`` () =
+    let ``Undeclared, the none sentinel and the any chore are compared against nothing and reported by nobody here``
+        ()
+        =
         let v =
             verdict
-                [ { Ref = "#None"; Repo = "r"; TouchSet = DeclaredNone }
-                  { Ref = "#Undeclared"; Repo = "r"; TouchSet = Undeclared }
-                  { Ref = "#Chore"; Repo = "r"; TouchSet = DeclaredChore } ]
+                [
+                    {
+                        Ref = "#None"
+                        Repo = "r"
+                        TouchSet = DeclaredNone
+                    }
+                    {
+                        Ref = "#Undeclared"
+                        Repo = "r"
+                        TouchSet = Undeclared
+                    }
+                    {
+                        Ref = "#Chore"
+                        Repo = "r"
+                        TouchSet = DeclaredChore
+                    }
+                ]
 
         Assert.Empty v.Groups
         Assert.Empty v.Unreadable
@@ -434,12 +476,18 @@ module ConsolidationLintTests =
     let ``UNMATCHABLE tokens never make a group, however identical they are (#273)`` () =
         let v =
             verdict
-                [ { Ref = "#Dead1"
-                    Repo = "r"
-                    TouchSet = Declared [ Unmatchable "**/x"; Unmatchable "**/y" ] }
-                  { Ref = "#Dead2"
-                    Repo = "r"
-                    TouchSet = Declared [ Unmatchable "**/x"; Unmatchable "**/y" ] } ]
+                [
+                    {
+                        Ref = "#Dead1"
+                        Repo = "r"
+                        TouchSet = Declared [ Unmatchable "**/x"; Unmatchable "**/y" ]
+                    }
+                    {
+                        Ref = "#Dead2"
+                        Repo = "r"
+                        TouchSet = Declared [ Unmatchable "**/x"; Unmatchable "**/y" ]
+                    }
+                ]
 
         Assert.Empty v.Groups
         Assert.Equal(0, v.Compared)
@@ -453,8 +501,10 @@ module ConsolidationLintTests =
     let ``two rows with IDENTICAL touch-sets in DIFFERENT repos are never one group (#353)`` () =
         let v =
             verdict
-                [ repoRow "alpha" "alpha#1" [ "src/A.fs"; "src/B.fs" ]
-                  repoRow "beta" "beta#1" [ "src/A.fs"; "src/B.fs" ] ]
+                [
+                    repoRow "alpha" "alpha#1" [ "src/A.fs"; "src/B.fs" ]
+                    repoRow "beta" "beta#1" [ "src/A.fs"; "src/B.fs" ]
+                ]
 
         Assert.Empty v.Groups
 
@@ -462,8 +512,10 @@ module ConsolidationLintTests =
         // repo partition and not some accident of the fixture.
         let same =
             verdict
-                [ repoRow "alpha" "alpha#1" [ "src/A.fs"; "src/B.fs" ]
-                  repoRow "alpha" "alpha#2" [ "src/A.fs"; "src/B.fs" ] ]
+                [
+                    repoRow "alpha" "alpha#1" [ "src/A.fs"; "src/B.fs" ]
+                    repoRow "alpha" "alpha#2" [ "src/A.fs"; "src/B.fs" ]
+                ]
 
         Assert.NotEmpty same.Groups
 
@@ -476,11 +528,12 @@ module ConsolidationLintTests =
     let ``the finding prints the shared tokens, states its blind spot, and hands the decision to the runner`` () =
         let v =
             verdict
-                [ row "#One" [ "shared/a.fs"; "shared/b.fs" ]
-                  row "#Two" [ "shared/a.fs"; "shared/b.fs" ] ]
+                [
+                    row "#One" [ "shared/a.fs"; "shared/b.fs" ]
+                    row "#Two" [ "shared/a.fs"; "shared/b.fs" ]
+                ]
 
-        let detail =
-            v.Groups |> List.head |> LintApplication.consolidationDetail
+        let detail = v.Groups |> List.head |> LintApplication.consolidationDetail
 
         // AC1 — the shared touch-set, by name.
         Assert.Contains("shared/a.fs", detail)
@@ -504,21 +557,25 @@ module ConsolidationLintTests =
     [<Fact>]
     let ``the verdict is a pure function of its rows — order cannot change it (AC4)`` () =
         let rows =
-            [ row "#A" [ "hub"; "ab" ]
-              row "#B" [ "hub"; "ab"; "bc" ]
-              row "#C" [ "hub"; "bc"; "cd" ]
-              row "#D" [ "hub"; "cd" ]
-              row "#E" [ "solo/one.fs"; "solo/two.fs" ]
-              row "#F" [ "solo/one.fs"; "solo/two.fs" ] ]
+            [
+                row "#A" [ "hub"; "ab" ]
+                row "#B" [ "hub"; "ab"; "bc" ]
+                row "#C" [ "hub"; "bc"; "cd" ]
+                row "#D" [ "hub"; "cd" ]
+                row "#E" [ "solo/one.fs"; "solo/two.fs" ]
+                row "#F" [ "solo/one.fs"; "solo/two.fs" ]
+            ]
 
         let forward = verdict rows
         let backward = verdict (List.rev rows)
 
         Assert.Equal<Set<Set<string>>>(memberSets forward, memberSets backward)
+
         Assert.Equal<string list list>(
             forward.Groups |> List.map (fun g -> g.Shared),
             backward.Groups |> List.map (fun g -> g.Shared)
         )
+
         Assert.Equal(forward.Compared, backward.Compared)
 
     /// The scores a reader is shown are a FLOOR over the group, never a mean that flatters it: the
@@ -527,9 +584,11 @@ module ConsolidationLintTests =
     let ``a group's reported scores are its WEAKEST pair's, not an average`` () =
         let v =
             verdict
-                [ row "#A" [ "core/x.fs"; "core/y.fs" ]
-                  row "#B" [ "core/x.fs"; "core/y.fs" ]
-                  row "#C" [ "core/x.fs"; "core/y.fs"; "core/z.fs" ] ]
+                [
+                    row "#A" [ "core/x.fs"; "core/y.fs" ]
+                    row "#B" [ "core/x.fs"; "core/y.fs" ]
+                    row "#C" [ "core/x.fs"; "core/y.fs"; "core/z.fs" ]
+                ]
 
         match groupsWith v [ "#A"; "#B"; "#C" ] with
         | [] -> failwith "three rows sharing two exclusive tokens pairwise were not grouped"
@@ -560,13 +619,15 @@ module ConsolidationLintTests =
     let ``four mutually-similar rows with NO common token are never proposed as one group`` () =
         let v =
             verdict
-                [ row "#W" [ "a.fs"; "b.fs"; "d.fs" ]
-                  row "#X" [ "a.fs"; "c.fs"; "d.fs" ]
-                  row "#Y" [ "b.fs"; "c.fs"; "d.fs" ]
-                  row "#Z" [ "a.fs"; "b.fs"; "c.fs" ]
-                  // Holds `d.fs` down to a fourth declarer so the fixture's weights are stable; its own
-                  // coverage against every other row is 1/3, so it never joins anything.
-                  row "#Filler" [ "d.fs" ] ]
+                [
+                    row "#W" [ "a.fs"; "b.fs"; "d.fs" ]
+                    row "#X" [ "a.fs"; "c.fs"; "d.fs" ]
+                    row "#Y" [ "b.fs"; "c.fs"; "d.fs" ]
+                    row "#Z" [ "a.fs"; "b.fs"; "c.fs" ]
+                    // Holds `d.fs` down to a fourth declarer so the fixture's weights are stable; its own
+                    // coverage against every other row is 1/3, so it never joins anything.
+                    row "#Filler" [ "d.fs" ]
+                ]
 
         // The quadruple is pairwise-legal and still must not be proposed; what IS proposed is every
         // maximal TRIPLE, each named by the one file its three members actually share.
@@ -578,10 +639,12 @@ module ConsolidationLintTests =
         // this file until this assertion was written.
         Assert.Equal<Set<Set<string>>>(
             Set.ofList
-                [ Set.ofList [ "#W"; "#X"; "#Y" ]
-                  Set.ofList [ "#W"; "#X"; "#Z" ]
-                  Set.ofList [ "#W"; "#Y"; "#Z" ]
-                  Set.ofList [ "#X"; "#Y"; "#Z" ] ],
+                [
+                    Set.ofList [ "#W"; "#X"; "#Y" ]
+                    Set.ofList [ "#W"; "#X"; "#Z" ]
+                    Set.ofList [ "#W"; "#Y"; "#Z" ]
+                    Set.ofList [ "#X"; "#Y"; "#Z" ]
+                ],
             memberSets v
         )
 

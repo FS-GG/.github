@@ -181,12 +181,14 @@ module Options =
         | WritesRemoteState
 
     type CommandDescriptor =
-        { Command: Command
-          Verb: string
-          Render: RenderSupport
-          Mutation: MutationKind
-          HandlerOwner: HandlerOwner
-          Documented: bool }
+        {
+            Command: Command
+            Verb: string
+            Render: RenderSupport
+            Mutation: MutationKind
+            HandlerOwner: HandlerOwner
+            Documented: bool
+        }
 
     /// Every nullary command case, derived from the union rather than maintained as a second list.
     val allCommands: Command list
@@ -199,160 +201,162 @@ module Options =
         | ClearBlockedBy
 
     type Options =
-        { Command: Command
-          Render: Render
-          /// EVERY render flag GIVEN — empty when neither appeared on argv. `Render` alone cannot say,
-          /// because it has a non-optional default; this is what makes the flag guardable at all (#1523).
-          ///
-          /// A SET rather than the winner: `Render` is last-wins, and remembering only the winner would
-          /// let `done --json --text` slip the `--json` it cannot honour past the residue rule unnamed.
-          RenderGiven: Set<Render>
-          SnapshotFile: string option
-          /// `driver --events` (.github#2135) — derive the material-transition/active-inventory
-          /// projection instead of the single next planning `Action`.
-          Events: bool
-          /// `driver --events --cursor <path>` (.github#2135) — the durable per-item cursor file.
-          CursorFile: string option
-          Repo: string option
-          Fresh: bool
-          AllowBacklog: bool
-          Limit: int option
-          LeaseMinutes: int
-          LeaseGiven: bool
+        {
+            Command: Command
+            Render: Render
+            /// EVERY render flag GIVEN — empty when neither appeared on argv. `Render` alone cannot say,
+            /// because it has a non-optional default; this is what makes the flag guardable at all (#1523).
+            ///
+            /// A SET rather than the winner: `Render` is last-wins, and remembering only the winner would
+            /// let `done --json --text` slip the `--json` it cannot honour past the residue rule unnamed.
+            RenderGiven: Set<Render>
+            SnapshotFile: string option
+            /// `driver --events` (.github#2135) — derive the material-transition/active-inventory
+            /// projection instead of the single next planning `Action`.
+            Events: bool
+            /// `driver --events --cursor <path>` (.github#2135) — the durable per-item cursor file.
+            CursorFile: string option
+            Repo: string option
+            Fresh: bool
+            AllowBacklog: bool
+            Limit: int option
+            LeaseMinutes: int
+            LeaseGiven: bool
 
-          /// Positional arguments in order — the ref, the field, the value, the child ref. Each command
-          /// reads what it needs and refuses the wrong count.
-          Args: string list
+            /// Positional arguments in order — the ref, the field, the value, the child ref. Each command
+            /// reads what it needs and refuses the wrong count.
+            Args: string list
 
-          /// `--worker <id>` — the lock's identity (ADR-0027; NOT the GitHub account).
-          Worker: string option
-          /// `--force` — steal a live lock (`claim`/`release`). A broken IDENTITY is never stealable; this
-          /// is for a lock a human means to break.
-          Force: bool
-          /// `--refuse-overlap` (`claim`, .github#2459) — turn `claim`'s own #353 collision report from a
-          /// WARNING that still claims into a REFUSAL. `claim` is the same lock as `take`/`batch` but
-          /// without their upstream overlap-avoidance (that is exactly why the orphan/recovery paths it
-          /// exists for can reach it), so the default stays permissive — this is the opt-in for a caller
-          /// that wants the scheduler's own guarantee without going through the scheduler.
-          RefuseOverlap: bool
-          /// `--mint` (`whoami`) — print one fresh id line for `eval`.
-          Mint: bool
-          /// `--flip` (`done`) — roll the parent up when this child completes it.
-          Flip: bool
-          /// `--evidence <text>` (`done`) — assert the item is finished with NO PR (#600). Required for the
-          /// no-PR green path; a green path with no argument would be a way of switching the stamp off.
-          Evidence: string option
-          /// `--partial <why>` (`done --flip`) — this child is a PARTIAL fix and does NOT discharge its
-          /// parent, so the roll-up leaves the parent OPEN (#614). Absent means the child completes it.
-          Partial: string option
-          /// `--to <worker>` (`say`).
-          ToWorker: string option
-          /// `--message <text>` (`say`).
-          Message: string option
-          /// `--paths <token>...` (`widen`/`set-paths`) — paths to add, or the explicit replacement.
-          ///
-          /// Consumes the following arguments up to the first FLAG-SHAPED one (`TouchSet.isFlagShaped`),
-          /// NOT to the end of argv. It read to the end until #1507, which made `--json` after `--paths` a
-          /// declared path token rather than the flag it is. Empty is REFUSED, so `--paths --json` is a
-          /// misconfiguration rather than a `--paths` silently satisfied by the next flag.
-          Paths: string list
+            /// `--worker <id>` — the lock's identity (ADR-0027; NOT the GitHub account).
+            Worker: string option
+            /// `--force` — steal a live lock (`claim`/`release`). A broken IDENTITY is never stealable; this
+            /// is for a lock a human means to break.
+            Force: bool
+            /// `--refuse-overlap` (`claim`, .github#2459) — turn `claim`'s own #353 collision report from a
+            /// WARNING that still claims into a REFUSAL. `claim` is the same lock as `take`/`batch` but
+            /// without their upstream overlap-avoidance (that is exactly why the orphan/recovery paths it
+            /// exists for can reach it), so the default stays permissive — this is the opt-in for a caller
+            /// that wants the scheduler's own guarantee without going through the scheduler.
+            RefuseOverlap: bool
+            /// `--mint` (`whoami`) — print one fresh id line for `eval`.
+            Mint: bool
+            /// `--flip` (`done`) — roll the parent up when this child completes it.
+            Flip: bool
+            /// `--evidence <text>` (`done`) — assert the item is finished with NO PR (#600). Required for the
+            /// no-PR green path; a green path with no argument would be a way of switching the stamp off.
+            Evidence: string option
+            /// `--partial <why>` (`done --flip`) — this child is a PARTIAL fix and does NOT discharge its
+            /// parent, so the roll-up leaves the parent OPEN (#614). Absent means the child completes it.
+            Partial: string option
+            /// `--to <worker>` (`say`).
+            ToWorker: string option
+            /// `--message <text>` (`say`).
+            Message: string option
+            /// `--paths <token>...` (`widen`/`set-paths`) — paths to add, or the explicit replacement.
+            ///
+            /// Consumes the following arguments up to the first FLAG-SHAPED one (`TouchSet.isFlagShaped`),
+            /// NOT to the end of argv. It read to the end until #1507, which made `--json` after `--paths` a
+            /// declared path token rather than the flag it is. Empty is REFUSED, so `--paths --json` is a
+            /// misconfiguration rather than a `--paths` silently satisfied by the next flag.
+            Paths: string list
 
-          /// `--pr <n>` (`verify-paths`) — the pull request to check.
-          Pr: int option
-          /// `--warn` (`verify-paths`) — downgrade a DRIFT/INVALID verdict to advisory (exit 0). "I could
-          /// not check" is never downgraded — only a real verdict is.
-          Warn: bool
-          /// `--issue <ref>` (`verify-paths`) — check the PR against an EXPLICITLY named issue's touch-set,
-          /// bypassing the branch/closing-ref resolution (#479). Its repo is authoritative: a `--issue` in a
-          /// different repo than the PR's is a straddle the tool refuses (a touch-set there says nothing about
-          /// the files changed here), and when `--repo` is absent the issue decides the repo.
-          Issue: string option
+            /// `--pr <n>` (`verify-paths`) — the pull request to check.
+            Pr: int option
+            /// `--warn` (`verify-paths`) — downgrade a DRIFT/INVALID verdict to advisory (exit 0). "I could
+            /// not check" is never downgraded — only a real verdict is.
+            Warn: bool
+            /// `--issue <ref>` (`verify-paths`) — check the PR against an EXPLICITLY named issue's touch-set,
+            /// bypassing the branch/closing-ref resolution (#479). Its repo is authoritative: a `--issue` in a
+            /// different repo than the PR's is a straddle the tool refuses (a touch-set there says nothing about
+            /// the files changed here), and when `--repo` is absent the issue decides the repo.
+            Issue: string option
 
-          /// `--status <name>` (`ready`) — show only that board Status column, matched by NAME the way
-          /// bash's `board_filter` matches it. Present ⇒ the default "not Done" filter is OFF: asking to
-          /// see a column is asking to see it, Done included.
-          Status: string option
-          /// `--blocked-by <ref>` (`release --status Blocked`) — the edge to write into the `Blocked by`
-          /// FIELD in the SAME call (.github#2079), so a coherent park is one call. Canonicalized exactly
-          /// as `set-field <ref> 'Blocked by' <value>` already canonicalizes it.
-          BlockedBy: string option
-          /// Exactly one explicit set mutation for `set-field ... 'Blocked by'`, or none.
-          BlockedByMutation: BlockedByMutation option
-          /// `--all` (`ready`) — widen past the "not Done" default without naming a column. `ready` is a
-          /// TRUTH read (#520), so `--all` shows the whole board — Done, and closed-but-still-columned rows.
-          All: bool
+            /// `--status <name>` (`ready`) — show only that board Status column, matched by NAME the way
+            /// bash's `board_filter` matches it. Present ⇒ the default "not Done" filter is OFF: asking to
+            /// see a column is asking to see it, Done included.
+            Status: string option
+            /// `--blocked-by <ref>` (`release --status Blocked`) — the edge to write into the `Blocked by`
+            /// FIELD in the SAME call (.github#2079), so a coherent park is one call. Canonicalized exactly
+            /// as `set-field <ref> 'Blocked by' <value>` already canonicalizes it.
+            BlockedBy: string option
+            /// Exactly one explicit set mutation for `set-field ... 'Blocked by'`, or none.
+            BlockedByMutation: BlockedByMutation option
+            /// `--all` (`ready`) — widen past the "not Done" default without naming a column. `ready` is a
+            /// TRUTH read (#520), so `--all` shows the whole board — Done, and closed-but-still-columned rows.
+            All: bool
 
-          /// `--batch` (`set-field`) — write the remaining `Field=Value` args in ONE aliased mutation
-          /// document (#448): N fields, one GraphQL request, one point at the floor.
-          Batch: bool
-          /// `batch --explain` — print the DERIVED RANKING beside the batch (.github#1598): every candidate
-          /// in the order the scheduler considered it, the rank inputs that produced that order, and how
-          /// many lanes each admitted item displaced. Stderr, like every other "why" this verb prints, so
-          /// `batch --json --explain` keeps stdout a clean machine document.
-          Explain: bool
+            /// `--batch` (`set-field`) — write the remaining `Field=Value` args in ONE aliased mutation
+            /// document (#448): N fields, one GraphQL request, one point at the floor.
+            Batch: bool
+            /// `batch --explain` — print the DERIVED RANKING beside the batch (.github#1598): every candidate
+            /// in the order the scheduler considered it, the rank inputs that produced that order, and how
+            /// many lanes each admitted item displaced. Stderr, like every other "why" this verb prints, so
+            /// `batch --json --explain` keeps stdout a clean machine document.
+            Explain: bool
 
-          /// `--strict` (`lint`) — a NOTE is fatal too, not just an error (the pedantic board-health pass).
-          Strict: bool
+            /// `--strict` (`lint`) — a NOTE is fatal too, not just an error (the pedantic board-health pass).
+            Strict: bool
 
-          /// `--active` (`overlap`) — check the item's touch-set against the LIVE claims in its own repo,
-          /// rather than against a second named item. Repo-scoped (#353).
-          Active: bool
+            /// `--active` (`overlap`) — check the item's touch-set against the LIVE claims in its own repo,
+            /// rather than against a second named item. Repo-scoped (#353).
+            Active: bool
 
-          /// `--apply` (`reap`) — actually DELETE the expired markers. Without it, `reap` is a DRY RUN that
-          /// only reports what it WOULD collect (`would reap …`), so a destructive lock-break is never the
-          /// default — the operator opts into it. #581.
-          Apply: bool
+            /// `--apply` (`reap`) — actually DELETE the expired markers. Without it, `reap` is a DRY RUN that
+            /// only reports what it WOULD collect (`would reap …`), so a destructive lock-break is never the
+            /// default — the operator opts into it. #581.
+            Apply: bool
 
-          /// `--peek` (`inbox`) — show new messages WITHOUT advancing the per-worker cursor, so the same
-          /// mail is still "new" on the next read. Off, `inbox` consumes what it shows.
-          Peek: bool
+            /// `--peek` (`inbox`) — show new messages WITHOUT advancing the per-worker cursor, so the same
+            /// mail is still "new" on the next read. Off, `inbox` consumes what it shows.
+            Peek: bool
 
-          /// `--dry-run` (`flush`) — LIST the queued board writes without replaying them.
-          ///
-          /// The polarity is the OPPOSITE of `reap --apply`, deliberately (#862). `reap` breaks another
-          /// worker's lock, so its bare form must be safe. `flush` replays writes THIS worker was already
-          /// told were queued — the recovery the `EX_RATE` message names — so defaulting to a dry run would
-          /// rebuild the very trap #862 was filed for: the worker runs the command the engine named, reads
-          /// a queue depth, concludes the board is repaired, and walks away from writes that never landed.
-          DryRun: bool
+            /// `--dry-run` (`flush`) — LIST the queued board writes without replaying them.
+            ///
+            /// The polarity is the OPPOSITE of `reap --apply`, deliberately (#862). `reap` breaks another
+            /// worker's lock, so its bare form must be safe. `flush` replays writes THIS worker was already
+            /// told were queued — the recovery the `EX_RATE` message names — so defaulting to a dry run would
+            /// rebuild the very trap #862 was filed for: the worker runs the command the engine named, reads
+            /// a queue depth, concludes the board is repaired, and walks away from writes that never landed.
+            DryRun: bool
 
-          /// `--wait` (`landable`) — poll until the verdict SETTLES rather than reading it once (#724). The
-          /// poll never believes an early `green`: it waits for the run set to STOP GROWING, and it keeps
-          /// waiting while zero runs have registered (the registration race). Conflicted/unknown return at
-          /// once — no amount of waiting fixes either.
-          Wait: bool
-          /// `--tries N` (`landable --wait`) — the maximum number of polls (positive). Default 30.
-          Tries: int option
-          /// `--interval S` (`landable --wait`) — seconds to sleep between polls (0 permitted, for the test
-          /// harness). Default 20.
-          Interval: int option
-          /// `--require NAME` (`landable`, REPEATABLE — each occurrence APPENDS) — a check-run name that must
-          /// have REPORTED before this PR is `green`. The rollup asks "is anything red?", which is blind to a
-          /// check that is ABSENT; branch protection covers the REQUIRED set, so this is for a NON-required
-          /// check that nonetheless decides the PR (#737). A missing one is `pending`, never `green`.
-          Require: string list
-          /// `--sha SHA` (`landable`) — the head SHA the caller believes it is gating. `pulls/{n}` is
-          /// eventually consistent after a force-push, so a caller that just pushed can name the commit it
-          /// MEANS; a disagreement is `pending` rather than a verdict about the previous commit (#737).
-          /// Absent ⇒ the PR's own head SHA is taken on trust, right for every caller that did not push.
-          Sha: string option
+            /// `--wait` (`landable`) — poll until the verdict SETTLES rather than reading it once (#724). The
+            /// poll never believes an early `green`: it waits for the run set to STOP GROWING, and it keeps
+            /// waiting while zero runs have registered (the registration race). Conflicted/unknown return at
+            /// once — no amount of waiting fixes either.
+            Wait: bool
+            /// `--tries N` (`landable --wait`) — the maximum number of polls (positive). Default 30.
+            Tries: int option
+            /// `--interval S` (`landable --wait`) — seconds to sleep between polls (0 permitted, for the test
+            /// harness). Default 20.
+            Interval: int option
+            /// `--require NAME` (`landable`, REPEATABLE — each occurrence APPENDS) — a check-run name that must
+            /// have REPORTED before this PR is `green`. The rollup asks "is anything red?", which is blind to a
+            /// check that is ABSENT; branch protection covers the REQUIRED set, so this is for a NON-required
+            /// check that nonetheless decides the PR (#737). A missing one is `pending`, never `green`.
+            Require: string list
+            /// `--sha SHA` (`landable`) — the head SHA the caller believes it is gating. `pulls/{n}` is
+            /// eventually consistent after a force-push, so a caller that just pushed can name the commit it
+            /// MEANS; a disagreement is `pending` rather than a verdict about the previous commit (#737).
+            /// Absent ⇒ the PR's own head SHA is taken on trust, right for every caller that did not push.
+            Sha: string option
 
-          /// `--label L` (`issues`) — restrict the REST listing to issues carrying this label. Absent ⇒ every
-          /// issue in the state.
-          Label: string option
-          /// `--state open|closed|all` (`issues`) — which issue state to list. Default `open`, exactly as
-          /// bash's `issues`.
-          IssueState: string option
-          /// `--local` (`who`) — join the live claims to the local git worktrees (#959). `who` is the only
-          /// reader.
-          Local: bool
-          /// `who --all-repos` — read every repository represented on the Coordination board instead of
-          /// silently defaulting to the current checkout's repository.
-          AllRepos: bool
+            /// `--label L` (`issues`) — restrict the REST listing to issues carrying this label. Absent ⇒ every
+            /// issue in the state.
+            Label: string option
+            /// `--state open|closed|all` (`issues`) — which issue state to list. Default `open`, exactly as
+            /// bash's `issues`.
+            IssueState: string option
+            /// `--local` (`who`) — join the live claims to the local git worktrees (#959). `who` is the only
+            /// reader.
+            Local: bool
+            /// `who --all-repos` — read every repository represented on the Coordination board instead of
+            /// silently defaulting to the current checkout's repository.
+            AllRepos: bool
 
-          /// `--over N,M` (`room open`) — the item refs the coordination room is opened over (ADR-0051),
-          /// comma-separated. `RoomOpen` is the only reader.
-          Over: string list }
+            /// `--over N,M` (`room open`) — the item refs the coordination room is opened over (ADR-0051),
+            /// comma-separated. `RoomOpen` is the only reader.
+            Over: string list
+        }
 
     /// The documented default (`FSGG_CLAIM_LEASE_MIN`).
     [<Literal>]
@@ -370,9 +374,7 @@ module Options =
     /// Structural closure for catalogue consumers. Reports every duplicate, missing, unexpected,
     /// blank, or undocumented row together so a command addition gets one actionable failure.
     val validateCommandCatalogue:
-        expectedCommands: Command list ->
-        descriptors: CommandDescriptor list ->
-        Result<unit, string list>
+        expectedCommands: Command list -> descriptors: CommandDescriptor list -> Result<unit, string list>
 
     /// A `--repo` token → the `RepoScope.Scope` board rows resolve to: a registry short-id maps
     /// (`sdd` → `FS.GG.SDD`), an `owner/repo` keeps its repo part, a literal name passes through, and
@@ -398,8 +400,7 @@ module Options =
     /// parsed in `Client.fs`): matched on (owner, repo) under ANY owner, consulted BEFORE the embedded table
     /// so a deployment can bring its own locks (or repoint one) without a code change (.github#1140,
     /// successor to #1087). Pass `[]` for the default FS-GG deployment — behaviour is then unchanged.
-    val choreLockRef:
-        extra: FS.GG.Coord.Types.Ref list -> owner: string -> repo: string -> FS.GG.Coord.Types.Ref option
+    val choreLockRef: extra: FS.GG.Coord.Types.Ref list -> owner: string -> repo: string -> FS.GG.Coord.Types.Ref option
 
     /// An owner + repo → the CLOSED issue whose comments are that repo's per-receiver OPERATION-LOCK CAS
     /// subject (executor-fencing design §4.1, extending ADR-0041 onto a third subject), resolved through the
@@ -424,8 +425,7 @@ module Options =
     ///
     /// `extra` is the per-deployment roster a vendored tenant may inject, matched on (owner, repo) under ANY
     /// owner and consulted BEFORE the embedded table. Pass `[]` for the default FS-GG deployment.
-    val opLockRef:
-        extra: FS.GG.Coord.Types.Ref list -> owner: string -> repo: string -> FS.GG.Coord.Types.Ref option
+    val opLockRef: extra: FS.GG.Coord.Types.Ref list -> owner: string -> repo: string -> FS.GG.Coord.Types.Ref option
 
     /// Parse argv. `Error` carries a message already fit to print.
     val parse: args: string list -> Result<Options, string>

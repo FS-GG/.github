@@ -56,9 +56,11 @@ module ChurnReading =
 
     /// Elements 2 and 3: a cause named in the analyst's own words, and the rows that instance it.
     type CauseInstance =
-        { /// Free prose. Never inspected for content — "name the cause in your own words" is judgement.
-          Cause: string
-          Rows: string list }
+        {
+            /// Free prose. Never inspected for content — "name the cause in your own words" is judgement.
+            Cause: string
+            Rows: string list
+        }
 
     /// Element 4: a row restating a condition a `scripts/check-*.py` already derives.
     type DerivedRow = { Row: string; Gate: string }
@@ -73,7 +75,11 @@ module ChurnReading =
     /// instants rather than a string: two readers of one board on one day, both with correct
     /// arithmetic, reported net −7 and net −1, and both were right — the windows differed by seventeen
     /// hours and both were labelled "today".
-    type Window = { Start: DateTimeOffset; End: DateTimeOffset }
+    type Window =
+        {
+            Start: DateTimeOffset
+            End: DateTimeOffset
+        }
 
     /// Element 1's second half. THE UNIT IS REQUIRED, and that is measured rather than fastidious: the
     /// reading that motivated the analyst role said "while 25 items landed", and
@@ -83,26 +89,28 @@ module ChurnReading =
     type Landed = { Count: int; Unit: string }
 
     type Reading =
-        { Schema: string
-          Window: Window
-          /// Element 1's components. `netRowDelta` must equal `rowsOpened - rowsClosed`; that is the
-          /// only arithmetic invariant this document has, and transcription slips in published counts
-          /// are a measured failure of this repository rather than a hypothetical one.
-          RowsOpened: int
-          RowsClosed: int
-          NetRowDelta: int
-          ItemsLanded: Landed
-          CauseInstances: Census<CauseInstance>
-          SuccessorGeneratingCauses: Census<CauseInstance>
-          AlreadyDerived: Census<DerivedRow>
-          JointlyRedCandidates: Census<JointlyRed>
-          /// Element 5. Explicit `null` when no pathology is present — never the string "none", which
-          /// `validate` refuses by name. Required to be non-null whenever any census reports `Found`.
-          Remedy: string option
-          /// The prose reading this skeleton accompanies, or an unambiguous pointer to where it was
-          /// posted. Free-form, never inspected — but REQUIRED, because a skeleton that can be emitted
-          /// without the reading would destroy the thing it was built to protect.
-          Prose: string }
+        {
+            Schema: string
+            Window: Window
+            /// Element 1's components. `netRowDelta` must equal `rowsOpened - rowsClosed`; that is the
+            /// only arithmetic invariant this document has, and transcription slips in published counts
+            /// are a measured failure of this repository rather than a hypothetical one.
+            RowsOpened: int
+            RowsClosed: int
+            NetRowDelta: int
+            ItemsLanded: Landed
+            CauseInstances: Census<CauseInstance>
+            SuccessorGeneratingCauses: Census<CauseInstance>
+            AlreadyDerived: Census<DerivedRow>
+            JointlyRedCandidates: Census<JointlyRed>
+            /// Element 5. Explicit `null` when no pathology is present — never the string "none", which
+            /// `validate` refuses by name. Required to be non-null whenever any census reports `Found`.
+            Remedy: string option
+            /// The prose reading this skeleton accompanies, or an unambiguous pointer to where it was
+            /// posted. Free-form, never inspected — but REQUIRED, because a skeleton that can be emitted
+            /// without the reading would destroy the thing it was built to protect.
+            Prose: string
+        }
 
     type Finding = { Field: string; Detail: string }
 

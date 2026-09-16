@@ -19,38 +19,44 @@ open FS.GG.Coord.GitHub
 module BlockerGraphTests =
 
     let private row owner repo n status state (blockedBy: string) : Scan.Row =
-        { Ref = { Owner = owner; Repo = repo; Number = n }
-          Title = $"item %d{n}"
-          Status = status
-          BlockedByRaw = blockedBy
-          State = state
-          IsPullRequest = false
-          PathRepo = repo
-          BoardClass = None
-          BoardKind = None
-          CommentCount = None
-          Severity = Unset
-          Phase = None
-          CreatedAt = None
-          SweptBody = None
-          NodeId = Some $"I_blocker_%d{n}" }
+        {
+            Ref =
+                {
+                    Owner = owner
+                    Repo = repo
+                    Number = n
+                }
+            Title = $"item %d{n}"
+            Status = status
+            BlockedByRaw = blockedBy
+            State = state
+            IsPullRequest = false
+            PathRepo = repo
+            BoardClass = None
+            BoardKind = None
+            CommentCount = None
+            Severity = Unset
+            Phase = None
+            CreatedAt = None
+            SweptBody = None
+            NodeId = Some $"I_blocker_%d{n}"
+        }
 
     // A `.github` open item blocked by a bare-`#n` list — the spelling the board actually uses.
     let private gh n (blockedBy: string) =
         row "FS-GG" ".github" n BoardStatus.Blocked IssueState.Open blockedBy
 
     let private ringOf (rings: Ref list list) =
-        rings |> List.map (fun ring -> ring |> List.map (fun r -> r.Number) |> List.sort) |> List.sort
+        rings
+        |> List.map (fun ring -> ring |> List.map (fun r -> r.Number) |> List.sort)
+        |> List.sort
 
     // ---- the regression: the real ring, as rows, is caught -----------------------------------------
 
     [<Fact>]
     let ``the 1059-1063-1073 ring produces a graph in which cycles finds the three-item ring`` () =
         // #1059 ──(Blocked by)──▶ #1063 ──▶ #1073 ──▶ #1059. Every blocker OPEN and on the board.
-        let rows =
-            [ gh 1059 "#1063"
-              gh 1063 "#1073"
-              gh 1073 "#1059" ]
+        let rows = [ gh 1059 "#1063"; gh 1063 "#1073"; gh 1073 "#1059" ]
 
         let rings = Blockers.cycles (Scan.blockerGraph rows)
         Assert.Equal<int list list>([ [ 1059; 1063; 1073 ] ], ringOf rings)
@@ -61,9 +67,11 @@ module BlockerGraphTests =
     let ``a CLOSED blocker breaks the ring - its edge is resolved and dropped`` () =
         // Same three refs, but #1073 is CLOSED. The edge #1063 → #1073 is resolved, so no ring closes.
         let rows =
-            [ gh 1059 "#1063"
-              gh 1063 "#1073"
-              row "FS-GG" ".github" 1073 BoardStatus.Done IssueState.Closed "#1059" ]
+            [
+                gh 1059 "#1063"
+                gh 1063 "#1073"
+                row "FS-GG" ".github" 1073 BoardStatus.Done IssueState.Closed "#1059"
+            ]
 
         Assert.Empty(Blockers.cycles (Scan.blockerGraph rows))
 
@@ -120,8 +128,6 @@ module BlockerGraphTests =
     let ``an owner-qualified cross-repo ref matches the on-board node`` () =
         // The scheduler writes qualified refs; a bare and a qualified spelling of the same node must both
         // resolve to it.
-        let rows =
-            [ gh 20 "FS-GG/.github#21"
-              gh 21 "#20" ]
+        let rows = [ gh 20 "FS-GG/.github#21"; gh 21 "#20" ]
 
         Assert.Equal<int list list>([ [ 20; 21 ] ], ringOf (Blockers.cycles (Scan.blockerGraph rows)))

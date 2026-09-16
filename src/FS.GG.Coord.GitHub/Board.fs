@@ -20,15 +20,19 @@ module Board =
     type Field = { Id: string; Type: FieldType }
 
     type BoardMap =
-        { Number: int
-          Id: string
-          Owner: string
-          Title: string
-          Fields: Map<string, Field> }
+        {
+            Number: int
+            Id: string
+            Owner: string
+            Title: string
+            Fields: Map<string, Field>
+        }
 
     type BlockedByObservation =
-        { Value: string option
-          Revision: string option }
+        {
+            Value: string option
+            Revision: string option
+        }
 
     type FieldWrite =
         | Set of value: string
@@ -49,13 +53,15 @@ module Board =
     // misreported as *"the board is half-written"*: the caller would then refuse to queue it (a partial is
     // never queued), and the write would be silently lost on a condition that was only ever temporary.
     let private query (document: string) (variables: (string * Var) list) (subject: string) =
-        { Method = "POST"
-          Path = "graphql"
-          Query = []
-          Body = Query(document, variables)
-          Budget = GraphQl
-          IfNoneMatch = None
-          Subject = subject }
+        {
+            Method = "POST"
+            Path = "graphql"
+            Query = []
+            Body = Query(document, variables)
+            Budget = GraphQl
+            IfNoneMatch = None
+            Subject = subject
+        }
 
     // ---- bootstrap ---------------------------------------------------------------------------------
 
@@ -127,27 +133,46 @@ module Board =
                    | None -> [])
 
             GraphQl.read transport (query (OwnerKind.forOwner kind ProjectsDoc) variables subject) (fun data ->
-                    let root = data.GetProperty ownerField
-                    if root.ValueKind = JsonValueKind.Null then
-                        Error(Malformed(subject, $"the project-list response is missing `%s{ownerField}.projectsV2`"))
-                    else
-                        let connection = root.GetProperty "projectsV2"
-                        GraphQl.pageWithin subject "the board lookup" 50 (fun (id, _, _) -> id)
-                            (fun node ->
-                                match node.TryGetProperty "id", node.TryGetProperty "title", node.TryGetProperty "number" with
-                                | (true, id), (true, projectTitle), (true, number)
-                                    when id.ValueKind = JsonValueKind.String
-                                         && projectTitle.ValueKind = JsonValueKind.String
-                                         && number.ValueKind = JsonValueKind.Number ->
-                                    match number.TryGetInt32() with
-                                    | true, value -> Ok(id.GetString(), projectTitle.GetString(), value)
-                                    | _ -> Error(Malformed(subject, "a board's `number` is not a 32-bit integer"))
-                                | _ -> Error(Malformed(subject, "the project list returned a board with no readable `number`/`title`/`id`")))
-                            connection)
+                let root = data.GetProperty ownerField
+
+                if root.ValueKind = JsonValueKind.Null then
+                    Error(Malformed(subject, $"the project-list response is missing `%s{ownerField}.projectsV2`"))
+                else
+                    let connection = root.GetProperty "projectsV2"
+
+                    GraphQl.pageWithin
+                        subject
+                        "the board lookup"
+                        50
+                        (fun (id, _, _) -> id)
+                        (fun node ->
+                            match
+                                node.TryGetProperty "id", node.TryGetProperty "title", node.TryGetProperty "number"
+                            with
+                            | (true, id), (true, projectTitle), (true, number) when
+                                id.ValueKind = JsonValueKind.String
+                                && projectTitle.ValueKind = JsonValueKind.String
+                                && number.ValueKind = JsonValueKind.Number
+                                ->
+                                match number.TryGetInt32() with
+                                | true, value -> Ok(id.GetString(), projectTitle.GetString(), value)
+                                | _ -> Error(Malformed(subject, "a board's `number` is not a 32-bit integer"))
+                            | _ ->
+                                Error(
+                                    Malformed(
+                                        subject,
+                                        "the project list returned a board with no readable `number`/`title`/`id`"
+                                    )
+                                ))
+                        connection)
 
         match GraphQl.drain subject "the board lookup" { MaxPages = 100; MaxItems = 5000 } fetchProjects with
         | Error e -> Error e
-        | Ok projects when projects |> List.exists (fun (_, projectTitle, _) -> projectTitle = title) |> not ->
+        | Ok projects when
+            projects
+            |> List.exists (fun (_, projectTitle, _) -> projectTitle = title)
+            |> not
+            ->
             // A BOARD WE READ AND DID NOT FIND IS A REAL ANSWER, and it is a configuration error, not a
             // transient. Naming the title back is what makes it fixable — the usual cause is
             // `FSGG_COORD_PROJECT` pointing at a board that was renamed. Since `.github#2535` this sentence
@@ -155,82 +180,99 @@ module Board =
             Error(NotFound $"no Projects v2 board titled '%s{title}' in %s{owner}")
 
         | Ok projects ->
-        let id, _, number = projects |> List.find (fun (_, projectTitle, _) -> projectTitle = title)
+            let id, _, number =
+                projects |> List.find (fun (_, projectTitle, _) -> projectTitle = title)
 
-        match transport.Send(query (OwnerKind.forOwner kind FieldsDoc) (ownerVars @ [ "number", VNumber(double number) ]) subject) with
-        | Error e -> Error e
-        | Ok fieldsResponse ->
+            match
+                transport.Send(
+                    query (OwnerKind.forOwner kind FieldsDoc) (ownerVars @ [ "number", VNumber(double number) ]) subject
+                )
+            with
+            | Error e -> Error e
+            | Ok fieldsResponse ->
 
-        match GraphQl.decode subject fieldsResponse.Body Ok with
-        | Error e -> Error e
-        | Ok fieldsData ->
+                match GraphQl.decode subject fieldsResponse.Body Ok with
+                | Error e -> Error e
+                | Ok fieldsData ->
 
-        let fieldsConnection =
-            try
-                let root = fieldsData.GetProperty ownerField
+                    let fieldsConnection =
+                        try
+                            let root = fieldsData.GetProperty ownerField
 
-                if root.ValueKind = JsonValueKind.Null then
-                    None
-                else
-                    let project = root.GetProperty "projectV2"
+                            if root.ValueKind = JsonValueKind.Null then
+                                None
+                            else
+                                let project = root.GetProperty "projectV2"
 
-                    if project.ValueKind = JsonValueKind.Null then
-                        None
-                    else
-                        Some(project.GetProperty "fields")
-            with :? KeyNotFoundException ->
-                None
+                                if project.ValueKind = JsonValueKind.Null then
+                                    None
+                                else
+                                    Some(project.GetProperty "fields")
+                        with :? KeyNotFoundException ->
+                            None
 
-        match fieldsConnection with
-        | None -> Error(Malformed(subject, $"the field-map response is missing `%s{ownerField}.projectV2.fields`"))
-        | Some fieldsConnection ->
+                    match fieldsConnection with
+                    | None ->
+                        Error(
+                            Malformed(subject, $"the field-map response is missing `%s{ownerField}.projectV2.fields`")
+                        )
+                    | Some fieldsConnection ->
 
-        // **A PARTIAL FIELD MAP IS REFUSED, NOT CACHED** (`.github#2535`). `fields(first: 50)` with no
-        // cursor silently drops the tail of a board with more than 50 fields, and the all-empty guard below
-        // cannot see a PARTIAL map — only a wholly unreadable one. So a board map missing exactly the field
-        // a later write needs was accepted, cached for a day, and every write to that field failed with the
-        // misleading `no field named 'X' on this board. Known fields: …`, which recites the TRUNCATED list
-        // as if it were the board's own. The completeness question is asked here, once, before anything is
-        // built from the nodes — and a `totalCount` we cannot read is a refusal too.
-        match Reads.connectionComplete subject "the board's field map" FieldsWindow fieldsConnection with
-        | Error e -> Error e
-        | Ok() ->
+                        // **A PARTIAL FIELD MAP IS REFUSED, NOT CACHED** (`.github#2535`). `fields(first: 50)` with no
+                        // cursor silently drops the tail of a board with more than 50 fields, and the all-empty guard below
+                        // cannot see a PARTIAL map — only a wholly unreadable one. So a board map missing exactly the field
+                        // a later write needs was accepted, cached for a day, and every write to that field failed with the
+                        // misleading `no field named 'X' on this board. Known fields: …`, which recites the TRUNCATED list
+                        // as if it were the board's own. The completeness question is asked here, once, before anything is
+                        // built from the nodes — and a `totalCount` we cannot read is a refusal too.
+                        match
+                            Reads.connectionComplete subject "the board's field map" FieldsWindow fieldsConnection
+                        with
+                        | Error e -> Error e
+                        | Ok() ->
 
-        let fields =
-            try
-                fieldsConnection.GetProperty("nodes").EnumerateArray()
-                |> Seq.choose (fun n ->
-                    let get (name: string) =
-                        match n.TryGetProperty name with
-                        | true, v when v.ValueKind = JsonValueKind.String -> Some(v.GetString())
-                        | _ -> None
+                            let fields =
+                                try
+                                    fieldsConnection.GetProperty("nodes").EnumerateArray()
+                                    |> Seq.choose (fun n ->
+                                        let get (name: string) =
+                                            match n.TryGetProperty name with
+                                            | true, v when v.ValueKind = JsonValueKind.String -> Some(v.GetString())
+                                            | _ -> None
 
-                    match get "name", get "id", get "dataType" with
-                    | Some name, Some fid, Some dt ->
-                        fieldTypeOf dt n |> Option.map (fun t -> name, { Id = fid; Type = t })
-                    | _ -> None)
-                |> Map.ofSeq
-            with :? KeyNotFoundException ->
-                Map.empty
+                                        match get "name", get "id", get "dataType" with
+                                        | Some name, Some fid, Some dt ->
+                                            fieldTypeOf dt n |> Option.map (fun t -> name, { Id = fid; Type = t })
+                                        | _ -> None)
+                                    |> Map.ofSeq
+                                with :? KeyNotFoundException ->
+                                    Map.empty
 
-        if Map.isEmpty fields then
-            // A BOARD WITH NO FIELDS IS A READ THAT WENT WRONG. Every board has at least `Status`, so an
-            // empty map is not an austere board — it is a document we failed to walk, and caching it would
-            // make every subsequent write fail with "no field named Status" for a day.
-            //
-            // THIS GUARD IS STILL DISTINCT FROM THE COMPLETENESS CHECK ABOVE and neither subsumes the
-            // other: `connectionComplete` catches a map truncated by the window (`totalCount` 60, 50
-            // returned), this one catches a map that arrived complete-as-far-as-the-wire-goes and was
-            // nonetheless unwalkable — `totalCount` 0 with an empty `nodes`, or nodes whose `dataType` we
-            // were never taught, both of which are complete reads that produce nothing usable.
-            Error(Malformed(subject, "the board reported no fields at all — refusing to cache a field map we could not read"))
-        else
-            Ok
-                { Number = number
-                  Id = id
-                  Owner = owner
-                  Title = title
-                  Fields = fields }
+                            if Map.isEmpty fields then
+                                // A BOARD WITH NO FIELDS IS A READ THAT WENT WRONG. Every board has at least `Status`, so an
+                                // empty map is not an austere board — it is a document we failed to walk, and caching it would
+                                // make every subsequent write fail with "no field named Status" for a day.
+                                //
+                                // THIS GUARD IS STILL DISTINCT FROM THE COMPLETENESS CHECK ABOVE and neither subsumes the
+                                // other: `connectionComplete` catches a map truncated by the window (`totalCount` 60, 50
+                                // returned), this one catches a map that arrived complete-as-far-as-the-wire-goes and was
+                                // nonetheless unwalkable — `totalCount` 0 with an empty `nodes`, or nodes whose `dataType` we
+                                // were never taught, both of which are complete reads that produce nothing usable.
+                                Error(
+                                    Malformed(
+                                        subject,
+                                        "the board reported no fields at all — refusing to cache a field map we could not read"
+                                    )
+                                )
+                            else
+                                Ok
+                                    {
+                                        Number = number
+                                        Id = id
+                                        Owner = owner
+                                        Title = title
+                                        Fields = fields
+                                    }
 
     // ---- the board map, serialised (#418) ----------------------------------------------------------
 
@@ -248,7 +290,9 @@ module Board =
     // iterates in key order, so the output is deterministic.
     let boardToJson (board: BoardMap) : string =
         use stream = new MemoryStream()
-        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        use w =
+            new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
 
         w.WriteStartObject()
         w.WriteNumber("number", board.Number)
@@ -317,11 +361,13 @@ module Board =
                 None
             else
                 Some
-                    { Number = root.GetProperty("number").GetInt32()
-                      Id = root.GetProperty("id").GetString()
-                      Owner = root.GetProperty("owner").GetString()
-                      Title = root.GetProperty("title").GetString()
-                      Fields = fields }
+                    {
+                        Number = root.GetProperty("number").GetInt32()
+                        Id = root.GetProperty("id").GetString()
+                        Owner = root.GetProperty("owner").GetString()
+                        Title = root.GetProperty("title").GetString()
+                        Fields = fields
+                    }
         with _ ->
             None
 
@@ -371,9 +417,11 @@ module Board =
         let request =
             query
                 ItemIdDoc
-                [ "owner", VString owner
-                  "repo", VString repo
-                  "number", VNumber(double number) ]
+                [
+                    "owner", VString owner
+                    "repo", VString repo
+                    "number", VNumber(double number)
+                ]
                 subject
 
         match transport.Send request with
@@ -388,62 +436,69 @@ module Board =
         | Error e -> Error e
         | Ok response ->
 
-        match GraphQl.decode subject response.Body Ok with
-        | Error e -> Error e
-        | Ok data ->
+            match GraphQl.decode subject response.Body Ok with
+            | Error e -> Error e
+            | Ok data ->
 
-        try
-            let issue = data.GetProperty("repository").GetProperty("issue")
+                try
+                    let issue = data.GetProperty("repository").GetProperty("issue")
 
-            if issue.ValueKind = JsonValueKind.Null then
-                Error(NotFound subject)
-            else
-
-            let projectItems = issue.GetProperty "projectItems"
-
-            let found =
-                projectItems.GetProperty("nodes").EnumerateArray()
-                |> Seq.tryPick (fun n ->
-                    let onThisBoard =
-                        match n.TryGetProperty "project" with
-                        | true, p when p.ValueKind = JsonValueKind.Object ->
-                            match p.TryGetProperty "number" with
-                            | true, num when num.ValueKind = JsonValueKind.Number -> num.GetInt32() = board.Number
-                            | _ -> false
-                        | _ -> false
-
-                    // AN ISSUE CAN BE ON SEVERAL BOARDS. Narrowing to OURS is not a detail: writing a Status
-                    // to another board's item is a silent cross-board write, and it would look like a
-                    // no-op here and like vandalism over there.
-                    if onThisBoard then
-                        match n.TryGetProperty "id" with
-                        | true, i when i.ValueKind = JsonValueKind.String -> Some(i.GetString())
-                        | _ -> None
+                    if issue.ValueKind = JsonValueKind.Null then
+                        Error(NotFound subject)
                     else
-                        None)
 
-            match found with
-            // FOUND IS FOUND. Truncation cannot unmake an answer we already have, so the completeness
-            // question is only asked on the miss — the same rule `externalItemId`'s walk follows when it
-            // returns on a hit without consulting `pageInfo`, and the reason this guard costs nothing on
-            // the hot path.
-            | Some _ -> Ok found
+                        let projectItems = issue.GetProperty "projectItems"
 
-            | None ->
-                // **`None` HERE IS A SUCCESSFUL READ, AND `.github#2535` IS WHAT MAKES THAT TRUE ON THE
-                // SECOND AXIS.** We reached the board, we walked its items, and this issue is not among
-                // them. That is the only path to `item-add`, and it cannot be reached from a failure —
-                // which is #421 for a read that ERRORED. But `projectItems(first: 20)` had a second way to
-                // manufacture the same definite "no": an issue sitting on more than twenty boards, ours
-                // being the twenty-first, returns a full window that simply does not contain us, and
-                // "walked its items" was a claim about a window rather than about the connection. Asking
-                // `totalCount` is what turns the sentence above back into a measurement.
-                match Reads.connectionComplete subject "this issue's project-item connection" ProjectItemsWindow projectItems with
-                | Error e -> Error e
-                | Ok() -> Ok None
+                        let found =
+                            projectItems.GetProperty("nodes").EnumerateArray()
+                            |> Seq.tryPick (fun n ->
+                                let onThisBoard =
+                                    match n.TryGetProperty "project" with
+                                    | true, p when p.ValueKind = JsonValueKind.Object ->
+                                        match p.TryGetProperty "number" with
+                                        | true, num when num.ValueKind = JsonValueKind.Number ->
+                                            num.GetInt32() = board.Number
+                                        | _ -> false
+                                    | _ -> false
 
-        with :? KeyNotFoundException ->
-            Error(Malformed(subject, "the item lookup response is missing `repository.issue.projectItems`"))
+                                // AN ISSUE CAN BE ON SEVERAL BOARDS. Narrowing to OURS is not a detail: writing a Status
+                                // to another board's item is a silent cross-board write, and it would look like a
+                                // no-op here and like vandalism over there.
+                                if onThisBoard then
+                                    match n.TryGetProperty "id" with
+                                    | true, i when i.ValueKind = JsonValueKind.String -> Some(i.GetString())
+                                    | _ -> None
+                                else
+                                    None)
+
+                        match found with
+                        // FOUND IS FOUND. Truncation cannot unmake an answer we already have, so the completeness
+                        // question is only asked on the miss — the same rule `externalItemId`'s walk follows when it
+                        // returns on a hit without consulting `pageInfo`, and the reason this guard costs nothing on
+                        // the hot path.
+                        | Some _ -> Ok found
+
+                        | None ->
+                            // **`None` HERE IS A SUCCESSFUL READ, AND `.github#2535` IS WHAT MAKES THAT TRUE ON THE
+                            // SECOND AXIS.** We reached the board, we walked its items, and this issue is not among
+                            // them. That is the only path to `item-add`, and it cannot be reached from a failure —
+                            // which is #421 for a read that ERRORED. But `projectItems(first: 20)` had a second way to
+                            // manufacture the same definite "no": an issue sitting on more than twenty boards, ours
+                            // being the twenty-first, returns a full window that simply does not contain us, and
+                            // "walked its items" was a claim about a window rather than about the connection. Asking
+                            // `totalCount` is what turns the sentence above back into a measurement.
+                            match
+                                Reads.connectionComplete
+                                    subject
+                                    "this issue's project-item connection"
+                                    ProjectItemsWindow
+                                    projectItems
+                            with
+                            | Error e -> Error e
+                            | Ok() -> Ok None
+
+                with :? KeyNotFoundException ->
+                    Error(Malformed(subject, "the item lookup response is missing `repository.issue.projectItems`"))
 
     [<Literal>]
     let private ExternalItemIdDoc =
@@ -465,52 +520,85 @@ module Board =
         (number: int)
         : IoResult<string option> =
 
-        let subject = $"%s{owner}/%s{repo}#%d{number} on board %s{board.Owner}/%s{board.Title}"
+        let subject =
+            $"%s{owner}/%s{repo}#%d{number} on board %s{board.Owner}/%s{board.Title}"
 
         let same (left: string) (right: string) =
             String.Equals(left, right, StringComparison.OrdinalIgnoreCase)
 
         let fetchItems (cursor: string option) =
             let variables =
-                    [ "projectId", VId board.Id ]
-                    @ (match cursor with
-                       | Some value -> [ "cursor", VString value ]
-                       | None -> [])
+                [ "projectId", VId board.Id ]
+                @ (match cursor with
+                   | Some value -> [ "cursor", VString value ]
+                   | None -> [])
 
             GraphQl.read transport (query ExternalItemIdDoc variables subject) (fun data ->
                 let project = data.GetProperty "node"
-                if project.ValueKind = JsonValueKind.Null then Error(NotFound $"board node %s{board.Id}") else
-                let items = project.GetProperty "items"
-                GraphQl.page subject "the external-owner board item lookup" (fun (id, _, _) -> id)
-                    (fun node ->
-                        match node.TryGetProperty "id" with
-                        | true, id when id.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(id.GetString())) ->
-                            match node.TryGetProperty "content" with
-                            | true, content when content.ValueKind = JsonValueKind.Object ->
-                                let issueNumber =
-                                    match content.TryGetProperty "number" with
-                                    | true, value when value.ValueKind = JsonValueKind.Number ->
-                                        match value.TryGetInt32() with true, parsed -> Some parsed | _ -> None
-                                    | _ -> None
-                                let nameWithOwner =
-                                    match content.TryGetProperty "repository" with
-                                    | true, repository when repository.ValueKind = JsonValueKind.Object ->
-                                        match repository.TryGetProperty "nameWithOwner" with
-                                        | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
+
+                if project.ValueKind = JsonValueKind.Null then
+                    Error(NotFound $"board node %s{board.Id}")
+                else
+                    let items = project.GetProperty "items"
+
+                    GraphQl.page
+                        subject
+                        "the external-owner board item lookup"
+                        (fun (id, _, _) -> id)
+                        (fun node ->
+                            match node.TryGetProperty "id" with
+                            | true, id when
+                                id.ValueKind = JsonValueKind.String
+                                && not (String.IsNullOrWhiteSpace(id.GetString()))
+                                ->
+                                match node.TryGetProperty "content" with
+                                | true, content when content.ValueKind = JsonValueKind.Object ->
+                                    let issueNumber =
+                                        match content.TryGetProperty "number" with
+                                        | true, value when value.ValueKind = JsonValueKind.Number ->
+                                            match value.TryGetInt32() with
+                                            | true, parsed -> Some parsed
+                                            | _ -> None
                                         | _ -> None
-                                    | _ -> None
-                                Ok(id.GetString(), nameWithOwner, issueNumber)
-                            | _ -> Ok(id.GetString(), None, None)
-                        | _ -> Error(Malformed(subject, "the external-owner board item lookup returned an item with no readable id")))
-                    items)
+
+                                    let nameWithOwner =
+                                        match content.TryGetProperty "repository" with
+                                        | true, repository when repository.ValueKind = JsonValueKind.Object ->
+                                            match repository.TryGetProperty "nameWithOwner" with
+                                            | true, value when value.ValueKind = JsonValueKind.String ->
+                                                Some(value.GetString())
+                                            | _ -> None
+                                        | _ -> None
+
+                                    Ok(id.GetString(), nameWithOwner, issueNumber)
+                                | _ -> Ok(id.GetString(), None, None)
+                            | _ ->
+                                Error(
+                                    Malformed(
+                                        subject,
+                                        "the external-owner board item lookup returned an item with no readable id"
+                                    )
+                                ))
+                        items)
 
         GraphQl.drain subject "the external-owner board item lookup" { MaxPages = 100; MaxItems = 10000 } fetchItems
-        |> Result.map (List.tryPick (fun (id, nameWithOwner, issueNumber) ->
-            match nameWithOwner, issueNumber with
-            | Some nwo, Some actualNumber ->
-                let parts = nwo.Split('/', 2)
-                if parts.Length = 2 && same parts.[0] owner && same parts.[1] repo && actualNumber = number then Some id else None
-            | _ -> None))
+        |> Result.map (
+            List.tryPick (fun (id, nameWithOwner, issueNumber) ->
+                match nameWithOwner, issueNumber with
+                | Some nwo, Some actualNumber ->
+                    let parts = nwo.Split('/', 2)
+
+                    if
+                        parts.Length = 2
+                        && same parts.[0] owner
+                        && same parts.[1] repo
+                        && actualNumber = number
+                    then
+                        Some id
+                    else
+                        None
+                | _ -> None)
+        )
 
     let itemId
         (transport: IGitHubTransport)
@@ -565,32 +653,34 @@ module Board =
         let request =
             query
                 IssueNodeIdDoc
-                [ "owner", VString owner
-                  "repo", VString repo
-                  "number", VNumber(double number) ]
+                [
+                    "owner", VString owner
+                    "repo", VString repo
+                    "number", VNumber(double number)
+                ]
                 subject
 
         match transport.Send request with
         | Error e -> Error e
         | Ok response ->
 
-        match GraphQl.decode subject response.Body Ok with
-        | Error e -> Error e
-        | Ok data ->
+            match GraphQl.decode subject response.Body Ok with
+            | Error e -> Error e
+            | Ok data ->
 
-        try
-            let issue = data.GetProperty("repository").GetProperty("issue")
+                try
+                    let issue = data.GetProperty("repository").GetProperty("issue")
 
-            if issue.ValueKind = JsonValueKind.Null then
-                Error(NotFound subject)
-            else
+                    if issue.ValueKind = JsonValueKind.Null then
+                        Error(NotFound subject)
+                    else
 
-            match issue.TryGetProperty "id" with
-            | true, id when id.ValueKind = JsonValueKind.String -> Ok(id.GetString())
-            | _ -> Error(Malformed(subject, "the issue lookup response has no `id`"))
+                        match issue.TryGetProperty "id" with
+                        | true, id when id.ValueKind = JsonValueKind.String -> Ok(id.GetString())
+                        | _ -> Error(Malformed(subject, "the issue lookup response has no `id`"))
 
-        with :? KeyNotFoundException ->
-            Error(Malformed(subject, "the issue lookup response is missing `repository.issue`"))
+                with :? KeyNotFoundException ->
+                    Error(Malformed(subject, "the issue lookup response is missing `repository.issue`"))
 
     // What `addItem` did. The caller needs to tell these apart: adding a second copy of an item is the
     // failure this whole function is shaped around, so "it was already there" is a SUCCESS worth naming.
@@ -657,35 +747,35 @@ module Board =
 
         | Ok None ->
 
-        match issueNodeId transport owner repo number with
-        | Error e -> Error e
-        | Ok contentId ->
+            match issueNodeId transport owner repo number with
+            | Error e -> Error e
+            | Ok contentId ->
 
-        let subject = $"%s{owner}/%s{repo}#%d{number}"
+                let subject = $"%s{owner}/%s{repo}#%d{number}"
 
-        let request =
-            query AddItemDoc [ "projectId", VId board.Id; "contentId", VId contentId ] subject
+                let request =
+                    query AddItemDoc [ "projectId", VId board.Id; "contentId", VId contentId ] subject
 
-        match transport.Send request with
-        | Error e -> Error e
-        | Ok response ->
+                match transport.Send request with
+                | Error e -> Error e
+                | Ok response ->
 
-        match GraphQl.decode subject response.Body Ok with
-        | Error e -> Error e
-        | Ok data ->
+                    match GraphQl.decode subject response.Body Ok with
+                    | Error e -> Error e
+                    | Ok data ->
 
-        try
-            let item = data.GetProperty("addProjectV2ItemById").GetProperty("item")
+                        try
+                            let item = data.GetProperty("addProjectV2ItemById").GetProperty("item")
 
-            match item.TryGetProperty "id" with
-            | true, id when id.ValueKind = JsonValueKind.String ->
-                let newId = id.GetString()
-                Cache.putItemId owner repo number board.Number newId
-                Ok(AddedToBoard newId)
-            | _ -> Error(Malformed(subject, "the add response has no `addProjectV2ItemById.item.id`"))
+                            match item.TryGetProperty "id" with
+                            | true, id when id.ValueKind = JsonValueKind.String ->
+                                let newId = id.GetString()
+                                Cache.putItemId owner repo number board.Number newId
+                                Ok(AddedToBoard newId)
+                            | _ -> Error(Malformed(subject, "the add response has no `addProjectV2ItemById.item.id`"))
 
-        with :? KeyNotFoundException ->
-            Error(Malformed(subject, "the add response is missing `addProjectV2ItemById.item`"))
+                        with :? KeyNotFoundException ->
+                            Error(Malformed(subject, "the add response is missing `addProjectV2ItemById.item`"))
 
     // ---- the pre-claim column (#481) ----------------------------------------------------------------
 
@@ -732,36 +822,42 @@ module Board =
         | Ok None -> Ok None
         | Ok(Some id) ->
 
-        let request =
-            query ExternalItemFieldDoc [ "itemId", VId id; "field", VString field ] subject
+            let request =
+                query ExternalItemFieldDoc [ "itemId", VId id; "field", VString field ] subject
 
-        match transport.Send request with
-        | Error e -> Error e
-        | Ok response ->
+            match transport.Send request with
+            | Error e -> Error e
+            | Ok response ->
 
-        match GraphQl.decode subject response.Body Ok with
-        | Error e -> Error e
-        | Ok data ->
+                match GraphQl.decode subject response.Body Ok with
+                | Error e -> Error e
+                | Ok data ->
 
-        try
-            let node = data.GetProperty "node"
+                    try
+                        let node = data.GetProperty "node"
 
-            if node.ValueKind = JsonValueKind.Null then
-                // A board item id that resolves to nothing is an UNRESOLVABLE read, not an empty field. It
-                // may not wear an absence's clothes (#266): the id came from the board, so a null here means
-                // the row moved or the read failed — either way we did not measure the column.
-                Error(NotFound $"board item %s{id} for %s{subject}")
-            else
+                        if node.ValueKind = JsonValueKind.Null then
+                            // A board item id that resolves to nothing is an UNRESOLVABLE read, not an empty field. It
+                            // may not wear an absence's clothes (#266): the id came from the board, so a null here means
+                            // the row moved or the read failed — either way we did not measure the column.
+                            Error(NotFound $"board item %s{id} for %s{subject}")
+                        else
 
-            match node.TryGetProperty "fieldValueByName" with
-            // Null when the row is on the board with the field genuinely unset — the same "nothing recorded"
-            // answer the issue-side reader reaches the other way.
-            | true, fv when fv.ValueKind = JsonValueKind.Object -> Ok(read fv)
-            | true, fv when fv.ValueKind = JsonValueKind.Null -> Ok None
-            | _ -> Error(Malformed(subject, "the external-owner field read response has no `node.fieldValueByName`"))
+                            match node.TryGetProperty "fieldValueByName" with
+                            // Null when the row is on the board with the field genuinely unset — the same "nothing recorded"
+                            // answer the issue-side reader reaches the other way.
+                            | true, fv when fv.ValueKind = JsonValueKind.Object -> Ok(read fv)
+                            | true, fv when fv.ValueKind = JsonValueKind.Null -> Ok None
+                            | _ ->
+                                Error(
+                                    Malformed(
+                                        subject,
+                                        "the external-owner field read response has no `node.fieldValueByName`"
+                                    )
+                                )
 
-        with :? KeyNotFoundException ->
-            Error(Malformed(subject, "the external-owner field read response is missing `data.node`"))
+                    with :? KeyNotFoundException ->
+                        Error(Malformed(subject, "the external-owner field read response is missing `data.node`"))
 
     // The `Status` single-select value, read off a `fieldValueByName` node.
     let private statusOfFieldValue (fv: JsonElement) : BoardStatus option =
@@ -825,62 +921,72 @@ module Board =
         let request =
             query
                 ItemStatusDoc
-                [ "owner", VString owner
-                  "repo", VString repo
-                  "number", VNumber(double number) ]
+                [
+                    "owner", VString owner
+                    "repo", VString repo
+                    "number", VNumber(double number)
+                ]
                 subject
 
         match transport.Send request with
         | Error e -> Error e
         | Ok response ->
 
-        match GraphQl.decode subject response.Body Ok with
-        | Error e -> Error e
-        | Ok data ->
+            match GraphQl.decode subject response.Body Ok with
+            | Error e -> Error e
+            | Ok data ->
 
-        try
-            let issue = data.GetProperty("repository").GetProperty("issue")
+                try
+                    let issue = data.GetProperty("repository").GetProperty("issue")
 
-            if issue.ValueKind = JsonValueKind.Null then
-                // The issue itself does not exist — a real, definite answer, and there is no column to record.
-                Ok None
-            else
+                    if issue.ValueKind = JsonValueKind.Null then
+                        // The issue itself does not exist — a real, definite answer, and there is no column to record.
+                        Ok None
+                    else
 
-            let projectItems = issue.GetProperty "projectItems"
+                        let projectItems = issue.GetProperty "projectItems"
 
-            // NARROW TO OUR BOARD, exactly as `itemId` does. An issue can sit on several boards, and the
-            // Status on another one is not the column this claim overwrites here.
-            let ourNode =
-                projectItems.GetProperty("nodes").EnumerateArray()
-                |> Seq.tryFind (fun n ->
-                    match n.TryGetProperty "project" with
-                    | true, p when p.ValueKind = JsonValueKind.Object ->
-                        match p.TryGetProperty "number" with
-                        | true, num when num.ValueKind = JsonValueKind.Number -> num.GetInt32() = board.Number
-                        | _ -> false
-                    | _ -> false)
+                        // NARROW TO OUR BOARD, exactly as `itemId` does. An issue can sit on several boards, and the
+                        // Status on another one is not the column this claim overwrites here.
+                        let ourNode =
+                            projectItems.GetProperty("nodes").EnumerateArray()
+                            |> Seq.tryFind (fun n ->
+                                match n.TryGetProperty "project" with
+                                | true, p when p.ValueKind = JsonValueKind.Object ->
+                                    match p.TryGetProperty "number" with
+                                    | true, num when num.ValueKind = JsonValueKind.Number ->
+                                        num.GetInt32() = board.Number
+                                    | _ -> false
+                                | _ -> false)
 
-            match ourNode with
-            // NOT ON THIS BOARD. A successful read with a definite answer — nothing to restore — and
-            // `.github#2535` is what keeps it one: on a miss, a window that hid the tail is a FAILED read,
-            // never "not on this board". `claim` treats both as "recorded no column", but the two are not
-            // the same fact and only one of them may be asserted.
-            | None ->
-                match Reads.connectionComplete subject "this issue's project-item connection" ProjectItemsWindow projectItems with
-                | Error e -> Error e
-                | Ok() -> Ok None
-            | Some node ->
-                match node.TryGetProperty "fieldValueByName" with
-                // `fieldValueByName` is null when the item is on the board with NO Status set. On board, no
-                // column — the same "nothing to restore" answer, reached the other way.
-                | true, fv when fv.ValueKind = JsonValueKind.Object ->
-                    match fv.TryGetProperty "name" with
-                    | true, nm when nm.ValueKind = JsonValueKind.String -> Ok(Reads.statusOfName (nm.GetString()))
-                    | _ -> Ok None
-                | _ -> Ok None
+                        match ourNode with
+                        // NOT ON THIS BOARD. A successful read with a definite answer — nothing to restore — and
+                        // `.github#2535` is what keeps it one: on a miss, a window that hid the tail is a FAILED read,
+                        // never "not on this board". `claim` treats both as "recorded no column", but the two are not
+                        // the same fact and only one of them may be asserted.
+                        | None ->
+                            match
+                                Reads.connectionComplete
+                                    subject
+                                    "this issue's project-item connection"
+                                    ProjectItemsWindow
+                                    projectItems
+                            with
+                            | Error e -> Error e
+                            | Ok() -> Ok None
+                        | Some node ->
+                            match node.TryGetProperty "fieldValueByName" with
+                            // `fieldValueByName` is null when the item is on the board with NO Status set. On board, no
+                            // column — the same "nothing to restore" answer, reached the other way.
+                            | true, fv when fv.ValueKind = JsonValueKind.Object ->
+                                match fv.TryGetProperty "name" with
+                                | true, nm when nm.ValueKind = JsonValueKind.String ->
+                                    Ok(Reads.statusOfName (nm.GetString()))
+                                | _ -> Ok None
+                            | _ -> Ok None
 
-        with :? KeyNotFoundException ->
-            Error(Malformed(subject, "the item-status response is missing `repository.issue.projectItems`"))
+                with :? KeyNotFoundException ->
+                    Error(Malformed(subject, "the item-status response is missing `repository.issue.projectItems`"))
 
     let itemStatus
         (transport: IGitHubTransport)
@@ -916,57 +1022,66 @@ module Board =
         let request =
             query
                 ItemBlockedByDoc
-                [ "owner", VString owner
-                  "repo", VString repo
-                  "number", VNumber(double number) ]
+                [
+                    "owner", VString owner
+                    "repo", VString repo
+                    "number", VNumber(double number)
+                ]
                 subject
 
         match transport.Send request with
         | Error e -> Error e
         | Ok response ->
 
-        match GraphQl.decode subject response.Body Ok with
-        | Error e -> Error e
-        | Ok data ->
+            match GraphQl.decode subject response.Body Ok with
+            | Error e -> Error e
+            | Ok data ->
 
-        try
-            let issue = data.GetProperty("repository").GetProperty("issue")
+                try
+                    let issue = data.GetProperty("repository").GetProperty("issue")
 
-            if issue.ValueKind = JsonValueKind.Null then
-                Ok None
-            else
+                    if issue.ValueKind = JsonValueKind.Null then
+                        Ok None
+                    else
 
-            let projectItems = issue.GetProperty "projectItems"
+                        let projectItems = issue.GetProperty "projectItems"
 
-            let ourNode =
-                projectItems.GetProperty("nodes").EnumerateArray()
-                |> Seq.tryFind (fun n ->
-                    match n.TryGetProperty "project" with
-                    | true, p when p.ValueKind = JsonValueKind.Object ->
-                        match p.TryGetProperty "number" with
-                        | true, num when num.ValueKind = JsonValueKind.Number -> num.GetInt32() = board.Number
-                        | _ -> false
-                    | _ -> false)
+                        let ourNode =
+                            projectItems.GetProperty("nodes").EnumerateArray()
+                            |> Seq.tryFind (fun n ->
+                                match n.TryGetProperty "project" with
+                                | true, p when p.ValueKind = JsonValueKind.Object ->
+                                    match p.TryGetProperty "number" with
+                                    | true, num when num.ValueKind = JsonValueKind.Number ->
+                                        num.GetInt32() = board.Number
+                                    | _ -> false
+                                | _ -> false)
 
-            match ourNode with
-            // `itemStatus`'s rule, for `itemStatus`'s reason (`.github#2535`): a miss over a window that
-            // hid the tail is a failed read, not "not on this board".
-            | None ->
-                match Reads.connectionComplete subject "this issue's project-item connection" ProjectItemsWindow projectItems with
-                | Error e -> Error e
-                | Ok() -> Ok None
-            | Some node ->
-                match node.TryGetProperty "fieldValueByName" with
-                // `fieldValueByName` is null when the item is on the board with the field genuinely
-                // unset — the same "nothing recorded" answer `itemStatus` reaches the other way.
-                | true, fv when fv.ValueKind = JsonValueKind.Object ->
-                    match fv.TryGetProperty "text" with
-                    | true, tx when tx.ValueKind = JsonValueKind.String -> Ok(Some(tx.GetString()))
-                    | _ -> Ok None
-                | _ -> Ok None
+                        match ourNode with
+                        // `itemStatus`'s rule, for `itemStatus`'s reason (`.github#2535`): a miss over a window that
+                        // hid the tail is a failed read, not "not on this board".
+                        | None ->
+                            match
+                                Reads.connectionComplete
+                                    subject
+                                    "this issue's project-item connection"
+                                    ProjectItemsWindow
+                                    projectItems
+                            with
+                            | Error e -> Error e
+                            | Ok() -> Ok None
+                        | Some node ->
+                            match node.TryGetProperty "fieldValueByName" with
+                            // `fieldValueByName` is null when the item is on the board with the field genuinely
+                            // unset — the same "nothing recorded" answer `itemStatus` reaches the other way.
+                            | true, fv when fv.ValueKind = JsonValueKind.Object ->
+                                match fv.TryGetProperty "text" with
+                                | true, tx when tx.ValueKind = JsonValueKind.String -> Ok(Some(tx.GetString()))
+                                | _ -> Ok None
+                            | _ -> Ok None
 
-        with :? KeyNotFoundException ->
-            Error(Malformed(subject, "the item-blocked-by response is missing `repository.issue.projectItems`"))
+                with :? KeyNotFoundException ->
+                    Error(Malformed(subject, "the item-blocked-by response is missing `repository.issue.projectItems`"))
 
     let private ItemBlockedByObservationDoc =
         "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { totalCount nodes { updatedAt project { number } fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } } } } } rateLimit { cost remaining } }"
@@ -983,9 +1098,11 @@ module Board =
         let request =
             query
                 ItemBlockedByObservationDoc
-                [ "owner", VString owner
-                  "repo", VString repo
-                  "number", VNumber(double number) ]
+                [
+                    "owner", VString owner
+                    "repo", VString repo
+                    "number", VNumber(double number)
+                ]
                 subject
 
         match transport.Send request with
@@ -1030,8 +1147,10 @@ module Board =
                                     | _ -> None
 
                                 Ok
-                                    { Value = value
-                                      Revision = Some(revision.GetString()) }
+                                    {
+                                        Value = value
+                                        Revision = Some(revision.GetString())
+                                    }
                             | _ ->
                                 Error(
                                     Malformed(
@@ -1080,8 +1199,10 @@ module Board =
                                     | _ -> None
 
                                 Ok
-                                    { Value = value
-                                      Revision = Some(revision.GetString()) }
+                                    {
+                                        Value = value
+                                        Revision = Some(revision.GetString())
+                                    }
                             | _ ->
                                 Error(
                                     Malformed(
@@ -1151,7 +1272,9 @@ module Board =
             | Text -> Ok("value: {text: $text}", [ "text", VString value ])
 
             | Number ->
-                match Double.TryParse(value, Globalization.NumberStyles.Float, Globalization.CultureInfo.InvariantCulture) with
+                match
+                    Double.TryParse(value, Globalization.NumberStyles.Float, Globalization.CultureInfo.InvariantCulture)
+                with
                 | true, n -> Ok("value: {number: $number}", [ "number", VNumber n ])
                 | _ -> Error $"'%s{value}' is not a number, and a NUMBER field cannot hold it."
 
@@ -1184,43 +1307,41 @@ module Board =
 
         | Some field ->
 
-        match valueClause field write with
-        | Error message -> Error(Http(422, $"%s{fieldName}: %s{message}"))
-        | Ok(clause, valueVars) ->
+            match valueClause field write with
+            | Error message -> Error(Http(422, $"%s{fieldName}: %s{message}"))
+            | Ok(clause, valueVars) ->
 
-        let document, variables =
-            let common =
-                [ "projectId", VId board.Id
-                  "itemId", VId itemId
-                  "fieldId", VId field.Id ]
+                let document, variables =
+                    let common =
+                        [ "projectId", VId board.Id; "itemId", VId itemId; "fieldId", VId field.Id ]
 
-            match write with
-            | Clear ->
-                // A DIFFERENT MUTATION ENTIRELY. `updateProjectV2ItemFieldValue` with an empty value is a
-                // no-op; this is the call that actually removes the value.
-                "mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!) { clearProjectV2ItemFieldValue(input: {projectId: $projectId, itemId: $itemId, fieldId: $fieldId}) { clientMutationId } }",
-                common
+                    match write with
+                    | Clear ->
+                        // A DIFFERENT MUTATION ENTIRELY. `updateProjectV2ItemFieldValue` with an empty value is a
+                        // no-op; this is the call that actually removes the value.
+                        "mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!) { clearProjectV2ItemFieldValue(input: {projectId: $projectId, itemId: $itemId, fieldId: $fieldId}) { clientMutationId } }",
+                        common
 
-            | Set _ ->
-                let varDecls =
-                    valueVars
-                    |> List.map (fun (name, v) ->
-                        let t =
-                            match v with
-                            | VId _ -> "ID!"
-                            | VNumber _ -> "Float!"
-                            | VString _ -> "String!"
-                            | VDate _ -> "Date!"
+                    | Set _ ->
+                        let varDecls =
+                            valueVars
+                            |> List.map (fun (name, v) ->
+                                let t =
+                                    match v with
+                                    | VId _ -> "ID!"
+                                    | VNumber _ -> "Float!"
+                                    | VString _ -> "String!"
+                                    | VDate _ -> "Date!"
 
-                        $"$%s{name}: %s{t}")
-                    |> String.concat ", "
+                                $"$%s{name}: %s{t}")
+                            |> String.concat ", "
 
-                $"mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, %s{varDecls}) {{ updateProjectV2ItemFieldValue(input: {{projectId: $projectId, itemId: $itemId, fieldId: $fieldId, %s{clause}}}) {{ clientMutationId }} }}",
-                common @ valueVars
+                        $"mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, %s{varDecls}) {{ updateProjectV2ItemFieldValue(input: {{projectId: $projectId, itemId: $itemId, fieldId: $fieldId, %s{clause}}}) {{ clientMutationId }} }}",
+                        common @ valueVars
 
-        match transport.Send(query document variables subject) with
-        | Error e -> Error e
-        | Ok response -> GraphQl.decode subject response.Body (fun _ -> Ok())
+                match transport.Send(query document variables subject) with
+                | Error e -> Error e
+                | Ok response -> GraphQl.decode subject response.Body (fun _ -> Ok())
 
     // ---- the aliased batch (#448) --------------------------------------------------------------------
 
@@ -1237,100 +1358,110 @@ module Board =
             Error(Http(422, "a batch with no writes in it writes nothing. Say what you mean to set."))
         else
 
-        // EVERYTHING IS RESOLVED AND VALIDATED BEFORE A SINGLE MUTATION IS EMITTED. A bad pair caught late
-        // would not merely waste a point: mutations run SERIALLY, so it would fail the document AFTER its
-        // earlier aliases had already been written to the board. A half-written board is a much worse
-        // outcome than a refused one, and it is entirely avoidable — the check is free and it is here.
-        let resolved =
-            writes
-            |> List.mapi (fun i (name, write) ->
-                match Map.tryFind name board.Fields with
-                | None ->
-                    let known = board.Fields |> Map.keys |> String.concat ", "
-                    Error $"no field named '%s{name}' on this board. Known fields: %s{known}"
-                | Some field ->
-                    match valueClause field write with
-                    | Error m -> Error $"%s{name}: %s{m}"
-                    | Ok(_, valueVars) -> Ok(i, field, write, valueVars))
+            // EVERYTHING IS RESOLVED AND VALIDATED BEFORE A SINGLE MUTATION IS EMITTED. A bad pair caught late
+            // would not merely waste a point: mutations run SERIALLY, so it would fail the document AFTER its
+            // earlier aliases had already been written to the board. A half-written board is a much worse
+            // outcome than a refused one, and it is entirely avoidable — the check is free and it is here.
+            let resolved =
+                writes
+                |> List.mapi (fun i (name, write) ->
+                    match Map.tryFind name board.Fields with
+                    | None ->
+                        let known = board.Fields |> Map.keys |> String.concat ", "
+                        Error $"no field named '%s{name}' on this board. Known fields: %s{known}"
+                    | Some field ->
+                        match valueClause field write with
+                        | Error m -> Error $"%s{name}: %s{m}"
+                        | Ok(_, valueVars) -> Ok(i, field, write, valueVars))
 
-        match resolved |> List.tryPick (function | Error m -> Some m | Ok _ -> None) with
-        | Some message -> Error(Http(422, message))
-        | None ->
+            match
+                resolved
+                |> List.tryPick (function
+                    | Error m -> Some m
+                    | Ok _ -> None)
+            with
+            | Some message -> Error(Http(422, message))
+            | None ->
 
-        let entries = resolved |> List.choose (function | Ok r -> Some r | Error _ -> None)
+                let entries =
+                    resolved
+                    |> List.choose (function
+                        | Ok r -> Some r
+                        | Error _ -> None)
 
-        // The aliases interpolate INLINE rather than using variables: aliasing N mutations would otherwise
-        // need N×4 declared variables, and the document becomes unreadable. `gqlStr` is what makes that
-        // safe — GraphQL string syntax is JSON string syntax.
-        let aliases =
-            entries
-            |> List.map (fun (i, field, write, valueVars) ->
-                let common =
-                    $"projectId: %s{gqlStr board.Id}, itemId: %s{gqlStr itemId}, fieldId: %s{gqlStr field.Id}"
+                // The aliases interpolate INLINE rather than using variables: aliasing N mutations would otherwise
+                // need N×4 declared variables, and the document becomes unreadable. `gqlStr` is what makes that
+                // safe — GraphQL string syntax is JSON string syntax.
+                let aliases =
+                    entries
+                    |> List.map (fun (i, field, write, valueVars) ->
+                        let common =
+                            $"projectId: %s{gqlStr board.Id}, itemId: %s{gqlStr itemId}, fieldId: %s{gqlStr field.Id}"
 
-                match write with
-                | Clear -> $"f%d{i}: clearProjectV2ItemFieldValue(input: {{%s{common}}}) {{ clientMutationId }}"
-                | Set _ ->
-                    let inline' =
-                        valueVars
-                        |> List.map (fun (name, v) ->
-                            let rendered =
-                                match v with
-                                | VId s -> gqlStr s
-                                | VString s -> gqlStr s
-                                // A `Date` literal is a quoted string in GraphQL source, like the two above.
-                                // The tag matters for the DECLARATION, which this path does not emit.
-                                | VDate s -> gqlStr s
-                                | VNumber n -> string n
+                        match write with
+                        | Clear ->
+                            $"f%d{i}: clearProjectV2ItemFieldValue(input: {{%s{common}}}) {{ clientMutationId }}"
+                        | Set _ ->
+                            let inline' =
+                                valueVars
+                                |> List.map (fun (name, v) ->
+                                    let rendered =
+                                        match v with
+                                        | VId s -> gqlStr s
+                                        | VString s -> gqlStr s
+                                        // A `Date` literal is a quoted string in GraphQL source, like the two above.
+                                        // The tag matters for the DECLARATION, which this path does not emit.
+                                        | VDate s -> gqlStr s
+                                        | VNumber n -> string n
 
-                            let key =
-                                match name with
-                                | "optionId" -> "singleSelectOptionId"
-                                | other -> other
+                                    let key =
+                                        match name with
+                                        | "optionId" -> "singleSelectOptionId"
+                                        | other -> other
 
-                            $"%s{key}: %s{rendered}")
-                        |> String.concat ", "
+                                    $"%s{key}: %s{rendered}")
+                                |> String.concat ", "
 
-                    $"f%d{i}: updateProjectV2ItemFieldValue(input: {{%s{common}, value: {{%s{inline'}}}}}) {{ clientMutationId }}")
-            |> String.concat " "
+                            $"f%d{i}: updateProjectV2ItemFieldValue(input: {{%s{common}, value: {{%s{inline'}}}}}) {{ clientMutationId }}")
+                    |> String.concat " "
 
-        // NO `rateLimit` SELECTION. It is a field of the QUERY root, not the Mutation root, so selecting it
-        // here is a document that does not parse. This is the one call whose cost the meter cannot read —
-        // which is fine, because its cost is exactly the thing this function makes constant: one document,
-        // one request, one point at the floor.
-        let document = $"mutation {{ %s{aliases} }}"
+                // NO `rateLimit` SELECTION. It is a field of the QUERY root, not the Mutation root, so selecting it
+                // here is a document that does not parse. This is the one call whose cost the meter cannot read —
+                // which is fine, because its cost is exactly the thing this function makes constant: one document,
+                // one request, one point at the floor.
+                let document = $"mutation {{ %s{aliases} }}"
 
-        match transport.Send(query document [] subject) with
-        | Error e -> Error e
-        | Ok response ->
+                match transport.Send(query document [] subject) with
+                | Error e -> Error e
+                | Ok response ->
 
-        // THE PARTIAL-APPLY ARM. A GraphQL failure mid-document arrives as HTTP 200 carrying BOTH `data`
-        // and `errors`, and `errors[].path[0]` names the failing ALIAS. Mutations execute SERIALLY, so the
-        // aliases before the failure DID land — the body tells us exactly which.
-        match GraphQl.decode subject response.Body Ok with
-        | Ok _ -> Ok()
+                    // THE PARTIAL-APPLY ARM. A GraphQL failure mid-document arrives as HTTP 200 carrying BOTH `data`
+                    // and `errors`, and `errors[].path[0]` names the failing ALIAS. Mutations execute SERIALLY, so the
+                    // aliases before the failure DID land — the body tells us exactly which.
+                    match GraphQl.decode subject response.Body Ok with
+                    | Ok _ -> Ok()
 
-        // A rate limit is not a partial write. `GraphQl.decode` tests for it FIRST, so by the time we get a
-        // `GraphQlErrors` we know the budget was not the cause.
-        //
-        // PROPAGATE THE VALUE, do not rebuild it: re-tupling the fields here would silently drop any the
-        // case grows later, and this arm has no opinion about which budget died.
-        | Error(RateLimited _ as e) -> Error e
+                    // A rate limit is not a partial write. `GraphQl.decode` tests for it FIRST, so by the time we get a
+                    // `GraphQlErrors` we know the budget was not the cause.
+                    //
+                    // PROPAGATE THE VALUE, do not rebuild it: re-tupling the fields here would silently drop any the
+                    // case grows later, and this arm has no opinion about which budget died.
+                    | Error(RateLimited _ as e) -> Error e
 
-        | Error(GraphQlErrors _ as graphQlError) ->
-            match GraphQl.partialMutation subject response.Body with
-            | Error error -> Error error
-            | Ok(applied, failedAliases) ->
-                if List.isEmpty applied then
-                    // NOTHING LANDED. This is a clean failure, and it is safe to queue or retry: the board
-                    // is exactly as it was.
-                    Error graphQlError
-                else
-                    // SOME OF IT LANDED. `EX_PARTIAL`, and it is NEVER queued — replaying the document would
-                    // rewrite the half that already took effect.
-                    Error(Partial(applied, failedAliases))
+                    | Error(GraphQlErrors _ as graphQlError) ->
+                        match GraphQl.partialMutation subject response.Body with
+                        | Error error -> Error error
+                        | Ok(applied, failedAliases) ->
+                            if List.isEmpty applied then
+                                // NOTHING LANDED. This is a clean failure, and it is safe to queue or retry: the board
+                                // is exactly as it was.
+                                Error graphQlError
+                            else
+                                // SOME OF IT LANDED. `EX_PARTIAL`, and it is NEVER queued — replaying the document would
+                                // rewrite the half that already took effect.
+                                Error(Partial(applied, failedAliases))
 
-        | Error e -> Error e
+                    | Error e -> Error e
 
     // ---- THE ONE BOARD WRITE (#510) ------------------------------------------------------------------
 
@@ -1416,17 +1547,19 @@ module Board =
             // draining, and the refusal never reaching the human who could fix it. That is #510.
             if isQueueable e then
                 let entry: Cache.Deferred =
-                    { Ref = $"%s{owner}/%s{repo}#%d{number}"
-                      Field = field
-                      Value =
-                        match write with
-                        | Set v -> v
-                        | Clear -> ""
-                      At = DateTimeOffset.UtcNow.ToString("o")
-                      Worker = worker
-                      // THE BOARD WE WERE WRITING TO, recorded at QUEUE time — the only moment it is known
-                      // (#882). `flush` bootstraps from the environment, which may since have been repointed.
-                      Board = Some(board.Owner, board.Title) }
+                    {
+                        Ref = $"%s{owner}/%s{repo}#%d{number}"
+                        Field = field
+                        Value =
+                            match write with
+                            | Set v -> v
+                            | Clear -> ""
+                        At = DateTimeOffset.UtcNow.ToString("o")
+                        Worker = worker
+                        // THE BOARD WE WERE WRITING TO, recorded at QUEUE time — the only moment it is known
+                        // (#882). `flush` bootstraps from the environment, which may since have been repointed.
+                        Board = Some(board.Owner, board.Title)
+                    }
 
                 match Cache.defer e entry with
                 | Ok() -> Ok Deferred
@@ -1516,17 +1649,19 @@ module Board =
                 | [] -> Ok Deferred
                 | (field, write) :: rest ->
                     let entry: Cache.Deferred =
-                        { Ref = $"%s{owner}/%s{repo}#%d{number}"
-                          Field = field
-                          Value =
-                            match write with
-                            | Set v -> v
-                            | Clear -> ""
-                          At = DateTimeOffset.UtcNow.ToString("o")
-                          Worker = worker
-                          // The same record the single write makes (#882): every pair of this batch was
-                          // refused against THIS board, so that is the board that can replay them.
-                          Board = Some(board.Owner, board.Title) }
+                        {
+                            Ref = $"%s{owner}/%s{repo}#%d{number}"
+                            Field = field
+                            Value =
+                                match write with
+                                | Set v -> v
+                                | Clear -> ""
+                            At = DateTimeOffset.UtcNow.ToString("o")
+                            Worker = worker
+                            // The same record the single write makes (#882): every pair of this batch was
+                            // refused against THIS board, so that is the board that can replay them.
+                            Board = Some(board.Owner, board.Title)
+                        }
 
                     match Cache.defer e entry with
                     | Ok() -> go rest
@@ -1541,7 +1676,11 @@ module Board =
                 itemIdCached transport board owner repo number
 
         match resolved with
-        | Error e -> if expectedBlockedBy.IsNone && isQueueable e then queueAll e else Error e
+        | Error e ->
+            if expectedBlockedBy.IsNone && isQueueable e then
+                queueAll e
+            else
+                Error e
         | Ok None -> Ok NotOnBoard
         | Ok(Some item) ->
             let condition =
@@ -1591,169 +1730,181 @@ module Board =
                 // A conditional write may never enter the unconditional replay queue: doing so would
                 // discard the exact revision/edge fence that authorized it and later grant Ready from a
                 // stale decision. The caller retries by re-deriving the observation instead.
-                if expectedBlockedBy.IsNone && isQueueable e then queueAll e else Error e
+                if expectedBlockedBy.IsNone && isQueueable e then
+                    queueAll e
+                else
+                    Error e
 
     type FlushOutcome =
-        { Queued: int
-          Written: int
-          Dropped: int
-          Skipped: int
-          Stopped: IoError option }
+        {
+            Queued: int
+            Written: int
+            Dropped: int
+            Skipped: int
+            Stopped: IoError option
+        }
 
     let flush (transport: IGitHubTransport) (board: BoardMap) : IoResult<FlushOutcome> =
         match Cache.pending () with
         | Error e -> Error e
         | Ok [] ->
             Ok
-                { Queued = 0
-                  Written = 0
-                  Dropped = 0
-                  Skipped = 0
-                  Stopped = None }
+                {
+                    Queued = 0
+                    Written = 0
+                    Dropped = 0
+                    Skipped = 0
+                    Stopped = None
+                }
         | Ok entries ->
 
-        let mutable written = 0
-        let mutable dropped = 0
-        let mutable stopped = None
+            let mutable written = 0
+            let mutable dropped = 0
+            let mutable stopped = None
 
-        // ANOTHER BOARD'S ENTRY IS NOT OURS TO REPLAY, AND EMPHATICALLY NOT OURS TO DROP (#882).
-        //
-        // Resolving it against THIS board is what the bug was: `itemId` answers `Ok None` — a successful read
-        // that walked the whole board and found nothing — which is `NotOnBoard`, which is PERMANENT, so the
-        // entry dropped and the CLI called it "permanently un-writable". Every step is locally correct; the
-        // conclusion is false, because the question was asked of the wrong board.
-        //
-        // SKIP, NOT DROP, is the whole repair: the write is still owed and still landable, so it stays queued
-        // where `flush --dry-run` can show it and a flush against its own board can replay it.
-        //
-        // A LEGACY ENTRY (`Board = None`) IS REPLAYED, NOT SKIPPED. It predates this field, so its board is
-        // genuinely unknown — and "unknown" must not become "skip forever", which would strand it exactly as
-        // #878 stranded the queue that had no verb. Replaying it against the current board is the behaviour it
-        // was queued under: no worse than before, and correct in the single-board case that is every real one.
-        let isOtherBoard (entry: Cache.Deferred) =
-            match entry.Board with
-            | Some queuedAgainst -> not (Cache.sameBoard queuedAgainst (board.Owner, board.Title))
-            | None -> false
+            // ANOTHER BOARD'S ENTRY IS NOT OURS TO REPLAY, AND EMPHATICALLY NOT OURS TO DROP (#882).
+            //
+            // Resolving it against THIS board is what the bug was: `itemId` answers `Ok None` — a successful read
+            // that walked the whole board and found nothing — which is `NotOnBoard`, which is PERMANENT, so the
+            // entry dropped and the CLI called it "permanently un-writable". Every step is locally correct; the
+            // conclusion is false, because the question was asked of the wrong board.
+            //
+            // SKIP, NOT DROP, is the whole repair: the write is still owed and still landable, so it stays queued
+            // where `flush --dry-run` can show it and a flush against its own board can replay it.
+            //
+            // A LEGACY ENTRY (`Board = None`) IS REPLAYED, NOT SKIPPED. It predates this field, so its board is
+            // genuinely unknown — and "unknown" must not become "skip forever", which would strand it exactly as
+            // #878 stranded the queue that had no verb. Replaying it against the current board is the behaviour it
+            // was queued under: no worse than before, and correct in the single-board case that is every real one.
+            let isOtherBoard (entry: Cache.Deferred) =
+                match entry.Board with
+                | Some queuedAgainst -> not (Cache.sameBoard queuedAgainst (board.Owner, board.Title))
+                | None -> false
 
-        // PARTITIONED BEFORE THE PASS, so a skip is decided by the entry alone and cannot be confused with a
-        // stop: a rate limit halts the replay of OUR entries, and must not retroactively re-classify another
-        // board's — `Skipped` is a property of the queue, `Stopped` a property of the budget.
-        let replayable, otherBoards = entries |> List.partition (isOtherBoard >> not)
-        let skipped = List.length otherBoards
+            // PARTITIONED BEFORE THE PASS, so a skip is decided by the entry alone and cannot be confused with a
+            // stop: a rate limit halts the replay of OUR entries, and must not retroactively re-classify another
+            // board's — `Skipped` is a property of the queue, `Stopped` a property of the budget.
+            let replayable, otherBoards = entries |> List.partition (isOtherBoard >> not)
+            let skipped = List.length otherBoards
 
-        for entry in replayable do
-            if stopped.IsNone then
-                let parts = entry.Ref.Split([| '/'; '#' |], StringSplitOptions.RemoveEmptyEntries)
+            for entry in replayable do
+                if stopped.IsNone then
+                    let parts = entry.Ref.Split([| '/'; '#' |], StringSplitOptions.RemoveEmptyEntries)
 
-                // `int parts.[2]` would THROW on a ref whose number is not a number, and an exception here
-                // aborts the whole flush — abandoning every entry after it, on the strength of one bad line.
-                // A queue entry we cannot parse will never land; it is dropped, not retried, because
-                // retrying it is an infinite loop that reports progress.
-                let parsed =
-                    if parts.Length < 3 then
-                        None
-                    else
-                        match Int32.TryParse parts.[2] with
-                        | true, n -> Some(parts.[0], parts.[1], n)
-                        | _ -> None
-
-                match parsed with
-                | None ->
-                    Cache.dropPending entry
-                    dropped <- dropped + 1
-                | Some(owner, repo, number) ->
-
-                    let write =
-                        if entry.Value = "" then Clear else Set entry.Value
-
-                    // A queued replacement is still an authoritative `Blocked by` writer. The caller that
-                    // queued it released its lease when the rate-limited first attempt ended, so replaying
-                    // directly through `attempt` would reopen the exact overwrite window the live routes
-                    // close. Reacquire the item-scoped lease for the replay itself. Keep the callback's
-                    // observed result so cleanup uncertainty can be distinguished from contention: if the
-                    // write landed but deleting our ticket failed, the queue entry is already fulfilled and
-                    // must be dropped; otherwise a failed lease/action leaves it queued for an explicit retry.
-                    let mutable attempted: IoResult<WriteOutcome> option = None
-
-                    let replay () =
-                        let result = attempt transport board owner repo number entry.Field write
-                        attempted <- Some result
-                        result
-
-                    let result =
-                        if entry.Field = "Blocked by" then
-                            Writes.withBlockedByMutationLease
-                                transport
-                                { Owner = owner; Repo = repo; Number = number }
-                                replay
+                    // `int parts.[2]` would THROW on a ref whose number is not a number, and an exception here
+                    // aborts the whole flush — abandoning every entry after it, on the strength of one bad line.
+                    // A queue entry we cannot parse will never land; it is dropped, not retried, because
+                    // retrying it is an infinite loop that reports progress.
+                    let parsed =
+                        if parts.Length < 3 then
+                            None
                         else
-                            replay ()
+                            match Int32.TryParse parts.[2] with
+                            | true, n -> Some(parts.[0], parts.[1], n)
+                            | _ -> None
 
-                    // REPLAY THROUGH `attempt`, NOT `boardWrite`. `boardWrite` carries the DEFER policy —
-                    // it queues on an exhausted budget — and that is exactly right for a FIRST attempt and
-                    // exactly wrong for a replay: this entry is ALREADY in the queue, so deferring it again
-                    // appends a second copy. Every flush under a dead budget would double the queue,
-                    // forever, while reporting that it had written nothing and backing off from nothing.
-                    match result with
-                    | Ok Written ->
-                        Cache.dropPending entry
-                        written <- written + 1
-
-                    | Ok NotOnBoard ->
-                        // `NotOnBoard` is DROPPED, not retried. It is permanent, and `boardWrite` would not
-                        // have queued it in the first place — but an entry queued before the item was
-                        // removed from the board can still reach here, and carrying it forever would mean
-                        // the queue never drains.
-                        //
-                        // DROPPED IS NOT WRITTEN, AND `written` IS THE COUNT THIS FUNCTION RETURNS (#862).
-                        // Counting it here would report a write that never happened, to a caller whose whole
-                        // job is telling a worker whether their board writes landed — the same
-                        // "reported success over a subject it never touched" that #266 names, inside the
-                        // one verb that exists to repair exactly that. The entry still drops; it counts
-                        // as DROPPED, which is a fact the caller renders separately.
+                    match parsed with
+                    | None ->
                         Cache.dropPending entry
                         dropped <- dropped + 1
+                    | Some(owner, repo, number) ->
 
-                    | Ok Deferred ->
-                        // `attempt` cannot return this — it has no queue. The case exists so that a future
-                        // outcome added to the DU forces a decision here rather than silently falling into
-                        // "drop it".
-                        ()
+                        let write = if entry.Value = "" then Clear else Set entry.Value
 
-                    | Error(RateLimited _ as e) ->
-                        // AN EXHAUSTED BUDGET STOPS THE WHOLE FLUSH. The rest would fail identically, and
-                        // spending REST calls to confirm that is exactly the back-off EX_RATE exists to
-                        // signal. The remainder STAYS QUEUED — untouched, and not re-appended.
-                        stopped <- Some e
+                        // A queued replacement is still an authoritative `Blocked by` writer. The caller that
+                        // queued it released its lease when the rate-limited first attempt ended, so replaying
+                        // directly through `attempt` would reopen the exact overwrite window the live routes
+                        // close. Reacquire the item-scoped lease for the replay itself. Keep the callback's
+                        // observed result so cleanup uncertainty can be distinguished from contention: if the
+                        // write landed but deleting our ticket failed, the queue entry is already fulfilled and
+                        // must be dropped; otherwise a failed lease/action leaves it queued for an explicit retry.
+                        let mutable attempted: IoResult<WriteOutcome> option = None
 
-                    | Error e when entry.Field = "Blocked by" ->
-                        match attempted with
-                        | Some(Ok Written) ->
-                            // The mutation landed; only lease cleanup is uncertain. Retaining the queued
-                            // replacement would replay a fulfilled stale value after the ticket expires.
+                        let replay () =
+                            let result = attempt transport board owner repo number entry.Field write
+                            attempted <- Some result
+                            result
+
+                        let result =
+                            if entry.Field = "Blocked by" then
+                                Writes.withBlockedByMutationLease
+                                    transport
+                                    {
+                                        Owner = owner
+                                        Repo = repo
+                                        Number = number
+                                    }
+                                    replay
+                            else
+                                replay ()
+
+                        // REPLAY THROUGH `attempt`, NOT `boardWrite`. `boardWrite` carries the DEFER policy —
+                        // it queues on an exhausted budget — and that is exactly right for a FIRST attempt and
+                        // exactly wrong for a replay: this entry is ALREADY in the queue, so deferring it again
+                        // appends a second copy. Every flush under a dead budget would double the queue,
+                        // forever, while reporting that it had written nothing and backing off from nothing.
+                        match result with
+                        | Ok Written ->
                             Cache.dropPending entry
                             written <- written + 1
-                        | _ -> ()
 
-                        // Contention and transport uncertainty are retryable for a queued authoritative
-                        // writer. Stop this pass and retain the current entry unless the action is known to
-                        // have landed; later entries remain untouched and no duplicate is appended.
-                        stopped <- Some e
+                        | Ok NotOnBoard ->
+                            // `NotOnBoard` is DROPPED, not retried. It is permanent, and `boardWrite` would not
+                            // have queued it in the first place — but an entry queued before the item was
+                            // removed from the board can still reach here, and carrying it forever would mean
+                            // the queue never drains.
+                            //
+                            // DROPPED IS NOT WRITTEN, AND `written` IS THE COUNT THIS FUNCTION RETURNS (#862).
+                            // Counting it here would report a write that never happened, to a caller whose whole
+                            // job is telling a worker whether their board writes landed — the same
+                            // "reported success over a subject it never touched" that #266 names, inside the
+                            // one verb that exists to repair exactly that. The entry still drops; it counts
+                            // as DROPPED, which is a fact the caller renders separately.
+                            Cache.dropPending entry
+                            dropped <- dropped + 1
 
-                    | Error _ ->
-                        // A PERMANENTLY UN-WRITABLE ENTRY IS DROPPED, LOUDLY. It will never land, and
-                        // carrying it forever means the queue never drains and nobody is ever told why.
-                        Cache.dropPending entry
-                        dropped <- dropped + 1
+                        | Ok Deferred ->
+                            // `attempt` cannot return this — it has no queue. The case exists so that a future
+                            // outcome added to the DU forces a decision here rather than silently falling into
+                            // "drop it".
+                            ()
 
-        // A STOP IS NOT AN ERROR HERE, AND THAT IS THE FIX (#862). Returning `Error e` discarded `written`
-        // — the count the caller renders — so the caller re-read the queue to infer it, and a concurrent
-        // `defer` into the shared queue file made that inference wrong. The rate limit and the work that
-        // landed are DIFFERENT FACTS; a caller needs both, so both are returned. `Error` now means only
-        // "the queue could not be read".
-        Ok
-            { Queued = List.length entries
-              Written = written
-              Dropped = dropped
-              Skipped = skipped
-              Stopped = stopped }
+                        | Error(RateLimited _ as e) ->
+                            // AN EXHAUSTED BUDGET STOPS THE WHOLE FLUSH. The rest would fail identically, and
+                            // spending REST calls to confirm that is exactly the back-off EX_RATE exists to
+                            // signal. The remainder STAYS QUEUED — untouched, and not re-appended.
+                            stopped <- Some e
+
+                        | Error e when entry.Field = "Blocked by" ->
+                            match attempted with
+                            | Some(Ok Written) ->
+                                // The mutation landed; only lease cleanup is uncertain. Retaining the queued
+                                // replacement would replay a fulfilled stale value after the ticket expires.
+                                Cache.dropPending entry
+                                written <- written + 1
+                            | _ -> ()
+
+                            // Contention and transport uncertainty are retryable for a queued authoritative
+                            // writer. Stop this pass and retain the current entry unless the action is known to
+                            // have landed; later entries remain untouched and no duplicate is appended.
+                            stopped <- Some e
+
+                        | Error _ ->
+                            // A PERMANENTLY UN-WRITABLE ENTRY IS DROPPED, LOUDLY. It will never land, and
+                            // carrying it forever means the queue never drains and nobody is ever told why.
+                            Cache.dropPending entry
+                            dropped <- dropped + 1
+
+            // A STOP IS NOT AN ERROR HERE, AND THAT IS THE FIX (#862). Returning `Error e` discarded `written`
+            // — the count the caller renders — so the caller re-read the queue to infer it, and a concurrent
+            // `defer` into the shared queue file made that inference wrong. The rate limit and the work that
+            // landed are DIFFERENT FACTS; a caller needs both, so both are returned. `Error` now means only
+            // "the queue could not be read".
+            Ok
+                {
+                    Queued = List.length entries
+                    Written = written
+                    Dropped = dropped
+                    Skipped = skipped
+                    Stopped = stopped
+                }

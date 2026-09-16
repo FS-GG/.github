@@ -191,12 +191,20 @@ module Errors =
             let landed = String.Join(", ", applied)
 
             let broke =
-                failed |> List.map (fun (alias, msg) -> $"%s{alias}: %s{msg}") |> String.concat "; "
+                failed
+                |> List.map (fun (alias, msg) -> $"%s{alias}: %s{msg}")
+                |> String.concat "; "
 
             $"PARTIAL WRITE — %d{List.length applied} of %d{List.length applied + List.length failed} aliases landed (%s{landed}) and the rest did not (%s{broke}). This is NOT queued: replaying the document would rewrite the half that already landed."
 
-        | Transport detail -> $"could not reach GitHub: %s{detail}. We did not observe anything — this is not an empty answer."
+        | Transport detail ->
+            $"could not reach GitHub: %s{detail}. We did not observe anything — this is not an empty answer."
 
         | Http(status, body) ->
-            let trimmed = if body.Length > 400 then body.Substring(0, 400) + "…" else body
+            let trimmed =
+                if body.Length > 400 then
+                    body.Substring(0, 400) + "…"
+                else
+                    body
+
             $"HTTP %d{status}: %s{trimmed}"

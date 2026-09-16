@@ -46,10 +46,13 @@ module WhoLivenessTests =
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None; Headers = Map.empty }
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            }
 
     /// One board, one row, `In progress` — the only column that licenses an `unclaimed` verdict at all, so
     /// the fixture must serve it or neither leg is testing what it says it is.
@@ -106,7 +109,8 @@ module WhoLivenessTests =
                 | Query(document, _) ->
                     match board document with
                     | Some answer -> ok answer
-                    | None -> Error(Errors.NotFound "the fixture serves no board WRITE — the lock is what is under test")
+                    | None ->
+                        Error(Errors.NotFound "the fixture serves no board WRITE — the lock is what is under test")
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             // Arm B (the off-board open-issue scan) finds nothing, so the row under test reaches the
@@ -121,11 +125,13 @@ module WhoLivenessTests =
     let private world (comments: string) = worldWith graphqlAnswer comments
 
     let private context (transport: Fake.Recorder) : Kernel.Context =
-        { Transport = transport
-          Owner = "FS-GG"
-          Title = "Coordination"
-          DefaultRepo = Some "FS.GG.SDD"
-          ChoreLocks = [] }
+        {
+            Transport = transport
+            Owner = "FS-GG"
+            Title = "Coordination"
+            DefaultRepo = Some "FS.GG.SDD"
+            ChoreLocks = []
+        }
 
     /// Drive `Client.who` against a throwaway cache, on `ForceStealTests.runClaim`'s licence exactly:
     /// `AssemblyInfo.fs` disables cross-class parallelism, so the process-global `FSGG_COORD_CACHE` is safe
@@ -134,7 +140,9 @@ module WhoLivenessTests =
     /// BOTH STREAMS ARE CAPTURED, because the two halves of this verb's answer are deliberately split across
     /// them: the row is stdout, and the warning — the accusation this issue is about — is stderr.
     let private runWho (transport: Fake.Recorder) (args: string list) : int * string * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-1668-" + Guid.NewGuid().ToString "n")
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-1668-" + Guid.NewGuid().ToString "n")
+
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let stdout = Console.Out
         let stderr = Console.Error

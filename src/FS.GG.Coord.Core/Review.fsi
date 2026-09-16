@@ -27,13 +27,15 @@ module Review =
     /// from claim and PR facts; `inspect` never infers identity from comment bodies beyond the critic
     /// identity `Driver.reviewPhaseFacts` already extracts.
     type Binding =
-        { ItemRef: string
-          Pr: int
-          HeadSha: string
-          ClaimGeneration: string
-          ImplementerIdentity: string
-          Phase: Phase
-          Round: int }
+        {
+            ItemRef: string
+            Pr: int
+            HeadSha: string
+            ClaimGeneration: string
+            ImplementerIdentity: string
+            Phase: Phase
+            Round: int
+        }
 
     /// The complete provenance a granted repair phase carries (acceptance 6): the exhausted PR and its
     /// escalation-marker comment, and the new claim/branch/PR/implementer/critic/head the fresh phase is
@@ -50,11 +52,13 @@ module Review =
     /// same-critic rule protects is preserved either by the same critic confirming or by the chain being
     /// honestly restarted, never by a stranger silently continuing it.
     type CriticSuccessionReceipt =
-        { OriginalCriticIdentity: string
-          SuccessorCriticIdentity: string
-          GrantedBy: string
-          Reason: string
-          CandidateHeadSha: string }
+        {
+            OriginalCriticIdentity: string
+            SuccessorCriticIdentity: string
+            GrantedBy: string
+            Reason: string
+            CandidateHeadSha: string
+        }
 
     /// The accountable grant that lets a repair whose subject is a PULL REQUEST COMMENT rather than the
     /// tree advance a round (.github#2549) — the third instance of the `RepairPhaseReceipt` /
@@ -71,10 +75,12 @@ module Review =
     /// `AnsweredReviewUrl` binds the grant to the exact review comment it answers, so a grant made for
     /// an earlier round cannot be replayed against a later one; `CandidateHeadSha` binds it to the head.
     type RepairAssertionReceipt =
-        { AnsweredReviewUrl: string
-          CandidateHeadSha: string
-          GrantedBy: string
-          Reason: string }
+        {
+            AnsweredReviewUrl: string
+            CandidateHeadSha: string
+            GrantedBy: string
+            Reason: string
+        }
 
     /// Facts read live by the caller — PR comments, check state, and the two facts this pure engine
     /// cannot observe itself (clarifications DEC-002): whether a fresh repair phase has already been
@@ -85,11 +91,13 @@ module Review =
     /// `review <ref> --pr N` path in `Client.fs`), and a required field would force every one of them to
     /// name it. `inspect`/`advance` take it as their own explicit parameter instead.
     type Facts =
-        { Comments: Driver.ReviewComment list
-          Checks: PrState
-          RepairPhaseGranted: RepairPhaseReceipt option
-          RepairRouteAvailable: bool
-          DiffAuditTrusted: SemanticDiff.TrustedAudit option }
+        {
+            Comments: Driver.ReviewComment list
+            Checks: PrState
+            RepairPhaseGranted: RepairPhaseReceipt option
+            RepairRouteAvailable: bool
+            DiffAuditTrusted: SemanticDiff.TrustedAudit option
+        }
 
     /// The closed review-protocol state model (acceptance 1). `MalformedEvidence` and `GuardViolation`
     /// are additional to the issue's named list — "at least" those names — and exist so a parser error
@@ -125,14 +133,16 @@ module Review =
     /// carries (acceptance 10) — `Delivery.fromReviewAcceptance` folds it into a `Delivery.Snapshot`
     /// without `Delivery` learning any of this module's states.
     type AcceptedReceipt =
-        { HeadSha: string
-          CriticIdentity: string
-          Rounds: int list
-          RepairPhase: bool
-          ChecksGreen: bool
-          RuntimeRouteEvidence: Driver.RuntimeRouteEvidence option
-          DiffAuditRequired: bool
-          DiffAuditHead: string option }
+        {
+            HeadSha: string
+            CriticIdentity: string
+            Rounds: int list
+            RepairPhase: bool
+            ChecksGreen: bool
+            RuntimeRouteEvidence: Driver.RuntimeRouteEvidence option
+            DiffAuditRequired: bool
+            DiffAuditHead: string option
+        }
 
     /// The closed set of typed next actions (acceptance 3) — one constructor per named action in the
     /// issue. `EnterCriticSuccession` (.github#2417) is returned in place of `ResumeSameCritic` only when
@@ -167,25 +177,29 @@ module Review =
     /// One inspected verdict: the state, the sole legal next action, and the freshness/idempotency pair
     /// (acceptance 9) a caller must present unchanged to `advance`.
     type Verdict =
-        { State: State
-          NextAction: NextAction
-          FreshnessToken: string
-          ActionKey: string
-          /// Every chain this verdict excluded from its evidence because a host acceptance already
-          /// settled it at a head the pull request has since moved off (.github#2527) — the fact that
-          /// explains why a pull request visibly carrying two initial markers is being classified against
-          /// the later one. Empty for every verdict that retires nothing, and deliberately not folded
-          /// into `ActionKey`, which already covers the head and comments it is derived from.
-          RetiredChains: Driver.ChainRetirement list }
+        {
+            State: State
+            NextAction: NextAction
+            FreshnessToken: string
+            ActionKey: string
+            /// Every chain this verdict excluded from its evidence because a host acceptance already
+            /// settled it at a head the pull request has since moved off (.github#2527) — the fact that
+            /// explains why a pull request visibly carrying two initial markers is being classified against
+            /// the later one. Empty for every verdict that retires nothing, and deliberately not folded
+            /// into `ActionKey`, which already covers the head and comments it is derived from.
+            RetiredChains: Driver.ChainRetirement list
+        }
 
     /// Complete live facts for deciding whether ordinary round-three may cross claim turnover.
     type OrdinaryExhaustionFacts =
-        { Phase: Phase
-          HeadSha: string
-          CurrentClaimGeneration: string
-          Checks: PrState
-          Comments: Driver.ReviewComment list
-          WaitState: ReviewWait.State option }
+        {
+            Phase: Phase
+            HeadSha: string
+            CurrentClaimGeneration: string
+            Checks: PrState
+            Comments: Driver.ReviewComment list
+            WaitState: ReviewWait.State option
+        }
 
     [<RequireQualifiedAccess>]
     type OrdinaryExhaustionDecision =
@@ -202,8 +216,7 @@ module Review =
     /// exact terminal verdict set that may cross ordinary round-three claim turnover:
     /// `changes-required`, or `pass` whose exact-head checks have settled red. A pre-round pass and
     /// pending or green terminal pass verdicts remain outside exhaustion.
-    val isOrdinaryExhaustionTerminal:
-        headSha: string -> checks: PrState -> comments: Driver.ReviewComment list -> bool
+    val isOrdinaryExhaustionTerminal: headSha: string -> checks: PrState -> comments: Driver.ReviewComment list -> bool
 
     /// One complete authority for terminal ledger shape, check settlement, exact review generation,
     /// completed wait, and claim turnover. Projections and writers consume this decision unchanged.

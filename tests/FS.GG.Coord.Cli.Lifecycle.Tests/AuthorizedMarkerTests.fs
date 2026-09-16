@@ -19,14 +19,16 @@ open FS.GG.Coord.Cli
 module AuthorizedMarkerTests =
 
     let private marker (id: int64) (worker: string) (ageSeconds: int) : Reads.Marker =
-        { Id = id
-          Worker = WorkerId worker
-          Session = None
-          AgeSeconds = ageSeconds
-          PreviousStatus = None
-          PathRepo = None
-          AgentContract = None
-          Raw = $"<!-- fsgg:claim worker=%s{worker} lease=120 -->" }
+        {
+            Id = id
+            Worker = WorkerId worker
+            Session = None
+            AgeSeconds = ageSeconds
+            PreviousStatus = None
+            PathRepo = None
+            AgentContract = None
+            Raw = $"<!-- fsgg:claim worker=%s{worker} lease=120 -->"
+        }
 
     /// A lease of 120 minutes throughout — matches the production default and #2378's own incident
     /// timeline (a 120-minute lease, a ~2h review cycle).
@@ -41,6 +43,7 @@ module AuthorizedMarkerTests =
     [<Fact>]
     let ``a live marker authorizes without consulting liveness at all`` () =
         let m = marker 1L "heron-b71" 0
+
         match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizedMarker leaseMinutes [ m ] mustNotBeCalled with
         | Ok(Some found) -> Assert.Equal(m, found)
         | other -> failwith $"a live marker must authorize on its own; got %A{other}"
@@ -80,7 +83,9 @@ module AuthorizedMarkerTests =
         let boom = Errors.Malformed("FS-GG/.github#2378", "fixture: the PR probe failed")
         let liveness () = Error boom
 
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizedMarker leaseMinutes [ stale ] (fun () -> liveness ()) with
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizedMarker leaseMinutes [ stale ] (fun () -> liveness ())
+        with
         | Error e -> Assert.Equal(boom, e)
         | other -> failwith $"a failed liveness read must propagate as an Error, not a verdict; got %A{other}"
 

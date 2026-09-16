@@ -25,9 +25,11 @@ module Chores =
         // of this line. The `worker-id-attractor` gate holds this, and it caught this line.
         String.concat
             "\n"
-            [ $"chore [%s{chore.Size.Label}] %s{chore.Statement}"
-              $"  you hold %s{lockRef.Short}, the chore lock for this repo (%d{LeaseMinutes}m)."
-              $"  do it, or hand it back now:  scripts/fsgg-coord release %s{lockRef.Short}" ]
+            [
+                $"chore [%s{chore.Size.Label}] %s{chore.Statement}"
+                $"  you hold %s{lockRef.Short}, the chore lock for this repo (%d{LeaseMinutes}m)."
+                $"  do it, or hand it back now:  scripts/fsgg-coord release %s{lockRef.Short}"
+            ]
 
     let private offerCore
         (lifecycle: Chore.Chore list)
@@ -103,6 +105,7 @@ module Chores =
                     lifecycle
                     |> List.filter (fun chore ->
                         String.Equals(chore.Subject.Repo, lockRef.Repo, StringComparison.OrdinalIgnoreCase))
+
                 match Chore.offerIncluding at lifecycleOurs with
                 | None -> None
                 | Some chore ->
@@ -123,7 +126,15 @@ module Chores =
                     //    must not take THIS lock in their name either: the drain it serialises would then be
                     //    attributed to a worker who never asked to drain anything.
                     match
-                        Writes.claim transport LeaseMinutes Writes.RefuseLiveHolder ignore worker self session lockRef
+                        Writes.claim
+                            transport
+                            LeaseMinutes
+                            Writes.RefuseLiveHolder
+                            ignore
+                            worker
+                            self
+                            session
+                            lockRef
                             (fun () -> None)
                     with
                     | Ok(Writes.Won _)

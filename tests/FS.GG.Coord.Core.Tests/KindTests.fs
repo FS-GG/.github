@@ -59,7 +59,9 @@ let ``a FENCED Kind line is documentation, not a declaration`` () =
     // fence-blind BY CONSTRUCTION". This is that next module, and these are the tests that say it was
     // not — which matters concretely here, because this change's own .fsi, ADR text and
     // `docs/coordination/board-schema.md` all QUOTE the grammar inside fences.
-    let body = "How to declare a kind:\n\n```\nKind: register\n```\n\nThat is the grammar.\n"
+    let body =
+        "How to declare a kind:\n\n```\nKind: register\n```\n\nThat is the grammar.\n"
+
     Assert.Equal(None, Kind.fromBody body)
     Assert.Equal<string list>([], Kind.unrecognised body)
 
@@ -73,7 +75,16 @@ let ``a word this engine does not speak is UNRECOGNISED, and is not resolved to 
     // word from the neighbouring vocabulary. NONE may resolve — and each must be REPORTED, because
     // `fromBody`'s `None` cannot tell "no line" from "a line I could not read" (.github#1651, measured
     // twice in one run on the `Class:` axis with two different invented words).
-    for bad in [ "registers"; "reg"; "standing"; "epic"; "hardening"; "anchors"; "Register Row" ] do
+    for bad in
+        [
+            "registers"
+            "reg"
+            "standing"
+            "epic"
+            "hardening"
+            "anchors"
+            "Register Row"
+        ] do
         let body = $"Kind: %s{bad}"
         Assert.Equal(None, Kind.fromBody body)
         Assert.Equal<string list>([ bad ], Kind.unrecognised body)
@@ -87,7 +98,13 @@ let ``an EMPTY Kind line is unrecognised, not absent`` () =
 
 [<Fact>]
 let ``a key that merely STARTS with kind is not a Kind line`` () =
-    for near in [ "Kinds: register"; "Kinder: register"; "KindOf: register"; "MyKind: register" ] do
+    for near in
+        [
+            "Kinds: register"
+            "Kinder: register"
+            "KindOf: register"
+            "MyKind: register"
+        ] do
         Assert.Equal(None, Kind.fromBody near)
         Assert.Equal<string list>([], Kind.unrecognised near)
 
@@ -121,12 +138,14 @@ let ``two STANDING declarations resolve deterministically and never to work`` ()
 [<Fact>]
 let ``govern reads no declaration as work — the property every row on the board relies on`` () =
     Assert.Equal(Work, Kind.govern None)
+
     for k in Kind.legalKinds do
         Assert.Equal(k, Kind.govern (Some k))
 
 [<Fact>]
 let ``isStanding is derived as not-work, so a fifth case is standing by default`` () =
     Assert.False(Kind.isStanding Work)
+
     for k in Kind.legalKinds |> List.filter (fun k -> k <> Work) do
         Assert.True(Kind.isStanding k, $"%A{k} must be standing")
 

@@ -8,13 +8,15 @@ module HandlerRegistration =
     /// The lifecycle family owns both live and snapshot forms of delivery/review. Program-level
     /// handlers retain that distinction while this inventory makes ownership exhaustive.
     let commands =
-        [ Options.DeliveryCmd
-          Options.ReviewCmd
-          Options.RouteCmd
-          Options.Landable
-          Options.DoneCmd
-          Options.VerifyPaths
-          Options.Followup ]
+        [
+            Options.DeliveryCmd
+            Options.ReviewCmd
+            Options.RouteCmd
+            Options.Landable
+            Options.DoneCmd
+            Options.VerifyPaths
+            Options.Followup
+        ]
 
     let validate (expected: Options.Command list) (registrations: (Options.Command * Handler) list) =
         let expectedSet = Set.ofList expected
@@ -29,7 +31,10 @@ module HandlerRegistration =
             grouped
             |> Map.toList
             |> List.choose (fun (command, count) ->
-                if count > 1 then Some $"duplicate lifecycle handler for %A{command}" else None)
+                if count > 1 then
+                    Some $"duplicate lifecycle handler for %A{command}"
+                else
+                    None)
 
         let registeredSet = registrations |> List.map fst |> Set.ofList
 

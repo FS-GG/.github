@@ -71,7 +71,9 @@ module RuleSubsetTests =
             elif t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<list<_>> then
                 // An F# list IS a union (`Empty`/`Cons`), and expanding `Cons` recurses forever on its own
                 // tail. One empty sample: no `Write` reads an element, and `RuleId` reads no field at all.
-                let empty = FSharpType.GetUnionCases t |> Array.find (fun c -> c.GetFields().Length = 0)
+                let empty =
+                    FSharpType.GetUnionCases t |> Array.find (fun c -> c.GetFields().Length = 0)
+
                 [ FSharpValue.MakeUnion(empty, [||]) ]
             elif FSharpType.IsUnion t then
                 FSharpType.GetUnionCases t
@@ -99,7 +101,8 @@ module RuleSubsetTests =
                     let value = FSharpValue.MakeUnion(c, List.toArray args) :?> Chore.ChoreKind
 
                     match write.GetValue(value) with
-                    | :? Option<string * string> as remedy when remedy.IsSome -> Some(ruleId.GetValue(value) :?> string, remedy.Value)
+                    | :? Option<string * string> as remedy when remedy.IsSome ->
+                        Some(ruleId.GetValue(value) :?> string, remedy.Value)
                     | _ -> None))
             |> List.distinct
             |> List.toArray
@@ -110,27 +113,50 @@ module RuleSubsetTests =
         // value per field would be indistinguishable from the `Array.head` version it replaces: green, and
         // blind again. At least one rule id must contribute MORE THAN ONE distinct write, which is exactly
         // the property `Array.head` destroyed.
-        let multiValued = writing |> Array.groupBy fst |> Array.filter (fun (_, ws) -> ws.Length > 1)
+        let multiValued =
+            writing |> Array.groupBy fst |> Array.filter (fun (_, ws) -> ws.Length > 1)
 
         Assert.True(
             multiValued.Length > 0,
             $"no rule id produced more than one write value — the sweep has collapsed to one sample per field and cannot see a varying remedy: %A{writing}"
         )
+
         let rec repoRoot (dir: DirectoryInfo) =
-            if File.Exists(Path.Combine(dir.FullName, ".git")) || Directory.Exists(Path.Combine(dir.FullName, ".git")) then dir.FullName
-            else repoRoot dir.Parent
+            if
+                File.Exists(Path.Combine(dir.FullName, ".git"))
+                || Directory.Exists(Path.Combine(dir.FullName, ".git"))
+            then
+                dir.FullName
+            else
+                repoRoot dir.Parent
+
         let root = repoRoot (DirectoryInfo(AppContext.BaseDirectory))
-        let bodies = [ ".claude/skills/check-board/references/deep-detail.md"; ".agents/skills/check-board/references/deep-detail.md" ]
+
+        let bodies =
+            [
+                ".claude/skills/check-board/references/deep-detail.md"
+                ".agents/skills/check-board/references/deep-detail.md"
+            ]
+
         for body in bodies do
             let text = File.ReadAllText(Path.Combine(root, body))
+
             for code, (field, value) in writing do
-                let row = text.Split('\n') |> Array.filter (fun line -> line.StartsWith("|") && line.Contains($"`{code}`"))
+                let row =
+                    text.Split('\n')
+                    |> Array.filter (fun line -> line.StartsWith("|") && line.Contains($"`{code}`"))
+
                 Assert.Single row |> ignore
                 Assert.Contains($"{field}=", row[0])
                 // `Class` and `Kind` are BODY-DECLARED projections: the remedy is "write whatever the
                 // item declares", so the documented row carries the placeholder rather than one of the
                 // vocabulary's values. Every other writing chore has a single concrete destination.
-                let expectedValue = if field = "Class" || field = "Kind" then "<declared>" else value
+                let expectedValue =
+                    if field = "Class" || field = "Kind" then
+                        "<declared>"
+                    else
+                        value
+
                 Assert.Contains(expectedValue, row[0])
 
     /// Every `Rule list` the protocol declares, EXCEPT the canonical `rules` itself.
@@ -191,7 +217,10 @@ module RuleSubsetTests =
         // generator's own output and passes: the block agrees with itself and says nothing at all. That
         // is #266's signature — a projection reporting success over a subject it does not carry.
         for name, rs in subsets do
-            Assert.True(not rs.IsEmpty, $"%s{name} is empty — its region would render no rules and still pass `--check`")
+            Assert.True(
+                not rs.IsEmpty,
+                $"%s{name} is empty — its region would render no rules and still pass `--check`"
+            )
 
     [<Fact>]
     let ``#889 no subset renders a rule twice - a document arguing with itself`` () =
@@ -228,6 +257,8 @@ module RuleSubsetTests =
                 Assert.Equal(rs.Length, emitted.GetArrayLength())
 
                 let ids =
-                    emitted.EnumerateArray() |> Seq.map (fun e -> e.GetProperty("id").GetString()) |> List.ofSeq
+                    emitted.EnumerateArray()
+                    |> Seq.map (fun e -> e.GetProperty("id").GetString())
+                    |> List.ofSeq
 
                 Assert.Equal<string list>(rs |> List.map _.Id, ids)

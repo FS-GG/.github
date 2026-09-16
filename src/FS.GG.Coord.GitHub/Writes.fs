@@ -37,38 +37,68 @@ module Writes =
         | StealLiveHolder
 
     type private ReplacementDraft =
-        { PreviousStatus: BoardStatus option
-          PathRepo: string option
-          AgentContract: string option
-          Body: string }
+        {
+            PreviousStatus: BoardStatus option
+            PathRepo: string option
+            AgentContract: string option
+            Body: string
+        }
 
     type SelfIdentity =
         | Derives of WorkerId
         | DerivesNothing
 
     type ClaimMarkerObservation =
-        { MarkerId: int64
-          Worker: WorkerId
-          Live: bool }
+        {
+            MarkerId: int64
+            Worker: WorkerId
+            Live: bool
+        }
 
     type ClaimMarkerCensus =
-        { WinnerMarkerId: int64 option
-          Markers: ClaimMarkerObservation list }
+        {
+            WinnerMarkerId: int64 option
+            Markers: ClaimMarkerObservation list
+        }
 
     type ForcedClaimCensuses =
-        { Before: ClaimMarkerCensus
-          After: ClaimMarkerCensus option }
+        {
+            Before: ClaimMarkerCensus
+            After: ClaimMarkerCensus option
+        }
 
     type ClaimOutcome =
         | Won of held: Held * collected: WorkerId list
         | Renewed of held: Held * collected: WorkerId list
         | Stolen of held: Held * from: WorkerId list * collected: WorkerId list * censuses: ForcedClaimCensuses
         | ReplacementWon of held: Held * collected: WorkerId list * censuses: ForcedClaimCensuses
-        | ReplacementPostFailed of holder: WorkerId * holderMarkerId: int64 * reason: string * censuses: ForcedClaimCensuses
-        | CleanupRequired of replacement: Held * removed: WorkerId list * failed: WorkerId * failedMarkerId: int64 * reason: string * censuses: ForcedClaimCensuses
-        | PostStateUnreadable of replacement: Held option * removed: WorkerId list * reason: string * censuses: ForcedClaimCensuses
-        | OldHolderStands of replacementMarkerId: int64 * holder: WorkerId * holderMarkerId: int64 * removed: WorkerId list * censuses: ForcedClaimCensuses
-        | NoHolderRemaining of replacementMarkerId: int64 option * removed: WorkerId list * censuses: ForcedClaimCensuses
+        | ReplacementPostFailed of
+            holder: WorkerId *
+            holderMarkerId: int64 *
+            reason: string *
+            censuses: ForcedClaimCensuses
+        | CleanupRequired of
+            replacement: Held *
+            removed: WorkerId list *
+            failed: WorkerId *
+            failedMarkerId: int64 *
+            reason: string *
+            censuses: ForcedClaimCensuses
+        | PostStateUnreadable of
+            replacement: Held option *
+            removed: WorkerId list *
+            reason: string *
+            censuses: ForcedClaimCensuses
+        | OldHolderStands of
+            replacementMarkerId: int64 *
+            holder: WorkerId *
+            holderMarkerId: int64 *
+            removed: WorkerId list *
+            censuses: ForcedClaimCensuses
+        | NoHolderRemaining of
+            replacementMarkerId: int64 option *
+            removed: WorkerId list *
+            censuses: ForcedClaimCensuses
         | ForcedClaimLost of winner: WorkerId * censuses: ForcedClaimCensuses
         | Lost of WorkerId
         | Twin of theirs: SessionId
@@ -86,8 +116,7 @@ module Writes =
         | ImpersonatesHolder of derived: WorkerId * named: WorkerId
 
     [<Sealed>]
-    type Reapable
-        internal (ref: Ref, worker: WorkerId, markerId: int64, previousStatus: BoardStatus option) =
+    type Reapable internal (ref: Ref, worker: WorkerId, markerId: int64, previousStatus: BoardStatus option) =
         member _.Ref = ref
         member _.Worker = worker
         member _.MarkerId = markerId
@@ -120,8 +149,12 @@ module Writes =
 
     let private currentAgentContract () =
         match Environment.GetEnvironmentVariable "FSGG_AGENT_CONTRACT_VERSION" with
-        | null | "" -> None
-        | version when version.Length = 64 && version |> Seq.forall (fun c -> c >= '0' && c <= '9' || c >= 'a' && c <= 'f') ->
+        | null
+        | "" -> None
+        | version when
+            version.Length = 64
+            && version |> Seq.forall (fun c -> c >= '0' && c <= '9' || c >= 'a' && c <= 'f')
+            ->
             Some version
         | invalid ->
             invalidArg
@@ -129,7 +162,8 @@ module Writes =
                 $"agent contract version must be one lowercase SHA-256 digest, got '%s{invalid}'"
 
     let private agentContractPart =
-        Option.map (fun version -> $" agentContract=%s{version}") >> Option.defaultValue ""
+        Option.map (fun version -> $" agentContract=%s{version}")
+        >> Option.defaultValue ""
 
     // THE MARKER. `worker=` MUST stay the first key — the parser anchors on it, and the anchor is what
     // stops a `say` message that merely QUOTES a marker from forging a lock.
@@ -154,7 +188,9 @@ module Writes =
             // no observation at all.
             | None -> ""
 
-        let pathRepoPart = pathRepo |> Option.map (fun p -> $" pathRepo=%s{p}") |> Option.defaultValue ""
+        let pathRepoPart =
+            pathRepo |> Option.map (fun p -> $" pathRepo=%s{p}") |> Option.defaultValue ""
+
         let agentContractPart = agentContractPart agentContract
 
         // GitHub only advances an issue comment's `updated_at` when its body actually changes.  Lease age
@@ -220,13 +256,15 @@ module Writes =
             o.ToJsonString()
 
         let request =
-            { Method = "POST"
-              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}/comments"
-              Query = []
-              Body = Json payload
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = ref.Short }
+            {
+                Method = "POST"
+                Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}/comments"
+                Query = []
+                Body = Json payload
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = ref.Short
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -254,9 +292,11 @@ module Writes =
     let postIssueComment transport ref body = postComment transport ref body
 
     type VerifiedCommentMutation =
-        { CommentId: int64
-          ByteLength: int
-          Sha256: string }
+        {
+            CommentId: int64
+            ByteLength: int
+            Sha256: string
+        }
 
     let private bodyEvidence (body: string) =
         let bytes = Encoding.UTF8.GetBytes body
@@ -278,9 +318,11 @@ module Writes =
 
                 if expectedLength = observedLength && expectedDigest = observedDigest then
                     Ok
-                        { CommentId = commentId
-                          ByteLength = expectedLength
-                          Sha256 = expectedDigest }
+                        {
+                            CommentId = commentId
+                            ByteLength = expectedLength
+                            Sha256 = expectedDigest
+                        }
                 else
                     Error(
                         Malformed(
@@ -289,7 +331,10 @@ module Writes =
                         )
                     )
             | [] -> Error(Malformed(ref.Short, $"comment %d{commentId} is missing from the authoritative readback"))
-            | _ -> Error(Malformed(ref.Short, $"comment %d{commentId} occurs more than once in the authoritative readback")))
+            | _ ->
+                Error(
+                    Malformed(ref.Short, $"comment %d{commentId} occurs more than once in the authoritative readback")
+                ))
 
     let createVerifiedComment transport ref body =
         postComment transport ref body
@@ -314,14 +359,21 @@ module Writes =
         let observe () =
             Reads.commentBodies transport ref.Owner ref.Repo ref.Number
             |> Result.bind (fun comments ->
-                let marked = comments |> List.filter (fun candidate -> candidate.Contains(marker, StringComparison.Ordinal))
+                let marked =
+                    comments
+                    |> List.filter (fun candidate -> candidate.Contains(marker, StringComparison.Ordinal))
+
                 match marked with
                 | [] -> Ok false
                 | [ exact ] when exact = body -> Ok true
-                | [ _ ] -> Error(Malformed(ref.Short, $"durable receipt marker '%s{marker}' conflicts with another body"))
+                | [ _ ] ->
+                    Error(Malformed(ref.Short, $"durable receipt marker '%s{marker}' conflicts with another body"))
                 | _ -> Error(Malformed(ref.Short, $"durable receipt marker '%s{marker}' occurs more than once")))
 
-        if String.IsNullOrWhiteSpace marker || not (body.Contains(marker, StringComparison.Ordinal)) then
+        if
+            String.IsNullOrWhiteSpace marker
+            || not (body.Contains(marker, StringComparison.Ordinal))
+        then
             Error(Malformed(ref.Short, "a durable receipt body must contain its non-empty marker"))
         else
             match observe () with
@@ -333,7 +385,13 @@ module Writes =
                     observe ()
                     |> Result.bind (function
                         | true -> Ok(CommentWritten commentId)
-                        | false -> Error(Malformed(ref.Short, "the durable receipt POST returned success but the exact body was absent from the authoritative re-read")))
+                        | false ->
+                            Error(
+                                Malformed(
+                                    ref.Short,
+                                    "the durable receipt POST returned success but the exact body was absent from the authoritative re-read"
+                                )
+                            ))
                 | Error writeError ->
                     match observe () with
                     | Ok true -> Ok CommentAlreadyPresent
@@ -355,13 +413,15 @@ module Writes =
     // Non-zero means the comment IS STILL THERE, and that is the only thing a caller cares about.
     let private deleteComment (transport: IGitHubTransport) (ref: Ref) (commentId: int64) : IoResult<unit> =
         let request =
-            { Method = "DELETE"
-              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/comments/%d{commentId}"
-              Query = []
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = ref.Short }
+            {
+                Method = "DELETE"
+                Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/comments/%d{commentId}"
+                Query = []
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = ref.Short
+            }
 
         match transport.Send request with
         | Ok _ -> Ok()
@@ -381,26 +441,35 @@ module Writes =
     let private BlockedByLeaseMinutes = 10
 
     type private BlockedByLeaseCandidate =
-        { Id: int64
-          Body: string
-          UpdatedAt: DateTimeOffset }
+        {
+            Id: int64
+            Body: string
+            UpdatedAt: DateTimeOffset
+        }
 
-    let private blockedByLeaseCandidates (transport: IGitHubTransport) (ref: Ref) : IoResult<BlockedByLeaseCandidate list> =
+    let private blockedByLeaseCandidates
+        (transport: IGitHubTransport)
+        (ref: Ref)
+        : IoResult<BlockedByLeaseCandidate list> =
         let subject = $"%s{ref.Short} Blocked by mutation lease"
+
         let request =
-            { Method = "GET"
-              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}/comments"
-              Query = [ "per_page", "100" ]
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
+            {
+                Method = "GET"
+                Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}/comments"
+                Query = [ "per_page", "100" ]
+                Body = NoBody
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = subject
+            }
 
         match transport.Send request with
         | Error error -> Error error
         | Ok response ->
             try
                 use document = JsonDocument.Parse response.Body
+
                 if document.RootElement.ValueKind <> JsonValueKind.Array then
                     Error(Malformed(subject, "the authoritative lease comment census is not a JSON array"))
                 else
@@ -411,21 +480,54 @@ module Writes =
                             |> Result.bind (fun candidates ->
                                 match comment.TryGetProperty "body" with
                                 | false, _ ->
-                                    Error(Malformed(subject, "a comment has no readable body, so it cannot be classified as a mutation lease"))
+                                    Error(
+                                        Malformed(
+                                            subject,
+                                            "a comment has no readable body, so it cannot be classified as a mutation lease"
+                                        )
+                                    )
                                 | true, body when body.ValueKind <> JsonValueKind.String ->
-                                    Error(Malformed(subject, "a comment has no readable body, so it cannot be classified as a mutation lease"))
+                                    Error(
+                                        Malformed(
+                                            subject,
+                                            "a comment has no readable body, so it cannot be classified as a mutation lease"
+                                        )
+                                    )
                                 | true, body ->
                                     let raw = body.GetString()
+
                                     if not (raw.StartsWith(BlockedByLeaseMarker, StringComparison.Ordinal)) then
                                         Ok candidates
                                     else
                                         match comment.TryGetProperty "id", comment.TryGetProperty "updated_at" with
-                                        | (true, id), (true, updated)
-                                            when id.ValueKind = JsonValueKind.Number && updated.ValueKind = JsonValueKind.String ->
+                                        | (true, id), (true, updated) when
+                                            id.ValueKind = JsonValueKind.Number
+                                            && updated.ValueKind = JsonValueKind.String
+                                            ->
                                             match DateTimeOffset.TryParse(updated.GetString()) with
-                                            | true, at -> Ok({ Id = id.GetInt64(); Body = raw; UpdatedAt = at } :: candidates)
-                                            | _ -> Error(Malformed(subject, "a mutation lease has an unreadable updated_at timestamp"))
-                                        | _ -> Error(Malformed(subject, "a mutation lease has no readable id and updated_at"))))
+                                            | true, at ->
+                                                Ok(
+                                                    {
+                                                        Id = id.GetInt64()
+                                                        Body = raw
+                                                        UpdatedAt = at
+                                                    }
+                                                    :: candidates
+                                                )
+                                            | _ ->
+                                                Error(
+                                                    Malformed(
+                                                        subject,
+                                                        "a mutation lease has an unreadable updated_at timestamp"
+                                                    )
+                                                )
+                                        | _ ->
+                                            Error(
+                                                Malformed(
+                                                    subject,
+                                                    "a mutation lease has no readable id and updated_at"
+                                                )
+                                            )))
                         (Ok [])
                     |> Result.map (List.sortBy _.Id)
             with :? JsonException as error ->
@@ -442,9 +544,14 @@ module Writes =
 
         let subject = $"%s{ref.Short} Blocked by mutation lease"
         let nonce = Guid.NewGuid().ToString("N")
-        let body = $"%s{BlockedByLeaseMarker} nonce=%s{nonce} lease=%d{BlockedByLeaseMinutes} -->"
+
+        let body =
+            $"%s{BlockedByLeaseMarker} nonce=%s{nonce} lease=%d{BlockedByLeaseMinutes} -->"
+
         let now () = DateTimeOffset.UtcNow
-        let isStale candidate = now () - candidate.UpdatedAt > TimeSpan.FromMinutes(float BlockedByLeaseMinutes)
+
+        let isStale candidate =
+            now () - candidate.UpdatedAt > TimeSpan.FromMinutes(float BlockedByLeaseMinutes)
 
         let rec deleteAll candidates =
             match candidates with
@@ -457,22 +564,45 @@ module Writes =
             match deleteComment transport ref myId, actionResult with
             | Ok(), result -> result
             | Error cleanup, Ok _ ->
-                Error(Malformed(subject, $"the guarded mutation succeeded but lease comment %d{myId} could not be removed (%s{Errors.explain cleanup}); do not retry until the lease expires"))
+                Error(
+                    Malformed(
+                        subject,
+                        $"the guarded mutation succeeded but lease comment %d{myId} could not be removed (%s{Errors.explain cleanup}); do not retry until the lease expires"
+                    )
+                )
             | Error cleanup, Error actionError ->
-                Error(Malformed(subject, $"the guarded mutation failed (%s{Errors.explain actionError}) and lease comment %d{myId} could not be removed (%s{Errors.explain cleanup})"))
+                Error(
+                    Malformed(
+                        subject,
+                        $"the guarded mutation failed (%s{Errors.explain actionError}) and lease comment %d{myId} could not be removed (%s{Errors.explain cleanup})"
+                    )
+                )
 
         let runIfWinner myId =
             blockedByLeaseCandidates transport ref
             |> Result.bind (fun candidates ->
                 let live = candidates |> List.filter (isStale >> not)
+
                 match live |> List.tryHead with
                 | Some winner when winner.Id = myId -> finish myId (action ())
                 | Some winner ->
                     deleteComment transport ref myId
-                    |> Result.bind (fun () -> Error(Malformed(subject, $"Blocked by mutation lease is held by comment %d{winner.Id}; no board mutation was sent")))
+                    |> Result.bind (fun () ->
+                        Error(
+                            Malformed(
+                                subject,
+                                $"Blocked by mutation lease is held by comment %d{winner.Id}; no board mutation was sent"
+                            )
+                        ))
                 | None ->
                     deleteComment transport ref myId
-                    |> Result.bind (fun () -> Error(Malformed(subject, "our mutation lease candidate disappeared before the authoritative election"))))
+                    |> Result.bind (fun () ->
+                        Error(
+                            Malformed(
+                                subject,
+                                "our mutation lease candidate disappeared before the authoritative election"
+                            )
+                        )))
 
         blockedByLeaseCandidates transport ref
         |> Result.bind (fun initial ->
@@ -483,7 +613,12 @@ module Writes =
             |> Result.bind (fun current ->
                 match current |> List.filter (isStale >> not) |> List.tryHead with
                 | Some winner ->
-                    Error(Malformed(subject, $"Blocked by mutation lease is held by comment %d{winner.Id}; no board mutation was sent"))
+                    Error(
+                        Malformed(
+                            subject,
+                            $"Blocked by mutation lease is held by comment %d{winner.Id}; no board mutation was sent"
+                        )
+                    )
                 | None ->
                     match postComment transport ref body with
                     | Ok myId -> runIfWinner myId
@@ -506,13 +641,15 @@ module Writes =
             o.ToJsonString()
 
         let request =
-            { Method = "PATCH"
-              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/comments/%d{commentId}"
-              Query = []
-              Body = Json payload
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = ref.Short }
+            {
+                Method = "PATCH"
+                Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/comments/%d{commentId}"
+                Query = []
+                Body = Json payload
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = ref.Short
+            }
 
         transport.Send request |> Result.map ignore
 
@@ -556,7 +693,10 @@ module Writes =
                 |> List.sortBy _.Id
                 |> List.tryHead)
 
-        if String.IsNullOrWhiteSpace marker || not (body.Contains(marker, StringComparison.Ordinal)) then
+        if
+            String.IsNullOrWhiteSpace marker
+            || not (body.Contains(marker, StringComparison.Ordinal))
+        then
             Error(Malformed(ref.Short, "a durable lease body must contain its non-empty generation marker"))
         else
             match observe () with
@@ -569,20 +709,38 @@ module Writes =
                     match observe () with
                     | Ok(Some winner) when winner.Id = myId -> Ok(LeaseAcquired myId)
                     | Ok(Some winner) ->
-                        deleteComment transport ref myId |> Result.map (fun () -> LeaseContended winner.Id)
+                        deleteComment transport ref myId
+                        |> Result.map (fun () -> LeaseContended winner.Id)
                     | Ok None ->
                         deleteComment transport ref myId
-                        |> Result.bind (fun () -> Error(Malformed(ref.Short, "the lease POST succeeded but no generation marker survived the authoritative re-read")))
+                        |> Result.bind (fun () ->
+                            Error(
+                                Malformed(
+                                    ref.Short,
+                                    "the lease POST succeeded but no generation marker survived the authoritative re-read"
+                                )
+                            ))
                     | Error readError ->
                         deleteComment transport ref myId
-                        |> Result.bind (fun () -> Error(Malformed(ref.Short, $"the post-write lease census was unreadable: %s{Errors.explain readError}")))
+                        |> Result.bind (fun () ->
+                            Error(
+                                Malformed(
+                                    ref.Short,
+                                    $"the post-write lease census was unreadable: %s{Errors.explain readError}"
+                                )
+                            ))
                 | Error writeError ->
                     match observe () with
                     | Ok(Some existing) when existing.Body = body -> Ok(LeaseAlreadyHeld existing.Id)
                     | Ok(Some existing) -> Ok(LeaseContended existing.Id)
                     | Ok None -> Error writeError
                     | Error readError ->
-                        Error(Malformed(ref.Short, $"the lease write failed (%s{Errors.explain writeError}) and recovery state is unreadable (%s{Errors.explain readError})"))
+                        Error(
+                            Malformed(
+                                ref.Short,
+                                $"the lease write failed (%s{Errors.explain writeError}) and recovery state is unreadable (%s{Errors.explain readError})"
+                            )
+                        )
 
     // ---- THE CAS ---------------------------------------------------------------------------------
 
@@ -632,374 +790,478 @@ module Writes =
         | Some derived -> Ok(Impersonates(derived, worker))
         | None ->
 
-        // 1. READ THE LIVE MARKERS. A failed read here is fatal and we have posted nothing, so there is no
-        //    marker to clean up — this is the only cheap place to fail, and it is why the read comes first.
-        match
-            Reads.markerScan transport ref.Owner ref.Repo ref.Number
-            |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
-        with
-        | Error e -> Error e
-        | Ok before ->
-
-        let liveBefore = Reads.winner leaseMinutes before
-
-        let census (markers: Reads.Marker list) : ClaimMarkerCensus =
-            { WinnerMarkerId = Reads.winner leaseMinutes markers |> Option.map _.Id
-              Markers =
-                markers
-                |> List.map (fun marker ->
-                    { MarkerId = marker.Id
-                      Worker = marker.Worker
-                      Live = not (Reads.isStale leaseMinutes marker) }) }
-
-        let beforeCensus = census before
-        let forcedCensuses after = { Before = beforeCensus; After = after |> Option.map census }
-
-        // COLLECT THE STALE DEBRIS ON AN ITEM WE HAVE WON. A stale marker is a lapsed lease, and the next
-        // claimant must COLLECT it, never merely out-order it: an ignored stale marker is exactly what
-        // `heartbeat` resurrects underneath the new holder — two live markers, one item. So once our live
-        // marker is the winner, delete every OTHER stale marker on the item (a 404 is success — a peer may
-        // have collected the same one, the concurrent-GC race), and hand back the workers we evicted so the
-        // caller can TELL them. Our OWN stale marker (a claim of ours that went stale) is deleted too, so
-        // exactly one marker survives, but is not returned: you do not message yourself. Best-effort — a
-        // stale marker we could not delete is left for `reap`, never a reason to fail a claim already won.
-        let collectStale (winnerId: int64) (markers: Reads.Marker list) : WorkerId list =
-            markers
-            |> List.filter (fun m -> m.Id <> winnerId && Reads.isStale leaseMinutes m)
-            |> List.choose (fun m ->
-                match deleteComment transport ref m.Id with
-                | Ok() -> Some m.Worker
-                | Error _ -> None)
-            // Our OWN stale marker is deleted but is not a notification (you do not message yourself); and an
-            // unparseable marker that is merely STALE is debris worth deleting, but its `worker` is a sentinel
-            // — `say`ing to "unparsed-marker" addresses no worker and posts a comment nobody reads.
-            |> List.filter (fun w -> w <> worker && w <> WorkerId UnparsedMarker)
-
-        // POST ONE REPLACEMENT CAPABILITY. For an ordinary claim this is followed immediately by election.
-        // For `--force`, this happens BEFORE any incumbent is deleted: a failed POST therefore leaves the
-        // prior holder untouched, while a later cleanup failure leaves two ordered, recoverable markers
-        // instead of zero. The marker is not a second authority — comment-order election remains the only
-        // authority, evaluated by `resolvePosted` after cleanup.
-        let postReplacement () : Result<Held, IoError * ReplacementDraft> =
-            let previousStatus = readPreviousStatus ()
-            let pathRepo = readPathRepo ()
-            let agentContract = currentAgentContract ()
-            let body = markerBody worker session leaseMinutes previousStatus pathRepo agentContract
-            let draft =
-                { PreviousStatus = previousStatus
-                  PathRepo = pathRepo
-                  AgentContract = agentContract
-                  Body = body }
-
-            match postComment transport ref body with
-            | Error e -> Error(e, draft)
-            | Ok myId -> Ok(Held(ref, worker, myId, session, previousStatus, pathRepo, agentContract))
-
-        // Re-read and apply the existing comment-order election to a posted marker. `retainOnUnreadable`
-        // is false for ordinary claims, where no destructive action preceded the read and withdrawal is
-        // safe. It is true after forced cleanup: withdrawing the replacement there could manufacture the
-        // zero-marker state, so unreadable/empty post-state is a typed interruption instead.
-        let resolvePosted (held: Held) (evicted: WorkerId list) (retainOnUnreadable: bool) : IoResult<ClaimOutcome> =
-            let myId = held.MarkerId
-
-            let readComplete () =
+            // 1. READ THE LIVE MARKERS. A failed read here is fatal and we have posted nothing, so there is no
+            //    marker to clean up — this is the only cheap place to fail, and it is why the read comes first.
+            match
                 Reads.markerScan transport ref.Owner ref.Repo ref.Number
                 |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+            with
+            | Error e -> Error e
+            | Ok before ->
 
-            let withdraw (reason: string) =
-                match deleteComment transport ref myId with
-                | Ok() -> Ok(Undecided reason)
-                | Error e ->
-                    // WE CANNOT WIN AND WE CANNOT WITHDRAW. This is the one genuinely bad outcome, and it
-                    // must be reported as itself: the marker is on the issue, we do not hold the item, and
-                    // a human has to reap it.
-                    Error(
-                        Transport
-                            $"%s{reason} — AND our own marker (comment %d{myId}) could not be removed: %s{explain e}. It is orphaned on %s{ref.Short} and must be reaped."
-                    )
+                let liveBefore = Reads.winner leaseMinutes before
 
-            let classifyFinalForced (collected: WorkerId list) (after: Reads.Marker list) =
-                match Reads.winner leaseMinutes after with
-                | None -> Ok(NoHolderRemaining(Some myId, evicted, forcedCensuses (Some after)))
-                | Some winner when winner.Id = myId ->
-                    if List.isEmpty evicted then
-                        Ok(ReplacementWon(held, collected, forcedCensuses (Some after)))
-                    else
-                        Ok(Stolen(held, evicted, collected, forcedCensuses (Some after)))
-                | Some winner -> Ok(ForcedClaimLost(winner.Worker, forcedCensuses (Some after)))
+                let census (markers: Reads.Marker list) : ClaimMarkerCensus =
+                    {
+                        WinnerMarkerId = Reads.winner leaseMinutes markers |> Option.map _.Id
+                        Markers =
+                            markers
+                            |> List.map (fun marker ->
+                                {
+                                    MarkerId = marker.Id
+                                    Worker = marker.Worker
+                                    Live = not (Reads.isStale leaseMinutes marker)
+                                })
+                    }
 
-            // A forced loss is not terminal until our replacement withdrawal is followed by a complete
-            // census. The DELETE acknowledgement is not itself the post-state; the final read may show
-            // the foreign winner, no holder, or even that our replacement survived and now wins.
-            let withdrawForced (winner: Reads.Marker) =
-                match deleteComment transport ref myId with
-                | Error e ->
-                    Error(
-                        Transport
-                            $"lost the forced claim race on %s{ref.Short} to %s{winner.Worker.Value}, AND could not remove our own marker (comment %d{myId}): %s{explain e}. It is orphaned and must be reaped."
-                    )
-                | Ok() ->
-                    match readComplete () with
-                    | Error e ->
-                        Ok(PostStateUnreadable(None, evicted, $"replacement withdrawal completed; final post-state read failed (%s{explain e})", forcedCensuses None))
-                    | Ok final -> classifyFinalForced [] final
+                let beforeCensus = census before
 
-            match readComplete () with
-            | Error e when retainOnUnreadable -> Ok(PostStateUnreadable(Some held, evicted, explain e, forcedCensuses None))
-            | Error e -> withdraw $"the re-read failed (%s{explain e})"
-            | Ok after ->
+                let forcedCensuses after =
+                    {
+                        Before = beforeCensus
+                        After = after |> Option.map census
+                    }
 
-            match Reads.winner leaseMinutes after with
-            // OUR MARKER IS NOT IN THE RE-READ AT ALL. We cannot tell who holds this, and **"we cannot
-            // tell" is a LOSS**. Reading it as a win would be a lock granted on the strength of an
-            // observation we did not make.
-            | None when retainOnUnreadable -> Ok(NoHolderRemaining(Some myId, evicted, forcedCensuses (Some after)))
-            | None -> withdraw "our marker vanished from the re-read"
+                // COLLECT THE STALE DEBRIS ON AN ITEM WE HAVE WON. A stale marker is a lapsed lease, and the next
+                // claimant must COLLECT it, never merely out-order it: an ignored stale marker is exactly what
+                // `heartbeat` resurrects underneath the new holder — two live markers, one item. So once our live
+                // marker is the winner, delete every OTHER stale marker on the item (a 404 is success — a peer may
+                // have collected the same one, the concurrent-GC race), and hand back the workers we evicted so the
+                // caller can TELL them. Our OWN stale marker (a claim of ours that went stale) is deleted too, so
+                // exactly one marker survives, but is not returned: you do not message yourself. Best-effort — a
+                // stale marker we could not delete is left for `reap`, never a reason to fail a claim already won.
+                let collectStale (winnerId: int64) (markers: Reads.Marker list) : WorkerId list =
+                    markers
+                    |> List.filter (fun m -> m.Id <> winnerId && Reads.isStale leaseMinutes m)
+                    |> List.choose (fun m ->
+                        match deleteComment transport ref m.Id with
+                        | Ok() -> Some m.Worker
+                        | Error _ -> None)
+                    // Our OWN stale marker is deleted but is not a notification (you do not message yourself); and an
+                    // unparseable marker that is merely STALE is debris worth deleting, but its `worker` is a sentinel
+                    // — `say`ing to "unparsed-marker" addresses no worker and posts a comment nobody reads.
+                    |> List.filter (fun w -> w <> worker && w <> WorkerId UnparsedMarker)
 
-            | Some w when w.Id = myId ->
-                // WE WON. The lowest live marker id is ours, and every racer computing the same total
-                // order reaches the same conclusion. Now collect the stale debris this win claimed over —
-                // including our OWN just-superseded stale marker, so a renew ends with exactly one marker,
-                // not two. `session` is what we posted into the marker (`body`, above), so the `Held`
-                // re-emits it on every heartbeat and twin-detection survives the lease (#1149).
-                let collected = collectStale myId after
+                // POST ONE REPLACEMENT CAPABILITY. For an ordinary claim this is followed immediately by election.
+                // For `--force`, this happens BEFORE any incumbent is deleted: a failed POST therefore leaves the
+                // prior holder untouched, while a later cleanup failure leaves two ordered, recoverable markers
+                // instead of zero. The marker is not a second authority — comment-order election remains the only
+                // authority, evaluated by `resolvePosted` after cleanup.
+                let postReplacement () : Result<Held, IoError * ReplacementDraft> =
+                    let previousStatus = readPreviousStatus ()
+                    let pathRepo = readPathRepo ()
+                    let agentContract = currentAgentContract ()
 
-                if retainOnUnreadable then
-                    // `collectStale` performs deletes. The census that licensed collection is therefore
-                    // not a post-operation census; read once more after every cleanup attempt finishes.
-                    match readComplete () with
-                    | Error e ->
-                        Ok(PostStateUnreadable(Some held, evicted, $"replacement won; final post-cleanup census failed (%s{explain e})", forcedCensuses None))
-                    | Ok final ->
-                        match Reads.winner leaseMinutes final with
-                        | Some winner when winner.Id <> myId -> withdrawForced winner
-                        | _ -> classifyFinalForced collected final
-                else
-                    Ok(Won(held, collected))
+                    let body =
+                        markerBody worker session leaseMinutes previousStatus pathRepo agentContract
 
-            | Some w when retainOnUnreadable ->
-                withdrawForced w
+                    let draft =
+                        {
+                            PreviousStatus = previousStatus
+                            PathRepo = pathRepo
+                            AgentContract = agentContract
+                            Body = body
+                        }
 
-            | Some w ->
-                // We lost the race — somebody's marker has a lower id. Back off CLEANLY.
-                match deleteComment transport ref myId with
-                | Ok() -> Ok(Lost w.Worker)
-                | Error e ->
-                    Error(
-                        Transport
-                            $"lost the claim race on %s{ref.Short} to %s{w.Worker.Value}, AND could not remove our own marker (comment %d{myId}): %s{explain e}. It is orphaned and must be reaped."
-                    )
+                    match postComment transport ref body with
+                    | Error e -> Error(e, draft)
+                    | Ok myId -> Ok(Held(ref, worker, myId, session, previousStatus, pathRepo, agentContract))
 
-        let postAndResolve () : IoResult<ClaimOutcome> =
-            match postReplacement () with
-            | Ok held -> resolvePosted held [] false
-            | Error(e, _) -> Error e
+                // Re-read and apply the existing comment-order election to a posted marker. `retainOnUnreadable`
+                // is false for ordinary claims, where no destructive action preceded the read and withdrawal is
+                // safe. It is true after forced cleanup: withdrawing the replacement there could manufacture the
+                // zero-marker state, so unreadable/empty post-state is a typed interruption instead.
+                let resolvePosted
+                    (held: Held)
+                    (evicted: WorkerId list)
+                    (retainOnUnreadable: bool)
+                    : IoResult<ClaimOutcome> =
+                    let myId = held.MarkerId
 
-        // THE #1620/#2772 STEAL — POST A REPLACEMENT, THEN CLEAN EVERY FOREIGN LIVE MARKER. Only
-        // `claim --force` reaches this. The CAS is still the comment-order election above.
-        //
-        // EVERY live foreign marker goes, not merely the winning one. A live marker left behind has a LOWER
-        // id than the one we are about to post, so it would win the re-read and we would withdraw — having
-        // already deleted the real holder's lock and taken nothing, which is the one outcome strictly worse
-        // than refusing. Clearing them all is what makes "the way is clear" true. A racer whose in-flight
-        // marker we delete is not harmed: its own re-read finds the marker gone, which this CAS already
-        // reads as a LOSS and retries (`Undecided`) — the #950/#266 fail-closed path, reached honestly.
-        //
-        // A failed DELETE response is not a post-state. Re-read the complete census: it may prove the delete
-        // landed, prove a deterministic two-marker cleanup state, prove the old holder stands, prove no
-        // marker remains, or remain unreadable. The replacement is retained throughout this discrimination.
-        let evictLive (replacement: Held) (markers: Reads.Marker list) : IoResult<ClaimOutcome> =
-            let rec go acc rest =
-                match rest with
-                | [] ->
-                    let removed = List.rev acc
-                    if not (List.isEmpty removed) then onEvict removed
-                    resolvePosted replacement removed true
-                | (m: Reads.Marker) :: tail ->
-                    match deleteComment transport ref m.Id with
-                    | Ok() -> go (m.Worker :: acc) tail
-                    | Error e ->
-                        let removed = List.rev acc
-                        match
-                            Reads.markerScan transport ref.Owner ref.Repo ref.Number
-                            |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
-                        with
-                        | Error readError ->
-                            if not (List.isEmpty removed) then onEvict removed
-                            Ok(PostStateUnreadable(Some replacement, removed, $"cleanup failed (%s{explain e}); post-state read failed (%s{explain readError})", forcedCensuses None))
-                        | Ok after ->
-                            let liveAfter = after |> List.filter (fun x -> not (Reads.isStale leaseMinutes x))
-                            let replacementPresent = liveAfter |> List.exists (fun x -> x.Id = replacement.MarkerId)
-                            let failedPresent = liveAfter |> List.exists (fun x -> x.Id = m.Id)
-                            match replacementPresent, failedPresent with
-                            | true, true ->
-                                if not (List.isEmpty removed) then onEvict removed
-                                Ok(CleanupRequired(replacement, removed, m.Worker, m.Id, explain e, forcedCensuses (Some after)))
-                            | true, false -> go (m.Worker :: acc) tail
-                            | false, _ ->
-                                if not (List.isEmpty removed) then onEvict removed
-                                match Reads.winner leaseMinutes liveAfter with
-                                | Some holder -> Ok(OldHolderStands(replacement.MarkerId, holder.Worker, holder.Id, removed, forcedCensuses (Some after)))
-                                | None -> Ok(NoHolderRemaining(Some replacement.MarkerId, removed, forcedCensuses (Some after)))
+                    let readComplete () =
+                        Reads.markerScan transport ref.Owner ref.Repo ref.Number
+                        |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
 
-            markers
-            |> List.filter (fun m -> not (Reads.isStale leaseMinutes m) && m.Id <> replacement.MarkerId)
-            |> go []
+                    let withdraw (reason: string) =
+                        match deleteComment transport ref myId with
+                        | Ok() -> Ok(Undecided reason)
+                        | Error e ->
+                            // WE CANNOT WIN AND WE CANNOT WITHDRAW. This is the one genuinely bad outcome, and it
+                            // must be reported as itself: the marker is on the issue, we do not hold the item, and
+                            // a human has to reap it.
+                            Error(
+                                Transport
+                                    $"%s{reason} — AND our own marker (comment %d{myId}) could not be removed: %s{explain e}. It is orphaned on %s{ref.Short} and must be reaped."
+                            )
 
-        match liveBefore with
-        // A MARKER HELD BY NOBODY BLOCKS. A half-written lock fails CLOSED — if it vanished, the item would
-        // read as free and a second worker would be handed files somebody may be standing in.
-        | Some m when m.Worker = WorkerId UnparsedMarker -> Ok BlockedByUnparseableMarker
+                    let classifyFinalForced (collected: WorkerId list) (after: Reads.Marker list) =
+                        match Reads.winner leaseMinutes after with
+                        | None -> Ok(NoHolderRemaining(Some myId, evicted, forcedCensuses (Some after)))
+                        | Some winner when winner.Id = myId ->
+                            if List.isEmpty evicted then
+                                Ok(ReplacementWon(held, collected, forcedCensuses (Some after)))
+                            else
+                                Ok(Stolen(held, evicted, collected, forcedCensuses (Some after)))
+                        | Some winner -> Ok(ForcedClaimLost(winner.Worker, forcedCensuses (Some after)))
 
-        // Somebody else holds a LIVE lock. Refuse before we post anything: a marker we post and then
-        // withdraw is a comment somebody has to read, and the item is not ours regardless.
-        //
-        // UNLESS THIS IS A STEAL (#1620). `--force` is the org's only sanctioned recovery route for a holder
-        // that died mid-item with hours of lease left: `reap` refuses an item with an open `item/<n>-*` PR
-        // (#581, correct), `adopt` refuses a claim that is not stale (correct — a live claim is not an
-        // orphan), and both of them point HERE. This arm is what makes that instruction true. It was not
-        // before: `--force` was read in exactly one place, the caller's #516 one-item-per-worker pre-check,
-        // so it refused identically with and without the flag while every message promised otherwise.
-        | Some m when m.Worker <> worker ->
-            match force with
-            | RefuseLiveHolder -> Ok(Lost m.Worker)
-            | StealLiveHolder ->
-                // A forced claim is still NEW dispatch.  Capacity admission must happen before
-                // `evictLive`: a constrained/unknown fleet may preserve accepted work, never delete
-                // somebody else's live marker and then discover it cannot continue.
-                admitNew () |> Result.bind (fun () ->
-                // THE REFUSALS BEHIND THE HOLDER. The arms above catch an unparseable or same-id marker
-                // when it is the CAS WINNER; a steal has to look PAST the winner too, because it is about
-                // to delete the winner and promote whatever was queued behind it.
-                //
-                //   * UNPARSEABLE — a lock held by nobody is not a contested item, and evicting the holder
-                //     would promote a marker we cannot attribute to anybody. `reap` owns that.
-                //   * OUR OWN WORKER ID — the `Twin` refusal (#419) has to cover this position or it only
-                //     covers half its own rule. Reachable: an orphaned marker from a failed withdraw (this
-                //     function names that state), or a hand-written one. Left unguarded, the eviction would
-                //     delete the real holder's live lock and then LOSE the re-read to our own twin's
-                //     surviving marker — deleting a live lock and taking nothing, the one outcome the
-                //     eviction comment below calls strictly worse than refusing.
-                let liveOthers = before |> List.filter (fun x -> not (Reads.isStale leaseMinutes x))
-
-                if liveOthers |> List.exists (fun x -> x.Worker = WorkerId UnparsedMarker) then
-                    Ok BlockedByUnparseableMarker
-                else
-                    match liveOthers |> List.tryFind (fun x -> x.Worker = worker) with
-                    // Sessions known and different: a twin, named as one.
-                    | Some ours when (twinSession session ours.Session).IsSome ->
-                        Ok(Twin (twinSession session ours.Session).Value)
-                    // Our marker behind the incumbent is the durable intermediate state #2772 creates.
-                    // Reuse it on retry rather than posting unbounded replacement debris.
-                    | Some ours ->
-                        let replacement =
-                            Held(ref, worker, ours.Id, session, ours.PreviousStatus, ours.PathRepo, ours.AgentContract)
-                        evictLive replacement before
-                    | None ->
-                        match postReplacement () with
-                        | Ok replacement -> evictLive replacement before
-                        | Error(postError, draft) ->
-                            match
-                                Reads.markerScan transport ref.Owner ref.Repo ref.Number
-                                |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
-                            with
-                            | Error readError ->
+                    // A forced loss is not terminal until our replacement withdrawal is followed by a complete
+                    // census. The DELETE acknowledgement is not itself the post-state; the final read may show
+                    // the foreign winner, no holder, or even that our replacement survived and now wins.
+                    let withdrawForced (winner: Reads.Marker) =
+                        match deleteComment transport ref myId with
+                        | Error e ->
+                            Error(
+                                Transport
+                                    $"lost the forced claim race on %s{ref.Short} to %s{winner.Worker.Value}, AND could not remove our own marker (comment %d{myId}): %s{explain e}. It is orphaned and must be reaped."
+                            )
+                        | Ok() ->
+                            match readComplete () with
+                            | Error e ->
                                 Ok(
                                     PostStateUnreadable(
                                         None,
-                                        [],
-                                        $"replacement POST failed (%s{explain postError}); post-state read failed (%s{explain readError})",
+                                        evicted,
+                                        $"replacement withdrawal completed; final post-state read failed (%s{explain e})",
                                         forcedCensuses None
                                     )
                                 )
-                            | Ok after ->
-                                // POST transport failure is ambiguous: GitHub may have committed the comment
-                                // and lost only the response. Identify a newly observed marker carrying the
-                                // exact drafted BYTES, including the opaque per-request renewal token and
-                                // lease, then reconcile it through the same cleanup/election path as an
-                                // acknowledged POST. Parsed equality is insufficient: those fields omit the
-                                // renewal token and lease, so a concurrent same-identity request could
-                                // otherwise authorize deletion of the incumbent. Lowest id is deterministic
-                                // if the exact request was somehow stored twice; `evictLive` cleans every
-                                // other live marker by id.
-                                let beforeIds = before |> List.map _.Id |> Set.ofList
-                                let replacement =
-                                    after
-                                    |> List.filter (fun marker ->
-                                        not (Set.contains marker.Id beforeIds)
-                                        && marker.Raw = draft.Body)
-                                    |> List.sortBy _.Id
-                                    |> List.tryHead
+                            | Ok final -> classifyFinalForced [] final
 
-                                match replacement with
-                                | Some marker ->
-                                    let held =
+                    match readComplete () with
+                    | Error e when retainOnUnreadable ->
+                        Ok(PostStateUnreadable(Some held, evicted, explain e, forcedCensuses None))
+                    | Error e -> withdraw $"the re-read failed (%s{explain e})"
+                    | Ok after ->
+
+                        match Reads.winner leaseMinutes after with
+                        // OUR MARKER IS NOT IN THE RE-READ AT ALL. We cannot tell who holds this, and **"we cannot
+                        // tell" is a LOSS**. Reading it as a win would be a lock granted on the strength of an
+                        // observation we did not make.
+                        | None when retainOnUnreadable ->
+                            Ok(NoHolderRemaining(Some myId, evicted, forcedCensuses (Some after)))
+                        | None -> withdraw "our marker vanished from the re-read"
+
+                        | Some w when w.Id = myId ->
+                            // WE WON. The lowest live marker id is ours, and every racer computing the same total
+                            // order reaches the same conclusion. Now collect the stale debris this win claimed over —
+                            // including our OWN just-superseded stale marker, so a renew ends with exactly one marker,
+                            // not two. `session` is what we posted into the marker (`body`, above), so the `Held`
+                            // re-emits it on every heartbeat and twin-detection survives the lease (#1149).
+                            let collected = collectStale myId after
+
+                            if retainOnUnreadable then
+                                // `collectStale` performs deletes. The census that licensed collection is therefore
+                                // not a post-operation census; read once more after every cleanup attempt finishes.
+                                match readComplete () with
+                                | Error e ->
+                                    Ok(
+                                        PostStateUnreadable(
+                                            Some held,
+                                            evicted,
+                                            $"replacement won; final post-cleanup census failed (%s{explain e})",
+                                            forcedCensuses None
+                                        )
+                                    )
+                                | Ok final ->
+                                    match Reads.winner leaseMinutes final with
+                                    | Some winner when winner.Id <> myId -> withdrawForced winner
+                                    | _ -> classifyFinalForced collected final
+                            else
+                                Ok(Won(held, collected))
+
+                        | Some w when retainOnUnreadable -> withdrawForced w
+
+                        | Some w ->
+                            // We lost the race — somebody's marker has a lower id. Back off CLEANLY.
+                            match deleteComment transport ref myId with
+                            | Ok() -> Ok(Lost w.Worker)
+                            | Error e ->
+                                Error(
+                                    Transport
+                                        $"lost the claim race on %s{ref.Short} to %s{w.Worker.Value}, AND could not remove our own marker (comment %d{myId}): %s{explain e}. It is orphaned and must be reaped."
+                                )
+
+                let postAndResolve () : IoResult<ClaimOutcome> =
+                    match postReplacement () with
+                    | Ok held -> resolvePosted held [] false
+                    | Error(e, _) -> Error e
+
+                // THE #1620/#2772 STEAL — POST A REPLACEMENT, THEN CLEAN EVERY FOREIGN LIVE MARKER. Only
+                // `claim --force` reaches this. The CAS is still the comment-order election above.
+                //
+                // EVERY live foreign marker goes, not merely the winning one. A live marker left behind has a LOWER
+                // id than the one we are about to post, so it would win the re-read and we would withdraw — having
+                // already deleted the real holder's lock and taken nothing, which is the one outcome strictly worse
+                // than refusing. Clearing them all is what makes "the way is clear" true. A racer whose in-flight
+                // marker we delete is not harmed: its own re-read finds the marker gone, which this CAS already
+                // reads as a LOSS and retries (`Undecided`) — the #950/#266 fail-closed path, reached honestly.
+                //
+                // A failed DELETE response is not a post-state. Re-read the complete census: it may prove the delete
+                // landed, prove a deterministic two-marker cleanup state, prove the old holder stands, prove no
+                // marker remains, or remain unreadable. The replacement is retained throughout this discrimination.
+                let evictLive (replacement: Held) (markers: Reads.Marker list) : IoResult<ClaimOutcome> =
+                    let rec go acc rest =
+                        match rest with
+                        | [] ->
+                            let removed = List.rev acc
+
+                            if not (List.isEmpty removed) then
+                                onEvict removed
+
+                            resolvePosted replacement removed true
+                        | (m: Reads.Marker) :: tail ->
+                            match deleteComment transport ref m.Id with
+                            | Ok() -> go (m.Worker :: acc) tail
+                            | Error e ->
+                                let removed = List.rev acc
+
+                                match
+                                    Reads.markerScan transport ref.Owner ref.Repo ref.Number
+                                    |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+                                with
+                                | Error readError ->
+                                    if not (List.isEmpty removed) then
+                                        onEvict removed
+
+                                    Ok(
+                                        PostStateUnreadable(
+                                            Some replacement,
+                                            removed,
+                                            $"cleanup failed (%s{explain e}); post-state read failed (%s{explain readError})",
+                                            forcedCensuses None
+                                        )
+                                    )
+                                | Ok after ->
+                                    let liveAfter = after |> List.filter (fun x -> not (Reads.isStale leaseMinutes x))
+
+                                    let replacementPresent =
+                                        liveAfter |> List.exists (fun x -> x.Id = replacement.MarkerId)
+
+                                    let failedPresent = liveAfter |> List.exists (fun x -> x.Id = m.Id)
+
+                                    match replacementPresent, failedPresent with
+                                    | true, true ->
+                                        if not (List.isEmpty removed) then
+                                            onEvict removed
+
+                                        Ok(
+                                            CleanupRequired(
+                                                replacement,
+                                                removed,
+                                                m.Worker,
+                                                m.Id,
+                                                explain e,
+                                                forcedCensuses (Some after)
+                                            )
+                                        )
+                                    | true, false -> go (m.Worker :: acc) tail
+                                    | false, _ ->
+                                        if not (List.isEmpty removed) then
+                                            onEvict removed
+
+                                        match Reads.winner leaseMinutes liveAfter with
+                                        | Some holder ->
+                                            Ok(
+                                                OldHolderStands(
+                                                    replacement.MarkerId,
+                                                    holder.Worker,
+                                                    holder.Id,
+                                                    removed,
+                                                    forcedCensuses (Some after)
+                                                )
+                                            )
+                                        | None ->
+                                            Ok(
+                                                NoHolderRemaining(
+                                                    Some replacement.MarkerId,
+                                                    removed,
+                                                    forcedCensuses (Some after)
+                                                )
+                                            )
+
+                    markers
+                    |> List.filter (fun m -> not (Reads.isStale leaseMinutes m) && m.Id <> replacement.MarkerId)
+                    |> go []
+
+                match liveBefore with
+                // A MARKER HELD BY NOBODY BLOCKS. A half-written lock fails CLOSED — if it vanished, the item would
+                // read as free and a second worker would be handed files somebody may be standing in.
+                | Some m when m.Worker = WorkerId UnparsedMarker -> Ok BlockedByUnparseableMarker
+
+                // Somebody else holds a LIVE lock. Refuse before we post anything: a marker we post and then
+                // withdraw is a comment somebody has to read, and the item is not ours regardless.
+                //
+                // UNLESS THIS IS A STEAL (#1620). `--force` is the org's only sanctioned recovery route for a holder
+                // that died mid-item with hours of lease left: `reap` refuses an item with an open `item/<n>-*` PR
+                // (#581, correct), `adopt` refuses a claim that is not stale (correct — a live claim is not an
+                // orphan), and both of them point HERE. This arm is what makes that instruction true. It was not
+                // before: `--force` was read in exactly one place, the caller's #516 one-item-per-worker pre-check,
+                // so it refused identically with and without the flag while every message promised otherwise.
+                | Some m when m.Worker <> worker ->
+                    match force with
+                    | RefuseLiveHolder -> Ok(Lost m.Worker)
+                    | StealLiveHolder ->
+                        // A forced claim is still NEW dispatch.  Capacity admission must happen before
+                        // `evictLive`: a constrained/unknown fleet may preserve accepted work, never delete
+                        // somebody else's live marker and then discover it cannot continue.
+                        admitNew ()
+                        |> Result.bind (fun () ->
+                            // THE REFUSALS BEHIND THE HOLDER. The arms above catch an unparseable or same-id marker
+                            // when it is the CAS WINNER; a steal has to look PAST the winner too, because it is about
+                            // to delete the winner and promote whatever was queued behind it.
+                            //
+                            //   * UNPARSEABLE — a lock held by nobody is not a contested item, and evicting the holder
+                            //     would promote a marker we cannot attribute to anybody. `reap` owns that.
+                            //   * OUR OWN WORKER ID — the `Twin` refusal (#419) has to cover this position or it only
+                            //     covers half its own rule. Reachable: an orphaned marker from a failed withdraw (this
+                            //     function names that state), or a hand-written one. Left unguarded, the eviction would
+                            //     delete the real holder's live lock and then LOSE the re-read to our own twin's
+                            //     surviving marker — deleting a live lock and taking nothing, the one outcome the
+                            //     eviction comment below calls strictly worse than refusing.
+                            let liveOthers = before |> List.filter (fun x -> not (Reads.isStale leaseMinutes x))
+
+                            if liveOthers |> List.exists (fun x -> x.Worker = WorkerId UnparsedMarker) then
+                                Ok BlockedByUnparseableMarker
+                            else
+                                match liveOthers |> List.tryFind (fun x -> x.Worker = worker) with
+                                // Sessions known and different: a twin, named as one.
+                                | Some ours when (twinSession session ours.Session).IsSome ->
+                                    Ok(Twin (twinSession session ours.Session).Value)
+                                // Our marker behind the incumbent is the durable intermediate state #2772 creates.
+                                // Reuse it on retry rather than posting unbounded replacement debris.
+                                | Some ours ->
+                                    let replacement =
                                         Held(
                                             ref,
                                             worker,
-                                            marker.Id,
+                                            ours.Id,
                                             session,
-                                            draft.PreviousStatus,
-                                            draft.PathRepo,
-                                            draft.AgentContract
+                                            ours.PreviousStatus,
+                                            ours.PathRepo,
+                                            ours.AgentContract
                                         )
-                                    evictLive held after
+
+                                    evictLive replacement before
                                 | None ->
-                                    match Reads.winner leaseMinutes after with
-                                    | Some holder ->
-                                        Ok(ReplacementPostFailed(holder.Worker, holder.Id, explain postError, forcedCensuses (Some after)))
-                                    | None -> Ok(NoHolderRemaining(None, [], forcedCensuses (Some after))))
+                                    match postReplacement () with
+                                    | Ok replacement -> evictLive replacement before
+                                    | Error(postError, draft) ->
+                                        match
+                                            Reads.markerScan transport ref.Owner ref.Repo ref.Number
+                                            |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+                                        with
+                                        | Error readError ->
+                                            Ok(
+                                                PostStateUnreadable(
+                                                    None,
+                                                    [],
+                                                    $"replacement POST failed (%s{explain postError}); post-state read failed (%s{explain readError})",
+                                                    forcedCensuses None
+                                                )
+                                            )
+                                        | Ok after ->
+                                            // POST transport failure is ambiguous: GitHub may have committed the comment
+                                            // and lost only the response. Identify a newly observed marker carrying the
+                                            // exact drafted BYTES, including the opaque per-request renewal token and
+                                            // lease, then reconcile it through the same cleanup/election path as an
+                                            // acknowledged POST. Parsed equality is insufficient: those fields omit the
+                                            // renewal token and lease, so a concurrent same-identity request could
+                                            // otherwise authorize deletion of the incumbent. Lowest id is deterministic
+                                            // if the exact request was somehow stored twice; `evictLive` cleans every
+                                            // other live marker by id.
+                                            let beforeIds = before |> List.map _.Id |> Set.ofList
 
-        // A live marker that is ALREADY OURS by worker id. Re-claiming is a no-op, and running the CAS again
-        // would post a SECOND marker of ours with a higher id — which we would then lose to our own first one.
-        //
-        // BUT an id is not a lock if two workers share it (#419). If this marker carries a DIFFERENT session
-        // from ours — and BOTH sessions are known — the holder is a TWIN, not us: another worker who derived
-        // or was handed the same id. Adopting their live lock as a heartbeat is exactly the double-claim
-        // ADR-0027 exists to prevent. So refuse, and hand back the other session to name.
-        //
-        // We conclude "twin" ONLY when both sessions are known. A sessionless marker (a human, a harness that
-        // exports none, any pre-#419 marker) is genuinely indistinguishable from ours — failing closed on it
-        // would lock workers out of items they really hold — so it heartbeats. And our OWN session re-claiming
-        // its own marker is a heartbeat, never a twin, or a worker could never renew its own lease.
-        | Some m ->
-            // THE IMPERSONATION QUESTION IS ALREADY ANSWERED — step 0 asked it for the whole function, so by
-            // here `worker` is this process's own id (or it derives none). That matters most on THIS arm:
-            // it hands back a `Renewed` over a marker it did not create, on the strength of the id alone,
-            // and under one harness session `twinSession` below cannot call that marker somebody else's,
-            // because the impersonator's session IS theirs. It was the first door found; it was not the only.
-            match twinSession session m.Session with
-            | Some theirs -> Ok(Twin theirs)
-            | None ->
-                // RE-CLAIM / HEARTBEAT. The marker is already ours — same session, sessionless (a human or a
-                // pre-#419 marker, indistinguishable from ours), or our own session re-claiming. RENEW THE
-                // LEASE IN PLACE: a PATCH of the one marker we have, never a second POST that we would then
-                // lose to our own first one and withdraw, reporting a loss on an item we hold. So a slow
-                // worker re-claiming ends with ONE marker, and `take` retries stay idempotent.
+                                            let replacement =
+                                                after
+                                                |> List.filter (fun marker ->
+                                                    not (Set.contains marker.Id beforeIds) && marker.Raw = draft.Body)
+                                                |> List.sortBy _.Id
+                                                |> List.tryHead
+
+                                            match replacement with
+                                            | Some marker ->
+                                                let held =
+                                                    Held(
+                                                        ref,
+                                                        worker,
+                                                        marker.Id,
+                                                        session,
+                                                        draft.PreviousStatus,
+                                                        draft.PathRepo,
+                                                        draft.AgentContract
+                                                    )
+
+                                                evictLive held after
+                                            | None ->
+                                                match Reads.winner leaseMinutes after with
+                                                | Some holder ->
+                                                    Ok(
+                                                        ReplacementPostFailed(
+                                                            holder.Worker,
+                                                            holder.Id,
+                                                            explain postError,
+                                                            forcedCensuses (Some after)
+                                                        )
+                                                    )
+                                                | None -> Ok(NoHolderRemaining(None, [], forcedCensuses (Some after))))
+
+                // A live marker that is ALREADY OURS by worker id. Re-claiming is a no-op, and running the CAS again
+                // would post a SECOND marker of ours with a higher id — which we would then lose to our own first one.
                 //
-                // This bypasses the CAS entirely, which is why it is a SEPARATE outcome the caller must warn
-                // about on a shared id (#419): a marker bearing our id is not proof it is ours, and adopting
-                // it without the CAS is exactly where a same-id sibling silently takes another worker's lock.
+                // BUT an id is not a lock if two workers share it (#419). If this marker carries a DIFFERENT session
+                // from ours — and BOTH sessions are known — the holder is a TWIN, not us: another worker who derived
+                // or was handed the same id. Adopting their live lock as a heartbeat is exactly the double-claim
+                // ADR-0027 exists to prevent. So refuse, and hand back the other session to name.
                 //
-                // Collect the stale debris first (as the fresh-CAS win does), then renew — a stale OTHER
-                // marker on this item is still what `heartbeat` would resurrect underneath us.
-                let collected = collectStale m.Id before
-                let renewed = markerBody worker session leaseMinutes m.PreviousStatus m.PathRepo m.AgentContract
+                // We conclude "twin" ONLY when both sessions are known. A sessionless marker (a human, a harness that
+                // exports none, any pre-#419 marker) is genuinely indistinguishable from ours — failing closed on it
+                // would lock workers out of items they really hold — so it heartbeats. And our OWN session re-claiming
+                // its own marker is a heartbeat, never a twin, or a worker could never renew its own lease.
+                | Some m ->
+                    // THE IMPERSONATION QUESTION IS ALREADY ANSWERED — step 0 asked it for the whole function, so by
+                    // here `worker` is this process's own id (or it derives none). That matters most on THIS arm:
+                    // it hands back a `Renewed` over a marker it did not create, on the strength of the id alone,
+                    // and under one harness session `twinSession` below cannot call that marker somebody else's,
+                    // because the impersonator's session IS theirs. It was the first door found; it was not the only.
+                    match twinSession session m.Session with
+                    | Some theirs -> Ok(Twin theirs)
+                    | None ->
+                        // RE-CLAIM / HEARTBEAT. The marker is already ours — same session, sessionless (a human or a
+                        // pre-#419 marker, indistinguishable from ours), or our own session re-claiming. RENEW THE
+                        // LEASE IN PLACE: a PATCH of the one marker we have, never a second POST that we would then
+                        // lose to our own first one and withdraw, reporting a loss on an item we hold. So a slow
+                        // worker re-claiming ends with ONE marker, and `take` retries stay idempotent.
+                        //
+                        // This bypasses the CAS entirely, which is why it is a SEPARATE outcome the caller must warn
+                        // about on a shared id (#419): a marker bearing our id is not proof it is ours, and adopting
+                        // it without the CAS is exactly where a same-id sibling silently takes another worker's lock.
+                        //
+                        // Collect the stale debris first (as the fresh-CAS win does), then renew — a stale OTHER
+                        // marker on this item is still what `heartbeat` would resurrect underneath us.
+                        let collected = collectStale m.Id before
 
-                // THE RENEWAL IS BEST-EFFORT, and it must be: we ALREADY hold this lock — our marker is the
-                // live CAS winner — so a failed renewal PATCH does not un-hold us, and failing the command
-                // here would turn an idempotent re-claim (a `take` retry) into an error on a transient 5xx,
-                // reporting a loss on an item we demonstrably hold. Renew the lease if we can; hold either
-                // way. This is bash's own re-claim (its `heartbeat_comment` result is not checked), and it
-                // matches how the fresh-CAS `Won` path treats its follow-on board write (best-effort, #510).
-                patchComment transport ref m.Id renewed |> ignore
-                // `session` (our own) is what `renewed` just wrote into the marker (line above), so that is
-                // what the `Held` carries forward — a re-claim UPGRADES a sessionless marker to bear our
-                // session, exactly as it refreshes the lease.
-                Ok(Renewed(Held(ref, worker, m.Id, session, m.PreviousStatus, m.PathRepo, m.AgentContract), collected))
+                        let renewed =
+                            markerBody worker session leaseMinutes m.PreviousStatus m.PathRepo m.AgentContract
 
-        // Nobody holds it. Post and race, evicting nothing.
-        | None -> admitNew () |> Result.bind (fun () -> postAndResolve ())
+                        // THE RENEWAL IS BEST-EFFORT, and it must be: we ALREADY hold this lock — our marker is the
+                        // live CAS winner — so a failed renewal PATCH does not un-hold us, and failing the command
+                        // here would turn an idempotent re-claim (a `take` retry) into an error on a transient 5xx,
+                        // reporting a loss on an item we demonstrably hold. Renew the lease if we can; hold either
+                        // way. This is bash's own re-claim (its `heartbeat_comment` result is not checked), and it
+                        // matches how the fresh-CAS `Won` path treats its follow-on board write (best-effort, #510).
+                        patchComment transport ref m.Id renewed |> ignore
+                        // `session` (our own) is what `renewed` just wrote into the marker (line above), so that is
+                        // what the `Held` carries forward — a re-claim UPGRADES a sessionless marker to bear our
+                        // session, exactly as it refreshes the lease.
+                        Ok(
+                            Renewed(
+                                Held(ref, worker, m.Id, session, m.PreviousStatus, m.PathRepo, m.AgentContract),
+                                collected
+                            )
+                        )
+
+                // Nobody holds it. Post and race, evicting nothing.
+                | None -> admitNew () |> Result.bind (fun () -> postAndResolve ())
 
     // Compatibility entry point for callers that do not have a board path scope (notably chore
     // locks and focused CAS tests). Its marker is intentionally legacy-shaped.
@@ -1014,7 +1276,18 @@ module Writes =
         (ref: Ref)
         (readPreviousStatus: unit -> BoardStatus option)
         : IoResult<ClaimOutcome> =
-        claimScoped transport leaseMinutes force onEvict worker self session ref readPreviousStatus (fun () -> None) (fun () -> Ok())
+        claimScoped
+            transport
+            leaseMinutes
+            force
+            onEvict
+            worker
+            self
+            session
+            ref
+            readPreviousStatus
+            (fun () -> None)
+            (fun () -> Ok())
 
     let mergeAtHead
         (transport: IGitHubTransport)
@@ -1026,6 +1299,7 @@ module Writes =
         let payload =
             let body = Nodes.JsonObject()
             body["sha"] <- Nodes.JsonValue.Create headSha
+
             body["merge_method"] <-
                 Nodes.JsonValue.Create(
                     match method with
@@ -1033,20 +1307,26 @@ module Writes =
                     | OperationalGraphQl.Rebase -> "rebase"
                     | OperationalGraphQl.Merge -> "merge"
                 )
+
             body.ToJsonString()
+
         let request =
-            { Method = "PUT"
-              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/pulls/%d{pr}/merge"
-              Query = []
-              Body = Json payload
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = ref.Short }
+            {
+                Method = "PUT"
+                Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/pulls/%d{pr}/merge"
+                Query = []
+                Body = Json payload
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = ref.Short
+            }
+
         match transport.Send request with
         | Error error -> Error error
         | Ok response ->
             try
                 use document = JsonDocument.Parse response.Body
+
                 match document.RootElement.TryGetProperty "merged" with
                 | true, value when value.ValueKind = JsonValueKind.True -> Ok true
                 | true, value when value.ValueKind = JsonValueKind.False -> Ok false
@@ -1094,12 +1374,13 @@ module Writes =
                 | Some derived -> Ok(ImpersonatesHolder(derived, worker))
                 | None ->
 
-                match twinSession session m.Session with
-                | Some theirs -> Ok(TwinHolds theirs)
-                // `m.Session` is the session ALREADY in the live marker — carry it, unchanged, so a later
-                // `heartbeat` re-emits it rather than stripping it (#1149). verifyHeld does not write, so the
-                // marker's own value is the truth here.
-                | None -> Ok(Holds(Held(ref, worker, m.Id, m.Session, m.PreviousStatus, m.PathRepo, m.AgentContract)))
+                    match twinSession session m.Session with
+                    | Some theirs -> Ok(TwinHolds theirs)
+                    // `m.Session` is the session ALREADY in the live marker — carry it, unchanged, so a later
+                    // `heartbeat` re-emits it rather than stripping it (#1149). verifyHeld does not write, so the
+                    // marker's own value is the truth here.
+                    | None ->
+                        Ok(Holds(Held(ref, worker, m.Id, m.Session, m.PreviousStatus, m.PathRepo, m.AgentContract)))
             | _ -> Ok DoesNotHold
 
     // ---- the touch-set -----------------------------------------------------------------------------
@@ -1110,67 +1391,67 @@ module Writes =
                 "a touch-set with no tokens reserves nothing. Declare `Paths: none` if that is the decision, or name the files."
         else
 
-        // THE SENTINEL IS A DECISION, AND `widen` IS HOW YOU DECLARE IT (#863).
-        //
-        // `Paths: none` says "this item touches nothing, deliberately" — an epic, a decision item (#496).
-        // It is not a path, so `TouchSet.classify` calls it `Unmatchable`, and the check below would
-        // therefore REFUSE it as a token that "can never match a file". That refusal is technically true
-        // and entirely beside the point: never matching a file is what the sentinel is FOR. It would also
-        // make the tool contradict itself — the empty-token refusal directly above tells the worker to
-        // "Declare `Paths: none` if that is the decision", and `widen --paths none` is how they would do
-        // it. So the sentinel is decided FIRST, over the whole token set, exactly as `TouchSet.parse`
-        // decides it — the two must agree, or `widen` writes a body its own parser reads differently.
-        let sentinels, realPaths = tokens |> List.partition TouchSet.isSentinel
-
-        if not (List.isEmpty sentinels) then
-            if not (List.isEmpty realPaths) then
-                // A CONTRADICTION: "I touch nothing/anything" and "I touch src/A" cannot both hold. Refuse
-                // it here rather than write it, and say which of the two the worker has to pick — the
-                // unmatchable message below would report the sentinel as a typo'd path and send them
-                // looking for the wrong mistake.
-                let named = String.Join(", ", realPaths)
-
-                Error
-                    $"a `Paths:` sentinel ('none' or 'any') declares that this item reserves no files — it cannot be declared alongside real paths (%s{named}). Declare the paths, or declare the sentinel, not both."
-            else
-                // ALL sentinel — but WHICH one? There are two (#1103 leg 8), they mean OPPOSITE things
-                // (`none` unschedulable, `any` a schedulable chore), and canonicalising both to `none` —
-                // as this did while there was only one — would silently turn a chore into an epic. So
-                // decide over the distinct sentinel WORDS, exactly as `TouchSet.parse` does, and refuse a
-                // mix (`none any` is as contradictory as `none src/A`). Canonicalise to a SINGLE token:
-                // `rewrite` joins verbatim, so `["none"; "none"]` would emit `Paths: none none`, #863's
-                // own input.
-                match sentinels |> List.choose TouchSet.sentinelToken |> List.distinct with
-                | [ "none" ] -> Ok(Validated [ "none" ])
-                | [ "any" ] -> Ok(Validated [ "any" ])
-                | _ ->
-                    Error
-                        "the touch-set sentinels 'none' (unschedulable — an epic/decision) and 'any' (a schedulable file-less chore) mean opposite things and cannot be declared together. Pick one."
-        else
-
-        // THE GRAMMAR LIVES IN THE CORE, AND THERE IS ONE OF IT. Re-implementing `classify` here would be a
-        // second place for the touch-set rule to rot — which is #485's shape (one question, five
-        // implementations, agreeing in none) reproduced inside its own remedy.
-        let unmatchable =
-            tokens
-            |> List.choose (fun t ->
-                match TouchSet.classify t with
-                | Unmatchable u -> Some u
-                | Matchable _ -> None)
-
-        if not (List.isEmpty unmatchable) then
-            // AN UNMATCHABLE TOKEN RESERVES NOTHING, so it conflicts with nothing, so it reads as DISJOINT
-            // against every other worker (#273) — a lock that succeeds under exactly the conditions it
-            // exists to prevent. It may not be written to an issue body.
+            // THE SENTINEL IS A DECISION, AND `widen` IS HOW YOU DECLARE IT (#863).
             //
-            // The refusal names what WOULD have been accepted. A refusal that does not only moves the
-            // worker's confusion one step later.
-            let bad = String.Join(", ", unmatchable)
+            // `Paths: none` says "this item touches nothing, deliberately" — an epic, a decision item (#496).
+            // It is not a path, so `TouchSet.classify` calls it `Unmatchable`, and the check below would
+            // therefore REFUSE it as a token that "can never match a file". That refusal is technically true
+            // and entirely beside the point: never matching a file is what the sentinel is FOR. It would also
+            // make the tool contradict itself — the empty-token refusal directly above tells the worker to
+            // "Declare `Paths: none` if that is the decision", and `widen --paths none` is how they would do
+            // it. So the sentinel is decided FIRST, over the whole token set, exactly as `TouchSet.parse`
+            // decides it — the two must agree, or `widen` writes a body its own parser reads differently.
+            let sentinels, realPaths = tokens |> List.partition TouchSet.isSentinel
 
-            Error
-                $"these tokens can never match a file, so they would reserve NOTHING and read as disjoint against every other worker: %s{bad}. %s{Schedulability.TouchSetGrammar}"
-        else
-            Ok(Validated tokens)
+            if not (List.isEmpty sentinels) then
+                if not (List.isEmpty realPaths) then
+                    // A CONTRADICTION: "I touch nothing/anything" and "I touch src/A" cannot both hold. Refuse
+                    // it here rather than write it, and say which of the two the worker has to pick — the
+                    // unmatchable message below would report the sentinel as a typo'd path and send them
+                    // looking for the wrong mistake.
+                    let named = String.Join(", ", realPaths)
+
+                    Error
+                        $"a `Paths:` sentinel ('none' or 'any') declares that this item reserves no files — it cannot be declared alongside real paths (%s{named}). Declare the paths, or declare the sentinel, not both."
+                else
+                    // ALL sentinel — but WHICH one? There are two (#1103 leg 8), they mean OPPOSITE things
+                    // (`none` unschedulable, `any` a schedulable chore), and canonicalising both to `none` —
+                    // as this did while there was only one — would silently turn a chore into an epic. So
+                    // decide over the distinct sentinel WORDS, exactly as `TouchSet.parse` does, and refuse a
+                    // mix (`none any` is as contradictory as `none src/A`). Canonicalise to a SINGLE token:
+                    // `rewrite` joins verbatim, so `["none"; "none"]` would emit `Paths: none none`, #863's
+                    // own input.
+                    match sentinels |> List.choose TouchSet.sentinelToken |> List.distinct with
+                    | [ "none" ] -> Ok(Validated [ "none" ])
+                    | [ "any" ] -> Ok(Validated [ "any" ])
+                    | _ ->
+                        Error
+                            "the touch-set sentinels 'none' (unschedulable — an epic/decision) and 'any' (a schedulable file-less chore) mean opposite things and cannot be declared together. Pick one."
+            else
+
+                // THE GRAMMAR LIVES IN THE CORE, AND THERE IS ONE OF IT. Re-implementing `classify` here would be a
+                // second place for the touch-set rule to rot — which is #485's shape (one question, five
+                // implementations, agreeing in none) reproduced inside its own remedy.
+                let unmatchable =
+                    tokens
+                    |> List.choose (fun t ->
+                        match TouchSet.classify t with
+                        | Unmatchable u -> Some u
+                        | Matchable _ -> None)
+
+                if not (List.isEmpty unmatchable) then
+                    // AN UNMATCHABLE TOKEN RESERVES NOTHING, so it conflicts with nothing, so it reads as DISJOINT
+                    // against every other worker (#273) — a lock that succeeds under exactly the conditions it
+                    // exists to prevent. It may not be written to an issue body.
+                    //
+                    // The refusal names what WOULD have been accepted. A refusal that does not only moves the
+                    // worker's confusion one step later.
+                    let bad = String.Join(", ", unmatchable)
+
+                    Error
+                        $"these tokens can never match a file, so they would reserve NOTHING and read as disjoint against every other worker: %s{bad}. %s{Schedulability.TouchSetGrammar}"
+                else
+                    Ok(Validated tokens)
 
     // A `Paths:` line, at the start of a line, with up to three leading spaces (CommonMark's limit).
     let private pathsLine = Regex(@"^ {0,3}[Pp]aths:", RegexOptions.Compiled)
@@ -1233,13 +1514,15 @@ module Writes =
             o.ToJsonString()
 
         let request =
-            { Method = "PATCH"
-              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}"
-              Query = []
-              Body = Json payload
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = ref.Short }
+            {
+                Method = "PATCH"
+                Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}"
+                Query = []
+                Body = Json payload
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = ref.Short
+            }
 
         transport.Send request |> Result.map ignore
 
@@ -1284,7 +1567,13 @@ module Writes =
                         observeNarrowed ()
                         |> Result.bind (function
                             | true -> Ok LoserNarrowed
-                            | false -> Error(Malformed(loser.Ref.Short, "the arbitration narrow PATCH returned success but the exact losing path declaration was absent from the authoritative re-read")))
+                            | false ->
+                                Error(
+                                    Malformed(
+                                        loser.Ref.Short,
+                                        "the arbitration narrow PATCH returned success but the exact losing path declaration was absent from the authoritative re-read"
+                                    )
+                                ))
                     | Error writeError ->
                         match observeNarrowed () with
                         | Ok true -> Ok LoserNarrowed
@@ -1400,7 +1689,12 @@ module Writes =
 
         postComment transport ref body |> Result.map ignore
 
-    let followupDisposition (transport: IGitHubTransport) (ref: Ref) (worker: WorkerId) (text: string) : IoResult<unit> =
+    let followupDisposition
+        (transport: IGitHubTransport)
+        (ref: Ref)
+        (worker: WorkerId)
+        (text: string)
+        : IoResult<unit> =
         let body =
             $"<!-- fsgg:followup-disposition worker=%s{worker.Value} -->\n"
             + $"**Follow-up disposition for %s{worker.Value}**\n\n%s{text}"
@@ -1423,8 +1717,19 @@ module Writes =
                     |> List.filter (fun body ->
                         body.StartsWith(FS.GG.Coord.Delivery.CompletionReceiptMarker, StringComparison.Ordinal))
                     |> List.map FS.GG.Coord.Delivery.tryDecodeCompletionReceipt
-                let errors = parsed |> List.choose (function Error error -> Some error | _ -> None)
-                let receipts = parsed |> List.choose (function Ok (Some value) -> Some value | _ -> None)
+
+                let errors =
+                    parsed
+                    |> List.choose (function
+                        | Error error -> Some error
+                        | _ -> None)
+
+                let receipts =
+                    parsed
+                    |> List.choose (function
+                        | Ok(Some value) -> Some value
+                        | _ -> None)
+
                 if not (List.isEmpty errors) then
                     Error(
                         Malformed(
@@ -1443,11 +1748,12 @@ module Writes =
                         && existing.PendingBoardWrites = receipt.PendingBoardWrites
                         && existing.FreshnessToken = receipt.FreshnessToken
                         && existing.ActionKey = receipt.ActionKey
+
                     match receipts with
                     | [] ->
                         postComment transport ref (FS.GG.Coord.Delivery.encodeCompletionReceipt receipt)
                         |> Result.map ignore
-                    | existing :: rest when sameAuthority existing && List.isEmpty rest -> Ok ()
+                    | existing :: rest when sameAuthority existing && List.isEmpty rest -> Ok()
                     | _ ->
                         Error(
                             Malformed(
@@ -1472,8 +1778,19 @@ module Writes =
                     |> List.filter (fun body ->
                         body.StartsWith(FS.GG.Coord.SelfHost.ReceiptMarker, StringComparison.Ordinal))
                     |> List.map FS.GG.Coord.SelfHost.tryDecodeReceipt
-                let errors = parsed |> List.choose (function Error error -> Some error | _ -> None)
-                let receipts = parsed |> List.choose (function Ok(Some value) -> Some value | _ -> None)
+
+                let errors =
+                    parsed
+                    |> List.choose (function
+                        | Error error -> Some error
+                        | _ -> None)
+
+                let receipts =
+                    parsed
+                    |> List.choose (function
+                        | Ok(Some value) -> Some value
+                        | _ -> None)
+
                 if not (List.isEmpty errors) then
                     Error(
                         Malformed(
@@ -1487,7 +1804,7 @@ module Writes =
                     | [] ->
                         postComment transport ref (FS.GG.Coord.SelfHost.encodeReceipt receipt)
                         |> Result.map ignore
-                    | [ existing ] when existing = receipt -> Ok ()
+                    | [ existing ] when existing = receipt -> Ok()
                     | _ ->
                         Error(
                             Malformed(
@@ -1506,7 +1823,12 @@ module Writes =
             Malformed(ref.Short, "invalid completion correction receipt: " + String.concat "; " errors))
         |> Result.bind (fun () ->
             if receipt.Item <> ref.Canonical then
-                Error(Malformed(ref.Short, $"completion correction receipt item '%s{receipt.Item}' does not match '%s{ref.Canonical}'"))
+                Error(
+                    Malformed(
+                        ref.Short,
+                        $"completion correction receipt item '%s{receipt.Item}' does not match '%s{ref.Canonical}'"
+                    )
+                )
             else
                 Reads.commentBodies transport ref.Owner ref.Repo ref.Number
                 |> Result.bind (fun comments ->
@@ -1514,16 +1836,36 @@ module Writes =
                         comments
                         |> List.filter (fun body ->
                             body.StartsWith(FS.GG.Coord.Delivery.CompletionReceiptMarker, StringComparison.Ordinal))
+
                     let parsed =
                         comments
                         |> List.filter (fun body ->
-                            body.StartsWith(FS.GG.Coord.Delivery.CompletionCorrectionMarker, StringComparison.Ordinal))
+                            body.StartsWith(
+                                FS.GG.Coord.Delivery.CompletionCorrectionMarker,
+                                StringComparison.Ordinal
+                            ))
                         |> List.map FS.GG.Coord.Delivery.tryDecodeCompletionCorrectionReceipt
-                    let errors = parsed |> List.choose (function Error error -> Some error | _ -> None)
-                    let receipts = parsed |> List.choose (function Ok (Some value) -> Some value | _ -> None)
+
+                    let errors =
+                        parsed
+                        |> List.choose (function
+                            | Error error -> Some error
+                            | _ -> None)
+
+                    let receipts =
+                        parsed
+                        |> List.choose (function
+                            | Ok(Some value) -> Some value
+                            | _ -> None)
+
                     match typedCompletionEvidence, errors, receipts with
                     | _ :: _, _, _ ->
-                        Error(Malformed(ref.Short, "completion evidence already exists; refusing a premature-completion correction"))
+                        Error(
+                            Malformed(
+                                ref.Short,
+                                "completion evidence already exists; refusing a premature-completion correction"
+                            )
+                        )
                     | [], _ :: _, _ ->
                         Error(
                             Malformed(
@@ -1535,12 +1877,11 @@ module Writes =
                     | [], [], [] ->
                         postComment transport ref (FS.GG.Coord.Delivery.encodeCompletionCorrectionReceipt receipt)
                         |> Result.map ignore
-                    | [], [], [ existing ]
-                        when existing.Item = receipt.Item
-                             && existing.Destination = receipt.Destination -> Ok ()
-                    | _ ->
-                        Error(Malformed(ref.Short, "a contradictory completion correction receipt already exists"))
-                        ))
+                    | [], [], [ existing ] when
+                        existing.Item = receipt.Item && existing.Destination = receipt.Destination
+                        ->
+                        Ok()
+                    | _ -> Error(Malformed(ref.Short, "a contradictory completion correction receipt already exists"))))
 
     let selfHostReplayReceipt
         (transport: IGitHubTransport)
@@ -1554,7 +1895,7 @@ module Writes =
                 Error(Malformed(ref.Short, "self-host replay cannot be recorded without durable bootstrap authority"))
             | FS.GG.Coord.SelfHost.InvalidReplay errors ->
                 Error(Malformed(ref.Short, "invalid self-host evidence: " + String.concat "; " errors))
-            | FS.GG.Coord.SelfHost.VerifiedReplay existing when existing = receipt -> Ok ()
+            | FS.GG.Coord.SelfHost.VerifiedReplay existing when existing = receipt -> Ok()
             | FS.GG.Coord.SelfHost.VerifiedReplay _ ->
                 Error(Malformed(ref.Short, "contradictory self-host replay evidence already exists"))
             | FS.GG.Coord.SelfHost.ReplayRequired bootstrap ->
@@ -1567,18 +1908,22 @@ module Writes =
 
     let reopenIssue (transport: IGitHubTransport) (ref: Ref) : IoResult<unit> =
         let payload = """{"state":"open"}"""
+
         let request =
-            { Method = "PATCH"
-              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}"
-              Query = []
-              Body = Json payload
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = ref.Short }
+            {
+                Method = "PATCH"
+                Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}"
+                Query = []
+                Body = Json payload
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = ref.Short
+            }
 
         let attempted = transport.Send request
+
         match Reads.issueState transport ref.Owner ref.Repo ref.Number with
-        | Ok IssueState.Open -> Ok ()
+        | Ok IssueState.Open -> Ok()
         | Ok IssueState.Closed ->
             match attempted with
             | Error error -> Error error
@@ -1597,18 +1942,22 @@ module Writes =
 
     let closeIssueCompleted (transport: IGitHubTransport) (ref: Ref) : IoResult<unit> =
         let payload = """{"state":"closed","state_reason":"completed"}"""
+
         let request =
-            { Method = "PATCH"
-              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}"
-              Query = []
-              Body = Json payload
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = ref.Short }
+            {
+                Method = "PATCH"
+                Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}"
+                Query = []
+                Body = Json payload
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = ref.Short
+            }
 
         let attempted = transport.Send request
+
         match Reads.issueState transport ref.Owner ref.Repo ref.Number with
-        | Ok IssueState.Closed -> Ok ()
+        | Ok IssueState.Closed -> Ok()
         | Ok IssueState.Open ->
             match attempted with
             | Error error -> Error error
@@ -1643,13 +1992,15 @@ module Writes =
             o.ToJsonString()
 
         let request =
-            { Method = "POST"
-              Path = $"repos/%s{parent.Owner}/%s{parent.Repo}/issues/%d{parent.Number}/sub_issues"
-              Query = []
-              Body = Json payload
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = parent.Short }
+            {
+                Method = "POST"
+                Path = $"repos/%s{parent.Owner}/%s{parent.Repo}/issues/%d{parent.Number}/sub_issues"
+                Query = []
+                Body = Json payload
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = parent.Short
+            }
 
         transport.Send request |> Result.map ignore
 
@@ -1681,19 +2032,28 @@ module Writes =
 
     let ensureRoomRef (transport: IGitHubTransport) (ref: Ref) (roomRef: string) : IoResult<unit> =
         let containsRoom body = appendRoomLine body roomRef = body
-        let read () = Reads.issueBody transport ref.Owner ref.Repo ref.Number
+
+        let read () =
+            Reads.issueBody transport ref.Owner ref.Repo ref.Number
 
         match read () with
         | Error error -> Error error
         | Ok body when containsRoom body -> Ok()
         | Ok body ->
             let written = patchBody transport ref (Rewritten(appendRoomLine body roomRef))
+
             match read () with
             | Ok observed when containsRoom observed -> Ok()
             | Ok _ ->
                 match written with
                 | Error error -> Error error
-                | Ok() -> Error(Malformed(ref.Short, "the room back-reference PATCH returned success but the reference was absent from the authoritative re-read"))
+                | Ok() ->
+                    Error(
+                        Malformed(
+                            ref.Short,
+                            "the room back-reference PATCH returned success but the reference was absent from the authoritative re-read"
+                        )
+                    )
             | Error readError ->
                 match written with
                 | Error writeError ->
@@ -1709,24 +2069,35 @@ module Writes =
         if String.IsNullOrWhiteSpace marker then
             Error(Malformed(ref.Short, "an issue-body marker cannot be blank"))
         else
-            let containsMarker (body: string) = body.Contains(marker, StringComparison.Ordinal)
+            let containsMarker (body: string) =
+                body.Contains(marker, StringComparison.Ordinal)
+
             let appendMarker (body: string) =
                 if containsMarker body then body
                 elif String.IsNullOrWhiteSpace body then marker
                 else body.TrimEnd() + "\n\n" + marker
-            let read () = Reads.issueBody transport ref.Owner ref.Repo ref.Number
+
+            let read () =
+                Reads.issueBody transport ref.Owner ref.Repo ref.Number
 
             match read () with
             | Error error -> Error error
             | Ok body when containsMarker body -> Ok()
             | Ok body ->
                 let written = patchBody transport ref (Rewritten(appendMarker body))
+
                 match read () with
                 | Ok observed when containsMarker observed -> Ok()
                 | Ok _ ->
                     match written with
                     | Error error -> Error error
-                    | Ok() -> Error(Malformed(ref.Short, "the issue-body marker PATCH returned success but the marker was absent from the authoritative re-read"))
+                    | Ok() ->
+                        Error(
+                            Malformed(
+                                ref.Short,
+                                "the issue-body marker PATCH returned success but the marker was absent from the authoritative re-read"
+                            )
+                        )
                 | Error readError ->
                     match written with
                     | Error writeError ->
@@ -1738,7 +2109,13 @@ module Writes =
                         )
                     | Ok() -> Error readError
 
-    let createRoom (transport: IGitHubTransport) (owner: string) (repo: string) (title: string) (body: string) : IoResult<Ref> =
+    let createRoom
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (title: string)
+        (body: string)
+        : IoResult<Ref> =
         let payload =
             let o = Nodes.JsonObject()
             o.["title"] <- Nodes.JsonValue.Create title
@@ -1746,13 +2123,15 @@ module Writes =
             o.ToJsonString()
 
         let request =
-            { Method = "POST"
-              Path = $"repos/%s{owner}/%s{repo}/issues"
-              Query = []
-              Body = Json payload
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = $"%s{owner}/%s{repo} room" }
+            {
+                Method = "POST"
+                Path = $"repos/%s{owner}/%s{repo}/issues"
+                Query = []
+                Body = Json payload
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = $"%s{owner}/%s{repo} room"
+            }
 
         match transport.Send request with
         | Error e -> Error e
@@ -1763,9 +2142,11 @@ module Writes =
                 match doc.RootElement.TryGetProperty "number" with
                 | true, v when v.ValueKind = JsonValueKind.Number ->
                     Ok
-                        { Owner = owner
-                          Repo = repo
-                          Number = v.GetInt32() }
+                        {
+                            Owner = owner
+                            Repo = repo
+                            Number = v.GetInt32()
+                        }
                 | _ ->
                     Error(
                         Malformed(
@@ -1811,9 +2192,11 @@ module Writes =
                             match issue.Body with
                             | Reads.BodyRead candidate when candidate.Contains(marker, StringComparison.Ordinal) ->
                                 Some
-                                    { Owner = owner
-                                      Repo = repo
-                                      Number = issue.Number }
+                                    {
+                                        Owner = owner
+                                        Repo = repo
+                                        Number = issue.Number
+                                    }
                             | _ -> None)
 
                     match matches with
@@ -1821,7 +2204,10 @@ module Writes =
                     | [ room ] -> Ok(Some room)
                     | _ -> Error(Malformed(subject, $"room marker '%s{marker}' occurs on more than one open issue")))
 
-        if String.IsNullOrWhiteSpace marker || not (body.Contains(marker, StringComparison.Ordinal)) then
+        if
+            String.IsNullOrWhiteSpace marker
+            || not (body.Contains(marker, StringComparison.Ordinal))
+        then
             Error(Malformed(subject, "an automatic room body must contain its non-empty cycle marker"))
         else
             match observe () with
@@ -1833,8 +2219,20 @@ module Writes =
                     observe ()
                     |> Result.bind (function
                         | Some observed when observed = created -> Ok(RoomCreated created)
-                        | Some observed -> Error(Malformed(subject, $"the room create response named %s{created.Short}, but the authoritative marker resolves to %s{observed.Short}"))
-                        | None -> Error(Malformed(subject, "the room create returned success but no marker-bearing room was present on the authoritative re-read")))
+                        | Some observed ->
+                            Error(
+                                Malformed(
+                                    subject,
+                                    $"the room create response named %s{created.Short}, but the authoritative marker resolves to %s{observed.Short}"
+                                )
+                            )
+                        | None ->
+                            Error(
+                                Malformed(
+                                    subject,
+                                    "the room create returned success but no marker-bearing room was present on the authoritative re-read"
+                                )
+                            ))
                 | Error writeError ->
                     match observe () with
                     | Ok(Some room) -> Ok(RoomAlreadyPresent room)
@@ -1849,21 +2247,29 @@ module Writes =
 
     let private renderIntake (valid: Intake.Draft) =
         let paths = String.concat " " valid.Paths
+
         let optionalLines =
-            [ valid.Phase |> Option.map (sprintf "Phase: %s")
-              valid.Severity |> Option.map (sprintf "Severity: %s")
-              valid.BlockedBy |> Option.map (sprintf "Blocked by: %s")
-              valid.BlockedOn |> Option.map (sprintf "Blocked on: %s")
-              valid.BacklogReason |> Option.map (sprintf "Backlog reason: %s") ]
+            [
+                valid.Phase |> Option.map (sprintf "Phase: %s")
+                valid.Severity |> Option.map (sprintf "Severity: %s")
+                valid.BlockedBy |> Option.map (sprintf "Blocked by: %s")
+                valid.BlockedOn |> Option.map (sprintf "Blocked on: %s")
+                valid.BacklogReason |> Option.map (sprintf "Backlog reason: %s")
+            ]
             |> List.choose id
             |> String.concat "\n"
+
         $"%s{IntakeReceipt.marker valid}\n\n## Observed behavior\n\n%s{valid.Observed}\n\n## Root cause\n\n%s{valid.RootCause}\n\n## Acceptance\n\n%s{valid.Acceptance}\n\n## Verification\n\n%s{valid.Verification}\n\nClass: %s{valid.Class}\n%s{optionalLines}\n\nPaths: %s{paths}"
 
     // The first write boundary of #2134: a malformed draft cannot reach issue creation.
     let createIntake (transport: IGitHubTransport) (draft: Intake.Draft) : IoResult<Ref> =
         match Intake.validate draft with
         | Error findings ->
-            let detail = findings |> List.map (fun finding -> $"%s{finding.Field} %s{finding.Detail}") |> String.concat "; "
+            let detail =
+                findings
+                |> List.map (fun finding -> $"%s{finding.Field} %s{finding.Detail}")
+                |> String.concat "; "
+
             Error(Malformed(draft.Id, $"invalid intake draft: %s{detail}"))
         | Ok valid -> createRoom transport valid.Owner valid.Repository valid.Title (renderIntake valid)
 
@@ -1878,54 +2284,94 @@ module Writes =
         : IoResult<unit> =
         match Intake.validate draft, IntakeReceipt.validate draft receipt with
         | Error findings, _ ->
-            let detail = findings |> List.map (fun finding -> $"%s{finding.Field} %s{finding.Detail}") |> String.concat "; "
+            let detail =
+                findings
+                |> List.map (fun finding -> $"%s{finding.Field} %s{finding.Detail}")
+                |> String.concat "; "
+
             Error(Malformed(draft.Id, $"invalid canonical intake draft: %s{detail}"))
         | _, Error detail -> Error(Malformed(draft.Id, detail))
         | Ok valid, Ok bound ->
             let canonicalDigest = IntakeReceipt.digest valid
-            if bound.DraftDigest = canonicalDigest then Ok() else
-            let predecessor =
-                IntakeReceipt.compatibleDrafts valid
-                |> List.tryFind (fun candidate -> IntakeReceipt.digest candidate = bound.DraftDigest)
-            match predecessor with
-            | None -> Error(Malformed(draft.Id, "receipt content digest has no declared canonical migration"))
-            | Some old ->
-                let issue = { Owner = bound.Owner; Repo = bound.Repository; Number = bound.IssueNumber }
-                let canonicalBody = renderIntake valid
-                let predecessorBody = renderIntake old
-                let observe () = Reads.issueBody transport issue.Owner issue.Repo issue.Number
-                let patch () =
-                    let payload =
-                        let o = Nodes.JsonObject()
-                        o.["body"] <- Nodes.JsonValue.Create canonicalBody
-                        o.ToJsonString()
-                    let request =
-                        { Method = "PATCH"
-                          Path = $"repos/%s{issue.Owner}/%s{issue.Repo}/issues/%d{issue.Number}"
-                          Query = []
-                          Body = Json payload
-                          Budget = Rest
-                          IfNoneMatch = None
-                          Subject = issue.Short }
-                    transport.Send request |> Result.map ignore
-                observe ()
-                |> Result.bind (fun before ->
-                    if before = canonicalBody then Ok()
-                    elif before <> predecessorBody then
-                        Error(Malformed(issue.Canonical, "receipt-bound intake body differs from both its declared predecessor and canonical projection; refusing to overwrite operator-authored content"))
-                    else
-                        let write = patch ()
-                        match observe () with
-                        | Ok after when after = canonicalBody -> Ok()
-                        | Ok _ ->
-                            match write with
-                            | Error error -> Error error
-                            | Ok _ -> Error(Malformed(issue.Canonical, "intake canonicalization PATCH returned success but the authoritative body does not match"))
-                        | Error readError ->
-                            match write with
-                            | Error writeError ->
-                                Error(Malformed(issue.Canonical, $"intake canonicalization failed (%s{Errors.explain writeError}) and recovery state is unreadable (%s{Errors.explain readError})"))
-                            | Ok _ -> Error readError)
+
+            if bound.DraftDigest = canonicalDigest then
+                Ok()
+            else
+                let predecessor =
+                    IntakeReceipt.compatibleDrafts valid
+                    |> List.tryFind (fun candidate -> IntakeReceipt.digest candidate = bound.DraftDigest)
+
+                match predecessor with
+                | None -> Error(Malformed(draft.Id, "receipt content digest has no declared canonical migration"))
+                | Some old ->
+                    let issue =
+                        {
+                            Owner = bound.Owner
+                            Repo = bound.Repository
+                            Number = bound.IssueNumber
+                        }
+
+                    let canonicalBody = renderIntake valid
+                    let predecessorBody = renderIntake old
+
+                    let observe () =
+                        Reads.issueBody transport issue.Owner issue.Repo issue.Number
+
+                    let patch () =
+                        let payload =
+                            let o = Nodes.JsonObject()
+                            o.["body"] <- Nodes.JsonValue.Create canonicalBody
+                            o.ToJsonString()
+
+                        let request =
+                            {
+                                Method = "PATCH"
+                                Path = $"repos/%s{issue.Owner}/%s{issue.Repo}/issues/%d{issue.Number}"
+                                Query = []
+                                Body = Json payload
+                                Budget = Rest
+                                IfNoneMatch = None
+                                Subject = issue.Short
+                            }
+
+                        transport.Send request |> Result.map ignore
+
+                    observe ()
+                    |> Result.bind (fun before ->
+                        if before = canonicalBody then
+                            Ok()
+                        elif before <> predecessorBody then
+                            Error(
+                                Malformed(
+                                    issue.Canonical,
+                                    "receipt-bound intake body differs from both its declared predecessor and canonical projection; refusing to overwrite operator-authored content"
+                                )
+                            )
+                        else
+                            let write = patch ()
+
+                            match observe () with
+                            | Ok after when after = canonicalBody -> Ok()
+                            | Ok _ ->
+                                match write with
+                                | Error error -> Error error
+                                | Ok _ ->
+                                    Error(
+                                        Malformed(
+                                            issue.Canonical,
+                                            "intake canonicalization PATCH returned success but the authoritative body does not match"
+                                        )
+                                    )
+                            | Error readError ->
+                                match write with
+                                | Error writeError ->
+                                    Error(
+                                        Malformed(
+                                            issue.Canonical,
+                                            $"intake canonicalization failed (%s{Errors.explain writeError}) and recovery state is unreadable (%s{Errors.explain readError})"
+                                        )
+                                    )
+                                | Ok _ -> Error readError)
 
     // Close the room ISSUE (ADR-0051 §4). Its lifecycle is DERIVED: a room dies when every item that
     // currently references it is done, and the caller (`done --flip`'s roll-up) has already established
@@ -1938,12 +2384,14 @@ module Writes =
             o.ToJsonString()
 
         let request =
-            { Method = "PATCH"
-              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}"
-              Query = []
-              Body = Json payload
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = ref.Short }
+            {
+                Method = "PATCH"
+                Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}"
+                Query = []
+                Body = Json payload
+                Budget = Rest
+                IfNoneMatch = None
+                Subject = ref.Short
+            }
 
         transport.Send request |> Result.map ignore

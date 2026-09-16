@@ -17,24 +17,30 @@ open FS.GG.Coord.Landable
 module LandableTests =
 
     let private run path event branch prs num status concl suite : RunRow =
-        { Path = path
-          Event = event
-          HeadBranch = branch
-          PrNumbers = prs
-          RunNumber = num
-          Status = status
-          Conclusion = concl
-          CheckSuiteId = suite }
+        {
+            Path = path
+            Event = event
+            HeadBranch = branch
+            PrNumbers = prs
+            RunNumber = num
+            Status = status
+            Conclusion = concl
+            CheckSuiteId = suite
+        }
 
     let private check suite status concl : CheckRow =
-        { Name = "job"
-          CheckSuiteId = suite
-          Status = status
-          Conclusion = concl }
+        {
+            Name = "job"
+            CheckSuiteId = suite
+            Status = status
+            Conclusion = concl
+        }
 
     /// `check`, with the check-run NAME that `--require` matches on (#737).
     let private named name suite status concl : CheckRow =
-        { check suite status concl with Name = name }
+        { check suite status concl with
+            Name = name
+        }
 
     /// A single green Actions run, no third-party checks.
     let private greenRun =
@@ -64,18 +70,30 @@ module LandableTests =
 
     [<Fact>]
     let ``mergeable + a check still running is PENDING — not green YET is not not-green`` () =
-        let pending = run ".github/workflows/test.yml" "pull_request" "item/976-x" [ 976 ] 1 "in_progress" None (Some 2L)
+        let pending =
+            run ".github/workflows/test.yml" "pull_request" "item/976-x" [ 976 ] 1 "in_progress" None (Some 2L)
+
         Assert.Equal(PrPending, score (Some true) [ greenRun; pending ] [])
 
     [<Fact>]
     let ``mergeable + a completed check that FAILED is RED`` () =
-        let failed = run ".github/workflows/test.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "failure") (Some 2L)
+        let failed =
+            run ".github/workflows/test.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "failure") (Some 2L)
+
         Assert.Equal(PrRed, score (Some true) [ greenRun; failed ] [])
 
     [<Fact>]
     let ``#2906 red provenance names every blocking run and check but excludes advisory failures`` () =
         let blockingRun =
-            run ".github/workflows/coherence.yml" "pull_request" "item/2906-x" [ 2906 ] 17 "completed" (Some "failure") (Some 17L)
+            run
+                ".github/workflows/coherence.yml"
+                "pull_request"
+                "item/2906-x"
+                [ 2906 ]
+                17
+                "completed"
+                (Some "failure")
+                (Some 17L)
 
         let unrelated = named "external-safety" (Some 99L) "completed" (Some "timed_out")
         let itemOwned = named "claim-generation" (Some 17L) "completed" (Some "failure")
@@ -83,9 +101,11 @@ module LandableTests =
         let fromMain = advisoryFrom [ "claim-generation"; "external-safety" ]
 
         Assert.Equal<Failure list>(
-            [ WorkflowRunFailure(".github/workflows/coherence.yml", 17, Some "failure")
-              CheckRunFailure("external-safety", Some 99L, Some "timed_out")
-              CheckRunFailure("claim-generation", Some 17L, Some "failure") ],
+            [
+                WorkflowRunFailure(".github/workflows/coherence.yml", 17, Some "failure")
+                CheckRunFailure("external-safety", Some 99L, Some "timed_out")
+                CheckRunFailure("claim-generation", Some 17L, Some "failure")
+            ],
             failuresDerived fromMain [] [ greenRun; blockingRun ] [ unrelated; itemOwned; advisory ]
         )
 
@@ -94,7 +114,9 @@ module LandableTests =
 
     [<Fact>]
     let ``a skipped conclusion counts as passed, not as a finding`` () =
-        let skipped = run ".github/workflows/lint.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "skipped") (Some 2L)
+        let skipped =
+            run ".github/workflows/lint.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "skipped") (Some 2L)
+
         Assert.Equal(PrGreen, score (Some true) [ greenRun; skipped ] [])
 
     // ---- a NON-Actions app appears only in the check-runs, and is scored by construction (#720) -------
@@ -131,7 +153,9 @@ module LandableTests =
 
     [<Fact>]
     let ``a cancelled run NOBODY re-ran stays live — it is still a finding (RED), not dropped`` () =
-        let lone = run ".github/workflows/build.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "cancelled") (Some 10L)
+        let lone =
+            run ".github/workflows/build.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "cancelled") (Some 10L)
+
         Assert.Equal(PrRed, score (Some true) [ lone ] [])
 
     [<Fact>]
@@ -139,8 +163,20 @@ module LandableTests =
         // Same path/branch/PR but a different EVENT (workflow_dispatch) is a different concurrency group, so
         // it supersedes nothing — dropping the cancelled pull_request run in its favour would count a
         // vacuous green.
-        let cancelled = run ".github/workflows/build.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "cancelled") (Some 10L)
-        let dispatch = run ".github/workflows/build.yml" "workflow_dispatch" "item/x" [ 1 ] 2 "completed" (Some "success") (Some 11L)
+        let cancelled =
+            run ".github/workflows/build.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "cancelled") (Some 10L)
+
+        let dispatch =
+            run
+                ".github/workflows/build.yml"
+                "workflow_dispatch"
+                "item/x"
+                [ 1 ]
+                2
+                "completed"
+                (Some "success")
+                (Some 11L)
+
         Assert.Equal(PrRed, score (Some true) [ cancelled; dispatch ] [])
 
     // ---- a superseded FAILURE is superseded too (#1039 / ADR-0043) ------------------------------------
@@ -158,7 +194,9 @@ module LandableTests =
         // worker to add. Same path, same event, same branch. Nothing cancelled 938 — it had COMPLETED, and
         // architecture-map declares no `concurrency` block — so the `cancelled`-only rule kept it and scored
         // the PR `red` permanently, while GitHub called it `clean` and the merge was correct.
-        let g = ".github/workflows/architecture-map.yml", "pull_request", "item/1026-chore-lock-embed", [ 1026 ]
+        let g =
+            ".github/workflows/architecture-map.yml", "pull_request", "item/1026-chore-lock-embed", [ 1026 ]
+
         let path, ev, br, prs = g
         let failed = run path ev br prs 938 "completed" (Some "failure") (Some 10L)
         let later = run path ev br prs 940 "completed" (Some "success") (Some 11L)
@@ -166,7 +204,9 @@ module LandableTests =
 
     [<Fact>]
     let ``a superseded FAILURE's check-runs are dropped with its suite, exactly as a cancelled one's are`` () =
-        let g = ".github/workflows/architecture-map.yml", "pull_request", "item/1026-x", [ 1026 ]
+        let g =
+            ".github/workflows/architecture-map.yml", "pull_request", "item/1026-x", [ 1026 ]
+
         let path, ev, br, prs = g
         let failed = run path ev br prs 938 "completed" (Some "failure") (Some 10L)
         let later = run path ev br prs 940 "completed" (Some "success") (Some 11L)
@@ -180,7 +220,9 @@ module LandableTests =
     let ``a FAILED run NOBODY replaced stays live — dropping a failure needs a REPLACEMENT, not a mood`` () =
         // The fail-closed half: supersession is a fact about a later run of the group, so a lone failure is
         // the latest in its own group and is scored. A red PR cannot go green by having no successor.
-        let lone = run ".github/workflows/build.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "failure") (Some 10L)
+        let lone =
+            run ".github/workflows/build.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "failure") (Some 10L)
+
         Assert.Equal(PrRed, score (Some true) [ lone ] [])
 
     [<Fact>]
@@ -190,8 +232,20 @@ module LandableTests =
         // supersedes nothing. A gate job that `if: github.event_name == 'pull_request'` SKIPS in the dispatch
         // run and concludes `success`; letting it drop the failed pull_request run would count a vacuous
         // green and merge a PR whose gate never passed. `cgroup` — not the conclusion — is what forbids it.
-        let failed = run ".github/workflows/build.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "failure") (Some 10L)
-        let dispatch = run ".github/workflows/build.yml" "workflow_dispatch" "item/x" [ 1 ] 2 "completed" (Some "success") (Some 11L)
+        let failed =
+            run ".github/workflows/build.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "failure") (Some 10L)
+
+        let dispatch =
+            run
+                ".github/workflows/build.yml"
+                "workflow_dispatch"
+                "item/x"
+                [ 1 ]
+                2
+                "completed"
+                (Some "success")
+                (Some 11L)
+
         Assert.Equal(PrRed, score (Some true) [ failed; dispatch ] [])
 
     [<Fact>]
@@ -222,7 +276,9 @@ module LandableTests =
     [<Fact>]
     let ``scoreN returns the verdict AND the number of LIVE subjects it scored`` () =
         // One live run + one live check = 2 subjects, and the verdict agrees with `score`.
-        let state, n = scoreN (Some true) [ greenRun ] [ check (Some 1L) "completed" (Some "success") ]
+        let state, n =
+            scoreN (Some true) [ greenRun ] [ check (Some 1L) "completed" (Some "success") ]
+
         Assert.Equal(PrGreen, state)
         Assert.Equal(2, n)
 
@@ -235,8 +291,28 @@ module LandableTests =
     [<Fact>]
     let ``scoreN drops a superseded suite from the count, not just the verdict`` () =
         // The cancelled run and its check-run are superseded, so only the live run + live check are counted.
-        let cancelled = run ".github/workflows/build.yml" "pull_request" "item/718-x" [ 718 ] 1 "completed" (Some "cancelled") (Some 10L)
-        let later = run ".github/workflows/build.yml" "pull_request" "item/718-x" [ 718 ] 2 "completed" (Some "success") (Some 11L)
+        let cancelled =
+            run
+                ".github/workflows/build.yml"
+                "pull_request"
+                "item/718-x"
+                [ 718 ]
+                1
+                "completed"
+                (Some "cancelled")
+                (Some 10L)
+
+        let later =
+            run
+                ".github/workflows/build.yml"
+                "pull_request"
+                "item/718-x"
+                [ 718 ]
+                2
+                "completed"
+                (Some "success")
+                (Some 11L)
+
         let deadCheck = check (Some 10L) "completed" (Some "failure")
         let liveCheck = check (Some 11L) "completed" (Some "success")
         let state, n = scoreN (Some true) [ cancelled; later ] [ deadCheck; liveCheck ]
@@ -262,8 +338,28 @@ module LandableTests =
         // `scoreRequired` to match on, which makes the trap REACHABLE for the first time: the field is
         // fit for a presence test and for nothing else. Nothing is cancelled here, so nothing may be
         // dropped — both `fixture`s are live verdicts.
-        let pin = run ".github/workflows/pin-coherence.yml" "pull_request" "b" [ 595 ] 30 "completed" (Some "success") (Some 7L)
-        let timeout = run ".github/workflows/timeout-coherence.yml" "pull_request" "b" [ 595 ] 31 "completed" (Some "success") (Some 8L)
+        let pin =
+            run
+                ".github/workflows/pin-coherence.yml"
+                "pull_request"
+                "b"
+                [ 595 ]
+                30
+                "completed"
+                (Some "success")
+                (Some 7L)
+
+        let timeout =
+            run
+                ".github/workflows/timeout-coherence.yml"
+                "pull_request"
+                "b"
+                [ 595 ]
+                31
+                "completed"
+                (Some "success")
+                (Some 8L)
+
         let redFixture = named "fixture" (Some 7L) "completed" (Some "failure")
         let greenFixture = named "fixture" (Some 8L) "completed" (Some "success")
         Assert.Equal(PrRed, score (Some true) [ pin; timeout ] [ redFixture; greenFixture ])
@@ -272,11 +368,18 @@ module LandableTests =
     let ``--require is satisfied by a check of that name even when another shares it and FAILS`` () =
         // The other half of the same rule: `--require` is a PRESENCE test, so a name collision cannot make
         // it unsatisfiable — but it also cannot launder the red. The verdict is still RED, from the rollup.
-        let a = run ".github/workflows/a.yml" "pull_request" "b" [ 1 ] 1 "completed" (Some "success") (Some 7L)
-        let b = run ".github/workflows/b.yml" "pull_request" "b" [ 1 ] 1 "completed" (Some "success") (Some 8L)
+        let a =
+            run ".github/workflows/a.yml" "pull_request" "b" [ 1 ] 1 "completed" (Some "success") (Some 7L)
+
+        let b =
+            run ".github/workflows/b.yml" "pull_request" "b" [ 1 ] 1 "completed" (Some "success") (Some 8L)
+
         let red = named "registry-coherence" (Some 7L) "completed" (Some "failure")
         let green = named "registry-coherence" (Some 8L) "completed" (Some "success")
-        let state, _ = scoreRequired [ "registry-coherence" ] (Some true) [ a; b ] [ red; green ]
+
+        let state, _ =
+            scoreRequired [ "registry-coherence" ] (Some true) [ a; b ] [ red; green ]
+
         Assert.Equal(PrRed, state)
         Assert.Empty(missing [ "registry-coherence" ] [ a; b ] [ red; green ])
 
@@ -299,7 +402,10 @@ module LandableTests =
         // Everything present is green, and without --require this is a GREEN that merges. The required
         // check never reported, so the thing it was to verify was never verified: not green.
         let checks = [ named "some-other-job" (Some 1L) "completed" (Some "success") ]
-        let state, _ = scoreRequired [ "registry-coherence" ] (Some true) [ greenRun ] checks
+
+        let state, _ =
+            scoreRequired [ "registry-coherence" ] (Some true) [ greenRun ] checks
+
         Assert.Equal(PrPending, state)
         // ...and without the requirement, the very same input IS green. That contrast is the whole point.
         Assert.Equal(PrGreen, score (Some true) [ greenRun ] checks)
@@ -321,7 +427,10 @@ module LandableTests =
         // softer verdict over a hard red would make --wait spin out its tries before announcing a failure
         // it already knew.
         let checks = [ named "build" (Some 1L) "completed" (Some "failure") ]
-        let state, _ = scoreRequired [ "registry-coherence" ] (Some true) [ greenRun ] checks
+
+        let state, _ =
+            scoreRequired [ "registry-coherence" ] (Some true) [ greenRun ] checks
+
         Assert.Equal(PrRed, state)
 
     [<Fact>]
@@ -330,10 +439,33 @@ module LandableTests =
         // check whose verdict we do not have. The replacement has not registered, so: pending, and the
         // next poll sees it. Satisfying the requirement from a dropped check would merge on a verdict
         // that was cancelled before it could be reached.
-        let cancelled = run ".github/workflows/registry.yml" "pull_request" "auto/registry" [ 9 ] 1 "completed" (Some "cancelled") (Some 10L)
-        let later = run ".github/workflows/registry.yml" "pull_request" "auto/registry" [ 9 ] 2 "completed" (Some "success") (Some 11L)
+        let cancelled =
+            run
+                ".github/workflows/registry.yml"
+                "pull_request"
+                "auto/registry"
+                [ 9 ]
+                1
+                "completed"
+                (Some "cancelled")
+                (Some 10L)
+
+        let later =
+            run
+                ".github/workflows/registry.yml"
+                "pull_request"
+                "auto/registry"
+                [ 9 ]
+                2
+                "completed"
+                (Some "success")
+                (Some 11L)
+
         let deadCheck = named "registry-coherence" (Some 10L) "completed" (Some "cancelled")
-        let state, _ = scoreRequired [ "registry-coherence" ] (Some true) [ cancelled; later ] [ deadCheck ]
+
+        let state, _ =
+            scoreRequired [ "registry-coherence" ] (Some true) [ cancelled; later ] [ deadCheck ]
+
         Assert.Equal(PrPending, state)
 
     [<Fact>]
@@ -358,11 +490,35 @@ module LandableTests =
 
     [<Fact>]
     let ``missing: names the required checks that did not report, superseded copies not counted`` () =
-        let cancelled = run ".github/workflows/registry.yml" "pull_request" "auto/registry" [ 9 ] 1 "completed" (Some "cancelled") (Some 10L)
-        let later = run ".github/workflows/registry.yml" "pull_request" "auto/registry" [ 9 ] 2 "completed" (Some "success") (Some 11L)
+        let cancelled =
+            run
+                ".github/workflows/registry.yml"
+                "pull_request"
+                "auto/registry"
+                [ 9 ]
+                1
+                "completed"
+                (Some "cancelled")
+                (Some 10L)
+
+        let later =
+            run
+                ".github/workflows/registry.yml"
+                "pull_request"
+                "auto/registry"
+                [ 9 ]
+                2
+                "completed"
+                (Some "success")
+                (Some 11L)
+
         let dead = named "registry-coherence" (Some 10L) "completed" (Some "cancelled")
         let live = named "build" (Some 11L) "completed" (Some "success")
-        Assert.Equal<string list>([ "registry-coherence" ], missing [ "registry-coherence"; "build" ] [ cancelled; later ] [ dead; live ])
+
+        Assert.Equal<string list>(
+            [ "registry-coherence" ],
+            missing [ "registry-coherence"; "build" ] [ cancelled; later ] [ dead; live ]
+        )
 
     [<Fact>]
     let ``missing: nothing is missing when every required check reported`` () =
@@ -397,12 +553,14 @@ module LandableTests =
     /// `gh api repos/FS-GG/.github/rules/branches/main` carries no `required_status_checks` rule, so the
     /// union `Reads.requiredContexts` forms over the two stores is this list alone.
     let private mainContexts =
-        [ "contract-coherence / coherence"
-          "projection"
-          "roster-closure"
-          "drift"
-          "reconcile"
-          "claim-generation" ]
+        [
+            "contract-coherence / coherence"
+            "projection"
+            "roster-closure"
+            "drift"
+            "reconcile"
+            "claim-generation"
+        ]
 
     /// The derivation branch protection produces on `.github` today.
     let private fromMain = advisoryFrom mainContexts
@@ -421,7 +579,10 @@ module LandableTests =
         let feedCheck = named "feed" (Some 5L) "completed" (Some "failure")
         let projection = named "projection" (Some 1L) "completed" (Some "success")
 
-        Assert.Equal(PrGreen, fst (scoreDerived fromMain [] (Some true) [ greenRun; feedRun ] [ feedCheck; projection ]))
+        Assert.Equal(
+            PrGreen,
+            fst (scoreDerived fromMain [] (Some true) [ greenRun; feedRun ] [ feedCheck; projection ])
+        )
 
     [<Fact>]
     let ``#2517 AC1: the SAME inputs are RED with no derivation — the verdict is the branch's, not a literal's`` () =
@@ -451,7 +612,9 @@ module LandableTests =
 
         Assert.Equal(PrGreen, fst (scoreDerived fromMain [] (Some true) [ greenRun; feedRun ] [ feedCheck ]))
 
-        let state, _ = scoreDerived fromMain [ "feed" ] (Some true) [ greenRun; feedRun ] [ feedCheck ]
+        let state, _ =
+            scoreDerived fromMain [ "feed" ] (Some true) [ greenRun; feedRun ] [ feedCheck ]
+
         Assert.Equal(PrRed, state)
 
     [<Fact>]
@@ -527,7 +690,14 @@ module LandableTests =
         // ...and under the world as it WAS — protection not naming it — #2373's rule still holds exactly.
         // The rule never changed; only who supplies its input did.
         let beforeArming =
-            advisoryFrom [ "contract-coherence / coherence"; "projection"; "roster-closure"; "drift"; "reconcile" ]
+            advisoryFrom
+                [
+                    "contract-coherence / coherence"
+                    "projection"
+                    "roster-closure"
+                    "drift"
+                    "reconcile"
+                ]
 
         Assert.Equal(PrGreen, fst (scoreDerived beforeArming [] (Some true) [ greenRun; feedRun ] [ cg ]))
 
@@ -598,19 +768,21 @@ module LandableTests =
 
         let allowed =
             set
-                [ ""
-                  "completed"
-                  "success"
-                  "skipped"
-                  "green"
-                  "conflicted"
-                  "pending"
-                  "red"
-                  "unknown"
-                  "merged"
-                  "closed"
-                  "the base branch requires no status checks, and an empty required set is not a derivation"
-                  "no branch policy was consulted" ]
+                [
+                    ""
+                    "completed"
+                    "success"
+                    "skipped"
+                    "green"
+                    "conflicted"
+                    "pending"
+                    "red"
+                    "unknown"
+                    "merged"
+                    "closed"
+                    "the base branch requires no status checks, and an empty required set is not a derivation"
+                    "no branch policy was consulted"
+                ]
 
         let unexpected =
             Regex.Matches(code, "\"([^\"]*)\"")
@@ -652,8 +824,10 @@ module LandableTests =
         // The carve-out is the complement of a DECLARED set — not "ignore anything that failed". A
         // genuinely failing required check must still red the PR exactly as before.
         let checks =
-            [ named "feed" (Some 2L) "completed" (Some "failure")
-              named "drift" (Some 3L) "completed" (Some "failure") ]
+            [
+                named "feed" (Some 2L) "completed" (Some "failure")
+                named "drift" (Some 3L) "completed" (Some "failure")
+            ]
 
         Assert.Equal(PrRed, fst (scoreDerived fromMain [] (Some true) [ greenRun ] checks))
 
@@ -700,7 +874,9 @@ module LandableTests =
         // one required job that really failed — must not have its redness laundered by the advisory job
         // sharing its suite.
         let advisoryCheck = named "feed" (Some 5L) "completed" (Some "failure")
-        let realCheck = named "contract-coherence / coherence" (Some 5L) "completed" (Some "failure")
+
+        let realCheck =
+            named "contract-coherence / coherence" (Some 5L) "completed" (Some "failure")
 
         Assert.Equal(
             PrRed,
@@ -708,7 +884,9 @@ module LandableTests =
         )
 
     [<Fact>]
-    let ``AC3: a run failing with NO check-runs of its own still reds — isolated from #606's zero-subjects rule (#2379)`` () =
+    let ``AC3: a run failing with NO check-runs of its own still reds — isolated from #606's zero-subjects rule (#2379)``
+        ()
+        =
         // The case that makes "just stop scoring runs" wrong: GitHub failed the run before any job could
         // even report, so there is no check-run to attribute the failure to — `runGating`'s empty-suite arm
         // must stay `Blocking`, not fall open because "no advisory checks disagreed".
@@ -724,7 +902,9 @@ module LandableTests =
         Assert.Equal(PrRed, fst (scoreDerived fromMain [] (Some true) [ feedRun ] [ unrelatedGreenCheck ]))
 
     [<Fact>]
-    let ``a run whose suite is entirely CLEAN (every check-run already passed) but the run itself concluded bad still reds (#2454)`` () =
+    let ``a run whose suite is entirely CLEAN (every check-run already passed) but the run itself concluded bad still reds (#2454)``
+        ()
+        =
         // The THIRD arm `runGating`'s `findings` filter introduces: a suite that has live check-runs, but
         // none of them is a FINDING (every one completed `success`), while the RUN's own conclusion is
         // nonetheless bad. Nothing in the suite explains that badness, so `runGating` stays conservative and
@@ -739,7 +919,9 @@ module LandableTests =
         Assert.Equal(PrRed, fst (scoreDerived fromMain [] (Some true) [ greenRun; feedRun ] [ onlyCheckPassed ]))
 
     [<Fact>]
-    let ``AC1 (multi-check suite, #2454): an advisory-failing check ALONGSIDE genuinely GREEN required checks does not red`` () =
+    let ``AC1 (multi-check suite, #2454): an advisory-failing check ALONGSIDE genuinely GREEN required checks does not red``
+        ()
+        =
         // `.github#2454`: the shape a real workflow produces, and the one the ORIGINAL #2400 fix did not
         // cover — one suite carrying the advisory job (failing) plus the workflow's other jobs, all passing.
         // The first shipped `runGating` surveyed suite MEMBERSHIP: every check-run in the suite, passing ones
@@ -747,7 +929,10 @@ module LandableTests =
         // kept the run `Blocking` and its own advisory-caused `failure` still reded the verdict. Filtering to
         // FINDINGS first is what makes "solely because its advisory job did" actually mean solely.
         let advisoryFailing = named "feed" (Some 5L) "completed" (Some "failure")
-        let ordinaryGreenA = named "contract-coherence / coherence" (Some 5L) "completed" (Some "success")
+
+        let ordinaryGreenA =
+            named "contract-coherence / coherence" (Some 5L) "completed" (Some "success")
+
         let ordinaryGreenB = named "projection" (Some 5L) "completed" (Some "success")
         let ordinaryGreenC = named "roster-closure" (Some 5L) "completed" (Some "success")
 
@@ -764,7 +949,9 @@ module LandableTests =
         )
 
     [<Fact>]
-    let ``AC2 (multi-check suite, #2454): List.forall over FINDINGS still governs the SUBJECT COUNT, though not the verdict on its own`` () =
+    let ``AC2 (multi-check suite, #2454): List.forall over FINDINGS still governs the SUBJECT COUNT, though not the verdict on its own``
+        ()
+        =
         // CORRECTED AT REVIEW (`.github#2454` round 2): a `forall` -> `exists` mutation of `runGating`'s
         // findings test cannot flip THIS shape's verdict, and the reason is structural rather than incidental
         // to the fixture. `findings` and `scoredChecks` are BOTH derived from the same `checks` list, and
@@ -803,7 +990,10 @@ module LandableTests =
         // `required` makes `checkGating` return `Blocking` for it, which flips `runGating`'s all-advisory test
         // for the run that contains it — so `--require` restores BOTH halves to the rollup.
         let advisoryCheck = named "feed" (Some 5L) "completed" (Some "failure")
-        let state, _ = scoreDerived fromMain [ "feed" ] (Some true) [ greenRun; feedRun ] [ advisoryCheck ]
+
+        let state, _ =
+            scoreDerived fromMain [ "feed" ] (Some true) [ greenRun; feedRun ] [ advisoryCheck ]
+
         Assert.Equal(PrRed, state)
 
     // ---- settled: the --wait break-vs-keep-waiting decision (#724) -----------------------------------

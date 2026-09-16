@@ -114,152 +114,156 @@ module Options =
         | WritesRemoteState
 
     type CommandDescriptor =
-        { Command: Command
-          Verb: string
-          Render: RenderSupport
-          Mutation: MutationKind
-          HandlerOwner: HandlerOwner
-          Documented: bool }
+        {
+            Command: Command
+            Verb: string
+            Render: RenderSupport
+            Mutation: MutationKind
+            HandlerOwner: HandlerOwner
+            Documented: bool
+        }
 
     type Options =
-        { Command: Command
-          Render: Render
-          /// EVERY render flag GIVEN — empty when neither `--json` nor `--text` appeared on argv.
-          ///
-          /// `Render` alone cannot answer "was the flag given?", because it has a non-optional default:
-          /// "given" and "defaulted" are the same state, which is the exemption that kept `--json` `Global`
-          /// and unguardable (#991's own note, quoted at `scopeOf`). This field is the missing bit, and it
-          /// is what lets `flagsGiven` report `--json` so the residue rule can refuse it (#1523).
-          ///
-          /// A SET, NOT THE LAST ONE. `Render` keeps last-wins, and a field that only remembered the
-          /// winner would leave the loser invisible: `done --json --text` would resolve to `Text`, report
-          /// only `--text` — which `done` legitimately takes — and let the `--json` it cannot honour
-          /// through unnamed. That is the accepted-and-ignored silence this whole change exists to end,
-          /// rebuilt inside the guard against it. Every spelling that was typed is refusable.
-          RenderGiven: Set<Render>
-          SnapshotFile: string option
-          /// `driver --events` — derive the material-transition/active-inventory projection instead of
-          /// the single next planning `Action` (.github#2135). A separate flag rather than a separate
-          /// command: both read the same live board/claim/PR/review facts `driver` already gathers, and
-          /// the projection is layered over the SAME source, not a second one.
-          Events: bool
-          /// `driver --events --cursor <path>` — the durable per-item cursor file read before, and
-          /// written after, deriving the projection (.github#2135). Absent ⇒ an empty cursor (every
-          /// classified state reads as a transition) and no persistence — a stateless single-shot render.
-          CursorFile: string option
-          Repo: string option
-          Fresh: bool
-          AllowBacklog: bool
-          Limit: int option
-          LeaseMinutes: int
-          LeaseGiven: bool
-          Args: string list
-          Worker: string option
-          Force: bool
-          /// `claim --refuse-overlap` (.github#2459) — see the `.fsi` doc.
-          RefuseOverlap: bool
-          Mint: bool
-          Flip: bool
-          Evidence: string option
-          /// `done --flip --partial "<why>"` — this child is a PARTIAL fix and does NOT discharge its
-          /// parent, so the roll-up must leave the parent OPEN (#614). Absent means the child completes it.
-          Partial: string option
-          ToWorker: string option
-          Message: string option
-          Paths: string list
-          Pr: int option
-          Warn: bool
-          /// `verify-paths --issue REF` — the issue whose touch-set to check the PR against, named
-          /// explicitly (bypasses branch/closing-ref resolution). Its repo is authoritative (#479).
-          Issue: string option
-          /// `ready --status S` — the board Status column to show, matched by NAME (case-insensitive), the
-          /// way bash's `board_filter` matches it. Present ⇒ the default "not Done" filter is off: asking for
-          /// a column is asking to SEE it, Done included.
-          ///
-          /// `release --status S` — the column to LAND the item in, matched the same way (#867/#331). It is
-          /// the caller stating the deliberate column, so it beats both the restore and the `Ready` fallback.
-          /// No other command reads this field; `statusCommands` refuses it everywhere else.
-          Status: string option
-          /// `release --status Blocked --blocked-by <ref>` — the edge to write into the `Blocked by`
-          /// FIELD in the SAME call (.github#2079), so a coherent park is one call rather than two the
-          /// caller must remember to pair. Canonicalized on `Blockers.canonicalizeBlockedBy`'s terms,
-          /// exactly as `set-field <ref> 'Blocked by' <value>` already is — a comma list, a bare `#n`, a
-          /// `repo#n`, or an issue URL, and prose or a placeholder is refused before anything is written.
-          /// Read ONLY by `release`; every other command refuses it.
-          BlockedBy: string option
-          // The explicit `Blocked by` set operation supplied to `set-field`.
-          BlockedByMutation: BlockedByMutation option
-          /// `ready --all` — widen past the "not Done" default without naming a column (#520: `ready` is a
-          /// TRUTH read, so `--all` shows the whole board, Done and closed items and all).
-          All: bool
-          /// `set-field --batch` — the remaining `Field=Value` args are written in ONE aliased mutation
-          /// document (#448): N fields, one GraphQL request, one point at the floor.
-          Batch: bool
-          /// `batch --explain` — print the DERIVED RANKING beside the batch (.github#1598): every candidate
-          /// in the order the scheduler considered it, the rank inputs that produced that order, and how
-          /// many lanes each admitted item displaced. Stderr, like every other "why" this verb prints, so
-          /// `batch --json --explain` keeps stdout a clean machine document.
-          Explain: bool
-          /// `lint --strict` — a NOTE (not just an error) is fatal. Off, a note is advisory and lint still
-          /// exits 0; on, any note fails the gate too (the pedantic board-health pass).
-          Strict: bool
-          /// `overlap <ref> --active` — check the item's touch-set against the LIVE claims in its own repo,
-          /// rather than against a second named item. Repo-scoped: a same-named token in another repo is not
-          /// a collision (#353).
-          Active: bool
+        {
+            Command: Command
+            Render: Render
+            /// EVERY render flag GIVEN — empty when neither `--json` nor `--text` appeared on argv.
+            ///
+            /// `Render` alone cannot answer "was the flag given?", because it has a non-optional default:
+            /// "given" and "defaulted" are the same state, which is the exemption that kept `--json` `Global`
+            /// and unguardable (#991's own note, quoted at `scopeOf`). This field is the missing bit, and it
+            /// is what lets `flagsGiven` report `--json` so the residue rule can refuse it (#1523).
+            ///
+            /// A SET, NOT THE LAST ONE. `Render` keeps last-wins, and a field that only remembered the
+            /// winner would leave the loser invisible: `done --json --text` would resolve to `Text`, report
+            /// only `--text` — which `done` legitimately takes — and let the `--json` it cannot honour
+            /// through unnamed. That is the accepted-and-ignored silence this whole change exists to end,
+            /// rebuilt inside the guard against it. Every spelling that was typed is refusable.
+            RenderGiven: Set<Render>
+            SnapshotFile: string option
+            /// `driver --events` — derive the material-transition/active-inventory projection instead of
+            /// the single next planning `Action` (.github#2135). A separate flag rather than a separate
+            /// command: both read the same live board/claim/PR/review facts `driver` already gathers, and
+            /// the projection is layered over the SAME source, not a second one.
+            Events: bool
+            /// `driver --events --cursor <path>` — the durable per-item cursor file read before, and
+            /// written after, deriving the projection (.github#2135). Absent ⇒ an empty cursor (every
+            /// classified state reads as a transition) and no persistence — a stateless single-shot render.
+            CursorFile: string option
+            Repo: string option
+            Fresh: bool
+            AllowBacklog: bool
+            Limit: int option
+            LeaseMinutes: int
+            LeaseGiven: bool
+            Args: string list
+            Worker: string option
+            Force: bool
+            /// `claim --refuse-overlap` (.github#2459) — see the `.fsi` doc.
+            RefuseOverlap: bool
+            Mint: bool
+            Flip: bool
+            Evidence: string option
+            /// `done --flip --partial "<why>"` — this child is a PARTIAL fix and does NOT discharge its
+            /// parent, so the roll-up must leave the parent OPEN (#614). Absent means the child completes it.
+            Partial: string option
+            ToWorker: string option
+            Message: string option
+            Paths: string list
+            Pr: int option
+            Warn: bool
+            /// `verify-paths --issue REF` — the issue whose touch-set to check the PR against, named
+            /// explicitly (bypasses branch/closing-ref resolution). Its repo is authoritative (#479).
+            Issue: string option
+            /// `ready --status S` — the board Status column to show, matched by NAME (case-insensitive), the
+            /// way bash's `board_filter` matches it. Present ⇒ the default "not Done" filter is off: asking for
+            /// a column is asking to SEE it, Done included.
+            ///
+            /// `release --status S` — the column to LAND the item in, matched the same way (#867/#331). It is
+            /// the caller stating the deliberate column, so it beats both the restore and the `Ready` fallback.
+            /// No other command reads this field; `statusCommands` refuses it everywhere else.
+            Status: string option
+            /// `release --status Blocked --blocked-by <ref>` — the edge to write into the `Blocked by`
+            /// FIELD in the SAME call (.github#2079), so a coherent park is one call rather than two the
+            /// caller must remember to pair. Canonicalized on `Blockers.canonicalizeBlockedBy`'s terms,
+            /// exactly as `set-field <ref> 'Blocked by' <value>` already is — a comma list, a bare `#n`, a
+            /// `repo#n`, or an issue URL, and prose or a placeholder is refused before anything is written.
+            /// Read ONLY by `release`; every other command refuses it.
+            BlockedBy: string option
+            // The explicit `Blocked by` set operation supplied to `set-field`.
+            BlockedByMutation: BlockedByMutation option
+            /// `ready --all` — widen past the "not Done" default without naming a column (#520: `ready` is a
+            /// TRUTH read, so `--all` shows the whole board, Done and closed items and all).
+            All: bool
+            /// `set-field --batch` — the remaining `Field=Value` args are written in ONE aliased mutation
+            /// document (#448): N fields, one GraphQL request, one point at the floor.
+            Batch: bool
+            /// `batch --explain` — print the DERIVED RANKING beside the batch (.github#1598): every candidate
+            /// in the order the scheduler considered it, the rank inputs that produced that order, and how
+            /// many lanes each admitted item displaced. Stderr, like every other "why" this verb prints, so
+            /// `batch --json --explain` keeps stdout a clean machine document.
+            Explain: bool
+            /// `lint --strict` — a NOTE (not just an error) is fatal. Off, a note is advisory and lint still
+            /// exits 0; on, any note fails the gate too (the pedantic board-health pass).
+            Strict: bool
+            /// `overlap <ref> --active` — check the item's touch-set against the LIVE claims in its own repo,
+            /// rather than against a second named item. Repo-scoped: a same-named token in another repo is not
+            /// a collision (#353).
+            Active: bool
 
-          /// `reap --apply` — actually DELETE the expired markers; without it, reap is a DRY RUN (#581).
-          Apply: bool
+            /// `reap --apply` — actually DELETE the expired markers; without it, reap is a DRY RUN (#581).
+            Apply: bool
 
-          /// `inbox --peek` — show new messages WITHOUT advancing the per-worker cursor, so the same mail
-          /// is still "new" on the next read. Off, `inbox` consumes what it shows.
-          Peek: bool
+            /// `inbox --peek` — show new messages WITHOUT advancing the per-worker cursor, so the same mail
+            /// is still "new" on the next read. Off, `inbox` consumes what it shows.
+            Peek: bool
 
-          /// `flush --dry-run` — LIST the queued writes without replaying them.
-          ///
-          /// The polarity is deliberate, and it is the OPPOSITE of `reap --apply` (#862). `reap` collects
-          /// another worker's claim, so its bare form must be safe. `flush` replays writes THIS worker was
-          /// already told were queued — the recovery action the `EX_RATE` message names — so a dry run by
-          /// default would rebuild the exact trap this issue was filed for: a worker runs the command the
-          /// engine told them to run, reads "3 pending", concludes the board is repaired, and walks away
-          /// from three writes that never landed.
-          DryRun: bool
+            /// `flush --dry-run` — LIST the queued writes without replaying them.
+            ///
+            /// The polarity is deliberate, and it is the OPPOSITE of `reap --apply` (#862). `reap` collects
+            /// another worker's claim, so its bare form must be safe. `flush` replays writes THIS worker was
+            /// already told were queued — the recovery action the `EX_RATE` message names — so a dry run by
+            /// default would rebuild the exact trap this issue was filed for: a worker runs the command the
+            /// engine told them to run, reads "3 pending", concludes the board is repaired, and walks away
+            /// from three writes that never landed.
+            DryRun: bool
 
-          /// `landable --wait` — poll until the verdict SETTLES instead of reading it once (#724). A `green`
-          /// is believed only once the subject count has stopped growing; a `red` at zero subjects is the
-          /// registration race and keeps waiting; conflicted/unknown return at once.
-          Wait: bool
-          /// `--tries N` (`landable --wait`) — the maximum number of polls. Default 30.
-          Tries: int option
-          /// `--interval N` (`landable --wait`) — seconds to sleep between polls. Default 20.
-          Interval: int option
-          /// `landable --require NAME` (repeatable) — check-run names that must have REPORTED. For a check
-          /// branch protection does NOT require but which is the reason the PR exists; absent, it reads
-          /// exactly like a passing one (#606/#737). Missing ⇒ `pending`, never `green`.
-          Require: string list
-          /// `landable --sha SHA` — the head SHA the caller believes it is gating. `pulls/{n}` is eventually
-          /// consistent after a force-push, so a caller that just pushed says which commit it means; a
-          /// disagreement is `pending`, never a verdict about the previous commit (#737).
-          Sha: string option
+            /// `landable --wait` — poll until the verdict SETTLES instead of reading it once (#724). A `green`
+            /// is believed only once the subject count has stopped growing; a `red` at zero subjects is the
+            /// registration race and keeps waiting; conflicted/unknown return at once.
+            Wait: bool
+            /// `--tries N` (`landable --wait`) — the maximum number of polls. Default 30.
+            Tries: int option
+            /// `--interval N` (`landable --wait`) — seconds to sleep between polls. Default 20.
+            Interval: int option
+            /// `landable --require NAME` (repeatable) — check-run names that must have REPORTED. For a check
+            /// branch protection does NOT require but which is the reason the PR exists; absent, it reads
+            /// exactly like a passing one (#606/#737). Missing ⇒ `pending`, never `green`.
+            Require: string list
+            /// `landable --sha SHA` — the head SHA the caller believes it is gating. `pulls/{n}` is eventually
+            /// consistent after a force-push, so a caller that just pushed says which commit it means; a
+            /// disagreement is `pending`, never a verdict about the previous commit (#737).
+            Sha: string option
 
-          /// `issues --label L` — restrict the REST listing to issues carrying this label (absent ⇒ all).
-          Label: string option
-          /// `issues --state open|closed|all` — which issue state to list. Default `open` (bash's default).
-          IssueState: string option
+            /// `issues --label L` — restrict the REST listing to issues carrying this label (absent ⇒ all).
+            Label: string option
+            /// `issues --state open|closed|all` — which issue state to list. Default `open` (bash's default).
+            IssueState: string option
 
-          /// `who --local` — join the live claims to the LOCAL git worktrees, so "what is that worktree
-          /// doing?" needs no forensics (#959). bash shipped and documented it; the port dropped it. Every
-          /// worker runs in a per-item worktree (pnext-item §2), so a fan-out IS a pile of `../<repo>-<n>`
-          /// directories, and this is the verb that names which is which — the remedy #419's own warning
-          /// points at when N agents collide on one id. `who` is the only reader.
-          Local: bool
-          /// `who --all-repos` — suppress the checkout-repository default and read the whole board.
-          AllRepos: bool
+            /// `who --local` — join the live claims to the LOCAL git worktrees, so "what is that worktree
+            /// doing?" needs no forensics (#959). bash shipped and documented it; the port dropped it. Every
+            /// worker runs in a per-item worktree (pnext-item §2), so a fan-out IS a pile of `../<repo>-<n>`
+            /// directories, and this is the verb that names which is which — the remedy #419's own warning
+            /// points at when N agents collide on one id. `who` is the only reader.
+            Local: bool
+            /// `who --all-repos` — suppress the checkout-repository default and read the whole board.
+            AllRepos: bool
 
-          /// `room open --over N,M` — the item refs the room is opened over (ADR-0051). A comma-separated
-          /// list resolved to `Ref`s by the handler, each of which gets a `Rooms: #room` back-reference
-          /// written onto its body. `RoomOpen` is the only reader; `scopeOf FOver` refuses it everywhere else.
-          Over: string list }
+            /// `room open --over N,M` — the item refs the room is opened over (ADR-0051). A comma-separated
+            /// list resolved to `Ref`s by the handler, each of which gets a `Rooms: #room` back-reference
+            /// written onto its body. `RoomOpen` is the only reader; `scopeOf FOver` refuses it everywhere else.
+            Over: string list
+        }
 
     /// The CLIENT's lease default, and the value `FSGG_CLAIM_LEASE_MIN` overrides.
     ///
@@ -616,69 +620,73 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     // because their arguments and validation differ, while behavior tests parse every descriptor verb.
     let commandCatalogue: CommandDescriptor list =
         let row command verb render mutation owner =
-            { Command = command
-              Verb = verb
-              Render = render
-              Mutation = mutation
-              HandlerOwner = owner
-              Documented = true }
+            {
+                Command = command
+                Verb = verb
+                Render = render
+                Mutation = mutation
+                HandlerOwner = owner
+                Documented = true
+            }
 
-        [ row Decide "decide" (Both Json) ReadOnly KernelProgram
-          row DeliveryCmd "delivery" (Both Json) WritesRemoteState KernelProgram
-          row SelfHostCmd "self-host" TextOnly WritesRemoteState KernelProgram
-          row ReviewCmd "review" (Both Json) WritesRemoteState KernelProgram
-          row DriverCmd "driver" (Both Json) ReadOnly KernelProgram
-          row CycleCmd "cycle" (Both Json) ReadOnly KernelProgram
-          row Scan "scan" JsonOnly ReadOnly KernelProgram
-          row LanesView "lanes" (Both Json) ReadOnly KernelProgram
-          row Facts "facts" (Both Json) ReadOnly KernelProgram
-          row CommandContractCmd "command-contract" JsonOnly ReadOnly KernelProgram
-          row IntakeCmd "intake" JsonOnly WritesRemoteState BoardOps
-          row PacketCmd "packet" JsonOnly ReadOnly KernelProgram
-          row RouteCmd "delivery-route" JsonOnly WritesRemoteState KernelProgram
-          row WhoAmI "whoami" TextOnly ReadOnly KernelProgram
-          row Budget "budget" (Both Text) ReadOnly KernelProgram
-          row Next "next" TextOnly WritesRemoteState KernelProgram
-          row BatchCmd "batch" (Both Json) ReadOnly KernelProgram
-          row Ready "ready" (Both Json) ReadOnly KernelProgram
-          row Reconcile "reconcile" (Both Text) WritesRemoteState KernelProgram
-          row Who "who" (Both Text) ReadOnly KernelProgram
-          row Reap "reap" TextOnly WritesRemoteState KernelProgram
-          row Claim "claim" (Both Text) WritesRemoteState KernelProgram
-          row Adopt "adopt" (Both Text) WritesRemoteState KernelProgram
-          row Landable "landable" TextOnly ReadOnly KernelProgram
-          row Take "take" (Both Text) WritesRemoteState KernelProgram
-          row Release "release" TextOnly WritesRemoteState KernelProgram
-          row Heartbeat "heartbeat" TextOnly WritesRemoteState KernelProgram
-          row SetField "set-field" TextOnly WritesRemoteState BoardOps
-          row Child "child" TextOnly WritesRemoteState BoardOps
-          row Widen "widen" (Both Text) WritesRemoteState KernelProgram
-          row SetPaths "set-paths" (Both Text) WritesRemoteState KernelProgram
-          row Overlap "overlap" TextOnly ReadOnly KernelProgram
-          row Say "say" TextOnly WritesRemoteState BoardOps
-          row Inbox "inbox" (Both Text) ReadOnly BoardOps
-          row DoneCmd "done" TextOnly WritesRemoteState KernelProgram
-          row VerifyPaths "verify-paths" TextOnly ReadOnly KernelProgram
-          row Bootstrap "bootstrap" TextOnly ReadOnly BoardOps
-          row BoardCmd "board" JsonOnly ReadOnly BoardOps
-          row FieldId "field-id" TextOnly ReadOnly BoardOps
-          row OptionId "option-id" TextOnly ReadOnly BoardOps
-          row ItemId "item-id" TextOnly ReadOnly BoardOps
-          row BodyEdits "body-edits" (Both Text) ReadOnly BoardOps
-          row GraphQlOps "graphql" JsonOnly WritesRemoteState KernelProgram
-          row Add "add" TextOnly WritesRemoteState BoardOps
-          row Flush "flush" TextOnly WritesRemoteState BoardOps
-          row LintCmd "lint" (Both Text) ReadOnly KernelProgram
-          row Issues "issues" JsonOnly ReadOnly BoardOps
-          row Followup "followup" TextOnly ReadOnly KernelProgram
-          row Predicate "predicate" (Both Text) ReadOnly KernelProgram
-          row DiffAudit "diff-audit" JsonOnly ReadOnly KernelProgram
-          row RoomOpen "room open" TextOnly WritesRemoteState BoardOps
-          row CommentCmd "comment" (Both Json) WritesRemoteState BoardOps
-          row OpLockAcquire "op-lock acquire" (Both Text) WritesRemoteState KernelProgram
-          row OpLockRelease "op-lock release" (Both Text) WritesRemoteState KernelProgram
-          row Help "--help" TextOnly ReadOnly KernelProgram
-          row Version "--version" TextOnly ReadOnly KernelProgram ]
+        [
+            row Decide "decide" (Both Json) ReadOnly KernelProgram
+            row DeliveryCmd "delivery" (Both Json) WritesRemoteState KernelProgram
+            row SelfHostCmd "self-host" TextOnly WritesRemoteState KernelProgram
+            row ReviewCmd "review" (Both Json) WritesRemoteState KernelProgram
+            row DriverCmd "driver" (Both Json) ReadOnly KernelProgram
+            row CycleCmd "cycle" (Both Json) ReadOnly KernelProgram
+            row Scan "scan" JsonOnly ReadOnly KernelProgram
+            row LanesView "lanes" (Both Json) ReadOnly KernelProgram
+            row Facts "facts" (Both Json) ReadOnly KernelProgram
+            row CommandContractCmd "command-contract" JsonOnly ReadOnly KernelProgram
+            row IntakeCmd "intake" JsonOnly WritesRemoteState BoardOps
+            row PacketCmd "packet" JsonOnly ReadOnly KernelProgram
+            row RouteCmd "delivery-route" JsonOnly WritesRemoteState KernelProgram
+            row WhoAmI "whoami" TextOnly ReadOnly KernelProgram
+            row Budget "budget" (Both Text) ReadOnly KernelProgram
+            row Next "next" TextOnly WritesRemoteState KernelProgram
+            row BatchCmd "batch" (Both Json) ReadOnly KernelProgram
+            row Ready "ready" (Both Json) ReadOnly KernelProgram
+            row Reconcile "reconcile" (Both Text) WritesRemoteState KernelProgram
+            row Who "who" (Both Text) ReadOnly KernelProgram
+            row Reap "reap" TextOnly WritesRemoteState KernelProgram
+            row Claim "claim" (Both Text) WritesRemoteState KernelProgram
+            row Adopt "adopt" (Both Text) WritesRemoteState KernelProgram
+            row Landable "landable" TextOnly ReadOnly KernelProgram
+            row Take "take" (Both Text) WritesRemoteState KernelProgram
+            row Release "release" TextOnly WritesRemoteState KernelProgram
+            row Heartbeat "heartbeat" TextOnly WritesRemoteState KernelProgram
+            row SetField "set-field" TextOnly WritesRemoteState BoardOps
+            row Child "child" TextOnly WritesRemoteState BoardOps
+            row Widen "widen" (Both Text) WritesRemoteState KernelProgram
+            row SetPaths "set-paths" (Both Text) WritesRemoteState KernelProgram
+            row Overlap "overlap" TextOnly ReadOnly KernelProgram
+            row Say "say" TextOnly WritesRemoteState BoardOps
+            row Inbox "inbox" (Both Text) ReadOnly BoardOps
+            row DoneCmd "done" TextOnly WritesRemoteState KernelProgram
+            row VerifyPaths "verify-paths" TextOnly ReadOnly KernelProgram
+            row Bootstrap "bootstrap" TextOnly ReadOnly BoardOps
+            row BoardCmd "board" JsonOnly ReadOnly BoardOps
+            row FieldId "field-id" TextOnly ReadOnly BoardOps
+            row OptionId "option-id" TextOnly ReadOnly BoardOps
+            row ItemId "item-id" TextOnly ReadOnly BoardOps
+            row BodyEdits "body-edits" (Both Text) ReadOnly BoardOps
+            row GraphQlOps "graphql" JsonOnly WritesRemoteState KernelProgram
+            row Add "add" TextOnly WritesRemoteState BoardOps
+            row Flush "flush" TextOnly WritesRemoteState BoardOps
+            row LintCmd "lint" (Both Text) ReadOnly KernelProgram
+            row Issues "issues" JsonOnly ReadOnly BoardOps
+            row Followup "followup" TextOnly ReadOnly KernelProgram
+            row Predicate "predicate" (Both Text) ReadOnly KernelProgram
+            row DiffAudit "diff-audit" JsonOnly ReadOnly KernelProgram
+            row RoomOpen "room open" TextOnly WritesRemoteState BoardOps
+            row CommentCmd "comment" (Both Json) WritesRemoteState BoardOps
+            row OpLockAcquire "op-lock acquire" (Both Text) WritesRemoteState KernelProgram
+            row OpLockRelease "op-lock release" (Both Text) WritesRemoteState KernelProgram
+            row Help "--help" TextOnly ReadOnly KernelProgram
+            row Version "--version" TextOnly ReadOnly KernelProgram
+        ]
 
     let renderSupport (command: Command) =
         commandCatalogue
@@ -714,9 +722,11 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     /// `renderSupport`, free to drift from it — and this board has spent five items on exactly that shape.
     /// Module-level `let` rather than a filter inside `scopeOf`, because `renderCommandContract` calls
     /// `scopeOf` once per (command, flag) pair and would otherwise rebuild both lists ~1,400 times.
-    let private jsonReaders = allCommands |> List.filter (fun c -> renderSupport c <> TextOnly)
+    let private jsonReaders =
+        allCommands |> List.filter (fun c -> renderSupport c <> TextOnly)
 
-    let private textReaders = allCommands |> List.filter (fun c -> renderSupport c <> JsonOnly)
+    let private textReaders =
+        allCommands |> List.filter (fun c -> renderSupport c <> JsonOnly)
 
     /// THE FLAG SURFACE (#991) — every global flag, and the commands that READ it.
     ///
@@ -1003,12 +1013,12 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     /// verb exited 2 with a stack trace. Copying `allCommands`'s spelling here looks right and is not.
     let private allFlags: Flag list =
         let binding =
-            System.Reflection.BindingFlags.NonPublic ||| System.Reflection.BindingFlags.Public
+            System.Reflection.BindingFlags.NonPublic
+            ||| System.Reflection.BindingFlags.Public
 
         Microsoft.FSharp.Reflection.FSharpType.GetUnionCases(typeof<Flag>, binding)
         |> Array.toList
-        |> List.map (fun case ->
-            Microsoft.FSharp.Reflection.FSharpValue.MakeUnion(case, [||], binding) :?> Flag)
+        |> List.map (fun case -> Microsoft.FSharp.Reflection.FSharpValue.MakeUnion(case, [||], binding) :?> Flag)
 
     /// EVERY flag and all its spellings — what `renderCommandContract` advertises per row, derived rather
     /// than listed. The emitter sorts each row's flags, so this list's order is not observable.
@@ -1117,63 +1127,108 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     /// records the ACT of giving them separately from the `Render` they set — the smallest change that
     /// turns an unguardable flag into a guarded one.
     let private flagsGiven (o: Options) : (Flag * string) list =
-        [ if o.SnapshotFile.IsSome then FSnapshot
-          if o.Events then FEvents
-          if o.CursorFile.IsSome then FCursor
-          if o.Repo.IsSome then FRepo
-          if o.Worker.IsSome then FWorker
-          if o.Evidence.IsSome then FEvidence
-          if o.Partial.IsSome then FPartial
-          if o.ToWorker.IsSome then FTo
-          if o.Message.IsSome then FMessage
-          if not (List.isEmpty o.Paths) then FPaths
-          if o.Pr.IsSome then FPr
-          if o.Warn then FWarn
-          if o.Issue.IsSome then FIssue
-          if o.Status.IsSome then FStatus
-          if o.BlockedBy.IsSome then FBlockedBy
-          match o.BlockedByMutation with
-          | Some(AddBlockedBy _) -> FBlockedByAdd
-          | Some(RemoveBlockedBy _) -> FBlockedByRemove
-          | Some(ReplaceBlockedBy _) -> FBlockedByReplace
-          | Some ClearBlockedBy -> FBlockedByClear
-          | None -> ()
-          if o.All then FAll
-          if o.Batch then FBatch
-          if o.Strict then FStrict
-          if o.Active then FActive
-          if o.Apply then FApply
-          if o.Peek then FPeek
-          if o.Local then FLocal
-          if o.AllRepos then FAllRepos
-          if o.DryRun then FDryRun
-          if o.Wait then FWait
-          if o.Tries.IsSome then FTries
-          if o.Interval.IsSome then FInterval
-          if not (List.isEmpty o.Require) then FRequire
-          if o.Sha.IsSome then FSha
-          if o.Label.IsSome then FLabel
-          if o.IssueState.IsSome then FState
-          if o.Fresh then FFresh
-          if o.AllowBacklog then FIncludeBacklog
-          if o.Force then FForce
-          if o.RefuseOverlap then FRefuseOverlap
-          if o.Mint then FMint
-          if o.Flip then FFlip
-          if not (List.isEmpty o.Over) then FOver
-          if o.Limit.IsSome then FLimit
-          if o.Explain then FExplain
-          if o.LeaseGiven then FLease
+        [
+            if o.SnapshotFile.IsSome then
+                FSnapshot
+            if o.Events then
+                FEvents
+            if o.CursorFile.IsSome then
+                FCursor
+            if o.Repo.IsSome then
+                FRepo
+            if o.Worker.IsSome then
+                FWorker
+            if o.Evidence.IsSome then
+                FEvidence
+            if o.Partial.IsSome then
+                FPartial
+            if o.ToWorker.IsSome then
+                FTo
+            if o.Message.IsSome then
+                FMessage
+            if not (List.isEmpty o.Paths) then
+                FPaths
+            if o.Pr.IsSome then
+                FPr
+            if o.Warn then
+                FWarn
+            if o.Issue.IsSome then
+                FIssue
+            if o.Status.IsSome then
+                FStatus
+            if o.BlockedBy.IsSome then
+                FBlockedBy
+            match o.BlockedByMutation with
+            | Some(AddBlockedBy _) -> FBlockedByAdd
+            | Some(RemoveBlockedBy _) -> FBlockedByRemove
+            | Some(ReplaceBlockedBy _) -> FBlockedByReplace
+            | Some ClearBlockedBy -> FBlockedByClear
+            | None -> ()
+            if o.All then
+                FAll
+            if o.Batch then
+                FBatch
+            if o.Strict then
+                FStrict
+            if o.Active then
+                FActive
+            if o.Apply then
+                FApply
+            if o.Peek then
+                FPeek
+            if o.Local then
+                FLocal
+            if o.AllRepos then
+                FAllRepos
+            if o.DryRun then
+                FDryRun
+            if o.Wait then
+                FWait
+            if o.Tries.IsSome then
+                FTries
+            if o.Interval.IsSome then
+                FInterval
+            if not (List.isEmpty o.Require) then
+                FRequire
+            if o.Sha.IsSome then
+                FSha
+            if o.Label.IsSome then
+                FLabel
+            if o.IssueState.IsSome then
+                FState
+            if o.Fresh then
+                FFresh
+            if o.AllowBacklog then
+                FIncludeBacklog
+            if o.Force then
+                FForce
+            if o.RefuseOverlap then
+                FRefuseOverlap
+            if o.Mint then
+                FMint
+            if o.Flip then
+                FFlip
+            if not (List.isEmpty o.Over) then
+                FOver
+            if o.Limit.IsSome then
+                FLimit
+            if o.Explain then
+                FExplain
+            if o.LeaseGiven then
+                FLease
 
-          // LAST, deliberately. `validate` reports the FIRST residue it finds, and putting these at the
-          // head changed the message for inputs that were already wrong for another reason:
-          // `next --snapshot x --json` used to name `--snapshot` and point at `decide`/`lanes`, which is
-          // the more useful answer. Adding a guard should not re-word an existing refusal.
-          //
-          // BOTH spellings are reported when both were typed — see `RenderGiven`. One command can hold a
-          // legal `--text` and an illegal `--json` at the same time, and only one of them is a finding.
-          if o.RenderGiven.Contains Json then FJson
-          if o.RenderGiven.Contains Text then FText ]
+            // LAST, deliberately. `validate` reports the FIRST residue it finds, and putting these at the
+            // head changed the message for inputs that were already wrong for another reason:
+            // `next --snapshot x --json` used to name `--snapshot` and point at `decide`/`lanes`, which is
+            // the more useful answer. Adding a guard should not re-word an existing refusal.
+            //
+            // BOTH spellings are reported when both were typed — see `RenderGiven`. One command can hold a
+            // legal `--text` and an illegal `--json` at the same time, and only one of them is a finding.
+            if o.RenderGiven.Contains Json then
+                FJson
+            if o.RenderGiven.Contains Text then
+                FText
+        ]
         |> List.map (fun flag -> flag, spellingOf flag)
 
     let commandName (command: Command) =
@@ -1196,16 +1251,30 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         let actual = descriptors |> List.map _.Command |> Set.ofList
         let missing = Set.difference expected actual |> Set.toList
         let unexpected = Set.difference actual expected |> Set.toList
-        let blankVerbs = descriptors |> List.filter (fun row -> System.String.IsNullOrWhiteSpace row.Verb) |> List.map _.Command
-        let undocumented = descriptors |> List.filter (fun row -> not row.Documented) |> List.map _.Command
+
+        let blankVerbs =
+            descriptors
+            |> List.filter (fun row -> System.String.IsNullOrWhiteSpace row.Verb)
+            |> List.map _.Command
+
+        let undocumented =
+            descriptors |> List.filter (fun row -> not row.Documented) |> List.map _.Command
 
         let errors =
-            [ if not duplicateCommands.IsEmpty then yield $"duplicate command descriptors: %A{duplicateCommands}"
-              if not duplicateVerbs.IsEmpty then yield $"duplicate command verbs: %A{duplicateVerbs}"
-              if not missing.IsEmpty then yield $"missing command descriptors: %A{missing}"
-              if not unexpected.IsEmpty then yield $"unexpected command descriptors: %A{unexpected}"
-              if not blankVerbs.IsEmpty then yield $"blank command verbs: %A{blankVerbs}"
-              if not undocumented.IsEmpty then yield $"undocumented commands: %A{undocumented}" ]
+            [
+                if not duplicateCommands.IsEmpty then
+                    yield $"duplicate command descriptors: %A{duplicateCommands}"
+                if not duplicateVerbs.IsEmpty then
+                    yield $"duplicate command verbs: %A{duplicateVerbs}"
+                if not missing.IsEmpty then
+                    yield $"missing command descriptors: %A{missing}"
+                if not unexpected.IsEmpty then
+                    yield $"unexpected command descriptors: %A{unexpected}"
+                if not blankVerbs.IsEmpty then
+                    yield $"blank command verbs: %A{blankVerbs}"
+                if not undocumented.IsEmpty then
+                    yield $"undocumented commands: %A{undocumented}"
+            ]
 
         if errors.IsEmpty then Ok() else Error errors
 
@@ -1220,6 +1289,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             |> List.sortBy _.Verb
 
         use stream = new System.IO.MemoryStream()
+
         use writer =
             new System.Text.Json.Utf8JsonWriter(
                 stream,
@@ -1240,11 +1310,11 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 // Every emitted flag is derived from `scopeOf`; `LeaseGiven` makes `--lease` observable,
                 // so it needs no special-case injection (#1544).
                 scopedFlags
-                 |> List.collect (fun (flag, spellings) ->
-                     match scopeOf flag with
-                     | Global -> spellings
-                     | Only readers when List.contains command readers -> spellings
-                     | Only _ -> [])
+                |> List.collect (fun (flag, spellings) ->
+                    match scopeOf flag with
+                    | Global -> spellings
+                    | Only readers when List.contains command readers -> spellings
+                    | Only _ -> [])
                 |> List.distinct
                 |> List.sort
 
@@ -1335,8 +1405,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     ///
     /// Idempotent, so a caller that resolves again for its own reasons gets the same answer: a resolved name
     /// has no slash and is not a short-id, so it maps to itself.
-    let resolveRepo (raw: string) : FS.GG.Coord.RepoScope.Scope =
-        FS.GG.Coord.RepoScope.resolve raw
+    let resolveRepo (raw: string) : FS.GG.Coord.RepoScope.Scope = FS.GG.Coord.RepoScope.resolve raw
 
     /// The display-string ECHO policy: every caller below wants the resolved token back as a plain
     /// string regardless of which arm it is — a `--repo` filter value, or a chore-lock repo comparison
@@ -1384,19 +1453,17 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // (canonical repo, its closed chore-lock issue number). Canonical spellings only — the lookup below
         // canonicalises the caller's input through `resolveRepo` before matching, so `Governance`, `governance`
         // and `FS.GG.Governance` all find this row, and the Ref that comes back is built from THIS spelling.
-        [ ".github", 1033
-          "FS.GG.SDD", 518
-          "FS.GG.Rendering", 878
-          "FS.GG.Governance", 268
-          "FS.GG.Templates", 252
-          "FS.GG.Game", 406
-          "FS.GG.Audio", 183 ]
+        [
+            ".github", 1033
+            "FS.GG.SDD", 518
+            "FS.GG.Rendering", 878
+            "FS.GG.Governance", 268
+            "FS.GG.Templates", 252
+            "FS.GG.Game", 406
+            "FS.GG.Audio", 183
+        ]
 
-    let choreLockRef
-        (extra: FS.GG.Coord.Types.Ref list)
-        (owner: string)
-        (repo: string)
-        : FS.GG.Coord.Types.Ref option =
+    let choreLockRef (extra: FS.GG.Coord.Types.Ref list) (owner: string) (repo: string) : FS.GG.Coord.Types.Ref option =
         // KEYED ON OWNER TOO, and that is the fail-closed part (see the doc above): a repo neither the
         // embedded table nor `extra` knows gets `None`, so `offer` refuses rather than broadcasts.
         // `.ToLowerInvariant()` throughout, matching `resolveRepo` — the resolver opens no `System`.
@@ -1429,9 +1496,11 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 // caller's casing. Echoing the caller back would mint a Ref structurally UNEQUAL to the
                 // canonical one while `Short` renders both alike — two locks that compare different and print
                 // the same, the split the CAS cannot survive and no log would show.
-                { FS.GG.Coord.Types.Owner = "FS-GG"
-                  FS.GG.Coord.Types.Repo = r
-                  FS.GG.Coord.Types.Number = n })
+                {
+                    FS.GG.Coord.Types.Owner = "FS-GG"
+                    FS.GG.Coord.Types.Repo = r
+                    FS.GG.Coord.Types.Number = n
+                })
 
     /// An owner + repo → the CLOSED issue whose comments are that repo's per-receiver OPERATION-LOCK CAS
     /// subject (design §4.1, extending ADR-0041 onto a third subject).
@@ -1474,20 +1543,18 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // `FS.GG.SDD`'s op-lock number (878) coincides with `FS.GG.Rendering`'s CHORE-lock number (878).
         // They are different issues in different repositories and nothing compares them, because a `Ref`
         // carries its repo; the coincidence is noted so a later reader does not "fix" one of them.
-        [ ".github", 2714
-          "FS.GG.SDD", 878
-          "FS.GG.Rendering", 1245
-          "FS.GG.Governance", 410
-          "FS.GG.Templates", 413
-          "FS.GG.Game", 604
-          "FS.GG.Audio", 259
-          "FS.GG.Net", 72 ]
+        [
+            ".github", 2714
+            "FS.GG.SDD", 878
+            "FS.GG.Rendering", 1245
+            "FS.GG.Governance", 410
+            "FS.GG.Templates", 413
+            "FS.GG.Game", 604
+            "FS.GG.Audio", 259
+            "FS.GG.Net", 72
+        ]
 
-    let opLockRef
-        (extra: FS.GG.Coord.Types.Ref list)
-        (owner: string)
-        (repo: string)
-        : FS.GG.Coord.Types.Ref option =
+    let opLockRef (extra: FS.GG.Coord.Types.Ref list) (owner: string) (repo: string) : FS.GG.Coord.Types.Ref option =
         // Keyed on OWNER as well as repo, for `choreLockRef`'s fail-closed reason: these numbers are FS-GG's
         // issues, so a caller under another owner must never be handed a real-but-unrelated ref — a lock
         // that protects nothing while reporting that it does. `extra` is consulted FIRST so a vendored
@@ -1515,9 +1582,11 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 // Echoing the caller back would mint a Ref structurally UNEQUAL to the canonical one while
                 // `Short` renders both alike: two locks that compare different and print the same, which is
                 // the split a CAS cannot survive and no log would show.
-                { FS.GG.Coord.Types.Owner = "FS-GG"
-                  FS.GG.Coord.Types.Repo = r
-                  FS.GG.Coord.Types.Number = n })
+                {
+                    FS.GG.Coord.Types.Owner = "FS-GG"
+                    FS.GG.Coord.Types.Repo = r
+                    FS.GG.Coord.Types.Number = n
+                })
 
     /// `say`'s message is POSITIONAL, and `--to` is OPTIONAL — the shape bash shipped, the shape all seven
     /// prescribing sites document, and the shape the port dropped (#919).
@@ -1548,7 +1617,12 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 | _ :: _ :: _, Some _ ->
                     Error
                         "say: the message was given BOTH positionally and with --message — pass it once (say <ref> [--to W] <message>)"
-                | ref :: (_ :: _ as rest), None -> Ok { o with Args = [ ref ]; Message = Some(String.concat " " rest) }
+                | ref :: (_ :: _ as rest), None ->
+                    Ok
+                        { o with
+                            Args = [ ref ]
+                            Message = Some(String.concat " " rest)
+                        }
                 | _ -> Ok o
 
             // `--to` defaults to `*` — anyone holding the item — as bash's `local to="*"` did. `Client.say`
@@ -1605,7 +1679,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                     // NAME THE READERS, not just the refusal. The caller reached for this flag because they
                     // wanted something; the useful answer is where that something lives, which is why #867's
                     // original message named `ready` and `release` rather than only saying no.
-                    let who = readers |> List.map (fun c -> $"`%s{commandName c}`") |> String.concat ", "
+                    let who =
+                        readers |> List.map (fun c -> $"`%s{commandName c}`") |> String.concat ", "
 
                     Error
                         $"%s{spelling} is not a flag of `%s{commandName o.Command}` — only %s{who} read it. It would have been ACCEPTED and IGNORED before #991; this refusal is the flag telling you the truth, not a new restriction."
@@ -1622,7 +1697,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
             | "--events" :: t -> flags { acc with Events = true } t
 
-            | "--cursor" :: value :: _ when value.StartsWith "-" -> Error $"--cursor needs a value (got flag '%s{value}')"
+            | "--cursor" :: value :: _ when value.StartsWith "-" ->
+                Error $"--cursor needs a value (got flag '%s{value}')"
             | "--cursor" :: value :: t -> flags { acc with CursorFile = Some value } t
             | [ "--cursor" ] -> Error "--cursor needs a value"
 
@@ -1636,18 +1712,21 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                         // `Options.Repo` stays a plain string — it is `--repo`'s FILTER value, always a
                         // repository token, never the `cross-repo` sentinel a `--repo` argument could
                         // not meaningfully name (#2398).
-                        Repo = Some(resolveRepoName value) }
+                        Repo = Some(resolveRepoName value)
+                    }
                     t
             | [ "--repo" ] -> Error "--repo needs a value"
 
-            | "--worker" :: value :: _ when value.StartsWith "-" -> Error $"--worker needs a value (got flag '%s{value}')"
+            | "--worker" :: value :: _ when value.StartsWith "-" ->
+                Error $"--worker needs a value (got flag '%s{value}')"
             | "--worker" :: value :: t -> flags { acc with Worker = Some value } t
             | [ "--worker" ] -> Error "--worker needs a value"
 
             | "--evidence" :: value :: t -> flags { acc with Evidence = Some value } t
             | [ "--evidence" ] -> Error "--evidence needs a value"
             | "--partial" :: value :: t -> flags { acc with Partial = Some value } t
-            | [ "--partial" ] -> Error "--partial needs a value — say why this child does NOT complete its parent (#614)"
+            | [ "--partial" ] ->
+                Error "--partial needs a value — say why this child does NOT complete its parent (#614)"
 
             | "--to" :: value :: _ when value.StartsWith "-" -> Error $"--to needs a value (got flag '%s{value}')"
             | "--to" :: value :: t -> flags { acc with ToWorker = Some value } t
@@ -1688,7 +1767,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             // resolves to is not a thing to leave to resolution order. It also keeps the call site honest —
             // the rule is the core grammar's, and it reads that way.
             | "--paths" :: t ->
-                let isPathToken (tok: string) = not (FS.GG.Coord.TouchSet.isFlagShaped tok)
+                let isPathToken (tok: string) =
+                    not (FS.GG.Coord.TouchSet.isFlagShaped tok)
+
                 let tokens = t |> List.takeWhile isPathToken
                 let rest = t |> List.skipWhile isPathToken
 
@@ -1737,12 +1818,22 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                         | "--add" -> AddBlockedBy value
                         | "--remove" -> RemoveBlockedBy value
                         | _ -> ReplaceBlockedBy value
-                    flags { acc with BlockedByMutation = Some mutation } t
+
+                    flags
+                        { acc with
+                            BlockedByMutation = Some mutation
+                        }
+                        t
             | [ ("--add" | "--remove" | "--replace") as flag ] -> Error $"%s{flag} needs a value"
             | "--clear" :: t ->
                 match acc.BlockedByMutation with
                 | Some _ -> Error "set-field accepts exactly one of --add, --remove, --replace, or --clear"
-                | None -> flags { acc with BlockedByMutation = Some ClearBlockedBy } t
+                | None ->
+                    flags
+                        { acc with
+                            BlockedByMutation = Some ClearBlockedBy
+                        }
+                        t
 
             // `issues --label` / `--state` — a label may legitimately begin with a hyphen, but a bare
             // trailing `--label` with nothing after it is still an error, so the empty-tail guard stays.
@@ -1789,8 +1880,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
             | "--wait" :: t -> flags { acc with Wait = true } t
 
-            | "--tries" :: value :: _ when value.StartsWith "-" ->
-                Error $"--tries needs a value (got flag '%s{value}')"
+            | "--tries" :: value :: _ when value.StartsWith "-" -> Error $"--tries needs a value (got flag '%s{value}')"
             | "--tries" :: value :: t ->
                 match System.Int32.TryParse value with
                 | true, n when n > 0 -> flags { acc with Tries = Some n } t
@@ -1816,7 +1906,12 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 Error $"--require needs a check name (got flag '%s{value}')"
             | "--require" :: value :: t when System.String.IsNullOrWhiteSpace value ->
                 Error "--require needs a check name (got an empty one)"
-            | "--require" :: value :: t -> flags { acc with Require = acc.Require @ [ value ] } t
+            | "--require" :: value :: t ->
+                flags
+                    { acc with
+                        Require = acc.Require @ [ value ]
+                    }
+                    t
             | [ "--require" ] -> Error "--require needs a check name"
 
             | "--sha" :: value :: _ when value.StartsWith "-" -> Error $"--sha needs a value (got flag '%s{value}')"
@@ -1846,7 +1941,13 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--lease" :: value :: _ when value.StartsWith "-" -> Error $"--lease needs a value (got flag '%s{value}')"
             | "--lease" :: value :: t ->
                 match System.Int32.TryParse value with
-                | true, n when n > 0 -> flags { acc with LeaseMinutes = n; LeaseGiven = true } t
+                | true, n when n > 0 ->
+                    flags
+                        { acc with
+                            LeaseMinutes = n
+                            LeaseGiven = true
+                        }
+                        t
                 | true, n -> Error $"--lease must be a positive number of minutes (got %d{n})"
                 | _ -> Error $"--lease needs a number of minutes (got '%s{value}')"
             | [ "--lease" ] -> Error "--lease needs a value"
@@ -1858,13 +1959,15 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 flags
                     { acc with
                         Render = Json
-                        RenderGiven = acc.RenderGiven.Add Json }
+                        RenderGiven = acc.RenderGiven.Add Json
+                    }
                     t
             | "--text" :: t ->
                 flags
                     { acc with
                         Render = Text
-                        RenderGiven = acc.RenderGiven.Add Text }
+                        RenderGiven = acc.RenderGiven.Add Text
+                    }
                     t
 
             | "-" :: t when acc.Command = DiffAudit -> flags { acc with Args = "-" :: acc.Args } t
@@ -1872,55 +1975,57 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | other :: t -> flags { acc with Args = other :: acc.Args } t
 
         let defaults =
-            { Command = Decide
-              // Overwritten by `start` for every verb — see below. Kept as `Json` only so the record is
-              // constructible; NOTHING should read this field's value here.
-              Render = Json
-              RenderGiven = Set.empty
-              SnapshotFile = None
-              Repo = None
-              Fresh = false
-              AllowBacklog = false
-              Limit = None
-              Events = false
-              CursorFile = None
-              LeaseMinutes = DefaultLeaseMinutes
-              LeaseGiven = false
-              Args = []
-              Worker = None
-              Force = false
-              RefuseOverlap = false
-              Mint = false
-              Flip = false
-              Evidence = None
-              Partial = None
-              ToWorker = None
-              Message = None
-              Paths = []
-              Pr = None
-              Warn = false
-              Issue = None
-              Status = None
-              BlockedBy = None
-              BlockedByMutation = None
-              All = false
-              Batch = false
-              Explain = false
-              Strict = false
-              Active = false
-              Apply = false
-              Peek = false
-              DryRun = false
-              Wait = false
-              Tries = None
-              Interval = None
-              Require = []
-              Sha = None
-              Label = None
-              IssueState = None
-              Local = false
-              AllRepos = false
-              Over = [] }
+            {
+                Command = Decide
+                // Overwritten by `start` for every verb — see below. Kept as `Json` only so the record is
+                // constructible; NOTHING should read this field's value here.
+                Render = Json
+                RenderGiven = Set.empty
+                SnapshotFile = None
+                Repo = None
+                Fresh = false
+                AllowBacklog = false
+                Limit = None
+                Events = false
+                CursorFile = None
+                LeaseMinutes = DefaultLeaseMinutes
+                LeaseGiven = false
+                Args = []
+                Worker = None
+                Force = false
+                RefuseOverlap = false
+                Mint = false
+                Flip = false
+                Evidence = None
+                Partial = None
+                ToWorker = None
+                Message = None
+                Paths = []
+                Pr = None
+                Warn = false
+                Issue = None
+                Status = None
+                BlockedBy = None
+                BlockedByMutation = None
+                All = false
+                Batch = false
+                Explain = false
+                Strict = false
+                Active = false
+                Apply = false
+                Peek = false
+                DryRun = false
+                Wait = false
+                Tries = None
+                Interval = None
+                Require = []
+                Sha = None
+                Label = None
+                IssueState = None
+                Local = false
+                AllRepos = false
+                Over = []
+            }
 
         /// THE DEFAULT COMES FROM THE DECLARATION, NOT FROM THE ARM (#1523).
         ///
@@ -1946,7 +2051,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         /// the default off `o.Command` keeps the derivation total either way — an arm cannot name one
         /// command and get another's default.
         let start (o: Options) =
-            { o with Render = defaultRender o.Command }
+            { o with
+                Render = defaultRender o.Command
+            }
 
         // `--help`, `--version` and a bare invocation answer BEFORE the environment is consulted, and
         // that exemption is load-bearing rather than tidiness.
@@ -1971,99 +2078,118 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
         | _ ->
 
-        // PRECEDENCE: `--lease` beats `FSGG_CLAIM_LEASE_MIN` beats `DefaultLeaseMinutes`, and it falls
-        // out of WHERE this sits rather than from a rule anybody has to remember — the env only re-seeds
-        // `defaults`, and `flags`' `--lease` arm overwrites `LeaseMinutes` afterwards. There is no
-        // givenness record for this field (see the residue rule above: `LeaseMinutes` is the field with a
-        // non-optional default and no record of having been given), so seeding the default is the ONLY
-        // place an env fallback can go without inventing one.
-        //
-        // The refusal is returned from `parse`, so it reaches the operator through the channel every
-        // other bad argument already uses, and no command that could ACT on a lease runs on one nobody
-        // could read.
-        match leaseMinutesFromEnv () with
-        | Error e -> Error e
-        | Ok envLeaseMinutes ->
+            // PRECEDENCE: `--lease` beats `FSGG_CLAIM_LEASE_MIN` beats `DefaultLeaseMinutes`, and it falls
+            // out of WHERE this sits rather than from a rule anybody has to remember — the env only re-seeds
+            // `defaults`, and `flags`' `--lease` arm overwrites `LeaseMinutes` afterwards. There is no
+            // givenness record for this field (see the residue rule above: `LeaseMinutes` is the field with a
+            // non-optional default and no record of having been given), so seeding the default is the ONLY
+            // place an env fallback can go without inventing one.
+            //
+            // The refusal is returned from `parse`, so it reaches the operator through the channel every
+            // other bad argument already uses, and no command that could ACT on a lease runs on one nobody
+            // could read.
+            match leaseMinutesFromEnv () with
+            | Error e -> Error e
+            | Ok envLeaseMinutes ->
 
-        let defaults =
-            { defaults with
-                LeaseMinutes = envLeaseMinutes }
+                let defaults =
+                    { defaults with
+                        LeaseMinutes = envLeaseMinutes
+                    }
 
-        match args with
-        | "scan" :: rest -> flags (start { defaults with Command = Scan }) rest
-        | "decide" :: rest -> flags (start { defaults with Command = Decide }) rest
-        | "delivery" :: rest -> flags (start { defaults with Command = DeliveryCmd }) rest
-        | "self-host" :: rest -> flags (start { defaults with Command = SelfHostCmd }) rest
-        | "review" :: rest -> flags (start { defaults with Command = ReviewCmd }) rest
-        | "driver" :: rest -> flags (start { defaults with Command = DriverCmd }) rest
-        | "cycle" :: rest -> flags (start { defaults with Command = CycleCmd }) rest
-        | "lanes" :: rest -> flags (start { defaults with Command = LanesView }) rest
-        | "facts" :: rest -> flags (start { defaults with Command = Facts }) rest
-        | "command-contract" :: rest -> flags (start { defaults with Command = CommandContractCmd }) rest
-        | "intake" :: rest -> flags (start { defaults with Command = IntakeCmd }) rest
-        | "packet" :: rest -> flags (start { defaults with Command = PacketCmd }) rest
-        | "delivery-route" :: rest -> flags (start { defaults with Command = RouteCmd }) rest
+                match args with
+                | "scan" :: rest -> flags (start { defaults with Command = Scan }) rest
+                | "decide" :: rest -> flags (start { defaults with Command = Decide }) rest
+                | "delivery" :: rest -> flags (start { defaults with Command = DeliveryCmd }) rest
+                | "self-host" :: rest -> flags (start { defaults with Command = SelfHostCmd }) rest
+                | "review" :: rest -> flags (start { defaults with Command = ReviewCmd }) rest
+                | "driver" :: rest -> flags (start { defaults with Command = DriverCmd }) rest
+                | "cycle" :: rest -> flags (start { defaults with Command = CycleCmd }) rest
+                | "lanes" :: rest -> flags (start { defaults with Command = LanesView }) rest
+                | "facts" :: rest -> flags (start { defaults with Command = Facts }) rest
+                | "command-contract" :: rest ->
+                    flags
+                        (start
+                            { defaults with
+                                Command = CommandContractCmd
+                            })
+                        rest
+                | "intake" :: rest -> flags (start { defaults with Command = IntakeCmd }) rest
+                | "packet" :: rest -> flags (start { defaults with Command = PacketCmd }) rest
+                | "delivery-route" :: rest -> flags (start { defaults with Command = RouteCmd }) rest
 
-        | "whoami" :: rest -> flags (start { defaults with Command = WhoAmI }) rest
-        | "budget" :: rest -> flags (start { defaults with Command = Budget }) rest
-        | "next" :: rest -> flags (start { defaults with Command = Next }) rest
-        | "batch" :: rest -> flags (start { defaults with Command = BatchCmd }) rest
-        | "ready" :: rest -> flags (start { defaults with Command = Ready }) rest
-        | "reconcile" :: rest -> flags (start { defaults with Command = Reconcile }) rest
-        | "who" :: rest -> flags (start { defaults with Command = Who }) rest
-        | "reap" :: rest -> flags (start { defaults with Command = Reap }) rest
-        | "claim" :: rest -> flags (start { defaults with Command = Claim }) rest
-        | "adopt" :: rest -> flags (start { defaults with Command = Adopt }) rest
-        | "landable" :: rest -> flags (start { defaults with Command = Landable }) rest
-        | "take" :: rest -> flags (start { defaults with Command = Take }) rest
-        | "release" :: rest -> flags (start { defaults with Command = Release }) rest
-        | "heartbeat" :: rest -> flags (start { defaults with Command = Heartbeat }) rest
-        | "set-field" :: rest -> flags (start { defaults with Command = SetField }) rest
-        | "child" :: rest -> flags (start { defaults with Command = Child }) rest
-        | "widen" :: rest -> flags (start { defaults with Command = Widen }) rest
-        | "set-paths" :: rest -> flags (start { defaults with Command = SetPaths }) rest
-        | "overlap" :: rest -> flags (start { defaults with Command = Overlap }) rest
-        | "say" :: rest -> flags (start { defaults with Command = Say }) rest
-        | "inbox" :: rest -> flags (start { defaults with Command = Inbox }) rest
-        | "done" :: rest -> flags (start { defaults with Command = DoneCmd }) rest
-        | "verify-paths" :: rest -> flags (start { defaults with Command = VerifyPaths }) rest
-        | "bootstrap" :: rest -> flags (start { defaults with Command = Bootstrap }) rest
-        | "board" :: rest -> flags (start { defaults with Command = BoardCmd }) rest
-        | "field-id" :: rest -> flags (start { defaults with Command = FieldId }) rest
-        | "option-id" :: rest -> flags (start { defaults with Command = OptionId }) rest
-        | "item-id" :: rest -> flags (start { defaults with Command = ItemId }) rest
-        | "body-edits" :: rest -> flags (start { defaults with Command = BodyEdits }) rest
-        | "graphql" :: rest -> flags (start { defaults with Command = GraphQlOps }) rest
-        | "add" :: rest -> flags (start { defaults with Command = Add }) rest
-        | "flush" :: rest -> flags (start { defaults with Command = Flush }) rest
-        | "lint" :: rest -> flags (start { defaults with Command = LintCmd }) rest
-        | "issues" :: rest -> flags (start { defaults with Command = Issues }) rest
-        | "followup" :: rest -> flags (start { defaults with Command = Followup }) rest
-        | "predicate" :: rest -> flags (start { defaults with Command = Predicate }) rest
-        | "diff-audit" :: rest -> flags (start { defaults with Command = DiffAudit }) rest
-        | "comment" :: rest -> flags (start { defaults with Command = CommentCmd }) rest
+                | "whoami" :: rest -> flags (start { defaults with Command = WhoAmI }) rest
+                | "budget" :: rest -> flags (start { defaults with Command = Budget }) rest
+                | "next" :: rest -> flags (start { defaults with Command = Next }) rest
+                | "batch" :: rest -> flags (start { defaults with Command = BatchCmd }) rest
+                | "ready" :: rest -> flags (start { defaults with Command = Ready }) rest
+                | "reconcile" :: rest -> flags (start { defaults with Command = Reconcile }) rest
+                | "who" :: rest -> flags (start { defaults with Command = Who }) rest
+                | "reap" :: rest -> flags (start { defaults with Command = Reap }) rest
+                | "claim" :: rest -> flags (start { defaults with Command = Claim }) rest
+                | "adopt" :: rest -> flags (start { defaults with Command = Adopt }) rest
+                | "landable" :: rest -> flags (start { defaults with Command = Landable }) rest
+                | "take" :: rest -> flags (start { defaults with Command = Take }) rest
+                | "release" :: rest -> flags (start { defaults with Command = Release }) rest
+                | "heartbeat" :: rest -> flags (start { defaults with Command = Heartbeat }) rest
+                | "set-field" :: rest -> flags (start { defaults with Command = SetField }) rest
+                | "child" :: rest -> flags (start { defaults with Command = Child }) rest
+                | "widen" :: rest -> flags (start { defaults with Command = Widen }) rest
+                | "set-paths" :: rest -> flags (start { defaults with Command = SetPaths }) rest
+                | "overlap" :: rest -> flags (start { defaults with Command = Overlap }) rest
+                | "say" :: rest -> flags (start { defaults with Command = Say }) rest
+                | "inbox" :: rest -> flags (start { defaults with Command = Inbox }) rest
+                | "done" :: rest -> flags (start { defaults with Command = DoneCmd }) rest
+                | "verify-paths" :: rest -> flags (start { defaults with Command = VerifyPaths }) rest
+                | "bootstrap" :: rest -> flags (start { defaults with Command = Bootstrap }) rest
+                | "board" :: rest -> flags (start { defaults with Command = BoardCmd }) rest
+                | "field-id" :: rest -> flags (start { defaults with Command = FieldId }) rest
+                | "option-id" :: rest -> flags (start { defaults with Command = OptionId }) rest
+                | "item-id" :: rest -> flags (start { defaults with Command = ItemId }) rest
+                | "body-edits" :: rest -> flags (start { defaults with Command = BodyEdits }) rest
+                | "graphql" :: rest -> flags (start { defaults with Command = GraphQlOps }) rest
+                | "add" :: rest -> flags (start { defaults with Command = Add }) rest
+                | "flush" :: rest -> flags (start { defaults with Command = Flush }) rest
+                | "lint" :: rest -> flags (start { defaults with Command = LintCmd }) rest
+                | "issues" :: rest -> flags (start { defaults with Command = Issues }) rest
+                | "followup" :: rest -> flags (start { defaults with Command = Followup }) rest
+                | "predicate" :: rest -> flags (start { defaults with Command = Predicate }) rest
+                | "diff-audit" :: rest -> flags (start { defaults with Command = DiffAudit }) rest
+                | "comment" :: rest -> flags (start { defaults with Command = CommentCmd }) rest
 
-        // `room open` — the ONLY two-word verb (ADR-0051). A `room` namespace, so `room close`/`room list`
-        // have a home if they ever land; today `open` is the one subcommand, and anything else under `room`
-        // is named and refused rather than swallowed.
-        | "room" :: "open" :: rest -> flags (start { defaults with Command = RoomOpen }) rest
-        | "room" :: sub :: _ -> Error $"unknown room subcommand: '%s{sub}' (expected: open)"
-        | [ "room" ] -> Error "room needs a subcommand (open)"
+                // `room open` — the ONLY two-word verb (ADR-0051). A `room` namespace, so `room close`/`room list`
+                // have a home if they ever land; today `open` is the one subcommand, and anything else under `room`
+                // is named and refused rather than swallowed.
+                | "room" :: "open" :: rest -> flags (start { defaults with Command = RoomOpen }) rest
+                | "room" :: sub :: _ -> Error $"unknown room subcommand: '%s{sub}' (expected: open)"
+                | [ "room" ] -> Error "room needs a subcommand (open)"
 
-        // `op-lock acquire` / `op-lock release` — the dispatch fence's two halves (design §4.1). A
-        // NAMESPACE for the same reason `room` is one: the pair is one mechanism and reads as one, and an
-        // unknown third word is NAMED and refused rather than swallowed into `acquire`'s positional list,
-        // where `op-lock aquire FS-GG/FS.GG.Net …` would otherwise be read as a four-positional acquire
-        // with a typo'd first argument.
-        | "op-lock" :: "acquire" :: rest -> flags (start { defaults with Command = OpLockAcquire }) rest
-        | "op-lock" :: "release" :: rest -> flags (start { defaults with Command = OpLockRelease }) rest
-        | "op-lock" :: sub :: _ -> Error $"unknown op-lock subcommand: '%s{sub}' (expected: acquire, release)"
-        | [ "op-lock" ] -> Error "op-lock needs a subcommand (acquire, release)"
+                // `op-lock acquire` / `op-lock release` — the dispatch fence's two halves (design §4.1). A
+                // NAMESPACE for the same reason `room` is one: the pair is one mechanism and reads as one, and an
+                // unknown third word is NAMED and refused rather than swallowed into `acquire`'s positional list,
+                // where `op-lock aquire FS-GG/FS.GG.Net …` would otherwise be read as a four-positional acquire
+                // with a typo'd first argument.
+                | "op-lock" :: "acquire" :: rest ->
+                    flags
+                        (start
+                            { defaults with
+                                Command = OpLockAcquire
+                            })
+                        rest
+                | "op-lock" :: "release" :: rest ->
+                    flags
+                        (start
+                            { defaults with
+                                Command = OpLockRelease
+                            })
+                        rest
+                | "op-lock" :: sub :: _ -> Error $"unknown op-lock subcommand: '%s{sub}' (expected: acquire, release)"
+                | [ "op-lock" ] -> Error "op-lock needs a subcommand (acquire, release)"
 
-        | other :: _ -> Error $"unknown command: %s{other}"
+                | other :: _ -> Error $"unknown command: %s{other}"
 
-        // UNREACHABLE: a bare invocation is answered above, before the environment is consulted. It is
-        // spelled anyway because F# checks each `match` independently, and it is routed to the SAME
-        // answer as the exemption arm rather than to an error — so if that arm's list is ever edited,
-        // the two cannot come to disagree about what a bare `fsgg-coord-engine` means.
-        | [] -> Ok(start { defaults with Command = Help })
+                // UNREACHABLE: a bare invocation is answered above, before the environment is consulted. It is
+                // spelled anyway because F# checks each `match` independently, and it is routed to the SAME
+                // answer as the exemption arm rather than to an error — so if that arm's list is ever edited,
+                // the two cannot come to disagree about what a bare `fsgg-coord-engine` means.
+                | [] -> Ok(start { defaults with Command = Help })

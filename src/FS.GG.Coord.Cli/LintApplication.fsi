@@ -11,14 +11,14 @@ open FS.GG.Coord.GitHub
 module LintApplication =
 
     type EpicFinding =
-        { Code: string
-          Severity: string
-          Detail: string }
+        {
+            Code: string
+            Severity: string
+            Detail: string
+        }
 
     type Summary =
-        { Errors: int
-          Notes: int
-          Fails: bool }
+        { Errors: int; Notes: int; Fails: bool }
 
     val badTouchSetDetail: status: string -> usability: TouchSet.Usability -> string option
 
@@ -91,34 +91,40 @@ module LintApplication =
 
     /// One board row as the consolidation rule sees it.
     type ConsolidationRow =
-        { /// The row's display ref, as the finding will name it.
-          Ref: string
-          /// The repo its tokens are relative to. Rows from different repos are NEVER compared (#353).
-          Repo: string
-          TouchSet: TouchSet }
+        {
+            /// The row's display ref, as the finding will name it.
+            Ref: string
+            /// The repo its tokens are relative to. Rows from different repos are NEVER compared (#353).
+            Repo: string
+            TouchSet: TouchSet
+        }
 
     /// A candidate set of rows that MAY be one piece of work — never a claim that they are.
     type ConsolidationGroup =
-        { /// Every member's ref, sorted. Never fewer than two.
-          Members: string list
-          /// The subtrees EVERY member declares. Never empty — a set with no common token is not a
-          /// candidate operation, and this is the evidence the runner judges on.
-          Shared: string list
-          /// The WEAKEST member pair's coverage (plain Jaccard) — a floor over the group, not a mean.
-          Coverage: float
-          /// The WEAKEST member pair's hub-discounted shared-token evidence.
-          Evidence: float }
+        {
+            /// Every member's ref, sorted. Never fewer than two.
+            Members: string list
+            /// The subtrees EVERY member declares. Never empty — a set with no common token is not a
+            /// candidate operation, and this is the evidence the runner judges on.
+            Shared: string list
+            /// The WEAKEST member pair's coverage (plain Jaccard) — a floor over the group, not a mean.
+            Coverage: float
+            /// The WEAKEST member pair's hub-discounted shared-token evidence.
+            Evidence: float
+        }
 
     /// What the consolidation rule saw, INCLUDING what it could not.
     type ConsolidationVerdict =
-        { Groups: ConsolidationGroup list
-          /// Rows whose `Paths:` could not be read, with the reason. While this is non-empty the verdict
-          /// is a NO-VERDICT and not an absence of clusters (#266).
-          Unreadable: (string * string) list
-          /// How many rows carried a declaration the rule could compare.
-          Compared: int
-          /// The whole population it was handed.
-          Population: int }
+        {
+            Groups: ConsolidationGroup list
+            /// Rows whose `Paths:` could not be read, with the reason. While this is non-empty the verdict
+            /// is a NO-VERDICT and not an absence of clusters (#266).
+            Unreadable: (string * string) list
+            /// How many rows carried a declaration the rule could compare.
+            Compared: int
+            /// The whole population it was handed.
+            Population: int
+        }
 
     /// Coverage floor — plain Jaccard over declared tokens, at the reference measurement's own
     /// threshold, deliberately unchanged. Every difference from the reference lives in the evidence

@@ -14,7 +14,12 @@ open FS.GG.Coord.Cli.BoardOps
 
 module BlockerLintTests =
 
-    let private ref' n : Ref = { Owner = "FS-GG"; Repo = ".github"; Number = n }
+    let private ref' n : Ref =
+        {
+            Owner = "FS-GG"
+            Repo = ".github"
+            Number = n
+        }
 
     [<Fact>]
     let ``#2907 explicit Blocked by flags are mutually exclusive and scoped to set-field`` () =
@@ -25,7 +30,17 @@ module BlockerLintTests =
         Assert.Equal(Some(Options.AddBlockedBy "#299"), parsed.BlockedByMutation)
 
         Assert.True(
-            (Options.parse [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--add"; "#299"; "--remove"; "#290" ]).IsError
+            (Options.parse
+                [
+                    "set-field"
+                    "FS.GG.SDD#42"
+                    "Blocked by"
+                    "--add"
+                    "#299"
+                    "--remove"
+                    "#290"
+                ])
+                .IsError
         )
 
         Assert.True((Options.parse [ "heartbeat"; "FS.GG.SDD#42"; "--clear" ]).IsError)
@@ -35,7 +50,11 @@ module BlockerLintTests =
     [<InlineData("FS-GG/.github#290", "Blocked by: #299", true)>]
     [<InlineData("FS-GG/.github#290", "Blocked by: #290", false)>]
     [<InlineData("", "```\nBlocked by: #290\n```", false)>]
-    let ``#2907 lint treats body dependency text as projection only`` (fieldValue: string) (body: string) (expected: bool) =
+    let ``#2907 lint treats body dependency text as projection only``
+        (fieldValue: string)
+        (body: string)
+        (expected: bool)
+        =
         let actual =
             Client.blockedByBodyProjectionVerdict "FS-GG" ".github" fieldValue body
             |> Option.isSome
@@ -45,20 +64,31 @@ module BlockerLintTests =
     module private BlockedBySetMutationFixture =
 
         let private ok body : Errors.IoResult<Response> =
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty }
+            Ok
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                }
 
         type Outcome =
-            { Code: int
-              Out: string
-              Error: string
-              Mutations: string list
-              IdentityLadderCleared: bool }
+            {
+                Code: int
+                Out: string
+                Error: string
+                Mutations: string list
+                IdentityLadderCleared: bool
+            }
 
         let private identitySessionVars =
-            [ "CLAUDE_CODE_SESSION_ID"
-              "OPENCODE_SESSION_ID"
-              "FSGG_AGENT_SESSION_ID"
-              "FSGG_AGENT_HARNESS" ]
+            [
+                "CLAUDE_CODE_SESSION_ID"
+                "OPENCODE_SESSION_ID"
+                "FSGG_AGENT_SESSION_ID"
+                "FSGG_AGENT_HARNESS"
+            ]
 
         let private runCore
             (leaseRaceWinner: bool)
@@ -66,7 +96,8 @@ module BlockerLintTests =
             (secondValue: string)
             (initialRevision: string)
             (secondRevision: string)
-            (args: string list) =
+            (args: string list)
+            =
             let mutable observations = 0
             let mutable leaseReads = 0
             let mutable leaseBody = ""
@@ -80,16 +111,29 @@ module BlockerLintTests =
                     match request.Method, request.Path.Trim('/'), request.Body with
                     | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments", _ ->
                         leaseReads <- leaseReads + 1
-                        if leaseReads < 3 then ok "[]"
+
+                        if leaseReads < 3 then
+                            ok "[]"
                         else
                             let now = DateTimeOffset.UtcNow.ToString("o")
-                            let ours = {| id = 200L; body = leaseBody; updated_at = now; html_url = "https://fixture/200" |}
+
+                            let ours =
+                                {|
+                                    id = 200L
+                                    body = leaseBody
+                                    updated_at = now
+                                    html_url = "https://fixture/200"
+                                |}
+
                             if leaseRaceWinner then
                                 let winner =
-                                    {| id = 100L
-                                       body = "<!-- fsgg:blocked-by-mutation-lease/v1 nonce=competitor lease=10 -->"
-                                       updated_at = now
-                                       html_url = "https://fixture/100" |}
+                                    {|
+                                        id = 100L
+                                        body = "<!-- fsgg:blocked-by-mutation-lease/v1 nonce=competitor lease=10 -->"
+                                        updated_at = now
+                                        html_url = "https://fixture/100"
+                                    |}
+
                                 ok (JsonSerializer.Serialize [| winner; ours |])
                             else
                                 ok (JsonSerializer.Serialize [| ours |])
@@ -100,20 +144,35 @@ module BlockerLintTests =
                     | "DELETE", "repos/FS-GG/FS.GG.SDD/issues/comments/200", _ -> ok "{}"
                     | "GET", "rate_limit", _ -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
                     | "POST", "graphql", Query(document, _) when document.Contains "projectsV2" ->
-                        ok """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
+                        ok
+                            """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
                     | "POST", "graphql", Query(document, _) when document.Contains "fields(first" ->
-                        ok """{"data":{"organization":{"projectV2":{"fields":{"totalCount":1,"nodes":[{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    | "POST", "graphql", Query(document, _) when document.Contains "updatedAt" && document.Contains "fieldValueByName" ->
+                        ok
+                            """{"data":{"organization":{"projectV2":{"fields":{"totalCount":1,"nodes":[{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    | "POST", "graphql", Query(document, _) when
+                        document.Contains "updatedAt" && document.Contains "fieldValueByName"
+                        ->
                         observations <- observations + 1
-                        if observations = 1 then ok (observation initialValue initialRevision)
-                        else ok (observation secondValue secondRevision)
-                    | "POST", "graphql", Query(document, _) when document.Contains "projectItems" && document.Contains "id project" ->
-                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_coord123","project":{"number":12}}]}}}}}"""
-                    | "POST", "graphql", Query(document, variables) when document.Contains "updateProjectV2ItemFieldValue" ->
+
+                        if observations = 1 then
+                            ok (observation initialValue initialRevision)
+                        else
+                            ok (observation secondValue secondRevision)
+                    | "POST", "graphql", Query(document, _) when
+                        document.Contains "projectItems" && document.Contains "id project"
+                        ->
+                        ok
+                            """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_coord123","project":{"number":12}}]}}}}}"""
+                    | "POST", "graphql", Query(document, variables) when
+                        document.Contains "updateProjectV2ItemFieldValue"
+                        ->
                         let text =
                             variables
-                            |> List.tryPick (function | "text", VString value -> Some value | _ -> None)
+                            |> List.tryPick (function
+                                | "text", VString value -> Some value
+                                | _ -> None)
                             |> Option.defaultValue "<missing>"
+
                         mutations.Add text
                         ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
                     | "POST", "graphql", Query(document, _) when document.Contains "clearProjectV2ItemFieldValue" ->
@@ -121,12 +180,16 @@ module BlockerLintTests =
                         ok """{"data":{"clearProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
                     | method, path, _ -> Error(Errors.NotFound $"fixture serves no %s{method} %s{path}"))
 
-            let dir = Path.Combine(Path.GetTempPath(), "fsgg-2907-" + Guid.NewGuid().ToString("N"))
+            let dir =
+                Path.Combine(Path.GetTempPath(), "fsgg-2907-" + Guid.NewGuid().ToString("N"))
+
             let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
             let previousWorker = Environment.GetEnvironmentVariable "FSGG_WORKER"
+
             let previousSessions =
                 identitySessionVars
                 |> List.map (fun variable -> variable, Environment.GetEnvironmentVariable variable)
+
             let stdout, stderr = Console.Out, Console.Error
             use capturedOut = new StringWriter()
             use capturedErr = new StringWriter()
@@ -139,30 +202,51 @@ module BlockerLintTests =
                 Environment.SetEnvironmentVariable("FSGG_AGENT_SESSION_ID", null)
                 Environment.SetEnvironmentVariable("FSGG_AGENT_HARNESS", null)
                 Environment.SetEnvironmentVariable("FSGG_WORKER", null)
+
                 let identityLadderCleared =
                     identitySessionVars
                     |> List.forall (fun variable -> String.IsNullOrEmpty(Environment.GetEnvironmentVariable variable))
+
                 Console.SetOut capturedOut
                 Console.SetError capturedErr
-                let opts = Options.parse (args @ [ "--worker"; "plover-2907" ]) |> Result.defaultWith failwith
+
+                let opts =
+                    Options.parse (args @ [ "--worker"; "plover-2907" ])
+                    |> Result.defaultWith failwith
+
                 let context: Kernel.Context =
-                    { Transport = transport; Owner = "FS-GG"; Title = "Coordination"; DefaultRepo = Some "FS.GG.SDD"; ChoreLocks = [] }
+                    {
+                        Transport = transport
+                        Owner = "FS-GG"
+                        Title = "Coordination"
+                        DefaultRepo = Some "FS.GG.SDD"
+                        ChoreLocks = []
+                    }
+
                 let code = Handlers.setField context opts
                 Console.Out.Flush()
                 Console.Error.Flush()
-                { Code = code
-                  Out = capturedOut.ToString()
-                  Error = capturedErr.ToString()
-                  Mutations = List.ofSeq mutations
-                  IdentityLadderCleared = identityLadderCleared }
+
+                {
+                    Code = code
+                    Out = capturedOut.ToString()
+                    Error = capturedErr.ToString()
+                    Mutations = List.ofSeq mutations
+                    IdentityLadderCleared = identityLadderCleared
+                }
             finally
                 Console.SetOut stdout
                 Console.SetError stderr
                 Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
                 Environment.SetEnvironmentVariable("FSGG_WORKER", previousWorker)
+
                 for variable, value in previousSessions do
                     Environment.SetEnvironmentVariable(variable, value)
-                try Directory.Delete(dir, true) with _ -> ()
+
+                try
+                    Directory.Delete(dir, true)
+                with _ ->
+                    ()
 
         let run initialValue secondValue initialRevision secondRevision args =
             runCore false initialValue secondValue initialRevision secondRevision args
@@ -179,6 +263,7 @@ module BlockerLintTests =
                 "r1"
                 "r1"
                 [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--add"; "#299" ]
+
         Assert.Equal(0, result.Code)
         Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#290, FS-GG/FS.GG.SDD#299" ], result.Mutations)
 
@@ -191,6 +276,7 @@ module BlockerLintTests =
                 "r1"
                 "r1"
                 [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--remove"; "#290" ]
+
         Assert.Equal(0, result.Code)
         Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#299" ], result.Mutations)
 
@@ -203,6 +289,7 @@ module BlockerLintTests =
                 "r1"
                 "r2"
                 [ "set-field"; "FS.GG.SDD#42"; "Blocked by"; "--add"; "#299" ]
+
         Assert.NotEqual(0, result.Code)
         Assert.Contains("Stale dependency-edge observation", result.Error)
         Assert.Empty(result.Mutations)
@@ -237,66 +324,111 @@ module BlockerLintTests =
 
     [<Fact>]
     let ``#2907 flush replay cannot interleave with an active derived writer`` () =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2907-flush-" + Guid.NewGuid().ToString("N"))
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-2907-flush-" + Guid.NewGuid().ToString("N"))
+
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let mutations = ResizeArray<string>()
 
         let response body : Errors.IoResult<Response> =
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty }
+            Ok
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                }
 
         let now = DateTimeOffset.UtcNow.ToString("o")
+
         let contender =
             JsonSerializer.Serialize
-                [| {| id = 100L
-                      body = "<!-- fsgg:blocked-by-mutation-lease/v1 nonce=derived-writer lease=10 -->"
-                      updated_at = now
-                      html_url = "https://fixture/100" |} |]
+                [|
+                    {|
+                        id = 100L
+                        body = "<!-- fsgg:blocked-by-mutation-lease/v1 nonce=derived-writer lease=10 -->"
+                        updated_at = now
+                        html_url = "https://fixture/100"
+                    |}
+                |]
 
         let transport =
             Fake.Recorder(fun request ->
                 match request.Method, request.Path.Trim('/'), request.Body with
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments", _ -> response contender
-                | "POST", "graphql", Query(document, _) when document.Contains "projectItems" && document.Contains "id project" ->
-                    response """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_coord123","project":{"number":12}}]}}}}}"""
+                | "POST", "graphql", Query(document, _) when
+                    document.Contains "projectItems" && document.Contains "id project"
+                    ->
+                    response
+                        """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_coord123","project":{"number":12}}]}}}}}"""
                 | "POST", "graphql", Query(document, variables) when document.Contains "updateProjectV2ItemFieldValue" ->
                     variables
-                    |> List.tryPick (function | "text", VString value -> Some value | _ -> None)
+                    |> List.tryPick (function
+                        | "text", VString value -> Some value
+                        | _ -> None)
                     |> Option.defaultValue "<missing>"
                     |> mutations.Add
+
                     response """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
                 | method, path, _ -> Error(Errors.NotFound $"flush fixture serves no %s{method} %s{path}"))
 
         let board: Board.BoardMap =
-            { Number = 12
-              Id = "PVT_coord"
-              Owner = "FS-GG"
-              Title = "Coordination"
-              Fields = Map.ofList [ "Blocked by", { Id = "PVTF_blocked"; Type = Board.Text } ] }
+            {
+                Number = 12
+                Id = "PVT_coord"
+                Owner = "FS-GG"
+                Title = "Coordination"
+                Fields =
+                    Map.ofList
+                        [
+                            "Blocked by",
+                            {
+                                Id = "PVTF_blocked"
+                                Type = Board.Text
+                            }
+                        ]
+            }
 
         let queued: Cache.Deferred =
-            { Ref = "FS-GG/FS.GG.SDD#42"
-              Field = "Blocked by"
-              Value = "FS-GG/FS.GG.SDD#299"
-              At = now
-              Worker = "plover-2907"
-              Board = Some("FS-GG", "Coordination") }
+            {
+                Ref = "FS-GG/FS.GG.SDD#42"
+                Field = "Blocked by"
+                Value = "FS-GG/FS.GG.SDD#299"
+                At = now
+                Worker = "plover-2907"
+                Board = Some("FS-GG", "Coordination")
+            }
 
         try
             Directory.CreateDirectory dir |> ignore
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+
             Cache.defer (Errors.RateLimited(Errors.GraphQlBudget, None)) queued
             |> Result.defaultWith (Errors.explain >> failwith)
 
-            let outcome = Board.flush transport board |> Result.defaultWith (Errors.explain >> failwith)
+            let outcome =
+                Board.flush transport board |> Result.defaultWith (Errors.explain >> failwith)
 
             Assert.Equal(0, outcome.Written)
             Assert.Equal(0, outcome.Dropped)
-            Assert.Contains("lease is held by comment 100", outcome.Stopped |> Option.map Errors.explain |> Option.defaultValue "")
+
+            Assert.Contains(
+                "lease is held by comment 100",
+                outcome.Stopped |> Option.map Errors.explain |> Option.defaultValue ""
+            )
+
             Assert.Empty(mutations)
-            Assert.Single(Cache.pending () |> Result.defaultWith (Errors.explain >> failwith)) |> ignore
+
+            Assert.Single(Cache.pending () |> Result.defaultWith (Errors.explain >> failwith))
+            |> ignore
         finally
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
-            try Directory.Delete(dir, true) with _ -> ()
+
+            try
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
 
     [<Fact>]
     let ``#2907 two concurrent writers serialize without losing either edge`` () =
@@ -315,18 +447,28 @@ module BlockerLintTests =
         let mutable maximumConcurrentActions = 0
 
         let response body : Errors.IoResult<Response> =
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty }
+            Ok
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                }
 
         let commentJson () =
             lock sync (fun () ->
                 let now = DateTimeOffset.UtcNow.ToString("o")
+
                 comments
                 |> Seq.sortBy (fun entry -> entry.Key)
                 |> Seq.map (fun entry ->
-                    {| id = entry.Key
-                       body = entry.Value
-                       updated_at = now
-                       html_url = $"https://fixture/%d{entry.Key}" |})
+                    {|
+                        id = entry.Key
+                        body = entry.Value
+                        updated_at = now
+                        html_url = $"https://fixture/%d{entry.Key}"
+                    |})
                 |> Seq.toArray
                 |> JsonSerializer.Serialize)
 
@@ -338,51 +480,80 @@ module BlockerLintTests =
                         let mustWaitToPost, json =
                             lock sync (fun () ->
                                 let threadId = Threading.Thread.CurrentThread.ManagedThreadId
+
                                 let priorReads =
                                     match emptyReadsByThread.TryGetValue threadId with
                                     | true, count -> count
                                     | _ -> 0
+
                                 let currentReads = priorReads + 1
                                 emptyReadsByThread.[threadId] <- currentReads
                                 let mustWaitToPost = postCount = 0 && currentReads = 2
+
                                 if mustWaitToPost then
                                     readyToPost <- readyToPost + 1
-                                    if readyToPost = 2 then bothReadyToPost.Set()
+
+                                    if readyToPost = 2 then
+                                        bothReadyToPost.Set()
+
                                 if postCount >= 2 then
                                     electionReads <- electionReads + 1
-                                    if electionReads >= 2 then bothElected.Set()
+
+                                    if electionReads >= 2 then
+                                        bothElected.Set()
+
                                 mustWaitToPost, commentJson ())
-                        if mustWaitToPost then Assert.True(bothReadyToPost.Wait(TimeSpan.FromSeconds 10.0), "both contenders did not reach the post boundary")
+
+                        if mustWaitToPost then
+                            Assert.True(
+                                bothReadyToPost.Wait(TimeSpan.FromSeconds 10.0),
+                                "both contenders did not reach the post boundary"
+                            )
+
                         response json
                     | "POST", "repos/FS-GG/.github/issues/42/comments", Json payload ->
                         let id, body, mustWait =
                             use document = JsonDocument.Parse payload
                             let body = document.RootElement.GetProperty("body").GetString()
+
                             lock sync (fun () ->
                                 let id = nextComment
                                 nextComment <- nextComment + 1L
                                 comments.[id] <- body
                                 postCount <- postCount + 1
-                                if postCount = 2 then bothPosted.Set()
+
+                                if postCount = 2 then
+                                    bothPosted.Set()
+
                                 id, body, postCount <= 2)
-                        if mustWait then Assert.True(bothPosted.Wait(TimeSpan.FromSeconds 10.0), "both contenders did not post")
+
+                        if mustWait then
+                            Assert.True(bothPosted.Wait(TimeSpan.FromSeconds 10.0), "both contenders did not post")
+
                         response (JsonSerializer.Serialize {| id = id; body = body |})
                     | "DELETE", path, _ when path.StartsWith "repos/FS-GG/.github/issues/comments/" ->
                         let id = int64 (path.Substring(path.LastIndexOf('/') + 1))
                         lock sync (fun () -> comments.Remove id |> ignore)
                         response "{}"
-                    | method, path, _ -> Error(Errors.NotFound $"race fixture serves no %s{method} %s{path}") }
+                    | method, path, _ -> Error(Errors.NotFound $"race fixture serves no %s{method} %s{path}")
+            }
 
         let run edge : Errors.IoResult<unit> =
             Writes.withBlockedByMutationLease transport (ref' 42) (fun () ->
                 lock sync (fun () ->
                     actionsInProgress <- actionsInProgress + 1
                     maximumConcurrentActions <- max maximumConcurrentActions actionsInProgress)
-                Assert.True(bothElected.Wait(TimeSpan.FromSeconds 10.0), "both contenders did not complete election reads")
+
+                Assert.True(
+                    bothElected.Wait(TimeSpan.FromSeconds 10.0),
+                    "both contenders did not complete election reads"
+                )
+
                 lock sync (fun () ->
                     let observed = edges
                     edges <- Set.add edge observed
                     actionsInProgress <- actionsInProgress - 1)
+
                 Ok())
 
         let first = Threading.Tasks.Task.Run(fun () -> run "FS-GG/.github#290")
@@ -390,17 +561,24 @@ module BlockerLintTests =
         Threading.Tasks.Task.WaitAll [| first :> Threading.Tasks.Task; second :> Threading.Tasks.Task |]
 
         let firstResults = [ first.Result; second.Result ]
+
         let firstErrors =
             firstResults
-            |> List.choose (function | Error error -> Some(Errors.explain error) | Ok() -> None)
+            |> List.choose (function
+                | Error error -> Some(Errors.explain error)
+                | Ok() -> None)
             |> String.concat " | "
+
         Assert.True(firstResults |> List.filter Result.isOk |> List.length = 1, firstErrors)
         Assert.Equal(1, firstResults |> List.filter Result.isError |> List.length)
         Assert.Equal(1, lock sync (fun () -> edges.Count))
         Assert.Equal(1, maximumConcurrentActions)
 
         let losingEdge =
-            if first.Result.IsError then "FS-GG/.github#290" else "FS-GG/.github#299"
+            if first.Result.IsError then
+                "FS-GG/.github#290"
+            else
+                "FS-GG/.github#299"
 
         Assert.True((run losingEdge).IsOk)
         Assert.Equal<string>(Set.ofList [ "FS-GG/.github#290"; "FS-GG/.github#299" ], lock sync (fun () -> edges))
@@ -409,24 +587,33 @@ module BlockerLintTests =
     [<Fact>]
     let ``#2907 set mutation fixture clears every identity session source before using explicit worker`` () =
         let sessionVariables =
-            [ "CLAUDE_CODE_SESSION_ID"
-              "OPENCODE_SESSION_ID"
-              "FSGG_AGENT_SESSION_ID"
-              "FSGG_AGENT_HARNESS" ]
+            [
+                "CLAUDE_CODE_SESSION_ID"
+                "OPENCODE_SESSION_ID"
+                "FSGG_AGENT_SESSION_ID"
+                "FSGG_AGENT_HARNESS"
+            ]
+
         let previous =
             sessionVariables
             |> List.map (fun variable -> variable, Environment.GetEnvironmentVariable variable)
 
         let cases =
-            [ [ "CLAUDE_CODE_SESSION_ID", "shared-claude-session" ]
-              [ "OPENCODE_SESSION_ID", "per-worker-opencode-session" ]
-              [ "FSGG_AGENT_SESSION_ID", "custom-session"; "FSGG_AGENT_HARNESS", "custom-harness" ]
-              [ "FSGG_AGENT_HARNESS", "orphaned-harness-name" ] ]
+            [
+                [ "CLAUDE_CODE_SESSION_ID", "shared-claude-session" ]
+                [ "OPENCODE_SESSION_ID", "per-worker-opencode-session" ]
+                [
+                    "FSGG_AGENT_SESSION_ID", "custom-session"
+                    "FSGG_AGENT_HARNESS", "custom-harness"
+                ]
+                [ "FSGG_AGENT_HARNESS", "orphaned-harness-name" ]
+            ]
 
         try
             for poisoned in cases do
                 for variable in sessionVariables do
                     Environment.SetEnvironmentVariable(variable, null)
+
                 for variable, value in poisoned do
                     Environment.SetEnvironmentVariable(variable, value)
 
@@ -450,8 +637,12 @@ module BlockerLintTests =
     /// one now; a `[]` ledger is the unschedulable-from-birth row the refusal exists to stop.
     let private routedLedger (subject: string) =
         System.Text.Json.JsonSerializer.Serialize
-            [| {| id = 7900
-                  body = StructuredFixtures.routeComment subject (Some DeliveryRoute.Lightweight) "fixture-route" None |} |]
+            [|
+                {|
+                    id = 7900
+                    body = StructuredFixtures.routeComment subject (Some DeliveryRoute.Lightweight) "fixture-route" None
+                |}
+            |]
 
     [<Fact>]
     let ``#2109 the Status=Blocked writer inventory is exhaustive and classifies every restore`` () =
@@ -468,21 +659,39 @@ module BlockerLintTests =
                 | _ -> false)
 
         Assert.Equal<string list>(
-          [ "add --status Blocked";
-              "intake apply Status=Blocked";
-              "release --status Blocked";
-              "set-field --batch Status=Blocked";
-              "set-field Status Blocked" ],
-            deliberate |> List.map (function Client.DeliberatePark name -> name | _ -> failwith "unreachable") |> List.sort
+            [
+                "add --status Blocked"
+                "intake apply Status=Blocked"
+                "release --status Blocked"
+                "set-field --batch Status=Blocked"
+                "set-field Status Blocked"
+            ],
+            deliberate
+            |> List.map (function
+                | Client.DeliberatePark name -> name
+                | _ -> failwith "unreachable")
+            |> List.sort
         )
+
         Assert.Equal<string list>(
-            [ "reap (recorded previous Status=Blocked)"
-              "release (recorded previous Status=Blocked)" ],
-            restores |> List.map (function Client.GuardedRestore name -> name | _ -> failwith "unreachable") |> List.sort
+            [
+                "reap (recorded previous Status=Blocked)"
+                "release (recorded previous Status=Blocked)"
+            ],
+            restores
+            |> List.map (function
+                | Client.GuardedRestore name -> name
+                | _ -> failwith "unreachable")
+            |> List.sort
         )
+
         Assert.Equal<string list>(
             [ "claim (Status=In progress)"; "done (Status=Done)" ],
-            impossible |> List.map (function Client.CannotWriteBlocked name -> name | _ -> failwith "unreachable") |> List.sort
+            impossible
+            |> List.map (function
+                | Client.CannotWriteBlocked name -> name
+                | _ -> failwith "unreachable")
+            |> List.sort
         )
 
         // The inventory is not a list tested against itself.  Count ALL transport shapes, not merely
@@ -490,28 +699,49 @@ module BlockerLintTests =
         // escaped the first inventory.  A new independent single/batch transport site now fails this
         // gate; routing through the shared boundary is the only way to avoid a new classification.
         let rec repoRoot dir =
-            if File.Exists(Path.Combine(dir, "src/FS.GG.Coord.Cli/Client.fs")) then dir
-            else repoRoot (Directory.GetParent(dir).FullName)
+            if File.Exists(Path.Combine(dir, "src/FS.GG.Coord.Cli/Client.fs")) then
+                dir
+            else
+                repoRoot (Directory.GetParent(dir).FullName)
 
         let root = repoRoot (Directory.GetCurrentDirectory())
+
         let source =
-            [ "src/FS.GG.Coord.Cli/Client.fs"
-              "src/FS.GG.Coord.Cli.BoardOps/Handlers.fs"
-              "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs" ]
+            [
+                "src/FS.GG.Coord.Cli/Client.fs"
+                "src/FS.GG.Coord.Cli.BoardOps/Handlers.fs"
+                "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"
+            ]
             |> List.map (fun path -> File.ReadAllText(Path.Combine(root, path)))
             |> String.concat "\n"
+
         let chore = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coord.Core/Chore.fs"))
+
         let directStatusWrites =
             Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
+
         Assert.Equal(4, directStatusWrites)
         Assert.Equal(13, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
         Assert.Equal(3, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
         Assert.Equal(3, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
         Assert.Equal(3, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
         Assert.Contains("LifecycleProjectionLag destination -> Some(\"Status\", statusWireName destination)", chore)
-        Assert.Contains("PrematureCompletion destination -> Some(\"Status\", destination |> completionCorrectionStatus |> statusWireName)", chore)
+
+        Assert.Contains(
+            "PrematureCompletion destination -> Some(\"Status\", destination |> completionCorrectionStatus |> statusWireName)",
+            chore
+        )
+
         Assert.Contains("CompletionProjection -> Some(\"Status\", statusWireName Done)", chore)
-        for retired in [ "StatusNotBlocked"; "BlockerCleared"; "ClosedIssueNotDone"; "ClaimStatusLag"; "ClaimReviewLag" ] do
+
+        for retired in
+            [
+                "StatusNotBlocked"
+                "BlockerCleared"
+                "ClosedIssueNotDone"
+                "ClaimStatusLag"
+                "ClaimReviewLag"
+            ] do
             Assert.DoesNotContain(retired, chore)
 
         // ...AND THE CLI MAY NOT SPELL THAT COLUMN A SECOND TIME. `writesFor` builds BLOCKER-CLEARED's
@@ -536,12 +766,28 @@ module BlockerLintTests =
 
     [<Fact>]
     let ``#1739 human park is noted only after every machine blocker resolves`` () =
-        let blocker state = { Ref = Some(ref' 2); Raw = ".github#2"; State = state }
+        let blocker state =
+            {
+                Ref = Some(ref' 2)
+                Raw = ".github#2"
+                State = state
+            }
+
         let verdict body blockers =
             Client.humanParkResolvedVerdict IssueState.Open BoardStatus.Blocked blockers body
 
-        Assert.Contains("human decision", verdict "Blocked on: human/decision" [ blocker BlockerClosed ] |> Option.defaultValue "")
-        Assert.Contains("human action", verdict "Blocked on: human/action" [ blocker BlockerMerged ] |> Option.defaultValue "")
+        Assert.Contains(
+            "human decision",
+            verdict "Blocked on: human/decision" [ blocker BlockerClosed ]
+            |> Option.defaultValue ""
+        )
+
+        Assert.Contains(
+            "human action",
+            verdict "Blocked on: human/action" [ blocker BlockerMerged ]
+            |> Option.defaultValue ""
+        )
+
         Assert.True((verdict "Blocked on: human/decision" [ blocker BlockerOpen ]).IsNone)
         Assert.True((verdict "Blocked on: human/decision" [ blocker BlockerUnknown ]).IsNone)
         Assert.True((verdict "Blocked on: human/decision" [ blocker BlockerUnparseable ]).IsNone)
@@ -550,7 +796,14 @@ module BlockerLintTests =
     [<Fact>]
     let ``BLOCKER-CYCLE reports each member of a genuine ring and ignores a chain`` () =
         let a, b, c = ref' 1, ref' 2, ref' 3
-        let openBlocker target = { Ref = Some target; Raw = target.Short; State = BlockerOpen }
+
+        let openBlocker target =
+            {
+                Ref = Some target
+                Raw = target.Short
+                State = BlockerOpen
+            }
+
         let ring = [ a, [ openBlocker b ]; b, [ openBlocker a ]; c, [ openBlocker b ] ]
         let findings = Client.blockerCycleVerdicts ring
 
@@ -569,15 +822,20 @@ module BlockerLintTests =
 
         let private ok (body: string) : Errors.IoResult<Response> =
             Ok
-                { Status = 200
-                  Body = body
-                  ETag = None
-                  NextLink = None; Headers = Map.empty }
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                }
 
         let subject: Ref =
-            { Owner = "FS-GG"
-              Repo = "FS.GG.SDD"
-              Number = 42 }
+            {
+                Owner = "FS-GG"
+                Repo = "FS.GG.SDD"
+                Number = 42
+            }
 
         /// A board fixture: `Board.bootstrapCached` (project + fields) and `Board.itemBlockedBy` (the
         /// LIVE resolver read this gate makes), plus the REST body read for the sentinel check.
@@ -610,14 +868,20 @@ module BlockerLintTests =
                     | _ -> Error(Errors.NotFound "a graphql call with no document")
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" when blockedByValue.IsNone ->
                     ok (System.Text.Json.JsonSerializer.Serialize {| number = 42; body = body |})
-                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p} — a coherent field must never read the body"))
+                | m, p ->
+                    Error(
+                        Errors.NotFound
+                            $"the fixture serves no %s{m} %s{p} — a coherent field must never read the body"
+                    ))
 
         let context (transport: Fake.Recorder) : Kernel.Context =
-            { Transport = transport
-              Owner = "FS-GG"
-              Title = "Coordination"
-              DefaultRepo = Some "FS.GG.SDD"
-              ChoreLocks = [] }
+            {
+                Transport = transport
+                Owner = "FS-GG"
+                Title = "Coordination"
+                DefaultRepo = Some "FS.GG.SDD"
+                ChoreLocks = []
+            }
 
         /// `Board.bootstrapCached` reads/writes `$FSGG_COORD_CACHE` — a real disk cache, unset in this
         /// process's ambient environment by default. Every leg below points it at a FRESH temp directory
@@ -625,7 +889,9 @@ module BlockerLintTests =
         /// so a board cached by an unrelated test (or a developer's real `.github` checkout) can never
         /// leak in and make one of these legs pass or fail on the wrong evidence.
         let run (blockedByValue: string option) (body: string) (requested: BoardStatus option) : Result<unit, int> =
-            let dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2079-" + System.Guid.NewGuid().ToString "n")
+            let dir =
+                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2079-" + System.Guid.NewGuid().ToString "n")
+
             let previousCache = System.Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
 
             try
@@ -662,18 +928,27 @@ module BlockerLintTests =
 
     [<Fact>]
     let ``the gate is a no-op for every OTHER --status, and spends no GraphQL at all`` () =
-        let dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2079-noop-" + System.Guid.NewGuid().ToString "n")
+        let dir =
+            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2079-noop-" + System.Guid.NewGuid().ToString "n")
+
         let previousCache = System.Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
 
         try
             System.IO.Directory.CreateDirectory dir |> ignore
             System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
-            let unreachable = Fake.Recorder(fun _ -> Error(Errors.NotFound "the park gate must not call the transport here"))
+
+            let unreachable =
+                Fake.Recorder(fun _ -> Error(Errors.NotFound "the park gate must not call the transport here"))
+
             let ctx = ParkGateFixture.context unreachable
 
             Assert.Equal(Ok(), Client.requireCoherentParkIfBlocked ctx ParkGateFixture.subject None)
             Assert.Equal(Ok(), Client.requireCoherentParkIfBlocked ctx ParkGateFixture.subject (Some BoardStatus.Ready))
-            Assert.Equal(Ok(), Client.requireCoherentParkIfBlocked ctx ParkGateFixture.subject (Some BoardStatus.InProgress))
+
+            Assert.Equal(
+                Ok(),
+                Client.requireCoherentParkIfBlocked ctx ParkGateFixture.subject (Some BoardStatus.InProgress)
+            )
         finally
             System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
 
@@ -693,11 +968,19 @@ module BlockerLintTests =
     // existing live-read gate unchanged.
 
     [<Fact>]
-    let ``batch pairing Status=Blocked with a non-empty Blocked by in the SAME call PROCEEDS with no live read at all`` () =
+    let ``batch pairing Status=Blocked with a non-empty Blocked by in the SAME call PROCEEDS with no live read at all``
+        ()
+        =
         // An unreachable transport: if the wrapper fell through to the live-read gate here, this would
         // fail on the very first call instead of returning Ok — so a passing assertion is also the proof
         // that the pending pair short-circuited before any board read.
-        let unreachable = Fake.Recorder(fun _ -> Error(Errors.NotFound "the batch park gate must not read the board when this batch's own pending write is coherent"))
+        let unreachable =
+            Fake.Recorder(fun _ ->
+                Error(
+                    Errors.NotFound
+                        "the batch park gate must not read the board when this batch's own pending write is coherent"
+                ))
+
         let ctx = ParkGateFixture.context unreachable
 
         Assert.Equal(
@@ -710,8 +993,15 @@ module BlockerLintTests =
         )
 
     [<Fact>]
-    let ``batch setting Status=Blocked with no Blocked by pair at all defers to the live gate, and refuses on an empty field with no sentinel`` () =
-        let dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2098-batch-none-" + System.Guid.NewGuid().ToString "n")
+    let ``batch setting Status=Blocked with no Blocked by pair at all defers to the live gate, and refuses on an empty field with no sentinel``
+        ()
+        =
+        let dir =
+            System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(),
+                "fsgg-2098-batch-none-" + System.Guid.NewGuid().ToString "n"
+            )
+
         let previousCache = System.Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
 
         try
@@ -719,8 +1009,12 @@ module BlockerLintTests =
             System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
             let ctx = ParkGateFixture.context (ParkGateFixture.transport None "Paths: src/A.fs")
 
-            match Client.requireCoherentParkIfBlockedForBatch ctx ParkGateFixture.subject (Some BoardStatus.Blocked) None with
-            | Ok() -> failwith "expected the batch gate to defer to the live read and refuse — the field is empty and the body has no sentinel"
+            match
+                Client.requireCoherentParkIfBlockedForBatch ctx ParkGateFixture.subject (Some BoardStatus.Blocked) None
+            with
+            | Ok() ->
+                failwith
+                    "expected the batch gate to defer to the live read and refuse — the field is empty and the body has no sentinel"
             | Error code -> Assert.NotEqual(0, code)
         finally
             System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
@@ -731,8 +1025,15 @@ module BlockerLintTests =
                 ()
 
     [<Fact>]
-    let ``batch pairing Status=Blocked with a CLEARED Blocked by defers to the live gate — a clear is not a pending edge`` () =
-        let dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2098-batch-clear-" + System.Guid.NewGuid().ToString "n")
+    let ``batch pairing Status=Blocked with a CLEARED Blocked by defers to the live gate — a clear is not a pending edge``
+        ()
+        =
+        let dir =
+            System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(),
+                "fsgg-2098-batch-clear-" + System.Guid.NewGuid().ToString "n"
+            )
+
         let previousCache = System.Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
 
         try
@@ -740,8 +1041,16 @@ module BlockerLintTests =
             System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
             let ctx = ParkGateFixture.context (ParkGateFixture.transport None "Paths: src/A.fs")
 
-            match Client.requireCoherentParkIfBlockedForBatch ctx ParkGateFixture.subject (Some BoardStatus.Blocked) (Some Board.Clear) with
-            | Ok() -> failwith "expected the batch gate to defer to the live read and refuse — a CLEAR leaves the field empty, same as no pair at all"
+            match
+                Client.requireCoherentParkIfBlockedForBatch
+                    ctx
+                    ParkGateFixture.subject
+                    (Some BoardStatus.Blocked)
+                    (Some Board.Clear)
+            with
+            | Ok() ->
+                failwith
+                    "expected the batch gate to defer to the live read and refuse — a CLEAR leaves the field empty, same as no pair at all"
             | Error code -> Assert.NotEqual(0, code)
         finally
             System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
@@ -752,11 +1061,18 @@ module BlockerLintTests =
                 ()
 
     [<Fact>]
-    let ``batch pairing Status=Blocked with a non-empty Blocked by PROCEEDS even when the live field is stale-empty`` () =
+    let ``batch pairing Status=Blocked with a non-empty Blocked by PROCEEDS even when the live field is stale-empty``
+        ()
+        =
         // The fixture's live field is unset and its body has no sentinel — the live gate ALONE would
         // refuse this. A passing assertion proves the batch's own pending write is what carried it, not
         // a live board that happened to already agree.
-        let dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2098-batch-pending-" + System.Guid.NewGuid().ToString "n")
+        let dir =
+            System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(),
+                "fsgg-2098-batch-pending-" + System.Guid.NewGuid().ToString "n"
+            )
+
         let previousCache = System.Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
 
         try
@@ -782,14 +1098,30 @@ module BlockerLintTests =
 
     [<Fact>]
     let ``the batch gate is a no-op for every OTHER --status, regardless of the pending Blocked by write`` () =
-        let unreachable = Fake.Recorder(fun _ -> Error(Errors.NotFound "the batch park gate must not call the transport for a non-Blocked status"))
+        let unreachable =
+            Fake.Recorder(fun _ ->
+                Error(Errors.NotFound "the batch park gate must not call the transport for a non-Blocked status"))
+
         let ctx = ParkGateFixture.context unreachable
 
         Assert.Equal(Ok(), Client.requireCoherentParkIfBlockedForBatch ctx ParkGateFixture.subject None None)
-        Assert.Equal(Ok(), Client.requireCoherentParkIfBlockedForBatch ctx ParkGateFixture.subject (Some BoardStatus.Ready) (Some Board.Clear))
+
         Assert.Equal(
             Ok(),
-            Client.requireCoherentParkIfBlockedForBatch ctx ParkGateFixture.subject (Some BoardStatus.InProgress) (Some(Board.Set "x"))
+            Client.requireCoherentParkIfBlockedForBatch
+                ctx
+                ParkGateFixture.subject
+                (Some BoardStatus.Ready)
+                (Some Board.Clear)
+        )
+
+        Assert.Equal(
+            Ok(),
+            Client.requireCoherentParkIfBlockedForBatch
+                ctx
+                ParkGateFixture.subject
+                (Some BoardStatus.InProgress)
+                (Some(Board.Set "x"))
         )
 
     // ---- round 1 (independent review, PR #2103): a pending CLEAR must not trust a stale live field -----
@@ -806,10 +1138,13 @@ module BlockerLintTests =
 
         let private ok (body: string) : Errors.IoResult<Response> =
             Ok
-                { Status = 200
-                  Body = body
-                  ETag = None
-                  NextLink = None; Headers = Map.empty }
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                }
 
         /// Serves ONLY the REST body read `requireSentinelIfBlockedByCleared` makes. Any GraphQL call —
         /// in particular the live `Blocked by` resolver read (`fieldValueByName`) — is a hard refusal, so
@@ -819,17 +1154,19 @@ module BlockerLintTests =
                 match req.Method, req.Path.Trim '/' with
                 | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" ->
                     ok (System.Text.Json.JsonSerializer.Serialize {| number = 42; body = body |})
-                | m, p ->
-                    Error(Errors.NotFound $"a pending CLEAR must consult ONLY the body — got %s{m} %s{p}"))
+                | m, p -> Error(Errors.NotFound $"a pending CLEAR must consult ONLY the body — got %s{m} %s{p}"))
 
     [<Fact>]
-    let ``round 1: a pending Blocked by CLEAR REFUSES even when the LIVE field is stale non-empty, and never reads it`` () =
+    let ``round 1: a pending Blocked by CLEAR REFUSES even when the LIVE field is stale non-empty, and never reads it``
+        ()
+        =
         // The critic's exact reproduction: no sentinel in the body, and — if the live field were consulted
         // — it would (wrongly) look coherent, because `ClearedBlockedByFixture` refuses that call outright
         // rather than serving a stale value. Under the round-1 defect this would never even reach the
         // assertion: the fallback to the live gate would have called it and the fixture's refusal would
         // surface as an unrelated `NotFound`, not the coherence refusal this pins.
-        let ctx = ParkGateFixture.context (ClearedBlockedByFixture.transport "Paths: src/A.fs")
+        let ctx =
+            ParkGateFixture.context (ClearedBlockedByFixture.transport "Paths: src/A.fs")
 
         match
             Client.requireCoherentParkIfBlockedForBatch
@@ -838,12 +1175,17 @@ module BlockerLintTests =
                 (Some BoardStatus.Blocked)
                 (Some Board.Clear)
         with
-        | Ok() -> failwith "expected the batch gate to refuse — the body has no sentinel, and a pending CLEAR must not trust a stale live field"
+        | Ok() ->
+            failwith
+                "expected the batch gate to refuse — the body has no sentinel, and a pending CLEAR must not trust a stale live field"
         | Error code -> Assert.NotEqual(0, code)
 
     [<Fact>]
-    let ``round 1: a pending Blocked by CLEAR PROCEEDS on a Blocked on: sentinel, still never touching the live field`` () =
-        let ctx = ParkGateFixture.context (ClearedBlockedByFixture.transport "Blocked on: human/decision")
+    let ``round 1: a pending Blocked by CLEAR PROCEEDS on a Blocked on: sentinel, still never touching the live field``
+        ()
+        =
+        let ctx =
+            ParkGateFixture.context (ClearedBlockedByFixture.transport "Blocked on: human/decision")
 
         Assert.Equal(
             Ok(),
@@ -866,10 +1208,13 @@ module BlockerLintTests =
 
         let private ok (body: string) : Errors.IoResult<Response> =
             Ok
-                { Status = 200
-                  Body = body
-                  ETag = None
-                  NextLink = None; Headers = Map.empty }
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                }
 
         /// A full board fixture for `Handlers.setField --batch`: discovery (`projectsV2`, `fields(first`),
         /// the item-id lookup (`projectItems`), the aliased mutation itself
@@ -882,10 +1227,17 @@ module BlockerLintTests =
         let private build (body: string) (liveBlockedBy: string option) =
             let comments = Collections.Generic.Dictionary<int64, string>()
             let mutable nextComment = 9000L
+
             let commentsJson () =
                 let now = DateTimeOffset.UtcNow.ToString("o")
+
                 comments
-                |> Seq.map (fun entry -> {| id = entry.Key; body = entry.Value; updated_at = now |})
+                |> Seq.map (fun entry ->
+                    {|
+                        id = entry.Key
+                        body = entry.Value
+                        updated_at = now
+                    |})
                 |> Seq.toArray
                 |> JsonSerializer.Serialize
 
@@ -944,15 +1296,29 @@ module BlockerLintTests =
         let transportWithStaleLiveField (body: string) (staleValue: string) = build body (Some staleValue)
 
         let private sessionVars =
-            [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
+            [
+                "CLAUDE_CODE_SESSION_ID"
+                "OPENCODE_SESSION_ID"
+                "FSGG_AGENT_SESSION_ID"
+                "FSGG_WORKER"
+            ]
 
         /// Drive `Handlers.setField` as a real command line, isolated on its own cache and identity — see
         /// `ReleaseBlockedByFixture.run`, whose shape this reuses.
         let run (transport: Fake.Recorder) (args: string list) : int * string * string =
-            let dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2098-setfield-batch-" + System.Guid.NewGuid().ToString "n")
+            let dir =
+                System.IO.Path.Combine(
+                    System.IO.Path.GetTempPath(),
+                    "fsgg-2098-setfield-batch-" + System.Guid.NewGuid().ToString "n"
+                )
+
             let previousCache = System.Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
             let previousKitRoot = System.Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
-            let previousSessions = sessionVars |> List.map (fun v -> v, System.Environment.GetEnvironmentVariable v)
+
+            let previousSessions =
+                sessionVars
+                |> List.map (fun v -> v, System.Environment.GetEnvironmentVariable v)
+
             let stdout = System.Console.Out
             let stderr = System.Console.Error
             use capturedOut = new System.IO.StringWriter()
@@ -975,11 +1341,13 @@ module BlockerLintTests =
                     | Error e -> failwithf "the fixture's own argv did not parse: %s" e
 
                 let context: Kernel.Context =
-                    { Transport = transport
-                      Owner = "FS-GG"
-                      Title = "Coordination"
-                      DefaultRepo = Some "FS.GG.SDD"
-                      ChoreLocks = [] }
+                    {
+                        Transport = transport
+                        Owner = "FS-GG"
+                        Title = "Coordination"
+                        DefaultRepo = Some "FS.GG.SDD"
+                        ChoreLocks = []
+                    }
 
                 let code = Handlers.setField context opts
                 System.Console.Out.Flush()
@@ -999,13 +1367,17 @@ module BlockerLintTests =
                 with _ ->
                     ()
 
-        let batchArgs (pairs: string list) = [ "set-field"; "--batch"; "FS.GG.SDD#42" ] @ pairs
+        let batchArgs (pairs: string list) =
+            [ "set-field"; "--batch"; "FS.GG.SDD#42" ] @ pairs
 
     [<Fact>]
-    let ``AC2: set-field --batch Status=Blocked ALONE — no other pair, empty field, no sentinel — is refused and writes nothing`` () =
+    let ``AC2: set-field --batch Status=Blocked ALONE — no other pair, empty field, no sentinel — is refused and writes nothing``
+        ()
+        =
         let transport = SetFieldBatchParkFixture.transport "Paths: src/A.fs"
 
-        let code, _, err = SetFieldBatchParkFixture.run transport (SetFieldBatchParkFixture.batchArgs [ "Status=Blocked" ])
+        let code, _, err =
+            SetFieldBatchParkFixture.run transport (SetFieldBatchParkFixture.batchArgs [ "Status=Blocked" ])
 
         Assert.NotEqual(0, code)
         Assert.Contains("2079", err)
@@ -1028,15 +1400,20 @@ module BlockerLintTests =
         Assert.True(transport.Logged "updateProjectV2ItemFieldValue")
 
     [<Fact>]
-    let ``round 1: set-field --batch Status=Blocked with 'Blocked by=' (a same-call CLEAR) is refused even when the LIVE field is stale non-empty, and writes nothing`` () =
+    let ``round 1: set-field --batch Status=Blocked with 'Blocked by=' (a same-call CLEAR) is refused even when the LIVE field is stale non-empty, and writes nothing``
+        ()
+        =
         // The critic's exact end-to-end reproduction against the round-1 head: the live field still names
         // a ref (`FS-GG/FS.GG.SDD#9`, stale), the body has no sentinel, and this SAME call clears the
         // field alongside `Status=Blocked`. Under the round-1 defect the wrapper deferred to the live
         // read, found the stale non-empty value, and wrongly returned Ok — this call landed, exit 0.
-        let transport = SetFieldBatchParkFixture.transportWithStaleLiveField "Paths: src/A.fs" "FS-GG/FS.GG.SDD#9"
+        let transport =
+            SetFieldBatchParkFixture.transportWithStaleLiveField "Paths: src/A.fs" "FS-GG/FS.GG.SDD#9"
 
         let code, _, err =
-            SetFieldBatchParkFixture.run transport (SetFieldBatchParkFixture.batchArgs [ "Status=Blocked"; "Blocked by=" ])
+            SetFieldBatchParkFixture.run
+                transport
+                (SetFieldBatchParkFixture.batchArgs [ "Status=Blocked"; "Blocked by=" ])
 
         Assert.NotEqual(0, code)
         Assert.Contains("2079", err)
@@ -1048,22 +1425,43 @@ module BlockerLintTests =
 
         let private ok (body: string) : Errors.IoResult<Response> =
             Ok
-                { Status = 200
-                  Body = body
-                  ETag = None
-                  NextLink = None; Headers = Map.empty }
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                }
 
         /// Both owners have `rogue3#96` on the same board. The item lookup returns the owner-specific
         /// project item id, so the CLI fixture checks the mutation target and the receipt from one argv.
         let transport () =
             let comments = Collections.Generic.Dictionary<int64, string>()
             let mutable nextComment = 9096L
+
             let commentsJson subject =
                 let now = DateTimeOffset.UtcNow.ToString("o")
+
                 seq {
-                    yield {| id = 7900L; body = StructuredFixtures.routeComment subject (Some DeliveryRoute.Lightweight) "fixture-route" None; updated_at = now |}
+                    yield
+                        {|
+                            id = 7900L
+                            body =
+                                StructuredFixtures.routeComment
+                                    subject
+                                    (Some DeliveryRoute.Lightweight)
+                                    "fixture-route"
+                                    None
+                            updated_at = now
+                        |}
+
                     for entry in comments do
-                        yield {| id = entry.Key; body = entry.Value; updated_at = now |}
+                        yield
+                            {|
+                                id = entry.Key
+                                body = entry.Value
+                                updated_at = now
+                            |}
                 }
                 |> Seq.toArray
                 |> JsonSerializer.Serialize
@@ -1083,7 +1481,10 @@ module BlockerLintTests =
                         elif document.Contains "node(id: $projectId)" then
                             ok
                                 """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_default96","content":{"number":96,"repository":{"nameWithOwner":"FS-GG/rogue3"}}},{"id":"PVTI_external96","content":{"number":96,"repository":{"nameWithOwner":"EHotwagner/rogue3"}}}]}}}}"""
-                        elif document.Contains "updateProjectV2ItemFieldValue" || document.Contains "clearProjectV2ItemFieldValue" then
+                        elif
+                            document.Contains "updateProjectV2ItemFieldValue"
+                            || document.Contains "clearProjectV2ItemFieldValue"
+                        then
                             if document.Contains "f0:" then
                                 ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}}}"""
                             else
@@ -1097,7 +1498,11 @@ module BlockerLintTests =
                                     | _ -> None)
                                 |> Option.defaultValue ""
 
-                            let item = if owner = "EHotwagner" then "PVTI_external96" else "PVTI_default96"
+                            let item =
+                                if owner = "EHotwagner" then
+                                    "PVTI_external96"
+                                else
+                                    "PVTI_default96"
 
                             ok
                                 $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"id":"%s{item}","project":{{"number":12}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
@@ -1119,8 +1524,10 @@ module BlockerLintTests =
                         comments.[id] <- document.RootElement.GetProperty("body").GetString()
                         ok (JsonSerializer.Serialize {| id = id |})
                     | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
-                | "DELETE", p when p.StartsWith "repos/FS-GG/rogue3/issues/comments/"
-                                   || p.StartsWith "repos/EHotwagner/rogue3/issues/comments/" ->
+                | "DELETE", p when
+                    p.StartsWith "repos/FS-GG/rogue3/issues/comments/"
+                    || p.StartsWith "repos/EHotwagner/rogue3/issues/comments/"
+                    ->
                     comments.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1))) |> ignore
                     ok "{}"
                 // .github#2698: `set-field <ref> Status Ready` — both spellings these legs drive — now
@@ -1134,9 +1541,19 @@ module BlockerLintTests =
 
     [<Theory>]
     [<InlineData(false, "rogue3#96", "FS-GG/rogue3#96", "EHotwagner/rogue3#96", "PVTI_default96", "PVTI_external96")>]
-    [<InlineData(false, "https://github.com/EHotwagner/rogue3/issues/96", "EHotwagner/rogue3#96", "FS-GG/rogue3#96", "PVTI_external96", "PVTI_default96")>]
+    [<InlineData(false,
+                 "https://github.com/EHotwagner/rogue3/issues/96",
+                 "EHotwagner/rogue3#96",
+                 "FS-GG/rogue3#96",
+                 "PVTI_external96",
+                 "PVTI_default96")>]
     [<InlineData(true, "rogue3#96", "FS-GG/rogue3#96", "EHotwagner/rogue3#96", "PVTI_default96", "PVTI_external96")>]
-    [<InlineData(true, "https://github.com/EHotwagner/rogue3/issues/96", "EHotwagner/rogue3#96", "FS-GG/rogue3#96", "PVTI_external96", "PVTI_default96")>]
+    [<InlineData(true,
+                 "https://github.com/EHotwagner/rogue3/issues/96",
+                 "EHotwagner/rogue3#96",
+                 "FS-GG/rogue3#96",
+                 "PVTI_external96",
+                 "PVTI_default96")>]
     let ``#2143 single and batch receipts distinguish default and external same-name twins``
         (batch: bool)
         (refArg: string)
@@ -1171,12 +1588,21 @@ module BlockerLintTests =
 
         let private ok (body: string) : Errors.IoResult<Response> =
             Ok
-                { Status = 200
-                  Body = body
-                  ETag = None
-                  NextLink = None; Headers = Map.empty }
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                }
 
-        let private itemJson (n: int) (status: string) (blockedBy: string option) (state: string) (body: string option) =
+        let private itemJson
+            (n: int)
+            (status: string)
+            (blockedBy: string option)
+            (state: string)
+            (body: string option)
+            =
             // `Scan.parseRow` reads `nested node "blockedBy" "text"` — the TEXT field's value is a
             // nested `{"text": "..."}` object on the wire, exactly as every other field is, NOT a bare
             // string. `null` (no value at all) is the shape an empty field takes.
@@ -1185,13 +1611,22 @@ module BlockerLintTests =
                 | Some b -> $"""{{"text":"%s{b}"}}"""
                 | None -> "null"
 
-            let bodyJson = body |> Option.map System.Text.Json.JsonSerializer.Serialize |> Option.defaultValue "null"
+            let bodyJson =
+                body
+                |> Option.map System.Text.Json.JsonSerializer.Serialize
+                |> Option.defaultValue "null"
+
             $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blockedByJson},"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","body":%s{bodyJson},"state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
 
         /// `#42` is `Blocked` with field = `FS-GG/FS.GG.SDD#8`; `#8` is CLOSED, on-board — so the field
         /// alone is a satisfied `BLOCKER-CLEARED` precondition. `body42` is the only thing that varies.
         let transport (body42: string) =
-            let items = [ itemJson 42 "Blocked" (Some "FS-GG/FS.GG.SDD#8") "OPEN" (Some body42); itemJson 8 "Done" None "CLOSED" None ] |> String.concat ","
+            let items =
+                [
+                    itemJson 42 "Blocked" (Some "FS-GG/FS.GG.SDD#8") "OPEN" (Some body42)
+                    itemJson 8 "Done" None "CLOSED" None
+                ]
+                |> String.concat ","
 
             Fake.Recorder(fun (req: Request) ->
                 match req.Method, req.Path.Trim '/' with
@@ -1227,16 +1662,23 @@ module BlockerLintTests =
                 | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
         let private context (transport: Fake.Recorder) : Kernel.Context =
-            { Transport = transport
-              Owner = "FS-GG"
-              Title = "Coordination"
-              DefaultRepo = Some "FS.GG.SDD"
-              ChoreLocks = [] }
+            {
+                Transport = transport
+                Owner = "FS-GG"
+                Title = "Coordination"
+                DefaultRepo = Some "FS.GG.SDD"
+                ChoreLocks = []
+            }
 
         /// Run `reconcile --repo FS.GG.SDD --json` (dry run — no `--apply`, no worker needed), isolated
         /// on its own `$FSGG_COORD_CACHE`, and return the exit code plus stdout/stderr separately.
         let run (body42: string) : int * string * string =
-            let dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2079-reconcile-" + System.Guid.NewGuid().ToString "n")
+            let dir =
+                System.IO.Path.Combine(
+                    System.IO.Path.GetTempPath(),
+                    "fsgg-2079-reconcile-" + System.Guid.NewGuid().ToString "n"
+                )
+
             let previousCache = System.Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
             let previousKitRoot = System.Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
             let stdout = System.Console.Out
@@ -1301,10 +1743,13 @@ module BlockerLintTests =
 
         let private ok (body: string) : Errors.IoResult<Response> =
             Ok
-                { Status = 200
-                  Body = body
-                  ETag = None
-                  NextLink = None; Headers = Map.empty }
+                {
+                    Status = 200
+                    Body = body
+                    ETag = None
+                    NextLink = None
+                    Headers = Map.empty
+                }
 
         /// A live claim marker, or none — `Writes.verifyHeld`'s subject, plus the ephemeral mutation
         /// lease comment `release --blocked-by` must now post and remove around its field write.
@@ -1330,8 +1775,11 @@ module BlockerLintTests =
 
             member _.Add(body: string) =
                 let id =
-                    if comments.Count = 0 then 9000L
-                    else (comments.Keys |> Seq.max) + 1L
+                    if comments.Count = 0 then
+                        9000L
+                    else
+                        (comments.Keys |> Seq.max) + 1L
+
                 comments.[id] <- body
                 id
 
@@ -1396,16 +1844,30 @@ module BlockerLintTests =
                 | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
         let sessionVars =
-            [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
+            [
+                "CLAUDE_CODE_SESSION_ID"
+                "OPENCODE_SESSION_ID"
+                "FSGG_AGENT_SESSION_ID"
+                "FSGG_WORKER"
+            ]
 
         /// Drive `Client.release` as a real command line, isolated on its own cache and identity — see
         /// `ForceStealTests.runClaim`, whose licence (`AssemblyInfo.fs` disables cross-class parallelism)
         /// this reuses.
         let run (transport: Fake.Recorder) (args: string list) : int * string =
-            let dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2079-release-" + System.Guid.NewGuid().ToString "n")
+            let dir =
+                System.IO.Path.Combine(
+                    System.IO.Path.GetTempPath(),
+                    "fsgg-2079-release-" + System.Guid.NewGuid().ToString "n"
+                )
+
             let previousCache = System.Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
             let previousKitRoot = System.Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
-            let previousSessions = sessionVars |> List.map (fun v -> v, System.Environment.GetEnvironmentVariable v)
+
+            let previousSessions =
+                sessionVars
+                |> List.map (fun v -> v, System.Environment.GetEnvironmentVariable v)
+
             let stdout = System.Console.Out
             use captured = new System.IO.StringWriter()
 
@@ -1425,11 +1887,13 @@ module BlockerLintTests =
                     | Error e -> failwithf "the fixture's own argv did not parse: %s" e
 
                 let context: Kernel.Context =
-                    { Transport = transport
-                      Owner = "FS-GG"
-                      Title = "Coordination"
-                      DefaultRepo = Some "FS.GG.SDD"
-                      ChoreLocks = [] }
+                    {
+                        Transport = transport
+                        Owner = "FS-GG"
+                        Title = "Coordination"
+                        DefaultRepo = Some "FS.GG.SDD"
+                        ChoreLocks = []
+                    }
 
                 let code = Client.release context opts
                 System.Console.Out.Flush()
@@ -1458,7 +1922,9 @@ module BlockerLintTests =
         let transport = ReleaseBlockedByFixture.nonHolderTransport (Some "snipe-f893")
 
         let code, _ =
-            ReleaseBlockedByFixture.run transport (ReleaseBlockedByFixture.releaseArgs [ "--blocked-by"; "FS-GG/FS.GG.SDD#9" ])
+            ReleaseBlockedByFixture.run
+                transport
+                (ReleaseBlockedByFixture.releaseArgs [ "--blocked-by"; "FS-GG/FS.GG.SDD#9" ])
 
         Assert.NotEqual(0, code)
         Assert.Equal(0, transport.GraphQlCalls)
@@ -1468,7 +1934,9 @@ module BlockerLintTests =
         let transport = ReleaseBlockedByFixture.nonHolderTransport None
 
         let code, _ =
-            ReleaseBlockedByFixture.run transport (ReleaseBlockedByFixture.releaseArgs [ "--blocked-by"; "FS-GG/FS.GG.SDD#9" ])
+            ReleaseBlockedByFixture.run
+                transport
+                (ReleaseBlockedByFixture.releaseArgs [ "--blocked-by"; "FS-GG/FS.GG.SDD#9" ])
 
         Assert.NotEqual(0, code)
         Assert.Equal(0, transport.GraphQlCalls)

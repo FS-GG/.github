@@ -25,22 +25,38 @@ module OptionsTests =
 
     [<Fact>]
     let ``diff audit consumes exact revisions and declared paths rather than accepting an implicit subject`` () =
-        let parsed = parse [ "diff-audit"; "base"; "head"; "oldName"; "newName"; "--repo"; "/tmp/fixture"; "--paths"; "Fixture.fs" ] |> ok
+        let parsed =
+            parse
+                [
+                    "diff-audit"
+                    "base"
+                    "head"
+                    "oldName"
+                    "newName"
+                    "--repo"
+                    "/tmp/fixture"
+                    "--paths"
+                    "Fixture.fs"
+                ]
+            |> ok
+
         Assert.Equal(DiffAudit, parsed.Command)
         Assert.Equal(Some "tmp/fixture", parsed.Repo)
         Assert.Equal<string list>([ "Fixture.fs" ], parsed.Paths)
 
         let itemDeclared =
             parse
-                [ "diff-audit"
-                  "base"
-                  "head"
-                  "oldName"
-                  "newName"
-                  "-"
-                  "item-body.md"
-                  "--paths"
-                  "Fixture.fs" ]
+                [
+                    "diff-audit"
+                    "base"
+                    "head"
+                    "oldName"
+                    "newName"
+                    "-"
+                    "item-body.md"
+                    "--paths"
+                    "Fixture.fs"
+                ]
             |> ok
 
         Assert.Equal<string list>([ "base"; "head"; "oldName"; "newName"; "-"; "item-body.md" ], itemDeclared.Args)
@@ -192,35 +208,37 @@ module OptionsTests =
 
     /// (flag argv, a command that READS it, a command that does NOT)
     let private surface =
-        [ [ "--mint" ], "whoami", "ready"
-          [ "--all" ], "ready", "next"
-          [ "--active" ], "overlap", "who"
-          [ "--apply" ], "reap", "batch"
-          [ "--peek" ], "inbox", "who"
-          [ "--local" ], "who", "next"
-          [ "--all-repos" ], "who", "next"
-          [ "--dry-run" ], "flush", "reap"
-          [ "--strict" ], "lint", "ready"
-          [ "--batch" ], "set-field", "widen"
-          [ "--flip" ], "done", "claim"
-          [ "--force" ], "claim", "release"
-          [ "--include-backlog" ], "take", "who"
-          [ "--explain" ], "batch", "take"
-          [ "--fresh" ], "scan", "batch"
-          [ "--wait" ], "landable", "next"
-          [ "--paths"; "src/A.fs" ], "widen", "claim"
-          [ "--to"; "w-x" ], "say", "inbox"
-          [ "--evidence"; "x" ], "done", "claim"
-          [ "--partial"; "x" ], "done", "widen"
-          [ "--issue"; ".github#1" ], "verify-paths", "done"
-          [ "--sha"; "abc" ], "landable", "take"
-          [ "--require"; "ci" ], "landable", "who"
-          [ "--tries"; "3" ], "landable", "next"
-          [ "--interval"; "5" ], "landable", "next"
-          [ "--label"; "bug" ], "issues", "ready"
-          [ "--state"; "all" ], "issues", "ready"
-          [ "-n"; "5" ], "scan", "next"
-          [ "--status"; "Blocked" ], "release", "claim" ]
+        [
+            [ "--mint" ], "whoami", "ready"
+            [ "--all" ], "ready", "next"
+            [ "--active" ], "overlap", "who"
+            [ "--apply" ], "reap", "batch"
+            [ "--peek" ], "inbox", "who"
+            [ "--local" ], "who", "next"
+            [ "--all-repos" ], "who", "next"
+            [ "--dry-run" ], "flush", "reap"
+            [ "--strict" ], "lint", "ready"
+            [ "--batch" ], "set-field", "widen"
+            [ "--flip" ], "done", "claim"
+            [ "--force" ], "claim", "release"
+            [ "--include-backlog" ], "take", "who"
+            [ "--explain" ], "batch", "take"
+            [ "--fresh" ], "scan", "batch"
+            [ "--wait" ], "landable", "next"
+            [ "--paths"; "src/A.fs" ], "widen", "claim"
+            [ "--to"; "w-x" ], "say", "inbox"
+            [ "--evidence"; "x" ], "done", "claim"
+            [ "--partial"; "x" ], "done", "widen"
+            [ "--issue"; ".github#1" ], "verify-paths", "done"
+            [ "--sha"; "abc" ], "landable", "take"
+            [ "--require"; "ci" ], "landable", "who"
+            [ "--tries"; "3" ], "landable", "next"
+            [ "--interval"; "5" ], "landable", "next"
+            [ "--label"; "bug" ], "issues", "ready"
+            [ "--state"; "all" ], "issues", "ready"
+            [ "-n"; "5" ], "scan", "next"
+            [ "--status"; "Blocked" ], "release", "claim"
+        ]
 
     [<Fact>]
     let ``#991 every flag is REFUSED by a command that does not read it`` () =
@@ -297,7 +315,10 @@ module OptionsTests =
         // `--apply --json` arm sat ahead of it, this line was answered first and the shadowing was
         // invisible; #1541 removed that arm, so a `reconcile` command line now reaches it. Hardcoding one
         // verb's name into a refusal every verb can trigger sends the reader to audit the wrong command.
-        let e = parse [ "reconcile"; "--apply"; "--json"; "--all-repos"; "--repo"; "FS.GG.SDD" ] |> rejected
+        let e =
+            parse [ "reconcile"; "--apply"; "--json"; "--all-repos"; "--repo"; "FS.GG.SDD" ]
+            |> rejected
+
         Assert.StartsWith("reconcile:", e)
         Assert.Contains("mutually exclusive", e)
 
@@ -335,7 +356,10 @@ module OptionsTests =
     let ``set-field --batch is a boolean flag; the Field=Value pairs stay in Args`` () =
         // #448: `--batch` opts the remaining args into the aliased-mutation path. A `Field=Value` pair
         // begins with a field name (not `-`), so it is an ordinary Arg — the ref first, then the pairs.
-        let o = parse [ "set-field"; "--batch"; "FS.GG.SDD#42"; "Phase=P2 SDD"; "Target=2026-08-01" ] |> ok
+        let o =
+            parse [ "set-field"; "--batch"; "FS.GG.SDD#42"; "Phase=P2 SDD"; "Target=2026-08-01" ]
+            |> ok
+
         Assert.True(o.Batch)
         Assert.Equal<string list>([ "FS.GG.SDD#42"; "Phase=P2 SDD"; "Target=2026-08-01" ], o.Args)
 
@@ -347,7 +371,19 @@ module OptionsTests =
     let ``verify-paths --issue carries the named issue ref`` () =
         // #479: `--issue` names the issue the PR implements explicitly. Its VALUE (an issue ref) is not
         // parsed here — that is verifyPaths' job — but it must be captured, not dropped.
-        let o = parse [ "verify-paths"; "--pr"; "7"; "--repo"; "sdd"; "--issue"; "FS-GG/FS.GG.SDD#70" ] |> ok
+        let o =
+            parse
+                [
+                    "verify-paths"
+                    "--pr"
+                    "7"
+                    "--repo"
+                    "sdd"
+                    "--issue"
+                    "FS-GG/FS.GG.SDD#70"
+                ]
+            |> ok
+
         Assert.Equal(Some "FS-GG/FS.GG.SDD#70", o.Issue)
         Assert.Equal(Some 7, o.Pr)
 
@@ -389,7 +425,7 @@ module OptionsTests =
     let ``lint parses to its command and defaults to the text projection`` () =
         let o = parse [ "lint" ] |> ok
         Assert.Equal(LintCmd, o.Command)
-        Assert.Equal(Text, o.Render)   // FSGG-LINT lines by default; --json opts into the array
+        Assert.Equal(Text, o.Render) // FSGG-LINT lines by default; --json opts into the array
 
     [<Fact>]
     let ``lint --json / --repo / --strict are all captured`` () =
@@ -474,8 +510,20 @@ module OptionsTests =
     [<Fact>]
     let ``landable --wait carries the poll knobs, and --interval permits 0 (#724)`` () =
         let o =
-            parse [ "landable"; "810"; "--repo"; "FS.GG.SDD"; "--wait"; "--tries"; "4"; "--interval"; "0" ]
+            parse
+                [
+                    "landable"
+                    "810"
+                    "--repo"
+                    "FS.GG.SDD"
+                    "--wait"
+                    "--tries"
+                    "4"
+                    "--interval"
+                    "0"
+                ]
             |> ok
+
         Assert.True(o.Wait)
         Assert.Equal(Some 4, o.Tries)
         // A delay, not a count — 0 is meaningful (the test harness drives the poll with no wall-clock).
@@ -483,12 +531,17 @@ module OptionsTests =
 
     [<Fact>]
     let ``landable --tries must be positive`` () =
-        let e = parse [ "landable"; "801"; "--repo"; "R"; "--wait"; "--tries"; "0" ] |> rejected
+        let e =
+            parse [ "landable"; "801"; "--repo"; "R"; "--wait"; "--tries"; "0" ] |> rejected
+
         Assert.Contains("--tries", e)
 
     [<Fact>]
     let ``landable --interval refuses a negative delay`` () =
-        let e = parse [ "landable"; "801"; "--repo"; "R"; "--wait"; "--interval"; "-3" ] |> rejected
+        let e =
+            parse [ "landable"; "801"; "--repo"; "R"; "--wait"; "--interval"; "-3" ]
+            |> rejected
+
         Assert.Contains("--interval", e)
 
     [<Fact>]
@@ -496,7 +549,17 @@ module OptionsTests =
         // Last-wins would silently drop a required check, which is the fail-open direction the flag exists
         // to close. Order is preserved so the diagnostic names them as the caller wrote them.
         let o =
-            parse [ "landable"; "9"; "--repo"; "R"; "--require"; "registry-coherence"; "--require"; "drift" ]
+            parse
+                [
+                    "landable"
+                    "9"
+                    "--repo"
+                    "R"
+                    "--require"
+                    "registry-coherence"
+                    "--require"
+                    "drift"
+                ]
             |> ok
 
         Assert.Equal<string list>([ "registry-coherence"; "drift" ], o.Require)
@@ -539,7 +602,10 @@ module OptionsTests =
 
     [<Fact>]
     let ``issues --state and --label are carried through`` () =
-        let o = parse [ "issues"; "FS-GG/FS.GG.Game"; "--state"; "closed"; "--label"; "bug" ] |> ok
+        let o =
+            parse [ "issues"; "FS-GG/FS.GG.Game"; "--state"; "closed"; "--label"; "bug" ]
+            |> ok
+
         Assert.Equal(Some "closed", o.IssueState)
         Assert.Equal(Some "bug", o.Label)
 
@@ -554,7 +620,17 @@ module OptionsTests =
 
     [<Fact>]
     let ``#614 done --flip --partial captures the reason and keeps --flip`` () =
-        let o = parse [ "done"; "FS.GG.SDD#62"; "--flip"; "--partial"; "callers migration is a separate child" ] |> ok
+        let o =
+            parse
+                [
+                    "done"
+                    "FS.GG.SDD#62"
+                    "--flip"
+                    "--partial"
+                    "callers migration is a separate child"
+                ]
+            |> ok
+
         Assert.True(o.Flip)
         Assert.Equal(Some "callers migration is a separate child", o.Partial)
 
@@ -565,7 +641,9 @@ module OptionsTests =
 
     [<Fact>]
     let ``delivery accepts flip so typed completion can perform the terminal roll-up`` () =
-        let o = parse [ "delivery"; "FS.GG.SDD#62"; "--pr"; "63"; "--flip"; "--apply" ] |> ok
+        let o =
+            parse [ "delivery"; "FS.GG.SDD#62"; "--pr"; "63"; "--flip"; "--apply" ] |> ok
+
         Assert.True(o.Flip)
         Assert.True(o.Apply)
 
@@ -580,9 +658,11 @@ module OptionsTests =
     // the embedded FS-GG numbers are still never handed to another owner (#1087's invariant, kept).
 
     let private mkRef (owner: string) (repo: string) (n: int) : FS.GG.Coord.Types.Ref =
-        { FS.GG.Coord.Types.Owner = owner
-          FS.GG.Coord.Types.Repo = repo
-          FS.GG.Coord.Types.Number = n }
+        {
+            FS.GG.Coord.Types.Owner = owner
+            FS.GG.Coord.Types.Repo = repo
+            FS.GG.Coord.Types.Number = n
+        }
 
     [<Fact>]
     let ``choreLockRef with no injected roster resolves the embedded FS-GG lock, unchanged`` () =
@@ -620,7 +700,9 @@ module OptionsTests =
     let ``parseChoreLocks reads a comma-separated roster, canonicalises the repo, and DROPS junk`` () =
         // A malformed token degrades to the fail-closed default (a chore not offered), never a throw that
         // would take down the caller's real command — the same answer an absent lock already gives.
-        let got = Kernel.parseChoreLocks "acme/Product.X#42, FS-GG/sdd#7 , garbage, /bad#1, a/b#x"
+        let got =
+            Kernel.parseChoreLocks "acme/Product.X#42, FS-GG/sdd#7 , garbage, /bad#1, a/b#x"
+
         Assert.Equal<FS.GG.Coord.Types.Ref list>(
             // `FS-GG/sdd` is canonicalised to `FS.GG.SDD` on the way in, so the stored ref is CAS-comparable.
             [ mkRef "acme" "Product.X" 42; mkRef "FS-GG" "FS.GG.SDD" 7 ],
@@ -687,7 +769,9 @@ module OptionsTests =
     [<Fact>]
     let ``#1507 --paths LAST does not swallow the trailing flag`` () =
         for verb in pathsVerbs do
-            let o = parse [ verb; ".github#1507"; "--paths"; "src/A.fs"; "src/B/"; "--json" ] |> ok
+            let o =
+                parse [ verb; ".github#1507"; "--paths"; "src/A.fs"; "src/B/"; "--json" ] |> ok
+
             Assert.Equal<string list>([ "src/A.fs"; "src/B/" ], o.Paths)
 
             // The other half of acceptance criterion 1: the flag is not merely absent from the touch-set,
@@ -707,7 +791,9 @@ module OptionsTests =
             // default is a thing that moves.
             Assert.Equal(Text, (parse [ verb; ".github#1507"; "--paths"; "src/A.fs" ] |> ok).Render)
 
-            let t = parse [ verb; ".github#1507"; "--paths"; "src/A.fs"; "src/B/"; "--json" ] |> ok
+            let t =
+                parse [ verb; ".github#1507"; "--paths"; "src/A.fs"; "src/B/"; "--json" ] |> ok
+
             Assert.Equal<string list>([ "src/A.fs"; "src/B/" ], t.Paths)
             Assert.Equal(Json, t.Render)
 
@@ -717,15 +803,13 @@ module OptionsTests =
         // long: `widen --json --paths ...` was always fine. Both orders must now mean the same thing.
         for verb in pathsVerbs do
             let after =
-                parse [ verb; ".github#1507"; "--paths"; "src/A.fs"; "--worker"; "w-1" ]
-                |> ok
+                parse [ verb; ".github#1507"; "--paths"; "src/A.fs"; "--worker"; "w-1" ] |> ok
 
             Assert.Equal<string list>([ "src/A.fs" ], after.Paths)
             Assert.Equal(Some "w-1", after.Worker)
 
             let before =
-                parse [ verb; ".github#1507"; "--worker"; "w-1"; "--paths"; "src/A.fs" ]
-                |> ok
+                parse [ verb; ".github#1507"; "--worker"; "w-1"; "--paths"; "src/A.fs" ] |> ok
 
             Assert.Equal<string list>(after.Paths, before.Paths)
             Assert.Equal(after.Worker, before.Worker)
@@ -765,10 +849,16 @@ module OptionsTests =
         //
         // All three are loud. None of them ends up in a `Paths:` line, which is the only property that
         // matters, and none of them required this arm to know the flag's name.
-        let residue = parse [ "widen"; ".github#1507"; "--paths"; "src/A.fs"; "--status"; "Blocked" ] |> rejected
+        let residue =
+            parse [ "widen"; ".github#1507"; "--paths"; "src/A.fs"; "--status"; "Blocked" ]
+            |> rejected
+
         Assert.Contains("--status", residue)
 
-        let unknown = parse [ "widen"; ".github#1507"; "--paths"; "src/A.fs"; "--nonesuch" ] |> rejected
+        let unknown =
+            parse [ "widen"; ".github#1507"; "--paths"; "src/A.fs"; "--nonesuch" ]
+            |> rejected
+
         Assert.Contains("--nonesuch", unknown)
 
     [<Fact>]
@@ -777,22 +867,26 @@ module OptionsTests =
         // the one it replaced: silently reserving FEWER files than the worker asked for.
         let o =
             parse
-                [ "widen"
-                  ".github#1507"
-                  "--paths"
-                  ".claude/skills/"
-                  ".codex/skills/"
-                  ".agents/skills/"
-                  ".github/workflows/skill-union.yml"
-                  "scripts/materialize-skill-roots.sh" ]
+                [
+                    "widen"
+                    ".github#1507"
+                    "--paths"
+                    ".claude/skills/"
+                    ".codex/skills/"
+                    ".agents/skills/"
+                    ".github/workflows/skill-union.yml"
+                    "scripts/materialize-skill-roots.sh"
+                ]
             |> ok
 
         Assert.Equal<string list>(
-            [ ".claude/skills/"
-              ".codex/skills/"
-              ".agents/skills/"
-              ".github/workflows/skill-union.yml"
-              "scripts/materialize-skill-roots.sh" ],
+            [
+                ".claude/skills/"
+                ".codex/skills/"
+                ".agents/skills/"
+                ".github/workflows/skill-union.yml"
+                "scripts/materialize-skill-roots.sh"
+            ],
             o.Paths
         )
 
@@ -833,71 +927,72 @@ module OptionsTests =
     /// and it is the one this table exists to keep true.
     let private bareRender: (string * Render) list =
         [
-          // Both projections — the handler branches. NONE of these values moved in #1523.
-          "decide", Json
-          "delivery", Json
-          "review", Json
-          "driver", Json
-          "cycle", Json
-          "lanes", Json
-          "facts", Json
-          "batch", Json
-          "ready", Json
-          "reconcile", Text
-          "who", Text
-          "budget", Text
-          "claim", Text
-          "adopt", Text
-          "take", Text
-          "widen", Text // #1517
-          "set-paths", Text // #1517
-          "inbox", Text
-          "predicate", Text
-          "lint", Text
-          "body-edits", Text // .github#2477 — same polarity as who/budget: a human table by default
-          "comment", Json // .github#2753 — a verified mutation receipt is the useful bare projection
+            // Both projections — the handler branches. NONE of these values moved in #1523.
+            "decide", Json
+            "delivery", Json
+            "review", Json
+            "driver", Json
+            "cycle", Json
+            "lanes", Json
+            "facts", Json
+            "batch", Json
+            "ready", Json
+            "reconcile", Text
+            "who", Text
+            "budget", Text
+            "claim", Text
+            "adopt", Text
+            "take", Text
+            "widen", Text // #1517
+            "set-paths", Text // #1517
+            "inbox", Text
+            "predicate", Text
+            "lint", Text
+            "body-edits", Text // .github#2477 — same polarity as who/budget: a human table by default
+            "comment", Json // .github#2753 — a verified mutation receipt is the useful bare projection
 
-          // JSON only — stdout is a machine document whatever the flag says. Unchanged.
-          "scan", Json
-          "command-contract", Json
-          "board", Json
-          "issues", Json
-          "diff-audit", Json
-          "intake", Json
-          "packet", Json
-          "delivery-route", Json
-          "graphql", Json
+            // JSON only — stdout is a machine document whatever the flag says. Unchanged.
+            "scan", Json
+            "command-contract", Json
+            "board", Json
+            "issues", Json
+            "diff-audit", Json
+            "intake", Json
+            "packet", Json
+            "delivery-route", Json
+            "graphql", Json
 
-          // TEXT only — prose, a bare id, or one verdict word. These are the fifteen VERBS that moved
-          // (`--help`/`--version` moved too, but are reached by flag and have no bare form to pin), plus
-          // the five (`reap`, `overlap`, `room open`, `followup`, `flush`) already pinned `Text` by hand.
-          "whoami", Text
-          "self-host", Text
-          "next", Text
-          "reap", Text
-          "landable", Text
-          "release", Text
-          "heartbeat", Text
-          "set-field", Text
-          "child", Text
-          "overlap", Text
-          "say", Text
-          "room open", Text
-          // `.github#2312` — both `Both Text`. `op-lock acquire`'s stdout is the dispatch broker's input
-          // tuple and the caller that consumes it is a shell composing `gh workflow run`, so the JSON
-          // projection is the point; the human form stays the bare default for the operator reading it by
-          // hand, which is `who`'s and `budget`'s polarity.
-          "op-lock acquire", Text
-          "op-lock release", Text
-          "done", Text
-          "verify-paths", Text
-          "followup", Text
-          "bootstrap", Text
-          "field-id", Text
-          "option-id", Text
-          "item-id", Text
-          "add", Text
-          "flush", Text ]
+            // TEXT only — prose, a bare id, or one verdict word. These are the fifteen VERBS that moved
+            // (`--help`/`--version` moved too, but are reached by flag and have no bare form to pin), plus
+            // the five (`reap`, `overlap`, `room open`, `followup`, `flush`) already pinned `Text` by hand.
+            "whoami", Text
+            "self-host", Text
+            "next", Text
+            "reap", Text
+            "landable", Text
+            "release", Text
+            "heartbeat", Text
+            "set-field", Text
+            "child", Text
+            "overlap", Text
+            "say", Text
+            "room open", Text
+            // `.github#2312` — both `Both Text`. `op-lock acquire`'s stdout is the dispatch broker's input
+            // tuple and the caller that consumes it is a shell composing `gh workflow run`, so the JSON
+            // projection is the point; the human form stays the bare default for the operator reading it by
+            // hand, which is `who`'s and `budget`'s polarity.
+            "op-lock acquire", Text
+            "op-lock release", Text
+            "done", Text
+            "verify-paths", Text
+            "followup", Text
+            "bootstrap", Text
+            "field-id", Text
+            "option-id", Text
+            "item-id", Text
+            "add", Text
+            "flush", Text
+        ]
 
     [<Fact>]
     let ``#1523 the BARE form of every verb parses to the mode that verb actually prints in`` () =
@@ -968,16 +1063,18 @@ module OptionsTests =
         // Including the two that decide whether this fleet can run. A refusal is loud and fixable; the
         // silence it replaces is neither.
         for verb, args in
-            [ "whoami", [ "--mint" ]
-              "done", [ ".github#1523"; "--flip" ]
-              "next", []
-              "landable", [ "801"; "--repo"; ".github" ]
-              "release", [ ".github#1523" ]
-              "heartbeat", [ ".github#1523" ]
-              "add", [ ".github#1523" ]
-              "flush", []
-              "reap", []
-              "verify-paths", [ "--pr"; "801" ] ] do
+            [
+                "whoami", [ "--mint" ]
+                "done", [ ".github#1523"; "--flip" ]
+                "next", []
+                "landable", [ "801"; "--repo"; ".github" ]
+                "release", [ ".github#1523" ]
+                "heartbeat", [ ".github#1523" ]
+                "add", [ ".github#1523" ]
+                "flush", []
+                "reap", []
+                "verify-paths", [ "--pr"; "801" ]
+            ] do
             let e = parse ([ verb ] @ args @ [ "--json" ]) |> rejected
             Assert.Contains("--json is not a flag of", e)
             Assert.Contains(verb, e)
@@ -1003,20 +1100,22 @@ module OptionsTests =
         // `lint --json`, `batch --json`, `take --json`, `who --json`, `reconcile --json`, `budget --json`,
         // `lanes --text`, `decide --text`, `ready --text`).
         for verb, args in
-            [ "decide", []
-              "lanes", []
-              "facts", []
-              "batch", []
-              "ready", []
-              "who", []
-              "budget", []
-              "claim", [ ".github#1523" ]
-              "adopt", [ ".github#1523" ]
-              "take", []
-              "widen", [ ".github#1523"; "--paths"; "src/A.fs" ]
-              "set-paths", [ ".github#1523"; "--paths"; "src/A.fs" ]
-              "inbox", []
-              "lint", [] ] do
+            [
+                "decide", []
+                "lanes", []
+                "facts", []
+                "batch", []
+                "ready", []
+                "who", []
+                "budget", []
+                "claim", [ ".github#1523" ]
+                "adopt", [ ".github#1523" ]
+                "take", []
+                "widen", [ ".github#1523"; "--paths"; "src/A.fs" ]
+                "set-paths", [ ".github#1523"; "--paths"; "src/A.fs" ]
+                "inbox", []
+                "lint", []
+            ] do
             Assert.Equal(Json, (parse ([ verb ] @ args @ [ "--json" ]) |> ok).Render)
             Assert.Equal(Text, (parse ([ verb ] @ args @ [ "--text" ]) |> ok).Render)
 
@@ -1068,12 +1167,14 @@ module OptionsTests =
         // A command holding one legal render flag and one illegal one is the ONLY case that separates
         // "remember the winner" from "remember what was typed", which is why it gets its own test.
         for verb, args, offending in
-            [ "done", [ ".github#1523"; "--flip" ], "--json"
-              "whoami", [ "--mint" ], "--json"
-              "next", [], "--json"
-              "board", [], "--text"
-              "issues", [ "sdd" ], "--text"
-              "scan", [], "--text" ] do
+            [
+                "done", [ ".github#1523"; "--flip" ], "--json"
+                "whoami", [ "--mint" ], "--json"
+                "next", [], "--json"
+                "board", [], "--text"
+                "issues", [ "sdd" ], "--text"
+                "scan", [], "--text"
+            ] do
             for order in [ [ "--json"; "--text" ]; [ "--text"; "--json" ] ] do
                 let e = parse ([ verb ] @ args @ order) |> rejected
                 Assert.Contains($"%s{offending} is not a flag of", e)

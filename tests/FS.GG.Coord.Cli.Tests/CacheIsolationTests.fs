@@ -120,7 +120,8 @@ module Guard =
                     Map.empty
 
             let added =
-                now |> Map.filter (fun name _ -> not (CacheSandbox.ScanFilesAtStartup.ContainsKey name))
+                now
+                |> Map.filter (fun name _ -> not (CacheSandbox.ScanFilesAtStartup.ContainsKey name))
 
             let changed =
                 now
@@ -130,7 +131,11 @@ module Guard =
                     | None -> false)
 
             let describe (label: string) (m: Map<string, string>) =
-                m |> Map.toList |> List.map fst |> String.concat ", " |> sprintf "%s: [%s]" label
+                m
+                |> Map.toList
+                |> List.map fst
+                |> String.concat ", "
+                |> sprintf "%s: [%s]" label
 
             Assert.True(
                 Map.isEmpty added && Map.isEmpty changed,

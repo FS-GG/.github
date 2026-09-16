@@ -16,102 +16,117 @@ module DriverEvents =
         | Unreadable of reason: string
 
     type ItemFacts =
-        { Ref: string
-          ReadOk: bool
-          UnreadableReason: string option
-          BoardStatus: BoardStatus option
-          IssueState: IssueState option
-          ClaimWorker: string option
-          HumanBlock: HumanBlock option
-          Pr: int option
-          Review: Driver.ReviewChain option
-          Merged: bool
-          ObligationsDeclared: bool
-          Obligations: Delivery.Obligation list
-          Evidence: string
-          ObservedAt: int64
-          SourceSha: string }
+        {
+            Ref: string
+            ReadOk: bool
+            UnreadableReason: string option
+            BoardStatus: BoardStatus option
+            IssueState: IssueState option
+            ClaimWorker: string option
+            HumanBlock: HumanBlock option
+            Pr: int option
+            Review: Driver.ReviewChain option
+            Merged: bool
+            ObligationsDeclared: bool
+            Obligations: Delivery.Obligation list
+            Evidence: string
+            ObservedAt: int64
+            SourceSha: string
+        }
 
     type Classified =
-        { Ref: string
-          State: MaterialState
-          Reason: string
-          Evidence: string
-          ObservedAt: int64
-          SourceSha: string }
+        {
+            Ref: string
+            State: MaterialState
+            Reason: string
+            Evidence: string
+            ObservedAt: int64
+            SourceSha: string
+        }
 
     type Cursor = Map<string, MaterialState>
 
     type TransitionEvent =
-        { Ref: string
-          Previous: MaterialState option
-          New: MaterialState
-          Reason: string
-          Evidence: string
-          ObservedAt: int64
-          SourceSha: string }
+        {
+            Ref: string
+            Previous: MaterialState option
+            New: MaterialState
+            Reason: string
+            Evidence: string
+            ObservedAt: int64
+            SourceSha: string
+        }
 
     type Projection =
-        { Transitions: TransitionEvent list
-          Active: Classified list
-          Unreadable: Classified list
-          Cursor: Cursor
-          RenderedAt: int64 }
+        {
+            Transitions: TransitionEvent list
+            Active: Classified list
+            Unreadable: Classified list
+            Cursor: Cursor
+            RenderedAt: int64
+        }
 
     // The pure state+reason derivation. A failed read wins over every other fact — an item this
     // process could not read is never confidently Ready/Blocked/Done from stale or partial data.
     let private deriveState (facts: ItemFacts) : MaterialState * string =
         if not facts.ReadOk then
-            Unreadable(facts.UnreadableReason |> Option.defaultValue "live read failed"), "live read failed or was incomplete"
+            Unreadable(facts.UnreadableReason |> Option.defaultValue "live read failed"),
+            "live read failed or was incomplete"
         else
             match facts.HumanBlock with
             | Some AwaitingHumanDecision -> HumanBlocked "Blocked on: human/decision", "human-decision sentinel present"
             | Some AwaitingHumanAction -> HumanBlocked "Blocked on: human/action", "human-action sentinel present"
             | None ->
 
-            match facts.BoardStatus with
-            | Some Types.Blocked -> HumanBlocked "board status Blocked", "board status is Blocked"
-            | _ ->
+                match facts.BoardStatus with
+                | Some Types.Blocked -> HumanBlocked "board status Blocked", "board status is Blocked"
+                | _ ->
 
-            // Merged/closed outranks every claim/review fact: a claim marker left behind by a worker who
-            // never released it must not keep a merged item reading as "still claimed" forever.
-            if facts.Merged && facts.IssueState = Some Closed then
-                let undischarged =
-                    facts.ObligationsDeclared
-                    && facts.Obligations |> List.exists (fun o -> not o.Verified)
+                    // Merged/closed outranks every claim/review fact: a claim marker left behind by a worker who
+                    // never released it must not keep a merged item reading as "still claimed" forever.
+                    if facts.Merged && facts.IssueState = Some Closed then
+                        let undischarged =
+                            facts.ObligationsDeclared
+                            && facts.Obligations |> List.exists (fun o -> not o.Verified)
 
-                if undischarged then
-                    MergedAwaitingObligations(facts.Pr |> Option.defaultValue 0), "merged; one or more obligations unverified"
-                else
-                    Released, "merged; every declared obligation is verified (or none was declared)"
-            elif facts.BoardStatus = Some Types.Done && facts.IssueState = Some Closed then
-                Done, "board status Done; issue closed"
-            else
-                match facts.ClaimWorker with
-                | Some worker ->
-                    match facts.Review with
-                    | Some chain when chain.MarkerValid && chain.RepairPhase ->
-                        ReviewRepair(List.length chain.Rounds), "review marker valid; in repair phase"
-                    | Some chain when chain.MarkerValid && chain.ChecksGreen && chain.HostAccepted ->
-                        CiLandable, "review marker valid; checks green; host-accepted"
-                    | Some chain when chain.MarkerValid ->
-                        ReviewHandoff chain.CriticIdentity, "review marker valid; awaiting critic or host action"
-                    | Some _ -> Claimed worker, "a review marker is present but invalid; treated as claimed pending a valid handoff"
-                    | None -> Claimed worker, "claim marker live; no review evidence yet"
-                | None ->
-                    match facts.BoardStatus with
-                    | Some Types.Done -> Done, "board status Done"
-                    | _ -> Ready, "no live claim; unclaimed and schedulable"
+                        if undischarged then
+                            MergedAwaitingObligations(facts.Pr |> Option.defaultValue 0),
+                            "merged; one or more obligations unverified"
+                        else
+                            Released, "merged; every declared obligation is verified (or none was declared)"
+                    elif facts.BoardStatus = Some Types.Done && facts.IssueState = Some Closed then
+                        Done, "board status Done; issue closed"
+                    else
+                        match facts.ClaimWorker with
+                        | Some worker ->
+                            match facts.Review with
+                            | Some chain when chain.MarkerValid && chain.RepairPhase ->
+                                ReviewRepair(List.length chain.Rounds), "review marker valid; in repair phase"
+                            | Some chain when chain.MarkerValid && chain.ChecksGreen && chain.HostAccepted ->
+                                CiLandable, "review marker valid; checks green; host-accepted"
+                            | Some chain when chain.MarkerValid ->
+                                ReviewHandoff chain.CriticIdentity,
+                                "review marker valid; awaiting critic or host action"
+                            | Some _ ->
+                                Claimed worker,
+                                "a review marker is present but invalid; treated as claimed pending a valid handoff"
+                            | None -> Claimed worker, "claim marker live; no review evidence yet"
+                        | None ->
+                            match facts.BoardStatus with
+                            | Some Types.Done -> Done, "board status Done"
+                            | _ -> Ready, "no live claim; unclaimed and schedulable"
 
     let classify (facts: ItemFacts) : Classified =
         let state, reason = deriveState facts
 
-        { Ref = facts.Ref
-          State = state
-          Reason = reason
-          Evidence = facts.Evidence
-          ObservedAt = facts.ObservedAt
-          SourceSha = facts.SourceSha }
+        {
+            Ref = facts.Ref
+            State = state
+            Reason = reason
+            Evidence = facts.Evidence
+            ObservedAt = facts.ObservedAt
+            SourceSha = facts.SourceSha
+        }
 
     let isActive (state: MaterialState) : bool =
         match state with
@@ -148,8 +163,11 @@ module DriverEvents =
         match Map.tryFind c.Ref cursor, c.State with
         | Some previous, Ready when isTerminal previous ->
             { c with
-                State = Unreadable $"cursor previously observed this item %A{previous}; a fresh read reported Ready, which regresses a terminal row and is refused rather than trusted"
-                Reason = $"terminal regression refused: previous read was %A{previous}, this read says Ready" }
+                State =
+                    Unreadable
+                        $"cursor previously observed this item %A{previous}; a fresh read reported Ready, which regresses a terminal row and is refused rather than trusted"
+                Reason = $"terminal regression refused: previous read was %A{previous}, this read says Ready"
+            }
         | _ -> c
 
     // A ref this process previously classified ACTIVE that is simply ABSENT from the current facts
@@ -190,21 +208,27 @@ module DriverEvents =
 
     let private missingActiveRefs (cursor: Cursor) (classified: Classified list) (observedAt: int64) : Classified list =
         let seenRefs = classified |> List.map (fun c -> c.Ref) |> Set.ofList
+
         let fallbackSha =
-            classified |> List.tryHead |> Option.map (fun c -> c.SourceSha) |> Option.defaultValue ""
+            classified
+            |> List.tryHead
+            |> Option.map (fun c -> c.SourceSha)
+            |> Option.defaultValue ""
 
         cursor
         |> Map.toList
         |> List.filter (fun (ref, state) -> isActive state && not (Set.contains ref seenRefs))
         |> List.map (fun (ref, state) ->
-            { Ref = ref
-              State =
-                Unreadable
-                    $"this item is ABSENT from the current facts batch and its state this pass is UNKNOWN; it was %s{lastKnownPhrase state} as of the PREVIOUS read, which is a superseded observation and NOT a statement about who holds it now"
-              Reason = "missing from this read: previously active, absent from the current facts batch"
-              Evidence = "cursor-only; absent from current read"
-              ObservedAt = observedAt
-              SourceSha = fallbackSha })
+            {
+                Ref = ref
+                State =
+                    Unreadable
+                        $"this item is ABSENT from the current facts batch and its state this pass is UNKNOWN; it was %s{lastKnownPhrase state} as of the PREVIOUS read, which is a superseded observation and NOT a statement about who holds it now"
+                Reason = "missing from this read: previously active, absent from the current facts batch"
+                Evidence = "cursor-only; absent from current read"
+                ObservedAt = observedAt
+                SourceSha = fallbackSha
+            })
 
     // Idempotency is suppression of REPEATED news: a stable `Claimed`/`Ready`/etc. state that has not
     // changed since the cursor is not worth re-announcing. `Unreadable` is the one state where that
@@ -236,13 +260,15 @@ module DriverEvents =
                     None
                 else
                     Some
-                        { Ref = c.Ref
-                          Previous = previous
-                          New = c.State
-                          Reason = c.Reason
-                          Evidence = c.Evidence
-                          ObservedAt = c.ObservedAt
-                          SourceSha = c.SourceSha })
+                        {
+                            Ref = c.Ref
+                            Previous = previous
+                            New = c.State
+                            Reason = c.Reason
+                            Evidence = c.Evidence
+                            ObservedAt = c.ObservedAt
+                            SourceSha = c.SourceSha
+                        })
 
         let newCursor =
             classified |> List.fold (fun acc c -> Map.add c.Ref c.State acc) cursor
@@ -271,7 +297,11 @@ module DriverEvents =
         // persists.
         let overriddenRefs =
             List.zip rawClassified regressionGuarded
-            |> List.choose (fun (raw, guarded) -> if raw.State <> guarded.State then Some guarded.Ref else None)
+            |> List.choose (fun (raw, guarded) ->
+                if raw.State <> guarded.State then
+                    Some guarded.Ref
+                else
+                    None)
             |> Set.ofList
 
         let missingRefs = missing |> List.map (fun c -> c.Ref) |> Set.ofList
@@ -288,21 +318,23 @@ module DriverEvents =
                     | None -> acc)
                 foldedCursor
 
-        { Transitions = events
-          Active = reported |> List.filter (fun c -> isActive c.State)
-          // THE COMPLETENESS OF THE ACTIVE SET, CARRIED (.github#2525). `isActive Unreadable` is false —
-          // correctly, an item nobody could read is not running — so before this the `Active` filter simply
-          // DISCARDED every unreadable row and the renderer had nothing left to distinguish "I measured an
-          // empty active set" from "I could not measure the active set". Those are different facts and the
-          // stopping rule consumes both, so the projection now carries them both.
-          Unreadable =
-            reported
-            |> List.filter (fun c ->
-                match c.State with
-                | Unreadable _ -> true
-                | _ -> false)
-          Cursor = newCursor
-          RenderedAt = observedAt }
+        {
+            Transitions = events
+            Active = reported |> List.filter (fun c -> isActive c.State)
+            // THE COMPLETENESS OF THE ACTIVE SET, CARRIED (.github#2525). `isActive Unreadable` is false —
+            // correctly, an item nobody could read is not running — so before this the `Active` filter simply
+            // DISCARDED every unreadable row and the renderer had nothing left to distinguish "I measured an
+            // empty active set" from "I could not measure the active set". Those are different facts and the
+            // stopping rule consumes both, so the projection now carries them both.
+            Unreadable =
+                reported
+                |> List.filter (fun c ->
+                    match c.State with
+                    | Unreadable _ -> true
+                    | _ -> false)
+            Cursor = newCursor
+            RenderedAt = observedAt
+        }
 
     let encodeState (state: MaterialState) : string =
         match state with
@@ -349,9 +381,7 @@ module DriverEvents =
                     projection.Transitions
                     |> List.map (fun e ->
                         let previous =
-                            e.Previous
-                            |> Option.map encodeState
-                            |> Option.defaultValue "unobserved"
+                            e.Previous |> Option.map encodeState |> Option.defaultValue "unobserved"
 
                         $"%s{e.Ref}: %s{previous} -> %s{encodeState e.New} (%s{e.Reason})")
                     |> String.concat "; "

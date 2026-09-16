@@ -42,7 +42,10 @@ module CommandSurfaceTests =
 
     [<Fact>]
     let ``command catalogue closure names missing duplicate and undocumented rows`` () =
-        let descriptor = Options.commandCatalogue |> List.find (fun row -> row.Command = Options.CommentCmd)
+        let descriptor =
+            Options.commandCatalogue
+            |> List.find (fun row -> row.Command = Options.CommentCmd)
+
         let mutant =
             Options.commandCatalogue
             |> List.filter (fun row -> row.Command <> Options.Help)
@@ -120,10 +123,13 @@ module CommandSurfaceTests =
         // extend is one that describes last year's engine. Reflection over the DU is the only source of
         // truth here that the inventory itself cannot drift from.
         let declared =
-            (surface |> List.map (snd >> caseName)) @ (flagDispatched |> List.map caseName) |> Set.ofList
+            (surface |> List.map (snd >> caseName)) @ (flagDispatched |> List.map caseName)
+            |> Set.ofList
 
         let actual =
-            FSharpType.GetUnionCases typeof<Command> |> Array.map (fun c -> c.Name) |> Set.ofArray
+            FSharpType.GetUnionCases typeof<Command>
+            |> Array.map (fun c -> c.Name)
+            |> Set.ofArray
 
         // (declared, actual) in that order: the inventory is the SPEC, the DU is what the engine really
         // has, so a verb added without a line here reads as "Actual: [… Flush …]" — the name of the thing
@@ -177,9 +183,7 @@ module CommandSurfaceTests =
 
         Assert.True(line.Success, $"%s{verb}: no anchored usage line to compare with its contract")
 
-        Regex.Matches(line.Value, @"--(?:json|text)")
-        |> Seq.map _.Value
-        |> Set.ofSeq
+        Regex.Matches(line.Value, @"--(?:json|text)") |> Seq.map _.Value |> Set.ofSeq
 
     /// Render-capable commands whose established usage form intentionally does not spell every projection.
     /// This is an explicit migration boundary, not a second contract: the assertion below requires this
@@ -187,43 +191,46 @@ module CommandSurfaceTests =
     /// the exemption itself fail until it is removed. #1548's four commands are deliberately absent.
     let private renderUsageExemptions =
         set
-            [ "scan"
-              "graphql"
-              "whoami"
-              "budget"
-              "next"
-              "reconcile"
-              "who"
-              "reap"
-              "claim"
-              "landable"
-              "take"
-              "release"
-              "heartbeat"
-              "add"
-              "set-field"
-              "child"
-              "widen"
-              "set-paths"
-              "overlap"
-              "say"
-              "inbox"
-              "done"
-              "verify-paths"
-              "flush"
-              "bootstrap"
-              "board"
-              "field-id"
-              "option-id"
-              "item-id"
-              "lint"
-              "issues"
-              "followup"
-              "room open" ]
+            [
+                "scan"
+                "graphql"
+                "whoami"
+                "budget"
+                "next"
+                "reconcile"
+                "who"
+                "reap"
+                "claim"
+                "landable"
+                "take"
+                "release"
+                "heartbeat"
+                "add"
+                "set-field"
+                "child"
+                "widen"
+                "set-paths"
+                "overlap"
+                "say"
+                "inbox"
+                "done"
+                "verify-paths"
+                "flush"
+                "bootstrap"
+                "board"
+                "field-id"
+                "option-id"
+                "item-id"
+                "lint"
+                "issues"
+                "followup"
+                "room open"
+            ]
 
     /// Every command the contract is emitted for, paired with its declared render support.
     let private contractCommands =
-        surface |> List.map (fun (verb, command) -> verb, command, renderSupport command)
+        surface
+        |> List.map (fun (verb, command) -> verb, command, renderSupport command)
 
     [<Fact>]
     let ``#1523 the contract advertises --json exactly where a JSON projection EXISTS`` () =
@@ -280,7 +287,8 @@ module CommandSurfaceTests =
                 if advertised = hasProjection then
                     None
                 else
-                    Some $"%s{verb}: --text advertised=%b{advertised}, projection exists=%b{hasProjection} (%A{support})")
+                    Some
+                        $"%s{verb}: --text advertised=%b{advertised}, projection exists=%b{hasProjection} (%A{support})")
 
         Assert.True(
             List.isEmpty wrong,
@@ -299,7 +307,9 @@ module CommandSurfaceTests =
         let disagreements =
             contractCommands
             |> List.choose (fun (verb, _, _) ->
-                let expected = emitted.[verb] |> Set.filter (fun flag -> flag = "--json" || flag = "--text")
+                let expected =
+                    emitted.[verb] |> Set.filter (fun flag -> flag = "--json" || flag = "--text")
+
                 let actual = usageRenderFlags verb
 
                 if actual = expected then
@@ -340,20 +350,22 @@ module CommandSurfaceTests =
         // quietly narrows its own subject is the #266 shape. So: advertised MUST parse `Ok`, and
         // unadvertised MUST produce the residue refusal by name. Anything else is a finding.
         let disagreements =
-            [ for verb, _, _ in contractCommands do
-                  for flag in [ "--json"; "--text" ] do
-                      let advertised = emitted.[verb].Contains flag
-                      let result = parse ((verb.Split(' ') |> Array.toList) @ [ flag ])
+            [
+                for verb, _, _ in contractCommands do
+                    for flag in [ "--json"; "--text" ] do
+                        let advertised = emitted.[verb].Contains flag
+                        let result = parse ((verb.Split(' ') |> Array.toList) @ [ flag ])
 
-                      match advertised, result with
-                      | true, Ok _ -> ()
-                      | true, Error e -> yield $"%s{verb} %s{flag}: advertised, but parse REFUSED it: %s{e}"
-                      | false, Error e when e.Contains $"%s{flag} is not a flag of" -> ()
-                      | false, Ok _ -> yield $"%s{verb} %s{flag}: NOT advertised, and the parser accepted it"
-                      | false, Error e ->
-                          yield
-                              $"%s{verb} %s{flag}: NOT advertised, and the refusal is about something else "
-                              + $"— the flag went unjudged: %s{e}" ]
+                        match advertised, result with
+                        | true, Ok _ -> ()
+                        | true, Error e -> yield $"%s{verb} %s{flag}: advertised, but parse REFUSED it: %s{e}"
+                        | false, Error e when e.Contains $"%s{flag} is not a flag of" -> ()
+                        | false, Ok _ -> yield $"%s{verb} %s{flag}: NOT advertised, and the parser accepted it"
+                        | false, Error e ->
+                            yield
+                                $"%s{verb} %s{flag}: NOT advertised, and the refusal is about something else "
+                                + $"— the flag went unjudged: %s{e}"
+            ]
 
         Assert.True(
             List.isEmpty disagreements,
@@ -368,7 +380,9 @@ module CommandSurfaceTests =
         let rows = doc.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
         let byName =
-            rows |> List.map (fun row -> row.GetProperty("name").GetString(), row.Clone()) |> Map.ofList
+            rows
+            |> List.map (fun row -> row.GetProperty("name").GetString(), row.Clone())
+            |> Map.ofList
 
         // `Map.ofList` KEEPS THE LAST OF A DUPLICATE KEY AND SAYS NOTHING, so two rows named `widen` — a
         // botched rebase in the emitter, or a `commandName` collision — would be invisible to every
@@ -446,26 +460,30 @@ module CommandSurfaceTests =
         Assert.NotEmpty rows
 
         let bad =
-            [ for verb, row in Map.toList rows do
-                  let writes = row.GetProperty("writes").GetString()
-                  let hasGate = fst (row.TryGetProperty "writesWhen")
+            [
+                for verb, row in Map.toList rows do
+                    let writes = row.GetProperty("writes").GetString()
+                    let hasGate = fst (row.TryGetProperty "writesWhen")
 
-                  match writes, hasGate with
-                  | "conditional", false -> yield $"%s{verb}: conditional, and says nothing about WHEN"
-                  | "conditional", true ->
-                      // Exactly one gate key, and it must be one this contract defines. A row carrying two
-                      // would be read by whichever key a consumer happened to look for first.
-                      let gate = row.GetProperty "writesWhen"
-                      let keys = gate.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
+                    match writes, hasGate with
+                    | "conditional", false -> yield $"%s{verb}: conditional, and says nothing about WHEN"
+                    | "conditional", true ->
+                        // Exactly one gate key, and it must be one this contract defines. A row carrying two
+                        // would be read by whichever key a consumer happened to look for first.
+                        let gate = row.GetProperty "writesWhen"
+                        let keys = gate.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
 
-                      if keys.Count <> 1 then
-                          yield $"%s{verb}: writesWhen carries %d{keys.Count} keys (%A{keys}), not exactly one"
-                      elif not (Set.isSubset keys (set [ "flagGiven"; "flagAbsent"; "argvCannotSay" ])) then
-                          yield $"%s{verb}: writesWhen names an unknown condition %A{keys}"
-                      elif System.String.IsNullOrWhiteSpace(gate.EnumerateObject() |> Seq.head |> _.Value.GetString()) then
-                          yield $"%s{verb}: writesWhen's value is blank — a condition nobody can act on"
-                  | _, true -> yield $"%s{verb}: writes=%s{writes} and yet carries a writesWhen gate"
-                  | _, false -> () ]
+                        if keys.Count <> 1 then
+                            yield $"%s{verb}: writesWhen carries %d{keys.Count} keys (%A{keys}), not exactly one"
+                        elif not (Set.isSubset keys (set [ "flagGiven"; "flagAbsent"; "argvCannotSay" ])) then
+                            yield $"%s{verb}: writesWhen names an unknown condition %A{keys}"
+                        elif
+                            System.String.IsNullOrWhiteSpace(gate.EnumerateObject() |> Seq.head |> _.Value.GetString())
+                        then
+                            yield $"%s{verb}: writesWhen's value is blank — a condition nobody can act on"
+                    | _, true -> yield $"%s{verb}: writes=%s{writes} and yet carries a writesWhen gate"
+                    | _, false -> ()
+            ]
 
         Assert.True(
             List.isEmpty bad,
@@ -508,22 +526,25 @@ module CommandSurfaceTests =
         Assert.Equal<Set<string>>(set [ "flush"; "reap"; "reconcile" ], flagGated)
 
         let bad =
-            [ for verb, row in Map.toList rows do
-                  match row.TryGetProperty "writesWhen" with
-                  | false, _ -> ()
-                  | true, gate ->
-                      let flags = row.GetProperty("flags").EnumerateArray() |> Seq.map _.GetString() |> Set.ofSeq
+            [
+                for verb, row in Map.toList rows do
+                    match row.TryGetProperty "writesWhen" with
+                    | false, _ -> ()
+                    | true, gate ->
+                        let flags =
+                            row.GetProperty("flags").EnumerateArray() |> Seq.map _.GetString() |> Set.ofSeq
 
-                      for key in [ "flagGiven"; "flagAbsent" ] do
-                          match gate.TryGetProperty key with
-                          | false, _ -> ()
-                          | true, spelling ->
-                              let f = spelling.GetString()
+                        for key in [ "flagGiven"; "flagAbsent" ] do
+                            match gate.TryGetProperty key with
+                            | false, _ -> ()
+                            | true, spelling ->
+                                let f = spelling.GetString()
 
-                              if not (flags.Contains f) then
-                                  yield
-                                      $"%s{verb}: gated on %s{f}, which is NOT a flag the command takes "
-                                      + $"(it takes %A{Set.toList flags}) — `scopeOf` and `writeSurface` disagree" ]
+                                if not (flags.Contains f) then
+                                    yield
+                                        $"%s{verb}: gated on %s{f}, which is NOT a flag the command takes "
+                                        + $"(it takes %A{Set.toList flags}) — `scopeOf` and `writeSurface` disagree"
+            ]
 
         Assert.True(
             List.isEmpty bad,
@@ -545,7 +566,9 @@ module CommandSurfaceTests =
         // polarity `reconcile` shares, and `batch` is `next` uncapped — the pair that proves "scheduler
         // verbs read" is not the rule `next` breaks.
         let rows = emittedRows ()
-        let writes verb = rows.[verb].GetProperty("writes").GetString()
+
+        let writes verb =
+            rows.[verb].GetProperty("writes").GetString()
 
         Assert.Equal("always", writes "set-paths")
         Assert.Equal("always", writes "widen")
@@ -565,10 +588,7 @@ module CommandSurfaceTests =
         let flags command =
             doc.RootElement.GetProperty("commands").EnumerateArray()
             |> Seq.find (fun row -> row.GetProperty("name").GetString() = command)
-            |> fun row ->
-                row.GetProperty("flags").EnumerateArray()
-                |> Seq.map _.GetString()
-                |> Set.ofSeq
+            |> fun row -> row.GetProperty("flags").EnumerateArray() |> Seq.map _.GetString() |> Set.ofSeq
 
         Assert.Contains("--paths", flags "widen")
         Assert.Contains("--paths", flags "set-paths")

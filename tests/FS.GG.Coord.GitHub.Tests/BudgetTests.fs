@@ -23,7 +23,9 @@ let private headers (pairs: (string * string) list) : string -> string option =
 [<Fact>]
 let ``a real REST header observation is credential-scoped and preserves the named resource`` () =
     let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
-    let cache = Path.Combine(Path.GetTempPath(), "fsgg-budget-test-" + Guid.NewGuid().ToString "N")
+
+    let cache =
+        Path.Combine(Path.GetTempPath(), "fsgg-budget-test-" + Guid.NewGuid().ToString "N")
 
     try
         Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
@@ -31,11 +33,13 @@ let ``a real REST header observation is credential-scoped and preserves the name
         Budget.observeRestHeaders
             "test-token-a"
             (headers
-                [ "X-RateLimit-Resource", "search"
-                  "X-RateLimit-Limit", "30"
-                  "X-RateLimit-Remaining", "0"
-                  "X-RateLimit-Used", "30"
-                  "X-RateLimit-Reset", "1760000000" ])
+                [
+                    "X-RateLimit-Resource", "search"
+                    "X-RateLimit-Limit", "30"
+                    "X-RateLimit-Remaining", "0"
+                    "X-RateLimit-Used", "30"
+                    "X-RateLimit-Reset", "1760000000"
+                ])
 
         match Budget.readRestObservation "test-token-a" with
         | Some observation ->
@@ -48,11 +52,15 @@ let ``a real REST header observation is credential-scoped and preserves the name
         Budget.observeRestHeaders
             "test-token-a"
             (headers
-                [ "X-RateLimit-Resource", "core"
-                  "X-RateLimit-Limit", "5000"
-                  "X-RateLimit-Remaining", "4200" ])
+                [
+                    "X-RateLimit-Resource", "core"
+                    "X-RateLimit-Limit", "5000"
+                    "X-RateLimit-Remaining", "4200"
+                ])
 
-        let resources = Budget.readRestObservations "test-token-a" |> List.map _.Resource |> Set.ofList
+        let resources =
+            Budget.readRestObservations "test-token-a" |> List.map _.Resource |> Set.ofList
+
         Assert.True((resources = set [ "core"; "search" ]))
 
         Assert.True((Budget.readRestObservation "test-token-b").IsNone)
@@ -62,20 +70,25 @@ let ``a real REST header observation is credential-scoped and preserves the name
 [<Fact>]
 let ``REST fleet state is pessimistic across resources and only a successful resource response clears exhaustion`` () =
     let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
-    let cache = Path.Combine(Path.GetTempPath(), "fsgg-budget-state-" + Guid.NewGuid().ToString "N")
+
+    let cache =
+        Path.Combine(Path.GetTempPath(), "fsgg-budget-state-" + Guid.NewGuid().ToString "N")
 
     try
         Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
         let token = "test-token-state"
+
         let record resource remaining reset =
             Budget.observeRestHeaders
                 token
                 (headers
-                    [ "X-RateLimit-Resource", resource
-                      "X-RateLimit-Limit", "5000"
-                      "X-RateLimit-Remaining", string remaining
-                      "X-RateLimit-Used", string (5000 - remaining)
-                      "X-RateLimit-Reset", string reset ])
+                    [
+                        "X-RateLimit-Resource", resource
+                        "X-RateLimit-Limit", "5000"
+                        "X-RateLimit-Remaining", string remaining
+                        "X-RateLimit-Used", string (5000 - remaining)
+                        "X-RateLimit-Reset", string reset
+                    ])
 
         // A healthy core reading cannot erase the independent search refusal.
         record "core" 4800 1760000000
@@ -98,7 +111,9 @@ let ``REST fleet state is pessimistic across resources and only a successful res
 [<Fact>]
 let ``concurrent workers retain one credential-scoped observation per REST resource`` () =
     let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
-    let cache = Path.Combine(Path.GetTempPath(), "fsgg-budget-concurrent-" + Guid.NewGuid().ToString "N")
+
+    let cache =
+        Path.Combine(Path.GetTempPath(), "fsgg-budget-concurrent-" + Guid.NewGuid().ToString "N")
 
     try
         Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
@@ -111,9 +126,11 @@ let ``concurrent workers retain one credential-scoped observation per REST resou
                 Budget.observeRestHeaders
                     token
                     (headers
-                        [ "X-RateLimit-Resource", resource
-                          "X-RateLimit-Limit", "5000"
-                          "X-RateLimit-Remaining", "4000" ])))
+                        [
+                            "X-RateLimit-Resource", resource
+                            "X-RateLimit-Limit", "5000"
+                            "X-RateLimit-Remaining", "4000"
+                        ])))
         |> List.toArray
         |> Task.WaitAll
 
@@ -237,8 +254,10 @@ let ``#1666 a SECONDARY limit NEVER carries the primary reset - that is the fals
             403
             """{"message":"You have exceeded a secondary rate limit."}"""
             (headers
-                [ "X-RateLimit-Resource", "core"
-                  "X-RateLimit-Reset", string (inSixMinutes.ToUnixTimeSeconds()) ])
+                [
+                    "X-RateLimit-Resource", "core"
+                    "X-RateLimit-Reset", string (inSixMinutes.ToUnixTimeSeconds())
+                ])
 
     match error with
     | RateLimited(SecondaryLimit _, None) -> ()
@@ -316,7 +335,10 @@ let ``#1666 a legitimate HTTP-date Retry-After IS still read - exactness is not 
             "s"
             403
             """{"message":"You have exceeded a secondary rate limit."}"""
-            (headers [ "Retry-After", at.ToString("r", System.Globalization.CultureInfo.InvariantCulture) ])
+            (headers
+                [
+                    "Retry-After", at.ToString("r", System.Globalization.CultureInfo.InvariantCulture)
+                ])
 
     match error with
     | RateLimited(SecondaryLimit(_, Some after), _) -> Assert.InRange(after.TotalSeconds, 60.0, 200.0)
@@ -563,11 +585,14 @@ let ``the reset is read from X-RateLimit-Reset - the header that was there the w
             403
             """{"message":"API rate limit exceeded for user ID 1645484."}"""
             (headers
-                [ "X-RateLimit-Resource", "core"
-                  "X-RateLimit-Reset", string (inTenMinutes.ToUnixTimeSeconds()) ])
+                [
+                    "X-RateLimit-Resource", "core"
+                    "X-RateLimit-Reset", string (inTenMinutes.ToUnixTimeSeconds())
+                ])
 
     match error with
-    | RateLimited(RestBudget(Some "core"), Some at) -> Assert.Equal(inTenMinutes.ToUnixTimeSeconds(), at.ToUnixTimeSeconds())
+    | RateLimited(RestBudget(Some "core"), Some at) ->
+        Assert.Equal(inTenMinutes.ToUnixTimeSeconds(), at.ToUnixTimeSeconds())
     | other -> failwith $"the reset header must be read — got %A{other}"
 
     Assert.Contains("resets in ~10m", explain error)
@@ -636,7 +661,13 @@ let ``every REST resource is the REST budget - and it NAMES the bucket rather th
     // was declining to say which bucket. Four investigations were filed on that reading, three of them
     // withdrawn by their own authors.
     for resource in [ "core"; "search"; "code_search"; "integration_manifest" ] do
-        match Budget.classify "s" 403 """{"message":"API rate limit exceeded"}""" (headers [ "X-RateLimit-Resource", resource ]) with
+        match
+            Budget.classify
+                "s"
+                403
+                """{"message":"API rate limit exceeded"}"""
+                (headers [ "X-RateLimit-Resource", resource ])
+        with
         | RateLimited(RestBudget(Some named), _) ->
             Assert.Equal(resource, named)
             // and it must reach the OPERATOR, not merely the type.
@@ -697,7 +728,7 @@ let ``the meter is read from the response, and a HALF meter is no meter`` () =
         Assert.Equal(4999, m.Remaining)
     | None -> failwith "a complete meter must be read"
 
-    Assert.True((Budget.readMeter """{"data":{"rateLimit":{"cost":1}}}""") .IsNone)
+    Assert.True((Budget.readMeter """{"data":{"rateLimit":{"cost":1}}}""").IsNone)
 
 [<Fact>]
 let ``a MUTATION carries no meter, and that is not an error`` () =
@@ -770,21 +801,29 @@ let ``THE INVERSION - unaccumulated meters leave spend at zero, which is exactly
 [<Fact>]
 let ``the ledger attributes spend BY COMMAND, dearest first`` () =
     let records: Budget.SpendRecord list =
-        [ { Command = "reconcile"
-            Points = 22
-            Calls = 22
-            Worker = Some "shrike-556b"
-            ObservedAt = DateTimeOffset.UtcNow }
-          { Command = "take"
-            Points = 3
-            Calls = 1
-            Worker = Some "heron-37a2"
-            ObservedAt = DateTimeOffset.UtcNow }
-          { Command = "reconcile"
-            Points = 20
-            Calls = 20
-            Worker = Some "shrike-556b"
-            ObservedAt = DateTimeOffset.UtcNow } ]
+        [
+            {
+                Command = "reconcile"
+                Points = 22
+                Calls = 22
+                Worker = Some "shrike-556b"
+                ObservedAt = DateTimeOffset.UtcNow
+            }
+            {
+                Command = "take"
+                Points = 3
+                Calls = 1
+                Worker = Some "heron-37a2"
+                ObservedAt = DateTimeOffset.UtcNow
+            }
+            {
+                Command = "reconcile"
+                Points = 20
+                Calls = 20
+                Worker = Some "shrike-556b"
+                ObservedAt = DateTimeOffset.UtcNow
+            }
+        ]
 
     match Budget.spendByCommand records with
     | ("reconcile", 42, 42) :: ("take", 3, 1) :: [] -> ()
@@ -807,9 +846,11 @@ let ``a spend record outside the window is not counted`` () =
 
         File.WriteAllLines(
             Path.Combine(cacheDir, "graphql-spend.jsonl"),
-            [ $"""{{"command":"lint","points":70,"calls":48,"worker":null,"observedAt":"{stale}"}}"""
-              $"""{{"command":"ready","points":22,"calls":22,"worker":null,"observedAt":"{fresh}"}}"""
-              "not json at all — a torn line must be skipped, not throw" ]
+            [
+                $"""{{"command":"lint","points":70,"calls":48,"worker":null,"observedAt":"{stale}"}}"""
+                $"""{{"command":"ready","points":22,"calls":22,"worker":null,"observedAt":"{fresh}"}}"""
+                "not json at all — a torn line must be skipped, not throw"
+            ]
         )
 
         match Budget.recentSpend (TimeSpan.FromHours 1.0) with
@@ -819,7 +860,11 @@ let ``a spend record outside the window is not counted`` () =
         | other -> failwithf "expected only the in-window record, got %A" other
     finally
         Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous)
-        try Directory.Delete(cacheDir, true) with _ -> ()
+
+        try
+            Directory.Delete(cacheDir, true)
+        with _ ->
+            ()
 
 [<Fact>]
 let ``#2419 a valid-JSON body that is NOT an object is no meter - and does not throw`` () =
@@ -865,7 +910,14 @@ let ``#2419 round 1 - a non-object 'data' is no meter either, at every depth`` (
 
     // And none of them may move the accumulator or throw through it.
     Budget.resetGraphQlSpend ()
-    for body in [ """{"data":"oops"}"""; """{"data":5}"""; """{"data":[1,2,3]}"""; """{"data":null}""" ] do
+
+    for body in
+        [
+            """{"data":"oops"}"""
+            """{"data":5}"""
+            """{"data":[1,2,3]}"""
+            """{"data":null}"""
+        ] do
         Budget.observeGraphQlBody body
 
     Assert.Equal(0, (Budget.graphQlSpend ()).Calls)
@@ -904,11 +956,13 @@ let ``#2419 the handler is a BACKSTOP for the whole shape, not one exception typ
     // Every one of these is a body the parser cannot read. NONE of them may throw, and none may produce a
     // reading — "I could not read it" is the answer, never a fabricated number.
     for body in
-        [ "[]"
-          "null"
-          """{"data":[1,2,3]}"""
-          """{"data":{"rateLimit":[]}}"""
-          """{"data":{"rateLimit":{"cost":"1","remaining":"2"}}}"""
-          """{"data":{"rateLimit":{"cost":7.5,"remaining":4992}}}"""
-          """{"data":{"rateLimit":{"cost":{},"remaining":{}}}}""" ] do
+        [
+            "[]"
+            "null"
+            """{"data":[1,2,3]}"""
+            """{"data":{"rateLimit":[]}}"""
+            """{"data":{"rateLimit":{"cost":"1","remaining":"2"}}}"""
+            """{"data":{"rateLimit":{"cost":7.5,"remaining":4992}}}"""
+            """{"data":{"rateLimit":{"cost":{},"remaining":{}}}}"""
+        ] do
         Assert.True((Budget.readMeter body).IsNone, $"expected no meter reading for %s{body}")

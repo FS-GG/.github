@@ -22,39 +22,47 @@ module ChurnReading =
 
     type JointlyRed = { Rows: string list; Gate: string }
 
-    type Window = { Start: DateTimeOffset; End: DateTimeOffset }
+    type Window =
+        {
+            Start: DateTimeOffset
+            End: DateTimeOffset
+        }
 
     type Landed = { Count: int; Unit: string }
 
     type Reading =
-        { Schema: string
-          Window: Window
-          RowsOpened: int
-          RowsClosed: int
-          NetRowDelta: int
-          ItemsLanded: Landed
-          CauseInstances: Census<CauseInstance>
-          SuccessorGeneratingCauses: Census<CauseInstance>
-          AlreadyDerived: Census<DerivedRow>
-          JointlyRedCandidates: Census<JointlyRed>
-          Remedy: string option
-          Prose: string }
+        {
+            Schema: string
+            Window: Window
+            RowsOpened: int
+            RowsClosed: int
+            NetRowDelta: int
+            ItemsLanded: Landed
+            CauseInstances: Census<CauseInstance>
+            SuccessorGeneratingCauses: Census<CauseInstance>
+            AlreadyDerived: Census<DerivedRow>
+            JointlyRedCandidates: Census<JointlyRed>
+            Remedy: string option
+            Prose: string
+        }
 
     type Finding = { Field: string; Detail: string }
 
     let private rootFields =
-        [ "schema"
-          "window"
-          "rowsOpened"
-          "rowsClosed"
-          "netRowDelta"
-          "itemsLanded"
-          "causeInstances"
-          "successorGeneratingCauses"
-          "alreadyDerived"
-          "jointlyRedCandidates"
-          "remedy"
-          "prose" ]
+        [
+            "schema"
+            "window"
+            "rowsOpened"
+            "rowsClosed"
+            "netRowDelta"
+            "itemsLanded"
+            "causeInstances"
+            "successorGeneratingCauses"
+            "alreadyDerived"
+            "jointlyRedCandidates"
+            "remedy"
+            "prose"
+        ]
 
     // Said once, so every census field says it the same way.
     let private censusShape =
@@ -111,8 +119,12 @@ module ChurnReading =
         |> Seq.map (fun property -> property.Name)
         |> Seq.filter (allowed.Contains >> not)
         |> Seq.map (fun name ->
-            { Field = qualify prefix name
-              Detail = $"is not a field of {Schema}; the fields of %s{where} are " + String.concat ", " known })
+            {
+                Field = qualify prefix name
+                Detail =
+                    $"is not a field of {Schema}; the fields of %s{where} are "
+                    + String.concat ", " known
+            })
         |> Seq.toList
 
     let private requiredStringIn (prefix: string) (element: JsonElement) (name: string) =
@@ -121,9 +133,29 @@ module ChurnReading =
         match element.TryGetProperty name with
         | true, value when value.ValueKind = JsonValueKind.String -> Ok(value.GetString())
         | true, value when value.ValueKind = JsonValueKind.Null ->
-            Error [ { Field = field; Detail = "is required and must be a string, but is null" } ]
-        | true, _ -> Error [ { Field = field; Detail = "must be a string" } ]
-        | false, _ -> Error [ { Field = field; Detail = "is required" } ]
+            Error
+                [
+                    {
+                        Field = field
+                        Detail = "is required and must be a string, but is null"
+                    }
+                ]
+        | true, _ ->
+            Error
+                [
+                    {
+                        Field = field
+                        Detail = "must be a string"
+                    }
+                ]
+        | false, _ ->
+            Error
+                [
+                    {
+                        Field = field
+                        Detail = "is required"
+                    }
+                ]
 
     let private requiredIntIn (prefix: string) (element: JsonElement) (name: string) =
         let field = qualify prefix name
@@ -132,9 +164,30 @@ module ChurnReading =
         | true, value when value.ValueKind = JsonValueKind.Number ->
             match value.TryGetInt32() with
             | true, number -> Ok number
-            | _ -> Error [ { Field = field; Detail = "must be a whole number" } ]
-        | true, _ -> Error [ { Field = field; Detail = "must be a whole number" } ]
-        | false, _ -> Error [ { Field = field; Detail = "is required" } ]
+            | _ ->
+                Error
+                    [
+                        {
+                            Field = field
+                            Detail = "must be a whole number"
+                        }
+                    ]
+        | true, _ ->
+            Error
+                [
+                    {
+                        Field = field
+                        Detail = "must be a whole number"
+                    }
+                ]
+        | false, _ ->
+            Error
+                [
+                    {
+                        Field = field
+                        Detail = "is required"
+                    }
+                ]
 
     let private stringArrayIn (prefix: string) (element: JsonElement) (name: string) =
         let field = qualify prefix name
@@ -146,14 +199,41 @@ module ChurnReading =
             if items |> List.forall (fun item -> item.ValueKind = JsonValueKind.String) then
                 Ok(items |> List.map (fun item -> item.GetString()))
             else
-                Error [ { Field = field; Detail = "must be an array of strings" } ]
-        | true, _ -> Error [ { Field = field; Detail = "must be an array of strings" } ]
-        | false, _ -> Error [ { Field = field; Detail = "is required" } ]
+                Error
+                    [
+                        {
+                            Field = field
+                            Detail = "must be an array of strings"
+                        }
+                    ]
+        | true, _ ->
+            Error
+                [
+                    {
+                        Field = field
+                        Detail = "must be an array of strings"
+                    }
+                ]
+        | false, _ ->
+            Error
+                [
+                    {
+                        Field = field
+                        Detail = "is required"
+                    }
+                ]
 
     let private requiredObject (root: JsonElement) (name: string) =
         match root.TryGetProperty name with
         | true, value when value.ValueKind = JsonValueKind.Object -> Ok value
-        | true, _ -> Error [ { Field = name; Detail = "must be an object" } ]
+        | true, _ ->
+            Error
+                [
+                    {
+                        Field = name
+                        Detail = "must be an object"
+                    }
+                ]
         | false, _ -> Error [ { Field = name; Detail = "is required" } ]
 
     let private decodeWindow (root: JsonElement) =
@@ -166,23 +246,30 @@ module ChurnReading =
                 Error unknown
             else
 
-            let endpoint name =
-                let field = qualify "window" name
+                let endpoint name =
+                    let field = qualify "window" name
 
-                match element.TryGetProperty name with
-                | true, value when value.ValueKind = JsonValueKind.String ->
-                    match parseInstant (value.GetString()) with
-                    | Some instant -> Ok instant
-                    | None -> Error [ { Field = field; Detail = instantShape } ]
-                | true, _ -> Error [ { Field = field; Detail = instantShape } ]
-                | false, _ -> Error [ { Field = field; Detail = $"is required and %s{instantShape}" } ]
+                    match element.TryGetProperty name with
+                    | true, value when value.ValueKind = JsonValueKind.String ->
+                        match parseInstant (value.GetString()) with
+                        | Some instant -> Ok instant
+                        | None -> Error [ { Field = field; Detail = instantShape } ]
+                    | true, _ -> Error [ { Field = field; Detail = instantShape } ]
+                    | false, _ ->
+                        Error
+                            [
+                                {
+                                    Field = field
+                                    Detail = $"is required and %s{instantShape}"
+                                }
+                            ]
 
-            let start = endpoint "start"
-            let finish = endpoint "end"
+                let start = endpoint "start"
+                let finish = endpoint "end"
 
-            match start, finish with
-            | Ok start, Ok finish -> Ok { Start = start; End = finish }
-            | _ -> Error(errorsOf [ start; finish ])
+                match start, finish with
+                | Ok start, Ok finish -> Ok { Start = start; End = finish }
+                | _ -> Error(errorsOf [ start; finish ])
 
     let private decodeLanded (root: JsonElement) =
         match requiredObject root "itemsLanded" with
@@ -194,66 +281,84 @@ module ChurnReading =
                 Error unknown
             else
 
-            let count = requiredIntIn "itemsLanded" element "count"
-            let unit = requiredStringIn "itemsLanded" element "unit"
+                let count = requiredIntIn "itemsLanded" element "count"
+                let unit = requiredStringIn "itemsLanded" element "unit"
 
-            match count, unit with
-            | Ok count, Ok unit -> Ok { Count = count; Unit = unit }
-            | _ -> Error(errorsOf [ count ] @ errorsOf [ unit ])
+                match count, unit with
+                | Ok count, Ok unit -> Ok { Count = count; Unit = unit }
+                | _ -> Error(errorsOf [ count ] @ errorsOf [ unit ])
 
     let private decodeCauseInstance (path: string) (element: JsonElement) =
         if element.ValueKind <> JsonValueKind.Object then
-            Error [ { Field = path; Detail = "must be an object carrying 'cause' and 'rows'" } ]
+            Error
+                [
+                    {
+                        Field = path
+                        Detail = "must be an object carrying 'cause' and 'rows'"
+                    }
+                ]
         else
 
-        let unknown = unknownFields path [ "cause"; "rows" ] element
+            let unknown = unknownFields path [ "cause"; "rows" ] element
 
-        if not (List.isEmpty unknown) then
-            Error unknown
-        else
+            if not (List.isEmpty unknown) then
+                Error unknown
+            else
 
-        let cause = requiredStringIn path element "cause"
-        let rows = stringArrayIn path element "rows"
+                let cause = requiredStringIn path element "cause"
+                let rows = stringArrayIn path element "rows"
 
-        match cause, rows with
-        | Ok cause, Ok rows -> Ok { Cause = cause; Rows = rows }
-        | _ -> Error(errorsOf [ cause ] @ errorsOf [ rows ])
+                match cause, rows with
+                | Ok cause, Ok rows -> Ok { Cause = cause; Rows = rows }
+                | _ -> Error(errorsOf [ cause ] @ errorsOf [ rows ])
 
     let private decodeDerivedRow (path: string) (element: JsonElement) =
         if element.ValueKind <> JsonValueKind.Object then
-            Error [ { Field = path; Detail = "must be an object carrying 'row' and 'gate'" } ]
+            Error
+                [
+                    {
+                        Field = path
+                        Detail = "must be an object carrying 'row' and 'gate'"
+                    }
+                ]
         else
 
-        let unknown = unknownFields path [ "row"; "gate" ] element
+            let unknown = unknownFields path [ "row"; "gate" ] element
 
-        if not (List.isEmpty unknown) then
-            Error unknown
-        else
+            if not (List.isEmpty unknown) then
+                Error unknown
+            else
 
-        let row = requiredStringIn path element "row"
-        let gate = requiredStringIn path element "gate"
+                let row = requiredStringIn path element "row"
+                let gate = requiredStringIn path element "gate"
 
-        match row, gate with
-        | Ok row, Ok gate -> Ok { Row = row; Gate = gate }
-        | _ -> Error(errorsOf [ row; gate ])
+                match row, gate with
+                | Ok row, Ok gate -> Ok { Row = row; Gate = gate }
+                | _ -> Error(errorsOf [ row; gate ])
 
     let private decodeJointlyRed (path: string) (element: JsonElement) =
         if element.ValueKind <> JsonValueKind.Object then
-            Error [ { Field = path; Detail = "must be an object carrying 'rows' and 'gate'" } ]
+            Error
+                [
+                    {
+                        Field = path
+                        Detail = "must be an object carrying 'rows' and 'gate'"
+                    }
+                ]
         else
 
-        let unknown = unknownFields path [ "rows"; "gate" ] element
+            let unknown = unknownFields path [ "rows"; "gate" ] element
 
-        if not (List.isEmpty unknown) then
-            Error unknown
-        else
+            if not (List.isEmpty unknown) then
+                Error unknown
+            else
 
-        let rows = stringArrayIn path element "rows"
-        let gate = requiredStringIn path element "gate"
+                let rows = stringArrayIn path element "rows"
+                let gate = requiredStringIn path element "gate"
 
-        match rows, gate with
-        | Ok rows, Ok gate -> Ok { Rows = rows; Gate = gate }
-        | _ -> Error(errorsOf [ rows ] @ errorsOf [ gate ])
+                match rows, gate with
+                | Ok rows, Ok gate -> Ok { Rows = rows; Gate = gate }
+                | _ -> Error(errorsOf [ rows ] @ errorsOf [ gate ])
 
     let private decodeCensus
         (field: string)
@@ -261,10 +366,23 @@ module ChurnReading =
         (root: JsonElement)
         : Result<Census<'a>, Finding list> =
         let malformed detail =
-            Error [ { Field = field; Detail = $"%s{detail}; it %s{censusShape}" } ]
+            Error
+                [
+                    {
+                        Field = field
+                        Detail = $"%s{detail}; it %s{censusShape}"
+                    }
+                ]
 
         match root.TryGetProperty field with
-        | false, _ -> Error [ { Field = field; Detail = $"is required and %s{censusShape}" } ]
+        | false, _ ->
+            Error
+                [
+                    {
+                        Field = field
+                        Detail = $"is required and %s{censusShape}"
+                    }
+                ]
         | true, element ->
             match element.ValueKind with
             | JsonValueKind.String -> malformed $"is the string '%s{element.GetString()}', which %s{collapses}"
@@ -304,7 +422,9 @@ module ChurnReading =
                     | other -> malformed $"names the unknown case '%s{other}'"
                 | [] -> malformed "is an empty object"
                 | _ ->
-                    let named = properties |> List.map (fun property -> property.Name) |> String.concat ", "
+                    let named =
+                        properties |> List.map (fun property -> property.Name) |> String.concat ", "
+
                     malformed $"names more than one case (%s{named})"
             | other -> malformed $"is a JSON %s{other.ToString().ToLowerInvariant()}"
 
@@ -314,14 +434,22 @@ module ChurnReading =
         | true, value when value.ValueKind = JsonValueKind.Null -> Ok None
         | true, _ ->
             Error
-                [ { Field = "remedy"
-                    Detail = "must be a string, or explicit null when no pathology is present" } ]
+                [
+                    {
+                        Field = "remedy"
+                        Detail = "must be a string, or explicit null when no pathology is present"
+                    }
+                ]
         | false, _ ->
             Error
-                [ { Field = "remedy"
-                    Detail =
-                      "is required; write explicit null when no pathology is present, never the string 'none' "
-                      + "and never an absent key" } ]
+                [
+                    {
+                        Field = "remedy"
+                        Detail =
+                            "is required; write explicit null when no pathology is present, never the string 'none' "
+                            + "and never an absent key"
+                    }
+                ]
 
     let private isPathology (census: Census<'a>) =
         match census with
@@ -330,50 +458,73 @@ module ChurnReading =
         | NotSearched _ -> false
 
     let private blankRows (field: string) (index: int) (label: string) (rows: string list) =
-        [ for rowIndex, row in List.indexed rows do
-              if String.IsNullOrWhiteSpace row then
-                  yield
-                      { Field = $"%s{field}.found[%d{index}].%s{label}[%d{rowIndex}]"
-                        Detail = "must be a row reference" } ]
+        [
+            for rowIndex, row in List.indexed rows do
+                if String.IsNullOrWhiteSpace row then
+                    yield
+                        {
+                            Field = $"%s{field}.found[%d{index}].%s{label}[%d{rowIndex}]"
+                            Detail = "must be a row reference"
+                        }
+        ]
 
     let private causeInstanceProblems (field: string) (index: int) (item: CauseInstance) =
-        [ if String.IsNullOrWhiteSpace item.Cause then
-              yield
-                  { Field = $"%s{field}.found[%d{index}].cause"
-                    Detail = "must name the cause in the analyst's own words" }
+        [
+            if String.IsNullOrWhiteSpace item.Cause then
+                yield
+                    {
+                        Field = $"%s{field}.found[%d{index}].cause"
+                        Detail = "must name the cause in the analyst's own words"
+                    }
 
-          if List.isEmpty item.Rows then
-              yield
-                  { Field = $"%s{field}.found[%d{index}].rows"
-                    Detail = "must name at least one row" }
+            if List.isEmpty item.Rows then
+                yield
+                    {
+                        Field = $"%s{field}.found[%d{index}].rows"
+                        Detail = "must name at least one row"
+                    }
 
-          yield! blankRows field index "rows" item.Rows ]
+            yield! blankRows field index "rows" item.Rows
+        ]
 
     let private derivedRowProblems (field: string) (index: int) (item: DerivedRow) =
-        [ if String.IsNullOrWhiteSpace item.Row then
-              yield { Field = $"%s{field}.found[%d{index}].row"; Detail = "must name the row" }
+        [
+            if String.IsNullOrWhiteSpace item.Row then
+                yield
+                    {
+                        Field = $"%s{field}.found[%d{index}].row"
+                        Detail = "must name the row"
+                    }
 
-          if String.IsNullOrWhiteSpace item.Gate then
-              yield
-                  { Field = $"%s{field}.found[%d{index}].gate"
-                    Detail = "must name the scripts/check-*.py that already derives the condition" } ]
+            if String.IsNullOrWhiteSpace item.Gate then
+                yield
+                    {
+                        Field = $"%s{field}.found[%d{index}].gate"
+                        Detail = "must name the scripts/check-*.py that already derives the condition"
+                    }
+        ]
 
     let private jointlyRedProblems (field: string) (index: int) (item: JointlyRed) =
         [ // "Individually green and JOINTLY red" is a coupling between rows. One row cannot be jointly
-          // anything, so a single-row entry is a different finding wearing this element's shape.
-          if List.length item.Rows < 2 then
-              yield
-                  { Field = $"%s{field}.found[%d{index}].rows"
-                    Detail =
-                      "must name at least two rows: this element is a COUPLING — rows individually green "
-                      + "and jointly red through a gate corpus neither author controls" }
+            // anything, so a single-row entry is a different finding wearing this element's shape.
+            if List.length item.Rows < 2 then
+                yield
+                    {
+                        Field = $"%s{field}.found[%d{index}].rows"
+                        Detail =
+                            "must name at least two rows: this element is a COUPLING — rows individually green "
+                            + "and jointly red through a gate corpus neither author controls"
+                    }
 
-          yield! blankRows field index "rows" item.Rows
+            yield! blankRows field index "rows" item.Rows
 
-          if String.IsNullOrWhiteSpace item.Gate then
-              yield
-                  { Field = $"%s{field}.found[%d{index}].gate"
-                    Detail = "must name the shared gate corpus the rows are jointly red through" } ]
+            if String.IsNullOrWhiteSpace item.Gate then
+                yield
+                    {
+                        Field = $"%s{field}.found[%d{index}].gate"
+                        Detail = "must name the shared gate corpus the rows are jointly red through"
+                    }
+        ]
 
     let private censusProblems
         (field: string)
@@ -383,28 +534,47 @@ module ChurnReading =
         =
         match census with
         | Found [] ->
-            [ { Field = field
-                Detail =
-                  "'found' must carry at least one row; a pass that looked and found none says so with "
-                  + "'searchedNotFound', which carries the search performed" } ]
+            [
+                {
+                    Field = field
+                    Detail =
+                        "'found' must carry at least one row; a pass that looked and found none says so with "
+                        + "'searchedNotFound', which carries the search performed"
+                }
+            ]
         | Found items -> items |> List.mapi (itemProblems field) |> List.concat
         | SearchedNotFound search when String.IsNullOrWhiteSpace search ->
-            [ { Field = field
-                Detail =
-                  "'searchedNotFound' must carry the search performed, so a reader can check the claim "
-                  + "rather than trust it" } ]
+            [
+                {
+                    Field = field
+                    Detail =
+                        "'searchedNotFound' must carry the search performed, so a reader can check the claim "
+                        + "rather than trust it"
+                }
+            ]
         | SearchedNotFound _ -> []
         | NotSearched why when String.IsNullOrWhiteSpace why ->
-            [ { Field = field; Detail = "'notSearched' must carry why the search was not performed" } ]
+            [
+                {
+                    Field = field
+                    Detail = "'notSearched' must carry why the search was not performed"
+                }
+            ]
         | NotSearched why ->
-            [ { Field = field
-                Detail =
-                  $"is 'notSearched' (%s{why}). %s{element} is one of the six REQUIRED elements of a churn "
-                  + "reading, so this pass is INCOMPLETE rather than clean: perform the search, or record "
-                  + "what you did look for with 'searchedNotFound'" } ]
+            [
+                {
+                    Field = field
+                    Detail =
+                        $"is 'notSearched' (%s{why}). %s{element} is one of the six REQUIRED elements of a churn "
+                        + "reading, so this pass is INCOMPLETE rather than clean: perform the search, or record "
+                        + "what you did look for with 'searchedNotFound'"
+                }
+            ]
 
     let private elementTwo = "Element 2 (rows that are instances of one cause)"
-    let private elementThree = "Element 3 (cause rows whose repairs keep generating successors)"
+
+    let private elementThree =
+        "Element 3 (cause rows whose repairs keep generating successors)"
 
     let private elementFour =
         "Element 4 (rows restating a condition a scripts/check-*.py already derives)"
@@ -414,92 +584,127 @@ module ChurnReading =
 
     let validate (now: DateTimeOffset) (reading: Reading) =
         let findings =
-            [ if reading.Schema <> Schema then
-                  yield { Field = "schema"; Detail = $"must be '{Schema}'" }
+            [
+                if reading.Schema <> Schema then
+                    yield
+                        {
+                            Field = "schema"
+                            Detail = $"must be '{Schema}'"
+                        }
 
-              if reading.Window.End <= reading.Window.Start then
-                  yield
-                      { Field = "window"
-                        Detail = "must be a closed interval whose end is strictly after its start" }
+                if reading.Window.End <= reading.Window.Start then
+                    yield
+                        {
+                            Field = "window"
+                            Detail = "must be a closed interval whose end is strictly after its start"
+                        }
 
-              if reading.Window.End > now then
-                  yield
-                      { Field = "window.end"
-                        Detail =
-                          "must already have happened; a reading whose window has not closed cannot be "
-                          + "re-derived even by the person who wrote it, five minutes later" }
+                if reading.Window.End > now then
+                    yield
+                        {
+                            Field = "window.end"
+                            Detail =
+                                "must already have happened; a reading whose window has not closed cannot be "
+                                + "re-derived even by the person who wrote it, five minutes later"
+                        }
 
-              if reading.RowsOpened < 0 then
-                  yield { Field = "rowsOpened"; Detail = "cannot be negative" }
+                if reading.RowsOpened < 0 then
+                    yield
+                        {
+                            Field = "rowsOpened"
+                            Detail = "cannot be negative"
+                        }
 
-              if reading.RowsClosed < 0 then
-                  yield { Field = "rowsClosed"; Detail = "cannot be negative" }
+                if reading.RowsClosed < 0 then
+                    yield
+                        {
+                            Field = "rowsClosed"
+                            Detail = "cannot be negative"
+                        }
 
-              if reading.NetRowDelta <> reading.RowsOpened - reading.RowsClosed then
-                  yield
-                      { Field = "netRowDelta"
-                        Detail =
-                          $"is %d{reading.NetRowDelta}, but rowsOpened %d{reading.RowsOpened} minus rowsClosed "
-                          + $"%d{reading.RowsClosed} is %d{reading.RowsOpened - reading.RowsClosed}" }
+                if reading.NetRowDelta <> reading.RowsOpened - reading.RowsClosed then
+                    yield
+                        {
+                            Field = "netRowDelta"
+                            Detail =
+                                $"is %d{reading.NetRowDelta}, but rowsOpened %d{reading.RowsOpened} minus rowsClosed "
+                                + $"%d{reading.RowsClosed} is %d{reading.RowsOpened - reading.RowsClosed}"
+                        }
 
-              if reading.ItemsLanded.Count < 0 then
-                  yield { Field = "itemsLanded.count"; Detail = "cannot be negative" }
+                if reading.ItemsLanded.Count < 0 then
+                    yield
+                        {
+                            Field = "itemsLanded.count"
+                            Detail = "cannot be negative"
+                        }
 
-              if String.IsNullOrWhiteSpace reading.ItemsLanded.Unit then
-                  yield
-                      { Field = "itemsLanded.unit"
-                        Detail =
-                          "must name what 'landed' counts — 'issues closed', 'pull requests merged' — because "
-                          + "a count whose unit is unrecoverable cannot be re-derived under any reading of it" }
+                if String.IsNullOrWhiteSpace reading.ItemsLanded.Unit then
+                    yield
+                        {
+                            Field = "itemsLanded.unit"
+                            Detail =
+                                "must name what 'landed' counts — 'issues closed', 'pull requests merged' — because "
+                                + "a count whose unit is unrecoverable cannot be re-derived under any reading of it"
+                        }
 
-              yield! censusProblems "causeInstances" elementTwo causeInstanceProblems reading.CauseInstances
+                yield! censusProblems "causeInstances" elementTwo causeInstanceProblems reading.CauseInstances
 
-              yield!
-                  censusProblems
-                      "successorGeneratingCauses"
-                      elementThree
-                      causeInstanceProblems
-                      reading.SuccessorGeneratingCauses
+                yield!
+                    censusProblems
+                        "successorGeneratingCauses"
+                        elementThree
+                        causeInstanceProblems
+                        reading.SuccessorGeneratingCauses
 
-              yield! censusProblems "alreadyDerived" elementFour derivedRowProblems reading.AlreadyDerived
+                yield! censusProblems "alreadyDerived" elementFour derivedRowProblems reading.AlreadyDerived
 
-              yield!
-                  censusProblems "jointlyRedCandidates" elementSix jointlyRedProblems reading.JointlyRedCandidates
+                yield! censusProblems "jointlyRedCandidates" elementSix jointlyRedProblems reading.JointlyRedCandidates
 
-              if String.IsNullOrWhiteSpace reading.Prose then
-                  yield
-                      { Field = "prose"
-                        Detail =
-                          "is required: this document is the checkable skeleton BESIDE the reading, never a "
-                          + "replacement for it, and the reading's value is the judgement in it" }
+                if String.IsNullOrWhiteSpace reading.Prose then
+                    yield
+                        {
+                            Field = "prose"
+                            Detail =
+                                "is required: this document is the checkable skeleton BESIDE the reading, never a "
+                                + "replacement for it, and the reading's value is the judgement in it"
+                        }
 
-              match reading.Remedy with
-              | Some remedy when String.IsNullOrWhiteSpace remedy ->
-                  yield
-                      { Field = "remedy"
-                        Detail = "must carry the mechanism, or be explicit null when no pathology is present" }
-              | Some remedy when remedy.Trim().Equals("none", StringComparison.OrdinalIgnoreCase) ->
-                  yield
-                      { Field = "remedy"
-                        Detail =
-                          "is the string 'none', which is the sentinel this schema replaces; write explicit null" }
-              | _ -> ()
+                match reading.Remedy with
+                | Some remedy when String.IsNullOrWhiteSpace remedy ->
+                    yield
+                        {
+                            Field = "remedy"
+                            Detail = "must carry the mechanism, or be explicit null when no pathology is present"
+                        }
+                | Some remedy when remedy.Trim().Equals("none", StringComparison.OrdinalIgnoreCase) ->
+                    yield
+                        {
+                            Field = "remedy"
+                            Detail =
+                                "is the string 'none', which is the sentinel this schema replaces; write explicit null"
+                        }
+                | _ -> ()
 
-              let pathologies =
-                  [ "causeInstances", isPathology reading.CauseInstances
-                    "successorGeneratingCauses", isPathology reading.SuccessorGeneratingCauses
-                    "alreadyDerived", isPathology reading.AlreadyDerived
-                    "jointlyRedCandidates", isPathology reading.JointlyRedCandidates ]
-                  |> List.filter snd
-                  |> List.map fst
+                let pathologies =
+                    [
+                        "causeInstances", isPathology reading.CauseInstances
+                        "successorGeneratingCauses", isPathology reading.SuccessorGeneratingCauses
+                        "alreadyDerived", isPathology reading.AlreadyDerived
+                        "jointlyRedCandidates", isPathology reading.JointlyRedCandidates
+                    ]
+                    |> List.filter snd
+                    |> List.map fst
 
-              if not (List.isEmpty pathologies) && Option.isNone reading.Remedy then
-                  yield
-                      { Field = "remedy"
-                        Detail =
-                          "is required to be non-null whenever a pathology is present, and "
-                          + String.concat ", " pathologies
-                          + " report found rows; a remedy names a mechanism, not an intention" } ]
+                if not (List.isEmpty pathologies) && Option.isNone reading.Remedy then
+                    yield
+                        {
+                            Field = "remedy"
+                            Detail =
+                                "is required to be non-null whenever a pathology is present, and "
+                                + String.concat ", " pathologies
+                                + " report found rows; a remedy names a mechanism, not an intention"
+                        }
+            ]
 
         if List.isEmpty findings then Ok reading else Error findings
 
@@ -509,70 +714,94 @@ module ChurnReading =
             let root = parsed.RootElement
 
             if root.ValueKind <> JsonValueKind.Object then
-                Error [ { Field = "document"; Detail = $"must be a JSON object carrying a {Schema} reading" } ]
+                Error
+                    [
+                        {
+                            Field = "document"
+                            Detail = $"must be a JSON object carrying a {Schema} reading"
+                        }
+                    ]
             else
 
-            let unknown = unknownFields "" rootFields root
+                let unknown = unknownFields "" rootFields root
 
-            if not (List.isEmpty unknown) then
-                Error unknown
-            else
+                if not (List.isEmpty unknown) then
+                    Error unknown
+                else
 
-            let schema = requiredStringIn "" root "schema"
-            let prose = requiredStringIn "" root "prose"
-            let window = decodeWindow root
-            let rowsOpened = requiredIntIn "" root "rowsOpened"
-            let rowsClosed = requiredIntIn "" root "rowsClosed"
-            let netRowDelta = requiredIntIn "" root "netRowDelta"
-            let itemsLanded = decodeLanded root
-            let causeInstances = decodeCensus "causeInstances" decodeCauseInstance root
-            let successors = decodeCensus "successorGeneratingCauses" decodeCauseInstance root
-            let alreadyDerived = decodeCensus "alreadyDerived" decodeDerivedRow root
-            let jointlyRed = decodeCensus "jointlyRedCandidates" decodeJointlyRed root
-            let remedy = decodeRemedy root
+                    let schema = requiredStringIn "" root "schema"
+                    let prose = requiredStringIn "" root "prose"
+                    let window = decodeWindow root
+                    let rowsOpened = requiredIntIn "" root "rowsOpened"
+                    let rowsClosed = requiredIntIn "" root "rowsClosed"
+                    let netRowDelta = requiredIntIn "" root "netRowDelta"
+                    let itemsLanded = decodeLanded root
+                    let causeInstances = decodeCensus "causeInstances" decodeCauseInstance root
+                    let successors = decodeCensus "successorGeneratingCauses" decodeCauseInstance root
+                    let alreadyDerived = decodeCensus "alreadyDerived" decodeDerivedRow root
+                    let jointlyRed = decodeCensus "jointlyRedCandidates" decodeJointlyRed root
+                    let remedy = decodeRemedy root
 
-            match
-                schema, prose, window, rowsOpened, rowsClosed, netRowDelta, itemsLanded, causeInstances, successors,
-                alreadyDerived, jointlyRed, remedy
-            with
-            | Ok schema,
-              Ok prose,
-              Ok window,
-              Ok rowsOpened,
-              Ok rowsClosed,
-              Ok netRowDelta,
-              Ok itemsLanded,
-              Ok causeInstances,
-              Ok successors,
-              Ok alreadyDerived,
-              Ok jointlyRed,
-              Ok remedy ->
-                Ok
-                    { Schema = schema
-                      Window = window
-                      RowsOpened = rowsOpened
-                      RowsClosed = rowsClosed
-                      NetRowDelta = netRowDelta
-                      ItemsLanded = itemsLanded
-                      CauseInstances = causeInstances
-                      SuccessorGeneratingCauses = successors
-                      AlreadyDerived = alreadyDerived
-                      JointlyRedCandidates = jointlyRed
-                      Remedy = remedy
-                      Prose = prose }
-            | _ ->
-                Error(
-                    errorsOf [ schema; prose ]
-                    @ errorsOf [ window ]
-                    @ errorsOf [ rowsOpened; rowsClosed; netRowDelta ]
-                    @ errorsOf [ itemsLanded ]
-                    @ errorsOf [ causeInstances; successors ]
-                    @ errorsOf [ alreadyDerived ]
-                    @ errorsOf [ jointlyRed ]
-                    @ errorsOf [ remedy ]
-                )
+                    match
+                        schema,
+                        prose,
+                        window,
+                        rowsOpened,
+                        rowsClosed,
+                        netRowDelta,
+                        itemsLanded,
+                        causeInstances,
+                        successors,
+                        alreadyDerived,
+                        jointlyRed,
+                        remedy
+                    with
+                    | Ok schema,
+                      Ok prose,
+                      Ok window,
+                      Ok rowsOpened,
+                      Ok rowsClosed,
+                      Ok netRowDelta,
+                      Ok itemsLanded,
+                      Ok causeInstances,
+                      Ok successors,
+                      Ok alreadyDerived,
+                      Ok jointlyRed,
+                      Ok remedy ->
+                        Ok
+                            {
+                                Schema = schema
+                                Window = window
+                                RowsOpened = rowsOpened
+                                RowsClosed = rowsClosed
+                                NetRowDelta = netRowDelta
+                                ItemsLanded = itemsLanded
+                                CauseInstances = causeInstances
+                                SuccessorGeneratingCauses = successors
+                                AlreadyDerived = alreadyDerived
+                                JointlyRedCandidates = jointlyRed
+                                Remedy = remedy
+                                Prose = prose
+                            }
+                    | _ ->
+                        Error(
+                            errorsOf [ schema; prose ]
+                            @ errorsOf [ window ]
+                            @ errorsOf [ rowsOpened; rowsClosed; netRowDelta ]
+                            @ errorsOf [ itemsLanded ]
+                            @ errorsOf [ causeInstances; successors ]
+                            @ errorsOf [ alreadyDerived ]
+                            @ errorsOf [ jointlyRed ]
+                            @ errorsOf [ remedy ]
+                        )
         with :? JsonException as ex ->
-            Error [ { Field = "document"; Detail = $"is not valid JSON: %s{ex.Message}" } ]
+            Error
+                [
+                    {
+                        Field = "document"
+                        Detail = $"is not valid JSON: %s{ex.Message}"
+                    }
+                ]
 
     let private censusReport (census: Census<'a>) =
         match census with
@@ -588,32 +817,34 @@ module ChurnReading =
 
         String.concat
             ""
-            [ "{\"schema\":\""
-              ResultSchema
-              "\",\"kind\":\"validated\",\"window\":{\"start\":"
-              instant reading.Window.Start
-              ",\"end\":"
-              instant reading.Window.End
-              "},\"rowsOpened\":"
-              string reading.RowsOpened
-              ",\"rowsClosed\":"
-              string reading.RowsClosed
-              ",\"netRowDelta\":"
-              string reading.NetRowDelta
-              ",\"itemsLanded\":{\"count\":"
-              string reading.ItemsLanded.Count
-              ",\"unit\":"
-              text reading.ItemsLanded.Unit
-              "},\"causeInstances\":"
-              censusReport reading.CauseInstances
-              ",\"successorGeneratingCauses\":"
-              censusReport reading.SuccessorGeneratingCauses
-              ",\"alreadyDerived\":"
-              censusReport reading.AlreadyDerived
-              ",\"jointlyRedCandidates\":"
-              censusReport reading.JointlyRedCandidates
-              ",\"remedy\":\""
-              (match reading.Remedy with
-               | Some _ -> "present"
-               | None -> "null")
-              "\",\"writes\":0}" ]
+            [
+                "{\"schema\":\""
+                ResultSchema
+                "\",\"kind\":\"validated\",\"window\":{\"start\":"
+                instant reading.Window.Start
+                ",\"end\":"
+                instant reading.Window.End
+                "},\"rowsOpened\":"
+                string reading.RowsOpened
+                ",\"rowsClosed\":"
+                string reading.RowsClosed
+                ",\"netRowDelta\":"
+                string reading.NetRowDelta
+                ",\"itemsLanded\":{\"count\":"
+                string reading.ItemsLanded.Count
+                ",\"unit\":"
+                text reading.ItemsLanded.Unit
+                "},\"causeInstances\":"
+                censusReport reading.CauseInstances
+                ",\"successorGeneratingCauses\":"
+                censusReport reading.SuccessorGeneratingCauses
+                ",\"alreadyDerived\":"
+                censusReport reading.AlreadyDerived
+                ",\"jointlyRedCandidates\":"
+                censusReport reading.JointlyRedCandidates
+                ",\"remedy\":\""
+                (match reading.Remedy with
+                 | Some _ -> "present"
+                 | None -> "null")
+                "\",\"writes\":0}"
+            ]

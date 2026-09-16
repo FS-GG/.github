@@ -19,15 +19,17 @@ module FindingPacketTests =
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "finding-packets", name))
 
     let private packet: FindingPacket.Packet =
-        { Schema = FindingPacket.Schema
-          Surface = "src/FS.GG.Coord.Core/Review.fs:314"
-          Cause = FindingPacket.Established "the conjunct pair is unreachable"
-          RedToday = FindingPacket.SearchedNotFound "nothing fails; the condition is latent"
-          DerivedBy = FindingPacket.SearchedNotFound "no scripts/check-*.py computes it"
-          ClassRow = FindingPacket.Found ".github#2557"
-          WhyNotHere = "outside the declared Paths:"
-          Paths = [ "src/FS.GG.Coord.Core/Review.fs" ]
-          Finder = "plover-ce15" }
+        {
+            Schema = FindingPacket.Schema
+            Surface = "src/FS.GG.Coord.Core/Review.fs:314"
+            Cause = FindingPacket.Established "the conjunct pair is unreachable"
+            RedToday = FindingPacket.SearchedNotFound "nothing fails; the condition is latent"
+            DerivedBy = FindingPacket.SearchedNotFound "no scripts/check-*.py computes it"
+            ClassRow = FindingPacket.Found ".github#2557"
+            WhyNotHere = "outside the declared Paths:"
+            Paths = [ "src/FS.GG.Coord.Core/Review.fs" ]
+            Finder = "plover-ce15"
+        }
 
     let private findings (result: Result<'a, FindingPacket.Finding list>) : FindingPacket.Finding list =
         match result with
@@ -37,14 +39,19 @@ module FindingPacketTests =
     let private accepted result =
         match result with
         | Ok value -> value
-        | Error (findings: FindingPacket.Finding list) ->
+        | Error(findings: FindingPacket.Finding list) ->
             let rendered =
-                findings |> List.map (fun f -> $"%s{f.Field}: %s{f.Detail}") |> String.concat "; "
+                findings
+                |> List.map (fun f -> $"%s{f.Field}: %s{f.Detail}")
+                |> String.concat "; "
 
             failwith $"expected acceptance, but got findings: %s{rendered}"
 
     let private fieldsOf result =
-        findings result |> List.map (fun finding -> finding.Field) |> List.distinct |> List.sort
+        findings result
+        |> List.map (fun finding -> finding.Field)
+        |> List.distinct
+        |> List.sort
 
     // ---------------------------------------------------------------- AC-001: the closed field set
 
@@ -139,7 +146,11 @@ module FindingPacketTests =
     [<Fact>]
     let ``#2737 a union case carrying a blank string is refused`` () =
         // FR-008. A sentinel that carries no evidence is exactly what `none` was, wearing a new shape.
-        let value = { packet with DerivedBy = FindingPacket.NotSearched "   " }
+        let value =
+            { packet with
+                DerivedBy = FindingPacket.NotSearched "   "
+            }
+
         Assert.Contains(fieldsOf (FindingPacket.validate value), fun field -> field = "derivedBy")
 
     [<Fact>]
@@ -231,11 +242,13 @@ module FindingPacketTests =
             [ "accept-5304198465.json"; "accept-5307639382.json"; "accept-5307153964.json" ]
 
         let rejected =
-            [ "reject-5304189944-no-paths.json"
-              "reject-5309266535-not-a-finding.json"
-              "reject-5306816009-increment.json"
-              "reject-5311301051-no-derived-by.json"
-              "reject-5304198465-sentinels-as-none.json" ]
+            [
+                "reject-5304189944-no-paths.json"
+                "reject-5309266535-not-a-finding.json"
+                "reject-5306816009-increment.json"
+                "reject-5311301051-no-derived-by.json"
+                "reject-5304198465-sentinels-as-none.json"
+            ]
 
         Assert.All(accepted, fun name -> Assert.True(verdicts name, $"%s{name} must be accepted"))
         Assert.All(rejected, fun name -> Assert.False(verdicts name, $"%s{name} must be rejected"))
@@ -252,7 +265,10 @@ module FindingPacketTests =
         Assert.True((FindingPacket.validate { value with Surface = "" }) |> Result.isError)
 
         Assert.True(
-            (FindingPacket.validate { value with DerivedBy = FindingPacket.NotSearched "" })
+            (FindingPacket.validate
+                { value with
+                    DerivedBy = FindingPacket.NotSearched ""
+                })
             |> Result.isError
         )
 
@@ -286,31 +302,35 @@ module FindingPacketTests =
         let seed = FindingPacket.toIntakeSeed value
 
         let draft: Intake.Draft =
-            { Schema = Intake.Schema
-              Id = "packet-5307153964"
-              Owner = "FS-GG"
-              Repository = ".github"
-              Title = "intake apply can never file a row in FS-GG/.github"
-              Observed = seed.Observed
-              RootCause = seed.RootCause
-              Acceptance = "duplicateCandidates follows pagination to exhaustion"
-              Verification = "a paginated fixture transport returns every candidate"
-              Paths = seed.Paths
-              Class = "defect"
-              Status = "Ready"
-              Disposition = Some Intake.Create
-              Phase = None
-              Severity = None
-              BlockedBy = None
-              BlockedOn = None
-              BacklogReason = None
-              JudgementQuestion = None }
+            {
+                Schema = Intake.Schema
+                Id = "packet-5307153964"
+                Owner = "FS-GG"
+                Repository = ".github"
+                Title = "intake apply can never file a row in FS-GG/.github"
+                Observed = seed.Observed
+                RootCause = seed.RootCause
+                Acceptance = "duplicateCandidates follows pagination to exhaustion"
+                Verification = "a paginated fixture transport returns every candidate"
+                Paths = seed.Paths
+                Class = "defect"
+                Status = "Ready"
+                Disposition = Some Intake.Create
+                Phase = None
+                Severity = None
+                BlockedBy = None
+                BlockedOn = None
+                BacklogReason = None
+                JudgementQuestion = None
+            }
 
         match Intake.validate draft with
         | Ok _ -> ()
         | Error findings ->
             let rendered =
-                findings |> List.map (fun f -> $"%s{f.Field} %s{f.Detail}") |> String.concat "; "
+                findings
+                |> List.map (fun f -> $"%s{f.Field} %s{f.Detail}")
+                |> String.concat "; "
 
             failwith $"the lifted draft must validate, but: %s{rendered}"
 
@@ -319,7 +339,10 @@ module FindingPacketTests =
     [<Fact>]
     let ``#2737 an unestablished cause lifts in .github#1858's form rather than vanishing`` () =
         let seed =
-            FindingPacket.toIntakeSeed { packet with Cause = FindingPacket.NotEstablished "three runs, two outcomes" }
+            FindingPacket.toIntakeSeed
+                { packet with
+                    Cause = FindingPacket.NotEstablished "three runs, two outcomes"
+                }
 
         Assert.Contains("not established", seed.RootCause)
         Assert.Contains("three runs, two outcomes", seed.RootCause)
@@ -338,5 +361,9 @@ module FindingPacketTests =
 
     [<Fact>]
     let ``#2737 an unrecognised schema version is refused rather than best-effort decoded`` () =
-        let value = { packet with Schema = "fsgg.coord.finding-packet/v2" }
+        let value =
+            { packet with
+                Schema = "fsgg.coord.finding-packet/v2"
+            }
+
         Assert.Contains(fieldsOf (FindingPacket.validate value), fun field -> field = "schema")

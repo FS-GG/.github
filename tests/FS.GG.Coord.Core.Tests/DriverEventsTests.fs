@@ -10,36 +10,40 @@ open FS.GG.Coord.DriverEvents
 module DriverEventsTests =
 
     let baseFacts: ItemFacts =
-        { Ref = ".github#1"
-          ReadOk = true
-          UnreadableReason = None
-          BoardStatus = Some Types.Ready
-          IssueState = Some Open
-          ClaimWorker = None
-          HumanBlock = None
-          Pr = None
-          Review = None
-          Merged = false
-          ObligationsDeclared = false
-          Obligations = []
-          Evidence = "board-status:Ready"
-          ObservedAt = 100L
-          SourceSha = "sha-1" }
+        {
+            Ref = ".github#1"
+            ReadOk = true
+            UnreadableReason = None
+            BoardStatus = Some Types.Ready
+            IssueState = Some Open
+            ClaimWorker = None
+            HumanBlock = None
+            Pr = None
+            Review = None
+            Merged = false
+            ObligationsDeclared = false
+            Obligations = []
+            Evidence = "board-status:Ready"
+            ObservedAt = 100L
+            SourceSha = "sha-1"
+        }
 
     let validReview: Driver.ReviewChain =
-        { MarkerValid = true
-          Subject = None
-          ClaimGeneration = None
-          BaseSha = None
-          CriticIdentity = Some "critic-1"
-          HeadSha = Some "head-1"
-          Rounds = []
-          RepairPhase = false
-          ChecksGreen = false
-          HostAccepted = false
-          RuntimeRouteEvidence = None
-          DiffAuditRequired = false
-          DiffAuditHead = None }
+        {
+            MarkerValid = true
+            Subject = None
+            ClaimGeneration = None
+            BaseSha = None
+            CriticIdentity = Some "critic-1"
+            HeadSha = Some "head-1"
+            Rounds = []
+            RepairPhase = false
+            ChecksGreen = false
+            HostAccepted = false
+            RuntimeRouteEvidence = None
+            DiffAuditRequired = false
+            DiffAuditHead = None
+        }
 
     // ---- classify: one fact in, one state out ---------------------------------------------------
 
@@ -50,7 +54,11 @@ module DriverEventsTests =
 
     [<Fact>]
     let ``classify: a live claim with no review evidence classifies Claimed`` () =
-        let facts = { baseFacts with ClaimWorker = Some "snipe-f30c" }
+        let facts =
+            { baseFacts with
+                ClaimWorker = Some "snipe-f30c"
+            }
+
         let classified = classify facts
         Assert.Equal(Claimed "snipe-f30c", classified.State)
 
@@ -60,7 +68,8 @@ module DriverEventsTests =
             { baseFacts with
                 ClaimWorker = Some "snipe-f30c"
                 Pr = Some 42
-                Review = Some validReview }
+                Review = Some validReview
+            }
 
         Assert.Equal(ReviewHandoff(Some "critic-1"), (classify facts).State)
 
@@ -70,7 +79,13 @@ module DriverEventsTests =
             { baseFacts with
                 ClaimWorker = Some "snipe-f30c"
                 Pr = Some 42
-                Review = Some { validReview with RepairPhase = true; Rounds = [ 1; 2 ] } }
+                Review =
+                    Some
+                        { validReview with
+                            RepairPhase = true
+                            Rounds = [ 1; 2 ]
+                        }
+            }
 
         Assert.Equal(ReviewRepair 2, (classify facts).State)
 
@@ -80,12 +95,20 @@ module DriverEventsTests =
             { baseFacts with
                 ClaimWorker = Some "snipe-f30c"
                 Pr = Some 42
-                Review = Some { validReview with ChecksGreen = true; HostAccepted = true } }
+                Review =
+                    Some
+                        { validReview with
+                            ChecksGreen = true
+                            HostAccepted = true
+                        }
+            }
 
         Assert.Equal(CiLandable, (classify facts).State)
 
     [<Fact>]
-    let ``classify: merged-awaiting-release — a merged closed item with an unverified obligation classifies MergedAwaitingObligations`` () =
+    let ``classify: merged-awaiting-release — a merged closed item with an unverified obligation classifies MergedAwaitingObligations``
+        ()
+        =
         let facts =
             { baseFacts with
                 ClaimWorker = Some "snipe-f30c"
@@ -93,7 +116,17 @@ module DriverEventsTests =
                 IssueState = Some Closed
                 Merged = true
                 ObligationsDeclared = true
-                Obligations = [ { Id = "kit-release"; Kind = "release"; Evidence = None; HeadSha = "head-1"; Verified = false } ] }
+                Obligations =
+                    [
+                        {
+                            Id = "kit-release"
+                            Kind = "release"
+                            Evidence = None
+                            HeadSha = "head-1"
+                            Verified = false
+                        }
+                    ]
+            }
 
         Assert.Equal(MergedAwaitingObligations 42, (classify facts).State)
 
@@ -106,19 +139,32 @@ module DriverEventsTests =
                 IssueState = Some Closed
                 Merged = true
                 ObligationsDeclared = true
-                Obligations = [ { Id = "kit-release"; Kind = "release"; Evidence = Some "https://example/1"; HeadSha = "head-1"; Verified = true } ] }
+                Obligations =
+                    [
+                        {
+                            Id = "kit-release"
+                            Kind = "release"
+                            Evidence = Some "https://example/1"
+                            HeadSha = "head-1"
+                            Verified = true
+                        }
+                    ]
+            }
 
         Assert.Equal(Released, (classify facts).State)
 
     [<Fact>]
-    let ``classify: a merged closed item with no declared obligations classifies Released, never stuck awaiting an obligation nobody declared`` () =
+    let ``classify: a merged closed item with no declared obligations classifies Released, never stuck awaiting an obligation nobody declared``
+        ()
+        =
         let facts =
             { baseFacts with
                 ClaimWorker = Some "snipe-f30c"
                 IssueState = Some Closed
                 Merged = true
                 ObligationsDeclared = false
-                Obligations = [] }
+                Obligations = []
+            }
 
         Assert.Equal(Released, (classify facts).State)
 
@@ -127,7 +173,8 @@ module DriverEventsTests =
         let facts =
             { baseFacts with
                 ClaimWorker = Some "snipe-f30c"
-                HumanBlock = Some AwaitingHumanDecision }
+                HumanBlock = Some AwaitingHumanDecision
+            }
 
         match (classify facts).State with
         | HumanBlocked _ -> ()
@@ -142,7 +189,8 @@ module DriverEventsTests =
                 IssueState = Some Closed
                 Merged = true
                 ReadOk = false
-                UnreadableReason = Some "PR read timed out" }
+                UnreadableReason = Some "PR read timed out"
+            }
 
         match (classify facts).State with
         | Unreadable reason -> Assert.Equal("PR read timed out", reason)
@@ -189,7 +237,9 @@ module DriverEventsTests =
         Assert.Equal(Ready, Map.find ".github#1" cursor)
 
     [<Fact>]
-    let ``deriveEvents: idempotent re-read — replaying the SAME facts against the returned cursor emits zero events`` () =
+    let ``deriveEvents: idempotent re-read — replaying the SAME facts against the returned cursor emits zero events``
+        ()
+        =
         let classified = classify baseFacts
         let firstEvents, cursor1 = deriveEvents Map.empty [ classified ]
         Assert.Single(firstEvents) |> ignore
@@ -198,9 +248,17 @@ module DriverEventsTests =
         Assert.Equal<Cursor>(cursor1, cursor2)
 
     [<Fact>]
-    let ``deriveEvents: a changed state against a populated cursor emits exactly one transition naming both states`` () =
+    let ``deriveEvents: a changed state against a populated cursor emits exactly one transition naming both states``
+        ()
+        =
         let cursor = Map.ofList [ ".github#1", Ready ]
-        let claimed = classify { baseFacts with ClaimWorker = Some "snipe-f30c" }
+
+        let claimed =
+            classify
+                { baseFacts with
+                    ClaimWorker = Some "snipe-f30c"
+                }
+
         let events, newCursor = deriveEvents cursor [ claimed ]
         Assert.Single(events) |> ignore
         Assert.Equal(Some Ready, events.[0].Previous)
@@ -210,8 +268,14 @@ module DriverEventsTests =
     // ---- premature-worker-return — issue acceptance #5 --------------------------------------------
 
     [<Fact>]
-    let ``premature-worker-return: a returning worker process is not itself a transition — re-deriving unchanged claim facts stays quiet`` () =
-        let claimed = { baseFacts with ClaimWorker = Some "snipe-f30c" }
+    let ``premature-worker-return: a returning worker process is not itself a transition — re-deriving unchanged claim facts stays quiet``
+        ()
+        =
+        let claimed =
+            { baseFacts with
+                ClaimWorker = Some "snipe-f30c"
+            }
+
         let classified = classify claimed
         let _, cursor = deriveEvents Map.empty [ classified ]
         // The "worker process returned" fact never enters `ItemFacts` at all — classification reads
@@ -225,20 +289,38 @@ module DriverEventsTests =
 
     [<Fact>]
     let ``omitted-active-item: the active inventory is rendered completely even when nothing transitioned`` () =
-        let claimed = classify { baseFacts with ClaimWorker = Some "snipe-f30c" }
+        let claimed =
+            classify
+                { baseFacts with
+                    ClaimWorker = Some "snipe-f30c"
+                }
+
         let _, cursor = deriveEvents Map.empty [ claimed ]
-        let projection = project cursor [ { baseFacts with ClaimWorker = Some "snipe-f30c" } ] 200L
+
+        let projection =
+            project
+                cursor
+                [
+                    { baseFacts with
+                        ClaimWorker = Some "snipe-f30c"
+                    }
+                ]
+                200L
+
         Assert.Empty(projection.Transitions)
         Assert.Single(projection.Active) |> ignore
         Assert.Equal(".github#1", projection.Active.[0].Ref)
 
     [<Fact>]
-    let ``external-claim: a claim this process never dispatched still appears as a transition and in the active inventory`` () =
+    let ``external-claim: a claim this process never dispatched still appears as a transition and in the active inventory``
+        ()
+        =
         let externallyClaimed =
             { baseFacts with
                 Ref = ".github#99"
                 ClaimWorker = Some "some-other-worker"
-                Evidence = "claim:worker=some-other-worker" }
+                Evidence = "claim:worker=some-other-worker"
+            }
 
         let projection = project Map.empty [ externallyClaimed ] 300L
         Assert.Single(projection.Transitions) |> ignore
@@ -255,7 +337,12 @@ module DriverEventsTests =
         Assert.Single(readyOnly.Transitions) |> ignore
         Assert.Empty(readyOnly.Active)
 
-        let claimedFacts = { baseFacts with Ref = ".github#2"; ClaimWorker = Some "w" }
+        let claimedFacts =
+            { baseFacts with
+                Ref = ".github#2"
+                ClaimWorker = Some "w"
+            }
+
         let firstRead = project Map.empty [ claimedFacts ] 100L
         let secondRead = project firstRead.Cursor [ claimedFacts ] 200L
         Assert.Empty(secondRead.Transitions)
@@ -270,7 +357,8 @@ module DriverEventsTests =
             { baseFacts with
                 Ref = ".github#3"
                 ReadOk = false
-                UnreadableReason = Some "board scan timed out" }
+                UnreadableReason = Some "board scan timed out"
+            }
 
         let firstEvents, cursor1 = deriveEvents Map.empty [ classify unreadable ]
         Assert.Single(firstEvents) |> ignore
@@ -296,9 +384,16 @@ module DriverEventsTests =
         // guarantee here pins that a stable Claimed/Ready/etc. state still goes quiet on an unchanged
         // re-read — repair 1 must not regress issue acceptance #5 while fixing acceptance #7.
         for facts in
-            [ baseFacts
-              { baseFacts with ClaimWorker = Some "w" }
-              { baseFacts with IssueState = Some Closed; Merged = true } ] do
+            [
+                baseFacts
+                { baseFacts with
+                    ClaimWorker = Some "w"
+                }
+                { baseFacts with
+                    IssueState = Some Closed
+                    Merged = true
+                }
+            ] do
             let classified = classify facts
             let _, cursor = deriveEvents Map.empty [ classified ]
             let events, _ = deriveEvents cursor [ classify facts ]
@@ -309,7 +404,13 @@ module DriverEventsTests =
         // The end-to-end shape the host loop actually consumes: two successive `project` calls over an
         // unchanged Unreadable fact must both carry a transition line naming it, not just `deriveEvents`
         // in isolation.
-        let unreadable = { baseFacts with Ref = ".github#4"; ReadOk = false; UnreadableReason = Some "PR read timed out" }
+        let unreadable =
+            { baseFacts with
+                Ref = ".github#4"
+                ReadOk = false
+                UnreadableReason = Some "PR read timed out"
+            }
+
         let first = project Map.empty [ unreadable ] 100L
         Assert.Single(first.Transitions) |> ignore
         let second = project first.Cursor [ unreadable ] 200L
@@ -319,13 +420,21 @@ module DriverEventsTests =
     // ---- failed-read — issue acceptance #7 ---------------------------------------------------------
 
     [<Fact>]
-    let ``failed-read: an unreadable item emits a transition event and is never silently dropped from an otherwise non-empty active list`` () =
-        let claimed = { baseFacts with Ref = ".github#2"; ClaimWorker = Some "w" }
+    let ``failed-read: an unreadable item emits a transition event and is never silently dropped from an otherwise non-empty active list``
+        ()
+        =
+        let claimed =
+            { baseFacts with
+                Ref = ".github#2"
+                ClaimWorker = Some "w"
+            }
+
         let unreadable =
             { baseFacts with
                 Ref = ".github#3"
                 ReadOk = false
-                UnreadableReason = Some "board scan timed out" }
+                UnreadableReason = Some "board scan timed out"
+            }
 
         let projection = project Map.empty [ claimed; unreadable ] 400L
         Assert.Equal(2, List.length projection.Transitions)
@@ -337,7 +446,12 @@ module DriverEventsTests =
 
     [<Fact>]
     let ``failed-read: every item unreadable still renders a real transition list, never an empty all-clear`` () =
-        let unreadable = { baseFacts with ReadOk = false; UnreadableReason = Some "scan failed" }
+        let unreadable =
+            { baseFacts with
+                ReadOk = false
+                UnreadableReason = Some "scan failed"
+            }
+
         let projection = project Map.empty [ unreadable ] 500L
         Assert.False(List.isEmpty projection.Transitions)
         Assert.Empty(projection.Active)
@@ -346,13 +460,20 @@ module DriverEventsTests =
     // ---- ready, and never as schedulable (issue acceptance #2) ------------------------------------
 
     [<Fact>]
-    let ``terminal-regression: a cursor-Done ref that a fresh read reports Ready is refused, never rendered ready or schedulable`` () =
+    let ``terminal-regression: a cursor-Done ref that a fresh read reports Ready is refused, never rendered ready or schedulable``
+        ()
+        =
         // Simulates the reproduction exactly: a PREVIOUS read correctly classified the merged, closed,
         // done-receipted row Done; the CURRENT read's facts (stale/partial, racing GitHub's own
         // eventual consistency) claim no live claim and an unclaimed board status, which `classify`
         // alone would turn into Ready.
         let cursor = Map.ofList [ ".github#1", Done ]
-        let staleFacts = { baseFacts with BoardStatus = Some Types.Ready; IssueState = Some Open }
+
+        let staleFacts =
+            { baseFacts with
+                BoardStatus = Some Types.Ready
+                IssueState = Some Open
+            }
 
         let projection = project cursor [ staleFacts ] 600L
 
@@ -367,11 +488,19 @@ module DriverEventsTests =
     [<Fact>]
     let ``terminal-regression: a cursor-Released ref regressing to Ready is refused the same way`` () =
         let cursor = Map.ofList [ ".github#1", Released ]
-        let staleFacts = { baseFacts with BoardStatus = Some Types.Ready; IssueState = Some Open }
+
+        let staleFacts =
+            { baseFacts with
+                BoardStatus = Some Types.Ready
+                IssueState = Some Open
+            }
+
         let projection = project cursor [ staleFacts ] 600L
+
         match projection.Active |> List.tryFind (fun c -> c.Ref = ".github#1") with
         | Some _ -> Assert.Fail "a regressed terminal row must never appear in the active inventory"
         | None -> ()
+
         Assert.Equal(Some Released, Map.tryFind ".github#1" projection.Cursor)
 
     /// GATE-INVERSION EVIDENCE for `guardTerminalRegression`. Removing the guard (equivalent to
@@ -383,7 +512,12 @@ module DriverEventsTests =
     [<Fact>]
     let ``gate-inversion: without the terminal-regression guard, a Done row reads back Ready and schedulable`` () =
         let cursor = Map.ofList [ ".github#1", Done ]
-        let staleFacts = { baseFacts with BoardStatus = Some Types.Ready; IssueState = Some Open }
+
+        let staleFacts =
+            { baseFacts with
+                BoardStatus = Some Types.Ready
+                IssueState = Some Open
+            }
         // Reproduce the PRE-FIX behavior directly (bypassing the guard under test) to pin exactly what
         // the guard prevents, without relying on the production code path staying broken.
         let unguardedClassified = [ classify staleFacts ]
@@ -395,9 +529,16 @@ module DriverEventsTests =
     // ---- must keep failing the same guard on every cycle, not just the first ----------------------
 
     [<Fact>]
-    let ``terminal-regression: PERSISTENT — two consecutive stale reads both refuse the Done->Ready regression, never just the first`` () =
+    let ``terminal-regression: PERSISTENT — two consecutive stale reads both refuse the Done->Ready regression, never just the first``
+        ()
+        =
         let cursor = Map.ofList [ ".github#1", Done ]
-        let staleFacts = { baseFacts with BoardStatus = Some Types.Ready; IssueState = Some Open }
+
+        let staleFacts =
+            { baseFacts with
+                BoardStatus = Some Types.Ready
+                IssueState = Some Open
+            }
 
         let firstRead = project cursor [ staleFacts ] 600L
         Assert.Empty(firstRead.Active)
@@ -424,11 +565,21 @@ module DriverEventsTests =
     /// red (the round-1, single-cycle facts stayed green, because they only exercise cycle 1), restored
     /// after observing the red, as `independent-review` requires.
     [<Fact>]
-    let ``gate-inversion: a cursor left at the round-1 (non-sticky) Unreadable override accepts a second Ready regression`` () =
+    let ``gate-inversion: a cursor left at the round-1 (non-sticky) Unreadable override accepts a second Ready regression``
+        ()
+        =
         let nonStickyCursorAfterCycle1 =
-            Map.ofList [ ".github#1", Unreadable "stand-in for round-1's own non-sticky fold overwriting Done" ]
+            Map.ofList
+                [
+                    ".github#1", Unreadable "stand-in for round-1's own non-sticky fold overwriting Done"
+                ]
 
-        let staleFacts = { baseFacts with BoardStatus = Some Types.Ready; IssueState = Some Open }
+        let staleFacts =
+            { baseFacts with
+                BoardStatus = Some Types.Ready
+                IssueState = Some Open
+            }
+
         let secondRead = project nonStickyCursorAfterCycle1 [ staleFacts ] 800L
 
         Assert.Equal(Some Ready, Map.tryFind ".github#1" secondRead.Cursor)
@@ -438,12 +589,16 @@ module DriverEventsTests =
     // ---- live (issue acceptance #1, #3) ------------------------------------------------------------
 
     [<Fact>]
-    let ``missing-active-ref: three live claims the cursor remembers, entirely absent from this read's facts, are never rendered as "no active items"`` () =
+    let ``missing-active-ref: three live claims the cursor remembers, entirely absent from this read's facts, are never rendered as "no active items"``
+        ()
+        =
         let cursor =
             Map.ofList
-                [ "FS-GG/.github#2305", Claimed "smew-1ae8"
-                  "FS-GG/.github#2365", Claimed "crake-4bcd"
-                  "FS-GG/.github#2373", Claimed "finch-d23b" ]
+                [
+                    "FS-GG/.github#2305", Claimed "smew-1ae8"
+                    "FS-GG/.github#2365", Claimed "crake-4bcd"
+                    "FS-GG/.github#2373", Claimed "finch-d23b"
+                ]
 
         // The reproduction exactly: no intervening board change, but this read's facts batch is empty
         // — the shape a caller-side partial/failed scan produces.
@@ -473,7 +628,12 @@ module DriverEventsTests =
     [<Fact>]
     let ``missing-active-ref: a live claim still present in the facts batch is unaffected by the guard`` () =
         let cursor = Map.ofList [ ".github#1", Claimed "snipe-f30c" ]
-        let stillClaimed = { baseFacts with ClaimWorker = Some "snipe-f30c" }
+
+        let stillClaimed =
+            { baseFacts with
+                ClaimWorker = Some "snipe-f30c"
+            }
+
         let projection = project cursor [ stillClaimed ] 700L
         Assert.Empty(projection.Transitions)
         Assert.Single(projection.Active) |> ignore
@@ -497,25 +657,33 @@ module DriverEventsTests =
     let ``gate-inversion: without the missing-active-ref guard, three live claims vanish with zero signal`` () =
         let cursor =
             Map.ofList
-                [ "FS-GG/.github#2305", Claimed "smew-1ae8"
-                  "FS-GG/.github#2365", Claimed "crake-4bcd"
-                  "FS-GG/.github#2373", Claimed "finch-d23b" ]
+                [
+                    "FS-GG/.github#2305", Claimed "smew-1ae8"
+                    "FS-GG/.github#2365", Claimed "crake-4bcd"
+                    "FS-GG/.github#2373", Claimed "finch-d23b"
+                ]
 
         // Reproduce the PRE-FIX code path directly: classify over an empty facts batch, with no
         // cross-check against the cursor at all.
         let unguardedClassified: Classified list = [] |> List.map classify
         let events, _ = deriveEvents cursor unguardedClassified
+
         let unguardedProjection: Projection =
-            { Transitions = events
-              Active = unguardedClassified |> List.filter (fun c -> isActive c.State)
-              Unreadable = []
-              Cursor = cursor
-              RenderedAt = 700L }
+            {
+                Transitions = events
+                Active = unguardedClassified |> List.filter (fun c -> isActive c.State)
+                Unreadable = []
+                Cursor = cursor
+                RenderedAt = 700L
+            }
+
         let rendered = renderText unguardedProjection
         Assert.Equal("no material transitions\nno active items", rendered)
 
     [<Fact>]
-    let ``missing-active-ref: PERSISTENT — two consecutive reads with the ref still missing both surface it, never falling silent after cycle one`` () =
+    let ``missing-active-ref: PERSISTENT — two consecutive reads with the ref still missing both surface it, never falling silent after cycle one``
+        ()
+        =
         let cursor = Map.ofList [ "FS-GG/.github#2305", Claimed "smew-1ae8" ]
 
         let firstRead = project cursor [] 700L
@@ -526,10 +694,12 @@ module DriverEventsTests =
         // fresh Map.empty. Falling silent here (round 1's shipped behavior) is WORSE than the original
         // bug report: silent forever rather than silent once.
         let secondRead = project firstRead.Cursor [] 800L
+
         Assert.False(
             List.isEmpty secondRead.Transitions,
             "a persistently-missing, previously-active ref must keep surfacing on every cycle, not just the first"
         )
+
         Assert.Single(secondRead.Transitions) |> ignore
         Assert.Equal(Some(Claimed "smew-1ae8"), Map.tryFind "FS-GG/.github#2305" secondRead.Cursor)
         Assert.DoesNotContain("no material transitions", renderText secondRead)
@@ -543,10 +713,14 @@ module DriverEventsTests =
     /// stickiness lines in `project` and re-running the suite: exactly the two "PERSISTENT" facts above
     /// went red, restored after observing the red, as `independent-review` requires.
     [<Fact>]
-    let ``gate-inversion: a cursor left at the round-1 (non-sticky) Unreadable override falls silent on the next missing read`` () =
+    let ``gate-inversion: a cursor left at the round-1 (non-sticky) Unreadable override falls silent on the next missing read``
+        ()
+        =
         let nonStickyCursorAfterCycle1 =
             Map.ofList
-                [ "FS-GG/.github#2305", Unreadable "stand-in for round-1's own non-sticky fold overwriting Claimed" ]
+                [
+                    "FS-GG/.github#2305", Unreadable "stand-in for round-1's own non-sticky fold overwriting Claimed"
+                ]
 
         let secondRead = project nonStickyCursorAfterCycle1 [] 800L
         Assert.Empty(secondRead.Transitions)
@@ -556,17 +730,19 @@ module DriverEventsTests =
     [<Fact>]
     let ``encodeState/decodeState round-trip every constructor`` () =
         let states =
-            [ Ready
-              Claimed "snipe-f30c"
-              ReviewHandoff(Some "critic-1")
-              ReviewHandoff None
-              ReviewRepair 3
-              CiLandable
-              MergedAwaitingObligations 42
-              Released
-              HumanBlocked "Blocked on: human/decision"
-              Done
-              Unreadable "board scan timed out" ]
+            [
+                Ready
+                Claimed "snipe-f30c"
+                ReviewHandoff(Some "critic-1")
+                ReviewHandoff None
+                ReviewRepair 3
+                CiLandable
+                MergedAwaitingObligations 42
+                Released
+                HumanBlocked "Blocked on: human/decision"
+                Done
+                Unreadable "board scan timed out"
+            ]
 
         for state in states do
             Assert.Equal(Some state, decodeState (encodeState state))
@@ -579,7 +755,15 @@ module DriverEventsTests =
 
     [<Fact>]
     let ``renderText: an empty projection renders the two documented "nothing happened" lines`` () =
-        let projection: Projection = { Transitions = []; Active = []; Unreadable = []; Cursor = Map.empty; RenderedAt = 0L }
+        let projection: Projection =
+            {
+                Transitions = []
+                Active = []
+                Unreadable = []
+                Cursor = Map.empty
+                RenderedAt = 0L
+            }
+
         let text = renderText projection
         let lines = text.Split '\n'
         Assert.Equal(2, lines.Length)
@@ -588,7 +772,11 @@ module DriverEventsTests =
 
     [<Fact>]
     let ``renderText: a transitioned, active item names its ref and state on both lines`` () =
-        let claimed = { baseFacts with ClaimWorker = Some "snipe-f30c" }
+        let claimed =
+            { baseFacts with
+                ClaimWorker = Some "snipe-f30c"
+            }
+
         let projection = project Map.empty [ claimed ] 100L
         let text = renderText projection
         let lines = text.Split '\n'
@@ -614,7 +802,8 @@ module DriverEventsTests =
             { baseFacts with
                 Ref = ".github#2512"
                 ReadOk = false
-                UnreadableReason = Some "the board scan could not be completed" }
+                UnreadableReason = Some "the board scan could not be completed"
+            }
 
         let projection = project Map.empty [ unreadable ] 700L
         let activeLine = (renderText projection).Split '\n' |> Array.item 1
@@ -626,7 +815,9 @@ module DriverEventsTests =
         Assert.Contains(".github#2512", activeLine)
 
     [<Fact>]
-    let ``.github#2525 acceptance #4: a COMPLETE read of an empty active set still renders exactly "no active items"`` () =
+    let ``.github#2525 acceptance #4: a COMPLETE read of an empty active set still renders exactly "no active items"``
+        ()
+        =
         // The controlled counterpart. Without this the fix could degrade to "always refuse", which would
         // be a worse defect than the one being repaired — it would train a host to ignore the line.
         let projection = project Map.empty [] 700L
@@ -636,7 +827,9 @@ module DriverEventsTests =
         Assert.Equal("no active items", lines.[1])
 
     [<Fact>]
-    let ``.github#2525 acceptance #4: a fully-read board whose items are all Ready still renders exactly "no active items"`` () =
+    let ``.github#2525 acceptance #4: a fully-read board whose items are all Ready still renders exactly "no active items"``
+        ()
+        =
         // Ready is not active, so this is a genuinely empty active set over a board that WAS read. The
         // literal must survive untouched.
         let ready = { baseFacts with Ref = ".github#1" }
@@ -657,7 +850,8 @@ module DriverEventsTests =
         let stillVisible =
             { baseFacts with
                 Ref = "FS-GG/.github#2511"
-                ClaimWorker = Some "brant-edf8" }
+                ClaimWorker = Some "brant-edf8"
+            }
 
         let projection = project cursor [ stillVisible ] 700L
         let activeLine = (renderText projection).Split '\n' |> Array.item 1

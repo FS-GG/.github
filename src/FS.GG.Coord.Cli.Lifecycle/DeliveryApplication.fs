@@ -23,13 +23,20 @@ module DeliveryApplication =
 
     let private readString (name: string) (element: JsonElement) : string =
         let value = required name element
-        if value.ValueKind <> JsonValueKind.String then invalidArg name "must be a string"
+
+        if value.ValueKind <> JsonValueKind.String then
+            invalidArg name "must be a string"
+
         let parsed = value.GetString()
-        if String.IsNullOrWhiteSpace parsed then invalidArg name "must not be empty"
+
+        if String.IsNullOrWhiteSpace parsed then
+            invalidArg name "must not be empty"
+
         parsed
 
     let private readBoolean (name: string) (element: JsonElement) : bool =
         let value = required name element
+
         match value.ValueKind with
         | JsonValueKind.True -> true
         | JsonValueKind.False -> false
@@ -37,12 +44,14 @@ module DeliveryApplication =
 
     let private readInteger (name: string) (element: JsonElement) : int =
         let value = required name element
+
         match value.TryGetInt32() with
         | true, parsed -> parsed
         | _ -> invalidArg name "must be a 32-bit integer"
 
     let private readOptionalInteger (name: string) (element: JsonElement) : int option =
         let value = required name element
+
         match value.ValueKind with
         | JsonValueKind.Null -> None
         | _ -> Some(readInteger name element)
@@ -56,15 +65,21 @@ module DeliveryApplication =
     /// already emits, so this is additive rather than a breaking wire change.
     let private declaredPaths (element: JsonElement) : Delivery.DeclaredPaths =
         let value = required "declaredPaths" element
+
         match value.ValueKind with
         | JsonValueKind.Array ->
             let paths =
                 value.EnumerateArray()
                 |> Seq.map (fun item ->
-                    if item.ValueKind <> JsonValueKind.String || String.IsNullOrWhiteSpace(item.GetString()) then
+                    if
+                        item.ValueKind <> JsonValueKind.String
+                        || String.IsNullOrWhiteSpace(item.GetString())
+                    then
                         invalidArg "declaredPaths" "must contain non-empty strings"
+
                     item.GetString())
                 |> List.ofSeq
+
             Delivery.Known paths
         | JsonValueKind.Object ->
             if fst (value.TryGetProperty "unread") then
@@ -74,11 +89,14 @@ module DeliveryApplication =
             elif fst (value.TryGetProperty "undeclared") then
                 Delivery.Undeclared
             else
-                invalidArg "declaredPaths" "object must be {\"unread\": reason}, {\"declaredNone\": true}, or {\"undeclared\": true}"
+                invalidArg
+                    "declaredPaths"
+                    "object must be {\"unread\": reason}, {\"declaredNone\": true}, or {\"undeclared\": true}"
         | _ -> invalidArg "declaredPaths" "must be an array of paths or a tagged object naming why it has none"
 
     let private readOptionalString (name: string) (element: JsonElement) : string option =
         let value = required name element
+
         match value.ValueKind with
         | JsonValueKind.Null -> None
         | JsonValueKind.String when not (String.IsNullOrWhiteSpace(value.GetString())) -> Some(value.GetString())
@@ -99,18 +117,23 @@ module DeliveryApplication =
 
     let private review (element: JsonElement) : Driver.ReviewChain option =
         let value = required "review" element
+
         match value.ValueKind with
         | JsonValueKind.Null -> None
         | JsonValueKind.Object ->
             let rounds =
                 let raw = required "rounds" value
-                if raw.ValueKind <> JsonValueKind.Array then invalidArg "review.rounds" "must be an array"
+
+                if raw.ValueKind <> JsonValueKind.Array then
+                    invalidArg "review.rounds" "must be an array"
+
                 raw.EnumerateArray()
                 |> Seq.map (fun item ->
                     match item.TryGetInt32() with
                     | true, number -> number
                     | _ -> invalidArg "review.rounds" "must contain integers")
                 |> List.ofSeq
+
             let markerValid = readBoolean "markerValid" value
             let subject = readOptionalStringOrAbsent "subject" value
             let claimGeneration = readOptionalStringOrAbsent "claimGeneration" value
@@ -120,36 +143,53 @@ module DeliveryApplication =
             let repairPhase = readBoolean "repairPhase" value
             let checksGreen = readBoolean "checksGreen" value
             let hostAccepted = readBoolean "hostAccepted" value
-            let runtimeRouteEvidence = readOptionalString "routeNotMeaningfulReason" value |> Option.map Driver.NotMeaningful
+
+            let runtimeRouteEvidence =
+                readOptionalString "routeNotMeaningfulReason" value
+                |> Option.map Driver.NotMeaningful
+
             let diffAuditRequired = readBooleanOrDefault "diffAuditRequired" false value
             let diffAuditHead = readOptionalStringOrAbsent "diffAuditHead" value
-            Some
-                ({ MarkerValid = markerValid;
-                  Subject = subject;
-                  ClaimGeneration = claimGeneration;
-                  BaseSha = baseSha;
-                  CriticIdentity = criticIdentity;
-                  HeadSha = headSha;
-                  Rounds = rounds;
-                  RepairPhase = repairPhase;
-                  ChecksGreen = checksGreen;
-                  HostAccepted = hostAccepted;
-                  RuntimeRouteEvidence = runtimeRouteEvidence;
-                  DiffAuditRequired = diffAuditRequired;
-                  DiffAuditHead = diffAuditHead } : Driver.ReviewChain)
+
+            Some(
+                {
+                    MarkerValid = markerValid
+                    Subject = subject
+                    ClaimGeneration = claimGeneration
+                    BaseSha = baseSha
+                    CriticIdentity = criticIdentity
+                    HeadSha = headSha
+                    Rounds = rounds
+                    RepairPhase = repairPhase
+                    ChecksGreen = checksGreen
+                    HostAccepted = hostAccepted
+                    RuntimeRouteEvidence = runtimeRouteEvidence
+                    DiffAuditRequired = diffAuditRequired
+                    DiffAuditHead = diffAuditHead
+                }
+                : Driver.ReviewChain
+            )
         | _ -> invalidArg "review" "must be an object or null"
 
     let private obligations (element: JsonElement) : Delivery.Obligation list =
         let value = required "obligations" element
-        if value.ValueKind <> JsonValueKind.Array then invalidArg "obligations" "must be an array"
+
+        if value.ValueKind <> JsonValueKind.Array then
+            invalidArg "obligations" "must be an array"
+
         value.EnumerateArray()
         |> Seq.map (fun obligation ->
-            if obligation.ValueKind <> JsonValueKind.Object then invalidArg "obligations" "must contain objects"
-            ({ Id = readString "id" obligation
-               Kind = readString "kind" obligation
-               Evidence = readOptionalString "evidence" obligation
-               HeadSha = readString "headSha" obligation
-               Verified = readBoolean "verified" obligation }: Delivery.Obligation))
+            if obligation.ValueKind <> JsonValueKind.Object then
+                invalidArg "obligations" "must contain objects"
+
+            ({
+                Id = readString "id" obligation
+                Kind = readString "kind" obligation
+                Evidence = readOptionalString "evidence" obligation
+                HeadSha = readString "headSha" obligation
+                Verified = readBoolean "verified" obligation
+            }
+            : Delivery.Obligation))
         |> List.ofSeq
 
     let private postMergeVerification (element: JsonElement) : Delivery.PostMergeVerification =
@@ -164,24 +204,33 @@ module DeliveryApplication =
             | "unreadable" -> Delivery.Unreadable(readString "reason" value)
             | "verified" ->
                 let runsElement = required "runs" value
-                if runsElement.ValueKind <> JsonValueKind.Array then invalidArg "postMergeVerification.runs" "must be an array"
+
+                if runsElement.ValueKind <> JsonValueKind.Array then
+                    invalidArg "postMergeVerification.runs" "must be an array"
+
                 let runs =
                     runsElement.EnumerateArray()
                     |> Seq.map (fun run ->
-                        ({ Id = run.GetProperty("id").GetInt64()
-                           Attempt = readInteger "attempt" run
-                           Workflow = readString "workflow" run
-                           Event = readString "event" run
-                           Branch = readString "branch" run
-                           Sha = readString "sha" run
-                           Status = readString "status" run
-                           Conclusion = readString "conclusion" run
-                           Url = readString "url" run }: Delivery.PostMergeRun))
+                        ({
+                            Id = run.GetProperty("id").GetInt64()
+                            Attempt = readInteger "attempt" run
+                            Workflow = readString "workflow" run
+                            Event = readString "event" run
+                            Branch = readString "branch" run
+                            Sha = readString "sha" run
+                            Status = readString "status" run
+                            Conclusion = readString "conclusion" run
+                            Url = readString "url" run
+                        }
+                        : Delivery.PostMergeRun))
                     |> List.ofSeq
+
                 Delivery.Verified
-                    { MergeSha = readString "mergeSha" value
-                      DefaultBranch = readString "defaultBranch" value
-                      Runs = runs }
+                    {
+                        MergeSha = readString "mergeSha" value
+                        DefaultBranch = readString "defaultBranch" value
+                        Runs = runs
+                    }
             | kind -> invalidArg "postMergeVerification.kind" $"unknown kind '%s{kind}'"
         | _ -> invalidArg "postMergeVerification" "must be an object or null"
 
@@ -191,16 +240,28 @@ module DeliveryApplication =
     let private fieldValue = "[^ ]+"
 
     let private obligationDeclaration =
-        Regex($"^<!-- fsgg:delivery-obligation id=(?<id>{obligationId}) kind=(?<kind>{obligationKind}) head=(?<head>{deliveryHead}) -->$", RegexOptions.Compiled)
+        Regex(
+            $"^<!-- fsgg:delivery-obligation id=(?<id>{obligationId}) kind=(?<kind>{obligationKind}) head=(?<head>{deliveryHead}) -->$",
+            RegexOptions.Compiled
+        )
 
     let private obligationReceipt =
-        Regex($"^<!-- fsgg:delivery-receipt id=(?<id>{obligationId}) head=(?<head>{deliveryHead}) evidence=(?<evidence>{fieldValue}) -->$", RegexOptions.Compiled)
+        Regex(
+            $"^<!-- fsgg:delivery-receipt id=(?<id>{obligationId}) head=(?<head>{deliveryHead}) evidence=(?<evidence>{fieldValue}) -->$",
+            RegexOptions.Compiled
+        )
 
     let private declarationFields =
-        Regex($"^<!-- fsgg:delivery-obligation id=(?<id>{fieldValue}) kind=(?<kind>{fieldValue}) head=(?<head>{fieldValue}) -->$", RegexOptions.Compiled)
+        Regex(
+            $"^<!-- fsgg:delivery-obligation id=(?<id>{fieldValue}) kind=(?<kind>{fieldValue}) head=(?<head>{fieldValue}) -->$",
+            RegexOptions.Compiled
+        )
 
     let private receiptFields =
-        Regex($"^<!-- fsgg:delivery-receipt id=(?<id>{fieldValue}) head=(?<head>{fieldValue}) evidence=(?<evidence>{fieldValue}) -->$", RegexOptions.Compiled)
+        Regex(
+            $"^<!-- fsgg:delivery-receipt id=(?<id>{fieldValue}) head=(?<head>{fieldValue}) evidence=(?<evidence>{fieldValue}) -->$",
+            RegexOptions.Compiled
+        )
 
     // THE LEADING-LINE RULE (.github#2347), applying `.github#2221`'s established correction
     // ("a marker is evidence only as a WHOLE LINE inside the comment's LEADING MARKER BLOCK", never
@@ -250,11 +311,15 @@ module DeliveryApplication =
         let firstContentLine =
             text.Replace("\r\n", "\n").Split('\n')
             |> Array.tryFind (fun line -> line.Trim() <> "")
+
         let indentOf (line: string) =
             let mutable i = 0
+
             while i < line.Length && (line.[i] = ' ' || line.[i] = '\t') do
                 i <- i + 1
+
             line.Substring(0, i)
+
         match firstContentLine with
         | Some line when (let indent = indentOf line in indent.Contains '\t' || indent.Length >= 4) ->
             // An indented code block is not a leading marker line at all. Returning the line AS WRITTEN
@@ -264,6 +329,7 @@ module DeliveryApplication =
             // Every other body reaches the original trim, byte for byte — so leading blank lines and up
             // to three spaces behave exactly as they did, and nothing else in this module moves.
             let trimmed = text.Trim().Replace("\r\n", "\n")
+
             match trimmed.IndexOf '\n' with
             | -1 -> trimmed
             | index -> trimmed.Substring(0, index)
@@ -316,20 +382,37 @@ module DeliveryApplication =
 
     let private malformedField (comment: Driver.ReviewComment) (kind: string) (fields: Regex) =
         let matched = fields.Match(leadingLine comment.Body)
-        if not matched.Success then Error $"delivery {kind} comment {comment.Id} has malformed body"
-        elif not (Regex($"^{obligationId}$").IsMatch(matched.Groups.["id"].Value)) then Error $"delivery {kind} comment {comment.Id} has malformed id"
-        elif kind = "obligation declaration" && not (Regex($"^{obligationKind}$").IsMatch(matched.Groups.["kind"].Value)) then Error $"delivery {kind} comment {comment.Id} has malformed kind"
-        elif not (Regex($"^{deliveryHead}$").IsMatch(matched.Groups.["head"].Value)) then Error $"delivery {kind} comment {comment.Id} has malformed head"
-        else Error $"delivery {kind} comment {comment.Id} is malformed"
 
-    let obligationsFromComments (headSha: string) (comments: Driver.ReviewComment list) : Result<Delivery.Obligation list, string> =
+        if not matched.Success then
+            Error $"delivery {kind} comment {comment.Id} has malformed body"
+        elif not (Regex($"^{obligationId}$").IsMatch(matched.Groups.["id"].Value)) then
+            Error $"delivery {kind} comment {comment.Id} has malformed id"
+        elif
+            kind = "obligation declaration"
+            && not (Regex($"^{obligationKind}$").IsMatch(matched.Groups.["kind"].Value))
+        then
+            Error $"delivery {kind} comment {comment.Id} has malformed kind"
+        elif not (Regex($"^{deliveryHead}$").IsMatch(matched.Groups.["head"].Value)) then
+            Error $"delivery {kind} comment {comment.Id} has malformed head"
+        else
+            Error $"delivery {kind} comment {comment.Id} is malformed"
+
+    let obligationsFromComments
+        (headSha: string)
+        (comments: Driver.ReviewComment list)
+        : Result<Delivery.Obligation list, string> =
         let declarations = comments |> List.filter (leadsWith declarationPrefix)
         let receipts = comments |> List.filter (leadsWith receiptPrefix)
         let none = $"<!-- fsgg:delivery-obligations none head=%s{headSha} -->"
+
         if declarations |> List.exists (fun comment -> leadingLine comment.Body = none) then
-            if declarations |> List.exists (fun comment -> leadingLine comment.Body <> none) || not (List.isEmpty receipts) then
+            if
+                declarations |> List.exists (fun comment -> leadingLine comment.Body <> none)
+                || not (List.isEmpty receipts)
+            then
                 Error "the no-obligations declaration cannot be combined with obligation declarations or receipts"
-            else Ok []
+            else
+                Ok []
         elif List.isEmpty declarations then
             // Still `undeclared` — the parse is unchanged and the marker stays inert — but say WHERE the
             // ignored marker is when there is one to point at (.github#2544).
@@ -347,35 +430,62 @@ module DeliveryApplication =
                 declarations
                 |> List.map (fun comment ->
                     let matched = obligationDeclaration.Match(leadingLine comment.Body)
-                    if not matched.Success then malformedField comment "obligation declaration" declarationFields
+
+                    if not matched.Success then
+                        malformedField comment "obligation declaration" declarationFields
                     elif matched.Groups.["head"].Value <> headSha then
-                        Error $"delivery obligation declaration comment {comment.Id} is stale for head {headSha}; edit it in place or delete it, because adding a declaration cannot repair it"
-                    else Ok(matched.Groups.["id"].Value, matched.Groups.["kind"].Value))
-            let firstError values = values |> List.tryPick (function Error error -> Some error | Ok _ -> None)
+                        Error
+                            $"delivery obligation declaration comment {comment.Id} is stale for head {headSha}; edit it in place or delete it, because adding a declaration cannot repair it"
+                    else
+                        Ok(matched.Groups.["id"].Value, matched.Groups.["kind"].Value))
+
+            let firstError values =
+                values
+                |> List.tryPick (function
+                    | Error error -> Some error
+                    | Ok _ -> None)
+
             match parsedDeclarations |> firstError with
             | Some error -> Error error
             | None ->
                 let declarations = parsedDeclarations |> List.choose Result.toOption
                 let ids = declarations |> List.map fst
-                if ids |> List.distinct |> List.length <> List.length ids then Error "delivery obligation ids must be unique"
+
+                if ids |> List.distinct |> List.length <> List.length ids then
+                    Error "delivery obligation ids must be unique"
                 else
                     let parsedReceipts =
                         receipts
                         |> List.map (fun comment ->
                             let matched = obligationReceipt.Match(leadingLine comment.Body)
-                            if not matched.Success then malformedField comment "obligation receipt" receiptFields
-                            elif matched.Groups.["head"].Value <> headSha then Error "a delivery obligation receipt is stale"
-                            else Ok(matched.Groups.["id"].Value, matched.Groups.["evidence"].Value))
+
+                            if not matched.Success then
+                                malformedField comment "obligation receipt" receiptFields
+                            elif matched.Groups.["head"].Value <> headSha then
+                                Error "a delivery obligation receipt is stale"
+                            else
+                                Ok(matched.Groups.["id"].Value, matched.Groups.["evidence"].Value))
+
                     match parsedReceipts |> firstError with
                     | Some error -> Error error
                     | None ->
                         let receipts = parsedReceipts |> List.choose Result.toOption |> Map.ofList
-                        if receipts |> Map.exists (fun id _ -> not (List.contains id ids)) then Error "a delivery obligation receipt names no declared obligation"
+
+                        if receipts |> Map.exists (fun id _ -> not (List.contains id ids)) then
+                            Error "a delivery obligation receipt names no declared obligation"
                         else
                             declarations
                             |> List.map (fun (id, kind) ->
                                 let evidence = Map.tryFind id receipts
-                                ({ Id = id; Kind = kind; Evidence = evidence; HeadSha = headSha; Verified = evidence.IsSome }: Delivery.Obligation))
+
+                                ({
+                                    Id = id
+                                    Kind = kind
+                                    Evidence = evidence
+                                    HeadSha = headSha
+                                    Verified = evidence.IsSome
+                                }
+                                : Delivery.Obligation))
                             |> Ok
 
     // ============================================================================================
@@ -416,7 +526,11 @@ module DeliveryApplication =
     // tolerantly and this producer must be able to see an election written by an older or newer
     // engine without failing to parse it. Nothing here validates; `Client` decides which elections
     // are this delivery target's, and the fence decides which one wins.
-    type Election = { Id: int64; Fields: Map<string, string> }
+    type Election =
+        {
+            Id: int64
+            Fields: Map<string, string>
+        }
 
     // `RegexOptions.Singleline` IS Python's `re.DOTALL`, and it is load-bearing for the same reason
     // the gate gives: the design doc's own spelling of this marker spans lines. `^` with no
@@ -466,6 +580,7 @@ module DeliveryApplication =
         comments
         |> List.choose (fun comment ->
             let matched = electionMarkerPattern.Match comment.Body
+
             if not matched.Success then
                 None
             else
@@ -473,6 +588,7 @@ module DeliveryApplication =
                     electionFieldPattern.Matches(matched.Groups.["fields"].Value)
                     |> Seq.map (fun m -> m.Groups.["k"].Value, m.Groups.["v"].Value)
                     |> Map.ofSeq
+
                 Some { Id = comment.Id; Fields = fields })
 
     // The elections THIS delivery target already owns — same operation key, same pull request.
@@ -494,16 +610,20 @@ module DeliveryApplication =
         | MergeRefused of reason: string
 
     type LandingReceipt<'result> =
-        { HeadSha: string
-          BaseSha: string
-          Result: 'result }
+        {
+            HeadSha: string
+            BaseSha: string
+            Result: 'result
+        }
 
     // Evidence minted only after the live GitHub boundary proves a complete, forward-only,
     // path-disjoint base advance. Guarded landing validates every binding before consuming it.
     type BaseAdvanceEvidence =
-        { AcceptedBaseSha: string
-          CurrentBaseSha: string
-          HeadSha: string }
+        {
+            AcceptedBaseSha: string
+            CurrentBaseSha: string
+            HeadSha: string
+        }
 
     let authorizeGuardedLanding freshnessToken actionKey facts currentAuthority currentClaimGeneration =
         match Delivery.advance freshnessToken actionKey facts with
@@ -513,32 +633,57 @@ module DeliveryApplication =
         | Delivery.Next _ when Some facts.Freshness.ClaimGeneration <> currentClaimGeneration ->
             MergeRefused "delivery claim generation changed after inspection; GitHub merge was not attempted"
         | Delivery.Next _ when not (Delivery.landingLinkageAuthorized currentAuthority) ->
-            MergeRefused "delivery closing linkage or two-phase receipt authority changed after inspection; GitHub merge was not attempted"
+            MergeRefused
+                "delivery closing linkage or two-phase receipt authority changed after inspection; GitHub merge was not attempted"
         | Delivery.Next _ -> MergeAuthorized
 
     /// Invoke the merge adapter only after claim and head still match and the effective base either
     // matches acceptance or the live IO boundary has proved a complete, path-disjoint forward advance.
-    let guardedLanding freshnessToken actionKey facts currentAuthority currentClaimGeneration currentHead currentBase baseAdvanceEvidence merge =
+    let guardedLanding
+        freshnessToken
+        actionKey
+        facts
+        currentAuthority
+        currentClaimGeneration
+        currentHead
+        currentBase
+        baseAdvanceEvidence
+        merge
+        =
         match authorizeGuardedLanding freshnessToken actionKey facts currentAuthority currentClaimGeneration with
         | MergeRefused reason -> Error reason
         | MergeAuthorized when currentHead <> Some facts.Freshness.HeadSha ->
             Error "delivery PR head changed after inspection; GitHub merge was not attempted"
         | MergeAuthorized ->
             let acceptedBase = facts.Review |> Option.bind _.BaseSha
+
             match acceptedBase, currentBase with
             | Some expected, Some actual when expected = actual ->
-                Ok { HeadSha = facts.Freshness.HeadSha; BaseSha = actual; Result = merge () }
+                Ok
+                    {
+                        HeadSha = facts.Freshness.HeadSha
+                        BaseSha = actual
+                        Result = merge ()
+                    }
             | Some expected, Some actual ->
                 match baseAdvanceEvidence with
-                | Some evidence
-                    when evidence.AcceptedBaseSha = expected
-                         && evidence.CurrentBaseSha = actual
-                         && evidence.HeadSha = facts.Freshness.HeadSha ->
-                    Ok { HeadSha = facts.Freshness.HeadSha; BaseSha = actual; Result = merge () }
+                | Some evidence when
+                    evidence.AcceptedBaseSha = expected
+                    && evidence.CurrentBaseSha = actual
+                    && evidence.HeadSha = facts.Freshness.HeadSha
+                    ->
+                    Ok
+                        {
+                            HeadSha = facts.Freshness.HeadSha
+                            BaseSha = actual
+                            Result = merge ()
+                        }
                 | Some _ ->
-                    Error "delivery base-advance evidence does not bind the accepted base, current base, and inspected head; GitHub merge was not attempted"
+                    Error
+                        "delivery base-advance evidence does not bind the accepted base, current base, and inspected head; GitHub merge was not attempted"
                 | None ->
-                    Error $"delivery effective base changed after acceptance: expected %s{expected}, actual %s{actual}; GitHub merge was not attempted"
+                    Error
+                        $"delivery effective base changed after acceptance: expected %s{expected}, actual %s{actual}; GitHub merge was not attempted"
             | None, _ -> Error "delivery accepted review carries no effective base SHA; GitHub merge was not attempted"
             | _, None -> Error "delivery effective base could not be re-read; GitHub merge was not attempted"
 
@@ -573,43 +718,56 @@ module DeliveryApplication =
         try
             use document = JsonDocument.Parse raw
             let root = document.RootElement
-            if root.ValueKind <> JsonValueKind.Object then invalidArg "snapshot" "must be an object"
+
+            if root.ValueKind <> JsonValueKind.Object then
+                invalidArg "snapshot" "must be an object"
+
             let freshnessElement = required "freshness" root
-            if freshnessElement.ValueKind <> JsonValueKind.Object then invalidArg "freshness" "must be an object"
+
+            if freshnessElement.ValueKind <> JsonValueKind.Object then
+                invalidArg "freshness" "must be an object"
+
             let freshness: Delivery.Freshness =
-                { ItemRef = readString "itemRef" freshnessElement
-                  ClaimGeneration = readString "claimGeneration" freshnessElement
-                  Executor = readString "executor" freshnessElement
-                  Branch = readString "branch" freshnessElement
-                  Worktree = readString "worktree" freshnessElement
-                  PullRequest = readOptionalInteger "pullRequest" freshnessElement
-                  HeadSha = readString "headSha" freshnessElement
-                  DeclaredPaths = declaredPaths freshnessElement
-                  BoardState = readString "boardState" freshnessElement }
+                {
+                    ItemRef = readString "itemRef" freshnessElement
+                    ClaimGeneration = readString "claimGeneration" freshnessElement
+                    Executor = readString "executor" freshnessElement
+                    Branch = readString "branch" freshnessElement
+                    Worktree = readString "worktree" freshnessElement
+                    PullRequest = readOptionalInteger "pullRequest" freshnessElement
+                    HeadSha = readString "headSha" freshnessElement
+                    DeclaredPaths = declaredPaths freshnessElement
+                    BoardState = readString "boardState" freshnessElement
+                }
+
             Ok(
-                { Freshness = freshness
-                  ItemBranchCanonical = readBoolean "itemBranchCanonical" root
-                  ClosingLinkageCanonical = readBoolean "closingLinkageCanonical" root
-                  PathsVerified = readBoolean "pathsVerified" root
-                  InReview = readBoolean "inReview" root
-                  Review = review root
-                  // `reviewProblem` was added after the first delivery snapshot contract shipped.
-                  // Older producers omit it, which means no parser failure was observed; accepting
-                  // that shape as None preserves the pure adapter's established wire contract.
-                  ReviewProblem = readOptionalStringOrAbsent "reviewProblem" root
-                  Landable = readBoolean "landable" root
-                  Merged = readBoolean "merged" root
-                  MergeReachable = readBoolean "mergeReachable" root
-                  IssueClosed = readBoolean "issueClosed" root
-                  BoardDone = readBoolean "boardDone" root
-                  ClaimReleased = readBoolean "claimReleased" root
-                  PendingWrites = readInteger "pendingWrites" root
-                  CleanupEligible = readBoolean "cleanupEligible" root
-                  ObligationsDeclared = readBoolean "obligationsDeclared" root
-                  Obligations = obligations root
-                  ParkedReason = readOptionalString "parkedReason" root },
-                postMergeVerification root)
-        with error -> Error error.Message
+                {
+                    Freshness = freshness
+                    ItemBranchCanonical = readBoolean "itemBranchCanonical" root
+                    ClosingLinkageCanonical = readBoolean "closingLinkageCanonical" root
+                    PathsVerified = readBoolean "pathsVerified" root
+                    InReview = readBoolean "inReview" root
+                    Review = review root
+                    // `reviewProblem` was added after the first delivery snapshot contract shipped.
+                    // Older producers omit it, which means no parser failure was observed; accepting
+                    // that shape as None preserves the pure adapter's established wire contract.
+                    ReviewProblem = readOptionalStringOrAbsent "reviewProblem" root
+                    Landable = readBoolean "landable" root
+                    Merged = readBoolean "merged" root
+                    MergeReachable = readBoolean "mergeReachable" root
+                    IssueClosed = readBoolean "issueClosed" root
+                    BoardDone = readBoolean "boardDone" root
+                    ClaimReleased = readBoolean "claimReleased" root
+                    PendingWrites = readInteger "pendingWrites" root
+                    CleanupEligible = readBoolean "cleanupEligible" root
+                    ObligationsDeclared = readBoolean "obligationsDeclared" root
+                    Obligations = obligations root
+                    ParkedReason = readOptionalString "parkedReason" root
+                },
+                postMergeVerification root
+            )
+        with error ->
+            Error error.Message
 
     let private stage (value: Delivery.Stage) =
         match value with
@@ -650,17 +808,38 @@ module DeliveryApplication =
         match Delivery.inspectWithPostMergeVerification postMergeVerification facts with
         | Delivery.NoVerdict reason ->
             match opts.Render with
-            | Json -> printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery/1"; verdict = "noVerdict"; reason = reason |})
+            | Json ->
+                printfn
+                    "%s"
+                    (JsonSerializer.Serialize
+                        {|
+                            schema = "fsgg.coord.delivery/1"
+                            verdict = "noVerdict"
+                            reason = reason
+                        |})
             | Text -> eprint $"UNDETERMINED — %s{reason}"
+
             ExitCode.toInt ExitCode.NoVerdict
         | Delivery.Next transition ->
             match opts.Render with
             | Json ->
-                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery/1"; verdict = "next"; stage = stage transition.Stage; action = action transition.Action; problem = actionProblem transition.Action; freshnessToken = transition.FreshnessToken; actionKey = transition.ActionKey |})
+                printfn
+                    "%s"
+                    (JsonSerializer.Serialize
+                        {|
+                            schema = "fsgg.coord.delivery/1"
+                            verdict = "next"
+                            stage = stage transition.Stage
+                            action = action transition.Action
+                            problem = actionProblem transition.Action
+                            freshnessToken = transition.FreshnessToken
+                            actionKey = transition.ActionKey
+                        |})
             | Text ->
                 match actionProblem transition.Action with
                 | Some problem -> printfn "%s — %s: %s" (stage transition.Stage) (action transition.Action) problem
                 | None -> printfn "%s — %s" (stage transition.Stage) (action transition.Action)
+
             ExitCode.toInt ExitCode.Green
 
     let render opts facts =
@@ -668,6 +847,7 @@ module DeliveryApplication =
 
     let run opts =
         let raw = input opts
+
         if String.IsNullOrWhiteSpace raw then
             eprint "fsgg-coord-engine: delivery snapshot is empty; refusing to infer lifecycle state."
             ExitCode.toInt ExitCode.Error
@@ -676,5 +856,4 @@ module DeliveryApplication =
             | Error error ->
                 eprint $"fsgg-coord-engine: delivery snapshot is malformed: %s{error}"
                 ExitCode.toInt ExitCode.Error
-            | Ok(facts, postMergeVerification) ->
-                renderWithPostMergeVerification opts postMergeVerification facts
+            | Ok(facts, postMergeVerification) -> renderWithPostMergeVerification opts postMergeVerification facts

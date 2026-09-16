@@ -8,25 +8,31 @@ open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.GitHub.Done
 
 let private aRef =
-    { Owner = "FS-GG"
-      Repo = "FS.GG.SDD"
-      Number = 398 }
+    {
+        Owner = "FS-GG"
+        Repo = "FS.GG.SDD"
+        Number = 398
+    }
 
 let private parentRef =
-    { Owner = "FS-GG"
-      Repo = "FS.GG.SDD"
-      Number = 350 }
+    {
+        Owner = "FS-GG"
+        Repo = "FS.GG.SDD"
+        Number = 350
+    }
 
 /// A merged PR whose BODY names this issue — a true closer (`ClosesThis`), the ordinary case. Its `Repo`
 /// defaults to `aRef`'s own repository — the ordinary same-repo case — so cross-repo tests (#2427) override
 /// it explicitly rather than every other test needing to state the obvious.
 let private closer n =
-    { Number = n
-      Merged = true
-      MergedAt = "2026-01-01T00:00:00Z"
-      Oid = "abc1234"
-      Repo = "FS-GG/FS.GG.SDD"
-      ClosesThis = true }
+    {
+        Number = n
+        Merged = true
+        MergedAt = "2026-01-01T00:00:00Z"
+        Oid = "abc1234"
+        Repo = "FS-GG/FS.GG.SDD"
+        ClosesThis = true
+    }
 
 /// A merged PR the issue's own CLOSED_EVENT names as the closer, whose BODY never named the issue — so
 /// GitHub does NOT list it in `closedByPullRequestsReferences` at all. This is the #558 case, in the shape
@@ -35,13 +41,15 @@ let private eventCloser n = { closer n with ClosesThis = false }
 
 /// A closed issue with a merged PR and no children — the ordinary green case.
 let private closedByPr =
-    { Ref = aRef
-      State = Closed
-      ClosingPrs = [ closer 399 ]
-      CloserPrs = []
-      Children = NoChildren
-      BoardStatus = InReview
-      Parent = None }
+    {
+        Ref = aRef
+        State = Closed
+        ClosingPrs = [ closer 399 ]
+        CloserPrs = []
+        Children = NoChildren
+        BoardStatus = InReview
+        Parent = None
+    }
 
 // ---- the ordinary green path ------------------------------------------------------------------------
 
@@ -71,7 +79,8 @@ let ``#928 the CLOSED_EVENT rescues a PR whose BODY never carried the keyword - 
     let facts =
         { closedByPr with
             ClosingPrs = []
-            CloserPrs = [ eventCloser 399 ] }
+            CloserPrs = [ eventCloser 399 ]
+        }
 
     match verify None None facts with
     | Green(ClosedByPullRequest(399, _, _, _)) -> ()
@@ -85,7 +94,8 @@ let ``#928 a LISTED PR whose body never carried the keyword is still rescued`` (
     let facts =
         { closedByPr with
             ClosingPrs = [ { closer 399 with ClosesThis = false } ]
-            CloserPrs = [ eventCloser 399 ] }
+            CloserPrs = [ eventCloser 399 ]
+        }
 
     match verify None None facts with
     | Green(ClosedByPullRequest(399, _, _, _)) -> ()
@@ -100,7 +110,8 @@ let ``#928 an UNMERGED closer named by the close event does NOT stamp - the unio
     let facts =
         { closedByPr with
             ClosingPrs = []
-            CloserPrs = [ { eventCloser 399 with Merged = false } ] }
+            CloserPrs = [ { eventCloser 399 with Merged = false } ]
+        }
 
     match verify None None facts with
     | Red reasons ->
@@ -116,7 +127,8 @@ let ``#928 --pr names a closer the reference list never listed`` () =
     let facts =
         { closedByPr with
             ClosingPrs = []
-            CloserPrs = [ eventCloser 399 ] }
+            CloserPrs = [ eventCloser 399 ]
+        }
 
     match verify (Some 399) None facts with
     | Green(ClosedByPullRequest(399, _, _, _)) -> ()
@@ -128,8 +140,21 @@ let ``#928 the union does not disturb #342 - the latest-merged closer still wins
     // closers, across both records: an event-named closer that merged LATER outranks a listed one.
     let facts =
         { closedByPr with
-            ClosingPrs = [ { closer 89 with MergedAt = "2026-01-01T00:00:00Z"; Oid = "1111aaa" } ]
-            CloserPrs = [ { eventCloser 95 with MergedAt = "2026-03-01T00:00:00Z"; Oid = "2222bbb" } ] }
+            ClosingPrs =
+                [
+                    { closer 89 with
+                        MergedAt = "2026-01-01T00:00:00Z"
+                        Oid = "1111aaa"
+                    }
+                ]
+            CloserPrs =
+                [
+                    { eventCloser 95 with
+                        MergedAt = "2026-03-01T00:00:00Z"
+                        Oid = "2222bbb"
+                    }
+                ]
+        }
 
     match verify None None facts with
     | Green(ClosedByPullRequest(95, "2222bbb", _, _)) -> ()
@@ -149,7 +174,8 @@ let ``#600 an item resolved WITHOUT a PR is DONE - when there is evidence`` () =
     let facts =
         { closedByPr with
             ClosingPrs = []
-            CloserPrs = [] }
+            CloserPrs = []
+        }
 
     match verify None (Some "resolved by #380/#383/#385 plus a feed re-baseline; verified empirically") facts with
     | Green(ResolvedWithoutPr evidence) -> Assert.Contains("feed re-baseline", evidence)
@@ -162,7 +188,8 @@ let ``#600 ...but the evidence is REQUIRED - a blank one is refused`` () =
     let facts =
         { closedByPr with
             ClosingPrs = []
-            CloserPrs = [] }
+            CloserPrs = []
+        }
 
     match verify None (Some "   ") facts with
     | Red reasons -> Assert.Contains(reasons, fun r -> r.Contains "blank")
@@ -173,7 +200,8 @@ let ``a CLOSED issue that nothing closed is RED - and it names the green path`` 
     let facts =
         { closedByPr with
             ClosingPrs = []
-            CloserPrs = [] }
+            CloserPrs = []
+        }
 
     match verify None None facts with
     | Red reasons ->
@@ -200,8 +228,17 @@ let ``#342 among two true closers the LATEST-merged wins, not the lowest-numbere
     let facts =
         { closedByPr with
             ClosingPrs =
-                [ { closer 89 with MergedAt = "2026-01-01T00:00:00Z"; Oid = "1111aaa" }
-                  { closer 95 with MergedAt = "2026-03-01T00:00:00Z"; Oid = "2222bbb" } ] }
+                [
+                    { closer 89 with
+                        MergedAt = "2026-01-01T00:00:00Z"
+                        Oid = "1111aaa"
+                    }
+                    { closer 95 with
+                        MergedAt = "2026-03-01T00:00:00Z"
+                        Oid = "2222bbb"
+                    }
+                ]
+        }
 
     match verify None None facts with
     | Green(ClosedByPullRequest(95, "2222bbb", _, _)) -> ()
@@ -215,7 +252,8 @@ let ``#342 a merged PR that only MENTIONS the issue is not a closer`` () =
     let facts =
         { closedByPr with
             ClosingPrs = [ { closer 97 with ClosesThis = false } ]
-            CloserPrs = [] }
+            CloserPrs = []
+        }
 
     match verify None None facts with
     | Red reasons -> Assert.Contains(reasons, fun r -> r.Contains "no merged PR closes this issue")
@@ -231,7 +269,8 @@ let ``#543 --pr cannot launder a mention into a stamp`` () =
     let facts =
         { closedByPr with
             ClosingPrs = [ { closer 97 with ClosesThis = false } ]
-            CloserPrs = [] }
+            CloserPrs = []
+        }
 
     match verify (Some 97) None facts with
     | Red reasons -> Assert.Contains(reasons, fun r -> r.Contains "does not close this issue")
@@ -244,8 +283,17 @@ let ``#543 --pr names WHICH true closer to stamp, among several`` () =
     let facts =
         { closedByPr with
             ClosingPrs =
-                [ { closer 89 with MergedAt = "2026-01-01T00:00:00Z"; Oid = "1111aaa" }
-                  { closer 95 with MergedAt = "2026-03-01T00:00:00Z"; Oid = "2222bbb" } ] }
+                [
+                    { closer 89 with
+                        MergedAt = "2026-01-01T00:00:00Z"
+                        Oid = "1111aaa"
+                    }
+                    { closer 95 with
+                        MergedAt = "2026-03-01T00:00:00Z"
+                        Oid = "2222bbb"
+                    }
+                ]
+        }
 
     match verify (Some 89) None facts with
     | Green(ClosedByPullRequest(89, "1111aaa", _, _)) -> ()
@@ -263,14 +311,19 @@ let ``#2427 a same-repo true closer wins over a LATER-merged foreign-repo closer
     let facts =
         { closedByPr with
             ClosingPrs =
-                [ { closer 413 with
-                      MergedAt = "2026-08-12T08:06:28Z"
-                      Oid = "e605d37"
-                      Repo = "FS-GG/FS.GG.SDD" }
-                  { closer 195 with
-                      MergedAt = "2026-08-12T08:19:28Z"
-                      Oid = "938020f"
-                      Repo = "EHotwagner/S.I.R." } ] }
+                [
+                    { closer 413 with
+                        MergedAt = "2026-08-12T08:06:28Z"
+                        Oid = "e605d37"
+                        Repo = "FS-GG/FS.GG.SDD"
+                    }
+                    { closer 195 with
+                        MergedAt = "2026-08-12T08:19:28Z"
+                        Oid = "938020f"
+                        Repo = "EHotwagner/S.I.R."
+                    }
+                ]
+        }
 
     match verify None None facts with
     | Green(ClosedByPullRequest(413, "e605d37", _, Some(195, "EHotwagner/S.I.R."))) -> ()
@@ -279,18 +332,32 @@ let ``#2427 a same-repo true closer wins over a LATER-merged foreign-repo closer
             $"the same-repo closer must win over a later-merged foreign one, and the stamp must name the foreign PR it passed over — got %A{other}"
 
 [<Fact>]
-let ``#2427 among two SAME-repo closers, latest-merged still wins - the repository preference does not soften #342`` () =
+let ``#2427 among two SAME-repo closers, latest-merged still wins - the repository preference does not soften #342``
+    ()
+    =
     // The repository preference decides WHICH TIER wins; #342's latest-merged rule is unchanged for
     // deciding among closers that share a tier.
     let facts =
         { closedByPr with
             ClosingPrs =
-                [ { closer 89 with MergedAt = "2026-01-01T00:00:00Z"; Oid = "1111aaa"; Repo = "FS-GG/FS.GG.SDD" }
-                  { closer 95 with MergedAt = "2026-03-01T00:00:00Z"; Oid = "2222bbb"; Repo = "FS-GG/FS.GG.SDD" } ] }
+                [
+                    { closer 89 with
+                        MergedAt = "2026-01-01T00:00:00Z"
+                        Oid = "1111aaa"
+                        Repo = "FS-GG/FS.GG.SDD"
+                    }
+                    { closer 95 with
+                        MergedAt = "2026-03-01T00:00:00Z"
+                        Oid = "2222bbb"
+                        Repo = "FS-GG/FS.GG.SDD"
+                    }
+                ]
+        }
 
     match verify None None facts with
     | Green(ClosedByPullRequest(95, "2222bbb", _, None)) -> ()
-    | other -> failwith $"latest-merged must still decide among same-repo closers, with nothing passed over — got %A{other}"
+    | other ->
+        failwith $"latest-merged must still decide among same-repo closers, with nothing passed over — got %A{other}"
 
 [<Fact>]
 let ``#2427 with no same-repo closer at all, the foreign one wins and nothing is reported passed over`` () =
@@ -298,22 +365,37 @@ let ``#2427 with no same-repo closer at all, the foreign one wins and nothing is
     // stamp must not claim it "passed over" a closer that never competed.
     let facts =
         { closedByPr with
-            ClosingPrs = [ { closer 195 with Repo = "EHotwagner/S.I.R." } ] }
+            ClosingPrs =
+                [
+                    { closer 195 with
+                        Repo = "EHotwagner/S.I.R."
+                    }
+                ]
+        }
 
     match verify None None facts with
     | Green(ClosedByPullRequest(195, _, _, None)) -> ()
     | other -> failwith $"a lone foreign closer still stamps green, with nothing passed over — got %A{other}"
 
 [<Fact>]
-let ``#2427 --pr can still name the foreign closer explicitly - the override skips the preference, not the provenance check`` () =
+let ``#2427 --pr can still name the foreign closer explicitly - the override skips the preference, not the provenance check``
+    ()
+    =
     // `--pr` overrides WHICH pull request the stamp names, never whether it closed the issue (#543) — and
     // that includes the repository preference: an operator who explicitly asks for the foreign PR by number
     // gets it. Nothing is reported "passed over" because this was an explicit choice, not a silent one.
     let facts =
         { closedByPr with
             ClosingPrs =
-                [ { closer 413 with Repo = "FS-GG/FS.GG.SDD" }
-                  { closer 195 with Repo = "EHotwagner/S.I.R." } ] }
+                [
+                    { closer 413 with
+                        Repo = "FS-GG/FS.GG.SDD"
+                    }
+                    { closer 195 with
+                        Repo = "EHotwagner/S.I.R."
+                    }
+                ]
+        }
 
     match verify (Some 195) None facts with
     | Green(ClosedByPullRequest(195, _, _, None)) -> ()
@@ -324,7 +406,8 @@ let ``#2444 render's stdout stamp names ONLY the winner - the passed-over note d
     // .github#2444: `render`'s stdout value is a single-line value some caller may `grep` or diff exactly
     // (`.github#2427`'s own acceptance criterion, and #733's precedent for a candidate that existed but
     // was not chosen). Restored to its pre-#2427 single-purpose shape.
-    let stamp = render aRef (Green(ClosedByPullRequest(413, "e605d37", "2026-08-12", Some(195, "EHotwagner/S.I.R."))))
+    let stamp =
+        render aRef (Green(ClosedByPullRequest(413, "e605d37", "2026-08-12", Some(195, "EHotwagner/S.I.R."))))
 
     Assert.Contains("FSGG-DONE", stamp)
     Assert.Contains("PR #413", stamp)
@@ -335,13 +418,15 @@ let ``#2444 render's stdout stamp names ONLY the winner - the passed-over note d
 let ``#2444 gate-inversion: a stamp with NO passed-over closer never gains the note`` () =
     // Inverting the intent (folding the note back into render's stdout shape unconditionally) would make
     // THIS case red too — the None-branch must still print nothing extra.
-    let stamp = render aRef (Green(ClosedByPullRequest(399, "abc1234", "2026-01-01", None)))
+    let stamp =
+        render aRef (Green(ClosedByPullRequest(399, "abc1234", "2026-01-01", None)))
 
     Assert.DoesNotContain("passed over", stamp)
 
 [<Fact>]
 let ``#2444 passedOverForeignNote names the foreign closer that render's stdout omits`` () =
-    let verdict = Green(ClosedByPullRequest(413, "e605d37", "2026-08-12", Some(195, "EHotwagner/S.I.R.")))
+    let verdict =
+        Green(ClosedByPullRequest(413, "e605d37", "2026-08-12", Some(195, "EHotwagner/S.I.R.")))
 
     match passedOverForeignNote aRef verdict with
     | Some note ->
@@ -365,7 +450,9 @@ let ``#2444 passedOverForeignNote is None off a red or unverified verdict`` () =
 
 [<Fact>]
 let ``#2444 renderReceipt DELIBERATELY diverges from render - the durable comment keeps the note`` () =
-    let verdict = Green(ClosedByPullRequest(413, "e605d37", "2026-08-12", Some(195, "EHotwagner/S.I.R.")))
+    let verdict =
+        Green(ClosedByPullRequest(413, "e605d37", "2026-08-12", Some(195, "EHotwagner/S.I.R.")))
+
     let stdout = render aRef verdict
     let receipt = renderReceipt aRef verdict
 
@@ -390,7 +477,8 @@ let ``#583 a parent with OPEN sub-issues is not done, whatever its board says`` 
     let facts =
         { closedByPr with
             Children = SomeOpen [ 401; 402 ]
-            BoardStatus = Done }
+            BoardStatus = Done
+        }
 
     match verify None None facts with
     | Red reasons ->
@@ -410,7 +498,8 @@ let ``an UNVERIFIABLE child set is NoVerdict - never green, and never a confiden
     // those are different sentences with different remedies.
     let facts =
         { closedByPr with
-            Children = Unverifiable(120, 100) }
+            Children = Unverifiable(120, 100)
+        }
 
     match verify None None facts with
     | NoVerdict reason ->
@@ -425,11 +514,13 @@ let ``truncation is checked FIRST - before the closing PR, before everything`` (
     let facts =
         { closedByPr with
             ClosingPrs = [ closer 399 ]
-            Children = Unverifiable(120, 100) }
+            Children = Unverifiable(120, 100)
+        }
 
     match verify None None facts with
     | NoVerdict _ -> ()
-    | Green _ -> failwith "a truncated child set produced a GREEN stamp — this is the confident-green over an unread subject"
+    | Green _ ->
+        failwith "a truncated child set produced a GREEN stamp — this is the confident-green over an unread subject"
     | other -> failwith $"expected NoVerdict — got %A{other}"
 
 // ---- an open issue ----------------------------------------------------------------------------------
@@ -446,7 +537,9 @@ let ``an OPEN issue cannot be stamped - the stamp records that work is finished,
 
 [<Fact>]
 let ``a green stamp and a red stamp do not look alike`` () =
-    let green = render aRef (Green(ClosedByPullRequest(399, "abc1234", "2026-01-01", None)))
+    let green =
+        render aRef (Green(ClosedByPullRequest(399, "abc1234", "2026-01-01", None)))
+
     let red = render aRef (Red [ "nope" ])
     let unverified = render aRef (NoVerdict "could not read")
 
@@ -462,21 +555,30 @@ let ``a green stamp and a red stamp do not look alike`` () =
 
 let private ok (body: string) =
     Ok
-        { Status = 200
-          Body = body
-          ETag = None
-          NextLink = None; Headers = Map.empty }
+        {
+            Status = 200
+            Body = body
+            ETag = None
+            NextLink = None
+            Headers = Map.empty
+        }
 
 let private board: Board.BoardMap =
-    { Number = 12
-      Id = "PVT_coord"
-      Owner = "FS-GG"
-      Title = "Coordination"
-      Fields =
-        Map.ofList
-            [ "Status",
-              { Id = "PVTSSF_status"
-                Type = Board.SingleSelect(Map.ofList [ "Done", "opt_done" ]) } ] }
+    {
+        Number = 12
+        Id = "PVT_coord"
+        Owner = "FS-GG"
+        Title = "Coordination"
+        Fields =
+            Map.ofList
+                [
+                    "Status",
+                    {
+                        Id = "PVTSSF_status"
+                        Type = Board.SingleSelect(Map.ofList [ "Done", "opt_done" ])
+                    }
+                ]
+    }
 
 [<Fact>]
 let ``#614 a PARTIAL child does NOT close its parent - even when it is the ONLY child`` () =
@@ -490,9 +592,17 @@ let ``#614 a PARTIAL child does NOT close its parent - even when it is the ONLY 
     // The roll-up assumed children PARTITION their parent. They do not — and whether they do is a fact only
     // the child's author knows. So it is an ARGUMENT, it has no default, and it is honoured before a single
     // read is made.
-    let transport = Fake.Recorder(fun _ -> failwith "a PARTIAL child must not read, write, or close ANYTHING")
+    let transport =
+        Fake.Recorder(fun _ -> failwith "a PARTIAL child must not read, write, or close ANYTHING")
 
-    match rollUp transport board "godwit-24dc" parentRef (Partial "#398 is the disclosure-only half; #350 also requires an ADR") with
+    match
+        rollUp
+            transport
+            board
+            "godwit-24dc"
+            parentRef
+            (Partial "#398 is the disclosure-only half; #350 also requires an ADR")
+    with
     | Ok [ ParentLeftOpen(p, reasons) ] ->
         Assert.Equal(parentRef, p)
         Assert.Contains(reasons, fun r -> r.Contains "PARTIAL")
@@ -564,19 +674,22 @@ let ``#613 a rolled-up parent is stamped Done AND CLOSED - not one or the other`
     // grandparent then read an OPEN child.
     let transport =
         scripted
-            [ ok parentAllDone // the parent's facts
-              // The EPIC-UNLINKED-CHILD check re-reads the body + graph (#325): a body declaring no
-              // extra children clears it, so the roll-up proceeds.
-              // The parent's body. It STATES ACCEPTANCE, and since #1003 it has to: a parent whose body
-              // carries no task line has nothing to check against its graph and is refused. This fixture
-              // read `"Paths: none"` — written when a body was only ever read for unlinked children — and
-              // that is now a body that cannot close. The line delegates to #398, the child in the graph
-              // below, which is what a rollup-able parent looks like.
-              ok """{"number":350,"body":"- [ ] #398 the only criterion, and it IS a child"}""" // the parent's body
-              ok """{"data":{"repository":{"issue":{"subIssues":{"totalCount":1,"nodes":[{"number":398,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}""" // its graph, with refs
-              ok itemOnBoard // boardWrite: resolve the item
-              ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" // the Status write
-              ok """{"number":350,"state":"closed"}""" ] // the ISSUE close
+            [
+                ok parentAllDone // the parent's facts
+                // The EPIC-UNLINKED-CHILD check re-reads the body + graph (#325): a body declaring no
+                // extra children clears it, so the roll-up proceeds.
+                // The parent's body. It STATES ACCEPTANCE, and since #1003 it has to: a parent whose body
+                // carries no task line has nothing to check against its graph and is refused. This fixture
+                // read `"Paths: none"` — written when a body was only ever read for unlinked children — and
+                // that is now a body that cannot close. The line delegates to #398, the child in the graph
+                // below, which is what a rollup-able parent looks like.
+                ok """{"number":350,"body":"- [ ] #398 the only criterion, and it IS a child"}""" // the parent's body
+                ok
+                    """{"data":{"repository":{"issue":{"subIssues":{"totalCount":1,"nodes":[{"number":398,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}""" // its graph, with refs
+                ok itemOnBoard // boardWrite: resolve the item
+                ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" // the Status write
+                ok """{"number":350,"state":"closed"}"""
+            ] // the ISSUE close
 
     match rollUp transport board "godwit-24dc" parentRef Completes with
     | Ok [ ParentClosed p ] ->
@@ -597,10 +710,13 @@ let ``#325 a parent whose BODY declares an unlinked child is left open, and name
     // over a criterion split out and never linked, so the roll-up must REFUSE and name #399.
     let transport =
         scripted
-            [ ok parentAllDone // facts: graph {#398 closed}, AllResolved
-              ok """{"number":350,"body":"- [ ] #398 the linked half\n- [ ] #399 the UNLINKED half"}""" // body declares #399
-              ok """{"data":{"repository":{"issue":{"subIssues":{"totalCount":1,"nodes":[{"number":398,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}""" // graph {#398}
-              ok """{"number":399,"body":"a plain issue"}""" ] // the PR-probe for #399 -> not a PR -> KEPT
+            [
+                ok parentAllDone // facts: graph {#398 closed}, AllResolved
+                ok """{"number":350,"body":"- [ ] #398 the linked half\n- [ ] #399 the UNLINKED half"}""" // body declares #399
+                ok
+                    """{"data":{"repository":{"issue":{"subIssues":{"totalCount":1,"nodes":[{"number":398,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}""" // graph {#398}
+                ok """{"number":399,"body":"a plain issue"}"""
+            ] // the PR-probe for #399 -> not a PR -> KEPT
 
     match rollUp transport board "godwit-24dc" parentRef Completes with
     | Ok [ ParentLeftOpen(p, reasons) ] ->
@@ -625,8 +741,11 @@ let ``#965 a parent whose body states UN-DELEGATED acceptance is left open, and 
     // The script carries the facts and the body, AND NOTHING ELSE — see the assertion below.
     let transport =
         scripted
-            [ ok parentAllDone // facts: graph {#398 closed}, AllResolved
-              ok """{"number":350,"body":"- [ ] #398 the delegated half\n- [ ] step 3: global.json into FILES, tripwire deleted"}""" ]
+            [
+                ok parentAllDone // facts: graph {#398 closed}, AllResolved
+                ok
+                    """{"number":350,"body":"- [ ] #398 the delegated half\n- [ ] step 3: global.json into FILES, tripwire deleted"}"""
+            ]
 
     match rollUp transport board "godwit-24dc" parentRef Completes with
     | Ok [ ParentLeftOpen(p, reasons) ] ->
@@ -655,8 +774,10 @@ let ``#965 un-delegated acceptance is refused BEFORE the graph read is paid for`
     // ONLY the facts and the body is itself the assertion: reaching the graph read would fail this test.
     let transport =
         scripted
-            [ ok parentAllDone
-              ok """{"number":350,"body":"- [ ] an acceptance line delegated to nobody"}""" ]
+            [
+                ok parentAllDone
+                ok """{"number":350,"body":"- [ ] an acceptance line delegated to nobody"}"""
+            ]
 
     match rollUp transport board "godwit-24dc" parentRef Completes with
     | Ok [ ParentLeftOpen _ ] ->
@@ -681,13 +802,18 @@ let ``#965 the rule holds for a parent that is NOT [epic]-titled - which is #561
     // must not start: the parent below is titled `[cross-repo]` and is refused all the same.
     let transport =
         scripted
-            [ ok parentAllDone
-              ok """{"number":350,"title":"[cross-repo] Roll the org SDK pin out to the four unpinned repos","body":"- [ ] #398 the delegated half\n- [ ] step 3: add global.json to FILES, delete the tripwire"}""" ]
+            [
+                ok parentAllDone
+                ok
+                    """{"number":350,"title":"[cross-repo] Roll the org SDK pin out to the four unpinned repos","body":"- [ ] #398 the delegated half\n- [ ] step 3: add global.json to FILES, delete the tripwire"}"""
+            ]
 
     match rollUp transport board "godwit-24dc" parentRef Completes with
     | Ok [ ParentLeftOpen(_, reasons) ] ->
         Assert.Contains("step 3: add global.json to FILES, delete the tripwire", String.concat " " reasons)
-    | other -> failwith $"a non-epic PARENT must be refused too — a title is not what makes acceptance rollup-able — got %A{other}"
+    | other ->
+        failwith
+            $"a non-epic PARENT must be refused too — a title is not what makes acceptance rollup-able — got %A{other}"
 
 [<Fact>]
 let ``#1003 a parent whose body states NO task-line acceptance is left open - #889's shape`` () =
@@ -702,8 +828,11 @@ let ``#1003 a parent whose body states NO task-line acceptance is left open - #8
     // has not addressed #965.
     let transport =
         scripted
-            [ ok parentAllDone
-              ok """{"number":350,"body":"## The work\n\nFold the restatements into generated regions:\n\n- `pnext-item` — the mint ritual\n- `check-board`"}""" ]
+            [
+                ok parentAllDone
+                ok
+                    """{"number":350,"body":"## The work\n\nFold the restatements into generated regions:\n\n- `pnext-item` — the mint ritual\n- `check-board`"}"""
+            ]
 
     match rollUp transport board "godwit-24dc" parentRef Completes with
     | Ok [ ParentLeftOpen(p, reasons) ] ->
@@ -726,7 +855,8 @@ let ``#1003 the refusal costs no graph read either - it is a property of the bod
 
     // Same discipline as #965's guard: `scripted` throws once its queue empties, so a script of exactly
     // the facts and the body IS the assertion, and the call counts make it non-vacuous.
-    let transport = scripted [ ok parentAllDone; ok """{"number":350,"body":"just prose, no criteria"}""" ]
+    let transport =
+        scripted [ ok parentAllDone; ok """{"number":350,"body":"just prose, no criteria"}""" ]
 
     match rollUp transport board "godwit-24dc" parentRef Completes with
     | Ok [ ParentLeftOpen _ ] ->
@@ -742,8 +872,10 @@ let ``#1003 does not fire on a body #965 already governs - the two guards do not
     // #1003's rule also fired, the reader would get two refusals for one defect and the remedies differ.
     let transport =
         scripted
-            [ ok parentAllDone
-              ok """{"number":350,"body":"- [ ] step 3: global.json into FILES, tripwire deleted"}""" ]
+            [
+                ok parentAllDone
+                ok """{"number":350,"body":"- [ ] step 3: global.json into FILES, tripwire deleted"}"""
+            ]
 
     match rollUp transport board "godwit-24dc" parentRef Completes with
     | Ok [ ParentLeftOpen(_, reasons) ] ->
@@ -760,12 +892,15 @@ let ``#965 an epic whose every acceptance line is a child ref still rolls up`` (
     // rule drives toward, and it must close exactly as before — otherwise the guard is a wall, not a fence.
     let transport =
         scripted
-            [ ok parentAllDone
-              ok """{"number":350,"body":"- [ ] #398 the only criterion, and it IS a child"}"""
-              ok """{"data":{"repository":{"issue":{"subIssues":{"totalCount":1,"nodes":[{"number":398,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}"""
-              ok itemOnBoard
-              ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
-              ok """{"number":350,"state":"closed"}""" ]
+            [
+                ok parentAllDone
+                ok """{"number":350,"body":"- [ ] #398 the only criterion, and it IS a child"}"""
+                ok
+                    """{"data":{"repository":{"issue":{"subIssues":{"totalCount":1,"nodes":[{"number":398,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}"""
+                ok itemOnBoard
+                ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+                ok """{"number":350,"state":"closed"}"""
+            ]
 
     match rollUp transport board "godwit-24dc" parentRef Completes with
     | Ok [ ParentClosed p ] -> Assert.Equal(parentRef, p)

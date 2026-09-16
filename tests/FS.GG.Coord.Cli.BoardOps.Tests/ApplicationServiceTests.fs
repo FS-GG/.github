@@ -30,7 +30,13 @@ module ApplicationServiceTests =
     /// the partial two-field receipt, the sentinel gate, the intent channel). Overriding the endpoint is
     /// the convention the doc comment above already prescribes for legs that mean the OTHER answer.
     let private routedLedger (subject: string) =
-        JsonSerializer.Serialize [| {| id = 7900; body = currentRouteComment subject "" |} |]
+        JsonSerializer.Serialize
+            [|
+                {|
+                    id = 7900
+                    body = currentRouteComment subject ""
+                |}
+            |]
 
     type private MutationCommentThread(initialBodies: string list) =
         let comments = Collections.Generic.Dictionary<int64, string>()
@@ -44,8 +50,14 @@ module ApplicationServiceTests =
 
         member _.Json() =
             let now = DateTimeOffset.UtcNow.ToString("o")
+
             comments
-            |> Seq.map (fun entry -> {| id = entry.Key; body = entry.Value; updated_at = now |})
+            |> Seq.map (fun entry ->
+                {|
+                    id = entry.Key
+                    body = entry.Value
+                    updated_at = now
+                |})
             |> Seq.toArray
             |> JsonSerializer.Serialize
 
@@ -67,25 +79,30 @@ module ApplicationServiceTests =
         Directory.CreateDirectory(Path.Combine(root, "work", workId)) |> ignore
         Directory.CreateDirectory(Path.Combine(root, "readiness", workId)) |> ignore
         File.WriteAllText(Path.Combine(root, specHome), "# Synthetic delivery-route fixture\n")
+
         File.WriteAllText(
             Path.Combine(root, "readiness", workId, "analysis.json"),
-            $"{{\"workId\":\"{workId}\",\"status\":\"implementationReady\"}}")
+            $"{{\"workId\":\"{workId}\",\"status\":\"implementationReady\"}}"
+        )
+
         Environment.SetEnvironmentVariable("FSGG_COORD_SDD_ROOT", root)
 
-        let current : DeliveryRoute.Receipt =
-            { Schema = DeliveryRoute.Schema
-              Subject = "FS-GG/.github#2137"
-              SubjectRevision = "fixture"
-              Route = Some DeliveryRoute.SddRequired
-              Agent = "fixture-route"
-              Timestamp = "2026-01-01T00:00:00Z"
-              ReasonCodes = [ "fixture" ]
-              Rationale = "fixture route receipt"
-              DeclaredImpacts = [ "internal" ]
-              ObservedFacts = [ "localized" ]
-              SddWorkId = Some workId
-              SpecHome = Some specHome
-              RequiredGates = [ "implementationReady"; "analyze"; "verify"; "ship" ] }
+        let current: DeliveryRoute.Receipt =
+            {
+                Schema = DeliveryRoute.Schema
+                Subject = "FS-GG/.github#2137"
+                SubjectRevision = "fixture"
+                Route = Some DeliveryRoute.SddRequired
+                Agent = "fixture-route"
+                Timestamp = "2026-01-01T00:00:00Z"
+                ReasonCodes = [ "fixture" ]
+                Rationale = "fixture route receipt"
+                DeclaredImpacts = [ "internal" ]
+                ObservedFacts = [ "localized" ]
+                SddWorkId = Some workId
+                SpecHome = Some specHome
+                RequiredGates = [ "implementationReady"; "analyze"; "verify"; "ship" ]
+            }
 
         try
             Assert.Empty(Client.sddEvidenceErrors current)
@@ -93,7 +110,8 @@ module ApplicationServiceTests =
             let nonexistent =
                 { current with
                     SddWorkId = Some "does-not-exist"
-                    SpecHome = Some "work/does-not-exist/spec.md" }
+                    SpecHome = Some "work/does-not-exist/spec.md"
+                }
 
             Assert.NotEmpty(Client.sddEvidenceErrors nonexistent)
         finally
@@ -102,8 +120,17 @@ module ApplicationServiceTests =
 
     [<Fact>]
     let ``#2137 SDD readiness rejects a substituted work id and non-implementation-ready status`` () =
-        Assert.NotEmpty(Client.sddReadinessEvidenceErrors "2137-delivery-route" """{"workId":"other-work","status":"implementationReady"}""")
-        Assert.NotEmpty(Client.sddReadinessEvidenceErrors "2137-delivery-route" """{"workId":"2137-delivery-route","status":"analyzing"}""")
+        Assert.NotEmpty(
+            Client.sddReadinessEvidenceErrors
+                "2137-delivery-route"
+                """{"workId":"other-work","status":"implementationReady"}"""
+        )
+
+        Assert.NotEmpty(
+            Client.sddReadinessEvidenceErrors
+                "2137-delivery-route"
+                """{"workId":"2137-delivery-route","status":"analyzing"}"""
+        )
 
     [<Fact>]
     let ``#1843 filing advisory finds a broad same-repo declaration and ignores reverse or other repos`` () =
@@ -113,45 +140,62 @@ module ApplicationServiceTests =
             |> Result.defaultWith (fun errors -> failwithf "fixture snapshot did not parse: %A" errors)
             |> fun request -> request.Candidates |> List.map _.Item
 
-        let broad = { Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 10 }
+        let broad =
+            {
+                Owner = "FS-GG"
+                Repo = "FS.GG.SDD"
+                Number = 10
+            }
+
         let narrow = { broad with Number = 11 }
         let otherRepo = { broad with Repo = "FS.GG.Game" }
 
-        Assert.Equal<Ref list>([ existing.Head.Ref ], Client.filingLaneOfOne broad (TouchSet.parse "Paths: docs/reports") existing)
+        Assert.Equal<Ref list>(
+            [ existing.Head.Ref ],
+            Client.filingLaneOfOne broad (TouchSet.parse "Paths: docs/reports") existing
+        )
+
         Assert.Empty(Client.filingLaneOfOne narrow (TouchSet.parse "Paths: docs/reports/new-file.md") existing)
         Assert.Empty(Client.filingLaneOfOne otherRepo (TouchSet.parse "Paths: docs/reports") existing)
 
     let private row number repo title status state isPullRequest : Scan.Row =
-        { Ref =
-            { Owner = "FS-GG"
-              Repo = repo
-              Number = number }
-          Title = title
-          Status = status
-          BlockedByRaw = ""
-          State = state
-          IsPullRequest = isPullRequest
-          PathRepo = repo
-          BoardClass = None
-          BoardKind = None
-          CommentCount = None
-          Severity = Unset
-          Phase = None
-          CreatedAt = None
-          SweptBody = None
-          NodeId = None }
+        {
+            Ref =
+                {
+                    Owner = "FS-GG"
+                    Repo = repo
+                    Number = number
+                }
+            Title = title
+            Status = status
+            BlockedByRaw = ""
+            State = state
+            IsPullRequest = isPullRequest
+            PathRepo = repo
+            BoardClass = None
+            BoardKind = None
+            CommentCount = None
+            Severity = Unset
+            Phase = None
+            CreatedAt = None
+            SweptBody = None
+            NodeId = None
+        }
 
     [<Fact>]
     let ``ready application service preserves the exact JSON projection contract`` () =
         let rows =
-            [ row 1 ".github" "quote: \"kept\"" BoardStatus.Ready IssueState.Open false
-              row 2 ".github" "done" BoardStatus.Done IssueState.Closed false
-              row 3 ".github" "pull request" BoardStatus.Ready IssueState.Open true
-              row 4 "FS.GG.Game" "other repo" BoardStatus.Backlog IssueState.Open false ]
+            [
+                row 1 ".github" "quote: \"kept\"" BoardStatus.Ready IssueState.Open false
+                row 2 ".github" "done" BoardStatus.Done IssueState.Closed false
+                row 3 ".github" "pull request" BoardStatus.Ready IssueState.Open true
+                row 4 "FS.GG.Game" "other repo" BoardStatus.Backlog IssueState.Open false
+            ]
 
         let selected = ReadyApplication.select (Some ".github") None false rows
 
         Assert.Equal(1, List.length selected.Rows)
+
         Assert.Equal(
             """[{"number":1,"repo":"FS-GG/.github","title":"quote: \u0022kept\u0022","status":"Ready","class":null,"kind":null,"commentCount":null,"severity":"Unset","state":"OPEN"}]""",
             Render.renderReadyJson selected.Rows
@@ -171,7 +215,8 @@ module ApplicationServiceTests =
         // turns on this value being real.
         let classed =
             { row 1 ".github" "a defect" BoardStatus.Ready IssueState.Open false with
-                BoardClass = Some Defect }
+                BoardClass = Some Defect
+            }
 
         Assert.Equal(
             """[{"number":1,"repo":"FS-GG/.github","title":"a defect","status":"Ready","class":"defect","kind":null,"commentCount":null,"severity":"Unset","state":"OPEN"}]""",
@@ -181,8 +226,10 @@ module ApplicationServiceTests =
     [<Fact>]
     let ``ready status selection is case-insensitive and can explicitly include Done`` () =
         let rows =
-            [ row 1 ".github" "ready" BoardStatus.Ready IssueState.Open false
-              row 2 ".github" "done" BoardStatus.Done IssueState.Closed false ]
+            [
+                row 1 ".github" "ready" BoardStatus.Ready IssueState.Open false
+                row 2 ".github" "done" BoardStatus.Done IssueState.Closed false
+            ]
 
         let selected = ReadyApplication.select None (Some "done") false rows
 
@@ -201,10 +248,25 @@ module ApplicationServiceTests =
 
     [<Fact>]
     let ``#1901 Unset Severity lints until an open row is triaged`` () =
-        Assert.True(LintApplication.severityVerdict IssueState.Open BoardStatus.Ready Unset |> Option.isSome)
-        Assert.True(LintApplication.severityVerdict IssueState.Open BoardStatus.InProgress Unset |> Option.isSome)
-        Assert.True(LintApplication.severityVerdict IssueState.Open BoardStatus.Done Unset |> Option.isNone)
-        Assert.True(LintApplication.severityVerdict IssueState.Closed BoardStatus.Ready Unset |> Option.isNone)
+        Assert.True(
+            LintApplication.severityVerdict IssueState.Open BoardStatus.Ready Unset
+            |> Option.isSome
+        )
+
+        Assert.True(
+            LintApplication.severityVerdict IssueState.Open BoardStatus.InProgress Unset
+            |> Option.isSome
+        )
+
+        Assert.True(
+            LintApplication.severityVerdict IssueState.Open BoardStatus.Done Unset
+            |> Option.isNone
+        )
+
+        Assert.True(
+            LintApplication.severityVerdict IssueState.Closed BoardStatus.Ready Unset
+            |> Option.isNone
+        )
 
         for severity in [ Critical; High; Medium; Low ] do
             Assert.True(
@@ -249,7 +311,11 @@ module ApplicationServiceTests =
     /// startable column, so every fixture built on the `In progress` default below is — by construction —
     /// a queue whose empty arm is under test (.github#1562 needed the OTHER arm as well).
     let private boardItemIn (status: string) (number: int) (title: string) (blockedBy: string option) (state: string) =
-        let blocked = blockedBy |> Option.map (fun value -> $"{{\"text\":\"%s{value}\"}}") |> Option.defaultValue "null"
+        let blocked =
+            blockedBy
+            |> Option.map (fun value -> $"{{\"text\":\"%s{value}\"}}")
+            |> Option.defaultValue "null"
+
         $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blocked},"content":{{"__typename":"Issue","number":%d{number},"title":"%s{title}","body":"","state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
 
     let private boardItemInWithBody status number title blockedBy state body =
@@ -257,7 +323,8 @@ module ApplicationServiceTests =
         let encoded = System.Text.Json.JsonSerializer.Serialize body
         row.Replace("\"body\":\"\"", $"\"body\":%s{encoded}")
 
-    let private boardItem (number: int) (title: string) = boardItemIn "In progress" number title None "OPEN"
+    let private boardItem (number: int) (title: string) =
+        boardItemIn "In progress" number title None "OPEN"
 
     /// One claim marker, `ageMinutes` old. Sessionless, exactly as `kit_server.py` serves it: a marker
     /// carrying no session is indistinguishable from ours, which is `verifyHeld`'s documented behaviour and
@@ -281,11 +348,13 @@ module ApplicationServiceTests =
             Map.tryFind number bodies
             |> Option.map (fun body ->
                 JsonSerializer.Serialize
-                    {| id = 7000 + number
-                       body = currentRouteComment $"FS-GG/FS.GG.SDD#%d{number}" body
-                       user = {| login = "EHotwagner" |}
-                       created_at = ts
-                       updated_at = ts |})
+                    {|
+                        id = 7000 + number
+                        body = currentRouteComment $"FS-GG/FS.GG.SDD#%d{number}" body
+                        user = {| login = "EHotwagner" |}
+                        created_at = ts
+                        updated_at = ts
+                    |})
             |> Option.toList
 
         let claim =
@@ -297,7 +366,9 @@ module ApplicationServiceTests =
                     |> Option.map (fun repo -> $" pathRepo=%s{repo}")
                     |> Option.defaultValue ""
 
-                [ $"""{{"id":%d{8000 + number},"body":"<!-- fsgg:claim worker=%s{worker} lease=120%s{pathRepo} -->\nheld","user":{{"login":"EHotwagner"}},"created_at":"%s{ts}","updated_at":"%s{ts}"}}""" ]
+                [
+                    $"""{{"id":%d{8000 + number},"body":"<!-- fsgg:claim worker=%s{worker} lease=120%s{pathRepo} -->\nheld","user":{{"login":"EHotwagner"}},"created_at":"%s{ts}","updated_at":"%s{ts}"}}"""
+                ]
 
         "[" + String.concat "," (route @ claim) + "]"
 
@@ -336,14 +407,18 @@ module ApplicationServiceTests =
     let private commentsAged bodies holders ageMinutes number =
         commentsAgedScoped bodies holders ageMinutes Map.empty number
 
-    let private commentsFor bodies (holders: Map<int, string>) (number: int) = commentsAged bodies holders Map.empty number
+    let private commentsFor bodies (holders: Map<int, string>) (number: int) =
+        commentsAged bodies holders Map.empty number
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None; Headers = Map.empty }
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            }
 
     /// A transport serving one repo AND one board. `bodies` is issue number → issue body (its `Paths:`
     /// declaration), `holders` is issue number → the worker whose claim marker sits on it, `markerAge` is
@@ -380,137 +455,176 @@ module ApplicationServiceTests =
             |> Map.toList
             |> List.filter (fun (n, _) -> not (offBoard.Contains n))
             |> List.map (fun (n, body) ->
-                let blocker = body.Split('\n') |> Array.tryPick (fun line -> if line.StartsWith("Blocked by: ") then Some(line.Substring("Blocked by: ".Length)) else None)
-                let state = if body.Contains("<!-- fixture:closed -->") then "CLOSED" else "OPEN"
+                let blocker =
+                    body.Split('\n')
+                    |> Array.tryPick (fun line ->
+                        if line.StartsWith("Blocked by: ") then
+                            Some(line.Substring("Blocked by: ".Length))
+                        else
+                            None)
+
+                let state =
+                    if body.Contains("<!-- fixture:closed -->") then
+                        "CLOSED"
+                    else
+                        "OPEN"
+
                 boardItemIn (statusFor n) n $"item %d{n}" blocker state)
             |> String.concat ","
 
-        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-            let path = req.Path.Trim '/'
+        Fake.Recorder(
+            StructuredFixtures.withIntake
+            <| fun (req: Request) ->
+                let path = req.Path.Trim '/'
 
-            let issueNumber (suffix: string) =
-                let prefix = "repos/FS-GG/FS.GG.SDD/issues/"
+                let issueNumber (suffix: string) =
+                    let prefix = "repos/FS-GG/FS.GG.SDD/issues/"
 
-                if path.StartsWith prefix && path.EndsWith suffix then
-                    let middle = path.Substring(prefix.Length, path.Length - prefix.Length - suffix.Length)
+                    if path.StartsWith prefix && path.EndsWith suffix then
+                        let middle =
+                            path.Substring(prefix.Length, path.Length - prefix.Length - suffix.Length)
 
-                    match Int32.TryParse middle with
-                    | true, n -> Some n
-                    | _ -> None
-                else
-                    None
-
-            match req.Method, path with
-            // .github#2300 repair 2: the bounded route-marker search (`Reads.recentCommentBodies`) —
-            // served from the SAME `bodies`/`holders`/`pathRepos` the REST `/comments` arm below reads,
-            // via `recentCommentBodiesScoped`.
-            | "POST", "graphql" when
-                (match req.Body with
-                 | Query(document, _) -> document.Contains "comments(last:"
-                 | _ -> false)
-                ->
-                match req.Body with
-                | Query(_, variables) ->
-                    let numberVar =
-                        variables
-                        |> List.tryFind (fun (k, _) -> k = "number")
-                        |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
-
-                    let lastVar =
-                        variables
-                        |> List.tryFind (fun (k, _) -> k = "last")
-                        |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
-
-                    match numberVar, lastVar with
-                    | Some n, Some last ->
-                        let recent =
-                            recentCommentBodiesScoped bodies holders pathRepos n last
-                            |> List.map (fun body -> {| body = body |})
-                            |> JsonSerializer.Serialize
-
-                        let payload =
-                            "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
-                            + recent
-                            + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
-
-                        ok payload
-                    | _ -> Error(Errors.NotFound "the recent-comments query is missing owner/repo/number/last variables")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, _) ->
-                    match graphqlAnswer (items ()) document with
-                    | Some answer -> ok answer
-                    | None -> Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            // THE REPO'S OPEN ISSUES (`Reads.openIssues`, #1525/.github#1779) — WITH THEIR BODIES.
-            //
-            // It served `[]` until #1779, which was true of the scheduler's use of it (this fixture's whole
-            // board WAS the board, so there was nothing off it to sweep) and is a lie about the repo. The
-            // #353 collision scan now keys its candidate set on this read instead of on the board's rows,
-            // so an empty answer here would make every OVERLAP leg below pass or fail for a reason that has
-            // nothing to do with claims. The bodies ride along exactly as `Reads.openIssues` promises they
-            // do — one list read serving both the marker scan and the touch-set extraction.
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues" ->
-                bodies
-                |> Map.toList
-                // A closed item remains on the board, but GitHub's open-issues endpoint must not smuggle it
-                // into `activeCollisions`.  #2250 needs the gate to reach that holder through the board
-                // scan, exactly as production does.
-                |> List.filter (fun (_, body) -> not (body.Contains("<!-- fixture:closed -->")))
-                |> List.map (fun (n, body) -> {| number = n; state = "open"; body = body |})
-                |> JsonSerializer.Serialize
-                |> ok
-            // THE REPO'S OPEN PRs (`Reads.prAlive`, #651/.github#2678). Served ONLY when a fixture asked
-            // for one: this is what makes a markerless row's `itemPr` reach the snapshot, which is the
-            // exact shape — work in flight with no marker on the issue — that used to be counted as an
-            // occupied implementer slot.
-            | "GET", "repos/FS-GG/FS.GG.SDD/pulls" when not (Map.isEmpty itemPrs) ->
-                itemPrs
-                |> Map.toList
-                |> List.map (fun (issue, pr) ->
-                    {| number = pr
-                       head = {| ref = $"item/%d{issue}-fixture" |} |})
-                |> JsonSerializer.Serialize
-                |> ok
-            // A DIFFERENT REPO'S issue list, and it is an ERROR rather than an empty array on purpose
-            // (.github#1779). `openIssues` is repo-scoped by construction now, so nothing may ask for
-            // another repo's issues; serving `[]` would let a cross-repo read pass unnoticed, which is the
-            // phantom-collision failure #353 removed. This makes that a test failure instead.
-            | "GET", p when p.EndsWith "/issues" ->
-                Error(Errors.NotFound $"the #353 scan asked for another repo's issues: %s{p}")
-            | "GET", _ when (issueNumber "/comments").IsSome ->
-                let n = (issueNumber "/comments").Value
-                let readable = commentsAgedScoped bodies holders markerAge pathRepos n
-
-                let body =
-                    if incomplete.Contains n then
-                        let unreadable = $"""{{"id":%d{9000 + n},"body":null}}"""
-
-                        if readable = "[]" then
-                            $"[%s{unreadable}]"
-                        else
-                            readable.TrimEnd(']') + "," + unreadable + "]"
+                        match Int32.TryParse middle with
+                        | true, n -> Some n
+                        | _ -> None
                     else
-                        readable
+                        None
 
-                ok body
-            | "POST", _ when (issueNumber "/comments").IsSome ->
-                if sayFails then
-                    Error(Errors.NotFound "the notice could not be posted")
-                else
-                    ok """{"id":9001}"""
-            | ("GET" | "PATCH"), _ when (issueNumber "").IsSome ->
-                let n = (issueNumber "").Value
+                match req.Method, path with
+                // .github#2300 repair 2: the bounded route-marker search (`Reads.recentCommentBodies`) —
+                // served from the SAME `bodies`/`holders`/`pathRepos` the REST `/comments` arm below reads,
+                // via `recentCommentBodiesScoped`.
+                | "POST", "graphql" when
+                    (match req.Body with
+                     | Query(document, _) -> document.Contains "comments(last:"
+                     | _ -> false)
+                    ->
+                    match req.Body with
+                    | Query(_, variables) ->
+                        let numberVar =
+                            variables
+                            |> List.tryFind (fun (k, _) -> k = "number")
+                            |> Option.bind (fun (_, v) ->
+                                match v with
+                                | VNumber n -> Some(int n)
+                                | _ -> None)
 
-                match Map.tryFind n bodies with
-                | Some body ->
-                    // A PATCH is accepted but not persisted: the #523 re-check compares the touch-set it
-                    // REWROTE in memory, never a re-read, so persisting it would test nothing extra.
-                    ok (JsonSerializer.Serialize {| number = n; state = "open"; body = body |})
-                | None -> Error(Errors.NotFound $"no issue %d{n}")
-            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+                        let lastVar =
+                            variables
+                            |> List.tryFind (fun (k, _) -> k = "last")
+                            |> Option.bind (fun (_, v) ->
+                                match v with
+                                | VNumber n -> Some(int n)
+                                | _ -> None)
+
+                        match numberVar, lastVar with
+                        | Some n, Some last ->
+                            let recent =
+                                recentCommentBodiesScoped bodies holders pathRepos n last
+                                |> List.map (fun body -> {| body = body |})
+                                |> JsonSerializer.Serialize
+
+                            let payload =
+                                "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                                + recent
+                                + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+
+                            ok payload
+                        | _ ->
+                            Error(
+                                Errors.NotFound "the recent-comments query is missing owner/repo/number/last variables"
+                            )
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, _) ->
+                        match graphqlAnswer (items ()) document with
+                        | Some answer -> ok answer
+                        | None -> Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                // THE REPO'S OPEN ISSUES (`Reads.openIssues`, #1525/.github#1779) — WITH THEIR BODIES.
+                //
+                // It served `[]` until #1779, which was true of the scheduler's use of it (this fixture's whole
+                // board WAS the board, so there was nothing off it to sweep) and is a lie about the repo. The
+                // #353 collision scan now keys its candidate set on this read instead of on the board's rows,
+                // so an empty answer here would make every OVERLAP leg below pass or fail for a reason that has
+                // nothing to do with claims. The bodies ride along exactly as `Reads.openIssues` promises they
+                // do — one list read serving both the marker scan and the touch-set extraction.
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues" ->
+                    bodies
+                    |> Map.toList
+                    // A closed item remains on the board, but GitHub's open-issues endpoint must not smuggle it
+                    // into `activeCollisions`.  #2250 needs the gate to reach that holder through the board
+                    // scan, exactly as production does.
+                    |> List.filter (fun (_, body) -> not (body.Contains("<!-- fixture:closed -->")))
+                    |> List.map (fun (n, body) ->
+                        {|
+                            number = n
+                            state = "open"
+                            body = body
+                        |})
+                    |> JsonSerializer.Serialize
+                    |> ok
+                // THE REPO'S OPEN PRs (`Reads.prAlive`, #651/.github#2678). Served ONLY when a fixture asked
+                // for one: this is what makes a markerless row's `itemPr` reach the snapshot, which is the
+                // exact shape — work in flight with no marker on the issue — that used to be counted as an
+                // occupied implementer slot.
+                | "GET", "repos/FS-GG/FS.GG.SDD/pulls" when not (Map.isEmpty itemPrs) ->
+                    itemPrs
+                    |> Map.toList
+                    |> List.map (fun (issue, pr) ->
+                        {|
+                            number = pr
+                            head = {| ref = $"item/%d{issue}-fixture" |}
+                        |})
+                    |> JsonSerializer.Serialize
+                    |> ok
+                // A DIFFERENT REPO'S issue list, and it is an ERROR rather than an empty array on purpose
+                // (.github#1779). `openIssues` is repo-scoped by construction now, so nothing may ask for
+                // another repo's issues; serving `[]` would let a cross-repo read pass unnoticed, which is the
+                // phantom-collision failure #353 removed. This makes that a test failure instead.
+                | "GET", p when p.EndsWith "/issues" ->
+                    Error(Errors.NotFound $"the #353 scan asked for another repo's issues: %s{p}")
+                | "GET", _ when (issueNumber "/comments").IsSome ->
+                    let n = (issueNumber "/comments").Value
+                    let readable = commentsAgedScoped bodies holders markerAge pathRepos n
+
+                    let body =
+                        if incomplete.Contains n then
+                            let unreadable = $"""{{"id":%d{9000 + n},"body":null}}"""
+
+                            if readable = "[]" then
+                                $"[%s{unreadable}]"
+                            else
+                                readable.TrimEnd(']') + "," + unreadable + "]"
+                        else
+                            readable
+
+                    ok body
+                | "POST", _ when (issueNumber "/comments").IsSome ->
+                    if sayFails then
+                        Error(Errors.NotFound "the notice could not be posted")
+                    else
+                        ok """{"id":9001}"""
+                | ("GET" | "PATCH"), _ when (issueNumber "").IsSome ->
+                    let n = (issueNumber "").Value
+
+                    match Map.tryFind n bodies with
+                    | Some body ->
+                        // A PATCH is accepted but not persisted: the #523 re-check compares the touch-set it
+                        // REWROTE in memory, never a re-read, so persisting it would test nothing extra.
+                        ok (
+                            JsonSerializer.Serialize
+                                {|
+                                    number = n
+                                    state = "open"
+                                    body = body
+                                |}
+                        )
+                    | None -> Error(Errors.NotFound $"no issue %d{n}")
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+        )
 
     let private worldOfWithIncomplete statusFor bodies holders markerAge offBoard incomplete sayFails =
         worldOfWithScopesAndIncomplete
@@ -528,16 +642,7 @@ module ApplicationServiceTests =
     /// world in which a MARKERLESS row reaches the snapshot carrying an `itemPr`, which is the row the
     /// implementer-slot count used to swallow.
     let private worldOfWithItemPrsAged statusFor bodies holders markerAge itemPrs =
-        worldOfWithScopesAndIncomplete
-            statusFor
-            bodies
-            holders
-            markerAge
-            Map.empty
-            itemPrs
-            Set.empty
-            Set.empty
-            false
+        worldOfWithScopesAndIncomplete statusFor bodies holders markerAge Map.empty itemPrs Set.empty Set.empty false
 
     let private worldOfWithItemPrs statusFor bodies holders itemPrs =
         worldOfWithItemPrsAged statusFor bodies holders Map.empty itemPrs
@@ -546,7 +651,12 @@ module ApplicationServiceTests =
         worldOfWithIncomplete statusFor bodies holders markerAge offBoard Set.empty sayFails
 
     /// `worldOf` with no aged markers and nothing off the board — every pre-#1779 caller's world.
-    let private worldWith (statusFor: int -> string) (bodies: Map<int, string>) (holders: Map<int, string>) (sayFails: bool) =
+    let private worldWith
+        (statusFor: int -> string)
+        (bodies: Map<int, string>)
+        (holders: Map<int, string>)
+        (sayFails: bool)
+        =
         worldOf statusFor bodies holders Map.empty Set.empty sayFails
 
     let private worldIn (status: string) (bodies: Map<int, string>) (holders: Map<int, string>) (sayFails: bool) =
@@ -568,11 +678,13 @@ module ApplicationServiceTests =
             false
 
     let private context (transport: Fake.Recorder) : Kernel.Context =
-        { Transport = transport
-          Owner = "FS-GG"
-          Title = "Coordination"
-          DefaultRepo = Some "FS.GG.SDD"
-          ChoreLocks = [] }
+        {
+            Transport = transport
+            Owner = "FS-GG"
+            Title = "Coordination"
+            DefaultRepo = Some "FS.GG.SDD"
+            ChoreLocks = []
+        }
 
     let private options (args: string list) : Options.Options =
         match Options.parse args with
@@ -603,15 +715,18 @@ module ApplicationServiceTests =
             | ExternalClaimPostFails
 
         type World =
-            { Transport: Fake.Recorder
-              DefaultMutated: unit -> bool
-              ExternalMutated: unit -> bool }
+            {
+                Transport: Fake.Recorder
+                DefaultMutated: unit -> bool
+                ExternalMutated: unit -> bool
+            }
 
         let private variable name variables =
             variables
             |> List.tryPick (fun (n, value) -> if n = name then Some value else None)
 
-        let private asString = function
+        let private asString =
+            function
             | VString value
             | VId value -> value
             | value -> failwithf "expected string GraphQL variable, got %A" value
@@ -676,136 +791,171 @@ module ApplicationServiceTests =
 
             let comments owner =
                 let timestamp = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
+
                 bodies owner
                 |> List.mapi (fun index body ->
-                    {| id = 9195 + index
-                       body = body
-                       user = {| login = "EHotwagner" |}
-                       created_at = timestamp
-                       updated_at = timestamp |})
+                    {|
+                        id = 9195 + index
+                        body = body
+                        user = {| login = "EHotwagner" |}
+                        created_at = timestamp
+                        updated_at = timestamp
+                    |})
                 |> JsonSerializer.Serialize
 
             let transport =
-                Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-                    let path = req.Path.Trim '/'
+                Fake.Recorder(
+                    StructuredFixtures.withIntake
+                    <| fun (req: Request) ->
+                        let path = req.Path.Trim '/'
 
-                    match req.Method, path with
-                    | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-                    | "POST", "graphql" ->
-                        match req.Body with
-                        // .github#2300 repair 2: the bounded route-marker search. `owner` distinguishes
-                        // the two same-numbered twins exactly as the REST arms below key on the URL's
-                        // owner segment.
-                        | Query(document, variables) when document.Contains "comments(last:" ->
-                            let ownerVar =
-                                variable "owner" variables |> Option.map asString
-                            let lastVar =
-                                variable "last" variables
-                                |> Option.map (function
-                                    | VNumber n -> int n
-                                    | value -> failwithf "expected numeric `last`, got %A" value)
+                        match req.Method, path with
+                        | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                        | "POST", "graphql" ->
+                            match req.Body with
+                            // .github#2300 repair 2: the bounded route-marker search. `owner` distinguishes
+                            // the two same-numbered twins exactly as the REST arms below key on the URL's
+                            // owner segment.
+                            | Query(document, variables) when document.Contains "comments(last:" ->
+                                let ownerVar = variable "owner" variables |> Option.map asString
 
-                            match ownerVar, lastVar with
-                            | Some owner, Some last ->
-                                let recent =
-                                    bodies owner
-                                    |> List.rev
-                                    |> List.truncate last
-                                    |> List.rev
-                                    |> List.map (fun body -> {| body = body |})
-                                    |> JsonSerializer.Serialize
+                                let lastVar =
+                                    variable "last" variables
+                                    |> Option.map (function
+                                        | VNumber n -> int n
+                                        | value -> failwithf "expected numeric `last`, got %A" value)
 
-                                let payload =
-                                    "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
-                                    + recent
-                                    + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+                                match ownerVar, lastVar with
+                                | Some owner, Some last ->
+                                    let recent =
+                                        bodies owner
+                                        |> List.rev
+                                        |> List.truncate last
+                                        |> List.rev
+                                        |> List.map (fun body -> {| body = body |})
+                                        |> JsonSerializer.Serialize
 
-                                ok payload
-                            | _ -> Error(Errors.NotFound $"the recent-comments query is missing owner/last: %A{variables}")
-                        | Query(document, variables) when document.Contains "projectsV2" ->
-                            ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                        | Query(document, _) when document.Contains "fields(first" ->
-                            // `Backlog` is a REAL option here on purpose: it is the #1823 default `add`
-                            // applies over a column it believes is unset, and an assertion that it was NOT
-                            // written is worthless if the write could not have resolved an option id anyway.
-                            ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_backlog","name":"Backlog"},{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_blocked","name":"Blocked"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                        | Query(document, _) when document.Contains "node(id: $projectId)" ->
-                            ok
-                                """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_default96","content":{"number":96,"repository":{"nameWithOwner":"FS-GG/rogue3"}}},{"id":"PVTI_external96","content":{"number":96,"repository":{"nameWithOwner":"EHotwagner/rogue3"}}}]}}}}"""
-                        | Query(document, variables) when document.Contains "node(id: $itemId)" ->
-                            let item = variable "itemId" variables |> Option.map asString |> Option.defaultValue ""
-                            let field = variable "field" variables |> Option.map asString |> Option.defaultValue ""
+                                    let payload =
+                                        "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                                        + recent
+                                        + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
 
-                            if item <> "PVTI_external96" then
-                                Error(Errors.NotFound $"the board-side field read addressed the wrong row: %s{item}")
-                            else
-                                ok (externalField field)
-                        | Query(document, _) when document.Contains "items(first" -> ok (boardItems ())
-                        | Query(document, variables) when document.Contains "projectItems" ->
-                            let owner = variable "owner" variables |> Option.map asString |> Option.defaultValue ""
-                            ok (projectItems owner (document.Contains "fieldValueByName"))
-                        | Query(document, variables) when document.Contains "updateProjectV2ItemFieldValue" ->
-                            let item = variable "itemId" variables |> Option.map asString |> Option.defaultValue ""
+                                    ok payload
+                                | _ ->
+                                    Error(
+                                        Errors.NotFound
+                                            $"the recent-comments query is missing owner/last: %A{variables}"
+                                    )
+                            | Query(document, variables) when document.Contains "projectsV2" ->
+                                ok
+                                    """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                            | Query(document, _) when document.Contains "fields(first" ->
+                                // `Backlog` is a REAL option here on purpose: it is the #1823 default `add`
+                                // applies over a column it believes is unset, and an assertion that it was NOT
+                                // written is worthless if the write could not have resolved an option id anyway.
+                                ok
+                                    """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_backlog","name":"Backlog"},{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_blocked","name":"Blocked"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                            | Query(document, _) when document.Contains "node(id: $projectId)" ->
+                                ok
+                                    """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_default96","content":{"number":96,"repository":{"nameWithOwner":"FS-GG/rogue3"}}},{"id":"PVTI_external96","content":{"number":96,"repository":{"nameWithOwner":"EHotwagner/rogue3"}}}]}}}}"""
+                            | Query(document, variables) when document.Contains "node(id: $itemId)" ->
+                                let item =
+                                    variable "itemId" variables |> Option.map asString |> Option.defaultValue ""
 
-                            if item = "PVTI_external96" then
-                                externalMutated <- true
-                                externalStatus <- "In progress"
-                            elif item = "PVTI_default96" then
-                                defaultMutated <- true
+                                let field =
+                                    variable "field" variables |> Option.map asString |> Option.defaultValue ""
 
-                            ok """{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_external96"}}}}"""
-                        | Query(document, _) -> Error(Errors.NotFound $"unserved GraphQL: %s{document}")
-                        | _ -> Error(Errors.NotFound "graphql call without a query")
-                    | "GET", "repos/FS-GG/rogue3/issues" ->
-                        ok """[{"number":96,"state":"open","body":"Paths: src/Rogue3/"}]"""
-                    | "GET", "repos/EHotwagner/rogue3/issues" when failure = ExternalReadFails ->
-                        Error(Errors.Transport "external owner issue list unavailable")
-                    | "GET", "repos/EHotwagner/rogue3/issues" ->
-                        ok """[{"number":96,"state":"open","body":"Paths: src/Rogue3/"}]"""
-                    | "GET", "repos/FS-GG/rogue3/issues/96" ->
-                        ok """{"number":96,"state":"open","body":"Paths: src/Rogue3/"}"""
-                    | "GET", "repos/EHotwagner/rogue3/issues/96" when failure = ExternalReadFails ->
-                        Error(Errors.Transport "external owner issue unavailable")
-                    | "GET", "repos/EHotwagner/rogue3/issues/96" ->
-                        ok """{"number":96,"state":"open","body":"Paths: src/Rogue3/"}"""
-                    | "GET", "repos/FS-GG/rogue3/issues/96/comments" -> ok (comments "FS-GG")
-                    | "GET", "repos/EHotwagner/rogue3/issues/96/comments" when failure = ExternalReadFails ->
-                        Error(Errors.Transport "external owner claim read unavailable")
-                    | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok (comments "EHotwagner")
-                    | "POST", "repos/FS-GG/rogue3/issues/96/comments" ->
-                        defaultMutated <- true
-                        ok """{"id":9195}"""
-                    | "POST", "repos/EHotwagner/rogue3/issues/96/comments" when failure = ExternalClaimPostFails ->
-                        Error(Errors.Http(502, "external owner claim post failed"))
-                    | "POST", "repos/EHotwagner/rogue3/issues/96/comments" ->
-                        externalMutated <- true
+                                if item <> "PVTI_external96" then
+                                    Error(
+                                        Errors.NotFound $"the board-side field read addressed the wrong row: %s{item}"
+                                    )
+                                else
+                                    ok (externalField field)
+                            | Query(document, _) when document.Contains "items(first" -> ok (boardItems ())
+                            | Query(document, variables) when document.Contains "projectItems" ->
+                                let owner =
+                                    variable "owner" variables |> Option.map asString |> Option.defaultValue ""
 
-                        match req.Body with
-                        | Json payload ->
-                            use document = JsonDocument.Parse payload
-                            externalMarker <- Some(document.RootElement.GetProperty("body").GetString())
-                        | _ -> failwith "claim POST did not carry JSON"
+                                ok (projectItems owner (document.Contains "fieldValueByName"))
+                            | Query(document, variables) when document.Contains "updateProjectV2ItemFieldValue" ->
+                                let item =
+                                    variable "itemId" variables |> Option.map asString |> Option.defaultValue ""
 
-                        ok """{"id":9196}"""
-                    | "GET", p when p.EndsWith "/pulls" -> ok "[]"
-                    // .github#2645 — `Reads.prAlive`'s SECOND probe. With no open PR it asks whether a
-                    // pushed `item/96-*` branch exists, and an UNREADABLE answer there is `LivenessUnknown`,
-                    // never "no PR" — which `claim` now correctly refuses to project a column from. Neither
-                    // twin has such a branch, so both answer the empty ref list.
-                    | "GET", p when p.Contains "/git/matching-refs/heads/item/96-" -> ok "[]"
-                    | method', target -> Error(Errors.NotFound $"unserved twin-owner request: %s{method'} %s{target}"))
+                                if item = "PVTI_external96" then
+                                    externalMutated <- true
+                                    externalStatus <- "In progress"
+                                elif item = "PVTI_default96" then
+                                    defaultMutated <- true
 
-            { Transport = transport
-              DefaultMutated = fun () -> defaultMutated
-              ExternalMutated = fun () -> externalMutated }
+                                ok
+                                    """{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_external96"}}}}"""
+                            | Query(document, _) -> Error(Errors.NotFound $"unserved GraphQL: %s{document}")
+                            | _ -> Error(Errors.NotFound "graphql call without a query")
+                        | "GET", "repos/FS-GG/rogue3/issues" ->
+                            ok """[{"number":96,"state":"open","body":"Paths: src/Rogue3/"}]"""
+                        | "GET", "repos/EHotwagner/rogue3/issues" when failure = ExternalReadFails ->
+                            Error(Errors.Transport "external owner issue list unavailable")
+                        | "GET", "repos/EHotwagner/rogue3/issues" ->
+                            ok """[{"number":96,"state":"open","body":"Paths: src/Rogue3/"}]"""
+                        | "GET", "repos/FS-GG/rogue3/issues/96" ->
+                            ok """{"number":96,"state":"open","body":"Paths: src/Rogue3/"}"""
+                        | "GET", "repos/EHotwagner/rogue3/issues/96" when failure = ExternalReadFails ->
+                            Error(Errors.Transport "external owner issue unavailable")
+                        | "GET", "repos/EHotwagner/rogue3/issues/96" ->
+                            ok """{"number":96,"state":"open","body":"Paths: src/Rogue3/"}"""
+                        | "GET", "repos/FS-GG/rogue3/issues/96/comments" -> ok (comments "FS-GG")
+                        | "GET", "repos/EHotwagner/rogue3/issues/96/comments" when failure = ExternalReadFails ->
+                            Error(Errors.Transport "external owner claim read unavailable")
+                        | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok (comments "EHotwagner")
+                        | "POST", "repos/FS-GG/rogue3/issues/96/comments" ->
+                            defaultMutated <- true
+                            ok """{"id":9195}"""
+                        | "POST", "repos/EHotwagner/rogue3/issues/96/comments" when failure = ExternalClaimPostFails ->
+                            Error(Errors.Http(502, "external owner claim post failed"))
+                        | "POST", "repos/EHotwagner/rogue3/issues/96/comments" ->
+                            externalMutated <- true
+
+                            match req.Body with
+                            | Json payload ->
+                                use document = JsonDocument.Parse payload
+                                externalMarker <- Some(document.RootElement.GetProperty("body").GetString())
+                            | _ -> failwith "claim POST did not carry JSON"
+
+                            ok """{"id":9196}"""
+                        | "GET", p when p.EndsWith "/pulls" -> ok "[]"
+                        // .github#2645 — `Reads.prAlive`'s SECOND probe. With no open PR it asks whether a
+                        // pushed `item/96-*` branch exists, and an UNREADABLE answer there is `LivenessUnknown`,
+                        // never "no PR" — which `claim` now correctly refuses to project a column from. Neither
+                        // twin has such a branch, so both answer the empty ref list.
+                        | "GET", p when p.Contains "/git/matching-refs/heads/item/96-" -> ok "[]"
+                        | method', target ->
+                            Error(Errors.NotFound $"unserved twin-owner request: %s{method'} %s{target}")
+                )
+
+            {
+                Transport = transport
+                DefaultMutated = fun () -> defaultMutated
+                ExternalMutated = fun () -> externalMutated
+            }
 
         let run (transport: Fake.Recorder) (args: string list) : int * string * string =
-            let cache = Path.Combine(Path.GetTempPath(), "fsgg-2155-twins-" + Guid.NewGuid().ToString "n")
+            let cache =
+                Path.Combine(Path.GetTempPath(), "fsgg-2155-twins-" + Guid.NewGuid().ToString "n")
+
             let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+
             let identityVars =
-                [ "FSGG_WORKER"; "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID" ]
+                [
+                    "FSGG_WORKER"
+                    "CLAUDE_CODE_SESSION_ID"
+                    "OPENCODE_SESSION_ID"
+                    "FSGG_AGENT_SESSION_ID"
+                ]
+
             let previousIdentity =
-                identityVars |> List.map (fun name -> name, Environment.GetEnvironmentVariable name)
+                identityVars
+                |> List.map (fun name -> name, Environment.GetEnvironmentVariable name)
+
             let stdout, stderr = Console.Out, Console.Error
             use capturedOut = new StringWriter()
             use capturedErr = new StringWriter()
@@ -813,10 +963,14 @@ module ApplicationServiceTests =
             try
                 Directory.CreateDirectory cache |> ignore
                 Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
-                previousIdentity |> List.iter (fun (name, _) -> Environment.SetEnvironmentVariable(name, null))
+
+                previousIdentity
+                |> List.iter (fun (name, _) -> Environment.SetEnvironmentVariable(name, null))
+
                 Console.SetOut capturedOut
                 Console.SetError capturedErr
                 let opts = options args
+
                 let code =
                     match opts.Command with
                     | Options.BatchCmd -> Client.batch (context transport) opts
@@ -825,6 +979,7 @@ module ApplicationServiceTests =
                     | Options.Release -> Client.release (context transport) opts
                     | Options.Add -> Handlers.addCmd (context transport) opts
                     | command -> failwithf "twin-owner fixture drives batch/take/claim/release/add, got %A" command
+
                 Console.Out.Flush()
                 Console.Error.Flush()
                 code, capturedOut.ToString(), capturedErr.ToString()
@@ -832,13 +987,22 @@ module ApplicationServiceTests =
                 Console.SetOut stdout
                 Console.SetError stderr
                 Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
-                previousIdentity |> List.iter (fun (name, value) -> Environment.SetEnvironmentVariable(name, value))
-                try Directory.Delete(cache, true) with _ -> ()
+
+                previousIdentity
+                |> List.iter (fun (name, value) -> Environment.SetEnvironmentVariable(name, value))
+
+                try
+                    Directory.Delete(cache, true)
+                with _ ->
+                    ()
 
     [<Fact>]
     let ``#2155 batch then bare take claims only the selected external twin and reports its canonical identity`` () =
         let world = ExternalOwnerTakeFixture.create ExternalOwnerTakeFixture.Healthy
-        let batchCode, batchOut, _ = ExternalOwnerTakeFixture.run world.Transport [ "batch"; "--json" ]
+
+        let batchCode, batchOut, _ =
+            ExternalOwnerTakeFixture.run world.Transport [ "batch"; "--json" ]
+
         Assert.Equal(0, batchCode)
         Assert.Equal("[\"EHotwagner/rogue3#96\"]" + Environment.NewLine, batchOut)
 
@@ -864,10 +1028,13 @@ module ApplicationServiceTests =
         (readFails: bool)
         =
         let failure =
-            if readFails then ExternalOwnerTakeFixture.ExternalReadFails
-            else ExternalOwnerTakeFixture.ExternalClaimPostFails
+            if readFails then
+                ExternalOwnerTakeFixture.ExternalReadFails
+            else
+                ExternalOwnerTakeFixture.ExternalClaimPostFails
 
         let world = ExternalOwnerTakeFixture.create failure
+
         let code, output, _ =
             ExternalOwnerTakeFixture.run world.Transport [ "take"; "--worker"; "otter-2155"; "--json" ]
 
@@ -888,12 +1055,14 @@ module ApplicationServiceTests =
         let claimCode, _, claimErr =
             ExternalOwnerTakeFixture.run world.Transport [ "claim"; "EHotwagner/rogue3#96"; "--worker"; "otter-2204" ]
 
-        if claimCode <> 0 then failwithf "the external claim failed: %s" claimErr
+        if claimCode <> 0 then
+            failwithf "the external claim failed: %s" claimErr
 
         let releaseCode, releaseOut, releaseErr =
             ExternalOwnerTakeFixture.run world.Transport [ "release"; "EHotwagner/rogue3#96"; "--worker"; "otter-2204" ]
 
-        if releaseCode <> 0 then failwithf "the external release failed: %s" releaseErr
+        if releaseCode <> 0 then
+            failwithf "the external release failed: %s" releaseErr
 
         // The pre-claim column was `Ready`, so the restore names it. The pre-repair output was the bare
         // "(no column to reset — not on this board, or no Status set)" for a row that is on the board.
@@ -910,17 +1079,17 @@ module ApplicationServiceTests =
         let addCode, addOut, addErr =
             ExternalOwnerTakeFixture.run world.Transport [ "add"; "EHotwagner/rogue3#96"; "--worker"; "otter-2204" ]
 
-        if addCode <> 0 then failwithf "the external add failed: %s" addErr
+        if addCode <> 0 then
+            failwithf "the external add failed: %s" addErr
 
         // The row's live column is `Ready`. `add` is idempotent over it: no Status write at all, and in
         // particular never the default.
         Assert.False(
             world.Transport.Logged "--single-select-option-id opt_backlog",
-            $"`add` wrote the Backlog default over a live external column — stdout: %s{addOut}")
+            $"`add` wrote the Backlog default over a live external column — stdout: %s{addOut}"
+        )
 
-        Assert.False(
-            world.Transport.Logged "--id PVTI_default96",
-            "`add` addressed the default-owner twin")
+        Assert.False(world.Transport.Logged "--id PVTI_default96", "`add` addressed the default-owner twin")
 
     [<Fact>]
     let ``#2127 driver review evidence is bound to the PR comment endpoint`` () =
@@ -929,8 +1098,10 @@ module ApplicationServiceTests =
         // a handler that accidentally reads #2127's comments for review evidence therefore produces zero.
         let mutable head = String.replicate 40 "3"
         let mutable claimed = false
+
         let boardItem =
             """{"status":{"name":"Ready"},"blockedBy":null,"content":{"__typename":"Issue","number":2127,"title":"driver","state":"OPEN","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
+
         let graph (query: string) =
             if query.Contains "projectsV2" then
                 """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}},"rateLimit":{"cost":1,"remaining":4977}}}"""
@@ -938,87 +1109,149 @@ module ApplicationServiceTests =
                 """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
             else
                 $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{boardItem}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+
         let transport =
-            Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-                match req.Method, req.Path.Trim '/' with
-                | "POST", "graphql" ->
-                    match req.Body with
-                    | Query(query, _) -> ok (graph query)
-                    | _ -> Error(Errors.NotFound "graphql without a query")
-                | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
-                | "GET", "repos/FS-GG/.github/issues/2127" -> ok """{"number":2127,"state":"open","body":"Paths: src/FS.GG.Coord.Core/Driver.fs"}"""
-                | "GET", "repos/FS-GG/.github/issues/2127/comments" ->
-                    if claimed then
-                        let timestamp = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
-                        let payload =
-                            [ {| id = 7127
-                                 body = currentRouteComment "FS-GG/.github#2127" "Paths: src/FS.GG.Coord.Core/Driver.fs"
-                                 user = {| login = "fixture" |}
-                                 created_at = timestamp
-                                 updated_at = timestamp |}
-                              {| id = 8127
-                                 body = "<!-- fsgg:claim worker=worker-2127 lease=120 -->"
-                                 user = {| login = "fixture" |}
-                                 created_at = timestamp
-                                 updated_at = timestamp |} ]
-                        ok (JsonSerializer.Serialize payload)
-                    else ok "[]"
-                | "GET", "repos/FS-GG/.github/pulls" -> ok """[{"number":2140,"head":{"ref":"item/2127-driver-transition-state-machine"}}]"""
-                | "GET", "repos/FS-GG/.github/pulls/2140" -> ok $"""{{"number":2140,"state":"open","merged":false,"mergeable":true,"mergeable_state":"clean","head":{{"ref":"item/2127-driver-transition-state-machine","sha":"%s{head}"}},"base":{{"ref":"main"}}}}"""
-                | "GET", "repos/FS-GG/.github/pulls/2140/files" -> ok "[]"
-                | "GET", path when path = $"repos/FS-GG/.github/commits/%s{head}" ->
-                    ok """{"commit":{"message":"ordinary driver change"}}"""
-                | "GET", "repos/FS-GG/.github/actions/runs" -> ok """{"total_count":1,"workflow_runs":[{"path":".github/workflows/build.yml","event":"pull_request","head_branch":"item/2127-driver-transition-state-machine","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":2140}]}]}"""
-                | "GET", path when path.StartsWith "repos/FS-GG/.github/commits/" && path.EndsWith "/check-runs" -> ok """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
-                | "GET", "repos/FS-GG/.github/issues/2140/comments" ->
-                    let comments =
-                        StructuredFixtures.acceptedReviewComments "FS-GG/.github#2127/pr/2140" head "shrike-7194"
-                        |> List.map (fun (id, url, body) -> {| id = id; html_url = url; body = body |})
-                    ok (JsonSerializer.Serialize comments)
-                | method', path -> Error(Errors.NotFound $"unexpected driver read: %s{method'} %s{path}"))
+            Fake.Recorder(
+                StructuredFixtures.withIntake
+                <| fun (req: Request) ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "POST", "graphql" ->
+                        match req.Body with
+                        | Query(query, _) -> ok (graph query)
+                        | _ -> Error(Errors.NotFound "graphql without a query")
+                    | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+                    | "GET", "repos/FS-GG/.github/issues/2127" ->
+                        ok """{"number":2127,"state":"open","body":"Paths: src/FS.GG.Coord.Core/Driver.fs"}"""
+                    | "GET", "repos/FS-GG/.github/issues/2127/comments" ->
+                        if claimed then
+                            let timestamp = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
+
+                            let payload =
+                                [
+                                    {|
+                                        id = 7127
+                                        body =
+                                            currentRouteComment
+                                                "FS-GG/.github#2127"
+                                                "Paths: src/FS.GG.Coord.Core/Driver.fs"
+                                        user = {| login = "fixture" |}
+                                        created_at = timestamp
+                                        updated_at = timestamp
+                                    |}
+                                    {|
+                                        id = 8127
+                                        body = "<!-- fsgg:claim worker=worker-2127 lease=120 -->"
+                                        user = {| login = "fixture" |}
+                                        created_at = timestamp
+                                        updated_at = timestamp
+                                    |}
+                                ]
+
+                            ok (JsonSerializer.Serialize payload)
+                        else
+                            ok "[]"
+                    | "GET", "repos/FS-GG/.github/pulls" ->
+                        ok """[{"number":2140,"head":{"ref":"item/2127-driver-transition-state-machine"}}]"""
+                    | "GET", "repos/FS-GG/.github/pulls/2140" ->
+                        ok
+                            $"""{{"number":2140,"state":"open","merged":false,"mergeable":true,"mergeable_state":"clean","head":{{"ref":"item/2127-driver-transition-state-machine","sha":"%s{head}"}},"base":{{"ref":"main"}}}}"""
+                    | "GET", "repos/FS-GG/.github/pulls/2140/files" -> ok "[]"
+                    | "GET", path when path = $"repos/FS-GG/.github/commits/%s{head}" ->
+                        ok """{"commit":{"message":"ordinary driver change"}}"""
+                    | "GET", "repos/FS-GG/.github/actions/runs" ->
+                        ok
+                            """{"total_count":1,"workflow_runs":[{"path":".github/workflows/build.yml","event":"pull_request","head_branch":"item/2127-driver-transition-state-machine","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":2140}]}]}"""
+                    | "GET", path when path.StartsWith "repos/FS-GG/.github/commits/" && path.EndsWith "/check-runs" ->
+                        ok
+                            """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+                    | "GET", "repos/FS-GG/.github/issues/2140/comments" ->
+                        let comments =
+                            StructuredFixtures.acceptedReviewComments "FS-GG/.github#2127/pr/2140" head "shrike-7194"
+                            |> List.map (fun (id, url, body) ->
+                                {|
+                                    id = id
+                                    html_url = url
+                                    body = body
+                                |})
+
+                        ok (JsonSerializer.Serialize comments)
+                    | method', path -> Error(Errors.NotFound $"unexpected driver read: %s{method'} %s{path}")
+            )
+
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
-        let cache = Path.Combine(Path.GetTempPath(), "fsgg-2127-driver-" + Guid.NewGuid().ToString "n")
+
+        let cache =
+            Path.Combine(Path.GetTempPath(), "fsgg-2127-driver-" + Guid.NewGuid().ToString "n")
+
         let previousOut, previousErr = Console.Out, Console.Error
+
         let invoke receipt =
             use capturedOut = new StringWriter()
             use capturedErr = new StringWriter()
             Console.SetOut capturedOut
             Console.SetError capturedErr
+
             let args =
-                [ yield "driver"; yield "--repo"; yield ".github"; yield "--json"; yield "--worker"; yield "host-2127"
-                  match receipt with
-                  | Some path -> yield "--snapshot"; yield path
-                  | None -> () ]
+                [
+                    yield "driver"
+                    yield "--repo"
+                    yield ".github"
+                    yield "--json"
+                    yield "--worker"
+                    yield "host-2127"
+                    match receipt with
+                    | Some path ->
+                        yield "--snapshot"
+                        yield path
+                    | None -> ()
+                ]
+
             let code = Client.driver (context transport) (options args)
             Console.Out.Flush()
             Console.Error.Flush()
             Console.SetOut previousOut
             Console.SetError previousErr
             code, capturedOut.ToString(), capturedErr.ToString()
+
         try
             Directory.CreateDirectory cache |> ignore
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
             let code, stdout, stderr = invoke None
-            if code <> 0 then failwithf "exit=%d; stderr=%s; log=%A" code stderr transport.Log
+
+            if code <> 0 then
+                failwithf "exit=%d; stderr=%s; log=%A" code stderr transport.Log
+
             Assert.Equal("", stderr)
             use document = JsonDocument.Parse(stdout)
             let root = document.RootElement
             let evidence = root.GetProperty("reviewEvidence").GetInt32()
-            if evidence <> 1 then failwithf "evidence=%d; stdout=%s; log=%A" evidence stdout transport.Log
+
+            if evidence <> 1 then
+                failwithf "evidence=%d; stdout=%s; log=%A" evidence stdout transport.Log
+
             Assert.False(root.GetProperty("receiptValid").GetBoolean())
             Assert.Equal("RepairEngineCurrency", root.GetProperty("action").GetString())
             let sourceSha = root.GetProperty("sourceSha").GetString()
             let receiptPath = Path.Combine(cache, "receipt.json")
+
             let receipt schema approved observedAt source =
                 let observation kind outcome =
                     let id = Driver.observationReceiptId kind observedAt source outcome
                     $"""{{"kind":"%s{kind}","observedAt":%d{observedAt},"sourceSha":"%s{source}","outcome":"%s{outcome}","receiptId":"%s{id}"}}"""
+
                 let observations =
-                    [ "reconcile-dry-run", "clean"; "reconcile-apply", "applied-or-not-needed"
-                      "reconcile-fresh", "clean"; "triage", "fresh"; "engine-currency", "current-scoped" ]
+                    [
+                        "reconcile-dry-run", "clean"
+                        "reconcile-apply", "applied-or-not-needed"
+                        "reconcile-fresh", "clean"
+                        "triage", "fresh"
+                        "engine-currency", "current-scoped"
+                    ]
                     |> List.map (fun (kind, outcome) -> observation kind outcome)
                     |> String.concat ","
+
                 $"""{{"schema":"%s{schema}","observedAt":%d{observedAt},"sourceSha":"%s{source}","complete":true,"consolidationApproved":%s{if approved then "true" else "false"},"observations":[%s{observations}],"contentIntakes":[],"contentDispositions":[]}}"""
+
             let now = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             let schema = Protocol.ledgerPolicy.Schema
             File.WriteAllText(receiptPath, receipt schema false now sourceSha)
@@ -1035,15 +1268,27 @@ module ApplicationServiceTests =
             use wrongSchemaDoc = JsonDocument.Parse wrongSchema
             Assert.False(wrongSchemaDoc.RootElement.GetProperty("receiptValid").GetBoolean())
             File.WriteAllText(receiptPath, receipt schema true now sourceSha)
+
             let queued: Cache.Deferred =
-                { Ref = ".github#2127"; Field = "Status"; Value = "Ready"; At = "2026-08-02T00:00:00Z"
-                  Worker = "host-2127"; Board = Some("FS-GG", "Coordination") }
+                {
+                    Ref = ".github#2127"
+                    Field = "Status"
+                    Value = "Ready"
+                    At = "2026-08-02T00:00:00Z"
+                    Worker = "host-2127"
+                    Board = Some("FS-GG", "Coordination")
+                }
+
             Cache.defer (Errors.RateLimited(Errors.GraphQlBudget, None)) queued
             |> Result.defaultWith (fun error -> failwithf "could not build pending-write provenance: %A" error)
+
             let _, pendingChanged, _ = invoke (Some receiptPath)
             use pendingChangedDoc = JsonDocument.Parse pendingChanged
             Assert.False(pendingChangedDoc.RootElement.GetProperty("receiptValid").GetBoolean())
-            let pendingSource = pendingChangedDoc.RootElement.GetProperty("sourceSha").GetString()
+
+            let pendingSource =
+                pendingChangedDoc.RootElement.GetProperty("sourceSha").GetString()
+
             Assert.True(sourceSha <> pendingSource)
             Cache.clearPending ()
             // Same item count, different live facts: a claim makes the old receipt unreplayable.  A fresh
@@ -1068,7 +1313,10 @@ module ApplicationServiceTests =
             use mismatchedDoc = JsonDocument.Parse mismatched
             Assert.False(mismatchedDoc.RootElement.GetProperty("receiptValid").GetBoolean())
             Assert.Equal("RepairEngineCurrency", mismatchedDoc.RootElement.GetProperty("action").GetString())
-            let malformed = (receipt schema true now sourceSha).Replace("\"receiptId\":\"", "\"receiptId\":\"malformed-")
+
+            let malformed =
+                (receipt schema true now sourceSha).Replace("\"receiptId\":\"", "\"receiptId\":\"malformed-")
+
             File.WriteAllText(receiptPath, malformed)
             let _, malformedOutput, _ = invoke (Some receiptPath)
             use malformedDoc = JsonDocument.Parse malformedOutput
@@ -1078,7 +1326,11 @@ module ApplicationServiceTests =
             Console.SetOut previousOut
             Console.SetError previousErr
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
-            try Directory.Delete(cache, true) with _ -> ()
+
+            try
+                Directory.Delete(cache, true)
+            with _ ->
+                ()
 
     /// .github#2144's escalated finding, driven through the real `Client.driver` handler.
     ///
@@ -1089,8 +1341,12 @@ module ApplicationServiceTests =
     /// green.  Measuring occurrences separates them, which is the whole repair.
     [<Fact>]
     let ``followup audit apply disposes an abandoned queue's ref even when another worker holds the open issue`` () =
-        let transport = world (Map.ofList [ 42, "Paths: src/A" ]) (Map.ofList [ 42, "other-123" ]) false
-        let cache = Path.Combine(Path.GetTempPath(), "fsgg-followup-audit-" + Guid.NewGuid().ToString "n")
+        let transport =
+            world (Map.ofList [ 42, "Paths: src/A" ]) (Map.ofList [ 42, "other-123" ]) false
+
+        let cache =
+            Path.Combine(Path.GetTempPath(), "fsgg-followup-audit-" + Guid.NewGuid().ToString "n")
+
         let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let stderr = Console.Error
         use captured = new StringWriter()
@@ -1110,18 +1366,31 @@ module ApplicationServiceTests =
                     (options [ "followup"; "audit"; "--apply" ])
 
             Assert.Equal(0, code)
-            Assert.False(File.Exists queue, "the claimed open ref is already resurfaced; its abandoned queue must clear")
+
+            Assert.False(
+                File.Exists queue,
+                "the claimed open ref is already resurfaced; its abandoned queue must clear"
+            )
+
             Assert.Contains("FS.GG.SDD#42", captured.ToString())
             Assert.True(transport.Logged "comment-post FS-GG/FS.GG.SDD 42")
         finally
             Console.SetError stderr
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous)
-            try Directory.Delete(cache, true) with _ -> ()
+
+            try
+                Directory.Delete(cache, true)
+            with _ ->
+                ()
 
     [<Fact>]
     let ``followup audit apply leaves the queue byte-identical when its durable disposition fails`` () =
-        let transport = world (Map.ofList [ 42, "Paths: src/A" ]) (Map.ofList [ 42, "other-123" ]) true
-        let cache = Path.Combine(Path.GetTempPath(), "fsgg-followup-audit-fail-" + Guid.NewGuid().ToString "n")
+        let transport =
+            world (Map.ofList [ 42, "Paths: src/A" ]) (Map.ofList [ 42, "other-123" ]) true
+
+        let cache =
+            Path.Combine(Path.GetTempPath(), "fsgg-followup-audit-fail-" + Guid.NewGuid().ToString "n")
+
         let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
 
         try
@@ -1142,7 +1411,11 @@ module ApplicationServiceTests =
             Assert.Equal(bytes, File.ReadAllText queue)
         finally
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous)
-            try Directory.Delete(cache, true) with _ -> ()
+
+            try
+                Directory.Delete(cache, true)
+            with _ ->
+                ()
 
     /// Run one verb against a THROWAWAY cache root and capture its stdout.
     ///
@@ -1172,7 +1445,12 @@ module ApplicationServiceTests =
         // that derives NOTHING and names itself with `--worker` — which is precisely what an in-process
         // argv fixture is, and the human-operator case the flag exists for.
         let identityVars =
-            [ "FSGG_WORKER"; "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID" ]
+            [
+                "FSGG_WORKER"
+                "CLAUDE_CODE_SESSION_ID"
+                "OPENCODE_SESSION_ID"
+                "FSGG_AGENT_SESSION_ID"
+            ]
 
         let previousIdentity =
             identityVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
@@ -1182,6 +1460,7 @@ module ApplicationServiceTests =
 
         try
             Directory.CreateDirectory dir |> ignore
+
             for v, _ in previousIdentity do
                 Environment.SetEnvironmentVariable(v, null)
 
@@ -1224,7 +1503,8 @@ module ApplicationServiceTests =
     /// `internal`, not `private` — #2306's `WidenRefusalTests.fs` drives the same fixture rather than
     /// duplicating GraphQL board-bootstrap mocking that has nothing to do with what it tests.
     let internal run (transport: Fake.Recorder) (args: string list) : int * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-1517-" + Guid.NewGuid().ToString "n")
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-1517-" + Guid.NewGuid().ToString "n")
 
         try
             runIn dir transport args
@@ -1257,29 +1537,36 @@ module ApplicationServiceTests =
     /// not say whether a source is a skill directory or a plain client file, so this fixture includes both
     /// inputs the real engine has and captures the stderr-only operator guidance.
     let private declaredKitWarning (body: string) : string =
-        let root = Path.Combine(Path.GetTempPath(), "fsgg-1878-" + Guid.NewGuid().ToString "n")
+        let root =
+            Path.Combine(Path.GetTempPath(), "fsgg-1878-" + Guid.NewGuid().ToString "n")
+
         let previousRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
         let stderr = Console.Error
         use captured = new StringWriter()
 
         try
             Directory.CreateDirectory(Path.Combine(root, "registry")) |> ignore
+
             File.WriteAllText(
                 Path.Combine(root, "registry", "repos.lock"),
                 "aaaa  .claude/skills/pnext-item\nbbbb  scripts/fsgg-coord\n"
             )
+
             File.WriteAllText(
                 Path.Combine(root, "registry", "repos.yml"),
                 "kit:\n  - { id: pnext-item, kind: skill, source: .claude/skills/pnext-item }\n  - { id: fsgg-coord, kind: client, source: scripts/fsgg-coord }\n"
             )
+
             Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", root)
             Console.SetError captured
 
             KitDigest.declaredWarn
                 (world (Map.ofList [ 74, body ]) Map.empty false)
-                { Owner = "FS-GG"
-                  Repo = "FS.GG.SDD"
-                  Number = 74 }
+                {
+                    Owner = "FS-GG"
+                    Repo = "FS.GG.SDD"
+                    Number = 74
+                }
 
             Console.Error.Flush()
             captured.ToString()
@@ -1294,7 +1581,9 @@ module ApplicationServiceTests =
 
     [<Fact>]
     let ``#1878 claim advice separates a skill SKILL.md digest from other packed skill files`` () =
-        let referenceOnly = declaredKitWarning "Paths: .claude/skills/pnext-item/references/command-contracts.md"
+        let referenceOnly =
+            declaredKitWarning "Paths: .claude/skills/pnext-item/references/command-contracts.md"
+
         let skillMd = declaredKitWarning "Paths: .claude/skills/pnext-item/SKILL.md"
         let client = declaredKitWarning "Paths: scripts/fsgg-coord"
 
@@ -1329,7 +1618,10 @@ module ApplicationServiceTests =
         try
             JsonDocument.Parse(out.Trim()).RootElement
         with e ->
-            failwithf "stdout was not one JSON document — this is the #1517 defect.\nstdout was:\n%s\n(%s)" out e.Message
+            failwithf
+                "stdout was not one JSON document — this is the #1517 defect.\nstdout was:\n%s\n(%s)"
+                out
+                e.Message
 
     /// `internal` — reused by #2306's `WidenRefusalTests.fs` (see `run`, above).
     let internal str (name: string) (el: JsonElement) = el.GetProperty(name).GetString()
@@ -1337,14 +1629,26 @@ module ApplicationServiceTests =
     /// `internal` — reused by #2323 round 1's repair legs in #2306's `WidenRefusalTests.fs` (see `run`,
     /// above), which assert the JSON `paths` array on a refused update rather than merely its `verdict`.
     let internal strings (name: string) (el: JsonElement) =
-        el.GetProperty(name).EnumerateArray() |> Seq.map (fun e -> e.GetString()) |> List.ofSeq
+        el.GetProperty(name).EnumerateArray()
+        |> Seq.map (fun e -> e.GetString())
+        |> List.ofSeq
 
     [<Theory>]
     [<InlineData("widen", "widened")>]
     [<InlineData("set-paths", "set")>]
     let ``both --paths verbs emit ONE parseable JSON object under --json`` (verb: string, kind: string) =
         let code, out =
-            run (disjointWorld ()) [ verb; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+            run
+                (disjointWorld ())
+                [
+                    verb
+                    "FS.GG.SDD#74"
+                    "--worker"
+                    "kite-469"
+                    "--json"
+                    "--paths"
+                    "src/Shared.fs"
+                ]
 
         let receipt = parsed out
 
@@ -1405,13 +1709,15 @@ module ApplicationServiceTests =
         let code, out =
             run
                 (disjointWorld ())
-                [ verb
-                  "FS.GG.SDD#74"
-                  "--worker"
-                  "kite-469"
-                  "--json"
-                  "--paths"
-                  "src/First.fs\nsrc/Second.fs\nsrc/Third.fs" ]
+                [
+                    verb
+                    "FS.GG.SDD#74"
+                    "--worker"
+                    "kite-469"
+                    "--json"
+                    "--paths"
+                    "src/First.fs\nsrc/Second.fs\nsrc/Third.fs"
+                ]
 
         let receipt = parsed out
 
@@ -1431,7 +1737,15 @@ module ApplicationServiceTests =
         let code, out =
             run
                 (overlappingWorld false)
-                [ verb; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+                [
+                    verb
+                    "FS.GG.SDD#74"
+                    "--worker"
+                    "kite-469"
+                    "--json"
+                    "--paths"
+                    "src/Shared.fs"
+                ]
 
         let receipt = parsed out
 
@@ -1465,13 +1779,20 @@ module ApplicationServiceTests =
         let holders = Map.ofList [ 74, "kite-469"; 75, "otter-9c21" ]
 
         let world =
-            worldWithPathRepos
-                bodies
-                holders
-                (Map.ofList [ 74, "FS.GG.Audio"; 75, "FS.GG.Rendering" ])
+            worldWithPathRepos bodies holders (Map.ofList [ 74, "FS.GG.Audio"; 75, "FS.GG.Rendering" ])
 
         let code, out =
-            run world [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+            run
+                world
+                [
+                    "widen"
+                    "FS.GG.SDD#74"
+                    "--worker"
+                    "kite-469"
+                    "--json"
+                    "--paths"
+                    "src/Shared.fs"
+                ]
 
         Assert.Equal(0, code)
         Assert.Equal("disjoint", str "verdict" (parsed out))
@@ -1487,13 +1808,20 @@ module ApplicationServiceTests =
         let holders = Map.ofList [ 74, "kite-469"; 75, "otter-9c21" ]
 
         let world =
-            worldWithPathRepos
-                bodies
-                holders
-                (Map.ofList [ 74, "FS.GG.Rendering"; 75, "FS.GG.Rendering" ])
+            worldWithPathRepos bodies holders (Map.ofList [ 74, "FS.GG.Rendering"; 75, "FS.GG.Rendering" ])
 
         let code, out =
-            run world [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+            run
+                world
+                [
+                    "widen"
+                    "FS.GG.SDD#74"
+                    "--worker"
+                    "kite-469"
+                    "--json"
+                    "--paths"
+                    "src/Shared.fs"
+                ]
 
         Assert.Equal(6, code)
         Assert.Equal("overlap", str "verdict" (parsed out))
@@ -1506,10 +1834,17 @@ module ApplicationServiceTests =
         let code, out =
             run
                 (overlappingWorld true)
-                [ verb; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+                [
+                    verb
+                    "FS.GG.SDD#74"
+                    "--worker"
+                    "kite-469"
+                    "--json"
+                    "--paths"
+                    "src/Shared.fs"
+                ]
 
-        let collision =
-            (parsed out).GetProperty("collisions").EnumerateArray() |> Seq.head
+        let collision = (parsed out).GetProperty("collisions").EnumerateArray() |> Seq.head
 
         Assert.False(collision.GetProperty("notified").GetBoolean())
         Assert.Equal(JsonValueKind.String, collision.GetProperty("notifyError").ValueKind)
@@ -1550,14 +1885,7 @@ module ApplicationServiceTests =
     // ---- .github#1896 — CLIENT CALLERS REFUSE INCOMPLETE LOCK READS -------------------------------
 
     let private incompleteWorld bodies holders ages incomplete =
-        worldOfWithIncomplete
-            (fun _ -> "In progress")
-            bodies
-            holders
-            ages
-            Set.empty
-            incomplete
-            false
+        worldOfWithIncomplete (fun _ -> "In progress") bodies holders ages Set.empty incomplete false
 
     [<Fact>]
     let ``#1896 reap refuses a readable stale marker beside an unclassifiable comment`` () =
@@ -1584,13 +1912,15 @@ module ApplicationServiceTests =
                 (Set.ofList [ 75 ])
 
         let code, _, err =
-            runCapturingStderr
-                transport
-                [ "claim"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json" ]
+            runCapturingStderr transport [ "claim"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json" ]
 
         Assert.Equal(1, code)
         Assert.Contains("claim-marker scan is incomplete", err)
-        Assert.False(transport.Logged "comment-post FS-GG/FS.GG.SDD 74", "claim reached its CAS after an incomplete guard read")
+
+        Assert.False(
+            transport.Logged "comment-post FS-GG/FS.GG.SDD 74",
+            "claim reached its CAS after an incomplete guard read"
+        )
 
     [<Fact>]
     let ``#1896 adopt refuses an incomplete orphan read instead of choosing the readable marker`` () =
@@ -1617,9 +1947,7 @@ module ApplicationServiceTests =
                 (Set.ofList [ 75 ])
 
         let code, _, err =
-            runCapturingStderr
-                transport
-                [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--paths"; "src/Shared.fs" ]
+            runCapturingStderr transport [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--paths"; "src/Shared.fs" ]
 
         Assert.Equal(1, code)
         Assert.Contains("claim-marker scan is incomplete", err)
@@ -1671,7 +1999,9 @@ module ApplicationServiceTests =
         Assert.Single(receipt.GetProperty("collisions").EnumerateArray() |> List.ofSeq)
 
     [<Fact>]
-    let ``#1740 cause 1: a claim landing inside the scan-cache window collides, and the cached board scan preserves the result`` () =
+    let ``#1740 cause 1: a claim landing inside the scan-cache window collides, and the cached board scan preserves the result``
+        ()
+        =
         // THE NAME CHANGED WITH THE MECHANISM, AND IT HAD TO. As #1740 wrote it, this leg drove the column
         // through a stale cache window and asserted the cache tier fixed it. Since #1779 nothing on this
         // path reads a board, so the `column` ref below is a DEAD INPUT — the assertion would pass
@@ -1724,11 +2054,13 @@ module ApplicationServiceTests =
     /// wrote `""` would be testing a shape the queue never produces.
     let private queuedWrite (issueRef: string) (boardTitle: string) (field: string) (value: string) =
         let common =
-            [ "ref", box issueRef
-              "field", box field
-              "value", box value
-              "at", box (DateTimeOffset.UtcNow.ToString "o")
-              "worker", box "otter-9c21" ]
+            [
+                "ref", box issueRef
+                "field", box field
+                "value", box value
+                "at", box (DateTimeOffset.UtcNow.ToString "o")
+                "worker", box "otter-9c21"
+            ]
 
         let board =
             if boardTitle = "" then
@@ -1744,7 +2076,13 @@ module ApplicationServiceTests =
     /// The AC3 fixture, LITERALLY: the board says `Ready` and it is not lying — the write has not happened.
     ///
     /// `queued` is the queue this run finds; `offBoard` is whether #75 has a board row at all.
-    let private runOn (queued: string option) (offBoard: Set<int>) (holders: Map<int, string>) (age: Map<int, int>) (bodies: Map<int, string>) =
+    let private runOn
+        (queued: string option)
+        (offBoard: Set<int>)
+        (holders: Map<int, string>)
+        (age: Map<int, int>)
+        (bodies: Map<int, string>)
+        =
         let dir = cacheDir ()
 
         try
@@ -1770,7 +2108,8 @@ module ApplicationServiceTests =
 
     [<Fact>]
     let ``#1740 cause 2: a live claim whose Status write is still QUEUED collides from a Ready column`` () =
-        let code, out = runWithQueue (Some(queuedStatusWrite "Coordination" "Status" "In progress"))
+        let code, out =
+            runWithQueue (Some(queuedStatusWrite "Coordination" "Status" "In progress"))
 
         let collision = soleCollision out
         Assert.Equal("FS.GG.SDD#75", str "ref" collision)
@@ -1812,7 +2151,8 @@ module ApplicationServiceTests =
         // `src/FS.GG.Coord.Cli/Client.fs`); `overlap .github#1688 --active` — #1688 declares the same file —
         // printed `DISJOINT` on `main` and `OVERLAP … held by shrike-41c7` on this branch, same board, same
         // second.
-        let code, out, _ = runOn None (Set.ofList [ 75 ]) laggingHolders Map.empty laggingBodies
+        let code, out, _ =
+            runOn None (Set.ofList [ 75 ]) laggingHolders Map.empty laggingBodies
 
         let collision = soleCollision out
         Assert.Equal("FS.GG.SDD#75", str "ref" collision)
@@ -1830,7 +2170,8 @@ module ApplicationServiceTests =
         // The whole board is `Ready`, #75 declares exactly what we are widening onto — and NOBODY holds it.
         // An unclaimed issue that names the same files is work nobody is doing; reporting it would stop a
         // worker who has nothing to stop for. KILLS: dropping the marker read and colliding on tokens alone.
-        let code, out, _ = runOn None Set.empty (Map.ofList [ 74, "kite-469" ]) Map.empty laggingBodies
+        let code, out, _ =
+            runOn None Set.empty (Map.ofList [ 74, "kite-469" ]) Map.empty laggingBodies
 
         Assert.Equal("disjoint", str "verdict" (parsed out))
         Assert.Equal(0, code)
@@ -1877,7 +2218,9 @@ module ApplicationServiceTests =
         // #75 is held, live, off the board and in a `Ready` column — every condition of the positive legs —
         // and it declares a file we are not asking for. KILLS: `TouchSet.conflicts _ _ = [ … ]`, i.e. a
         // token filter that is a constant. Without this leg both positive legs pass with no filter at all.
-        let bodies = Map.ofList [ 74, "Paths: scripts/fsgg-coord"; 75, "Paths: docs/elsewhere.md" ]
+        let bodies =
+            Map.ofList [ 74, "Paths: scripts/fsgg-coord"; 75, "Paths: docs/elsewhere.md" ]
+
         let code, out, _ = runOn None (Set.ofList [ 75 ]) laggingHolders Map.empty bodies
 
         Assert.Equal("disjoint", str "verdict" (parsed out))
@@ -1890,7 +2233,9 @@ module ApplicationServiceTests =
         // every single widen. #75 is absent from this world entirely, so the only candidate IS the subject.
         // KILLS: dropping the `number = ref.Number` arm.
         let bodies = Map.ofList [ 74, "Paths: scripts/fsgg-coord src/Shared.fs" ]
-        let code, out, _ = runOn None Set.empty (Map.ofList [ 74, "kite-469" ]) Map.empty bodies
+
+        let code, out, _ =
+            runOn None Set.empty (Map.ofList [ 74, "kite-469" ]) Map.empty bodies
 
         Assert.Equal("disjoint", str "verdict" (parsed out))
         Assert.Equal(0, code)
@@ -1916,7 +2261,12 @@ module ApplicationServiceTests =
     ///     reason: #74 is HELD, so `batch` passes over it whatever #75's marker says, and a test watching
     ///     #74 would be measuring the claim rather than the lapsed lease.
     let private contendedBodies =
-        Map.ofList [ 74, "Paths: scripts/fsgg-coord"; 75, "Paths: src/Shared.fs"; 76, "Paths: src/Shared.fs" ]
+        Map.ofList
+            [
+                74, "Paths: scripts/fsgg-coord"
+                75, "Paths: src/Shared.fs"
+                76, "Paths: src/Shared.fs"
+            ]
 
     let private contendedWorld (column75: string) (holders: Map<int, string>) (age: Map<int, int>) =
         worldOf
@@ -2010,9 +2360,11 @@ module ApplicationServiceTests =
         // makes the gate DISJOINT while #76 remains refused, which is the exact production divergence.
         let bodies =
             Map.ofList
-                [ 74, "Paths: scripts/fsgg-coord"
-                  75, "Paths: src/Shared.fs\n<!-- fixture:closed -->"
-                  76, "Paths: src/Shared.fs" ]
+                [
+                    74, "Paths: scripts/fsgg-coord"
+                    75, "Paths: src/Shared.fs\n<!-- fixture:closed -->"
+                    76, "Paths: src/Shared.fs"
+                ]
 
         let status n =
             match n with
@@ -2184,15 +2536,25 @@ module ApplicationServiceTests =
         // list once and then exactly one marker.
         let bodies =
             Map.ofList
-                [ 74, "Paths: scripts/fsgg-coord"
-                  75, "Paths: src/Shared.fs"
-                  76, "Paths: docs/a.md"
-                  77, "Paths: docs/b.md"
-                  78, "Paths: docs/c.md"
-                  79, "Paths: docs/d.md" ]
+                [
+                    74, "Paths: scripts/fsgg-coord"
+                    75, "Paths: src/Shared.fs"
+                    76, "Paths: docs/a.md"
+                    77, "Paths: docs/b.md"
+                    78, "Paths: docs/c.md"
+                    79, "Paths: docs/d.md"
+                ]
 
         let holders =
-            Map.ofList [ 74, "kite-469"; 75, "otter-9c21"; 76, "wren-1"; 77, "wren-2"; 78, "wren-3"; 79, "wren-4" ]
+            Map.ofList
+                [
+                    74, "kite-469"
+                    75, "otter-9c21"
+                    76, "wren-1"
+                    77, "wren-2"
+                    78, "wren-3"
+                    79, "wren-4"
+                ]
 
         let code, out, world = runOn None Set.empty holders Map.empty bodies
 
@@ -2221,7 +2583,12 @@ module ApplicationServiceTests =
         // nothing is confirmed, so the scan is a single list read. KILLS: reading markers before filtering
         // on tokens — the ~74-reads-per-widen shape #1779 was filed believing was unavoidable.
         let bodies =
-            Map.ofList [ 74, "Paths: scripts/fsgg-coord"; 75, "Paths: docs/a.md"; 76, "Paths: docs/b.md" ]
+            Map.ofList
+                [
+                    74, "Paths: scripts/fsgg-coord"
+                    75, "Paths: docs/a.md"
+                    76, "Paths: docs/b.md"
+                ]
 
         let holders = Map.ofList [ 74, "kite-469"; 75, "otter-9c21"; 76, "wren-1" ]
 
@@ -2229,8 +2596,23 @@ module ApplicationServiceTests =
 
         try
             Directory.CreateDirectory dir |> ignore
-            let world = worldOf (fun _ -> "In progress") bodies holders Map.empty Set.empty false
-            let code, out = runIn dir world [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "docs/unrelated.md" ]
+
+            let world =
+                worldOf (fun _ -> "In progress") bodies holders Map.empty Set.empty false
+
+            let code, out =
+                runIn
+                    dir
+                    world
+                    [
+                        "widen"
+                        "FS.GG.SDD#74"
+                        "--worker"
+                        "kite-469"
+                        "--json"
+                        "--paths"
+                        "docs/unrelated.md"
+                    ]
 
             Assert.Equal("disjoint", str "verdict" (parsed out))
             Assert.Equal(0, code)
@@ -2260,12 +2642,21 @@ module ApplicationServiceTests =
     let ``#1740 AC5: a proper narrowing that collides is reported as PRE-EXISTING`` () =
         // #74 declares two tokens; `set-paths` drops one. A subset names strictly fewer files, so this
         // command provably did not cause the collision it is about to be told about.
-        let bodies = Map.ofList [ 74, "Paths: scripts/fsgg-coord src/Shared.fs"; 75, "Paths: src/Shared.fs" ]
+        let bodies =
+            Map.ofList [ 74, "Paths: scripts/fsgg-coord src/Shared.fs"; 75, "Paths: src/Shared.fs" ]
 
         let code, out, err =
             runCapturingStderr
                 (world bodies laggingHolders false)
-                [ "set-paths"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+                [
+                    "set-paths"
+                    "FS.GG.SDD#74"
+                    "--worker"
+                    "kite-469"
+                    "--json"
+                    "--paths"
+                    "src/Shared.fs"
+                ]
 
         Assert.Equal("overlap", str "verdict" (parsed out))
         Assert.Contains(narrowingClaim, err)
@@ -2279,7 +2670,15 @@ module ApplicationServiceTests =
         let code, out, err =
             runCapturingStderr
                 (overlappingWorld false)
-                [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+                [
+                    "widen"
+                    "FS.GG.SDD#74"
+                    "--worker"
+                    "kite-469"
+                    "--json"
+                    "--paths"
+                    "src/Shared.fs"
+                ]
 
         Assert.Equal("overlap", str "verdict" (parsed out))
         Assert.DoesNotContain(narrowingClaim, err)
@@ -2298,7 +2697,15 @@ module ApplicationServiceTests =
         let code, _, err =
             runCapturingStderr
                 (world bodies laggingHolders false)
-                [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+                [
+                    "widen"
+                    "FS.GG.SDD#74"
+                    "--worker"
+                    "kite-469"
+                    "--json"
+                    "--paths"
+                    "src/Shared.fs"
+                ]
 
         Assert.DoesNotContain(narrowingClaim, err)
         Assert.Equal(6, code)
@@ -2329,22 +2736,38 @@ module ApplicationServiceTests =
     /// write QUEUE instead of land (`Errors.isQueueable`: a rate limit, and nothing else, may be deferred).
     let private typedCompletionComments (number: int) =
         let facts: Delivery.CompletionFacts =
-            { HeadSha = "head"
-              Merged = true
-              MergeReachable = true
-              PostMergeVerification =
-                Delivery.Verified
-                    { MergeSha = $"merge-%d{number}"; DefaultBranch = "main"
-                      Runs =
-                        [ { Id = int64 number; Attempt = 1; Workflow = "CI"; Event = "push"; Branch = "main"
-                            Sha = $"merge-%d{number}"; Status = "completed"; Conclusion = "success"; Url = $"https://run/%d{number}" } ] }
-              IssueClosed = true
-              BoardDone = false
-              ClaimReleased = false
-              PendingWrites = 0
-              CleanupEligible = false
-              ObligationsDeclared = true
-              Obligations = [] }
+            {
+                HeadSha = "head"
+                Merged = true
+                MergeReachable = true
+                PostMergeVerification =
+                    Delivery.Verified
+                        {
+                            MergeSha = $"merge-%d{number}"
+                            DefaultBranch = "main"
+                            Runs =
+                                [
+                                    {
+                                        Id = int64 number
+                                        Attempt = 1
+                                        Workflow = "CI"
+                                        Event = "push"
+                                        Branch = "main"
+                                        Sha = $"merge-%d{number}"
+                                        Status = "completed"
+                                        Conclusion = "success"
+                                        Url = $"https://run/%d{number}"
+                                    }
+                                ]
+                        }
+                IssueClosed = true
+                BoardDone = false
+                ClaimReleased = false
+                PendingWrites = 0
+                CleanupEligible = false
+                ObligationsDeclared = true
+                Obligations = []
+            }
 
         let receipt =
             Delivery.createCompletionReceipt
@@ -2367,22 +2790,27 @@ module ApplicationServiceTests =
         (closed: int list)
         (rateLimited: Set<int>)
         (queries: ResizeArray<string> option)
-        (comments: string) =
+        (comments: string)
+        =
         // A successful GraphQL mutation is not itself evidence that the board projection changed.  This
         // fixture therefore models the projection separately: only a subsequent scan after an accepted
         // mutation observes Done.  The rate-limited item never reaches that transition.
         let mutable written: Map<int, string> = Map.empty
+
         let mutable reopened: Set<int> =
             if comments.Contains(Delivery.CompletionReceiptMarker, StringComparison.Ordinal) then
                 Set.ofList closed
             else
                 Set.empty
+
         let projectedStatus = if comments = "[]" then "In review" else "Done"
+
         let mutable storedCommentBodies =
             if comments = SubjectBoundTypedCompletion then
                 []
             else
                 use document = JsonDocument.Parse comments
+
                 document.RootElement.EnumerateArray()
                 |> Seq.choose (fun entry ->
                     match entry.TryGetProperty "body" with
@@ -2407,116 +2835,139 @@ module ApplicationServiceTests =
                 $"""{{"status":{{"name":"%s{status}"}},"blockedBy":null,"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","body":"","state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}""")
             |> String.concat ","
 
-        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-            match req.Method, req.Path.Trim '/' with
-            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, variables) ->
-                    queries |> Option.iter (fun captured -> captured.Add document)
-                    let number =
-                        variables
-                        |> List.tryPick (fun (k, v) ->
-                            match k, v with
-                            | "number", VNumber n -> Some(int n)
-                            | _ -> None)
+        Fake.Recorder(
+            StructuredFixtures.withIntake
+            <| fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, variables) ->
+                        queries |> Option.iter (fun captured -> captured.Add document)
 
-                    // `projectItems` FIRST — it is unique to the item-id lookup, and testing it before the
-                    // board queries keeps a document that mentions both from answering the wrong branch.
-                    if document.Contains "projectItems" then
-                        match number with
-                        | Some n when rateLimited.Contains n ->
-                            // How GitHub actually reports an exhausted GraphQL budget: HTTP **200**
-                            // carrying `errors`. `Budget.isRateLimited` matches the message, and only this
-                            // shape yields `RateLimited` — which is the only error `boardWrite` may queue.
-                            ok """{"errors":[{"message":"API rate limit exceeded for this token"}]}"""
-                        | Some n ->
-                            ok
-                                $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"id":"PVTI_%d{n}","project":{{"number":12}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                        | None -> Error(Errors.NotFound "an item-id lookup with no number")
-                    elif document.Contains "node(id: $itemId)" then
-                        let item =
+                        let number =
                             variables
                             |> List.tryPick (fun (k, v) ->
                                 match k, v with
-                                | "itemId", VId id when id.StartsWith "PVTI_" ->
-                                    match Int32.TryParse(id.Substring "PVTI_".Length) with
-                                    | true, n -> Some n
-                                    | _ -> None
+                                | "number", VNumber n -> Some(int n)
                                 | _ -> None)
 
-                        let field =
+                        // `projectItems` FIRST — it is unique to the item-id lookup, and testing it before the
+                        // board queries keeps a document that mentions both from answering the wrong branch.
+                        if document.Contains "projectItems" then
+                            match number with
+                            | Some n when rateLimited.Contains n ->
+                                // How GitHub actually reports an exhausted GraphQL budget: HTTP **200**
+                                // carrying `errors`. `Budget.isRateLimited` matches the message, and only this
+                                // shape yields `RateLimited` — which is the only error `boardWrite` may queue.
+                                ok """{"errors":[{"message":"API rate limit exceeded for this token"}]}"""
+                            | Some n ->
+                                ok
+                                    $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"id":"PVTI_%d{n}","project":{{"number":12}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                            | None -> Error(Errors.NotFound "an item-id lookup with no number")
+                        elif document.Contains "node(id: $itemId)" then
+                            let item =
+                                variables
+                                |> List.tryPick (fun (k, v) ->
+                                    match k, v with
+                                    | "itemId", VId id when id.StartsWith "PVTI_" ->
+                                        match Int32.TryParse(id.Substring "PVTI_".Length) with
+                                        | true, n -> Some n
+                                        | _ -> None
+                                    | _ -> None)
+
+                            let field =
+                                variables
+                                |> List.tryPick (fun (k, v) ->
+                                    match k, v with
+                                    | "field", VString name -> Some name
+                                    | _ -> None)
+
+                            match item, field with
+                            | Some n, Some "Status" when closed |> List.contains n ->
+                                let status = Map.tryFind n written |> Option.defaultValue "In progress"
+
+                                ok
+                                    $"""{{"data":{{"node":{{"fieldValueByName":{{"name":"%s{status}"}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                            | _ ->
+                                Error(
+                                    Errors.NotFound "a targeted verification read addressed an unknown reconcile field"
+                                )
+                        elif document.Contains "updateProjectV2ItemFieldValue" then
                             variables
-                            |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+                            |> List.tryPick (fun (_, v) ->
+                                match v with
+                                | VId id when id.StartsWith "PVTI_" ->
+                                    id.Substring("PVTI_".Length)
+                                    |> Int32.TryParse
+                                    |> function
+                                        | true, n -> Some n
+                                        | _ -> None
+                                | _ -> None)
+                            |> Option.iter (fun n -> written <- Map.add n projectedStatus written)
 
-                        match item, field with
-                        | Some n, Some "Status" when closed |> List.contains n ->
-                            let status = Map.tryFind n written |> Option.defaultValue "In progress"
-                            ok $"""{{"data":{{"node":{{"fieldValueByName":{{"name":"%s{status}"}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                        | _ -> Error(Errors.NotFound "a targeted verification read addressed an unknown reconcile field")
-                    elif document.Contains "updateProjectV2ItemFieldValue" then
-                        variables
-                        |> List.tryPick (fun (_, v) ->
-                            match v with
-                            | VId id when id.StartsWith "PVTI_" -> id.Substring("PVTI_".Length) |> Int32.TryParse |> function | true, n -> Some n | _ -> None
-                            | _ -> None)
-                        |> Option.iter (fun n -> written <- Map.add n projectedStatus written)
-                        ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
-                    elif document.Contains "projectsV2" then
-                        ok
-                            """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "fields(first" then
-                        // `Done` is an option here because the remedy WRITES it: a single-select write
-                        // resolves the value to an option id before it is attempted.
-                        ok
-                            """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_review","name":"In review"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "items(first" then
-                        ok
-                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                    else
-                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            // The OPEN-issue listing. Empty, and that is the fixture's point: every item here is CLOSED, so
-            // none of them is open, none carries a claim marker, and `choresFor` takes its unreserved
-            // branch — which is the one `CLOSED-ISSUE-NOT-DONE` lives on.
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
-            // A CLOSED candidate is swept with no body, marker, or blocker read (`Scan.snapshot`), so this
-            // exists only to keep an unexpected REST call loud rather than silently empty.
-            | "GET", path when path.EndsWith "/comments" ->
-                let parts = path.Split '/'
-                let number = Int32.Parse parts.[parts.Length - 2]
-                ok (commentsJson number)
-            | "GET", path when path.StartsWith("repos/FS-GG/FS.GG.SDD/issues/", StringComparison.Ordinal) ->
-                let number = path.Substring("repos/FS-GG/FS.GG.SDD/issues/".Length) |> Int32.Parse
-                let state = if reopened.Contains number then "open" else "closed"
-                ok ($"{{\"state\":\"%s{state}\",\"body\":\"\"}}")
-            | "PATCH", path when path.StartsWith("repos/FS-GG/FS.GG.SDD/issues/", StringComparison.Ordinal) ->
-                let number = path.Substring("repos/FS-GG/FS.GG.SDD/issues/".Length) |> Int32.Parse
-                match req.Body with
-                | Json payload ->
-                    use document = JsonDocument.Parse payload
-                    match document.RootElement.GetProperty("state").GetString() with
-                    | "open" -> reopened <- reopened.Add number
-                    | "closed" -> reopened <- reopened.Remove number
-                    | state -> failwithf "unexpected issue state %s" state
-                | _ -> failwith "issue PATCH carried no JSON body"
-                ok "{}"
-            | "POST", path when path.EndsWith "/comments" ->
-                match req.Body with
-                | Json payload ->
-                    use document = JsonDocument.Parse payload
-                    storedCommentBodies <-
-                        storedCommentBodies @ [ document.RootElement.GetProperty("body").GetString() ]
-                | _ -> failwith "comment POST carried no JSON body"
-                ok """{"id":9001}"""
-            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+                            ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+                        elif document.Contains "projectsV2" then
+                            ok
+                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "fields(first" then
+                            // `Done` is an option here because the remedy WRITES it: a single-select write
+                            // resolves the value to an option id before it is attempted.
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_review","name":"In review"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "items(first" then
+                            ok
+                                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        else
+                            Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                // The OPEN-issue listing. Empty, and that is the fixture's point: every item here is CLOSED, so
+                // none of them is open, none carries a claim marker, and `choresFor` takes its unreserved
+                // branch — which is the one `CLOSED-ISSUE-NOT-DONE` lives on.
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+                // A CLOSED candidate is swept with no body, marker, or blocker read (`Scan.snapshot`), so this
+                // exists only to keep an unexpected REST call loud rather than silently empty.
+                | "GET", path when path.EndsWith "/comments" ->
+                    let parts = path.Split '/'
+                    let number = Int32.Parse parts.[parts.Length - 2]
+                    ok (commentsJson number)
+                | "GET", path when path.StartsWith("repos/FS-GG/FS.GG.SDD/issues/", StringComparison.Ordinal) ->
+                    let number = path.Substring("repos/FS-GG/FS.GG.SDD/issues/".Length) |> Int32.Parse
+                    let state = if reopened.Contains number then "open" else "closed"
+                    ok ($"{{\"state\":\"%s{state}\",\"body\":\"\"}}")
+                | "PATCH", path when path.StartsWith("repos/FS-GG/FS.GG.SDD/issues/", StringComparison.Ordinal) ->
+                    let number = path.Substring("repos/FS-GG/FS.GG.SDD/issues/".Length) |> Int32.Parse
 
-    let private reconcileWorldWithQueries (closed: int list) (rateLimited: Set<int>) (queries: ResizeArray<string> option) =
-        reconcileWorldWithQueriesAndComments
-            closed
-            rateLimited
-            queries
-            SubjectBoundTypedCompletion
+                    match req.Body with
+                    | Json payload ->
+                        use document = JsonDocument.Parse payload
+
+                        match document.RootElement.GetProperty("state").GetString() with
+                        | "open" -> reopened <- reopened.Add number
+                        | "closed" -> reopened <- reopened.Remove number
+                        | state -> failwithf "unexpected issue state %s" state
+                    | _ -> failwith "issue PATCH carried no JSON body"
+
+                    ok "{}"
+                | "POST", path when path.EndsWith "/comments" ->
+                    match req.Body with
+                    | Json payload ->
+                        use document = JsonDocument.Parse payload
+
+                        storedCommentBodies <-
+                            storedCommentBodies @ [ document.RootElement.GetProperty("body").GetString() ]
+                    | _ -> failwith "comment POST carried no JSON body"
+
+                    ok """{"id":9001}"""
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+        )
+
+    let private reconcileWorldWithQueries
+        (closed: int list)
+        (rateLimited: Set<int>)
+        (queries: ResizeArray<string> option)
+        =
+        reconcileWorldWithQueriesAndComments closed rateLimited queries SubjectBoundTypedCompletion
 
     let private reconcileWorld (closed: int list) (rateLimited: Set<int>) =
         reconcileWorldWithQueries closed rateLimited None
@@ -2531,62 +2982,85 @@ module ApplicationServiceTests =
         let items () =
             let status = if mutationAccepted then "Ready" else "Blocked"
 
-            [ boardItemInWithBody status 47 "blocked item" (Some staleBlocker) "OPEN" "Paths: src/A.fs"
-              boardItemIn "Done" 45 "resolved blocker" None "CLOSED" ]
+            [
+                boardItemInWithBody status 47 "blocked item" (Some staleBlocker) "OPEN" "Paths: src/A.fs"
+                boardItemIn "Done" 45 "resolved blocker" None "CLOSED"
+            ]
             |> String.concat ","
 
-        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-            match req.Method, req.Path.Trim '/' with
-            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, variables) ->
-                    if document.Contains "projectItems" then
-                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "node(id: $itemId)" then
-                        let field = variables |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
-                        let value =
-                            match field with
-                            | Some "Status" -> $"""{{"name":"%s{if mutationAccepted then "Ready" else "Blocked"}"}}"""
-                            | Some "Blocked by" -> $"""{{"text":"%s{staleBlocker}"}}"""
-                            | _ -> "null"
-                        ok ("{\"data\":{\"node\":{\"fieldValueByName\":" + value + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
-                    elif document.Contains "updateProjectV2ItemFieldValue" then
-                        mutationAccepted <- true
-                        ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}}}"""
-                    elif document.Contains "projectsV2" then
-                        ok
-                            """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "fields(first" then
-                        ok
-                            """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "items(first" then
-                        ok
-                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                    else
-                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            // A REAL touch-set, and .github#2220 is why it is spelled rather than left as filler. This body
-            // was `Paths: none` — chosen as the shortest thing that parses, not as a fact about the row —
-            // and `Paths: none` is `DeclaredNone`, whose remedy is now `Backlog` rather than `Ready`. This
-            // fixture's subject is the two-FIELD receipt on an ORDINARY cleared row, so the ordinary row is
-            // what it must carry; the `DeclaredNone` path has its own fixture below.
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
-                ok """{"number":47,"body":"Paths: src/A.fs"}"""
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (thread.Json())
-            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" ->
-                match req.Body with
-                | Json payload ->
-                    use document = JsonDocument.Parse payload
-                    ok (JsonSerializer.Serialize {| id = thread.Add(document.RootElement.GetProperty("body").GetString()) |})
-                | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
-            | "DELETE", p when p.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
-                thread.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1)))
-                ok "{}"
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
-            | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
-            | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
-            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+        Fake.Recorder(
+            StructuredFixtures.withIntake
+            <| fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, variables) ->
+                        if document.Contains "projectItems" then
+                            ok
+                                """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "node(id: $itemId)" then
+                            let field =
+                                variables
+                                |> List.tryPick (fun (k, v) ->
+                                    match k, v with
+                                    | "field", VString name -> Some name
+                                    | _ -> None)
+
+                            let value =
+                                match field with
+                                | Some "Status" ->
+                                    $"""{{"name":"%s{if mutationAccepted then "Ready" else "Blocked"}"}}"""
+                                | Some "Blocked by" -> $"""{{"text":"%s{staleBlocker}"}}"""
+                                | _ -> "null"
+
+                            ok (
+                                "{\"data\":{\"node\":{\"fieldValueByName\":"
+                                + value
+                                + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+                            )
+                        elif document.Contains "updateProjectV2ItemFieldValue" then
+                            mutationAccepted <- true
+                            ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}}}"""
+                        elif document.Contains "projectsV2" then
+                            ok
+                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "fields(first" then
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "items(first" then
+                            ok
+                                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        else
+                            Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                // A REAL touch-set, and .github#2220 is why it is spelled rather than left as filler. This body
+                // was `Paths: none` — chosen as the shortest thing that parses, not as a fact about the row —
+                // and `Paths: none` is `DeclaredNone`, whose remedy is now `Backlog` rather than `Ready`. This
+                // fixture's subject is the two-FIELD receipt on an ORDINARY cleared row, so the ordinary row is
+                // what it must carry; the `DeclaredNone` path has its own fixture below.
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" -> ok """{"number":47,"body":"Paths: src/A.fs"}"""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (thread.Json())
+                | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" ->
+                    match req.Body with
+                    | Json payload ->
+                        use document = JsonDocument.Parse payload
+
+                        ok (
+                            JsonSerializer.Serialize
+                                {|
+                                    id = thread.Add(document.RootElement.GetProperty("body").GetString())
+                                |}
+                        )
+                    | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
+                | "DELETE", p when p.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
+                    thread.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1)))
+                    ok "{}"
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+        )
 
     /// `.github#1858`'S EXACT SHAPE: one OPEN `Blocked` row whose only blocker has CLOSED, whose body
     /// declares `Paths: none`, and which `BLOCKER-CLEARED` used to promote to `Ready` (.github#2220).
@@ -2604,63 +3078,91 @@ module ApplicationServiceTests =
         let thread = MutationCommentThread []
 
         let items () =
-            [ boardItemInWithBody status 47 "a decision item" (if blockedBy = "" then None else Some blockedBy) "OPEN" "Paths: none"
-              boardItemIn "Done" 45 "resolved blocker" None "CLOSED" ]
+            [
+                boardItemInWithBody
+                    status
+                    47
+                    "a decision item"
+                    (if blockedBy = "" then None else Some blockedBy)
+                    "OPEN"
+                    "Paths: none"
+                boardItemIn "Done" 45 "resolved blocker" None "CLOSED"
+            ]
             |> String.concat ","
 
-        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-            match req.Method, req.Path.Trim '/' with
-            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, variables) ->
-                    if document.Contains "projectItems" then
-                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "node(id: $itemId)" then
-                        let field = variables |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
-                        let value =
-                            match field with
-                            | Some "Status" -> $"""{{"name":"%s{status}"}}"""
-                            | Some "Blocked by" when blockedBy <> "" -> $"""{{"text":"%s{blockedBy}"}}"""
-                            | Some "Blocked by" -> "null"
-                            | _ -> "null"
-                        ok ("{\"data\":{\"node\":{\"fieldValueByName\":" + value + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
-                    elif document.Contains "updateProjectV2ItemFieldValue" then
-                        // The repair landed: the fresh verification read below now observes both fields.
-                        status <- "Backlog"
-                        blockedBy <- ""
-                        ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}}}"""
-                    elif document.Contains "projectsV2" then
-                        ok
-                            """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "fields(first" then
-                        // `Backlog` IS an option here, unlike the fixtures above — a board that could not
-                        // represent the destination would fail this test for the wrong reason (HTTP 422),
-                        // which proves nothing about which column the CLI chose.
-                        ok
-                            """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_backlog","name":"Backlog"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "items(first" then
-                        ok
-                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                    else
-                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
-                ok """{"number":47,"body":"Paths: none"}"""
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (thread.Json())
-            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" ->
-                match req.Body with
-                | Json payload ->
-                    use document = JsonDocument.Parse payload
-                    ok (JsonSerializer.Serialize {| id = thread.Add(document.RootElement.GetProperty("body").GetString()) |})
-                | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
-            | "DELETE", p when p.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
-                thread.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1)))
-                ok "{}"
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
-            | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
-            | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
-            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+        Fake.Recorder(
+            StructuredFixtures.withIntake
+            <| fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, variables) ->
+                        if document.Contains "projectItems" then
+                            ok
+                                """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "node(id: $itemId)" then
+                            let field =
+                                variables
+                                |> List.tryPick (fun (k, v) ->
+                                    match k, v with
+                                    | "field", VString name -> Some name
+                                    | _ -> None)
+
+                            let value =
+                                match field with
+                                | Some "Status" -> $"""{{"name":"%s{status}"}}"""
+                                | Some "Blocked by" when blockedBy <> "" -> $"""{{"text":"%s{blockedBy}"}}"""
+                                | Some "Blocked by" -> "null"
+                                | _ -> "null"
+
+                            ok (
+                                "{\"data\":{\"node\":{\"fieldValueByName\":"
+                                + value
+                                + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+                            )
+                        elif document.Contains "updateProjectV2ItemFieldValue" then
+                            // The repair landed: the fresh verification read below now observes both fields.
+                            status <- "Backlog"
+                            blockedBy <- ""
+                            ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}}}"""
+                        elif document.Contains "projectsV2" then
+                            ok
+                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "fields(first" then
+                            // `Backlog` IS an option here, unlike the fixtures above — a board that could not
+                            // represent the destination would fail this test for the wrong reason (HTTP 422),
+                            // which proves nothing about which column the CLI chose.
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_backlog","name":"Backlog"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "items(first" then
+                            ok
+                                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        else
+                            Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" -> ok """{"number":47,"body":"Paths: none"}"""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (thread.Json())
+                | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" ->
+                    match req.Body with
+                    | Json payload ->
+                        use document = JsonDocument.Parse payload
+
+                        ok (
+                            JsonSerializer.Serialize
+                                {|
+                                    id = thread.Add(document.RootElement.GetProperty("body").GetString())
+                                |}
+                        )
+                    | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
+                | "DELETE", p when p.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
+                    thread.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1)))
+                    ok "{}"
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+        )
 
     /// A board with ONE OPEN item that declares `Class: defect` in its body and carries NO `Class`
     /// column — so `CLASS-PROJECTION-LAG` is the single chore (.github#1588).
@@ -2679,51 +3181,67 @@ module ApplicationServiceTests =
             let boardClass = if classWritten then "{\"name\":\"defect\"}" else "null"
             $"""{{"status":{{"name":"Ready"}},"blockedBy":null,"class":%s{boardClass},"content":{{"__typename":"Issue","number":301,"title":"ordinary title, class is in the body","state":"OPEN","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
 
-        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-            match req.Method, req.Path.Trim '/' with
-            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, variables) ->
-                    if document.Contains "projectItems" then
-                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_301","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "node(id: $itemId)" then
-                        let field = variables |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
-                        let value =
-                            match field with
-                            | Some "Class" when classWritten -> "{\"name\":\"defect\"}"
-                            | Some "Class" -> "null"
-                            | _ -> "null"
-                        ok ("{\"data\":{\"node\":{\"fieldValueByName\":" + value + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
-                    elif document.Contains "updateProjectV2ItemFieldValue" then
-                        classWritten <- true
-                        ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
-                    elif document.Contains "projectsV2" then
-                        ok
-                            """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "fields(first" then
-                        // The `Class` field, with its three options — a single-select write resolves its
-                        // value to an option id before it is attempted, so the write cannot even be tried
-                        // against a project that does not declare it.
-                        if withClass then
+        Fake.Recorder(
+            StructuredFixtures.withIntake
+            <| fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, variables) ->
+                        if document.Contains "projectItems" then
                             ok
-                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_done","name":"Done"}]},{"id":"PVTSSF_class","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"opt_defect","name":"defect"},{"id":"opt_hard","name":"hardening"},{"id":"opt_dec","name":"decision"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                                """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_301","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "node(id: $itemId)" then
+                            let field =
+                                variables
+                                |> List.tryPick (fun (k, v) ->
+                                    match k, v with
+                                    | "field", VString name -> Some name
+                                    | _ -> None)
+
+                            let value =
+                                match field with
+                                | Some "Class" when classWritten -> "{\"name\":\"defect\"}"
+                                | Some "Class" -> "null"
+                                | _ -> "null"
+
+                            ok (
+                                "{\"data\":{\"node\":{\"fieldValueByName\":"
+                                + value
+                                + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+                            )
+                        elif document.Contains "updateProjectV2ItemFieldValue" then
+                            classWritten <- true
+                            ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+                        elif document.Contains "projectsV2" then
+                            ok
+                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "fields(first" then
+                            // The `Class` field, with its three options — a single-select write resolves its
+                            // value to an option id before it is attempted, so the write cannot even be tried
+                            // against a project that does not declare it.
+                            if withClass then
+                                ok
+                                    """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_done","name":"Done"}]},{"id":"PVTSSF_class","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"opt_defect","name":"defect"},{"id":"opt_hard","name":"hardening"},{"id":"opt_dec","name":"decision"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                            else
+                                ok
+                                    """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "items(first" then
+                            ok
+                                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{item ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
                         else
-                            ok
-                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "items(first" then
-                        ok $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{item ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                    else
-                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            // OPEN, so its body IS read — that is where the class is declared. A real touch-set too, or the
-            // item would not be a candidate at all.
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/301" ->
-                ok """{"number":301,"body":"Paths: src/Real/**\n\nClass: defect"}"""
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
-            | "GET", path when path.EndsWith "/comments" -> ok "[]"
-            | "POST", path when path.EndsWith "/comments" -> ok """{"id":9047}"""
-            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+                            Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                // OPEN, so its body IS read — that is where the class is declared. A real touch-set too, or the
+                // item would not be a candidate at all.
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/301" ->
+                    ok """{"number":301,"body":"Paths: src/Real/**\n\nClass: defect"}"""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+                | "GET", path when path.EndsWith "/comments" -> ok "[]"
+                | "POST", path when path.EndsWith "/comments" -> ok """{"id":9047}"""
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+        )
 
     /// .github#2394 — a coherent `Blocked on: human/...` park must not be projected away by
     /// `LIFECYCLE-PROJECTION-LAG`. One OPEN item, `Status=Blocked`, with NO recorded `Blocked by` ref at
@@ -2750,60 +3268,72 @@ module ApplicationServiceTests =
                 "Paths: src/A.fs"
 
         let items () =
-            [ boardItemInWithBody status 47 "a human-parked item" None "OPEN" body ] |> String.concat ","
+            [ boardItemInWithBody status 47 "a human-parked item" None "OPEN" body ]
+            |> String.concat ","
 
-        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-            match req.Method, req.Path.Trim '/' with
-            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, variables) ->
-                    if document.Contains "projectItems" then
-                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "node(id: $itemId)" then
-                        let field =
-                            variables
-                            |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+        Fake.Recorder(
+            StructuredFixtures.withIntake
+            <| fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, variables) ->
+                        if document.Contains "projectItems" then
+                            ok
+                                """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "node(id: $itemId)" then
+                            let field =
+                                variables
+                                |> List.tryPick (fun (k, v) ->
+                                    match k, v with
+                                    | "field", VString name -> Some name
+                                    | _ -> None)
 
-                        let value =
-                            match field with
-                            | Some "Status" -> $"""{{"name":"%s{status}"}}"""
-                            | _ -> "null"
+                            let value =
+                                match field with
+                                | Some "Status" -> $"""{{"name":"%s{status}"}}"""
+                                | _ -> "null"
 
-                        ok ("{\"data\":{\"node\":{\"fieldValueByName\":" + value + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
-                    elif document.Contains "updateProjectV2ItemFieldValue" then
-                        if sentinel then
-                            Error(
-                                Errors.NotFound
-                                    ".github#2394: a coherent human park must never reach a board write — \
-                                     if this fired, LIFECYCLE-PROJECTION-LAG stopped respecting the sentinel"
+                            ok (
+                                "{\"data\":{\"node\":{\"fieldValueByName\":"
+                                + value
+                                + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
                             )
+                        elif document.Contains "updateProjectV2ItemFieldValue" then
+                            if sentinel then
+                                Error(
+                                    Errors.NotFound
+                                        ".github#2394: a coherent human park must never reach a board write — \
+                                     if this fired, LIFECYCLE-PROJECTION-LAG stopped respecting the sentinel"
+                                )
+                            else
+                                status <- "Ready"
+                                ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+                        elif document.Contains "projectsV2" then
+                            ok
+                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "fields(first" then
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "items(first" then
+                            ok
+                                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
                         else
-                            status <- "Ready"
-                            ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
-                    elif document.Contains "projectsV2" then
-                        ok
-                            """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "fields(first" then
-                        ok
-                            """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "items(first" then
-                        ok
-                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                    else
-                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
-                ok (System.Text.Json.JsonSerializer.Serialize {| number = 47; body = body |})
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (routedLedger "FS-GG/FS.GG.SDD#47")
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
-            | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
-            | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
-            // Only reached on the `sentinel = false` leg: a landed `LIFECYCLE-PROJECTION-LAG` write posts
-            // its durable ordering watermark (`LifecycleProjection.watermarkMarker`) right after the fresh
-            // verification read proves the Status mutation landed.
-            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok """{"id":9047}"""
-            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+                            Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
+                    ok (System.Text.Json.JsonSerializer.Serialize {| number = 47; body = body |})
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (routedLedger "FS-GG/FS.GG.SDD#47")
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
+                // Only reached on the `sentinel = false` leg: a landed `LIFECYCLE-PROJECTION-LAG` write posts
+                // its durable ordering watermark (`LifecycleProjection.watermarkMarker`) right after the fresh
+                // verification read proves the Status mutation landed.
+                | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok """{"id":9047}"""
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+        )
 
     /// Run `reconcile` against a throwaway cache root, capturing stdout AND stderr separately.
     ///
@@ -2821,12 +3351,19 @@ module ApplicationServiceTests =
         (args: string list)
         (adjust: Options.Options -> Options.Options)
         : int * string * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-1524-" + Guid.NewGuid().ToString "n")
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-1524-" + Guid.NewGuid().ToString "n")
+
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
 
         let identityVars =
-            [ "FSGG_WORKER"; "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID" ]
+            [
+                "FSGG_WORKER"
+                "CLAUDE_CODE_SESSION_ID"
+                "OPENCODE_SESSION_ID"
+                "FSGG_AGENT_SESSION_ID"
+            ]
 
         let previousIdentity =
             identityVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
@@ -2924,70 +3461,101 @@ module ApplicationServiceTests =
                 """{"status":{"name":"Done"},"blockedBy":null,"content":{"__typename":"Issue","number":2155,"title":"resolved blocker","body":"","state":"CLOSED","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
 
             let external =
-                $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{if blockedBy = "" then "null" else $"{{\"text\":\"%s{blockedBy}\"}}"},"content":{{"__typename":"Issue","number":96,"title":"external target","body":"Paths: src/A.fs","state":"OPEN","repository":{{"nameWithOwner":"EHotwagner/rogue3"}}}}}}"""
+                $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{if blockedBy = "" then
+                                                                          "null"
+                                                                      else
+                                                                          $"{{\"text\":\"%s{blockedBy}\"}}"},"content":{{"__typename":"Issue","number":96,"title":"external target","body":"Paths: src/A.fs","state":"OPEN","repository":{{"nameWithOwner":"EHotwagner/rogue3"}}}}}}"""
 
             String.concat "," [ external; blocker ]
 
-        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-            match req.Method, req.Path.Trim '/' with
-            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, _) when document.Contains "node(id: $projectId)" ->
-                    ok lookupResponse
-                | Query(document, variables) when document.Contains "node(id: $itemId)" ->
-                    let item = variables |> List.tryPick (fun (k, v) -> match k, v with | "itemId", VId id -> Some id | _ -> None)
-                    let field = variables |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+        Fake.Recorder(
+            StructuredFixtures.withIntake
+            <| fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, _) when document.Contains "node(id: $projectId)" -> ok lookupResponse
+                    | Query(document, variables) when document.Contains "node(id: $itemId)" ->
+                        let item =
+                            variables
+                            |> List.tryPick (fun (k, v) ->
+                                match k, v with
+                                | "itemId", VId id -> Some id
+                                | _ -> None)
 
-                    match item, field with
-                    | Some "PVTI_external96", Some "Status" ->
-                        ok $"""{{"data":{{"node":{{"fieldValueByName":{{"name":"%s{status}"}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                    | Some "PVTI_external96", Some "Blocked by" when blockedBy <> "" ->
-                        ok $"""{{"data":{{"node":{{"fieldValueByName":{{"text":"%s{blockedBy}"}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                    | Some "PVTI_external96", Some "Blocked by" ->
-                        ok """{"data":{"node":{"fieldValueByName":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    | _ -> Error(Errors.NotFound "the targeted verification read addressed the wrong external row or field")
-                | Query(document, _) when document.Contains "f0:" ->
-                    status <- "Ready"
-                    blockedBy <- ""
-                    ok """{"data":{"f0":{"projectV2Item":{"id":"PVTI_external96"}},"f1":{"projectV2Item":{"id":"PVTI_external96"}}}}"""
-                | Query(document, _) when document.Contains "updateProjectV2ItemFieldValue" ->
-                    status <- "Ready"
-                    ok """{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_external96"}}}}"""
-                | Query(document, _) when document.Contains "projectsV2" ->
-                    ok
-                        """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                | Query(document, _) when document.Contains "fields(first" ->
-                    ok
-                        """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                | Query(document, _) when document.Contains "items(first" ->
-                    ok
-                        $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                | Query(document, _) -> Error(Errors.NotFound $"the external-owner fixture serves no answer for: %s{document}")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            // A REAL touch-set — .github#2220, for `partialBlockerReconcileWorld`'s reason exactly. This
-            // fixture is about carrying the EXTERNAL OWNER into the lookup, and it needs an ordinary
-            // cleared row to do it on; `Paths: none` would silently move it onto the `Backlog` path and
-            // test the external owner against the wrong remedy.
-            | "GET", "repos/EHotwagner/rogue3/issues" ->
-                ok """[{"number":96,"state":"open","body":"Paths: src/A.fs"}]"""
-            | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
-            | "GET", "repos/EHotwagner/rogue3/issues/96" ->
-                ok """{"number":96,"state":"open","body":"Paths: src/A.fs"}"""
-            | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok (thread.Json())
-            | "POST", "repos/EHotwagner/rogue3/issues/96/comments" ->
-                match req.Body with
-                | Json payload ->
-                    use document = JsonDocument.Parse payload
-                    ok (JsonSerializer.Serialize {| id = thread.Add(document.RootElement.GetProperty("body").GetString()) |})
-                | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
-            | "DELETE", p when p.StartsWith "repos/EHotwagner/rogue3/issues/comments/" ->
-                thread.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1)))
-                ok "{}"
-            | "GET", "repos/EHotwagner/rogue3/pulls" -> ok "[]"
-            | "GET", "repos/EHotwagner/rogue3/git/matching-refs/heads/item/96-" -> ok "[]"
-            | "GET", path when path.EndsWith "/comments" -> ok "[]"
-            | m, p -> Error(Errors.NotFound $"the external-owner fixture serves no %s{m} %s{p}"))
+                        let field =
+                            variables
+                            |> List.tryPick (fun (k, v) ->
+                                match k, v with
+                                | "field", VString name -> Some name
+                                | _ -> None)
+
+                        match item, field with
+                        | Some "PVTI_external96", Some "Status" ->
+                            ok
+                                $"""{{"data":{{"node":{{"fieldValueByName":{{"name":"%s{status}"}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        | Some "PVTI_external96", Some "Blocked by" when blockedBy <> "" ->
+                            ok
+                                $"""{{"data":{{"node":{{"fieldValueByName":{{"text":"%s{blockedBy}"}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        | Some "PVTI_external96", Some "Blocked by" ->
+                            ok """{"data":{"node":{"fieldValueByName":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        | _ ->
+                            Error(
+                                Errors.NotFound
+                                    "the targeted verification read addressed the wrong external row or field"
+                            )
+                    | Query(document, _) when document.Contains "f0:" ->
+                        status <- "Ready"
+                        blockedBy <- ""
+
+                        ok
+                            """{"data":{"f0":{"projectV2Item":{"id":"PVTI_external96"}},"f1":{"projectV2Item":{"id":"PVTI_external96"}}}}"""
+                    | Query(document, _) when document.Contains "updateProjectV2ItemFieldValue" ->
+                        status <- "Ready"
+                        ok """{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_external96"}}}}"""
+                    | Query(document, _) when document.Contains "projectsV2" ->
+                        ok
+                            """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    | Query(document, _) when document.Contains "fields(first" ->
+                        ok
+                            """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    | Query(document, _) when document.Contains "items(first" ->
+                        ok
+                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                    | Query(document, _) ->
+                        Error(Errors.NotFound $"the external-owner fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                // A REAL touch-set — .github#2220, for `partialBlockerReconcileWorld`'s reason exactly. This
+                // fixture is about carrying the EXTERNAL OWNER into the lookup, and it needs an ordinary
+                // cleared row to do it on; `Paths: none` would silently move it onto the `Backlog` path and
+                // test the external owner against the wrong remedy.
+                | "GET", "repos/EHotwagner/rogue3/issues" ->
+                    ok """[{"number":96,"state":"open","body":"Paths: src/A.fs"}]"""
+                | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+                | "GET", "repos/EHotwagner/rogue3/issues/96" ->
+                    ok """{"number":96,"state":"open","body":"Paths: src/A.fs"}"""
+                | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok (thread.Json())
+                | "POST", "repos/EHotwagner/rogue3/issues/96/comments" ->
+                    match req.Body with
+                    | Json payload ->
+                        use document = JsonDocument.Parse payload
+
+                        ok (
+                            JsonSerializer.Serialize
+                                {|
+                                    id = thread.Add(document.RootElement.GetProperty("body").GetString())
+                                |}
+                        )
+                    | _ -> Error(Errors.NotFound "the comment write carried no JSON body")
+                | "DELETE", p when p.StartsWith "repos/EHotwagner/rogue3/issues/comments/" ->
+                    thread.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1)))
+                    ok "{}"
+                | "GET", "repos/EHotwagner/rogue3/pulls" -> ok "[]"
+                | "GET", "repos/EHotwagner/rogue3/git/matching-refs/heads/item/96-" -> ok "[]"
+                | "GET", path when path.EndsWith "/comments" -> ok "[]"
+                | m, p -> Error(Errors.NotFound $"the external-owner fixture serves no %s{m} %s{p}")
+        )
 
     let private externalOwnerWriteWorld () =
         externalOwnerWriteWorldWithLookup validExternalOwnerItemLookup
@@ -2996,14 +3564,28 @@ module ApplicationServiceTests =
     let ``#2166 ready and set-field preserve one external canonical row through fresh readback`` () =
         let world = externalOwnerWriteWorld ()
         let readyCode, readyOut, _ = runReconcile world [ "ready"; "--all"; "--json" ]
+
         let setCode, _, setErr =
-            runReconcile world [ "set-field"; "EHotwagner/rogue3#96"; "Status"; "Ready"; "--worker"; "heron-2166" ]
+            runReconcile
+                world
+                [
+                    "set-field"
+                    "EHotwagner/rogue3#96"
+                    "Status"
+                    "Ready"
+                    "--worker"
+                    "heron-2166"
+                ]
+
         let verifyCode, verifyOut, _ = runReconcile world [ "ready"; "--all"; "--json" ]
 
         Assert.Equal(0, readyCode)
         Assert.Contains("\"repo\":\"EHotwagner/rogue3\"", readyOut)
         Assert.Contains("\"status\":\"Blocked\"", readyOut)
-        if setCode <> 0 then failwithf "external set-field failed: %s" setErr
+
+        if setCode <> 0 then
+            failwithf "external set-field failed: %s" setErr
+
         Assert.Equal(0, verifyCode)
         Assert.Contains("\"repo\":\"EHotwagner/rogue3\"", verifyOut)
         Assert.Contains("\"status\":\"Ready\"", verifyOut)
@@ -3013,16 +3595,21 @@ module ApplicationServiceTests =
     [<Fact>]
     let ``#2166 reconcile apply carries the external owner into lookup and verifies both repaired fields`` () =
         let world = externalOwnerWriteWorld ()
+
         let code, out, err =
             runReconcile world [ "reconcile"; "--worker"; "heron-2166"; "--apply"; "--json" ]
 
         if String.IsNullOrWhiteSpace out then
             failwithf "#2166 external reconcile emitted no receipt (exit %d): %s" code err
 
-        let row = parsedArray out |> List.find (fun item -> str "subject" item = "rogue3#96")
+        let row =
+            parsedArray out |> List.find (fun item -> str "subject" item = "rogue3#96")
+
         let observed = row.GetProperty("observed").EnumerateArray() |> List.ofSeq
 
-        if code <> 0 then failwithf "external reconcile failed: %s" err
+        if code <> 0 then
+            failwithf "external reconcile failed: %s" err
+
         Assert.Equal("written", str "outcome" row)
         Assert.Equal(2, List.length observed)
         Assert.Equal("Status", str "field" observed.[0])
@@ -3035,16 +3622,30 @@ module ApplicationServiceTests =
     [<Fact>]
     let ``#2166 set-field fails closed on malformed external-owner pagination completeness`` () =
         let malformedLookups =
-            [ "pageInfo absent", """{"data":{"node":{"items":{"nodes":[]}}}}"""
-              "pageInfo null", """{"data":{"node":{"items":{"pageInfo":null,"nodes":[]}}}}"""
-              "hasNextPage absent", """{"data":{"node":{"items":{"pageInfo":{"endCursor":null},"nodes":[]}}}}"""
-              "hasNextPage null", """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":null,"endCursor":null},"nodes":[]}}}}"""
-              "hasNextPage wrong type", """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":"false","endCursor":null},"nodes":[]}}}}""" ]
+            [
+                "pageInfo absent", """{"data":{"node":{"items":{"nodes":[]}}}}"""
+                "pageInfo null", """{"data":{"node":{"items":{"pageInfo":null,"nodes":[]}}}}"""
+                "hasNextPage absent", """{"data":{"node":{"items":{"pageInfo":{"endCursor":null},"nodes":[]}}}}"""
+                "hasNextPage null",
+                """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":null,"endCursor":null},"nodes":[]}}}}"""
+                "hasNextPage wrong type",
+                """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":"false","endCursor":null},"nodes":[]}}}}"""
+            ]
 
         for label, lookup in malformedLookups do
             let world = externalOwnerWriteWorldWithLookup lookup
+
             let code, _, err =
-                runReconcile world [ "set-field"; "EHotwagner/rogue3#96"; "Status"; "Ready"; "--worker"; "heron-2166" ]
+                runReconcile
+                    world
+                    [
+                        "set-field"
+                        "EHotwagner/rogue3#96"
+                        "Status"
+                        "Ready"
+                        "--worker"
+                        "heron-2166"
+                    ]
 
             Assert.NotEqual(0, code)
             Assert.Contains("pageInfo", err)
@@ -3068,34 +3669,40 @@ module ApplicationServiceTests =
                 $"""{{"status":{{"name":"Done"}},"blockedBy":null,"content":{{"__typename":"Issue","number":%d{n},"title":"settled item %d{n}","body":"Class: hardening","state":"CLOSED","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}""")
             |> String.concat ","
 
-        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-            match req.Method, req.Path.Trim '/' with
-            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, _) ->
-                    if document.Contains "projectsV2" then
-                        ok
-                            """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "fields(first" then
-                        ok
-                            """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "items(first" then
-                        ok
-                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                    else
-                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
-            | "GET", path when path.EndsWith "/comments" ->
-                commentReads.Add path
-                ok "[{\"body\":\"<!-- fsgg:done-receipt v=1 -->\\nverified\"}]"
-            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+        Fake.Recorder(
+            StructuredFixtures.withIntake
+            <| fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, _) ->
+                        if document.Contains "projectsV2" then
+                            ok
+                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "fields(first" then
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "items(first" then
+                            ok
+                                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        else
+                            Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+                | "GET", path when path.EndsWith "/comments" ->
+                    commentReads.Add path
+                    ok "[{\"body\":\"<!-- fsgg:done-receipt v=1 -->\\nverified\"}]"
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+        )
 
     [<Fact>]
     let ``#2382 a settled Done row's comment thread is never read`` () =
         let commentReads = ResizeArray<string>()
-        let code, _, err = runReconcile (settledDoneWorld 3 commentReads) (reconcileArgs [ "--json" ])
+
+        let code, _, err =
+            runReconcile (settledDoneWorld 3 commentReads) (reconcileArgs [ "--json" ])
+
         let threads = String.Join(", ", commentReads)
 
         Assert.Equal(0, code)
@@ -3164,7 +3771,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
 
         let row = parsedArray out |> List.find (fun r -> str "subject" r = "FS.GG.SDD#47")
 
-        if code <> 0 then failwithf ".github#2220 reconcile failed: %s" err
+        if code <> 0 then
+            failwithf ".github#2220 reconcile failed: %s" err
 
         Assert.Equal("LIFECYCLE-PROJECTION-LAG", str "rule" row)
         Assert.Equal("written", str "outcome" row)
@@ -3194,8 +3802,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         let rows = parsedArray out
         Assert.Equal(2, List.length rows)
 
-        let bySubject =
-            rows |> List.map (fun r -> str "subject" r, r) |> Map.ofList
+        let bySubject = rows |> List.map (fun r -> str "subject" r, r) |> Map.ofList
 
         // THE WRITE THAT LANDED. The wire word is `written`, which is `ClaimReceipt.statusWrite`'s name for
         // this exact `Board.WriteOutcome` case — one CLI, one name per fact. The human line still says
@@ -3230,13 +3837,22 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
     [<Fact>]
     let ``#2313 reconcile apply verifies N writes with N targeted reads and never repeats the board census`` () =
         let queries = ResizeArray<string>()
-        let code, _, err = runApplyJson (reconcileWorldWithQueries [ 101; 102; 103 ] Set.empty (Some queries))
+
+        let code, _, err =
+            runApplyJson (reconcileWorldWithQueries [ 101; 102; 103 ] Set.empty (Some queries))
 
         Assert.Equal(0, code)
         Assert.True(String.IsNullOrWhiteSpace err, err)
 
-        let boardScans = queries |> Seq.filter (fun document -> document.Contains "items(first") |> Seq.length
-        let targeted = queries |> Seq.filter (fun document -> document.Contains "node(id: $itemId)") |> Seq.length
+        let boardScans =
+            queries
+            |> Seq.filter (fun document -> document.Contains "items(first")
+            |> Seq.length
+
+        let targeted =
+            queries
+            |> Seq.filter (fun document -> document.Contains "node(id: $itemId)")
+            |> Seq.length
 
         // One initial census derives all three chores. Each accepted one-field write is then observed by
         // one resolver read; the old full-scan verifier would instead make this 1 + N board scans and 0
@@ -3271,12 +3887,18 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         let nl = Environment.NewLine
 
         let expected =
-            "applying (2 mechanical finding(s))" + nl
-            + "  COMPLETION-PROJECTION-LAG FS.GG.SDD#101            Status=Done" + nl
-            + "  COMPLETION-PROJECTION-LAG FS.GG.SDD#102            Status=Done" + nl
-            + "judgement findings are report-only: scripts/fsgg-coord lint --repo FS.GG.SDD" + nl
-            + "applied  FS.GG.SDD#101  Status=Done" + nl
-            + "queued   FS.GG.SDD#102  Status=Done (run scripts/fsgg-coord flush)" + nl
+            "applying (2 mechanical finding(s))"
+            + nl
+            + "  COMPLETION-PROJECTION-LAG FS.GG.SDD#101            Status=Done"
+            + nl
+            + "  COMPLETION-PROJECTION-LAG FS.GG.SDD#102            Status=Done"
+            + nl
+            + "judgement findings are report-only: scripts/fsgg-coord lint --repo FS.GG.SDD"
+            + nl
+            + "applied  FS.GG.SDD#101  Status=Done"
+            + nl
+            + "queued   FS.GG.SDD#102  Status=Done (run scripts/fsgg-coord flush)"
+            + nl
 
         Assert.Equal(expected, out)
         Assert.Equal(0, code)
@@ -3295,10 +3917,14 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         let nl = Environment.NewLine
 
         let expected =
-            "applying (1 mechanical finding(s))" + nl
-            + "  CLASS-PROJECTION-LAG     FS.GG.SDD#301            Class=defect" + nl
-            + "judgement findings are report-only: scripts/fsgg-coord lint --repo FS.GG.SDD" + nl
-            + "applied  FS.GG.SDD#301  Class=defect" + nl
+            "applying (1 mechanical finding(s))"
+            + nl
+            + "  CLASS-PROJECTION-LAG     FS.GG.SDD#301            Class=defect"
+            + nl
+            + "judgement findings are report-only: scripts/fsgg-coord lint --repo FS.GG.SDD"
+            + nl
+            + "applied  FS.GG.SDD#301  Class=defect"
+            + nl
 
         Assert.Equal(expected, out)
         Assert.Equal(0, code)
@@ -3344,7 +3970,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
 
     [<Fact>]
     let ``.github#2394 reconcile --apply derives nothing for a Blocked row carrying a human-action sentinel`` () =
-        let code, out, err = runReconcile (humanParkReconcileWorld true) (reconcileArgs [ "--apply" ])
+        let code, out, err =
+            runReconcile (humanParkReconcileWorld true) (reconcileArgs [ "--apply" ])
 
         Assert.Equal(0, code)
         Assert.Equal("", err)
@@ -3353,66 +3980,89 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         let nl = Environment.NewLine
 
         let expected =
-            "clean — no mechanical board repairs" + nl
-            + "judgement findings are report-only: scripts/fsgg-coord lint --repo FS.GG.SDD" + nl
+            "clean — no mechanical board repairs"
+            + nl
+            + "judgement findings are report-only: scripts/fsgg-coord lint --repo FS.GG.SDD"
+            + nl
 
         Assert.Equal(expected, out)
 
     [<Fact>]
-    let ``.github#2394 the same row with a human-decision sentinel is held too — both sentinel variants gate, not just Class: decision`` () =
+    let ``.github#2394 the same row with a human-decision sentinel is held too — both sentinel variants gate, not just Class: decision``
+        ()
+        =
         // AC2: the fix must not depend on the incidental `Class: decision` projection. This row declares
         // no `Class:` line at all — only `Blocked on: human/decision` — so if the gate secretly rode on
         // `Class`, this leg would regress to the same board write the `human/action` leg above refuses.
         let mutable status = "Blocked"
 
         let items () =
-            [ boardItemInWithBody status 47 "a human-parked item" None "OPEN" "Paths: src/A.fs\n\nBlocked on: human/decision" ]
+            [
+                boardItemInWithBody
+                    status
+                    47
+                    "a human-parked item"
+                    None
+                    "OPEN"
+                    "Paths: src/A.fs\n\nBlocked on: human/decision"
+            ]
             |> String.concat ","
 
         let transport =
-            Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-                match req.Method, req.Path.Trim '/' with
-                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-                | "POST", "graphql" ->
-                    match req.Body with
-                    | Query(document, variables) ->
-                        if document.Contains "projectItems" then
-                            ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                        elif document.Contains "node(id: $itemId)" then
-                            let field =
-                                variables
-                                |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+            Fake.Recorder(
+                StructuredFixtures.withIntake
+                <| fun (req: Request) ->
+                    match req.Method, req.Path.Trim '/' with
+                    | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                    | "POST", "graphql" ->
+                        match req.Body with
+                        | Query(document, variables) ->
+                            if document.Contains "projectItems" then
+                                ok
+                                    """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                            elif document.Contains "node(id: $itemId)" then
+                                let field =
+                                    variables
+                                    |> List.tryPick (fun (k, v) ->
+                                        match k, v with
+                                        | "field", VString name -> Some name
+                                        | _ -> None)
 
-                            let value =
-                                match field with
-                                | Some "Status" -> $"""{{"name":"%s{status}"}}"""
-                                | _ -> "null"
+                                let value =
+                                    match field with
+                                    | Some "Status" -> $"""{{"name":"%s{status}"}}"""
+                                    | _ -> "null"
 
-                            ok ("{\"data\":{\"node\":{\"fieldValueByName\":" + value + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
-                        elif document.Contains "updateProjectV2ItemFieldValue" then
-                            Error(
-                                Errors.NotFound
-                                    ".github#2394: a coherent human/decision park must never reach a board write either"
-                            )
-                        elif document.Contains "projectsV2" then
-                            ok
-                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                        elif document.Contains "fields(first" then
-                            ok
-                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                        elif document.Contains "items(first" then
-                            ok
-                                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                        else
-                            Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
-                    | _ -> Error(Errors.NotFound "a graphql call with no document")
-                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
-                    ok """{"number":47,"body":"Paths: src/A.fs\n\nBlocked on: human/decision"}"""
-                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (routedLedger "FS-GG/FS.GG.SDD#47")
-                | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
-                | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
-                | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
-                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+                                ok (
+                                    "{\"data\":{\"node\":{\"fieldValueByName\":"
+                                    + value
+                                    + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+                                )
+                            elif document.Contains "updateProjectV2ItemFieldValue" then
+                                Error(
+                                    Errors.NotFound
+                                        ".github#2394: a coherent human/decision park must never reach a board write either"
+                                )
+                            elif document.Contains "projectsV2" then
+                                ok
+                                    """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                            elif document.Contains "fields(first" then
+                                ok
+                                    """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                            elif document.Contains "items(first" then
+                                ok
+                                    $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                            else
+                                Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                        | _ -> Error(Errors.NotFound "a graphql call with no document")
+                    | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
+                        ok """{"number":47,"body":"Paths: src/A.fs\n\nBlocked on: human/decision"}"""
+                    | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (routedLedger "FS-GG/FS.GG.SDD#47")
+                    | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+                    | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
+                    | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
+                    | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+            )
 
         let code, out, err = runReconcile transport (reconcileArgs [ "--apply" ])
 
@@ -3432,9 +4082,12 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         let nl = Environment.NewLine
 
         let expected =
-            "applying (1 mechanical finding(s))" + nl
-            + "  CLASS-PROJECTION-LAG     FS.GG.SDD#47             Class=decision" + nl
-            + "judgement findings are report-only: scripts/fsgg-coord lint --repo FS.GG.SDD" + nl
+            "applying (1 mechanical finding(s))"
+            + nl
+            + "  CLASS-PROJECTION-LAG     FS.GG.SDD#47             Class=decision"
+            + nl
+            + "judgement findings are report-only: scripts/fsgg-coord lint --repo FS.GG.SDD"
+            + nl
 
         Assert.Equal(expected, out)
         Assert.Contains("board has no Class field", err)
@@ -3444,7 +4097,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         // The gate-inversion counterpart to the two legs above: this pins that the fix is a SENTINEL gate,
         // not a blanket "never touch a Blocked row" regression that would just as silently break ordinary
         // stale-Blocked reconciliation.
-        let code, out, err = runReconcile (humanParkReconcileWorld false) (reconcileArgs [ "--apply"; "--json" ])
+        let code, out, err =
+            runReconcile (humanParkReconcileWorld false) (reconcileArgs [ "--apply"; "--json" ])
 
         Assert.Equal(0, code)
         Assert.Equal("", err)
@@ -3460,7 +4114,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
 
     [<Fact>]
     let ``the dry-run --json projection is unchanged, alphabetical keys and all`` () =
-        let code, out, _ = runReconcile (reconcileWorld [ 101 ] Set.empty) (reconcileArgs [ "--json" ])
+        let code, out, _ =
+            runReconcile (reconcileWorld [ 101 ] Set.empty) (reconcileArgs [ "--json" ])
 
         // THE KEY ORDER IS THE CONTRACT, AND IT IS ALPHABETICAL — `id,remedy,rule,size,statement,subject`.
         // Not the order the old source literal read as: this projection was an F# ANONYMOUS RECORD, whose
@@ -3479,7 +4134,9 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         Assert.Equal(0, code)
 
     let private runReconcileWithHealthReport (world: Fake.Recorder) =
-        let path = Path.Combine(Path.GetTempPath(), "fsgg-completion-health-" + Guid.NewGuid().ToString "n" + ".json")
+        let path =
+            Path.Combine(Path.GetTempPath(), "fsgg-completion-health-" + Guid.NewGuid().ToString "n" + ".json")
+
         let previous = Environment.GetEnvironmentVariable "FSGG_COORD_HEALTH_REPORT"
 
         try
@@ -3503,7 +4160,11 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         Assert.Single rows |> ignore
         Assert.Equal("PREMATURE-COMPLETION", rows.Head.GetProperty("rule").GetString())
         Assert.Equal("Status=In review", rows.Head.GetProperty("remedy").GetString())
-        Assert.False(world.Logged "updateProjectV2ItemFieldValue", $"a receipt-free row reached a mutation: %A{world.Log}")
+
+        Assert.False(
+            world.Logged "updateProjectV2ItemFieldValue",
+            $"a receipt-free row reached a mutation: %A{world.Log}"
+        )
 
         use document = JsonDocument.Parse report
         let root = document.RootElement
@@ -3528,15 +4189,28 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         Assert.Equal("written", row.GetProperty("outcome").GetString())
         Assert.Equal("In review", row.GetProperty("value").GetString())
 
-        let firstComment = world.Log |> List.findIndex (fun entry -> entry.Contains "comment-post")
+        let firstComment =
+            world.Log |> List.findIndex (fun entry -> entry.Contains "comment-post")
+
         let reopen = world.Log |> List.findIndex (fun entry -> entry.Contains "issue-patch")
-        let statusWrite = world.Log |> List.findIndex (fun entry -> entry.Contains "item-edit")
+
+        let statusWrite =
+            world.Log |> List.findIndex (fun entry -> entry.Contains "item-edit")
+
         Assert.True(firstComment < reopen, $"correction authority was not first: %A{world.Log}")
         Assert.True(reopen < statusWrite, $"issue reopen did not precede Status projection: %A{world.Log}")
 
         let secondCode, secondOut, secondErr =
             runReconcile world (reconcileArgs [ "--apply"; "--json" ])
-        if secondCode <> 0 then failwithf "second completion projection failed (exit %d): %s\n%s\n%A" secondCode secondErr secondOut world.Log
+
+        if secondCode <> 0 then
+            failwithf
+                "second completion projection failed (exit %d): %s\n%s\n%A"
+                secondCode
+                secondErr
+                secondOut
+                world.Log
+
         Assert.Equal("", secondErr)
         Assert.Empty(parsedArray secondOut)
         Assert.Equal(1, world.Count "issue-patch")
@@ -3545,22 +4219,39 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
     [<Fact>]
     let ``typed completion receipt repairs an open issue and Status Done idempotently`` () =
         let facts: Delivery.CompletionFacts =
-            { HeadSha = "head"
-              Merged = true
-              MergeReachable = true
-              PostMergeVerification =
-                Delivery.Verified
-                    { MergeSha = "merge-sha"; DefaultBranch = "main"
-                      Runs =
-                        [ { Id = 2905L; Attempt = 1; Workflow = "CI"; Event = "push"; Branch = "main"
-                            Sha = "merge-sha"; Status = "completed"; Conclusion = "success"; Url = "https://run/2905" } ] }
-              IssueClosed = true
-              BoardDone = false
-              ClaimReleased = false
-              PendingWrites = 0
-              CleanupEligible = false
-              ObligationsDeclared = true
-              Obligations = [] }
+            {
+                HeadSha = "head"
+                Merged = true
+                MergeReachable = true
+                PostMergeVerification =
+                    Delivery.Verified
+                        {
+                            MergeSha = "merge-sha"
+                            DefaultBranch = "main"
+                            Runs =
+                                [
+                                    {
+                                        Id = 2905L
+                                        Attempt = 1
+                                        Workflow = "CI"
+                                        Event = "push"
+                                        Branch = "main"
+                                        Sha = "merge-sha"
+                                        Status = "completed"
+                                        Conclusion = "success"
+                                        Url = "https://run/2905"
+                                    }
+                                ]
+                        }
+                IssueClosed = true
+                BoardDone = false
+                ClaimReleased = false
+                PendingWrites = 0
+                CleanupEligible = false
+                ObligationsDeclared = true
+                Obligations = []
+            }
+
         let receipt =
             Delivery.createCompletionReceipt
                 "FS-GG/FS.GG.SDD#101"
@@ -3571,24 +4262,45 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
                 "action"
                 facts
             |> Result.defaultWith (String.concat "; " >> failwith)
+
         let comments =
-            JsonSerializer.Serialize [| {| body = Delivery.encodeCompletionReceipt receipt |} |]
+            JsonSerializer.Serialize
+                [|
+                    {|
+                        body = Delivery.encodeCompletionReceipt receipt
+                    |}
+                |]
+
         let world = reconcileWorldWithQueriesAndComments [ 101 ] Set.empty None comments
 
         let code, out, err = runReconcile world (reconcileArgs [ "--apply"; "--json" ])
-        if code <> 0 then failwithf "completion projection failed (exit %d): %s\n%s\n%A" code err out world.Log
+
+        if code <> 0 then
+            failwithf "completion projection failed (exit %d): %s\n%s\n%A" code err out world.Log
+
         Assert.Equal("", err)
         let row = parsedArray out |> List.exactlyOne
         Assert.Equal("COMPLETION-PROJECTION-LAG", row.GetProperty("rule").GetString())
         Assert.Equal("Done", row.GetProperty("value").GetString())
         Assert.Equal("written", row.GetProperty("outcome").GetString())
         let close = world.Log |> List.findIndex (fun entry -> entry.Contains "issue-patch")
-        let statusWrite = world.Log |> List.findIndex (fun entry -> entry.Contains "item-edit")
+
+        let statusWrite =
+            world.Log |> List.findIndex (fun entry -> entry.Contains "item-edit")
+
         Assert.True(close < statusWrite, $"issue closure did not precede Status=Done: %A{world.Log}")
 
         let secondCode, secondOut, secondErr =
             runReconcile world (reconcileArgs [ "--apply"; "--json" ])
-        if secondCode <> 0 then failwithf "second typed completion projection failed (exit %d): %s\n%s\n%A" secondCode secondErr secondOut world.Log
+
+        if secondCode <> 0 then
+            failwithf
+                "second typed completion projection failed (exit %d): %s\n%s\n%A"
+                secondCode
+                secondErr
+                secondOut
+                world.Log
+
         Assert.Equal("", secondErr)
         Assert.Empty(parsedArray secondOut)
         Assert.Equal(1, world.Count "issue-patch")
@@ -3598,21 +4310,36 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
     let ``malformed typed completion evidence is visible in health and never corrected`` () =
         let comments =
             JsonSerializer.Serialize
-                [| {| body = Delivery.CompletionReceiptMarker + Environment.NewLine + "{}" |} |]
+                [|
+                    {|
+                        body = Delivery.CompletionReceiptMarker + Environment.NewLine + "{}"
+                    |}
+                |]
+
         let world = reconcileWorldWithQueriesAndComments [ 101 ] Set.empty None comments
         let code, out, err, report = runReconcileWithHealthReport world
 
         Assert.Equal(0, code)
         Assert.Empty(parsedArray out)
         Assert.Contains("invalid delivery completion evidence", err)
-        Assert.False(world.Logged "updateProjectV2ItemFieldValue", $"invalid evidence reached a mutation: %A{world.Log}")
+
+        Assert.False(
+            world.Logged "updateProjectV2ItemFieldValue",
+            $"invalid evidence reached a mutation: %A{world.Log}"
+        )
 
         use document = JsonDocument.Parse report
-        let subjects = document.RootElement.GetProperty("subjects").EnumerateArray() |> List.ofSeq
+
+        let subjects =
+            document.RootElement.GetProperty("subjects").EnumerateArray() |> List.ofSeq
+
         Assert.Single subjects |> ignore
+
         Assert.StartsWith(
             "withheld: invalid delivery completion evidence:",
-            subjects.Head.GetProperty("intended").GetString())
+            subjects.Head.GetProperty("intended").GetString()
+        )
+
         Assert.False(subjects.Head.GetProperty("readComplete").GetBoolean())
 
     /// The four environment variables `Identity.resolve` consults, cleared and restored. Clearing ALL of
@@ -3621,7 +4348,12 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
     /// resolve an id and the branch under test would never be reached.
     let private withNoIdentity (body: unit -> 'a) : 'a =
         let names =
-            [ "FSGG_WORKER"; "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID" ]
+            [
+                "FSGG_WORKER"
+                "CLAUDE_CODE_SESSION_ID"
+                "OPENCODE_SESSION_ID"
+                "FSGG_AGENT_SESSION_ID"
+            ]
 
         let saved = names |> List.map (fun n -> n, Environment.GetEnvironmentVariable n)
 
@@ -3715,12 +4447,19 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         (transport: Fake.Recorder)
         (args: string list)
         : int * string * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-1525-" + Guid.NewGuid().ToString "n")
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-1525-" + Guid.NewGuid().ToString "n")
+
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
 
         let identityVars =
-            [ "FSGG_WORKER"; "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID" ]
+            [
+                "FSGG_WORKER"
+                "CLAUDE_CODE_SESSION_ID"
+                "OPENCODE_SESSION_ID"
+                "FSGG_AGENT_SESSION_ID"
+            ]
 
         let previousIdentity =
             identityVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
@@ -3958,8 +4697,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
 
     /// The supported receiver topology: work-board is always materialized; operator-only drive-board is not.
     let private installWaveModel (root: string) =
-        let declaration =
-            waveModelDeclaration 3
+        let declaration = waveModelDeclaration 3
 
         let directory = Path.Combine(root, ".claude", "skills", "work-board", "references")
         Directory.CreateDirectory directory |> ignore
@@ -3985,27 +4723,33 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
 
         let bodies =
             [ for n in 1..active -> n, $"Paths: src/%d{n}" ]
-            @ (if hasReady then [ readyNumber, $"Paths: src/%d{readyNumber}" ] else [])
+            @ (if hasReady then
+                   [ readyNumber, $"Paths: src/%d{readyNumber}" ]
+               else
+                   [])
             |> Map.ofList
 
-        let holders =
-            [ for n in 1..active -> n, $"worker-%d{n}" ] |> Map.ofList
+        let holders = [ for n in 1..active -> n, $"worker-%d{n}" ] |> Map.ofList
 
         let statusFor n =
-            if hasReady && n = readyNumber then "Ready" else "In progress"
+            if hasReady && n = readyNumber then
+                "Ready"
+            else
+                "In progress"
 
         let transport = worldOf statusFor bodies holders Map.empty Set.empty false
 
         let code, out, err =
-            runQueueWithKit
-                installWaveModel
-                transport
-                [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ]
+            runQueueWithKit installWaveModel transport [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ]
 
         let expectedOut =
-            if hasReady then $"[\"FS-GG/FS.GG.SDD#%d{readyNumber}\"]" else "[]"
+            if hasReady then
+                $"[\"FS-GG/FS.GG.SDD#%d{readyNumber}\"]"
+            else
+                "[]"
 
         Assert.Equal(expectedOut + Environment.NewLine, out)
+
         Assert.Contains(
             $"wave occupancy: {{\"activeItems\":%d{active},\"waveCapacity\":6,\"openSlots\":%d{openSlots}}}",
             err
@@ -4020,10 +4764,7 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
             worldIn "Ready" (Map.ofList [ 74, "Paths: scripts/fsgg-coord" ]) Map.empty false
 
         let code, out, err =
-            runQueueWithKit
-                installDisagreeingWaveModels
-                transport
-                [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ]
+            runQueueWithKit installDisagreeingWaveModels transport [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ]
 
         Assert.Equal("[\"FS-GG/FS.GG.SDD#74\"]" + Environment.NewLine, out)
         Assert.Contains("wave occupancy: unavailable", err)
@@ -4212,13 +4953,15 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         let doc =
             snapshotOf
                 [ unowned ]
-                [ claimedRow 2664 "In progress" "Paths: src/2664"
-                  claimedRow 2667 "In progress" "Paths: src/2667"
-                  claimedRow 2668 "In progress" "Paths: src/2668"
-                  orphanPr 2642 2655
-                  orphanPr 2581 2651
-                  orphanPr 2645 2650
-                  ready 2690 ]
+                [
+                    claimedRow 2664 "In progress" "Paths: src/2664"
+                    claimedRow 2667 "In progress" "Paths: src/2667"
+                    claimedRow 2668 "In progress" "Paths: src/2668"
+                    orphanPr 2642 2655
+                    orphanPr 2581 2651
+                    orphanPr 2645 2650
+                    ready 2690
+                ]
 
         let slots = batchOccupancy doc
         let driverActive = driverActiveOf Map.empty doc
@@ -4232,10 +4975,12 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
 
         // And the residue is accounted for rather than lost: three orphan PRs and the markerless row.
         Assert.Equal<string list>(
-            [ "FS-GG/FS.GG.SDD#2642"
-              "FS-GG/FS.GG.SDD#2581"
-              "FS-GG/FS.GG.SDD#2645"
-              "FS-GG/FS.GG.SDD#91" ],
+            [
+                "FS-GG/FS.GG.SDD#2642"
+                "FS-GG/FS.GG.SDD#2581"
+                "FS-GG/FS.GG.SDD#2645"
+                "FS-GG/FS.GG.SDD#91"
+            ],
             slots.WorkWithoutClaim |> List.map (fun r -> r.Canonical)
         )
 
@@ -4262,7 +5007,11 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         // on a blocked row is still standing in its lane and only `reap` frees it, so the slot is
         // consumed. A maintainer who reads the two answers and "fixes" the disagreement would be aligning
         // the correct side to the other one — which is why the comments now say which is which.
-        let unreadable = if itemPrUnreadable then ""","itemPrUnreadable":true""" else ""
+        let unreadable =
+            if itemPrUnreadable then
+                ""","itemPrUnreadable":true"""
+            else
+                ""
 
         let row =
             $"""{{"owner":"FS-GG","repo":"FS.GG.SDD","number":7,"status":"%s{status}","state":"OPEN","body":"%s{body}","claim":{{"worker":"w-7","ageSeconds":60,"liveness":{{"kind":"lease-held"}}}}%s{unreadable}}}"""
@@ -4301,14 +5050,20 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
 
         let merged: Map<string, int * bool * Delivery.Obligation list> =
             Map.ofList
-                [ "FS-GG/FS.GG.SDD#6",
-                  (99,
-                   true,
-                   [ { Id = "o1"
-                       Kind = "release-verification"
-                       Evidence = None
-                       HeadSha = "abc"
-                       Verified = false } ]) ]
+                [
+                    "FS-GG/FS.GG.SDD#6",
+                    (99,
+                     true,
+                     [
+                         {
+                             Id = "o1"
+                             Kind = "release-verification"
+                             Evidence = None
+                             HeadSha = "abc"
+                             Verified = false
+                         }
+                     ])
+                ]
 
         Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#6" ], driverActiveOf merged doc)
         Assert.Equal<string list>([], (batchOccupancy doc).Occupying |> List.map (fun r -> r.Canonical))
@@ -4321,7 +5076,11 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         // `Result.map (fun _ -> UnknownHolder)` is applied to a collected Error, so the snapshot is
         // refused outright and no holder is ever minted.
         let unknownKind =
-            snapshotOf [ """{"owner":"FS-GG","repo":"FS.GG.SDD","paths":["src/9"],"holder":{"kind":"unknown"}}""" ] []
+            snapshotOf
+                [
+                    """{"owner":"FS-GG","repo":"FS.GG.SDD","paths":["src/9"],"holder":{"kind":"unknown"}}"""
+                ]
+                []
 
         let slots = batchOccupancy unknownKind
         Assert.Equal<Ref list>([], slots.Occupying)
@@ -4329,7 +5088,9 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
 
         let malformedLiveClaim =
             snapshotOf
-                [ """{"owner":"FS-GG","repo":"FS.GG.SDD","paths":["src/9"],"holder":{"kind":"live-claim","owner":"FS-GG","repo":"FS.GG.SDD","number":9}}""" ]
+                [
+                    """{"owner":"FS-GG","repo":"FS.GG.SDD","paths":["src/9"],"holder":{"kind":"live-claim","owner":"FS-GG","repo":"FS.GG.SDD","number":9}}"""
+                ]
                 []
 
         match Client.slotOccupancyOf malformedLiveClaim with
@@ -4344,24 +5105,28 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         // Byte equality, in key order, because a consumer keying on position — or a human diffing a
         // receipt log — sees the bytes and not the record.
         let receipt: Render.ClaimReceipt =
-            { Ref =
-                { Owner = "FS-GG"
-                  Repo = ".github"
-                  Number = 1525 }
-              Worker = "snipe-6404"
-              Kind = "claimed"
-              MarkerObserved = true
-              MarkerId = Some 5087533685L
-              AssigneeObserved = None
-              Status = Some "In progress"
-              StatusRead = "observed"
-              StatusWrite = "written"
-              PendingBoardWrites = Some 0
-              // .github#2459 adds this key to the wire shape; the empty case is what every claim before
-              // #2459 would have reported had the key existed, so it is the byte-identical baseline here.
-              Collisions = []
-              ForcedClaimCensuses = None
-              Converged = true }
+            {
+                Ref =
+                    {
+                        Owner = "FS-GG"
+                        Repo = ".github"
+                        Number = 1525
+                    }
+                Worker = "snipe-6404"
+                Kind = "claimed"
+                MarkerObserved = true
+                MarkerId = Some 5087533685L
+                AssigneeObserved = None
+                Status = Some "In progress"
+                StatusRead = "observed"
+                StatusWrite = "written"
+                PendingBoardWrites = Some 0
+                // .github#2459 adds this key to the wire shape; the empty case is what every claim before
+                // #2459 would have reported had the key existed, so it is the byte-identical baseline here.
+                Collisions = []
+                ForcedClaimCensuses = None
+                Converged = true
+            }
 
         Assert.Equal(
             """{"ref":".github#1525","repo":"FS-GG/.github","number":1525,"worker":"snipe-6404","kind":"claimed","markerObserved":true,"markerId":5087533685,"assigneeObserved":null,"status":"In progress","statusRead":"observed","statusWrite":"written","pendingBoardWrites":0,"collisions":[],"converged":true}""",
@@ -4371,29 +5136,37 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
     [<Fact>]
     let ``#2772 a non-green forced claim has a typed census receipt`` () =
         let census: Render.ClaimMarkerCensusReceipt =
-            { WinnerMarkerId = Some 901L
-              Markers =
-                [ { MarkerId = 901L
-                    Worker = "vole-418"
-                    Live = true } ] }
+            {
+                WinnerMarkerId = Some 901L
+                Markers =
+                    [
+                        {
+                            MarkerId = 901L
+                            Worker = "vole-418"
+                            Live = true
+                        }
+                    ]
+            }
 
         let receipt: Render.ForcedClaimOutcomeReceipt =
-            { Ref =
-                { Owner = "FS-GG"
-                  Repo = ".github"
-                  Number = 2772 }
-              Worker = "kite-461"
-              Kind = "replacement-post-failed"
-              ReplacementMarkerId = None
-              StandingWorker = Some "vole-418"
-              StandingMarkerId = Some 901L
-              RemovedWorkers = []
-              FailedWorker = None
-              FailedMarkerId = None
-              Reason = Some "HTTP 500: post failed"
-              ForcedClaimCensuses =
-                { Before = census
-                  After = Some census } }
+            {
+                Ref =
+                    {
+                        Owner = "FS-GG"
+                        Repo = ".github"
+                        Number = 2772
+                    }
+                Worker = "kite-461"
+                Kind = "replacement-post-failed"
+                ReplacementMarkerId = None
+                StandingWorker = Some "vole-418"
+                StandingMarkerId = Some 901L
+                RemovedWorkers = []
+                FailedWorker = None
+                FailedMarkerId = None
+                Reason = Some "HTTP 500: post failed"
+                ForcedClaimCensuses = { Before = census; After = Some census }
+            }
 
         Assert.Equal(
             """{"ref":".github#2772","repo":"FS-GG/.github","number":2772,"worker":"kite-461","kind":"replacement-post-failed","replacementMarkerId":null,"standingWorker":"vole-418","standingMarkerId":901,"removedWorkers":[],"failedWorker":null,"failedMarkerId":null,"reason":"HTTP 500: post failed","forcedClaimCensuses":{"before":{"winnerMarkerId":901,"markers":[{"markerId":901,"worker":"vole-418","live":true}]},"after":{"winnerMarkerId":901,"markers":[{"markerId":901,"worker":"vole-418","live":true}]}}}""",
@@ -4462,46 +5235,68 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
     /// nothing"; the remaining reads are a green empty answer.  `claim` now refuses one step earlier on
     /// a missing source-bound route receipt (1): that is the required zero-write admission gate.
     let private sweptArms: (Options.Command * string list * int) list =
-        [ Options.Take, [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ], 5
-          Options.DriverCmd, [ "driver"; "--repo"; "FS.GG.SDD"; "--json" ], 1
-          Options.BatchCmd, [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ], 0
-          Options.Ready, [ "ready"; "--repo"; "FS.GG.SDD"; "--json" ], 0
-          Options.Reconcile, [ "reconcile"; "--repo"; "FS.GG.SDD"; "--json" ], 0
-          Options.LintCmd, [ "lint"; "--repo"; "FS.GG.SDD"; "--json" ], 0
-          Options.BoardCmd, [ "board"; "--json" ], 0
-          Options.Who, [ "who"; "--repo"; "FS.GG.SDD"; "--json" ], 0
-          Options.Inbox, [ "inbox"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ], 0
-          Options.Budget, [ "budget"; "--json" ], 0
-          Options.Predicate, [ "predicate"; "fsgg.kit"; "version"; "9.9.9"; "--json" ], 4
-          Options.Claim, [ "claim"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 1
-          Options.Adopt, [ "adopt"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 3
-          Options.Widen, [ "widen"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json"; "--paths"; "src/X.fs" ], 1
-          Options.SetPaths,
-          [ "set-paths"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json"; "--paths"; "src/X.fs" ],
-          1
-          // `review` refuses before any board/GitHub read: `--pr` is required (.github#2175 — there is
-          // no review protocol before a PR exists), so this lands on that refusal deterministically,
-          // the same way the four lock verbs above land on theirs.
-          Options.ReviewCmd, [ "review"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 1
-          // `.github#2477`: the fixture answers no GraphQL document naming `userContentEdits` (its
-          // `graphqlAnswer` only knows the board-scan shapes), so `Reads.contentEditProvenance` gets a
-          // `NotFound` back and the read refuses at `Errors.exitCode NotFound` — 1, the same code the
-          // four lock verbs above land on for the same reason: the fixture has no answer for this call.
-          Options.BodyEdits, [ "body-edits"; "FS.GG.SDD#999"; "--json" ], 1
-          // `.github#2753`: an incomplete comment mutation request is refused before transport. Its
-          // JSON projection keeps the diagnostic on stderr and stdout empty at exit 1.
-          Options.CommentCmd, [ "comment"; "--json" ], 1
-          // .github#2737. `packet validate` opens no transport seam at all, so it is driven here
-          // against a path that does not exist: the refusing arm must still put ONE document on
-          // stdout, with the per-field reading on stderr.
-          Options.PacketCmd, [ "packet"; "validate"; "no-such-packet.json"; "--json" ], 1 ]
-          // `.github#2312`. BOTH op-lock verbs are driven onto their fail-closed arm — a receiver with no
-          // operation-lock issue — because that arm is reached BEFORE any network call by design ("a
-          // receiver with no lock is a guaranteed refusal and must not cost a round trip"), so it is
-          // deterministic here whatever the fixture's transport would have answered. Exit 1: `NoLockRef`
-          // is a configuration fact somebody must change, not the contended `6` a busy receiver gets.
-          @ [ Options.OpLockAcquire,
-              [ "op-lock"
+        [
+            Options.Take, [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ], 5
+            Options.DriverCmd, [ "driver"; "--repo"; "FS.GG.SDD"; "--json" ], 1
+            Options.BatchCmd, [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ], 0
+            Options.Ready, [ "ready"; "--repo"; "FS.GG.SDD"; "--json" ], 0
+            Options.Reconcile, [ "reconcile"; "--repo"; "FS.GG.SDD"; "--json" ], 0
+            Options.LintCmd, [ "lint"; "--repo"; "FS.GG.SDD"; "--json" ], 0
+            Options.BoardCmd, [ "board"; "--json" ], 0
+            Options.Who, [ "who"; "--repo"; "FS.GG.SDD"; "--json" ], 0
+            Options.Inbox, [ "inbox"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ], 0
+            Options.Budget, [ "budget"; "--json" ], 0
+            Options.Predicate, [ "predicate"; "fsgg.kit"; "version"; "9.9.9"; "--json" ], 4
+            Options.Claim, [ "claim"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 1
+            Options.Adopt, [ "adopt"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 3
+            Options.Widen,
+            [
+                "widen"
+                "FS.GG.SDD#999"
+                "--worker"
+                "otter-9c21"
+                "--json"
+                "--paths"
+                "src/X.fs"
+            ],
+            1
+            Options.SetPaths,
+            [
+                "set-paths"
+                "FS.GG.SDD#999"
+                "--worker"
+                "otter-9c21"
+                "--json"
+                "--paths"
+                "src/X.fs"
+            ],
+            1
+            // `review` refuses before any board/GitHub read: `--pr` is required (.github#2175 — there is
+            // no review protocol before a PR exists), so this lands on that refusal deterministically,
+            // the same way the four lock verbs above land on theirs.
+            Options.ReviewCmd, [ "review"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 1
+            // `.github#2477`: the fixture answers no GraphQL document naming `userContentEdits` (its
+            // `graphqlAnswer` only knows the board-scan shapes), so `Reads.contentEditProvenance` gets a
+            // `NotFound` back and the read refuses at `Errors.exitCode NotFound` — 1, the same code the
+            // four lock verbs above land on for the same reason: the fixture has no answer for this call.
+            Options.BodyEdits, [ "body-edits"; "FS.GG.SDD#999"; "--json" ], 1
+            // `.github#2753`: an incomplete comment mutation request is refused before transport. Its
+            // JSON projection keeps the diagnostic on stderr and stdout empty at exit 1.
+            Options.CommentCmd, [ "comment"; "--json" ], 1
+            // .github#2737. `packet validate` opens no transport seam at all, so it is driven here
+            // against a path that does not exist: the refusing arm must still put ONE document on
+            // stdout, with the per-field reading on stderr.
+            Options.PacketCmd, [ "packet"; "validate"; "no-such-packet.json"; "--json" ], 1
+        ]
+        // `.github#2312`. BOTH op-lock verbs are driven onto their fail-closed arm — a receiver with no
+        // operation-lock issue — because that arm is reached BEFORE any network call by design ("a
+        // receiver with no lock is a guaranteed refusal and must not cost a round trip"), so it is
+        // deterministic here whatever the fixture's transport would have answered. Exit 1: `NoLockRef`
+        // is a configuration fact somebody must change, not the contended `6` a busy receiver gets.
+        @ [
+            Options.OpLockAcquire,
+            [
+                "op-lock"
                 "acquire"
                 "FS-GG/.github#2312"
                 "5319401108"
@@ -4509,40 +5304,52 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
                 "dispatch:coordination-kit"
                 "--worker"
                 "otter-9c21"
-                "--json" ],
-              1
-              Options.OpLockRelease,
-              [ "op-lock"; "release"; "FS-GG/FS.GG.NotARepo"; "--worker"; "otter-9c21"; "--json" ], 1 ]
+                "--json"
+            ],
+            1
+            Options.OpLockRelease,
+            [
+                "op-lock"
+                "release"
+                "FS-GG/FS.GG.NotARepo"
+                "--worker"
+                "otter-9c21"
+                "--json"
+            ],
+            1
+        ]
 
     /// The `Json`-admitting verbs this fixture cannot reach, each with the reason and what reading their
     /// arms found. The reason lives HERE rather than in a PR body because that is the whole argument of
     /// this block: the coverage leg quotes it, so moving a verb between the two lists costs a line in a
     /// diff instead of costing nothing.
     let private notDriven: (Options.Command * string) list =
-        [ Options.Decide,
-          "`Program.fs` `decide` is private to the entry point; audited by reading — under `Json` the SAME `printfn (Snapshot.render …)` runs for all three verdicts and Red/NoVerdict only pick the exit code, so there is no verdict that swaps the document for prose (the eprint-per-verdict projection is `renderText`, which is the Text arm). Its two refusal arms, empty stdin and an unparseable snapshot, are `eprint` at a non-zero code"
-          Options.DeliveryCmd,
-          "`Program.fs` dispatches the private `DeliveryApplication.run`; audited by reading and the delivery command tests. Its JSON arm serializes exactly one next/no-verdict document, and empty or malformed snapshots are stderr failures at a non-zero code. The command is pure snapshot interpretation; live GitHub acquisition remains an application-boundary follow-on."
-          Options.CycleCmd,
-          "`Program.fs` dispatches `CycleLedgerApplication.run`; audited by cycle-ledger command smoke coverage. Its Json projection serializes exactly one ready/next document, while malformed documents and every fail-closed provider or ledger mismatch use `fail` on stderr at a non-zero code."
-          Options.LanesView,
-          "`Program.fs` `lanes` is private to the entry point; audited by reading — `| Json -> printfn` emits one `Snapshot.renderLanes` document, and the empty partition renders as that document, not prose"
-          Options.Facts,
-          "`Program.fs` `facts` is private to the entry point; audited by reading — it reads nothing and cannot be empty, and `| Json -> printfn` emits one `Snapshot.renderFacts` document"
-          Options.Scan,
-          "`Program.fs` `scan` is private to the entry point; `JsonOnly`, and audited by reading — BOTH arms print the same snapshot document, and every failure is an `Error` on stderr at a non-zero code (never an empty snapshot, #344/#421/#461)"
-          Options.CommandContractCmd,
-          "`Program.fs` dispatches `renderCommandContract ()` inline; `JsonOnly`, it reads nothing, and `CommandSurfaceTests` already parses the emitted document"
-          Options.Issues,
-          "`Handlers.issues` is the family-owned handler; audited by reading — stdout is the raw REST body (`[]` on a repo with no issues), and BOTH its refusal arms are stderr at a non-zero code: the missing-repo refusal and the read failure, the latter through `fail` so a rate limit keeps EX_RATE"
-          Options.IntakeCmd,
-          "`Handlers.intakeCmd` is the family-owned handler and is audited by transaction tests. Its validate arm emits one typed zero-write receipt, while apply emits one receipt-bound issue/projection result; malformed drafts and unreadable receipts fail on stderr before a POST."
-          Options.RouteCmd,
-          "`Client.deliveryRouteCmd` is private; audited by reading pending its recording-transport fixture. Its show arm emits one typed current receipt only after reading both the body and append-only comment ledger; record validates the source-bound receipt before its sole comment POST, and malformed or unreadable evidence fails on stderr."
-          Options.GraphQlOps,
-          "`Client.graphQlOps` is the JSON-only operational facade over `OperationalGraphQl`; the typed boundary fault, pagination, duplicate, repeated-cursor and partial-mutation cases are driven in GraphQlBoundaryTests, while every migrated shell/Python consumer has an executable integration fixture."
-          Options.DiffAudit,
-          "`SemanticDiffApplication.run` is a local git-object command; planted base/head, unresolved, resolved, stale, malformed, threshold and declaration arms are covered by SemanticDiffTests plus the executable engine fixture" ]
+        [
+            Options.Decide,
+            "`Program.fs` `decide` is private to the entry point; audited by reading — under `Json` the SAME `printfn (Snapshot.render …)` runs for all three verdicts and Red/NoVerdict only pick the exit code, so there is no verdict that swaps the document for prose (the eprint-per-verdict projection is `renderText`, which is the Text arm). Its two refusal arms, empty stdin and an unparseable snapshot, are `eprint` at a non-zero code"
+            Options.DeliveryCmd,
+            "`Program.fs` dispatches the private `DeliveryApplication.run`; audited by reading and the delivery command tests. Its JSON arm serializes exactly one next/no-verdict document, and empty or malformed snapshots are stderr failures at a non-zero code. The command is pure snapshot interpretation; live GitHub acquisition remains an application-boundary follow-on."
+            Options.CycleCmd,
+            "`Program.fs` dispatches `CycleLedgerApplication.run`; audited by cycle-ledger command smoke coverage. Its Json projection serializes exactly one ready/next document, while malformed documents and every fail-closed provider or ledger mismatch use `fail` on stderr at a non-zero code."
+            Options.LanesView,
+            "`Program.fs` `lanes` is private to the entry point; audited by reading — `| Json -> printfn` emits one `Snapshot.renderLanes` document, and the empty partition renders as that document, not prose"
+            Options.Facts,
+            "`Program.fs` `facts` is private to the entry point; audited by reading — it reads nothing and cannot be empty, and `| Json -> printfn` emits one `Snapshot.renderFacts` document"
+            Options.Scan,
+            "`Program.fs` `scan` is private to the entry point; `JsonOnly`, and audited by reading — BOTH arms print the same snapshot document, and every failure is an `Error` on stderr at a non-zero code (never an empty snapshot, #344/#421/#461)"
+            Options.CommandContractCmd,
+            "`Program.fs` dispatches `renderCommandContract ()` inline; `JsonOnly`, it reads nothing, and `CommandSurfaceTests` already parses the emitted document"
+            Options.Issues,
+            "`Handlers.issues` is the family-owned handler; audited by reading — stdout is the raw REST body (`[]` on a repo with no issues), and BOTH its refusal arms are stderr at a non-zero code: the missing-repo refusal and the read failure, the latter through `fail` so a rate limit keeps EX_RATE"
+            Options.IntakeCmd,
+            "`Handlers.intakeCmd` is the family-owned handler and is audited by transaction tests. Its validate arm emits one typed zero-write receipt, while apply emits one receipt-bound issue/projection result; malformed drafts and unreadable receipts fail on stderr before a POST."
+            Options.RouteCmd,
+            "`Client.deliveryRouteCmd` is private; audited by reading pending its recording-transport fixture. Its show arm emits one typed current receipt only after reading both the body and append-only comment ledger; record validates the source-bound receipt before its sole comment POST, and malformed or unreadable evidence fails on stderr."
+            Options.GraphQlOps,
+            "`Client.graphQlOps` is the JSON-only operational facade over `OperationalGraphQl`; the typed boundary fault, pagination, duplicate, repeated-cursor and partial-mutation cases are driven in GraphQlBoundaryTests, while every migrated shell/Python consumer has an executable integration fixture."
+            Options.DiffAudit,
+            "`SemanticDiffApplication.run` is a local git-object command; planted base/head, unresolved, resolved, stale, malformed, threshold and declaration arms are covered by SemanticDiffTests plus the executable engine fixture"
+        ]
 
     /// Drive ONE verb's empty or refusing arm under `--json`, capturing stdout and stderr APART.
     ///
@@ -4551,13 +5358,20 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
     /// there. Identity is scrubbed for `runIn`'s reason (#1646) — these legs name their worker with
     /// `--worker`, and a harness-derived session id would have every lock verb refuse for the wrong reason.
     let private runJsonArm (transport: Fake.Recorder) (args: string list) : int * string * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-1688-" + Guid.NewGuid().ToString "n")
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-1688-" + Guid.NewGuid().ToString "n")
+
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
         let previousRegistry = Environment.GetEnvironmentVariable "FSGG_REGISTRY"
 
         let identityVars =
-            [ "FSGG_WORKER"; "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID" ]
+            [
+                "FSGG_WORKER"
+                "CLAUDE_CODE_SESSION_ID"
+                "OPENCODE_SESSION_ID"
+                "FSGG_AGENT_SESSION_ID"
+            ]
 
         let previousIdentity =
             identityVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
@@ -4638,11 +5452,15 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
             worldWith
                 (fun number -> if number = 42 then "Blocked" else "Done")
                 (Map.ofList
-                    [ 42, "Blocked by: FS-GG/FS.GG.SDD#2\nBlocked on: human/decision\nPaths: src/A.fs"
-                      2, "<!-- fixture:closed -->\nPaths: src/B.fs" ])
+                    [
+                        42, "Blocked by: FS-GG/FS.GG.SDD#2\nBlocked on: human/decision\nPaths: src/A.fs"
+                        2, "<!-- fixture:closed -->\nPaths: src/B.fs"
+                    ])
                 Map.empty
                 false
-        let code, output, _ = runJsonArm transport [ "lint"; "--repo"; "FS.GG.SDD"; "--json" ]
+
+        let code, output, _ =
+            runJsonArm transport [ "lint"; "--repo"; "FS.GG.SDD"; "--json" ]
         // The deliberately minimal fixture also trips unrelated board hygiene errors; the note is
         // nevertheless emitted in the same lint result.
         Assert.Equal(1, code)
@@ -4652,16 +5470,20 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
     [<Fact>]
     let ``#1892 json worker failures classify rate limits without using stdout`` () =
         let cases =
-            [ "primary", Errors.RateLimited(Errors.RestBudget(Some "core"), None)
-              "secondary", Errors.RateLimited(Errors.SecondaryLimit(Some "core", None), None)
-              "unknown", Errors.RateLimited(Errors.UnknownBudget, None) ]
+            [
+                "primary", Errors.RateLimited(Errors.RestBudget(Some "core"), None)
+                "secondary", Errors.RateLimited(Errors.SecondaryLimit(Some "core", None), None)
+                "unknown", Errors.RateLimited(Errors.UnknownBudget, None)
+            ]
 
         for expectedKind, error in cases do
             let transport = Fake.Recorder(fun _ -> Error error)
 
             for args in
-                [ [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ]
-                  [ "claim"; "--json"; "FS.GG.SDD#42"; "--worker"; "otter-9c21" ] ] do
+                [
+                    [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ]
+                    [ "claim"; "--json"; "FS.GG.SDD#42"; "--worker"; "otter-9c21" ]
+                ] do
                 let code, stdout, stderr = runJsonArm transport args
                 Assert.Equal(Errors.ExRate, code)
                 Assert.Equal("", stdout)
@@ -4693,28 +5515,30 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
                             Some e.Message
 
                 [
-                  // THE ROW MUST DRIVE THE VERB IT CLAIMS TO COVER. `runJsonArm` dispatches on the argv's
-                  // OWN parse, so without this the `Command` in the row is read by the coverage leg alone
-                  // — and a mis-paired row (`Options.Claim` beside an `adopt` argv) would mark a verb
-                  // covered that nothing ever ran, with both legs green. That is exactly the hole this
-                  // block claims to close.
-                  if parsedCommand <> declared then
-                      yield
-                          $"%s{verb}: the row declares %A{declared} but its argv parses to %A{parsedCommand} — it marks a verb covered that it never drives"
+                    // THE ROW MUST DRIVE THE VERB IT CLAIMS TO COVER. `runJsonArm` dispatches on the argv's
+                    // OWN parse, so without this the `Command` in the row is read by the coverage leg alone
+                    // — and a mis-paired row (`Options.Claim` beside an `adopt` argv) would mark a verb
+                    // covered that nothing ever ran, with both legs green. That is exactly the hole this
+                    // block claims to close.
+                    if parsedCommand <> declared then
+                        yield
+                            $"%s{verb}: the row declares %A{declared} but its argv parses to %A{parsedCommand} — it marks a verb covered that it never drives"
 
-                  // AND IT MUST REACH THE ARM IT WAS WRITTEN FOR. Four of these rows print NOTHING on
-                  // stdout, and "not prose" is satisfied perfectly by a verb that failed earlier than
-                  // intended — so the code is what stops a fixture change quietly moving a row onto some
-                  // other arm while the assertion below keeps passing.
-                  if code <> expectedCode then
-                      yield
-                          $"%s{verb}: exit %d{code}, expected %d{expectedCode} — this row no longer reaches the arm it pins, so its stdout says nothing about that arm"
+                    // AND IT MUST REACH THE ARM IT WAS WRITTEN FOR. Four of these rows print NOTHING on
+                    // stdout, and "not prose" is satisfied perfectly by a verb that failed earlier than
+                    // intended — so the code is what stops a fixture change quietly moving a row onto some
+                    // other arm while the assertion below keeps passing.
+                    if code <> expectedCode then
+                        yield
+                            $"%s{verb}: exit %d{code}, expected %d{expectedCode} — this row no longer reaches the arm it pins, so its stdout says nothing about that arm"
 
-                  // THE INVARIANT ITSELF: one parseable document, or nothing at all.
-                  match notOneDocument with
-                  | Some message ->
-                      yield $"%s{verb}: stdout under --json is not one JSON document (%s{message}); stdout was:\n%s{out}"
-                  | None -> () ])
+                    // THE INVARIANT ITSELF: one parseable document, or nothing at all.
+                    match notOneDocument with
+                    | Some message ->
+                        yield
+                            $"%s{verb}: stdout under --json is not one JSON document (%s{message}); stdout was:\n%s{out}"
+                    | None -> ()
+                ])
 
         Assert.True(
             List.isEmpty failures,
@@ -4823,7 +5647,10 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
     let ``#2264 round 2: rate limits and other IO error shapes are not board-unreachable`` () =
         Assert.False(Client.boardUnreachable (Errors.RateLimited(Errors.GraphQlBudget, None)))
         Assert.False(Client.boardUnreachable (Errors.Transport "connection reset"))
-        Assert.False(Client.boardUnreachable (Errors.Unauthorized "no Projects v2 board titled 'Coordination' in FS-GG"))
+
+        Assert.False(
+            Client.boardUnreachable (Errors.Unauthorized "no Projects v2 board titled 'Coordination' in FS-GG")
+        )
 
     // ---- .github#2525 acceptance #2 — "nothing schedulable" must mean MEASURED nothing --------------
     //
@@ -4837,7 +5664,9 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
     // change that moved both streams at once would have gone green everywhere.
 
     [<Fact>]
-    let ``.github#2525: batch --text states how many candidates it MEASURED, on stderr, leaving stdout byte-identical`` () =
+    let ``.github#2525: batch --text states how many candidates it MEASURED, on stderr, leaving stdout byte-identical``
+        ()
+        =
         let code, out, err =
             runQueue (busyQueue ()) [ "batch"; "--text"; "--repo"; "FS.GG.SDD"; "-n"; "1" ]
 
@@ -4850,7 +5679,9 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         Assert.Contains("measured count, not an assumption", err)
 
     [<Fact>]
-    let ``.github#2525: a board with NO items reports zero considered — distinguishable from one that considered and refused`` () =
+    let ``.github#2525: a board with NO items reports zero considered — distinguishable from one that considered and refused``
+        ()
+        =
         // The distinction the acceptance is about. "I considered 1 and refused it" and "I considered
         // nothing" produced identical output before this; they are different facts, and only the second
         // is consistent with a scan that came back short.
@@ -4917,12 +5748,14 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
 
     let private StatusOptionNames =
         Map.ofList
-            [ "opt_backlog", "Backlog"
-              "opt_ready", "Ready"
-              "opt_blocked", "Blocked"
-              "opt_wip", "In progress"
-              "opt_rev", "In review"
-              "opt_done", "Done" ]
+            [
+                "opt_backlog", "Backlog"
+                "opt_ready", "Ready"
+                "opt_blocked", "Blocked"
+                "opt_wip", "In progress"
+                "opt_rev", "In review"
+                "opt_done", "Done"
+            ]
 
     let private intentChannelWorld (board: IntentBoard) (issueBody: string) =
         let encodedBody = JsonSerializer.Serialize issueBody
@@ -4940,72 +5773,92 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
             |> String.concat ","
             |> fun rows -> $"[%s{rows}]"
 
-        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-            match req.Method, req.Path.Trim '/' with
-            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, variables) ->
-                    // THE DISPATCH ORDER IS `humanParkReconcileWorld`'S, DELIBERATELY. The board scan's own
-                    // `items(first: 100` document also selects `fieldValueByName`, so keying the per-item
-                    // read on that substring swallows the whole-board read and the pass fails as a
-                    // malformed response rather than as the thing under test.
-                    if document.Contains "projectItems" then
-                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "node(id: $itemId)" then
-                        let field =
-                            variables
-                            |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+        Fake.Recorder(
+            StructuredFixtures.withIntake
+            <| fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, variables) ->
+                        // THE DISPATCH ORDER IS `humanParkReconcileWorld`'S, DELIBERATELY. The board scan's own
+                        // `items(first: 100` document also selects `fieldValueByName`, so keying the per-item
+                        // read on that substring swallows the whole-board read and the pass fails as a
+                        // malformed response rather than as the thing under test.
+                        if document.Contains "projectItems" then
+                            ok
+                                """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "node(id: $itemId)" then
+                            let field =
+                                variables
+                                |> List.tryPick (fun (k, v) ->
+                                    match k, v with
+                                    | "field", VString name -> Some name
+                                    | _ -> None)
 
-                        let value =
-                            match field with
-                            | Some "Status" -> $"""{{"name":"%s{board.Column}"}}"""
-                            | Some "Class" -> """{"name":"hardening"}"""
-                            | _ -> "null"
+                            let value =
+                                match field with
+                                | Some "Status" -> $"""{{"name":"%s{board.Column}"}}"""
+                                | Some "Class" -> """{"name":"hardening"}"""
+                                | _ -> "null"
 
-                        ok $"""{{"data":{{"node":{{"fieldValueByName":%s{value}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                    elif document.Contains "updateProjectV2ItemFieldValue" then
-                        // THE MUTATION MOVES THE FIXTURE'S OWN COLUMN. A board that did not change would
-                        // answer every later read with the pre-write value, and the revert these legs are
-                        // about would be unobservable — the fixture would agree with the defect.
-                        let fieldId =
-                            variables |> List.tryPick (fun (k, v) -> match k, v with | "fieldId", VId id -> Some id | _ -> None)
+                            ok
+                                $"""{{"data":{{"node":{{"fieldValueByName":%s{value}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        elif document.Contains "updateProjectV2ItemFieldValue" then
+                            // THE MUTATION MOVES THE FIXTURE'S OWN COLUMN. A board that did not change would
+                            // answer every later read with the pre-write value, and the revert these legs are
+                            // about would be unobservable — the fixture would agree with the defect.
+                            let fieldId =
+                                variables
+                                |> List.tryPick (fun (k, v) ->
+                                    match k, v with
+                                    | "fieldId", VId id -> Some id
+                                    | _ -> None)
 
-                        let optionId =
-                            variables |> List.tryPick (fun (k, v) -> match k, v with | "optionId", VString id -> Some id | _ -> None)
+                            let optionId =
+                                variables
+                                |> List.tryPick (fun (k, v) ->
+                                    match k, v with
+                                    | "optionId", VString id -> Some id
+                                    | _ -> None)
 
-                        match fieldId, optionId |> Option.bind (fun id -> Map.tryFind id StatusOptionNames) with
-                        | Some "PVTSSF_status", Some name -> board.SetColumn name
-                        | _ -> ()
+                            match fieldId, optionId |> Option.bind (fun id -> Map.tryFind id StatusOptionNames) with
+                            | Some "PVTSSF_status", Some name -> board.SetColumn name
+                            | _ -> ()
 
-                        ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "projectsV2" then
-                        ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "fields(first" then
-                        ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_backlog","name":"Backlog"},{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_wip","name":"In progress"},{"id":"opt_rev","name":"In review"},{"id":"opt_done","name":"Done"}]},{"id":"PVTSSF_class","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"opt_defect","name":"defect"},{"id":"opt_hard","name":"hardening"},{"id":"opt_dec","name":"decision"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "items(first" then
-                        ok $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{item ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                    else
-                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
-                ok (JsonSerializer.Serialize {| number = 47; body = issueBody |})
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (commentsJson ())
-            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" ->
-                match req.Body with
-                | Json payload ->
-                    use doc = JsonDocument.Parse payload
+                            ok
+                                """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "projectsV2" then
+                            ok
+                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "fields(first" then
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_backlog","name":"Backlog"},{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_wip","name":"In progress"},{"id":"opt_rev","name":"In review"},{"id":"opt_done","name":"Done"}]},{"id":"PVTSSF_class","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"opt_defect","name":"defect"},{"id":"opt_hard","name":"hardening"},{"id":"opt_dec","name":"decision"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "items(first" then
+                            ok
+                                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{item ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        else
+                            Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
+                    ok (JsonSerializer.Serialize {| number = 47; body = issueBody |})
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok (commentsJson ())
+                | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" ->
+                    match req.Body with
+                    | Json payload ->
+                        use doc = JsonDocument.Parse payload
 
-                    match doc.RootElement.TryGetProperty "body" with
-                    | true, value -> board.Post(value.GetString())
-                    | _ -> failwith "the engine posted a comment with no body"
+                        match doc.RootElement.TryGetProperty "body" with
+                        | true, value -> board.Post(value.GetString())
+                        | _ -> failwith "the engine posted a comment with no body"
 
-                    ok """{"id":9047}"""
-                | _ -> Error(Errors.NotFound "a comment POST with no JSON payload")
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
-            | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
-            | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
-            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+                        ok """{"id":9047}"""
+                    | _ -> Error(Errors.NotFound "a comment POST with no JSON payload")
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+        )
 
     /// The declaration that makes `lifecyclePolicyIntent` answer `Auto` — declared paths, no human hold.
     /// It is what makes both legs below adversarial: policy, left to itself, promotes this row to `Ready`.
@@ -5033,7 +5886,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         // AND NOW THE PASS THAT USED TO REVERT IT. `Paths: src/A.fs` is a schedulable declaration and the
         // row carries no human hold, so `lifecyclePolicyIntent` answers `Auto` — which projects `Ready`.
         // Only the receipt above stands between the operator's park and that promotion.
-        let reconcileCode, _, reconcileErr = runReconcile world (reconcileArgs [ "--apply" ])
+        let reconcileCode, _, reconcileErr =
+            runReconcile world (reconcileArgs [ "--apply" ])
 
         if reconcileCode <> 0 then
             failwithf "the reconcile pass failed: %s" reconcileErr
@@ -5067,7 +5921,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         // reader can still see what the row used to believe.
         Assert.Contains(FrozenDecisionWatermark, board.Watermarks)
 
-        let reconcileCode, _, reconcileErr = runReconcile world (reconcileArgs [ "--apply" ])
+        let reconcileCode, _, reconcileErr =
+            runReconcile world (reconcileArgs [ "--apply" ])
 
         if reconcileCode <> 0 then
             failwithf "the reconcile pass failed: %s" reconcileErr
@@ -5112,8 +5967,12 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
     /// of it. The fixture records the bodies it is asked to post.
     let private kindReconcileWorld (declareKind: bool) (postedComments: ResizeArray<string>) =
         let mutable status = "Blocked"
+
         let body =
-            if declareKind then "Paths: none\nKind: register\n" else "Paths: none\n"
+            if declareKind then
+                "Paths: none\nKind: register\n"
+            else
+                "Paths: none\n"
 
         // A FROZEN BACKLOG PARK, at an `observedAt` in the past. On a `work` row this is exactly the
         // .github#2690 shape: `lifecycleSelection` replays the receipt's intent rather than re-deriving
@@ -5128,53 +5987,74 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
             "<!-- fsgg:lifecycle-watermark v=2 observedAt=1 status=Backlog intent=backlog revision=1 until=none reason=operator%20park -->"
 
         let items () =
-            [ boardItemInWithBody status 47 "a standing register" None "OPEN" body ] |> String.concat ","
+            [ boardItemInWithBody status 47 "a standing register" None "OPEN" body ]
+            |> String.concat ","
 
-        Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-            match req.Method, req.Path.Trim '/' with
-            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, variables) ->
-                    if document.Contains "projectItems" then
-                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "node(id: $itemId)" then
-                        let field = variables |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
-                        let value =
-                            match field with
-                            | Some "Status" -> $"""{{"name":"%s{status}"}}"""
-                            | _ -> "null"
-                        ok ("{\"data\":{\"node\":{\"fieldValueByName\":" + value + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
-                    elif document.Contains "updateProjectV2ItemFieldValue" then
-                        // The repair landed: the fresh verification read below observes the park.
-                        status <- "Backlog"
-                        ok """{"data":{"f0":{"clientMutationId":null}}}"""
-                    elif document.Contains "projectsV2" then
-                        ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "fields(first" then
-                        // NO `Kind` FIELD, which is the state of every board in this org today — so the
-                        // `KIND-PROJECTION-LAG` this row would otherwise derive is withheld behind one
-                        // diagnostic, and the only thing left to observe is the lifecycle behaviour.
-                        ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_backlog","name":"Backlog"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "items(first" then
-                        ok $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                    else
-                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
-                ok (System.Text.Json.JsonSerializer.Serialize {| number = 47; body = body |})
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" ->
-                ok (System.Text.Json.JsonSerializer.Serialize [| {| id = 1; body = watermark |} |])
-            | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" ->
-                postedComments.Add(
+        Fake.Recorder(
+            StructuredFixtures.withIntake
+            <| fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "POST", "graphql" ->
                     match req.Body with
-                    | Json payload -> payload
-                    | _ -> "<non-json comment>")
-                ok """{"id":9047}"""
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
-            | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
-            | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
-            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+                    | Query(document, variables) ->
+                        if document.Contains "projectItems" then
+                            ok
+                                """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "node(id: $itemId)" then
+                            let field =
+                                variables
+                                |> List.tryPick (fun (k, v) ->
+                                    match k, v with
+                                    | "field", VString name -> Some name
+                                    | _ -> None)
+
+                            let value =
+                                match field with
+                                | Some "Status" -> $"""{{"name":"%s{status}"}}"""
+                                | _ -> "null"
+
+                            ok (
+                                "{\"data\":{\"node\":{\"fieldValueByName\":"
+                                + value
+                                + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+                            )
+                        elif document.Contains "updateProjectV2ItemFieldValue" then
+                            // The repair landed: the fresh verification read below observes the park.
+                            status <- "Backlog"
+                            ok """{"data":{"f0":{"clientMutationId":null}}}"""
+                        elif document.Contains "projectsV2" then
+                            ok
+                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "fields(first" then
+                            // NO `Kind` FIELD, which is the state of every board in this org today — so the
+                            // `KIND-PROJECTION-LAG` this row would otherwise derive is withheld behind one
+                            // diagnostic, and the only thing left to observe is the lifecycle behaviour.
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_backlog","name":"Backlog"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "items(first" then
+                            ok
+                                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        else
+                            Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
+                    ok (System.Text.Json.JsonSerializer.Serialize {| number = 47; body = body |})
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" ->
+                    ok (System.Text.Json.JsonSerializer.Serialize [| {| id = 1; body = watermark |} |])
+                | "POST", "repos/FS-GG/FS.GG.SDD/issues/47/comments" ->
+                    postedComments.Add(
+                        match req.Body with
+                        | Json payload -> payload
+                        | _ -> "<non-json comment>"
+                    )
+
+                    ok """{"id":9047}"""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
+                | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+        )
 
     [<Fact>]
     let ``2712 reconcile --apply writes NO Status and NO watermark for a standing row`` () =
@@ -5182,7 +6062,8 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         let world = kindReconcileWorld true posted
         let code, out, err = runReconcile world (reconcileArgs [ "--apply"; "--json" ])
 
-        if code <> 0 then failwithf ".github#2712 reconcile failed (exit %d): %s\n%s" code err out
+        if code <> 0 then
+            failwithf ".github#2712 reconcile failed (exit %d): %s\n%s" code err out
 
         // NO STATUS ON THE WIRE. Read from the transport log — the option ids GitHub would have received
         // — rather than from the receipt, which is the engine describing itself.
@@ -5210,11 +6091,16 @@ not be fetched — read %d{commentReads.Count}: %s{threads}%s{err}"
         let world = kindReconcileWorld false posted
         let code, out, err = runReconcile world (reconcileArgs [ "--apply"; "--json" ])
 
-        if code <> 0 then failwithf ".github#2712 control fixture failed (exit %d): %s\n%s" code err out
+        if code <> 0 then
+            failwithf ".github#2712 control fixture failed (exit %d): %s\n%s" code err out
 
         Assert.True(
-            world.Logged "opt_ready" || world.Logged "opt_backlog" || world.Logged "opt_blocked" || world.Logged "opt_done",
-            $"the control row projected no Status at all, so the exempt assertion observes nothing: %A{world.Log}")
+            world.Logged "opt_ready"
+            || world.Logged "opt_backlog"
+            || world.Logged "opt_blocked"
+            || world.Logged "opt_done",
+            $"the control row projected no Status at all, so the exempt assertion observes nothing: %A{world.Log}"
+        )
 
         // AND THE RECEIPT NAMES THE CHORE the exempt world must not produce, so the two fixtures are
         // shown to differ in the reducer's own decision and not only in what reached the wire.

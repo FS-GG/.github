@@ -52,7 +52,12 @@ module RegistryPredicateTests =
     [<Fact>]
     let ``parseAssertion reads the id/field/value triple off the form headings`` () =
         Assert.Equal(
-            Some { Id = "fs-gg-playtest"; Field = "mirrored"; Value = "true" },
+            Some
+                {
+                    Id = "fs-gg-playtest"
+                    Field = "mirrored"
+                    Value = "true"
+                },
             parseAssertion (formBody "fs-gg-playtest" "mirrored" "true")
         )
 
@@ -72,7 +77,13 @@ module RegistryPredicateTests =
     // ---- classify --------------------------------------------------------------------------------
 
     let private rows = parseRows sampleRows
-    let private assert' id field value : Assertion = { Id = id; Field = field; Value = value }
+
+    let private assert' id field value : Assertion =
+        {
+            Id = id
+            Field = field
+            Value = value
+        }
 
     [<Fact>]
     let ``owner declares the asserted value -> Agrees`` () =
@@ -118,7 +129,13 @@ module RegistryPredicateTests =
     let ``an unsupported field is Unknown even when the owner Declares a value`` () =
         // Only `mirrored` is compared today; `materializes-when` abstains rather than fork the normalizer.
         Assert.False(supportsField "materializes-when")
-        match classify rows (Declares "profile in [game]") (assert' "fs-gg-playtest" "materializes-when" "profile in [game]") with
+
+        match
+            classify
+                rows
+                (Declares "profile in [game]")
+                (assert' "fs-gg-playtest" "materializes-when" "profile in [game]")
+        with
         | Unknown _ -> ()
         | other -> failwithf "expected Unknown, got %A" other
 

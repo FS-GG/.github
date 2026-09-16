@@ -29,14 +29,16 @@ module Landable =
     /// instead derives a run's advisory-ness from `CheckSuiteId` — the check-runs it produced — the same
     /// data this field already carries for supersession.
     type RunRow =
-        { Path: string
-          Event: string
-          HeadBranch: string
-          PrNumbers: int list
-          RunNumber: int
-          Status: string
-          Conclusion: string option
-          CheckSuiteId: int64 option }
+        {
+            Path: string
+            Event: string
+            HeadBranch: string
+            PrNumbers: int list
+            RunNumber: int
+            Status: string
+            Conclusion: string option
+            CheckSuiteId: int64 option
+        }
 
     /// One check run on a head SHA (`commits/{sha}/check-runs`.`check_runs[]`).
     ///
@@ -50,10 +52,12 @@ module Landable =
     /// "latest check run per name" is what branch protection does, and here it would let one workflow's
     /// green `fixture` hide another's red one.
     type CheckRow =
-        { Name: string
-          CheckSuiteId: int64 option
-          Status: string
-          Conclusion: string option }
+        {
+            Name: string
+            CheckSuiteId: int64 option
+            Status: string
+            Conclusion: string option
+        }
 
     /// A completed, non-successful subject kept in the blocking rollup. The IO boundary adds the evaluated
     /// head SHA before presenting it; this pure type carries only the subject identity GitHub returned.
@@ -156,11 +160,7 @@ module Landable =
     /// together — including in the direction #2342 §9.1 asked for: `claim-generation` is in `.github`'s
     /// required contexts today, so it is `Blocking` again, with no source edit.
     val scoreRequired:
-        required: string list ->
-        mergeable: bool option ->
-        runs: RunRow list ->
-        checks: CheckRow list ->
-            PrState * int
+        required: string list -> mergeable: bool option -> runs: RunRow list -> checks: CheckRow list -> PrState * int
 
     /// `scoreRequired`, given HOW the advisory carve-out was populated (`.github#2517`).
     ///
@@ -184,16 +184,12 @@ module Landable =
         mergeable: bool option ->
         runs: RunRow list ->
         checks: CheckRow list ->
-        PrState * int
+            PrState * int
 
     /// Exact bad run/check identities selected by the same supersession and advisory classification as
     /// `scoreDerived`. Empty for a zero-subject registration race and for non-blocking advisory failures.
     val failuresDerived:
-        advisory: AdvisorySet ->
-        required: string list ->
-        runs: RunRow list ->
-        checks: CheckRow list ->
-        Failure list
+        advisory: AdvisorySet -> required: string list -> runs: RunRow list -> checks: CheckRow list -> Failure list
 
     /// Which `required` checks are absent from the LIVE check-runs (superseded suites dropped). Diagnostics
     /// only — `scoreRequired` owns the verdict — so the CLI can name the check that never reported instead

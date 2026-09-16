@@ -172,9 +172,7 @@ module SnapshotTests =
         // A shadow that has to be debugged one field per round-trip, across six repos, does not get
         // debugged — it gets switched off.
         let e =
-            snapshot """{ "owner":"o","repo":"r","number":1 }"""
-            |> Snapshot.parse
-            |> errors
+            snapshot """{ "owner":"o","repo":"r","number":1 }""" |> Snapshot.parse |> errors
 
         Assert.Contains("items[0].status", paths e)
         Assert.Contains("items[0].state", paths e)
@@ -258,9 +256,11 @@ module SnapshotTests =
         let c = List.head r.Candidates
 
         let expected: RegistryPredicate.Assertion =
-            { Id = "fs-gg-playtest"
-              Field = "mirrored"
-              Value = "true" }
+            {
+                Id = "fs-gg-playtest"
+                Field = "mirrored"
+                Value = "true"
+            }
 
         Assert.Equal(Some expected, c.DeclaredPredicate)
 
@@ -319,7 +319,12 @@ module SnapshotTests =
         let reviewPolicy = document.RootElement.GetProperty("reviewPolicy")
 
         Assert.Equal(StructuredDecision.ReviewSchema, reviewPolicy.GetProperty("schema").GetString())
-        let kinds = reviewPolicy.GetProperty("kinds").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+
+        let kinds =
+            reviewPolicy.GetProperty("kinds").EnumerateArray()
+            |> Seq.map _.GetString()
+            |> Seq.toList
+
         Assert.Equal<string list>(Protocol.reviewPolicy.Kinds, kinds)
         Assert.False(reviewPolicy.TryGetProperty("initialMarker") |> fst)
         Assert.False(reviewPolicy.TryGetProperty("markerFieldGrammar") |> fst)

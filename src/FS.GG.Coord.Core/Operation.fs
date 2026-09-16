@@ -82,7 +82,8 @@ module Operation =
     // there cannot forge a different four-field pre-image today but would the moment a fifth field is
     // appended. Stating the guarantee over the DOMAIN rather than over the current field order is what
     // keeps that future change from being a silent one.
-    let private separatorFree (value: string) = value |> Seq.exists Char.IsControl |> not
+    let private separatorFree (value: string) =
+        value |> Seq.exists Char.IsControl |> not
 
     // Well-formed UTF-16: every high surrogate is followed by a low surrogate, and no low surrogate
     // stands alone. This is EXACTLY the precondition under which `Encoding.UTF8.GetBytes` is
@@ -101,14 +102,20 @@ module Operation =
     // join.
     let private wellFormedUtf16 (value: string) =
         let rec check index =
-            if index >= value.Length then true
+            if index >= value.Length then
+                true
             else
                 let current = value[index]
 
                 if Char.IsHighSurrogate current then
-                    if index + 1 < value.Length && Char.IsLowSurrogate value[index + 1] then check (index + 2) else false
-                elif Char.IsLowSurrogate current then false
-                else check (index + 1)
+                    if index + 1 < value.Length && Char.IsLowSurrogate value[index + 1] then
+                        check (index + 2)
+                    else
+                        false
+                elif Char.IsLowSurrogate current then
+                    false
+                else
+                    check (index + 1)
 
         check 0
 
@@ -118,9 +125,7 @@ module Operation =
     // idempotence key exists to prevent. It also excludes `0` itself, which is neither a comment id nor
     // an issue number.
     let private serverAssignedId (value: string) =
-        value.Length > 0
-        && value[0] <> '0'
-        && value |> Seq.forall Char.IsAsciiDigit
+        value.Length > 0 && value[0] <> '0' && value |> Seq.forall Char.IsAsciiDigit
 
     // `owner/repo`: exactly one `/`, both halves non-empty, no whitespace, and no `#` — the `#` clause
     // is what stops `owner/repo#12` being accepted as a receiver.
@@ -144,10 +149,14 @@ module Operation =
     // nothing to inspect for control characters, so reporting both would be one real problem stated
     // twice.
     let private wellFormed part (value: string) =
-        if isBlank value then [ Blank part ]
-        elif not (separatorFree value) then [ ControlCharacter part ]
-        elif not (wellFormedUtf16 value) then [ UnpairedSurrogate part ]
-        else []
+        if isBlank value then
+            [ Blank part ]
+        elif not (separatorFree value) then
+            [ ControlCharacter part ]
+        elif not (wellFormedUtf16 value) then
+            [ UnpairedSurrogate part ]
+        else
+            []
 
     let wire op =
         match op with
@@ -166,17 +175,29 @@ module Operation =
     let preimage item generation receiver op =
         let itemRefusals =
             match wellFormed Item item with
-            | [] -> if qualifiedItem item then [] else [ ItemNotFullyQualified item ]
+            | [] ->
+                if qualifiedItem item then
+                    []
+                else
+                    [ ItemNotFullyQualified item ]
             | refusals -> refusals
 
         let generationRefusals =
             match wellFormed Generation generation with
-            | [] -> if serverAssignedId generation then [] else [ GenerationNotServerAssigned generation ]
+            | [] ->
+                if serverAssignedId generation then
+                    []
+                else
+                    [ GenerationNotServerAssigned generation ]
             | refusals -> refusals
 
         let receiverRefusals =
             match wellFormed Receiver receiver with
-            | [] -> if qualifiedRepo receiver then [] else [ ReceiverNotFullyQualified receiver ]
+            | [] ->
+                if qualifiedRepo receiver then
+                    []
+                else
+                    [ ReceiverNotFullyQualified receiver ]
             | refusals -> refusals
 
         match itemRefusals @ generationRefusals @ receiverRefusals @ operationRefusals op with

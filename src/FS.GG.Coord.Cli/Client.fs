@@ -108,9 +108,21 @@ module Client =
 
     let private offlineDeliveryRoute =
         DeliveryRoute.Current
-            { Schema = DeliveryRoute.Schema; Subject = "offline"; SubjectRevision = "offline"; Route = Some DeliveryRoute.Lightweight
-              Agent = "offline"; Timestamp = "1970-01-01T00:00:00Z"; ReasonCodes = [ "offline" ]; Rationale = "offline diagnostic"
-              DeclaredImpacts = [ "offline" ]; ObservedFacts = [ "offline" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
+            {
+                Schema = DeliveryRoute.Schema
+                Subject = "offline"
+                SubjectRevision = "offline"
+                Route = Some DeliveryRoute.Lightweight
+                Agent = "offline"
+                Timestamp = "1970-01-01T00:00:00Z"
+                ReasonCodes = [ "offline" ]
+                Rationale = "offline diagnostic"
+                DeclaredImpacts = [ "offline" ]
+                ObservedFacts = [ "offline" ]
+                SddWorkId = None
+                SpecHome = None
+                RequiredGates = []
+            }
 
     /// .github#2300 AC1/AC2/AC4: is this candidate's schedulability verdict ALREADY DECIDED by steps
     /// that run strictly before the route check, so the real delivery-route receipt could not change it?
@@ -130,7 +142,15 @@ module Client =
     let private routeCannotChangeVerdict (allowBacklog: bool) (item: Item) : bool =
         // .github#2305 — `inFlight = []` here (see the doc above: this preview never reaches step 6), so
         // no disjointness hit can ever occur and `generated` cannot change the answer either way. `Set.empty`.
-        match Schedulability.schedulable Set.empty allowBacklog [] { item with DeliveryRoute = offlineDeliveryRoute } with
+        match
+            Schedulability.schedulable
+                Set.empty
+                allowBacklog
+                []
+                { item with
+                    DeliveryRoute = offlineDeliveryRoute
+                }
+        with
         | Schedulability.IssueClosed
         | Schedulability.WrongStatus _
         | Schedulability.BlockedBy _
@@ -159,8 +179,16 @@ module Client =
                     if routeCannotChangeVerdict request.AllowBacklog candidate.Item then
                         candidate
                     else
-                        let route = FS.GG.Coord.Cli.Lifecycle.LiveHandlers.readDeliveryRouteVerdict ctx candidate.Item.Ref
-                        { candidate with Item = { candidate.Item with DeliveryRoute = route } }) }
+                        let route =
+                            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.readDeliveryRouteVerdict ctx candidate.Item.Ref
+
+                        { candidate with
+                            Item =
+                                { candidate.Item with
+                                    DeliveryRoute = route
+                                }
+                        })
+        }
 
     /// Scan the board and decide. The shared body of `next`/`batch`/`take` — one board read, one decision,
     /// so the three can never disagree about which items exist (#485).
@@ -215,8 +243,7 @@ module Client =
     /// item we could not join is an item whose column we do not claim to know, and `BoardClass = None`
     /// costs at most one idempotent re-write rather than suppressing a projection that is genuinely owed.
     let private enrichBoardFacts (rows: Scan.Row list) (request: Snapshot.Request) : Snapshot.Request =
-        let byRef =
-            rows |> List.map (fun r -> r.Ref, r) |> Map.ofList
+        let byRef = rows |> List.map (fun r -> r.Ref, r) |> Map.ofList
 
         // ONE `now` FOR THE WHOLE BATCH. Reading the clock per item would let two candidates a millisecond
         // apart be aged against two different instants, which is a comparison whose inputs move while it
@@ -269,7 +296,8 @@ module Client =
                             // rostered) compared unequal downstream and split a lane on the strength of
                             // the sentinel alone, without either touch-set ever being read
                             // (`.github#2386`).
-                            PathRepo = FS.GG.Coord.RepoScope.orFallback c.Item.Ref.Repo (Options.resolveRepo row.PathRepo)
+                            PathRepo =
+                                FS.GG.Coord.RepoScope.orFallback c.Item.Ref.Repo (Options.resolveRepo row.PathRepo)
                             Class =
                                 match c.Item.Class with
                                 | Some _ as declared -> declared
@@ -291,10 +319,13 @@ module Client =
                             CommentCount = row.CommentCount
                             Severity = row.Severity
                             Phase = row.Phase
-                            AgeDays = ageDaysOf row } }
+                            AgeDays = ageDaysOf row
+                        }
+                }
 
         { request with
-            Candidates = request.Candidates |> List.map enrich }
+            Candidates = request.Candidates |> List.map enrich
+        }
 
 
     /// THE WHOLE BOARD'S BLOCKING COUNTS, from the scan rows the offer path already holds (.github#1628).
@@ -357,22 +388,25 @@ module Client =
     // process implementation (`generatedPaths`), before this module can serve a command — this forward
     // declaration is what lets every earlier consumer in file order (this one is now the EARLIEST) reuse
     // that one fail-closed collector instead of acquiring a second, weaker list of generated paths.
-    let mutable private generatedPathCollector: string -> Set<string> = fun _ -> Set.empty
+    let mutable private generatedPathCollector: string -> Set<string> =
+        fun _ -> Set.empty
 
     // One bounded process view over BoardIntake's private checked-through cache. Policy is
     // repository-global and author permission is shared across that author's issues. Every item still
     // gets a current identity/revision read. Failed, corrupt and expired observations never authorize.
-    let mutable private boardIntakeGate: (IGitHubTransport * BoardIntake.Gate) option = None
+    let mutable private boardIntakeGate: (IGitHubTransport * BoardIntake.Gate) option =
+        None
+
     let private intakeGate transport =
         match boardIntakeGate with
-        | Some(existing,gate) when obj.ReferenceEquals(existing,transport) -> gate
+        | Some(existing, gate) when obj.ReferenceEquals(existing, transport) -> gate
         | _ ->
             let gate = BoardIntake.Gate transport
-            boardIntakeGate <- Some(transport,gate)
+            boardIntakeGate <- Some(transport, gate)
             gate
 
     let private authorizeBoardIntake (ctx: Context) (itemRef: Ref) =
-        (intakeGate ctx.Transport).Authorize(itemRef.Owner,itemRef.Repo,itemRef.Number)
+        (intakeGate ctx.Transport).Authorize(itemRef.Owner, itemRef.Repo, itemRef.Number)
         |> Result.map ignore
 
     let private authorizeChosenIntake (ctx: Context) (items: Item list) =
@@ -382,8 +416,8 @@ module Client =
     // Bound beside the authoritative generated-path and delivery-route readers below. The live
     // delivery adapter occurs earlier in this module, so this forward binding is the single seam that
     // lets it and `verifyPaths` consume the identical classifier and authority derivation.
-    let mutable private deliveryPathClassifier:
-        Context -> Ref -> TouchSet -> string list -> Delivery.PathClassification list =
+    let mutable private deliveryPathClassifier
+        : Context -> Ref -> TouchSet -> string list -> Delivery.PathClassification list =
         fun _ _ touchSet files ->
             Delivery.classifyPaths
                 touchSet
@@ -391,7 +425,12 @@ module Client =
                 (Delivery.AuthorityUnknown "sdd-package authority is not initialized")
                 files
 
-    let renderLiveDecision (ctx: Context) (opts: Options) (rows: Scan.Row list) (doc: string) : Result<Batch.BatchResult, int> =
+    let renderLiveDecision
+        (ctx: Context)
+        (opts: Options)
+        (rows: Scan.Row list)
+        (doc: string)
+        : Result<Batch.BatchResult, int> =
         match Snapshot.parse doc with
         | Error errors ->
             for e in errors do
@@ -423,7 +462,7 @@ module Client =
             with
             | Green result ->
                 match authorizeChosenIntake ctx result.Chosen with
-                | Ok () -> Ok result
+                | Ok() -> Ok result
                 | Error error -> fail error |> Error
             | Red reasons ->
                 eprint "REFUSED — the batch cannot be scheduled:"
@@ -441,17 +480,43 @@ module Client =
     let renderDecision (opts: Options) (rows: Scan.Row list) (doc: string) : Result<Batch.BatchResult, int> =
         match Snapshot.parse doc with
         | Error errors ->
-            for e in errors do eprint $"fsgg-coord-engine: %s{e.Path}: %s{e.Message}"
+            for e in errors do
+                eprint $"fsgg-coord-engine: %s{e.Path}: %s{e.Message}"
+
             Result.Error ExitError
         | Ok parsed ->
             let request =
-                parsed |> enrichBoardFacts rows
-                |> fun r -> { r with Candidates = r.Candidates |> List.map (fun c -> { c with Item = { c.Item with DeliveryRoute = offlineDeliveryRoute } }) }
+                parsed
+                |> enrichBoardFacts rows
+                |> fun r ->
+                    { r with
+                        Candidates =
+                            r.Candidates
+                            |> List.map (fun c ->
+                                { c with
+                                    Item =
+                                        { c.Item with
+                                            DeliveryRoute = offlineDeliveryRoute
+                                        }
+                                })
+                    }
             // .github#2305 — offline/pure, same reasoning as `Program.fs`'s `lanes`/`decide`: `Set.empty`.
-            match Batch.scheduleWith Set.empty (boardBlockingCounts rows) request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map _.Item) with
+            match
+                Batch.scheduleWith
+                    Set.empty
+                    (boardBlockingCounts rows)
+                    request.AllowBacklog
+                    request.Limit
+                    request.InFlight
+                    (request.Candidates |> List.map _.Item)
+            with
             | Green result -> Ok result
-            | Red reasons -> reasons |> List.iter (fun r -> eprint $"  %s{r}"); Result.Error ExitRed
-            | Verdict.NoVerdict reason -> eprint $"UNDETERMINED — %s{reason}"; Result.Error ExitNoVerdict
+            | Red reasons ->
+                reasons |> List.iter (fun r -> eprint $"  %s{r}")
+                Result.Error ExitRed
+            | Verdict.NoVerdict reason ->
+                eprint $"UNDETERMINED — %s{reason}"
+                Result.Error ExitNoVerdict
 
     /// The candidates the scheduler LOOKED AT and refused. One spelling, because two call sites print this
     /// list and a third reports its COUNT on the wire (`take --json`'s `passedOver`, .github#1525) — a
@@ -490,7 +555,8 @@ module Client =
     /// (`tests/FS.GG.Coord.Cli.Tests/CacheSandbox.fs`), which is a different repair for a different cause.
     let private sayHowManyConsidered (result: Batch.BatchResult) =
         if List.isEmpty result.Chosen then
-            eprint $"considered %d{List.length result.Decisions} candidate(s) — this is a measured count, not an assumption."
+            eprint
+                $"considered %d{List.length result.Decisions} candidate(s) — this is a measured count, not an assumption."
 
     /// THE `--json` STDERR SPLIT, shared by `batch --json` and `take --json` (.github#1525).
     ///
@@ -574,9 +640,11 @@ module Client =
         | None -> Error "the kit root is unavailable"
         | Some root ->
             let paths =
-                [ for skillRoot in [ ".claude/skills"; ".agents/skills" ] do
-                      for driver in [ "drive-board"; "work-board" ] do
-                          $"%s{skillRoot}/%s{driver}/references/host-loop.md" ]
+                [
+                    for skillRoot in [ ".claude/skills"; ".agents/skills" ] do
+                        for driver in [ "drive-board"; "work-board" ] do
+                            $"%s{skillRoot}/%s{driver}/references/host-loop.md"
+                ]
 
             let read (relative: string) =
                 let path = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar))
@@ -591,8 +659,7 @@ module Client =
                     with e ->
                         Error $"%s{relative} could not be read: %s{e.Message}"
 
-            let existing =
-                paths |> List.filter (fun p -> File.Exists(Path.Combine(root, p)))
+            let existing = paths |> List.filter (fun p -> File.Exists(Path.Combine(root, p)))
 
             match existing with
             | [] -> Error "no drive-board or work-board host-loop document exists"
@@ -602,6 +669,7 @@ module Client =
                 // to agree, without turning an intentionally absent operator skill into an unavailable
                 // signal for the product driver.
                 let results = documents |> List.map read
+
                 let errors =
                     results
                     |> List.choose (function
@@ -638,8 +706,7 @@ module Client =
             |> List.map (fun e -> $"%s{e.Path}: %s{e.Message}")
             |> String.concat "; "
             |> Error
-        | Ok request ->
-            Ok(Batch.implementerSlots (request.Candidates |> List.map (fun c -> c.Item)) request.InFlight)
+        | Ok request -> Ok(Batch.implementerSlots (request.Candidates |> List.map (fun c -> c.Item)) request.InFlight)
 
     /// Occupancy is advisory, not enforcing: refusing `batch` on an open slot would prevent the dispatch
     /// that closes it, and a draining queue legitimately has spare capacity. It is nevertheless loud and
@@ -661,7 +728,8 @@ module Client =
             Batch.waveShortfallHeadline (List.length result.Chosen) occupancy
             |> Option.iter eprint
         | model, slots ->
-            let explain = function
+            let explain =
+                function
                 | Ok _ -> None
                 | Error e -> Some e
 
@@ -715,7 +783,8 @@ module Client =
         // replayed over a materially different board.  Every live read consumed by the transition is now
         // one constituent.  Callers can carry the content-addressed receipts; they cannot choose the source
         // against which this invocation validates them.
-        facts |> String.concat "\n\u001e\n"
+        facts
+        |> String.concat "\n\u001e\n"
         |> Text.Encoding.UTF8.GetBytes
         |> Security.Cryptography.SHA256.HashData
         |> Convert.ToHexString
@@ -729,34 +798,92 @@ module Client =
             let observationFields = Protocol.ledgerPolicy.ObservationFields
             let contentIntakeFields = Protocol.ledgerPolicy.ContentIntakeFields
             let contentDispositionFields = Protocol.ledgerPolicy.ContentDispositionFields
-            let schemaField, observedAtField, sourceShaField, completeField, consolidationApprovedField, observationsField, contentIntakesField, contentDispositionsField =
+
+            let (schemaField,
+                 observedAtField,
+                 sourceShaField,
+                 completeField,
+                 consolidationApprovedField,
+                 observationsField,
+                 contentIntakesField,
+                 contentDispositionsField) =
                 match receiptFields with
-                | [ schema; observedAt; sourceSha; complete; consolidationApproved; observations; contentIntakes; contentDispositions ] ->
-                    schema, observedAt, sourceSha, complete, consolidationApproved, observations, contentIntakes, contentDispositions
+                | [ schema
+                    observedAt
+                    sourceSha
+                    complete
+                    consolidationApproved
+                    observations
+                    contentIntakes
+                    contentDispositions ] ->
+                    schema,
+                    observedAt,
+                    sourceSha,
+                    complete,
+                    consolidationApproved,
+                    observations,
+                    contentIntakes,
+                    contentDispositions
                 | _ -> failwith "the ledger receipt field policy is malformed"
+
             let kindField, observationObservedAtField, observationSourceShaField, outcomeField, receiptIdField =
                 match observationFields with
                 | [ kind; observedAt; sourceSha; outcome; receiptId ] -> kind, observedAt, sourceSha, outcome, receiptId
                 | _ -> failwith "the ledger observation field policy is malformed"
-            let sourceFindingField, dispositionField, consumerPathsField, decisionMakerField, rationaleField, evidenceField, dispositionObservedAtField, dispositionSourceShaField, dispositionReceiptIdField =
+
+            let (sourceFindingField,
+                 dispositionField,
+                 consumerPathsField,
+                 decisionMakerField,
+                 rationaleField,
+                 evidenceField,
+                 dispositionObservedAtField,
+                 dispositionSourceShaField,
+                 dispositionReceiptIdField) =
                 match contentDispositionFields with
-                | [ sourceFinding; disposition; consumerPaths; decisionMaker; rationale; evidence; observedAt; sourceSha; receiptId ] ->
-                    sourceFinding, disposition, consumerPaths, decisionMaker, rationale, evidence, observedAt, sourceSha, receiptId
+                | [ sourceFinding
+                    disposition
+                    consumerPaths
+                    decisionMaker
+                    rationale
+                    evidence
+                    observedAt
+                    sourceSha
+                    receiptId ] ->
+                    sourceFinding,
+                    disposition,
+                    consumerPaths,
+                    decisionMaker,
+                    rationale,
+                    evidence,
+                    observedAt,
+                    sourceSha,
+                    receiptId
                 | _ -> failwith "the ledger content disposition field policy is malformed"
+
             let requireFields (fields: string list) (node: JsonElement) =
-                fields |> List.iter (fun name ->
+                fields
+                |> List.iter (fun name ->
                     let mutable value = Unchecked.defaultof<JsonElement>
-                    if not (node.TryGetProperty(name, &value)) then failwith $"missing ledger field {name}")
+
+                    if not (node.TryGetProperty(name, &value)) then
+                        failwith $"missing ledger field {name}")
+
             requireFields receiptFields root
+
             if root.GetProperty(schemaField).GetString() <> Protocol.ledgerPolicy.Schema then
                 failwith "the ledger receipt schema is unsupported"
+
             let bool (name: string) (node: JsonElement) = node.GetProperty(name).GetBoolean()
+
             let sourceFindingField =
                 match contentIntakeFields with
                 | [ sourceFinding ] -> sourceFinding
                 | _ -> failwith "the ledger content intake field policy is malformed"
+
             let contentDisposition (item: JsonElement) : Driver.ContentDispositionReceipt =
                 requireFields contentDispositionFields item
+
                 let disposition =
                     match item.GetProperty(dispositionField).GetString() with
                     | "not-reusable" -> Driver.NotReusable
@@ -764,48 +891,98 @@ module Client =
                     | "example/fixture" -> Driver.ExampleFixture
                     | "skill+example/fixture" -> Driver.SkillAndExampleFixture
                     | _ -> failwith "the ledger content disposition is unsupported"
+
                 let evidence =
                     match item.GetProperty(evidenceField).GetString() with
-                    | null | "" -> None
+                    | null
+                    | "" -> None
                     | value when value.StartsWith "url:" -> Some(Driver.EvidenceUrl(value.Substring 4))
                     | value when value.StartsWith "path:" -> Some(Driver.EvidencePath(value.Substring 5))
                     | _ -> failwith "the ledger content evidence is unsupported"
-                { SourceFinding = item.GetProperty(sourceFindingField).GetString() |> Option.ofObj |> Option.defaultValue ""
-                  Disposition = disposition
-                  ConsumerPaths = item.GetProperty(consumerPathsField).EnumerateArray() |> Seq.map (fun path -> path.GetString() |> Option.ofObj |> Option.defaultValue "") |> Seq.toList
-                  DecisionMaker = item.GetProperty(decisionMakerField).GetString() |> Option.ofObj |> Option.defaultValue ""
-                  Rationale = item.GetProperty(rationaleField).GetString() |> Option.ofObj |> Option.defaultValue ""
-                  Evidence = evidence
-                  ObservedAt = item.GetProperty(dispositionObservedAtField).GetInt64()
-                  SourceSha = item.GetProperty(dispositionSourceShaField).GetString() |> Option.ofObj |> Option.defaultValue ""
-                  ReceiptId = item.GetProperty(dispositionReceiptIdField).GetString() |> Option.ofObj |> Option.defaultValue "" }
+
+                {
+                    SourceFinding =
+                        item.GetProperty(sourceFindingField).GetString()
+                        |> Option.ofObj
+                        |> Option.defaultValue ""
+                    Disposition = disposition
+                    ConsumerPaths =
+                        item.GetProperty(consumerPathsField).EnumerateArray()
+                        |> Seq.map (fun path -> path.GetString() |> Option.ofObj |> Option.defaultValue "")
+                        |> Seq.toList
+                    DecisionMaker =
+                        item.GetProperty(decisionMakerField).GetString()
+                        |> Option.ofObj
+                        |> Option.defaultValue ""
+                    Rationale =
+                        item.GetProperty(rationaleField).GetString()
+                        |> Option.ofObj
+                        |> Option.defaultValue ""
+                    Evidence = evidence
+                    ObservedAt = item.GetProperty(dispositionObservedAtField).GetInt64()
+                    SourceSha =
+                        item.GetProperty(dispositionSourceShaField).GetString()
+                        |> Option.ofObj
+                        |> Option.defaultValue ""
+                    ReceiptId =
+                        item.GetProperty(dispositionReceiptIdField).GetString()
+                        |> Option.ofObj
+                        |> Option.defaultValue ""
+                }
+
             let receipt: Driver.PlanningReceipt =
-                { ObservedAt = root.GetProperty(observedAtField).GetInt64()
-                  SourceSha = root.GetProperty(sourceShaField).GetString() |> Option.ofObj |> Option.defaultValue ""
-                  Complete = bool completeField root
-                  ConsolidationApproved = bool consolidationApprovedField root
-                  Observations =
-                    root.GetProperty(observationsField).EnumerateArray()
-                    |> Seq.map (fun item ->
-                        requireFields observationFields item
-                        ({ Kind = item.GetProperty(kindField).GetString() |> Option.ofObj |> Option.defaultValue ""
-                           ObservedAt = item.GetProperty(observationObservedAtField).GetInt64()
-                           SourceSha = item.GetProperty(observationSourceShaField).GetString() |> Option.ofObj |> Option.defaultValue ""
-                           Outcome = item.GetProperty(outcomeField).GetString() |> Option.ofObj |> Option.defaultValue ""
-                           ReceiptId = item.GetProperty(receiptIdField).GetString() |> Option.ofObj |> Option.defaultValue "" }: Driver.PlanningObservation))
-                    |> Seq.toList
-                  ContentDispositions =
-                    root.GetProperty(contentDispositionsField).EnumerateArray()
-                    |> Seq.map contentDisposition
-                    |> Seq.toList
-                  ContentIntakes =
-                    root.GetProperty(contentIntakesField).EnumerateArray()
-                    |> Seq.map (fun item ->
-                        requireFields contentIntakeFields item
-                        item.GetProperty(sourceFindingField).GetString() |> Option.ofObj |> Option.defaultValue "")
-                    |> Seq.toList }
+                {
+                    ObservedAt = root.GetProperty(observedAtField).GetInt64()
+                    SourceSha =
+                        root.GetProperty(sourceShaField).GetString()
+                        |> Option.ofObj
+                        |> Option.defaultValue ""
+                    Complete = bool completeField root
+                    ConsolidationApproved = bool consolidationApprovedField root
+                    Observations =
+                        root.GetProperty(observationsField).EnumerateArray()
+                        |> Seq.map (fun item ->
+                            requireFields observationFields item
+
+                            ({
+                                Kind =
+                                    item.GetProperty(kindField).GetString()
+                                    |> Option.ofObj
+                                    |> Option.defaultValue ""
+                                ObservedAt = item.GetProperty(observationObservedAtField).GetInt64()
+                                SourceSha =
+                                    item.GetProperty(observationSourceShaField).GetString()
+                                    |> Option.ofObj
+                                    |> Option.defaultValue ""
+                                Outcome =
+                                    item.GetProperty(outcomeField).GetString()
+                                    |> Option.ofObj
+                                    |> Option.defaultValue ""
+                                ReceiptId =
+                                    item.GetProperty(receiptIdField).GetString()
+                                    |> Option.ofObj
+                                    |> Option.defaultValue ""
+                            }
+                            : Driver.PlanningObservation))
+                        |> Seq.toList
+                    ContentDispositions =
+                        root.GetProperty(contentDispositionsField).EnumerateArray()
+                        |> Seq.map contentDisposition
+                        |> Seq.toList
+                    ContentIntakes =
+                        root.GetProperty(contentIntakesField).EnumerateArray()
+                        |> Seq.map (fun item ->
+                            requireFields contentIntakeFields item
+
+                            item.GetProperty(sourceFindingField).GetString()
+                            |> Option.ofObj
+                            |> Option.defaultValue "")
+                        |> Seq.toList
+                }
+
             Ok receipt
-        with error -> Error $"the driver receipt is malformed: %s{error.Message}"
+        with error ->
+            Error $"the driver receipt is malformed: %s{error.Message}"
 
     /// One candidate's live board/claim/PR/review/delivery facts, projected into the shape
     /// `DriverEvents.classify` consumes (.github#2135). Named and pure over its inputs — no `ctx`, no
@@ -821,8 +998,12 @@ module Client =
         (candidate: Snapshot.Candidate)
         : DriverEvents.ItemFacts =
         let refText = candidate.Item.Ref.Canonical
-        let claimWorker = candidate.Item.Claim |> Option.map (fun (claim, _) -> claim.Worker.Value)
-        let review = candidate.Item.ItemPr |> Option.bind (fun pr -> Map.tryFind pr reviewByPr)
+
+        let claimWorker =
+            candidate.Item.Claim |> Option.map (fun (claim, _) -> claim.Worker.Value)
+
+        let review =
+            candidate.Item.ItemPr |> Option.bind (fun pr -> Map.tryFind pr reviewByPr)
 
         let merged, obligationsDeclared, obligations, pr =
             match Map.tryFind refText mergedFactsByRef with
@@ -836,25 +1017,27 @@ module Client =
             | None, Some pr -> $"pr:%d{pr}"
             | None, None -> $"board-status:%A{candidate.Item.Status}"
 
-        { Ref = refText
-          ReadOk = not candidate.Item.ItemPrUnreadable
-          UnreadableReason =
-            if candidate.Item.ItemPrUnreadable then
-                Some "the markerless item-PR probe was unreadable"
-            else
-                None
-          BoardStatus = Some candidate.Item.Status
-          IssueState = Some candidate.Item.State
-          ClaimWorker = claimWorker
-          HumanBlock = candidate.Item.HumanBlock
-          Pr = pr
-          Review = review
-          Merged = merged
-          ObligationsDeclared = obligationsDeclared
-          Obligations = obligations
-          Evidence = evidence
-          ObservedAt = now
-          SourceSha = sourceSha }
+        {
+            Ref = refText
+            ReadOk = not candidate.Item.ItemPrUnreadable
+            UnreadableReason =
+                if candidate.Item.ItemPrUnreadable then
+                    Some "the markerless item-PR probe was unreadable"
+                else
+                    None
+            BoardStatus = Some candidate.Item.Status
+            IssueState = Some candidate.Item.State
+            ClaimWorker = claimWorker
+            HumanBlock = candidate.Item.HumanBlock
+            Pr = pr
+            Review = review
+            Merged = merged
+            ObligationsDeclared = obligationsDeclared
+            Obligations = obligations
+            Evidence = evidence
+            ObservedAt = now
+            SourceSha = sourceSha
+        }
 
     /// Read the durable `driver --events` cursor (.github#2135). No `--cursor` and a `--cursor` path
     /// that has never been written both read as an empty cursor — a legitimate first run. A path that
@@ -890,9 +1073,20 @@ module Client =
                         | None -> Error $"entry '%s{prop.Name}' has an unrecognized state encoding '%s{raw}'")
                     |> Seq.toList
 
-                match decoded |> List.tryPick (function Error e -> Some e | Ok _ -> None) with
+                match
+                    decoded
+                    |> List.tryPick (function
+                        | Error e -> Some e
+                        | Ok _ -> None)
+                with
                 | Some error -> Error $"cursor file '%s{path}' is corrupt: %s{error}"
-                | None -> decoded |> List.choose (function Ok pair -> Some pair | Error _ -> None) |> Map.ofList |> Ok
+                | None ->
+                    decoded
+                    |> List.choose (function
+                        | Ok pair -> Some pair
+                        | Error _ -> None)
+                    |> Map.ofList
+                    |> Ok
             with ex ->
                 Error $"cursor file '%s{path}' could not be parsed: %s{ex.Message}"
 
@@ -914,10 +1108,13 @@ module Client =
 
         let directory =
             match Path.GetDirectoryName path with
-            | null | "" -> "."
+            | null
+            | "" -> "."
             | value -> value
 
-        let tempPath = Path.Combine(directory, $".{Path.GetFileName path}.tmp-{Guid.NewGuid():N}")
+        let tempPath =
+            Path.Combine(directory, $".{Path.GetFileName path}.tmp-{Guid.NewGuid():N}")
+
         File.WriteAllText(tempPath, json)
         File.Move(tempPath, path, true)
 
@@ -927,21 +1124,25 @@ module Client =
         let transitions =
             projection.Transitions
             |> List.map (fun e ->
-                {| ref = e.Ref
-                   previous = e.Previous |> Option.map DriverEvents.encodeState |> Option.toObj
-                   state = DriverEvents.encodeState e.New
-                   reason = e.Reason
-                   evidence = e.Evidence
-                   observedAt = e.ObservedAt
-                   sourceSha = e.SourceSha |})
+                {|
+                    ref = e.Ref
+                    previous = e.Previous |> Option.map DriverEvents.encodeState |> Option.toObj
+                    state = DriverEvents.encodeState e.New
+                    reason = e.Reason
+                    evidence = e.Evidence
+                    observedAt = e.ObservedAt
+                    sourceSha = e.SourceSha
+                |})
 
         let activeItems =
             projection.Active
             |> List.map (fun c ->
-                {| ref = c.Ref
-                   state = DriverEvents.encodeState c.State
-                   reason = c.Reason
-                   evidence = c.Evidence |})
+                {|
+                    ref = c.Ref
+                    state = DriverEvents.encodeState c.State
+                    reason = c.Reason
+                    evidence = c.Evidence
+                |})
 
         // THE MACHINE PROJECTION NEEDS THE SAME COMPLETENESS FACT AS THE TEXT ONE (.github#2525).
         // A reader that only saw `active: []` could not tell a measured-empty inventory from one this read
@@ -951,19 +1152,23 @@ module Client =
         let unreadableItems =
             projection.Unreadable
             |> List.map (fun c ->
-                {| ref = c.Ref
-                   state = DriverEvents.encodeState c.State
-                   reason = c.Reason
-                   evidence = c.Evidence |})
+                {|
+                    ref = c.Ref
+                    state = DriverEvents.encodeState c.State
+                    reason = c.Reason
+                    evidence = c.Evidence
+                |})
 
         JsonSerializer.Serialize
-            {| schema = "fsgg.coord.driver-events/1"
-               sourceSha = sourceSha
-               renderedAt = projection.RenderedAt
-               transitions = transitions
-               active = activeItems
-               activeComplete = List.isEmpty projection.Unreadable
-               unreadable = unreadableItems |}
+            {|
+                schema = "fsgg.coord.driver-events/1"
+                sourceSha = sourceSha
+                renderedAt = projection.RenderedAt
+                transitions = transitions
+                active = activeItems
+                activeComplete = List.isEmpty projection.Unreadable
+                unreadable = unreadableItems
+            |}
 
     /// Live inspection derives occupancy from the same board snapshot as `batch`, never caller input.
     let driver (ctx: Context) (opts: Options) : int =
@@ -981,13 +1186,19 @@ module Client =
                 |> Array.choose (fun line ->
                     let prefix = "diff-audit-receipt-v1:"
                     let line = line.Trim()
-                    if line.StartsWith(prefix, StringComparison.Ordinal) then Some(line.Substring(prefix.Length).Trim()) else None)
+
+                    if line.StartsWith(prefix, StringComparison.Ordinal) then
+                        Some(line.Substring(prefix.Length).Trim())
+                    else
+                        None)
                 |> Array.toList)
             |> List.choose (SemanticDiff.ofBase64 >> Result.toOption)
 
         let collect rows =
             rows
-            |> List.fold (fun state next -> Result.bind (fun all -> Result.map (fun row -> all @ [ row ]) next) state) (Ok [])
+            |> List.fold
+                (fun state next -> Result.bind (fun all -> Result.map (fun row -> all @ [ row ]) next) state)
+                (Ok [])
 
         /// The blob pair a rename is visible in.  A 404 is the SERVER saying the path is absent at that
         /// ref — a file this PR added or deleted — which is empty content and a readable fact. Every
@@ -999,6 +1210,7 @@ module Client =
                 | Ok content -> Ok content
                 | Error(Errors.NotFound _) -> Ok ""
                 | Error e -> Error e
+
             match at baseSha, at headSha with
             | Ok before, Ok after -> Ok(path, before, after)
             | Error e, _
@@ -1014,13 +1226,27 @@ module Client =
                 blobPair owner repo path baseSha headSha
                 |> Result.map (fun (path, before, after) ->
                     SemanticDiff.inventory path before after submitted.OldToken submitted.NewToken))
-            |> List.fold (fun state next -> Result.bind (fun all -> Result.map (fun rows -> all @ rows) next) state) (Ok [])
+            |> List.fold
+                (fun state next -> Result.bind (fun all -> Result.map (fun rows -> all @ rows) next) state)
+                (Ok [])
             |> Result.map (fun rows ->
-                SemanticDiff.receipt submitted.Repository baseSha headSha submitted.OldToken submitted.NewToken submitted.DeclaredPaths true rows)
+                SemanticDiff.receipt
+                    submitted.Repository
+                    baseSha
+                    headSha
+                    submitted.OldToken
+                    submitted.NewToken
+                    submitted.DeclaredPaths
+                    true
+                    rows)
 
         match scanAndDecide ctx opts Cache.Scheduling, readWaveModel () with
-        | Error e, _ -> eprint (Errors.explain e); ExitError
-        | _, Error e -> eprint e; ExitError
+        | Error e, _ ->
+            eprint (Errors.explain e)
+            ExitError
+        | _, Error e ->
+            eprint e
+            ExitError
         | Ok(_, doc, _), Ok model ->
             // THE SAME PROJECTION `batch` REPORTS, AND THE SECOND CONSUMER THE MISCOUNT REACHED
             // (.github#2678). `Driver.nextAction` sizes the next wave as
@@ -1029,12 +1255,17 @@ module Client =
             // `openSlots` `batch` printed. One derivation now answers both, so the planning verb and the
             // scheduling verb cannot drift from each other or from `driver --events`.
             match slotOccupancyOf doc with
-            | Error e -> eprint e; ExitError
+            | Error e ->
+                eprint e
+                ExitError
             | Ok slots ->
                 let active = slots.Occupying
+
                 match Snapshot.parse doc with
                 | Error errors ->
-                    errors |> List.iter (fun error -> eprint $"fsgg-coord-engine: %s{error.Path}: %s{error.Message}")
+                    errors
+                    |> List.iter (fun error -> eprint $"fsgg-coord-engine: %s{error.Path}: %s{error.Message}")
+
                     ExitError
                 | Ok snapshot ->
                     let reviewEvidence =
@@ -1042,25 +1273,49 @@ module Client =
                         |> List.choose (fun candidate ->
                             match candidate.Item.ItemPr with
                             | Some pr ->
-                                match Reads.markerScan ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo candidate.Item.Ref.Number,
-                                      Reads.prLandable ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
-                                      Reads.prHeadSha ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
-                                      Reads.commentsWithIdentity ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr with
+                                match
+                                    Reads.markerScan
+                                        ctx.Transport
+                                        candidate.Item.Ref.Owner
+                                        candidate.Item.Ref.Repo
+                                        candidate.Item.Ref.Number,
+                                    Reads.prLandable ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
+                                    Reads.prHeadSha ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
+                                    Reads.commentsWithIdentity
+                                        ctx.Transport
+                                        candidate.Item.Ref.Owner
+                                        candidate.Item.Ref.Repo
+                                        pr
+                                with
                                 | Ok scan, PrGreen, Ok head, Ok comments when List.isEmpty scan.Unreadable ->
                                     let owner = candidate.Item.Ref.Owner
                                     let repo = candidate.Item.Ref.Repo
-                                    let comments = comments |> List.map (fun c -> ({ Id = c.Id; Url = c.Url; Body = c.Body }: Driver.ReviewComment))
+
+                                    let comments =
+                                        comments
+                                        |> List.map (fun c ->
+                                            ({
+                                                Id = c.Id
+                                                Url = c.Url
+                                                Body = c.Body
+                                            }
+                                            : Driver.ReviewComment))
+
                                     let threshold =
                                         match Environment.GetEnvironmentVariable "FSGG_DIFF_AUDIT_THRESHOLD" with
-                                        | null | "" -> Some 5
+                                        | null
+                                        | "" -> Some 5
                                         | value ->
                                             match Int32.TryParse value with
                                             | true, number when number >= 0 -> Some number
                                             | _ -> None
-                                    match threshold,
-                                          Reads.issueBody ctx.Transport owner repo candidate.Item.Ref.Number,
-                                          Reads.commitMessage ctx.Transport owner repo head,
-                                          Reads.prFiles ctx.Transport owner repo pr with
+
+                                    match
+                                        threshold,
+                                        Reads.issueBody ctx.Transport owner repo candidate.Item.Ref.Number,
+                                        Reads.commitMessage ctx.Transport owner repo head,
+                                        Reads.prFiles ctx.Transport owner repo pr
+                                    with
                                     | Some threshold, Ok itemBody, Ok commitMessage, Ok changedPaths ->
                                         let finish required trusted =
                                             match Driver.parseReviewCommentsWithFacts required trusted comments with
@@ -1093,7 +1348,8 @@ module Client =
                                         // Evidence we could not read stays UNKNOWN throughout: it requires the
                                         // receipt rather than disproving the threshold. A negative fact is never
                                         // manufactured from a missing one.
-                                        let declared = SemanticDiff.activationRequired threshold 0 commitMessage (Some itemBody)
+                                        let declared =
+                                            SemanticDiff.activationRequired threshold 0 commitMessage (Some itemBody)
 
                                         /// Every occurrence the engine can discover over the whole diff, read from the
                                         /// live base/head blobs of every changed path. An `Error` means the reads
@@ -1112,7 +1368,11 @@ module Client =
                                             // Threshold satisfaction could not be DISPROVED. Fail closed.
                                             | Error _ -> true
                                             | Ok occurrences ->
-                                                SemanticDiff.activationRequired threshold occurrences.Length commitMessage (Some itemBody)
+                                                SemanticDiff.activationRequired
+                                                    threshold
+                                                    occurrences.Length
+                                                    commitMessage
+                                                    (Some itemBody)
 
                                         match auditReceipts comments with
                                         | _ :: _ as submitted ->
@@ -1132,9 +1392,21 @@ module Client =
                                                 | Ok expected, Ok discovered ->
                                                     let required =
                                                         declared
-                                                        || SemanticDiff.activationRequired threshold discovered.Length commitMessage (Some itemBody)
+                                                        || SemanticDiff.activationRequired
+                                                            threshold
+                                                            discovered.Length
+                                                            commitMessage
+                                                            (Some itemBody)
 
-                                                    finish required (Some({ Expected = expected; Discovered = discovered }: SemanticDiff.TrustedAudit))
+                                                    finish
+                                                        required
+                                                        (Some(
+                                                            {
+                                                                Expected = expected
+                                                                Discovered = discovered
+                                                            }
+                                                            : SemanticDiff.TrustedAudit
+                                                        ))
                                                 | _ ->
                                                     // The live facts could not be established, so the receipts cannot be
                                                     // checked against anything. Requiring the audit while supplying NO
@@ -1159,8 +1431,10 @@ module Client =
                                     | _ -> None
                                 | _ -> None
                             | None -> None)
+
                     let pending = Cache.pending ()
                     let identity = Identity.resolve opts.Worker
+
                     let staleClaim =
                         snapshot.Candidates
                         |> List.exists (fun candidate ->
@@ -1172,29 +1446,48 @@ module Client =
                     // receipt changes exactly when that age becomes actionable, not every second.
                     let stableBoard =
                         Text.RegularExpressions.Regex.Replace(doc, "\"ageSeconds\":-?[0-9]+", "\"ageSeconds\":0")
+
                     let sourceSha =
                         planningSourceSha
-                            [ "board:" + stableBoard
-                              "stale-claim:" + string staleClaim
-                              "pending:" + (pending |> Result.map (sprintf "%A") |> Result.defaultValue "UNREADABLE")
-                              "identity:" + (identity |> Result.map (fun value -> sprintf "%A" value) |> Result.defaultValue "UNRESOLVED")
-                              "review:" + sprintf "%A" reviewEvidence
-                              "engine:" + string (Reflection.Assembly.GetExecutingAssembly().ManifestModule.ModuleVersionId) ]
+                            [
+                                "board:" + stableBoard
+                                "stale-claim:" + string staleClaim
+                                "pending:"
+                                + (pending |> Result.map (sprintf "%A") |> Result.defaultValue "UNREADABLE")
+                                "identity:"
+                                + (identity
+                                   |> Result.map (fun value -> sprintf "%A" value)
+                                   |> Result.defaultValue "UNRESOLVED")
+                                "review:" + sprintf "%A" reviewEvidence
+                                "engine:"
+                                + string (Reflection.Assembly.GetExecutingAssembly().ManifestModule.ModuleVersionId)
+                            ]
+
                     let now = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-                    let suppliedReceipt = opts.SnapshotFile |> Option.bind (parsePlanningReceipt >> Result.toOption)
-                    let receiptValid = suppliedReceipt |> Option.exists (Driver.planningReceiptFresh now 300L sourceSha)
+
+                    let suppliedReceipt =
+                        opts.SnapshotFile |> Option.bind (parsePlanningReceipt >> Result.toOption)
+
+                    let receiptValid =
+                        suppliedReceipt
+                        |> Option.exists (Driver.planningReceiptFresh now 300L sourceSha)
+
                     let pendingWrites = pending |> Result.map List.length |> Result.defaultValue 1
                     let hasIdentity = Result.isOk identity
+
                     let housekeeping: Driver.Housekeeping =
-                        { HasHostIdentity = hasIdentity
-                          StaleClaim = staleClaim
-                          EngineCurrent = receiptValid
-                          PendingWrites = pendingWrites
-                          ReconcileDryRunFresh = receiptValid
-                          ReconcileApplied = receiptValid
-                          ReconcileFresh = receiptValid
-                          TriageFresh = receiptValid
-                          CurrencyScoped = receiptValid }
+                        {
+                            HasHostIdentity = hasIdentity
+                            StaleClaim = staleClaim
+                            EngineCurrent = receiptValid
+                            PendingWrites = pendingWrites
+                            ReconcileDryRunFresh = receiptValid
+                            ReconcileApplied = receiptValid
+                            ReconcileFresh = receiptValid
+                            TriageFresh = receiptValid
+                            CurrencyScoped = receiptValid
+                        }
+
                     if opts.Events then
                         // The material-transition/active-inventory projection (.github#2135), layered
                         // over the SAME live board scan and review evidence this command already reads —
@@ -1217,9 +1510,23 @@ module Client =
                                 | Some pr ->
                                     let owner = candidate.Item.Ref.Owner
                                     let repo = candidate.Item.Ref.Repo
-                                    match Reads.prLandable ctx.Transport owner repo pr, Reads.prHeadSha ctx.Transport owner repo pr, Reads.commentsWithIdentity ctx.Transport owner repo pr with
+
+                                    match
+                                        Reads.prLandable ctx.Transport owner repo pr,
+                                        Reads.prHeadSha ctx.Transport owner repo pr,
+                                        Reads.commentsWithIdentity ctx.Transport owner repo pr
+                                    with
                                     | PrMerged, Ok head, Ok comments ->
-                                        let comments = comments |> List.map (fun c -> ({ Id = c.Id; Url = c.Url; Body = c.Body }: Driver.ReviewComment))
+                                        let comments =
+                                            comments
+                                            |> List.map (fun c ->
+                                                ({
+                                                    Id = c.Id
+                                                    Url = c.Url
+                                                    Body = c.Body
+                                                }
+                                                : Driver.ReviewComment))
+
                                         match DeliveryApplication.obligationsFromComments head comments with
                                         | Ok obligations -> Some(candidate.Item.Ref.Canonical, (pr, true, obligations))
                                         | Error _ -> Some(candidate.Item.Ref.Canonical, (pr, false, []))
@@ -1252,23 +1559,50 @@ module Client =
                             ExitGreen
                     else
 
-                    let reviewedPrs = reviewEvidence |> List.map (fun (pr, _, _, _) -> pr) |> Set.ofList
-                    let workerReturns =
-                        snapshot.Candidates
-                        |> List.choose (fun candidate ->
-                            match candidate.Item.Claim with
-                            | Some(_, Types.LeaseHeld) ->
-                                Some
-                                    ({ ClaimLive = true
-                                       ReviewReady = candidate.Item.ItemPr |> Option.exists reviewedPrs.Contains
-                                       ParkedOrDone = candidate.Item.Status = Types.Blocked || candidate.Item.Status = Types.Done }: Driver.WorkerReturn)
-                            | _ -> None)
-                    let consolidationApproved = suppliedReceipt |> Option.exists (fun receipt -> receiptValid && receipt.ConsolidationApproved)
-                    let action = Driver.nextAction model (List.length active) consolidationApproved housekeeping workerReturns
-                    match opts.Render with
-                    | Json -> printfn "{\"schema\":\"fsgg.coord.driver-live/1\",\"sourceSha\":\"%s\",\"receiptValid\":%s,\"activeItems\":%d,\"reviewSlotsReserved\":%d,\"reviewEvidence\":%d,\"action\":\"%A\"}" sourceSha (if receiptValid then "true" else "false") (List.length active) model.ReviewSlots (List.length reviewEvidence) action
-                    | Text -> printfn "%A" action
-                    ExitGreen
+                        let reviewedPrs = reviewEvidence |> List.map (fun (pr, _, _, _) -> pr) |> Set.ofList
+
+                        let workerReturns =
+                            snapshot.Candidates
+                            |> List.choose (fun candidate ->
+                                match candidate.Item.Claim with
+                                | Some(_, Types.LeaseHeld) ->
+                                    Some(
+                                        {
+                                            ClaimLive = true
+                                            ReviewReady = candidate.Item.ItemPr |> Option.exists reviewedPrs.Contains
+                                            ParkedOrDone =
+                                                candidate.Item.Status = Types.Blocked
+                                                || candidate.Item.Status = Types.Done
+                                        }
+                                        : Driver.WorkerReturn
+                                    )
+                                | _ -> None)
+
+                        let consolidationApproved =
+                            suppliedReceipt
+                            |> Option.exists (fun receipt -> receiptValid && receipt.ConsolidationApproved)
+
+                        let action =
+                            Driver.nextAction
+                                model
+                                (List.length active)
+                                consolidationApproved
+                                housekeeping
+                                workerReturns
+
+                        match opts.Render with
+                        | Json ->
+                            printfn
+                                "{\"schema\":\"fsgg.coord.driver-live/1\",\"sourceSha\":\"%s\",\"receiptValid\":%s,\"activeItems\":%d,\"reviewSlotsReserved\":%d,\"reviewEvidence\":%d,\"action\":\"%A\"}"
+                                sourceSha
+                                (if receiptValid then "true" else "false")
+                                (List.length active)
+                                model.ReviewSlots
+                                (List.length reviewEvidence)
+                                action
+                        | Text -> printfn "%A" action
+
+                        ExitGreen
 
     type PathVerdictProjection =
         | DeliveryReceiptProjection
@@ -1291,10 +1625,14 @@ module Client =
         Delivery.classifyPaths touchSet generated (Delivery.AuthorityKnown("delivery-route:not-applicable", [])) files
         |> projectPathVerdict DeliveryReceiptProjection
 
-    let outstandingObligations = FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations
+    let outstandingObligations =
+        FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations
+
     let private manifestCandidates =
-        [ ".agents/skills/skill-manifest.json"
-          "template/skill-manifest/skill-manifest.json" ]
+        [
+            ".agents/skills/skill-manifest.json"
+            "template/skill-manifest/skill-manifest.json"
+        ]
 
     let private envOr (name: string) (fallback: string) : string =
         match Environment.GetEnvironmentVariable name with
@@ -1426,7 +1764,7 @@ module Client =
 
             let rows =
                 if File.Exists registryPath then
-                    RegistryPredicate.parseRows(File.ReadAllText registryPath)
+                    RegistryPredicate.parseRows (File.ReadAllText registryPath)
                 else
                     []
 
@@ -1436,11 +1774,14 @@ module Client =
                     { c with
                         Item =
                             { c.Item with
-                                Predicate = Some(resolveAssertion reposRoot rows a) } }
+                                Predicate = Some(resolveAssertion reposRoot rows a)
+                            }
+                    }
                 | _ -> c
 
             { request with
-                Candidates = request.Candidates |> List.map enrich }
+                Candidates = request.Candidates |> List.map enrich
+            }
 
     /// A parsed snapshot's rows as a `Chore.Whole` — the ONE construction of that case, so the label is
     /// never spelled twice (#485) and never asserted by a caller who only believes the board is whole. The
@@ -1456,36 +1797,66 @@ module Client =
         | Some human, _, _ ->
             LifecycleProjection.HumanPark(
                 human,
-                { Revision = observedAt; Reason = "explicit human scheduling hold" })
+                {
+                    Revision = observedAt
+                    Reason = "explicit human scheduling hold"
+                }
+            )
         | None, Some Decision, _ ->
             LifecycleProjection.HumanPark(
                 AwaitingHumanDecision,
-                { Revision = observedAt; Reason = "decision-class work requires a human decision" })
+                {
+                    Revision = observedAt
+                    Reason = "decision-class work requires a human decision"
+                }
+            )
         | None, _, (Undeclared | DeclaredNone) ->
             LifecycleProjection.Backlog
-                { Revision = observedAt; Reason = "touch-set policy is not schedulable" }
+                {
+                    Revision = observedAt
+                    Reason = "touch-set policy is not schedulable"
+                }
         | None, _, (DeclaredChore | Declared _) -> LifecycleProjection.Auto
         | None, _, Unreadable reason ->
             LifecycleProjection.Deferred($"touch-set unreadable: %s{reason}", None, observedAt)
 
     let private lifecycleObservation observedAt (item: Item) delivery =
-        let fact value : LifecycleProjection.Fact<_> = { ObservedAt = observedAt; Value = value }
+        let fact value : LifecycleProjection.Fact<_> =
+            {
+                ObservedAt = observedAt
+                Value = value
+            }
+
         let pullRequest =
             item.ItemPr
             |> Option.map (fun number ->
-                ({ Number = number; Open = true; ReviewOrCiActive = true }: LifecycleProjection.PullRequest))
-        ({ Claim = fact item.Claim
-           PullRequest = fact pullRequest
-           Blockers = fact item.Blockers
-           Delivery = fact delivery
-           Issue = fact item.State }: LifecycleProjection.Observation)
+                ({
+                    Number = number
+                    Open = true
+                    ReviewOrCiActive = true
+                }
+                : LifecycleProjection.PullRequest))
+
+        ({
+            Claim = fact item.Claim
+            PullRequest = fact pullRequest
+            Blockers = fact item.Blockers
+            Delivery = fact delivery
+            Issue = fact item.State
+        }
+        : LifecycleProjection.Observation)
 
     let private lifecycleSelection
         observedAt
         (item: Item)
         (delivery: LifecycleProjection.Delivery)
-        (watermark: LifecycleProjection.Watermark option) =
-        let intent = watermark |> Option.map _.Intent |> Option.defaultValue (lifecyclePolicyIntent observedAt item)
+        (watermark: LifecycleProjection.Watermark option)
+        =
+        let intent =
+            watermark
+            |> Option.map _.Intent
+            |> Option.defaultValue (lifecyclePolicyIntent observedAt item)
+
         intent,
         // `item.Kind` — THE ITEM'S OWN `Kind:` LINE, RE-READ ON THIS PASS (.github#2712), and pointedly
         // NOT anything the watermark carries. The line above is the freeze: a watermark's mere existence
@@ -1526,7 +1897,12 @@ module Client =
     /// ZERO REST IS THE COMMON CASE: an item with no `Blocked by` value spends one resolver read (against
     /// a board the caller has already bootstrapped) and no REST at all.
     let private liveBlockers (ctx: Context) (board: Board.BoardMap) (ref: Ref) : Errors.IoResult<Blocker list> =
-        let unparseable token = { Ref = None; Raw = token; State = BlockerUnparseable }
+        let unparseable token =
+            {
+                Ref = None
+                Raw = token
+                State = BlockerUnparseable
+            }
 
         let resolve (token: string) : Errors.IoResult<Blocker> =
             match Blockers.canonicalizeBlockedBy ref.Owner ref.Repo token with
@@ -1539,7 +1915,12 @@ module Client =
                 | Error _ -> Ok(unparseable token)
                 | Ok target ->
                     Reads.blockerState ctx.Transport target.Owner target.Repo target.Number
-                    |> Result.map (fun state -> { Ref = Some target; Raw = target.Short; State = state })
+                    |> Result.map (fun state ->
+                        {
+                            Ref = Some target
+                            Raw = target.Short
+                            State = state
+                        })
 
         match Board.itemBlockedBy ctx.Transport board ref.Owner ref.Repo ref.Number with
         | Error e -> Error e
@@ -1612,12 +1993,19 @@ module Client =
         (held: Writes.Held)
         : Result<BoardStatus, string> =
 
-        let claim : Claim =
-            { Worker = held.Worker
-              Session = held.Session
-              AgeSeconds = 0
-              PreviousStatus = held.PreviousStatus }
-        let fact value : LifecycleProjection.Fact<_> = { ObservedAt = observedAt; Value = value }
+        let claim: Claim =
+            {
+                Worker = held.Worker
+                Session = held.Session
+                AgeSeconds = 0
+                PreviousStatus = held.PreviousStatus
+            }
+
+        let fact value : LifecycleProjection.Fact<_> =
+            {
+                ObservedAt = observedAt
+                Value = value
+            }
 
         // The item's OWN open `item/<n>-*` PR, constructed exactly as `lifecycleObservation` constructs it
         // from `item.ItemPr`. `LivenessUnknown` and a propagated transport/rate-limit error are the two
@@ -1626,7 +2014,16 @@ module Client =
         let pullRequest =
             match Reads.prAlive ctx.Transport ref.Owner ref.Repo ref.Number with
             | Ok(LeaseExpiredPrOpen pr) ->
-                Ok(Some({ Number = pr; Open = true; ReviewOrCiActive = true }: LifecycleProjection.PullRequest))
+                Ok(
+                    Some(
+                        {
+                            Number = pr
+                            Open = true
+                            ReviewOrCiActive = true
+                        }
+                        : LifecycleProjection.PullRequest
+                    )
+                )
             // No open PR: `LeaseExpiredNoPr` and `LeaseExpiredBranchPushed` are both DEFINITE negatives
             // about a PULL REQUEST (a pushed branch is proof of life, but it is not a PR, and `ItemPr`
             // carries the same reading at Scan.fs's own probe).
@@ -1679,7 +2076,8 @@ module Client =
         let kind =
             match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
             | Ok body -> Ok(Kind.govern (Kind.fromBody body))
-            | Error e -> Error $"the item's body could not be read, so its `Kind:` is UNKNOWN — not absent: %s{Errors.explain e}"
+            | Error e ->
+                Error $"the item's body could not be read, so its `Kind:` is UNKNOWN — not absent: %s{Errors.explain e}"
 
         // ALL FOUR READS ARE MADE, then judged — deliberately, not as an oversight. Short-circuiting on the
         // first failure would make this path's cost depend on which read failed, and a claim whose spend
@@ -1696,13 +2094,21 @@ module Client =
         | Ok pullRequest, Ok issue, Ok comments, Ok blockers, Ok kind ->
             let watermark = LifecycleProjection.tryWatermark comments
 
-            let observation : LifecycleProjection.Observation =
-                { Claim = fact (Some(claim, LeaseHeld))
-                  PullRequest = fact pullRequest
-                  Blockers = fact blockers
-                  Delivery =
-                    fact ({ Outstanding = false; DoneStamped = Done.hasReceiptFor ref comments }: LifecycleProjection.Delivery)
-                  Issue = fact issue }
+            let observation: LifecycleProjection.Observation =
+                {
+                    Claim = fact (Some(claim, LeaseHeld))
+                    PullRequest = fact pullRequest
+                    Blockers = fact blockers
+                    Delivery =
+                        fact (
+                            {
+                                Outstanding = false
+                                DoneStamped = Done.hasReceiptFor ref comments
+                            }
+                            : LifecycleProjection.Delivery
+                        )
+                    Issue = fact issue
+                }
 
             let intent =
                 watermark |> Option.map _.Intent |> Option.defaultValue LifecycleProjection.Auto
@@ -1721,19 +2127,30 @@ module Client =
     /// Next/AfterDone consume the same reducer as reconcile. Only its verified destination is admitted to
     /// the chore queue; Chore.derive remains unable to manufacture a Status repair.
     let private lifecycleOfferChores (ctx: Context) (observed: Chore.Board) =
-        let items = match observed with | Chore.Whole values | Chore.Filtered values -> values
+        let items =
+            match observed with
+            | Chore.Whole values
+            | Chore.Filtered values -> values
+
         items
         |> List.choose (fun item ->
-            if item.Status = Done then None
+            if item.Status = Done then
+                None
             else
                 match Reads.commentBodies ctx.Transport item.Ref.Owner item.Ref.Repo item.Ref.Number with
                 | Error _ -> None
                 | Ok comments ->
                     let observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-                    let delivery : LifecycleProjection.Delivery =
-                        { Outstanding = false; DoneStamped = Done.hasReceiptFor item.Ref comments }
+
+                    let delivery: LifecycleProjection.Delivery =
+                        {
+                            Outstanding = false
+                            DoneStamped = Done.hasReceiptFor item.Ref comments
+                        }
+
                     let _, selected =
                         lifecycleSelection observedAt item delivery (LifecycleProjection.tryWatermark comments)
+
                     match selected with
                     | LifecycleProjection.Project(destination, _) -> Chore.lifecycleProjection item destination
                     // NO CHORE for a standing row — no park, no promote, no `Done` (.github#2712 AC2).
@@ -1838,7 +2255,13 @@ module Client =
         // look" and then compared as though it had been read.
         | Ok(rows, doc, _) -> offerBoardOf rows doc
 
-    let private offerChoreAt (ctx: Context) (opts: Options) (boundary: Chore.Boundary) (repo: string) (observed: Chore.Board) : unit =
+    let private offerChoreAt
+        (ctx: Context)
+        (opts: Options)
+        (boundary: Chore.Boundary)
+        (repo: string)
+        (observed: Chore.Board)
+        : unit =
         // No worker id resolves ⇒ no lock is possible ⇒ no offer. `next` itself needs no worker, and that
         // asymmetry is deliberate: the ANSWER does not touch a lock, the OFFER is nothing but one. Note this
         // uses `Identity.resolve` directly rather than `worker`, which PRINTS a #419 warning and would make
@@ -1855,7 +2278,18 @@ module Client =
             // `Blocked` row and `CLOSED-ISSUE-NOT-DONE` a closed one, and bash filtered on
             // `Status ∈ {Ready, Backlog}` before the engine was asked, so under it neither could ever fire.
             let lifecycle = lifecycleOfferChores ctx observed
-            Chores.offerWithLifecycle lifecycle ctx.Transport boundary (WorkerId w.Id) (selfOf w) session ctx.ChoreLocks ctx.Owner repo observed
+
+            Chores.offerWithLifecycle
+                lifecycle
+                ctx.Transport
+                boundary
+                (WorkerId w.Id)
+                (selfOf w)
+                session
+                ctx.ChoreLocks
+                ctx.Owner
+                repo
+                observed
             |> Option.iter (fun (chore, lockRef) -> eprint (Chores.render chore lockRef))
 
     /// `next`'s call site. The repo the offer is FOR: `--repo` when given, else the checkout we are standing
@@ -1935,8 +2369,7 @@ module Client =
     /// default-scoped, that reuse would silently relabel a slice `Whole` and the fail-open returns with no
     /// compile error. `wholeBoard` is the only door, so the re-read buys the guarantee back.
     let private offerChoreAtNext (ctx: Context) (opts: Options) : unit =
-        let repo =
-            opts.Repo |> Option.orElse ctx.DefaultRepo |> Option.defaultValue ""
+        let repo = opts.Repo |> Option.orElse ctx.DefaultRepo |> Option.defaultValue ""
 
         // The free question first, exactly as `Chores.offer` does it and for the same reason: a repo with no
         // chore lock must not buy a board read to hear so.
@@ -2000,7 +2433,9 @@ module Client =
         // not know — which is still a case that reaches here, and is still one nobody should pay a scan for.
         match Options.choreLockRef ctx.ChoreLocks ctx.Owner ref.Repo with
         | None -> ()
-        | Some _ -> wholeBoard ctx opts |> Option.iter (offerChoreAt ctx opts Chore.AfterDone ref.Repo)
+        | Some _ ->
+            wholeBoard ctx opts
+            |> Option.iter (offerChoreAt ctx opts Chore.AfterDone ref.Repo)
 
     let next (ctx: Context) (opts: Options) : int =
         // `next` is `batch` capped at one. The cap is the ONLY difference — the decision is identical, so
@@ -2095,19 +2530,28 @@ module Client =
     /// generic reconcile dispatcher.  A scan's earlier blocker observation is not a substitute: the
     /// field can change before this mutation is emitted.
     let private requireCoherentBlockedWrite (ctx: Context) (ref: Ref) (status: BoardStatus option) : Result<unit, int> =
-        if status <> Some BoardStatus.Blocked then Ok()
+        if status <> Some BoardStatus.Blocked then
+            Ok()
         else
             match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
-            | Error e -> eprint $"fsgg-coord-engine: Status=Blocked: board unreadable ({Errors.explain e})"; Error ExitError
+            | Error e ->
+                eprint $"fsgg-coord-engine: Status=Blocked: board unreadable ({Errors.explain e})"
+                Error ExitError
             | Ok board ->
                 match Board.itemBlockedBy ctx.Transport board ref.Owner ref.Repo ref.Number with
                 | Ok(Some value) when not (String.IsNullOrWhiteSpace value) -> Ok()
-                | Error e -> eprint $"fsgg-coord-engine: Status=Blocked: Blocked by unreadable ({Errors.explain e})"; Error ExitError
+                | Error e ->
+                    eprint $"fsgg-coord-engine: Status=Blocked: Blocked by unreadable ({Errors.explain e})"
+                    Error ExitError
                 | Ok _ ->
                     match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
                     | Ok body when HumanBlock.parse body |> Option.isSome -> Ok()
-                    | Ok _ -> eprint "fsgg-coord-engine: Status=Blocked refuses an incoherent park (.github#2079)."; Error ExitError
-                    | Error e -> eprint $"fsgg-coord-engine: Status=Blocked: body unreadable ({Errors.explain e})"; Error ExitError
+                    | Ok _ ->
+                        eprint "fsgg-coord-engine: Status=Blocked refuses an incoherent park (.github#2079)."
+                        Error ExitError
+                    | Error e ->
+                        eprint $"fsgg-coord-engine: Status=Blocked: body unreadable ({Errors.explain e})"
+                        Error ExitError
 
     /// THE ONE RESOLVED-STATUS BOUNDARY FOR A `Ready` WRITE (.github#2698) — the deliberate mirror of
     /// `requireCoherentBlockedWrite` directly above, and placed beside it so the two lifecycle columns
@@ -2139,7 +2583,8 @@ module Client =
     /// preserved rather than flattened to 1, so a rate-limited read stays EX_RATE and keeps its back-off
     /// contract instead of reading to a JSON worker as a permanent refusal.
     let private requireCurrentRouteIfReady (ctx: Context) (ref: Ref) (status: BoardStatus option) : Result<unit, int> =
-        if status <> Some BoardStatus.Ready then Ok()
+        if status <> Some BoardStatus.Ready then
+            Ok()
         else
             match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.readDeliveryRouteComments ctx ref with
             | Error e ->
@@ -2192,6 +2637,7 @@ module Client =
 itself could not be resolved (a credential/visibility gap), never mistake this for \"reached the board, \
 nothing to reconcile\". The remedy is org-level (grant this token Projects v2 read/write, or provision a \
 scoped credential) and is tracked at .github#2332, not fixable from this repo's tree."
+
             ExitNoVerdict
         | Error e -> fail e
         // The scan ROWS, no longer discarded: `enrichBoardFacts` joins the board's `Class` column and each
@@ -2239,7 +2685,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // actually posted to, so `Outstanding` measured an always-empty set and stayed `false`
                 // regardless of what was truly owed: silently reproducing the exact `.github#2135`/
                 // `.github#2333` failure this projector exists to prevent, parsing precision aside.
-                let resultLabel = function
+                let resultLabel =
+                    function
                     | LifecycleProjection.Project(status, _) -> statusWireName status
                     // RENDERED DISTINCTLY, never as a `withheld:` reason. This label is what the reconcile
                     // health row reports as `intended`, and it is read by a human deciding whether the
@@ -2248,236 +2695,300 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     // permanent fact in a vocabulary that means "try again".
                     | LifecycleProjection.Exempt kind -> $"exempt: %s{itemKindWireName kind}"
                     | LifecycleProjection.Withheld reason -> $"withheld: %s{reason}"
-                let intentLabel = function
+
+                let intentLabel =
+                    function
                     | LifecycleProjection.Auto -> "auto"
                     | LifecycleProjection.Backlog _ -> "backlog"
                     | LifecycleProjection.HumanPark(AwaitingHumanDecision, _) -> "human-decision"
                     | LifecycleProjection.HumanPark(AwaitingHumanAction, _) -> "human-action"
                     | LifecycleProjection.Deferred _ -> "deferred"
+
                 let lifecycleHealthRows = ResizeArray<_>()
+
                 let lifecycleChores, lifecycleWatermarks =
                     lifecycleItems
-                    |> List.fold (fun (chores, watermarks) item ->
-                        // A SETTLED ROW IS SWEPT, NOT READ — and this is `.github#2300` again, arriving
-                        // through the projector rather than the route search. `State = Closed` reads as a
-                        // narrow condition and is the OPPOSITE of one: a closed row is the only kind this
-                        // board accumulates, so this gate names ~99% of it and grows by one row for every
-                        // item the fleet ever completes. Measured on the live board (2026-08-11, one
-                        // `reconcile --json` dry run behind a logging proxy): 2,159 of 2,181 rows are
-                        // closed, and the pass spent 2,050+ billed REST requests, 1,847 of them exactly
-                        // here, against a 5,000/hr budget — so a `check-board` pass (dry-run, apply, fresh,
-                        // lint) could not finish inside one hour and the board driver exhausted the fleet's
-                        // budget before dispatching a single worker. `Reads.commentBodies` is unconditional
-                        // (`IfNoneMatch = None`) and paginates with the whole thread, so none of it is
-                        // recoverable by caching.
-                        //
-                        // THE BOUND IS A PROOF, NOT A BUDGET HEURISTIC — the same standard `memoisable`
-                        // holds. For `Closed` + `Done`, the lifecycle reducer has exactly three
-                        // reachable answers, and the read cannot change ANY of them:
-                        //   * an unresolved blocker → `Project(Blocked)`. Decided by `observation.Blockers`,
-                        //     a free scan fact, ABOVE the closure arm — so it still fires here, unread.
-                        //   * `DoneStamped` → `Project(Done)`, and `Chore.lifecycleProjection` returns
-                        //     `None` on `item.Status = destination`. No chore, and — because the watermark
-                        //     is added only on the `Some chore` arm below — no watermark either.
-                        //   * no receipt → `Withheld "closed issue has no verified done receipt"`. Also no
-                        //     chore, also no watermark. Closure is never an instruction to demote a row
-                        //     (`project`'s own comment), so nothing is lost by not distinguishing these two.
-                        // Both read-dependent answers are already no-ops, so skipping the read is
-                        // BEHAVIOUR-PRESERVING, not a trade — identical chores, identical watermarks.
-                        //
-                        // WHAT IS DELIBERATELY STILL READ: a closed row that is NOT `Done`. That is
-                        // `.github#2225`'s post-merge window — closed, claim live, obligations outstanding —
-                        // and it is a first-class in-flight state whose receipt this projector must see. It
-                        // is also small and bounded by the fleet's own concurrency, which is the difference
-                        // that matters: it does not grow with the board's history.
-                        let settledDone = item.State = Closed && item.Status = Done
+                    |> List.fold
+                        (fun (chores, watermarks) item ->
+                            // A SETTLED ROW IS SWEPT, NOT READ — and this is `.github#2300` again, arriving
+                            // through the projector rather than the route search. `State = Closed` reads as a
+                            // narrow condition and is the OPPOSITE of one: a closed row is the only kind this
+                            // board accumulates, so this gate names ~99% of it and grows by one row for every
+                            // item the fleet ever completes. Measured on the live board (2026-08-11, one
+                            // `reconcile --json` dry run behind a logging proxy): 2,159 of 2,181 rows are
+                            // closed, and the pass spent 2,050+ billed REST requests, 1,847 of them exactly
+                            // here, against a 5,000/hr budget — so a `check-board` pass (dry-run, apply, fresh,
+                            // lint) could not finish inside one hour and the board driver exhausted the fleet's
+                            // budget before dispatching a single worker. `Reads.commentBodies` is unconditional
+                            // (`IfNoneMatch = None`) and paginates with the whole thread, so none of it is
+                            // recoverable by caching.
+                            //
+                            // THE BOUND IS A PROOF, NOT A BUDGET HEURISTIC — the same standard `memoisable`
+                            // holds. For `Closed` + `Done`, the lifecycle reducer has exactly three
+                            // reachable answers, and the read cannot change ANY of them:
+                            //   * an unresolved blocker → `Project(Blocked)`. Decided by `observation.Blockers`,
+                            //     a free scan fact, ABOVE the closure arm — so it still fires here, unread.
+                            //   * `DoneStamped` → `Project(Done)`, and `Chore.lifecycleProjection` returns
+                            //     `None` on `item.Status = destination`. No chore, and — because the watermark
+                            //     is added only on the `Some chore` arm below — no watermark either.
+                            //   * no receipt → `Withheld "closed issue has no verified done receipt"`. Also no
+                            //     chore, also no watermark. Closure is never an instruction to demote a row
+                            //     (`project`'s own comment), so nothing is lost by not distinguishing these two.
+                            // Both read-dependent answers are already no-ops, so skipping the read is
+                            // BEHAVIOUR-PRESERVING, not a trade — identical chores, identical watermarks.
+                            //
+                            // WHAT IS DELIBERATELY STILL READ: a closed row that is NOT `Done`. That is
+                            // `.github#2225`'s post-merge window — closed, claim live, obligations outstanding —
+                            // and it is a first-class in-flight state whose receipt this projector must see. It
+                            // is also small and bounded by the fleet's own concurrency, which is the difference
+                            // that matters: it does not grow with the board's history.
+                            let settledDone = item.State = Closed && item.Status = Done
 
-                        // `Backlog` IS ON THIS LIST, AND ITS ABSENCE WAS THE OTHER HALF OF .github#2690.
-                        //
-                        // This read is the ONLY place a row's lifecycle watermark is recovered — the
-                        // delivery facts and `tryWatermark` come out of the same `commentBodies` call, two
-                        // lines below — so a column excluded here is a column whose recorded intent the
-                        // reducer never sees. `lifecycleSelection` then falls through to
-                        // `lifecyclePolicyIntent`, which answers `Auto` for any row with declared paths, and
-                        // `Auto` projects `Ready`. That is a deliberate park promoted by a pass that did not
-                        // read the park, and no operator-writable intent channel could have survived it: the
-                        // receipt was written, and nothing ever looked.
-                        //
-                        // IT IS ALSO WHY .github#2690's DIRECTION C NEEDED NO OPERATOR AT ALL. `add` files a
-                        // row into an empty column at `Backlog` (#1823) precisely so promotion stays "a
-                        // deliberate act"; the very next pass skipped the read and promoted it anyway.
-                        // `#2678`, `#2679`, `#2683`, `#2684` and `#2688` all read `Ready` within the hour of
-                        // being filed.
-                        //
-                        // THE .github#2300 BOUND IS UNTOUCHED, and this is not a quiet reopening of it. That
-                        // skip's measured subject is CLOSED history — 2,159 of 2,181 rows, 1,847 billed REST
-                        // requests in one pass — and `settledDone` above still names exactly it. `Backlog` is
-                        // not history: it is the live triage queue, bounded by intake rather than by
-                        // everything the fleet has ever completed, and it is the same population as the
-                        // `Ready` rows one line down whose comments this pass already reads unconditionally.
-                        // So the increment is at most the order of the `Ready` cost already being paid, not
-                        // the order of the cost `#2300` removed. (The live Backlog row count is `unverified`
-                        // here: reading it needs a board scan, and a claimed worker gets one scan, spent on
-                        // `take`.)
-                        let needsDeliveryRead =
-                            not settledDone
-                            && (item.State = Closed
-                                || item.Status = InReview
-                                || item.Status = InProgress
-                                || item.Status = Blocked
-                                || item.Status = BoardStatus.Backlog
-                                || item.Status = BoardStatus.Ready)
+                            // `Backlog` IS ON THIS LIST, AND ITS ABSENCE WAS THE OTHER HALF OF .github#2690.
+                            //
+                            // This read is the ONLY place a row's lifecycle watermark is recovered — the
+                            // delivery facts and `tryWatermark` come out of the same `commentBodies` call, two
+                            // lines below — so a column excluded here is a column whose recorded intent the
+                            // reducer never sees. `lifecycleSelection` then falls through to
+                            // `lifecyclePolicyIntent`, which answers `Auto` for any row with declared paths, and
+                            // `Auto` projects `Ready`. That is a deliberate park promoted by a pass that did not
+                            // read the park, and no operator-writable intent channel could have survived it: the
+                            // receipt was written, and nothing ever looked.
+                            //
+                            // IT IS ALSO WHY .github#2690's DIRECTION C NEEDED NO OPERATOR AT ALL. `add` files a
+                            // row into an empty column at `Backlog` (#1823) precisely so promotion stays "a
+                            // deliberate act"; the very next pass skipped the read and promoted it anyway.
+                            // `#2678`, `#2679`, `#2683`, `#2684` and `#2688` all read `Ready` within the hour of
+                            // being filed.
+                            //
+                            // THE .github#2300 BOUND IS UNTOUCHED, and this is not a quiet reopening of it. That
+                            // skip's measured subject is CLOSED history — 2,159 of 2,181 rows, 1,847 billed REST
+                            // requests in one pass — and `settledDone` above still names exactly it. `Backlog` is
+                            // not history: it is the live triage queue, bounded by intake rather than by
+                            // everything the fleet has ever completed, and it is the same population as the
+                            // `Ready` rows one line down whose comments this pass already reads unconditionally.
+                            // So the increment is at most the order of the `Ready` cost already being paid, not
+                            // the order of the cost `#2300` removed. (The live Backlog row count is `unverified`
+                            // here: reading it needs a board scan, and a claimed worker gets one scan, spent on
+                            // `take`.)
+                            let needsDeliveryRead =
+                                not settledDone
+                                && (item.State = Closed
+                                    || item.Status = InReview
+                                    || item.Status = InProgress
+                                    || item.Status = Blocked
+                                    || item.Status = BoardStatus.Backlog
+                                    || item.Status = BoardStatus.Ready)
 
-                        let delivery =
-                            if not needsDeliveryRead then
-                                Some(
-                                    ({ Outstanding = false; DoneStamped = false }: LifecycleProjection.Delivery),
-                                    None,
-                                    false,
-                                    false
+                            let delivery =
+                                if not needsDeliveryRead then
+                                    Some(
+                                        ({
+                                            Outstanding = false
+                                            DoneStamped = false
+                                        }
+                                        : LifecycleProjection.Delivery),
+                                        None,
+                                        false,
+                                        false
+                                    )
+                                else
+                                    match
+                                        Reads.commentBodies ctx.Transport item.Ref.Owner item.Ref.Repo item.Ref.Number
+                                    with
+                                    | Error error ->
+                                        lifecycleHealthRows.Add(
+                                            {|
+                                                current = statusWireName item.Status
+                                                intended =
+                                                    $"withheld: completion evidence unreadable: %s{Errors.explain error}"
+                                                intent = "unknown"
+                                                readComplete = false
+                                                subject = item.Ref.Canonical
+                                            |}
+                                        )
+
+                                        None
+                                    | Ok issueComments ->
+                                        // No PR yet ⇒ nothing has been merged to owe a release obligation, so
+                                        // `Outstanding = false` — the same "nothing to check" reading
+                                        // `needsDeliveryRead` already gives a row with no PR at all.
+                                        // `outstandingObligations` above is the ANCHORED, ID-MATCHED, REUSED
+                                        // check for every other case — see its doc comment for why a quoted
+                                        // marker can never pass it the way the prior bulk `.Contains` scan let
+                                        // one through.
+                                        let outstanding =
+                                            match item.ItemPr with
+                                            | None -> false
+                                            | Some pr ->
+                                                outstandingObligations
+                                                    (Reads.prHeadSha ctx.Transport item.Ref.Owner item.Ref.Repo pr)
+                                                    (Reads.commentsWithIdentity
+                                                        ctx.Transport
+                                                        item.Ref.Owner
+                                                        item.Ref.Repo
+                                                        pr)
+
+                                        let completionState = Done.receiptStateFor item.Ref issueComments
+                                        let correctionState = Done.completionCorrectionStateFor item.Ref issueComments
+
+                                        match completionState, correctionState with
+                                        | Done.InvalidCompletionReceipt errors, _ ->
+                                            let detail = String.concat "; " errors
+
+                                            lifecycleHealthRows.Add(
+                                                {|
+                                                    current = statusWireName item.Status
+                                                    intended =
+                                                        $"withheld: invalid delivery completion evidence: %s{detail}"
+                                                    intent = "unknown"
+                                                    readComplete = false
+                                                    subject = item.Ref.Canonical
+                                                |}
+                                            )
+
+                                            eprint
+                                                $"fsgg-coord-engine: reconcile: %s{item.Ref.Short} has invalid delivery completion evidence: %s{detail}"
+
+                                            None
+                                        | _, Done.InvalidCompletionCorrection errors ->
+                                            let detail = String.concat "; " errors
+
+                                            lifecycleHealthRows.Add(
+                                                {|
+                                                    current = statusWireName item.Status
+                                                    intended =
+                                                        $"withheld: invalid completion correction evidence: %s{detail}"
+                                                    intent = "unknown"
+                                                    readComplete = false
+                                                    subject = item.Ref.Canonical
+                                                |}
+                                            )
+
+                                            eprint
+                                                $"fsgg-coord-engine: reconcile: %s{item.Ref.Short} has invalid completion correction evidence: %s{detail}"
+
+                                            None
+                                        | receiptState, correctionState ->
+                                            let doneStamped =
+                                                match receiptState with
+                                                | Done.VerifiedCompletionReceipt _ -> true
+                                                | Done.LegacyReceipt
+                                                | Done.NoReceipt -> false
+                                                | Done.InvalidCompletionReceipt _ -> false
+
+                                            let correctionPending =
+                                                match correctionState with
+                                                | Done.VerifiedCompletionCorrection _ -> true
+                                                | Done.NoCompletionCorrection
+                                                | Done.InvalidCompletionCorrection _ -> false
+
+                                            let needsCorrection =
+                                                item.State = Closed
+                                                && (receiptState = Done.NoReceipt || receiptState = Done.LegacyReceipt)
+                                                && correctionState = Done.NoCompletionCorrection
+
+                                            let needsCompletionProjection =
+                                                match receiptState with
+                                                | Done.VerifiedCompletionReceipt _ ->
+                                                    item.State <> Closed || item.Status <> Done
+                                                | _ -> false
+
+                                            Some(
+                                                ({
+                                                    Outstanding = outstanding || correctionPending
+                                                    DoneStamped = doneStamped
+                                                }
+                                                : LifecycleProjection.Delivery),
+                                                LifecycleProjection.tryWatermark issueComments,
+                                                needsCorrection,
+                                                needsCompletionProjection
+                                            )
+
+                            match delivery with
+                            | None -> chores, watermarks // an unreadable fact withholds its write; scheduled reconciliation retries.
+                            | Some(delivery, watermark, needsCorrection, needsCompletionProjection) ->
+                                let observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                                let intent, selected = lifecycleSelection observedAt item delivery watermark
+
+                                let correctionDestination =
+                                    if not (List.isEmpty item.Blockers) && not (Blockers.cleared item.Blockers) then
+                                        Blocked
+                                    else
+                                        InReview
+
+                                let selectedForHealth =
+                                    if needsCompletionProjection then
+                                        LifecycleProjection.Project(Done, observedAt)
+                                    elif needsCorrection then
+                                        LifecycleProjection.Project(correctionDestination, observedAt)
+                                    else
+                                        selected
+
+                                lifecycleHealthRows.Add(
+                                    {|
+                                        current = statusWireName item.Status
+                                        intended = resultLabel selectedForHealth
+                                        intent = intentLabel intent
+                                        readComplete = true
+                                        subject = item.Ref.Canonical
+                                    |}
                                 )
-                            else
-                                match Reads.commentBodies ctx.Transport item.Ref.Owner item.Ref.Repo item.Ref.Number with
-                                | Error error ->
-                                    lifecycleHealthRows.Add(
-                                        {| current = statusWireName item.Status
-                                           intended = $"withheld: completion evidence unreadable: %s{Errors.explain error}"
-                                           intent = "unknown"
-                                           readComplete = false
-                                           subject = item.Ref.Canonical |})
-                                    None
-                                | Ok issueComments ->
-                                    // No PR yet ⇒ nothing has been merged to owe a release obligation, so
-                                    // `Outstanding = false` — the same "nothing to check" reading
-                                    // `needsDeliveryRead` already gives a row with no PR at all.
-                                    // `outstandingObligations` above is the ANCHORED, ID-MATCHED, REUSED
-                                    // check for every other case — see its doc comment for why a quoted
-                                    // marker can never pass it the way the prior bulk `.Contains` scan let
-                                    // one through.
-                                    let outstanding =
-                                        match item.ItemPr with
-                                        | None -> false
-                                        | Some pr ->
-                                            outstandingObligations
-                                                (Reads.prHeadSha ctx.Transport item.Ref.Owner item.Ref.Repo pr)
-                                                (Reads.commentsWithIdentity ctx.Transport item.Ref.Owner item.Ref.Repo pr)
-                                    let completionState = Done.receiptStateFor item.Ref issueComments
-                                    let correctionState = Done.completionCorrectionStateFor item.Ref issueComments
-                                    match completionState, correctionState with
-                                    | Done.InvalidCompletionReceipt errors, _ ->
-                                        let detail = String.concat "; " errors
-                                        lifecycleHealthRows.Add(
-                                            {| current = statusWireName item.Status
-                                               intended = $"withheld: invalid delivery completion evidence: %s{detail}"
-                                               intent = "unknown"
-                                               readComplete = false
-                                               subject = item.Ref.Canonical |})
-                                        eprint
-                                            $"fsgg-coord-engine: reconcile: %s{item.Ref.Short} has invalid delivery completion evidence: %s{detail}"
-                                        None
-                                    | _, Done.InvalidCompletionCorrection errors ->
-                                        let detail = String.concat "; " errors
-                                        lifecycleHealthRows.Add(
-                                            {| current = statusWireName item.Status
-                                               intended = $"withheld: invalid completion correction evidence: %s{detail}"
-                                               intent = "unknown"
-                                               readComplete = false
-                                               subject = item.Ref.Canonical |})
-                                        eprint
-                                            $"fsgg-coord-engine: reconcile: %s{item.Ref.Short} has invalid completion correction evidence: %s{detail}"
-                                        None
-                                    | receiptState, correctionState ->
-                                        let doneStamped =
-                                            match receiptState with
-                                            | Done.VerifiedCompletionReceipt _ -> true
-                                            | Done.LegacyReceipt
-                                            | Done.NoReceipt -> false
-                                            | Done.InvalidCompletionReceipt _ -> false
-                                        let correctionPending =
-                                            match correctionState with
-                                            | Done.VerifiedCompletionCorrection _ -> true
-                                            | Done.NoCompletionCorrection
-                                            | Done.InvalidCompletionCorrection _ -> false
-                                        let needsCorrection =
-                                            item.State = Closed
-                                            && (receiptState = Done.NoReceipt || receiptState = Done.LegacyReceipt)
-                                            && correctionState = Done.NoCompletionCorrection
-                                        let needsCompletionProjection =
-                                            match receiptState with
-                                            | Done.VerifiedCompletionReceipt _ ->
-                                                item.State <> Closed || item.Status <> Done
-                                            | _ -> false
-                                        Some
-                                            (({ Outstanding = outstanding || correctionPending
-                                                DoneStamped = doneStamped }: LifecycleProjection.Delivery),
-                                             LifecycleProjection.tryWatermark issueComments,
-                                             needsCorrection,
-                                             needsCompletionProjection)
 
-                        match delivery with
-                        | None -> chores, watermarks // an unreadable fact withholds its write; scheduled reconciliation retries.
-                        | Some(delivery, watermark, needsCorrection, needsCompletionProjection) ->
-                            let observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-                            let intent, selected = lifecycleSelection observedAt item delivery watermark
-                            let correctionDestination =
-                                if not (List.isEmpty item.Blockers) && not (Blockers.cleared item.Blockers) then
-                                    Blocked
-                                else
-                                    InReview
-                            let selectedForHealth =
                                 if needsCompletionProjection then
-                                    LifecycleProjection.Project(Done, observedAt)
-                                elif needsCorrection then
-                                    LifecycleProjection.Project(correctionDestination, observedAt)
-                                else
-                                    selected
-                            lifecycleHealthRows.Add(
-                                {| current = statusWireName item.Status
-                                   intended = resultLabel selectedForHealth
-                                   intent = intentLabel intent
-                                   readComplete = true
-                                   subject = item.Ref.Canonical |})
-                            if needsCompletionProjection then
-                                match Chore.completionProjection item with
-                                | Some chore ->
-                                    chore :: chores,
-                                    Map.add item.Ref
-                                        ({ ObservedAt = observedAt
-                                           Status = Done
-                                           Intent = intent }: LifecycleProjection.Watermark)
-                                        watermarks
-                                | None -> chores, watermarks
-                            elif needsCorrection then
-                                match Chore.prematureCompletion item correctionDestination with
-                                | Some chore ->
-                                    chore :: chores,
-                                    Map.add item.Ref
-                                        ({ ObservedAt = observedAt
-                                           Status = correctionDestination
-                                           Intent = intent }: LifecycleProjection.Watermark)
-                                        watermarks
-                                | None -> chores, watermarks
-                            else
-                                match selected with
-                                | LifecycleProjection.Project(destination, timestamp) ->
-                                    match Chore.lifecycleProjection item destination with
+                                    match Chore.completionProjection item with
                                     | Some chore ->
                                         chore :: chores,
-                                        Map.add item.Ref
-                                            ({ ObservedAt = timestamp
-                                               Status = destination
-                                               Intent = intent }: LifecycleProjection.Watermark)
+                                        Map.add
+                                            item.Ref
+                                            ({
+                                                ObservedAt = observedAt
+                                                Status = Done
+                                                Intent = intent
+                                            }
+                                            : LifecycleProjection.Watermark)
                                             watermarks
                                     | None -> chores, watermarks
-                                // NEITHER A CHORE NOR A WATERMARK (.github#2712 AC2 — "no park, no promote, no
-                                // `Done`, no watermark"). This arm is the second half of the exemption and it
-                                // is not redundant with the reducer's: `advance` decides that no STATUS is
-                                // projected, and this decides that no RECEIPT is persisted either. A watermark
-                                // written here would be a durable ordering fact about a lifecycle the row does
-                                // not have, and `tryWatermark` would keep re-asserting it with a fresh
-                                // `ObservedAt` on every pass.
-                                | LifecycleProjection.Exempt _ -> chores, watermarks
-                                | LifecycleProjection.Withheld _ -> chores, watermarks) ([], Map.empty)
+                                elif needsCorrection then
+                                    match Chore.prematureCompletion item correctionDestination with
+                                    | Some chore ->
+                                        chore :: chores,
+                                        Map.add
+                                            item.Ref
+                                            ({
+                                                ObservedAt = observedAt
+                                                Status = correctionDestination
+                                                Intent = intent
+                                            }
+                                            : LifecycleProjection.Watermark)
+                                            watermarks
+                                    | None -> chores, watermarks
+                                else
+                                    match selected with
+                                    | LifecycleProjection.Project(destination, timestamp) ->
+                                        match Chore.lifecycleProjection item destination with
+                                        | Some chore ->
+                                            chore :: chores,
+                                            Map.add
+                                                item.Ref
+                                                ({
+                                                    ObservedAt = timestamp
+                                                    Status = destination
+                                                    Intent = intent
+                                                }
+                                                : LifecycleProjection.Watermark)
+                                                watermarks
+                                        | None -> chores, watermarks
+                                    // NEITHER A CHORE NOR A WATERMARK (.github#2712 AC2 — "no park, no promote, no
+                                    // `Done`, no watermark"). This arm is the second half of the exemption and it
+                                    // is not redundant with the reducer's: `advance` decides that no STATUS is
+                                    // projected, and this decides that no RECEIPT is persisted either. A watermark
+                                    // written here would be a durable ordering fact about a lifecycle the row does
+                                    // not have, and `tryWatermark` would keep re-asserting it with a fresh
+                                    // `ObservedAt` on every pass.
+                                    | LifecycleProjection.Exempt _ -> chores, watermarks
+                                    | LifecycleProjection.Withheld _ -> chores, watermarks)
+                        ([], Map.empty)
 
                 // Scheduling Status has one authority: the intent reducer above. `Chore.derive` remains
                 // responsible only for non-lifecycle maintenance such as stale-claim cleanup and Class.
@@ -2487,6 +2998,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         match chore.Kind.Write with
                         | Some("Status", _) -> false
                         | _ -> true)
+
                 let chores = maintenanceChores @ List.rev lifecycleChores
 
                 // The field write a chore implies — the SINGLE source for the write this phase performs,
@@ -2509,11 +3021,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     match write chore with
                     | Some(field, value) ->
                         let primary = [ field, Board.Set value ]
+
                         match chore.Kind, Map.tryFind chore.Subject lifecycleByRef with
-                        | Chore.LifecycleProjectionLag destination, Some item
-                            when destination <> Blocked
-                                 && not (List.isEmpty item.Blockers)
-                                 && Blockers.cleared item.Blockers ->
+                        | Chore.LifecycleProjectionLag destination, Some item when
+                            destination <> Blocked
+                            && not (List.isEmpty item.Blockers)
+                            && Blockers.cleared item.Blockers
+                            ->
                             primary @ [ "Blocked by", Board.Clear ]
                         | _ -> primary
                     | None -> []
@@ -2529,16 +3043,24 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | None -> "reap expired claim and restore its previous Status"
 
                 let reconcileRow (chore: Chore.Chore) (outcome: ReconcileOutcome option) : ReconcileRow =
-                    { Id = chore.Id
-                      Rule = chore.Kind.RuleId
-                      Subject = chore.Subject
-                      Size = chore.Size.Label
-                      Remedy = target chore
-                      Statement = chore.Statement
-                      Write = write chore
-                      Writes = writesFor chore |> List.map (fun (field, write) -> field, match write with | Board.Set value -> value | Board.Clear -> "")
-                      Observed = None
-                      Outcome = outcome }
+                    {
+                        Id = chore.Id
+                        Rule = chore.Kind.RuleId
+                        Subject = chore.Subject
+                        Size = chore.Size.Label
+                        Remedy = target chore
+                        Statement = chore.Statement
+                        Write = write chore
+                        Writes =
+                            writesFor chore
+                            |> List.map (fun (field, write) ->
+                                field,
+                                match write with
+                                | Board.Set value -> value
+                                | Board.Clear -> "")
+                        Observed = None
+                        Outcome = outcome
+                    }
 
                 /// Emit the machine document, ONCE, and only under `--json`.
                 ///
@@ -2567,6 +3089,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             | Some("Status", value), Some Written, Some _ -> Some(row.Subject.Canonical, value)
                             | _ -> None)
                         |> Map.ofList
+
                     Environment.GetEnvironmentVariable "FSGG_COORD_HEALTH_REPORT"
                     |> Option.ofObj
                     |> Option.filter (String.IsNullOrWhiteSpace >> not)
@@ -2574,27 +3097,40 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         let subjects =
                             lifecycleHealthRows
                             |> Seq.map (fun row ->
-                                let finalApplied = Map.tryFind row.subject verifiedStatusWrites |> Option.defaultValue row.current
+                                let finalApplied =
+                                    Map.tryFind row.subject verifiedStatusWrites |> Option.defaultValue row.current
+
                                 let reversal =
                                     row.intent <> "auto"
                                     && not (row.intended.StartsWith("withheld:", StringComparison.Ordinal))
                                     && finalApplied <> row.intended
-                                {| applied = finalApplied
-                                   current = row.current
-                                   intended = row.intended
-                                   intent = row.intent
-                                   readComplete = row.readComplete
-                                   reversed = reversal
-                                   subject = row.subject |})
+
+                                {|
+                                    applied = finalApplied
+                                    current = row.current
+                                    intended = row.intended
+                                    intent = row.intent
+                                    readComplete = row.readComplete
+                                    reversed = reversal
+                                    subject = row.subject
+                                |})
                             |> Seq.sortBy (fun row -> row.subject)
                             |> Seq.toArray
+
                         let report =
-                            {| applicationMode = applicationMode
-                               completeReadBoundary = "typed-complete-success/1"
-                               schemaVersion = 1
-                               subjectCount = lifecycleItems.Length
-                               subjects = subjects |}
-                        File.WriteAllText(path, JsonSerializer.Serialize(report, JsonSerializerOptions(WriteIndented = true)) + Environment.NewLine))
+                            {|
+                                applicationMode = applicationMode
+                                completeReadBoundary = "typed-complete-success/1"
+                                schemaVersion = 1
+                                subjectCount = lifecycleItems.Length
+                                subjects = subjects
+                            |}
+
+                        File.WriteAllText(
+                            path,
+                            JsonSerializer.Serialize(report, JsonSerializerOptions(WriteIndented = true))
+                            + Environment.NewLine
+                        ))
 
                 match opts.Render with
                 | Json -> ()
@@ -2602,12 +3138,20 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     if List.isEmpty chores then
                         printfn "clean — no mechanical board repairs"
                     else
-                        printfn "%s (%d mechanical finding(s))" (if opts.Apply then "applying" else "dry-run") chores.Length
+                        printfn
+                            "%s (%d mechanical finding(s))"
+                            (if opts.Apply then "applying" else "dry-run")
+                            chores.Length
 
                         for chore in chores do
                             printfn "  %-24s %-24s %s" chore.Kind.RuleId chore.Subject.Short (target chore)
 
-                    printfn "judgement findings are report-only: scripts/fsgg-coord lint%s" (if opts.Repo.IsSome then " --repo " + opts.Repo.Value else "")
+                    printfn
+                        "judgement findings are report-only: scripts/fsgg-coord lint%s"
+                        (if opts.Repo.IsSome then
+                             " --repo " + opts.Repo.Value
+                         else
+                             "")
 
                 if not opts.Apply || List.isEmpty chores then
                     // The DRY RUN, and the nothing-to-do apply. No outcome exists, so none is claimed: the
@@ -2640,7 +3184,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         // board after each repair re-runs the expensive closed-row census N times.
                         let verifyWrites (chore: Chore.Chore) (writes: (string * Board.FieldWrite) list) =
                             let read field =
-                                Board.itemFieldValue ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number field
+                                Board.itemFieldValue
+                                    ctx.Transport
+                                    board
+                                    chore.Subject.Owner
+                                    chore.Subject.Repo
+                                    chore.Subject.Number
+                                    field
                                 |> Result.map (Option.defaultValue "")
 
                             let rec readAll remaining observed =
@@ -2656,7 +3206,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             // item ..."`; that is the targeted-read equivalent of the old scan not finding
                             // the row. Preserve the established receipt/diagnostic without treating other
                             // NotFound, malformed, or transport failures as an absence.
-                            | Error(Errors.NotFound subject) when subject.StartsWith("board item ", StringComparison.Ordinal) ->
+                            | Error(Errors.NotFound subject) when
+                                subject.StartsWith("board item ", StringComparison.Ordinal)
+                                ->
                                 Error(None, "the item left the board before fresh verification")
                             | Error e -> Error(None, Errors.explain e)
                             | Ok observedValues ->
@@ -2665,9 +3217,17 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 let mismatches =
                                     writes
                                     |> List.choose (fun (field, requested) ->
-                                        let intended = match requested with | Board.Set value -> value | Board.Clear -> ""
+                                        let intended =
+                                            match requested with
+                                            | Board.Set value -> value
+                                            | Board.Clear -> ""
+
                                         let actual = observed[field]
-                                        if actual = intended then None else Some $"%s{field}: intended '%s{intended}', observed '%s{actual}'")
+
+                                        if actual = intended then
+                                            None
+                                        else
+                                            Some $"%s{field}: intended '%s{intended}', observed '%s{actual}'")
 
                                 if List.isEmpty mismatches then
                                     Ok observedValues
@@ -2735,7 +3295,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             let processPath =
                                 Environment.ProcessPath
                                 |> Option.ofObj
-                                |> Option.defaultWith (fun () -> invalidOp "reconcile: current executable path is unavailable")
+                                |> Option.defaultWith (fun () ->
+                                    invalidOp "reconcile: current executable path is unavailable")
 
                             let psi = ProcessStartInfo(processPath)
                             psi.UseShellExecute <- false
@@ -2802,307 +3363,393 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             child.WaitForExit()
                             reapExit[repo] <- child.ExitCode
 
-                            if child.ExitCode <> ExitGreen then failed <- true)
+                            if child.ExitCode <> ExitGreen then
+                                failed <- true)
 
                         let applied =
-                            [ for chore in chores do
-                                  match write chore with
-                                  | Some("Kind", _) when kindFieldMissing ->
-                                      // One map-level diagnostic above names the remedy, on the `Class`
-                                      // arm's exact terms.
-                                      reconcileRow
-                                          chore
-                                          (Some(
-                                              NotAttempted
-                                                  "the board declares no Kind field; create it with createProjectV2Field before projecting Kind"
-                                          ))
-                                  | Some("Class", _) when classFieldMissing ->
-                                      // One map-level diagnostic above names the remedy. Repeating it for
-                                      // every row would turn a board configuration fact into N failures.
-                                      reconcileRow
-                                          chore
-                                          (Some(
-                                              NotAttempted
-                                                  "the board declares no Class field; create it with createProjectV2Field before projecting Class"
-                                          ))
-                                  | None ->
-                                      // `STALE-CLAIM` — no field write; the `reap` pass above owns it. Its
-                                      // outcome is that pass's exit code, per REPO, and it is reported as
-                                      // `reaped` rather than `written` precisely because it is the weaker
-                                      // observation. A repo with no recorded pass never happens (the pass
-                                      // is driven off these same chores), so an absent entry is honestly
-                                      // "not attempted" rather than a guess at success.
-                                      match reapExit.TryGetValue chore.Subject.Repo with
-                                      | true, code when code = ExitGreen -> reconcileRow chore (Some Reaped)
-                                      | true, code ->
-                                          reconcileRow
-                                              chore
-                                              (Some(
-                                                  Failed
-                                                      $"`reap --repo %s{chore.Subject.Repo} --apply` exited %d{code}"
-                                              ))
-                                      | _ ->
-                                          reconcileRow chore (Some(NotAttempted "no reap pass ran for this repo"))
-                                  | Some(field, value) ->
-                                      let writes = writesFor chore
+                            [
+                                for chore in chores do
+                                    match write chore with
+                                    | Some("Kind", _) when kindFieldMissing ->
+                                        // One map-level diagnostic above names the remedy, on the `Class`
+                                        // arm's exact terms.
+                                        reconcileRow
+                                            chore
+                                            (Some(
+                                                NotAttempted
+                                                    "the board declares no Kind field; create it with createProjectV2Field before projecting Kind"
+                                            ))
+                                    | Some("Class", _) when classFieldMissing ->
+                                        // One map-level diagnostic above names the remedy. Repeating it for
+                                        // every row would turn a board configuration fact into N failures.
+                                        reconcileRow
+                                            chore
+                                            (Some(
+                                                NotAttempted
+                                                    "the board declares no Class field; create it with createProjectV2Field before projecting Class"
+                                            ))
+                                    | None ->
+                                        // `STALE-CLAIM` — no field write; the `reap` pass above owns it. Its
+                                        // outcome is that pass's exit code, per REPO, and it is reported as
+                                        // `reaped` rather than `written` precisely because it is the weaker
+                                        // observation. A repo with no recorded pass never happens (the pass
+                                        // is driven off these same chores), so an absent entry is honestly
+                                        // "not attempted" rather than a guess at success.
+                                        match reapExit.TryGetValue chore.Subject.Repo with
+                                        | true, code when code = ExitGreen -> reconcileRow chore (Some Reaped)
+                                        | true, code ->
+                                            reconcileRow
+                                                chore
+                                                (Some(
+                                                    Failed
+                                                        $"`reap --repo %s{chore.Subject.Repo} --apply` exited %d{code}"
+                                                ))
+                                        | _ -> reconcileRow chore (Some(NotAttempted "no reap pass ran for this repo"))
+                                    | Some(field, value) ->
+                                        let writes = writesFor chore
 
-                                      // `ChoreKind.Write` deliberately carries a variable field/value so
-                                      // reconciliation can project more than Status.  When that resolved
-                                      // pair is `Status=Blocked`, re-check coherence immediately before the
-                                      // transport mutation: the scan that derived this chore is stale by
-                                      // definition once another actor can clear `Blocked by`.
-                                      let resolvedStatus = if field = "Status" then Reads.statusOfName value else None
+                                        // `ChoreKind.Write` deliberately carries a variable field/value so
+                                        // reconciliation can project more than Status.  When that resolved
+                                        // pair is `Status=Blocked`, re-check coherence immediately before the
+                                        // transport mutation: the scan that derived this chore is stale by
+                                        // definition once another actor can clear `Blocked by`.
+                                        let resolvedStatus = if field = "Status" then Reads.statusOfName value else None
 
-                                      // The durable correction fact is written before its mutable Status
-                                      // projection. A retry may observe the same authority and proceed, but
-                                      // contradictory/malformed evidence or a completion receipt that won
-                                      // the race refuses the board mutation.
-                                      let completionProjectionGate =
-                                          match chore.Kind, resolvedStatus with
-                                          | Chore.CompletionProjection, Some Done ->
-                                              match Reads.commentBodies ctx.Transport chore.Subject.Owner chore.Subject.Repo chore.Subject.Number with
-                                              | Error error ->
-                                                  eprint
-                                                      $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion receipt could not be re-read before projection: %s{Errors.explain error}"
-                                                  Error ExitError
-                                              | Ok comments ->
-                                                  match Done.receiptStateFor chore.Subject comments with
-                                                  | Done.VerifiedCompletionReceipt _ ->
-                                                      match Writes.closeIssueCompleted ctx.Transport chore.Subject with
-                                                      | Ok () -> Ok ()
-                                                      | Error error ->
-                                                          eprint
-                                                              $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion receipt is valid but issue closure was not freshly verified: %s{Errors.explain error}"
-                                                          Error ExitError
-                                                  | state ->
-                                                      eprint
-                                                          $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion authority changed before projection: %A{state}"
-                                                      Error ExitError
-                                          | Chore.PrematureCompletion correction, Some actual
-                                              when Chore.completionCorrectionStatus correction = actual ->
-                                              let destination = Chore.completionCorrectionStatus correction
-                                              match
-                                                  Delivery.createCompletionCorrectionReceipt
-                                                      chore.Subject.Canonical
-                                                      destination
-                                                      DateTimeOffset.UtcNow
-                                              with
-                                              | Error errors ->
-                                                  let detail = String.concat "; " errors
-                                                  eprint
-                                                      $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion correction could not be authorized: %s{detail}"
-                                                  Error ExitError
-                                              | Ok receipt ->
-                                                  match Writes.completionCorrectionReceipt ctx.Transport chore.Subject receipt with
-                                                  | Ok () ->
-                                                      match Writes.reopenIssue ctx.Transport chore.Subject with
-                                                      | Ok () -> Ok ()
-                                                      | Error error ->
-                                                          eprint
-                                                              $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} correction receipt landed but issue reopen was not freshly verified: %s{Errors.explain error}"
-                                                          Error ExitError
-                                                  | Error error ->
-                                                      eprint
-                                                          $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion correction receipt could not be persisted: %s{Errors.explain error}"
-                                                      Error ExitError
-                                          | Chore.PrematureCompletion _, _ ->
-                                              eprint
-                                                  $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion correction has no valid Status destination"
-                                              Error ExitError
-                                          | Chore.CompletionProjection, _ ->
-                                              eprint
-                                                  $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion projection has no valid Done destination"
-                                              Error ExitError
-                                          | _ -> Ok ()
+                                        // The durable correction fact is written before its mutable Status
+                                        // projection. A retry may observe the same authority and proceed, but
+                                        // contradictory/malformed evidence or a completion receipt that won
+                                        // the race refuses the board mutation.
+                                        let completionProjectionGate =
+                                            match chore.Kind, resolvedStatus with
+                                            | Chore.CompletionProjection, Some Done ->
+                                                match
+                                                    Reads.commentBodies
+                                                        ctx.Transport
+                                                        chore.Subject.Owner
+                                                        chore.Subject.Repo
+                                                        chore.Subject.Number
+                                                with
+                                                | Error error ->
+                                                    eprint
+                                                        $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion receipt could not be re-read before projection: %s{Errors.explain error}"
 
-                                      let blockedGate =
-                                          if field = "Status" then
-                                              match resolvedStatus, Map.tryFind chore.Subject lifecycleWatermarks with
-                                              // A typed HumanPark intent is itself the durable reason for
-                                              // this lifecycle write. Requiring the old prose sentinel as
-                                              // well would make the new-only reducer compute Blocked and
-                                              // then let a retired authority veto its own projection.
-                                              // Blocker-derived Auto writes still pass through the live
-                                              // Blocked-by/body coherence boundary below.
-                                              | Some Blocked, Some watermark when LifecycleProjection.isHumanPark watermark.Intent -> Ok()
-                                              | _ -> requireCoherentBlockedWrite ctx chore.Subject resolvedStatus
-                                          else
-                                              Ok()
+                                                    Error ExitError
+                                                | Ok comments ->
+                                                    match Done.receiptStateFor chore.Subject comments with
+                                                    | Done.VerifiedCompletionReceipt _ ->
+                                                        match
+                                                            Writes.closeIssueCompleted ctx.Transport chore.Subject
+                                                        with
+                                                        | Ok() -> Ok()
+                                                        | Error error ->
+                                                            eprint
+                                                                $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion receipt is valid but issue closure was not freshly verified: %s{Errors.explain error}"
 
-                                      let gate =
-                                          if Result.isError completionProjectionGate then
-                                              completionProjectionGate
-                                          elif field = "Status" then
-                                              // .github#2698 — THE SEAM WITH NO OPERATOR IN IT, and the one
-                                              // the filed acceptance criterion did not name. A host measured
-                                              // `reconcile --apply` reporting `LIFECYCLE-PROJECTION-LAG …
-                                              // Status=Ready` for `.github#2721`-`#2723` and PROMOTING all
-                                              // three — rows deliberately set to `Backlog` to honour a
-                                              // design's ordering — with no `add`, no `set-field`, and no
-                                              // human in the loop. Every one landed `Ready` with no receipt
-                                              // and was then found unschedulable by `batch --explain`.
-                                              //
-                                              // So the reducer is gated exactly as the operator doors are.
-                                              // This does NOT stop the reducer DERIVING `Ready` — that
-                                              // projection has a purpose this row did not study — it stops
-                                              // the derived value being WRITTEN onto a row that cannot be
-                                              // scheduled once it lands.
-                                              //
-                                              // The receipt read is paid only on a row this pass is ALREADY
-                                              // about to write, never per board row — `enrichDeliveryRoutes`'
-                                              // own #2300 lesson, kept by placing the gate at the mutation
-                                              // rather than at the scan.
-                                              match blockedGate with
-                                              | Error rc -> Error rc
-                                              | Ok() -> requireCurrentRouteIfReady ctx chore.Subject resolvedStatus
-                                          else
-                                              Ok()
+                                                            Error ExitError
+                                                    | state ->
+                                                        eprint
+                                                            $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion authority changed before projection: %A{state}"
 
-                                      // WHICH CLASS OF OUTCOME IS A ROUTE REFUSAL? .github#2698 REPAIR 1,
-                                      // AND THE CHANGE MUST DECIDE IT RATHER THAN INHERIT IT.
-                                      //
-                                      // `coord-board-reconcile.yml` runs this pass on a SCHEDULE and ends
-                                      // `exit "$rc"` (`:347`, `:362`). It maps two conditions to
-                                      // `::warning:: + exit 0` — an unresolvable board (exit 4) and an
-                                      // exhausted budget (EX_RATE) — under a rule it states in its own
-                                      // words: those are "NO VERDICT, not a pass", and the mapping is
-                                      // "never for a genuine finding". Left in the `Failed` arm below, a
-                                      // route refusal exits 1 and REDS that scheduled workflow; and since
-                                      // nothing recurring authors a receipt, the red cannot self-clear —
-                                      // it would sit red until a human authored receipts by hand, on a
-                                      // `main` this item's own body already describes as wedged.
-                                      //
-                                      // IT IS NEITHER OF THOSE TWO CLASSES, AND IT IS NOT A FAILURE. The
-                                      // pass ran to completion and the board is not wrong; ONE derived
-                                      // remedy was declined because performing it needs a judgement this
-                                      // pass may not make. `reconcile`'s own contract already draws that
-                                      // line — "`--apply` may perform only remedies represented by
-                                      // `ChoreKind`; findings that require judgement remain report-only" —
-                                      // and the vocabulary for it already exists and is already used for a
-                                      // mechanically identical case: `NotAttempted`, which is what the
-                                      // `classFieldMissing` arm above emits for a remedy whose
-                                      // precondition lies outside this pass, WITHOUT failing it.
-                                      //
-                                      // So it is reported, loudly, and not failed. The refusal text (row,
-                                      // reason, and the command that authors a receipt) is already on
-                                      // stderr from the gate itself, the row carries `not-attempted` and
-                                      // its reason in the `--json` receipt, and `$rc` stays 0 for a pass
-                                      // whose only finding is "these rows owe a route decision".
-                                      //
-                                      // THE BLOCKED GATE'S CLASSIFICATION IS UNTOUCHED. It is a different
-                                      // judgement — an incoherent park is the board being wrong — and it
-                                      // keeps its `Failed` arm and its non-zero exit. That is also why
-                                      // these two are told apart here rather than through `gate`, whose
-                                      // `Result.isError` cannot say WHICH boundary refused: before this,
-                                      // a route refusal was reported to the operator as a
-                                      // "Status=Blocked coherence gate" refusal, naming a gate that had
-                                      // returned `Ok`.
-                                      let routeRefused =
-                                          Result.isOk completionProjectionGate
-                                          && Result.isError gate
-                                          && Result.isOk blockedGate
+                                                        Error ExitError
+                                            | Chore.PrematureCompletion correction, Some actual when
+                                                Chore.completionCorrectionStatus correction = actual
+                                                ->
+                                                let destination = Chore.completionCorrectionStatus correction
 
-                                      let outcome =
-                                          match gate with
-                                          | Error _ -> Ok Board.NotOnBoard
-                                          | Ok() ->
-                                              withBlockedByLeaseForWrites ctx chore.Subject writes (fun () ->
-                                                  if List.length writes > 1 then
-                                                      Board.boardWriteBatch ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number None writes w.Id
-                                                  else
-                                                      Board.boardWrite ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number field (Board.Set value) w.Id)
+                                                match
+                                                    Delivery.createCompletionCorrectionReceipt
+                                                        chore.Subject.Canonical
+                                                        destination
+                                                        DateTimeOffset.UtcNow
+                                                with
+                                                | Error errors ->
+                                                    let detail = String.concat "; " errors
 
-                                      match outcome with
-                                      // The two lines .github#1524 is about. They are the HUMAN projection
-                                      // and every recipe reads them.
-                                      //
-                                      // THEY NAME `field` NOW, NOT THE LITERAL "Status" (.github#1588). Both
-                                      // lines hardcoded the word while `field` — the name of the column
-                                      // actually being written, already bound right here — sat unused two
-                                      // lines above. That was invisible for as long as every chore wrote
-                                      // `Status`, and it is the same defect `write`'s own comment warns
-                                      // about: "one object comes to describe two different writes". MEASURED
-                                      // on the live board: `CLASS-PROJECTION-LAG` applied cleanly and
-                                      // reported `applied .github#1547 Status=decision` — a receipt naming a
-                                      // column that was never touched, for a value `Status` has no option
-                                      // for. A reader checking that receipt would go looking for a corrupt
-                                      // Status column, and `--json`'s `write` object said `Class` the whole
-                                      // time, so the two projections of one fact disagreed.
-                                      | Ok Board.Written ->
-                                          match verifyWrites chore writes with
-                                          | Ok observed ->
-                                              // The write acknowledgement is not the ordering receipt.  Store
-                                              // the watermark only after the fresh scan above proved the row
-                                              // contains the projected status; otherwise a late event could
-                                              // be suppressed by a receipt for a mutation that never landed.
-                                              match chore.Kind, Map.tryFind chore.Subject lifecycleWatermarks with
-                                              | (Chore.LifecycleProjectionLag _ | Chore.PrematureCompletion _ | Chore.CompletionProjection), Some watermark ->
-                                                  match Writes.lifecycleWatermark ctx.Transport chore.Subject (LifecycleProjection.watermarkMarker watermark) with
-                                                  | Error e ->
-                                                      failed <- true
-                                                      eprint $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} Status=%s{value} was verified but its lifecycle watermark could not be persisted: %s{Errors.explain e}"
-                                                      { reconcileRow chore (Some(Failed "verified status has no durable lifecycle watermark")) with Observed = Some observed }
-                                                  | Ok () ->
-                                                      match opts.Render with
-                                                      | Text -> printfn "applied  %s  %s=%s" chore.Subject.Short field value
-                                                      | Json -> ()
-                                                      { reconcileRow chore (Some Written) with Observed = Some observed }
-                                              | _ ->
-                                                  match opts.Render with
-                                                  | Text -> printfn "applied  %s  %s=%s" chore.Subject.Short field value
-                                                  | Json -> ()
-                                                  { reconcileRow chore (Some Written) with Observed = Some observed }
-                                          | Error(observed, reason) ->
-                                              eprint $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} mutation was accepted but fresh verification failed: %s{reason}"
-                                              failed <- true
-                                              { reconcileRow chore (Some(Failed reason)) with Observed = observed }
-                                      | Ok Board.Deferred ->
-                                          match opts.Render with
-                                          | Text ->
-                                              printfn
-                                                  "queued   %s  %s=%s (run scripts/fsgg-coord flush)"
-                                                  chore.Subject.Short
-                                                  field
-                                                  value
-                                          | Json -> ()
+                                                    eprint
+                                                        $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion correction could not be authorized: %s{detail}"
 
-                                          reconcileRow chore (Some Deferred)
-                                      // .github#2698 — THE ROUTE REFUSAL, REPORTED AND NOT FAILED. Matched
-                                      // BEFORE the `Result.isError gate` arm below, which is the
-                                      // `Status=Blocked` coherence refusal and keeps its non-zero exit.
-                                      // The reason travels in the receipt so a `--json` reader gets the
-                                      // row, the rule, and what is owed; the gate itself has already put
-                                      // the full refusal and the authoring command on stderr.
-                                      | Ok Board.NotOnBoard when routeRefused ->
-                                          reconcileRow
-                                              chore
-                                              (Some(
-                                                  NotAttempted
-                                                      $"%s{chore.Subject.Short} has no current delivery-route receipt, so Status=Ready was NOT written — a row promoted without one is unschedulable. The route is an agent judgement this pass may not make: scripts/fsgg-coord delivery-route record %s{chore.Subject.Short} <receipt.json>"
-                                              ))
-                                      | Ok Board.NotOnBoard when Result.isError completionProjectionGate ->
-                                          failed <- true
-                                          reconcileRow chore (Some(Failed "completion projection authority could not be persisted or verified"))
-                                      | Ok Board.NotOnBoard when Result.isError gate ->
-                                          failed <- true
-                                          reconcileRow chore (Some(Failed "Status=Blocked coherence gate refused the stale reconcile write"))
-                                      | Ok Board.NotOnBoard ->
-                                          eprint
-                                              $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} left the board before apply."
+                                                    Error ExitError
+                                                | Ok receipt ->
+                                                    match
+                                                        Writes.completionCorrectionReceipt
+                                                            ctx.Transport
+                                                            chore.Subject
+                                                            receipt
+                                                    with
+                                                    | Ok() ->
+                                                        match Writes.reopenIssue ctx.Transport chore.Subject with
+                                                        | Ok() -> Ok()
+                                                        | Error error ->
+                                                            eprint
+                                                                $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} correction receipt landed but issue reopen was not freshly verified: %s{Errors.explain error}"
 
-                                          failed <- true
-                                          reconcileRow chore (Some NotOnBoard)
-                                      | Error e ->
-                                          eprint
-                                              // `field`, not the literal "Status" — the third of the three
-                                              // lines .github#1588 caught. This one is the worst of them:
-                                              // it is the DIAGNOSTIC, read by whoever is working out why a
-                                              // write failed, and naming the wrong column sends them to
-                                              // audit a field nothing touched.
-                                              $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} %s{field}=%s{value} failed: %s{Errors.explain e}"
+                                                            Error ExitError
+                                                    | Error error ->
+                                                        eprint
+                                                            $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion correction receipt could not be persisted: %s{Errors.explain error}"
 
-                                          failed <- true
-                                          reconcileRow chore (Some(Failed(Errors.explain e))) ]
+                                                        Error ExitError
+                                            | Chore.PrematureCompletion _, _ ->
+                                                eprint
+                                                    $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion correction has no valid Status destination"
+
+                                                Error ExitError
+                                            | Chore.CompletionProjection, _ ->
+                                                eprint
+                                                    $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} completion projection has no valid Done destination"
+
+                                                Error ExitError
+                                            | _ -> Ok()
+
+                                        let blockedGate =
+                                            if field = "Status" then
+                                                match resolvedStatus, Map.tryFind chore.Subject lifecycleWatermarks with
+                                                // A typed HumanPark intent is itself the durable reason for
+                                                // this lifecycle write. Requiring the old prose sentinel as
+                                                // well would make the new-only reducer compute Blocked and
+                                                // then let a retired authority veto its own projection.
+                                                // Blocker-derived Auto writes still pass through the live
+                                                // Blocked-by/body coherence boundary below.
+                                                | Some Blocked, Some watermark when
+                                                    LifecycleProjection.isHumanPark watermark.Intent
+                                                    ->
+                                                    Ok()
+                                                | _ -> requireCoherentBlockedWrite ctx chore.Subject resolvedStatus
+                                            else
+                                                Ok()
+
+                                        let gate =
+                                            if Result.isError completionProjectionGate then
+                                                completionProjectionGate
+                                            elif field = "Status" then
+                                                // .github#2698 — THE SEAM WITH NO OPERATOR IN IT, and the one
+                                                // the filed acceptance criterion did not name. A host measured
+                                                // `reconcile --apply` reporting `LIFECYCLE-PROJECTION-LAG …
+                                                // Status=Ready` for `.github#2721`-`#2723` and PROMOTING all
+                                                // three — rows deliberately set to `Backlog` to honour a
+                                                // design's ordering — with no `add`, no `set-field`, and no
+                                                // human in the loop. Every one landed `Ready` with no receipt
+                                                // and was then found unschedulable by `batch --explain`.
+                                                //
+                                                // So the reducer is gated exactly as the operator doors are.
+                                                // This does NOT stop the reducer DERIVING `Ready` — that
+                                                // projection has a purpose this row did not study — it stops
+                                                // the derived value being WRITTEN onto a row that cannot be
+                                                // scheduled once it lands.
+                                                //
+                                                // The receipt read is paid only on a row this pass is ALREADY
+                                                // about to write, never per board row — `enrichDeliveryRoutes`'
+                                                // own #2300 lesson, kept by placing the gate at the mutation
+                                                // rather than at the scan.
+                                                match blockedGate with
+                                                | Error rc -> Error rc
+                                                | Ok() -> requireCurrentRouteIfReady ctx chore.Subject resolvedStatus
+                                            else
+                                                Ok()
+
+                                        // WHICH CLASS OF OUTCOME IS A ROUTE REFUSAL? .github#2698 REPAIR 1,
+                                        // AND THE CHANGE MUST DECIDE IT RATHER THAN INHERIT IT.
+                                        //
+                                        // `coord-board-reconcile.yml` runs this pass on a SCHEDULE and ends
+                                        // `exit "$rc"` (`:347`, `:362`). It maps two conditions to
+                                        // `::warning:: + exit 0` — an unresolvable board (exit 4) and an
+                                        // exhausted budget (EX_RATE) — under a rule it states in its own
+                                        // words: those are "NO VERDICT, not a pass", and the mapping is
+                                        // "never for a genuine finding". Left in the `Failed` arm below, a
+                                        // route refusal exits 1 and REDS that scheduled workflow; and since
+                                        // nothing recurring authors a receipt, the red cannot self-clear —
+                                        // it would sit red until a human authored receipts by hand, on a
+                                        // `main` this item's own body already describes as wedged.
+                                        //
+                                        // IT IS NEITHER OF THOSE TWO CLASSES, AND IT IS NOT A FAILURE. The
+                                        // pass ran to completion and the board is not wrong; ONE derived
+                                        // remedy was declined because performing it needs a judgement this
+                                        // pass may not make. `reconcile`'s own contract already draws that
+                                        // line — "`--apply` may perform only remedies represented by
+                                        // `ChoreKind`; findings that require judgement remain report-only" —
+                                        // and the vocabulary for it already exists and is already used for a
+                                        // mechanically identical case: `NotAttempted`, which is what the
+                                        // `classFieldMissing` arm above emits for a remedy whose
+                                        // precondition lies outside this pass, WITHOUT failing it.
+                                        //
+                                        // So it is reported, loudly, and not failed. The refusal text (row,
+                                        // reason, and the command that authors a receipt) is already on
+                                        // stderr from the gate itself, the row carries `not-attempted` and
+                                        // its reason in the `--json` receipt, and `$rc` stays 0 for a pass
+                                        // whose only finding is "these rows owe a route decision".
+                                        //
+                                        // THE BLOCKED GATE'S CLASSIFICATION IS UNTOUCHED. It is a different
+                                        // judgement — an incoherent park is the board being wrong — and it
+                                        // keeps its `Failed` arm and its non-zero exit. That is also why
+                                        // these two are told apart here rather than through `gate`, whose
+                                        // `Result.isError` cannot say WHICH boundary refused: before this,
+                                        // a route refusal was reported to the operator as a
+                                        // "Status=Blocked coherence gate" refusal, naming a gate that had
+                                        // returned `Ok`.
+                                        let routeRefused =
+                                            Result.isOk completionProjectionGate
+                                            && Result.isError gate
+                                            && Result.isOk blockedGate
+
+                                        let outcome =
+                                            match gate with
+                                            | Error _ -> Ok Board.NotOnBoard
+                                            | Ok() ->
+                                                withBlockedByLeaseForWrites ctx chore.Subject writes (fun () ->
+                                                    if List.length writes > 1 then
+                                                        Board.boardWriteBatch
+                                                            ctx.Transport
+                                                            board
+                                                            chore.Subject.Owner
+                                                            chore.Subject.Repo
+                                                            chore.Subject.Number
+                                                            None
+                                                            writes
+                                                            w.Id
+                                                    else
+                                                        Board.boardWrite
+                                                            ctx.Transport
+                                                            board
+                                                            chore.Subject.Owner
+                                                            chore.Subject.Repo
+                                                            chore.Subject.Number
+                                                            field
+                                                            (Board.Set value)
+                                                            w.Id)
+
+                                        match outcome with
+                                        // The two lines .github#1524 is about. They are the HUMAN projection
+                                        // and every recipe reads them.
+                                        //
+                                        // THEY NAME `field` NOW, NOT THE LITERAL "Status" (.github#1588). Both
+                                        // lines hardcoded the word while `field` — the name of the column
+                                        // actually being written, already bound right here — sat unused two
+                                        // lines above. That was invisible for as long as every chore wrote
+                                        // `Status`, and it is the same defect `write`'s own comment warns
+                                        // about: "one object comes to describe two different writes". MEASURED
+                                        // on the live board: `CLASS-PROJECTION-LAG` applied cleanly and
+                                        // reported `applied .github#1547 Status=decision` — a receipt naming a
+                                        // column that was never touched, for a value `Status` has no option
+                                        // for. A reader checking that receipt would go looking for a corrupt
+                                        // Status column, and `--json`'s `write` object said `Class` the whole
+                                        // time, so the two projections of one fact disagreed.
+                                        | Ok Board.Written ->
+                                            match verifyWrites chore writes with
+                                            | Ok observed ->
+                                                // The write acknowledgement is not the ordering receipt.  Store
+                                                // the watermark only after the fresh scan above proved the row
+                                                // contains the projected status; otherwise a late event could
+                                                // be suppressed by a receipt for a mutation that never landed.
+                                                match chore.Kind, Map.tryFind chore.Subject lifecycleWatermarks with
+                                                | (Chore.LifecycleProjectionLag _ | Chore.PrematureCompletion _ | Chore.CompletionProjection),
+                                                  Some watermark ->
+                                                    match
+                                                        Writes.lifecycleWatermark
+                                                            ctx.Transport
+                                                            chore.Subject
+                                                            (LifecycleProjection.watermarkMarker watermark)
+                                                    with
+                                                    | Error e ->
+                                                        failed <- true
+
+                                                        eprint
+                                                            $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} Status=%s{value} was verified but its lifecycle watermark could not be persisted: %s{Errors.explain e}"
+
+                                                        { reconcileRow
+                                                              chore
+                                                              (Some(
+                                                                  Failed
+                                                                      "verified status has no durable lifecycle watermark"
+                                                              )) with
+                                                            Observed = Some observed
+                                                        }
+                                                    | Ok() ->
+                                                        match opts.Render with
+                                                        | Text ->
+                                                            printfn "applied  %s  %s=%s" chore.Subject.Short field value
+                                                        | Json -> ()
+
+                                                        { reconcileRow chore (Some Written) with
+                                                            Observed = Some observed
+                                                        }
+                                                | _ ->
+                                                    match opts.Render with
+                                                    | Text ->
+                                                        printfn "applied  %s  %s=%s" chore.Subject.Short field value
+                                                    | Json -> ()
+
+                                                    { reconcileRow chore (Some Written) with
+                                                        Observed = Some observed
+                                                    }
+                                            | Error(observed, reason) ->
+                                                eprint
+                                                    $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} mutation was accepted but fresh verification failed: %s{reason}"
+
+                                                failed <- true
+
+                                                { reconcileRow chore (Some(Failed reason)) with
+                                                    Observed = observed
+                                                }
+                                        | Ok Board.Deferred ->
+                                            match opts.Render with
+                                            | Text ->
+                                                printfn
+                                                    "queued   %s  %s=%s (run scripts/fsgg-coord flush)"
+                                                    chore.Subject.Short
+                                                    field
+                                                    value
+                                            | Json -> ()
+
+                                            reconcileRow chore (Some Deferred)
+                                        // .github#2698 — THE ROUTE REFUSAL, REPORTED AND NOT FAILED. Matched
+                                        // BEFORE the `Result.isError gate` arm below, which is the
+                                        // `Status=Blocked` coherence refusal and keeps its non-zero exit.
+                                        // The reason travels in the receipt so a `--json` reader gets the
+                                        // row, the rule, and what is owed; the gate itself has already put
+                                        // the full refusal and the authoring command on stderr.
+                                        | Ok Board.NotOnBoard when routeRefused ->
+                                            reconcileRow
+                                                chore
+                                                (Some(
+                                                    NotAttempted
+                                                        $"%s{chore.Subject.Short} has no current delivery-route receipt, so Status=Ready was NOT written — a row promoted without one is unschedulable. The route is an agent judgement this pass may not make: scripts/fsgg-coord delivery-route record %s{chore.Subject.Short} <receipt.json>"
+                                                ))
+                                        | Ok Board.NotOnBoard when Result.isError completionProjectionGate ->
+                                            failed <- true
+
+                                            reconcileRow
+                                                chore
+                                                (Some(
+                                                    Failed
+                                                        "completion projection authority could not be persisted or verified"
+                                                ))
+                                        | Ok Board.NotOnBoard when Result.isError gate ->
+                                            failed <- true
+
+                                            reconcileRow
+                                                chore
+                                                (Some(
+                                                    Failed
+                                                        "Status=Blocked coherence gate refused the stale reconcile write"
+                                                ))
+                                        | Ok Board.NotOnBoard ->
+                                            eprint
+                                                $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} left the board before apply."
+
+                                            failed <- true
+                                            reconcileRow chore (Some NotOnBoard)
+                                        | Error e ->
+                                            eprint
+                                                // `field`, not the literal "Status" — the third of the three
+                                                // lines .github#1588 caught. This one is the worst of them:
+                                                // it is the DIAGNOSTIC, read by whoever is working out why a
+                                                // write failed, and naming the wrong column sends them to
+                                                // audit a field nothing touched.
+                                                $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} %s{field}=%s{value} failed: %s{Errors.explain e}"
+
+                                            failed <- true
+                                            reconcileRow chore (Some(Failed(Errors.explain e)))
+                            ]
 
                         emitHealth "verified-apply" applied
                         emitJson applied true
@@ -3226,9 +3873,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             let comments =
                 comments
                 |> List.map (fun comment ->
-                    ({ Id = comment.Id
-                       Url = comment.Url
-                       Body = comment.Body }: Driver.ReviewComment))
+                    ({
+                        Id = comment.Id
+                        Url = comment.Url
+                        Body = comment.Body
+                    }
+                    : Driver.ReviewComment))
 
             match Driver.parseEffectiveReviewComments head comments with
             | Error errors -> Error(String.concat "; " errors)
@@ -3271,7 +3921,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // The board rows in scope, no PRs (#641). #480 — `--repo` scopes to the checkout. These
                 // carry the ONE thing the off-board scan cannot: the In-progress COLUMN, which is the only
                 // fact that licenses an `unclaimed` verdict on a markerless item (work outside the protocol).
-                let scoped = rows |> List.filter (fun r -> not r.IsPullRequest) |> Scan.scope opts.Repo
+                let scoped =
+                    rows |> List.filter (fun r -> not r.IsPullRequest) |> Scan.scope opts.Repo
 
                 // #979. `who` does not fail OPEN on an unrostered `--repo` the way `ready` did — the
                 // off-board fallback below scans `<owner>/<name>` directly, so a repo that does not
@@ -3357,8 +4008,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         |> Seq.sortBy (fun (o, r, n) -> o, r, n)
                         |> List.ofSeq
 
-                let isInProgress ref =
-                    inProgressRefs |> Set.contains ref
+                let isInProgress ref = inProgressRefs |> Set.contains ref
 
                 let results = ResizeArray<WhoRow>()
 
@@ -3483,25 +4133,27 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     | None -> None
 
                                 results.Add(
-                                    { Ref = ref
-                                      State = st
-                                      Paths = paths
-                                      LivePr = livePr
-                                      BranchPushed = branchPushed
-                                      PrState = prState
-                                      // Filled in below, once the worktree read has run once for the whole
-                                      // set rather than per row — a claim's worktree is a local fact, not one
-                                      // of the network reads this loop is spending.
-                                      Worktree = None
+                                    {
+                                        Ref = ref
+                                        State = st
+                                        Paths = paths
+                                        LivePr = livePr
+                                        BranchPushed = branchPushed
+                                        PrState = prState
+                                        // Filled in below, once the worktree read has run once for the whole
+                                        // set rather than per row — a claim's worktree is a local fact, not one
+                                        // of the network reads this loop is spending.
+                                        Worktree = None
 
-                                      // .github#1668: ON EVERY ROW, not just the markerless one. The
-                                      // `Undetermined` STATE is only reachable when the short read left no
-                                      // marker at all; this field is the READ's own completeness, and a
-                                      // `Held`/`Stale` row needs it just as badly — a hidden marker with a
-                                      // lower id means the holder named above is the wrong holder, and a
-                                      // hidden LIVE marker behind a lapsed one means the `STALE` a human is
-                                      // reading before reaping is not free.
-                                      Incomplete = scan.Unreadable }
+                                        // .github#1668: ON EVERY ROW, not just the markerless one. The
+                                        // `Undetermined` STATE is only reachable when the short read left no
+                                        // marker at all; this field is the READ's own completeness, and a
+                                        // `Held`/`Stale` row needs it just as badly — a hidden marker with a
+                                        // lower id means the holder named above is the wrong holder, and a
+                                        // hidden LIVE marker behind a lapsed one means the `STALE` a human is
+                                        // reading before reaping is not free.
+                                        Incomplete = scan.Unreadable
+                                    }
                                 )
 
                 match failure with
@@ -3599,10 +4251,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                         (Schedulability.leaseWindow opts.LeaseMinutes m.AgeSeconds)
                                         wt
                                 | Unclaimed ->
-                                    printfn
-                                        "  %-16s UNCLAIMED — In progress with NO claim marker%s"
-                                        row.Ref.Short
-                                        wt
+                                    printfn "  %-16s UNCLAIMED — In progress with NO claim marker%s" row.Ref.Short wt
                                 // .github#1668. NOT a variant spelling of UNCLAIMED: this row is the verb
                                 // declining to answer. The count goes in the line because "1 comment" and
                                 // "all 40 comments" are very different situations to walk into, and the
@@ -3759,260 +4408,282 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     let reap (ctx: Context) (opts: Options) : int =
         match opts.Repo with
         | None ->
-            eprint
-                "fsgg-coord-engine: reap: --repo required (no git remote here, so the repo to reap is undefined)."
+            eprint "fsgg-coord-engine: reap: --repo required (no git remote here, so the repo to reap is undefined)."
 
             ExitError
         | Some repoName ->
 
-        // The board map, for the post-reap column restore. BEST-EFFORT: reap has already broken the lock by
-        // the time it restores, so a board it cannot resolve leaves the column alone and reports it, rather
-        // than a failure that would strand the freed item.
-        //
-        // LAZY, and #418 is why: a DRY RUN performs no restore, so it must not pay `bootstrap`'s two GraphQL
-        // points on the budget that dies first for a board it will never write. Resolving on first actual
-        // reset keeps the dry run — the form an operator runs to LOOK before deciding — free.
-        let board = lazy (Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title)
+            // The board map, for the post-reap column restore. BEST-EFFORT: reap has already broken the lock by
+            // the time it restores, so a board it cannot resolve leaves the column alone and reports it, rather
+            // than a failure that would strand the freed item.
+            //
+            // LAZY, and #418 is why: a DRY RUN performs no restore, so it must not pay `bootstrap`'s two GraphQL
+            // points on the budget that dies first for a board it will never write. Resolving on first actual
+            // reset keeps the dry run — the form an operator runs to LOOK before deciding — free.
+            let board = lazy (Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title)
 
-        match Reads.openIssues ctx.Transport ctx.Owner repoName with
-        | Error e -> fail e
-        | Ok issues ->
-            let mutable failure: Errors.IoError option = None
+            match Reads.openIssues ctx.Transport ctx.Owner repoName with
+            | Error e -> fail e
+            | Ok issues ->
+                let mutable failure: Errors.IoError option = None
 
-            // `reap` needs the NUMBER only: its subject is the lock, and the lock is a comment. The body
-            // rides along free and is not consulted, so its readability cannot change a reap decision.
-            for { Reads.OpenIssue.Number = number } in issues do
-                if failure.IsNone then
-                    let ref =
-                        { Owner = ctx.Owner
-                          Repo = repoName
-                          Number = number }
+                // `reap` needs the NUMBER only: its subject is the lock, and the lock is a comment. The body
+                // rides along free and is not consulted, so its readability cannot change a reap decision.
+                for { Reads.OpenIssue.Number = number } in issues do
+                    if failure.IsNone then
+                        let ref =
+                            {
+                                Owner = ctx.Owner
+                                Repo = repoName
+                                Number = number
+                            }
 
-                    // FAIL CLOSED (#461): a claim set we could not read is never an empty one.
-                    match
-                        Reads.markerScan ctx.Transport ref.Owner ref.Repo ref.Number
-                        |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
-                    with
-                    | Error e -> failure <- Some e
-                    | Ok markers ->
-                        // A live winner is a claim reap may not touch. Only when NO winner is live but a
-                        // marker exists is the lowest-id marker a stale lock — reap's one candidate per item.
-                        match Reads.winner opts.LeaseMinutes markers with
-                        | Some _ -> ()
-                        | None ->
-                            // `Reads.lowestId`, NOT `Reads.reserver`. `reap` acts ONLY when no live winner
-                            // exists — the `Some _` arm above does nothing — so substituting `reserver`
-                            // here would hand `reap` the live holder and break a lock somebody is standing
-                            // in. This is design §4.2's second constraint, in the one path where getting it
-                            // wrong is worst.
-                            match Reads.lowestId markers with
-                            | None -> ()
-                            | Some marker ->
-                                // #581: the lease lapsed — now ask whether the WORK did.
-                                match Reads.prAlive ctx.Transport ref.Owner ref.Repo ref.Number with
-                                | Error e -> failure <- Some e
-                                | Ok liveness ->
-                                    match Writes.reapable ref marker liveness with
-                                    | Error(Writes.WorkAlive pr) ->
-                                        // #697: refusing on the PR's mere EXISTENCE is right (#581), but the
-                                        // remedy that used to follow — "close it, then reap" — is a loaded
-                                        // gun pointed at the best work on the board. Read WHAT the PR says
-                                        // and tell the states apart: only ever advise closing the one that is
-                                        // genuinely abandoned (red/conflicted). The verdict is advisory — a
-                                        // `PrUnknown` chooses the "look yourself" wording, never a delete.
-                                        let idleM = marker.AgeSeconds / 60
-                                        let w = marker.Worker.Value
+                        // FAIL CLOSED (#461): a claim set we could not read is never an empty one.
+                        match
+                            Reads.markerScan ctx.Transport ref.Owner ref.Repo ref.Number
+                            |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+                        with
+                        | Error e -> failure <- Some e
+                        | Ok markers ->
+                            // A live winner is a claim reap may not touch. Only when NO winner is live but a
+                            // marker exists is the lowest-id marker a stale lock — reap's one candidate per item.
+                            match Reads.winner opts.LeaseMinutes markers with
+                            | Some _ -> ()
+                            | None ->
+                                // `Reads.lowestId`, NOT `Reads.reserver`. `reap` acts ONLY when no live winner
+                                // exists — the `Some _` arm above does nothing — so substituting `reserver`
+                                // here would hand `reap` the live holder and break a lock somebody is standing
+                                // in. This is design §4.2's second constraint, in the one path where getting it
+                                // wrong is worst.
+                                match Reads.lowestId markers with
+                                | None -> ()
+                                | Some marker ->
+                                    // #581: the lease lapsed — now ask whether the WORK did.
+                                    match Reads.prAlive ctx.Transport ref.Owner ref.Repo ref.Number with
+                                    | Error e -> failure <- Some e
+                                    | Ok liveness ->
+                                        match Writes.reapable ref marker liveness with
+                                        | Error(Writes.WorkAlive pr) ->
+                                            // #697: refusing on the PR's mere EXISTENCE is right (#581), but the
+                                            // remedy that used to follow — "close it, then reap" — is a loaded
+                                            // gun pointed at the best work on the board. Read WHAT the PR says
+                                            // and tell the states apart: only ever advise closing the one that is
+                                            // genuinely abandoned (red/conflicted). The verdict is advisory — a
+                                            // `PrUnknown` chooses the "look yourself" wording, never a delete.
+                                            let idleM = marker.AgeSeconds / 60
+                                            let w = marker.Worker.Value
 
-                                        match Reads.prLandable ctx.Transport ref.Owner ref.Repo pr with
-                                        | PrGreen ->
-                                            match acceptedReviewHead ctx ref pr with
-                                            | Ok _ ->
+                                            match Reads.prLandable ctx.Transport ref.Owner ref.Repo pr with
+                                            | PrGreen ->
+                                                match acceptedReviewHead ctx ref pr with
+                                                | Ok _ ->
+                                                    eprint
+                                                        $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN, GREEN and MERGEABLE with a current host-accepted review."
+
+                                                    eprint
+                                                        "fsgg-coord-engine:   This work is ready for guarded recovery. Do NOT close it: transfer the orphaned claim, then continue through typed delivery:"
+
+                                                    eprint
+                                                        $"fsgg-coord-engine:       scripts/fsgg-coord adopt %s{ref.Short}"
+                                                | Error why ->
+                                                    eprint
+                                                        $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN and its checks are GREEN, but review readiness is not established: %s{why}."
+
+                                                    eprint
+                                                        $"fsgg-coord-engine:   The work is NOT ready to land. Do NOT close, reap, or adopt it; inspect the authoritative review-aware verdict: scripts/fsgg-coord landable %d{pr} --repo %s{ref.Repo}"
+                                            | PrPending ->
                                                 eprint
-                                                    $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN, GREEN and MERGEABLE with a current host-accepted review."
+                                                    $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (checks running). The lease lapsed; the WORK did not."
 
                                                 eprint
-                                                    "fsgg-coord-engine:   This work is ready for guarded recovery. Do NOT close it: transfer the orphaned claim, then continue through typed delivery:"
-
-                                                eprint $"fsgg-coord-engine:       scripts/fsgg-coord adopt %s{ref.Short}"
-                                            | Error why ->
-                                                eprint
-                                                    $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN and its checks are GREEN, but review readiness is not established: %s{why}."
+                                                    "fsgg-coord-engine:   Its checks are STILL RUNNING — it is UNFINISHED, not abandoned, and may be minutes from green. Do NOT close it. Let CI settle, then ask the authoritative review-aware gate:"
 
                                                 eprint
-                                                    $"fsgg-coord-engine:   The work is NOT ready to land. Do NOT close, reap, or adopt it; inspect the authoritative review-aware verdict: scripts/fsgg-coord landable %d{pr} --repo %s{ref.Repo}"
-                                        | PrPending ->
-                                            eprint
-                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (checks running). The lease lapsed; the WORK did not."
-
-                                            eprint
-                                                "fsgg-coord-engine:   Its checks are STILL RUNNING — it is UNFINISHED, not abandoned, and may be minutes from green. Do NOT close it. Let CI settle, then ask the authoritative review-aware gate:"
-
-                                            eprint
-                                                $"fsgg-coord-engine:       scripts/fsgg-coord landable %d{pr} --repo %s{repoName}"
-                                        | PrUnknown ->
-                                            eprint
-                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (state unknown). The lease lapsed; the WORK did not."
-
-                                            eprint
-                                                $"fsgg-coord-engine:   Its state could NOT be determined (rate limit? network?). Do NOT close it on a guess — look at PR #%d{pr} yourself before deciding anything."
-                                        | (PrMerged | PrClosed) as verdict ->
-                                            // Structurally unreachable: this arm is reached through
-                                            // `Writes.WorkAlivePr`, which names an OPEN PR. Handled anyway,
-                                            // and handled SAFELY — a merged PR is finished work, so the one
-                                            // thing this must never do is advise closing it.
-                                            eprint
-                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is %s{Landable.name verdict}, not open."
-
-                                            eprint
-                                                $"fsgg-coord-engine:   The claim outlived its PR. Do NOT close anything — look at PR #%d{pr} and, if it MERGED, complete delivery: scripts/fsgg-coord delivery %s{ref.Short} --pr %d{pr} --flip --apply"
-                                        | (PrRed | PrConflicted) as verdict ->
-                                            // The one genuinely-abandoned case — and the ONLY one that may
-                                            // advise closing. A conflicted or red PR is not finished work.
-                                            eprint
-                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (%s{Landable.name verdict}). The lease lapsed; the WORK did not."
-
-                                            eprint
-                                                $"fsgg-coord-engine:   It is %s{Landable.name verdict}, so there is nothing to land as it stands (`adopt` only lands green, mergeable work). If the PR really is abandoned, close it, then reap."
-                                    | Error Writes.WorkAliveBranch ->
-                                        // #1055: no PR yet, but a pushed `item/<n>-*` branch — proof of life
-                                        // during §3, before §5 opens the PR. There is nothing to `adopt` (a
-                                        // branch is not a landable PR), so this refuses without the land/close
-                                        // advice: the worker is likely still writing, or a REST outage expired
-                                        // the lease mid-work and they have not re-claimed yet.
-                                        let idleM = marker.AgeSeconds / 60
-                                        let w = marker.Worker.Value
-
-                                        eprint
-                                            $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), a pushed item/%d{ref.Number}-* branch has NO PR yet. The lease lapsed; the WORK did not (#1055/#581)."
-
-                                        eprint
-                                            "fsgg-coord-engine:   A branch with no PR is work IN PROGRESS, not an abandoned one — the worker may be mid-build, or a REST outage expired the lease before they opened the PR. Nothing to adopt (there is no PR to land). Leave it: they re-claim, or push the PR."
-                                    | Error(Writes.Undetermined why) ->
-                                        eprint
-                                            $"fsgg-coord-engine: NOT reaping %s{ref.Short} — %s{why}; a lock we cannot rule dead we may not break."
-                                    | Ok reapable ->
-                                        if not opts.Apply then
-                                            // DRY RUN — say what --apply would collect, and touch nothing.
-                                            printfn "would reap  %s  worker %s" ref.Short marker.Worker.Value
-                                        else
-                                            match Writes.reap ctx.Transport opts.LeaseMinutes reapable with
-                                            | Error e ->
-                                                // A FAILED DELETE IS REPORTED, NOT SWALLOWED, and the scan
-                                                // moves on to the next item. The marker is still there, so the
-                                                // item is still HELD — the board is left untouched and the
-                                                // worker is NOT told it was released. `reap` deletes BEFORE it
-                                                // would ever notify (and this engine's reap posts no notify at
-                                                // all): a notify ahead of a failed delete would tell a worker
-                                                // to stop while its marker still holds the item for a full
-                                                // lease — released to its owner, held against everyone else,
-                                                // and nothing clears it. One failed collect is not fatal to
-                                                // the whole reap; the other items still collect.
+                                                    $"fsgg-coord-engine:       scripts/fsgg-coord landable %d{pr} --repo %s{repoName}"
+                                            | PrUnknown ->
                                                 eprint
-                                                    $"fsgg-coord-engine: FAILED  %s{ref.Short}  worker %s{marker.Worker.Value}  — could not remove the marker (%s{Errors.explain e}); board left untouched, worker not notified."
-                                            | Ok(Writes.RenewedSinceScan ageSeconds) ->
-                                                // The holder HEARTBEATED between the scan and this delete: the
-                                                // lock is live again, so reap SKIPS it rather than break a
-                                                // lease that was renewed under it — the one way reap could
-                                                // itself cause the double-hold it exists to clean up.
-                                                printfn
-                                                    "skipped  %s  worker %s  — renewed since the scan (%dm), still alive"
-                                                    ref.Short
-                                                    marker.Worker.Value
-                                                    (ageSeconds / 60)
-                                            | Ok Writes.AlreadyGone ->
-                                                // A peer collected the same stale marker first — nothing left
-                                                // to break, which is a collector's goal state, not a failure.
-                                                printfn
-                                                    "skipped  %s  worker %s  — marker already gone"
-                                                    ref.Short
-                                                    marker.Worker.Value
-                                            | Ok Writes.Reaped ->
-                                                printfn "reaped  %s  worker %s" ref.Short marker.Worker.Value
+                                                    $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (state unknown). The lease lapsed; the WORK did not."
 
-                                                // Restore the freed column — best-effort, the lock is already
-                                                // gone. An OFF-BOARD claim has no board item to reset, and reap
-                                                // must not claim a reset it never performed (case 25).
-                                                match board.Value with
-                                                | Ok bm ->
-                                                    match
-                                                        Board.itemIdCached ctx.Transport bm ref.Owner ref.Repo ref.Number
-                                                    with
-                                                    | Ok(Some _) ->
-                                                        // #331's read, in `reap`'s copy — because the reaper
-                                                        // collects a LEASE and knows nothing about whether the
-                                                        // item became startable. A worker whose lease lapsed on
-                                                        // an item it had deliberately marked `Blocked` had that
-                                                        // column reset on its way out, which is #331 with a
-                                                        // dead worker instead of a live one. bash asked ONE
-                                                        // question here (`unclaim_status`); so does this.
+                                                eprint
+                                                    $"fsgg-coord-engine:   Its state could NOT be determined (rate limit? network?). Do NOT close it on a guess — look at PR #%d{pr} yourself before deciding anything."
+                                            | (PrMerged | PrClosed) as verdict ->
+                                                // Structurally unreachable: this arm is reached through
+                                                // `Writes.WorkAlivePr`, which names an OPEN PR. Handled anyway,
+                                                // and handled SAFELY — a merged PR is finished work, so the one
+                                                // thing this must never do is advise closing it.
+                                                eprint
+                                                    $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is %s{Landable.name verdict}, not open."
+
+                                                eprint
+                                                    $"fsgg-coord-engine:   The claim outlived its PR. Do NOT close anything — look at PR #%d{pr} and, if it MERGED, complete delivery: scripts/fsgg-coord delivery %s{ref.Short} --pr %d{pr} --flip --apply"
+                                            | (PrRed | PrConflicted) as verdict ->
+                                                // The one genuinely-abandoned case — and the ONLY one that may
+                                                // advise closing. A conflicted or red PR is not finished work.
+                                                eprint
+                                                    $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (%s{Landable.name verdict}). The lease lapsed; the WORK did not."
+
+                                                eprint
+                                                    $"fsgg-coord-engine:   It is %s{Landable.name verdict}, so there is nothing to land as it stands (`adopt` only lands green, mergeable work). If the PR really is abandoned, close it, then reap."
+                                        | Error Writes.WorkAliveBranch ->
+                                            // #1055: no PR yet, but a pushed `item/<n>-*` branch — proof of life
+                                            // during §3, before §5 opens the PR. There is nothing to `adopt` (a
+                                            // branch is not a landable PR), so this refuses without the land/close
+                                            // advice: the worker is likely still writing, or a REST outage expired
+                                            // the lease mid-work and they have not re-claimed yet.
+                                            let idleM = marker.AgeSeconds / 60
+                                            let w = marker.Worker.Value
+
+                                            eprint
+                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), a pushed item/%d{ref.Number}-* branch has NO PR yet. The lease lapsed; the WORK did not (#1055/#581)."
+
+                                            eprint
+                                                "fsgg-coord-engine:   A branch with no PR is work IN PROGRESS, not an abandoned one — the worker may be mid-build, or a REST outage expired the lease before they opened the PR. Nothing to adopt (there is no PR to land). Leave it: they re-claim, or push the PR."
+                                        | Error(Writes.Undetermined why) ->
+                                            eprint
+                                                $"fsgg-coord-engine: NOT reaping %s{ref.Short} — %s{why}; a lock we cannot rule dead we may not break."
+                                        | Ok reapable ->
+                                            if not opts.Apply then
+                                                // DRY RUN — say what --apply would collect, and touch nothing.
+                                                printfn "would reap  %s  worker %s" ref.Short marker.Worker.Value
+                                            else
+                                                match Writes.reap ctx.Transport opts.LeaseMinutes reapable with
+                                                | Error e ->
+                                                    // A FAILED DELETE IS REPORTED, NOT SWALLOWED, and the scan
+                                                    // moves on to the next item. The marker is still there, so the
+                                                    // item is still HELD — the board is left untouched and the
+                                                    // worker is NOT told it was released. `reap` deletes BEFORE it
+                                                    // would ever notify (and this engine's reap posts no notify at
+                                                    // all): a notify ahead of a failed delete would tell a worker
+                                                    // to stop while its marker still holds the item for a full
+                                                    // lease — released to its owner, held against everyone else,
+                                                    // and nothing clears it. One failed collect is not fatal to
+                                                    // the whole reap; the other items still collect.
+                                                    eprint
+                                                        $"fsgg-coord-engine: FAILED  %s{ref.Short}  worker %s{marker.Worker.Value}  — could not remove the marker (%s{Errors.explain e}); board left untouched, worker not notified."
+                                                | Ok(Writes.RenewedSinceScan ageSeconds) ->
+                                                    // The holder HEARTBEATED between the scan and this delete: the
+                                                    // lock is live again, so reap SKIPS it rather than break a
+                                                    // lease that was renewed under it — the one way reap could
+                                                    // itself cause the double-hold it exists to clean up.
+                                                    printfn
+                                                        "skipped  %s  worker %s  — renewed since the scan (%dm), still alive"
+                                                        ref.Short
+                                                        marker.Worker.Value
+                                                        (ageSeconds / 60)
+                                                | Ok Writes.AlreadyGone ->
+                                                    // A peer collected the same stale marker first — nothing left
+                                                    // to break, which is a collector's goal state, not a failure.
+                                                    printfn
+                                                        "skipped  %s  worker %s  — marker already gone"
+                                                        ref.Short
+                                                        marker.Worker.Value
+                                                | Ok Writes.Reaped ->
+                                                    printfn "reaped  %s  worker %s" ref.Short marker.Worker.Value
+
+                                                    // Restore the freed column — best-effort, the lock is already
+                                                    // gone. An OFF-BOARD claim has no board item to reset, and reap
+                                                    // must not claim a reset it never performed (case 25).
+                                                    match board.Value with
+                                                    | Ok bm ->
                                                         match
-                                                            Board.itemStatus ctx.Transport bm ref.Owner ref.Repo ref.Number
+                                                            Board.itemIdCached
+                                                                ctx.Transport
+                                                                bm
+                                                                ref.Owner
+                                                                ref.Repo
+                                                                ref.Number
                                                         with
-                                                        // A column we could not read is not one we may
-                                                        // overwrite (#266, aimed at a writer). Never fatal —
-                                                        // the lock is already gone.
-                                                        | Error e ->
-                                                            printfn
-                                                                "  column UNREADABLE (%s) — marker cleared, column left ALONE:  scripts/fsgg-coord set-field %s Status '<column>'"
-                                                                (Errors.explain e)
-                                                                ref.Short
-                                                        | Ok live ->
+                                                        | Ok(Some _) ->
+                                                            // #331's read, in `reap`'s copy — because the reaper
+                                                            // collects a LEASE and knows nothing about whether the
+                                                            // item became startable. A worker whose lease lapsed on
+                                                            // an item it had deliberately marked `Blocked` had that
+                                                            // column reset on its way out, which is #331 with a
+                                                            // dead worker instead of a live one. bash asked ONE
+                                                            // question here (`unclaim_status`); so does this.
+                                                            match
+                                                                Board.itemStatus
+                                                                    ctx.Transport
+                                                                    bm
+                                                                    ref.Owner
+                                                                    ref.Repo
+                                                                    ref.Number
+                                                            with
+                                                            // A column we could not read is not one we may
+                                                            // overwrite (#266, aimed at a writer). Never fatal —
+                                                            // the lock is already gone.
+                                                            | Error e ->
+                                                                printfn
+                                                                    "  column UNREADABLE (%s) — marker cleared, column left ALONE:  scripts/fsgg-coord set-field %s Status '<column>'"
+                                                                    (Errors.explain e)
+                                                                    ref.Short
+                                                            | Ok live ->
 
-                                                        match unclaimColumn live reapable.PreviousStatus with
-                                                        | Preserve(Some s) ->
-                                                            printfn
-                                                                "  column left at %s (chosen during the lease — reap collects a lease, not a decision)"
-                                                                (statusWireName s)
-                                                        | Preserve None -> printfn "  no column set (nothing to reset)"
-                                                        | ResetTo restoreTo ->
-
-                                                        let name = statusWireName restoreTo
-
-                                                        if name <> "" then
-                                                            // #867: `release`'s defect, in `reap`'s copy —
-                                                            // the outcome was discarded, so "best-effort"
-                                                            // meant "unmentioned". Case 25's own rule is that
-                                                            // reap must not claim a reset it never performed;
-                                                            // a silent `Deferred` or failure claims exactly
-                                                            // that, by saying nothing. Still never fatal: the
-                                                            // lock is already gone.
-                                                            match requireCoherentParkIfBlocked ctx ref (Some restoreTo) with
-                                                            | Error _ ->
-                                                                printfn "  reset to %s REFUSED — the restored Blocked column has no coherent reason" name
-                                                            | Ok() ->
-                                                                match
-                                                                    Board.boardWrite
-                                                                        ctx.Transport
-                                                                        bm
-                                                                        ref.Owner
-                                                                        ref.Repo
-                                                                        ref.Number
-                                                                        "Status"
-                                                                        (Board.Set name)
-                                                                        marker.Worker.Value
-                                                                with
-                                                                | Ok Board.Written -> printfn "  reset to %s" name
-                                                                | Ok Board.Deferred ->
+                                                                match unclaimColumn live reapable.PreviousStatus with
+                                                                | Preserve(Some s) ->
                                                                     printfn
-                                                                        "  reset to %s DEFERRED (budget exhausted) — queued, not lost; nothing replays it on its own:  scripts/fsgg-coord flush"
-                                                                        name
-                                                                | Ok Board.NotOnBoard ->
-                                                                    printfn "  not on board (marker cleared; nothing to reset)"
-                                                                | Error e ->
-                                                                    printfn
-                                                                        "  reset to %s FAILED (%s) — marker cleared, column UNCHANGED:  scripts/fsgg-coord set-field %s Status '%s'"
-                                                                        name
-                                                                        (Errors.explain e)
-                                                                        ref.Short
-                                                                        name
-                                                    | Ok None ->
-                                                        printfn "  not on board (marker cleared; nothing to reset)"
+                                                                        "  column left at %s (chosen during the lease — reap collects a lease, not a decision)"
+                                                                        (statusWireName s)
+                                                                | Preserve None ->
+                                                                    printfn "  no column set (nothing to reset)"
+                                                                | ResetTo restoreTo ->
+
+                                                                    let name = statusWireName restoreTo
+
+                                                                    if name <> "" then
+                                                                        // #867: `release`'s defect, in `reap`'s copy —
+                                                                        // the outcome was discarded, so "best-effort"
+                                                                        // meant "unmentioned". Case 25's own rule is that
+                                                                        // reap must not claim a reset it never performed;
+                                                                        // a silent `Deferred` or failure claims exactly
+                                                                        // that, by saying nothing. Still never fatal: the
+                                                                        // lock is already gone.
+                                                                        match
+                                                                            requireCoherentParkIfBlocked
+                                                                                ctx
+                                                                                ref
+                                                                                (Some restoreTo)
+                                                                        with
+                                                                        | Error _ ->
+                                                                            printfn
+                                                                                "  reset to %s REFUSED — the restored Blocked column has no coherent reason"
+                                                                                name
+                                                                        | Ok() ->
+                                                                            match
+                                                                                Board.boardWrite
+                                                                                    ctx.Transport
+                                                                                    bm
+                                                                                    ref.Owner
+                                                                                    ref.Repo
+                                                                                    ref.Number
+                                                                                    "Status"
+                                                                                    (Board.Set name)
+                                                                                    marker.Worker.Value
+                                                                            with
+                                                                            | Ok Board.Written ->
+                                                                                printfn "  reset to %s" name
+                                                                            | Ok Board.Deferred ->
+                                                                                printfn
+                                                                                    "  reset to %s DEFERRED (budget exhausted) — queued, not lost; nothing replays it on its own:  scripts/fsgg-coord flush"
+                                                                                    name
+                                                                            | Ok Board.NotOnBoard ->
+                                                                                printfn
+                                                                                    "  not on board (marker cleared; nothing to reset)"
+                                                                            | Error e ->
+                                                                                printfn
+                                                                                    "  reset to %s FAILED (%s) — marker cleared, column UNCHANGED:  scripts/fsgg-coord set-field %s Status '%s'"
+                                                                                    name
+                                                                                    (Errors.explain e)
+                                                                                    ref.Short
+                                                                                    name
+                                                        | Ok None ->
+                                                            printfn "  not on board (marker cleared; nothing to reset)"
+                                                        | Error _ -> ()
                                                     | Error _ -> ()
-                                                | Error _ -> ()
 
-            match failure with
-            | Some e -> fail e
-            | None -> ExitGreen
+                match failure with
+                | Some e -> fail e
+                | None -> ExitGreen
 
     /// `pendingBoardWrites` is the DEPTH OF THE DEFERRAL QUEUE — the writes `boardWrite` took on an
     /// exhausted budget and `flush` will replay (#862). It reads a local file and spends nothing, which is
@@ -4048,14 +4719,18 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // machine-readable form of "do not conclude REST is healthy from this".
                 let doc =
                     JsonSerializer.Serialize(
-                        {| graphql =
-                            {| remaining = meter.Remaining
-                               limit = meter.Limit
-                               source = "github:/rate_limit" |}
-                           restReported = not rests.IsEmpty
-                           rest = rests
-                           fleetState = fleetState
-                           pendingBoardWrites = pending |}
+                        {|
+                            graphql =
+                                {|
+                                    remaining = meter.Remaining
+                                    limit = meter.Limit
+                                    source = "github:/rate_limit"
+                                |}
+                            restReported = not rests.IsEmpty
+                            rest = rests
+                            fleetState = fleetState
+                            pendingBoardWrites = pending
+                        |}
                     )
 
                 printfn "%s" doc
@@ -4066,18 +4741,38 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // healthy-looking number in the other, concluded the engine was tripping a counter of its
                 // own. It reports ONE bucket, read from GitHub's own free `/rate_limit`, and the claim lock
                 // does not live in it. Neither does a secondary limit, which never appears there at all.
-                printfn "GitHub GraphQL points (from GitHub's own /rate_limit): %d / %d remaining" meter.Remaining meter.Limit
+                printfn
+                    "GitHub GraphQL points (from GitHub's own /rate_limit): %d / %d remaining"
+                    meter.Remaining
+                    meter.Limit
 
                 match rests with
                 | [] ->
-                    printfn "REST resource telemetry: unknown (no real-resource header observation yet); fleet unknown for new dispatch."
+                    printfn
+                        "REST resource telemetry: unknown (no real-resource header observation yet); fleet unknown for new dispatch."
                 | observations ->
                     for observation in observations |> List.sortBy _.Resource do
-                        let remaining = observation.Remaining |> Option.map string |> Option.defaultValue "unknown"
+                        let remaining =
+                            observation.Remaining |> Option.map string |> Option.defaultValue "unknown"
+
                         let limit = observation.Limit |> Option.map string |> Option.defaultValue "unknown"
                         let used = observation.Used |> Option.map string |> Option.defaultValue "unknown"
-                        let reset = observation.ResetAt |> Option.map (fun instant -> instant.ToString "o") |> Option.defaultValue "unknown"
-                        printfn "REST %s (real response headers): %s / %s remaining; used %s; reset %s; observed %s; source %s; fleet %s" observation.Resource remaining limit used reset (observation.ObservedAt.ToString "o") observation.Source fleetState
+
+                        let reset =
+                            observation.ResetAt
+                            |> Option.map (fun instant -> instant.ToString "o")
+                            |> Option.defaultValue "unknown"
+
+                        printfn
+                            "REST %s (real response headers): %s / %s remaining; used %s; reset %s; observed %s; source %s; fleet %s"
+                            observation.Resource
+                            remaining
+                            limit
+                            used
+                            reset
+                            (observation.ObservedAt.ToString "o")
+                            observation.Source
+                            fleetState
 
                 printfn
                     "REST requests: NOT REPORTED here — /rate_limit's `core` figure disagrees with the counter real requests are billed against on this account, and a SECONDARY (abuse-detection) limit never appears in it. The claim lock lives on REST (ADR-0034 §3), so a healthy line above is not evidence that `claim`/`take`/`who` will run."
@@ -4120,14 +4815,16 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         "  (queries only — a mutation carries no `rateLimit`, so board WRITES are billed the 1-pt floor and are not counted above)"
 
             if meter.Remaining < Budget.WarnBelow then
-                eprint $"fsgg-coord-engine: WARNING — only %d{meter.Remaining} GraphQL points remain (< %d{Budget.WarnBelow}); the fleet shares one 5,000/hr budget (#418)."
+                eprint
+                    $"fsgg-coord-engine: WARNING — only %d{meter.Remaining} GraphQL points remain (< %d{Budget.WarnBelow}); the fleet shares one 5,000/hr budget (#418)."
 
             // A QUEUE WITH ENTRIES IN IT IS NOT AN ERROR — it is the state `flush` exists for — so this
             // stays green and merely says so. Exiting non-zero here would make `budget`, the one free
             // pre-flight read the recipes tell you to START with, fail on a board that is merely mid-repair.
             match pending with
             | Some n when n > 0 ->
-                eprint $"fsgg-coord-engine: NOTE — %d{n} board write(s) are queued and have NOT landed; `flush` replays them (#862)."
+                eprint
+                    $"fsgg-coord-engine: NOTE — %d{n} board write(s) are queued and have NOT landed; `flush` replays them (#862)."
             | _ -> ()
 
             ExitGreen
@@ -4216,7 +4913,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // falls back to the row's own hosting repository — the doc above's "retain their own
                 // repository as the only truthful scope," now the same fallback `enrich`/`Lanes.partition`
                 // apply, rather than a raw resolve that could hand back the sentinel itself.
-                |> List.map (fun r -> r.Ref, FS.GG.Coord.RepoScope.orFallback r.Ref.Repo (Options.resolveRepo r.PathRepo))
+                |> List.map (fun r ->
+                    r.Ref, FS.GG.Coord.RepoScope.orFallback r.Ref.Repo (Options.resolveRepo r.PathRepo))
                 |> Map.ofList
                 |> Ok
 
@@ -4387,8 +5085,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         // unfinished delivery, while a false DISJOINT has no later CAS to repair it.
         let closedUnstampedIssues =
             Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
-            |> Result.bind (fun board ->
-                Scan.board ctx.Transport Cache.Scheduling ctx.Owner ctx.Title board.Number)
+            |> Result.bind (fun board -> Scan.board ctx.Transport Cache.Scheduling ctx.Owner ctx.Title board.Number)
             |> Result.bind (fun rows ->
                 rows
                 |> List.filter (fun row ->
@@ -4404,8 +5101,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         |> Result.bind (fun issues ->
                             Reads.issueBody ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number
                             |> Result.map (fun body ->
-                                ({ Number = row.Ref.Number
-                                   Body = Reads.BodyRead body }: Reads.OpenIssue)
+                                ({
+                                    Number = row.Ref.Number
+                                    Body = Reads.BodyRead body
+                                }
+                                : Reads.OpenIssue)
                                 :: issues)))
                     (Ok []))
 
@@ -4442,9 +5142,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         None
                     else
                         let other =
-                            { Owner = ref.Owner
-                              Repo = ref.Repo
-                              Number = issue.Number }
+                            {
+                                Owner = ref.Owner
+                                Repo = ref.Repo
+                                Number = issue.Number
+                            }
 
                         match issue.Body with
                         // .github#1794 — A ROW WE COULD NOT READ SURVIVES THE FILTER. It cannot be
@@ -4461,7 +5163,10 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             // .github#2305 — a pair attributable SOLELY to a shared generated artifact is
                             // excluded here, before the marker-backed scope check below ever runs: neither
                             // side authors that file, so it is not a real reservation to defend.
-                            match TouchSet.conflicts ts (TouchSet.parse body) |> TouchSet.excludeGenerated generated with
+                            match
+                                TouchSet.conflicts ts (TouchSet.parse body)
+                                |> TouchSet.excludeGenerated generated
+                            with
                             | [] -> None
                             | pairs -> Some(other, Choice1Of2 pairs))
 
@@ -4566,6 +5271,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         | Some m ->
                             // #2351 — `cross-repo` is not a repository; see `pathRepoOrFallback`.
                             let otherPathRepo = m.PathRepo |> pathRepoOrFallback other.Repo
+
                             let samePathRepo =
                                 String.Equals(ref.Owner, other.Owner, StringComparison.OrdinalIgnoreCase)
                                 && String.Equals(targetPathRepo, otherPathRepo, StringComparison.OrdinalIgnoreCase)
@@ -4607,13 +5313,16 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     // closes the scan-to-claim race and prevents an implicit route after scope changes.
                     match authorizeBoardIntake ctx ref with
                     | Error error -> Error error
-                    | Ok () ->
-                      match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.requireCurrentDeliveryRoute ctx ref with
-                      | Ok _ ->
-                        // The bounded existing claim scan is the first real-resource observation for a
-                        // fresh session.  Check admission only after it, still before the claim CAS/post.
-                          if opts.Force then Ok [] else heldElsewhere ctx opts.LeaseMinutes w.Id ref
-                      | Error error -> Error error
+                    | Ok() ->
+                        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.requireCurrentDeliveryRoute ctx ref with
+                        | Ok _ ->
+                            // The bounded existing claim scan is the first real-resource observation for a
+                            // fresh session.  Check admission only after it, still before the claim CAS/post.
+                            if opts.Force then
+                                Ok []
+                            else
+                                heldElsewhere ctx opts.LeaseMinutes w.Id ref
+                        | Error error -> Error error
 
                 match heldCheck with
                 | Error e -> failWith opts.Render e
@@ -4623,18 +5332,19 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     eprint
                         $"fsgg-coord-engine: worker '%s{w.Id}' ALREADY HOLDS %s{names}. A claim reserves a touch-set, so a second one locks files nobody is editing for the rest of the lease (%d{opts.LeaseMinutes}m) — and `batch` will refuse every item that overlaps it (#516)."
 
-                    eprint "  Finish or drop the item you hold:  scripts/fsgg-coord delivery <issue> --pr <pr> --flip --apply   (or: release <issue>)"
+                    eprint
+                        "  Finish or drop the item you hold:  scripts/fsgg-coord delivery <issue> --pr <pr> --flip --apply   (or: release <issue>)"
 
                     // #1620: `--force` now carries a SECOND, destructive power — it STEALS a live claim.
                     // This line points a worker at the flag for the #516 override alone, so it has to say
                     // what else it will do, or it sends somebody to delete a lock they never meant to touch.
                     // That is exactly the message-vs-behaviour disagreement #1620 exists to close, and it
                     // would have been re-created here, in the one place that actively recommends the flag.
-                    eprint
-                        $"  If you genuinely mean to hold two, say so:  scripts/fsgg-coord claim <issue> --force"
+                    eprint $"  If you genuinely mean to hold two, say so:  scripts/fsgg-coord claim <issue> --force"
 
                     eprint
                         $"  NOTE: --force ALSO STEALS a live claim — against an item another worker is holding it will DELETE their lock (#1620). On a FREE item it does nothing but lift this refusal."
+
                     ExitRed
                 | Ok [] ->
                     // #2459 — `claim` reaches items the scheduler's OWN overlap-avoidance never sees:
@@ -4703,29 +5413,36 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     // attempt (`--refuse-overlap`) changed nothing on either item, so there is nothing yet
                     // for them to coordinate around.
                     let notifyOverlap (collisions: (Ref * string * string list) list) : PathCollision list =
-                        [ for other, holder, toks in collisions do
-                              let msg =
-                                  $"heads up: worker '%s{w.Id}' just claimed %s{ref.Short} via `claim` (not the scheduler), which overlaps your touch-set here (%s{sharedTokenText toks}). I do not know which of us declared these paths first. This is NOT a race the scheduler is sequencing for us — `claim` skips that upstream filter (#2459) — so please coordinate directly: merge-sequence by hand (whoever lands second rebases), or one of us narrows with `set-paths`. Reply here."
+                        [
+                            for other, holder, toks in collisions do
+                                let msg =
+                                    $"heads up: worker '%s{w.Id}' just claimed %s{ref.Short} via `claim` (not the scheduler), which overlaps your touch-set here (%s{sharedTokenText toks}). I do not know which of us declared these paths first. This is NOT a race the scheduler is sequencing for us — `claim` skips that upstream filter (#2459) — so please coordinate directly: merge-sequence by hand (whoever lands second rebases), or one of us narrows with `set-paths`. Reply here."
 
-                              match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
-                              | Error e ->
-                                  eprint $"  could NOT notify worker %s{holder} on %s{other.Short}: %s{Errors.explain e}"
+                                match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
+                                | Error e ->
+                                    eprint
+                                        $"  could NOT notify worker %s{holder} on %s{other.Short}: %s{Errors.explain e}"
 
-                                  yield
-                                      { Ref = other
-                                        Worker = holder
-                                        SharedTokens = toks
-                                        Notified = false
-                                        NotifyError = Some(Errors.explain e) }
-                              | Ok() ->
-                                  eprint $"  notified worker %s{holder} on %s{other.Short}"
+                                    yield
+                                        {
+                                            Ref = other
+                                            Worker = holder
+                                            SharedTokens = toks
+                                            Notified = false
+                                            NotifyError = Some(Errors.explain e)
+                                        }
+                                | Ok() ->
+                                    eprint $"  notified worker %s{holder} on %s{other.Short}"
 
-                                  yield
-                                      { Ref = other
-                                        Worker = holder
-                                        SharedTokens = toks
-                                        Notified = true
-                                        NotifyError = None } ]
+                                    yield
+                                        {
+                                            Ref = other
+                                            Worker = holder
+                                            SharedTokens = toks
+                                            Notified = true
+                                            NotifyError = None
+                                        }
+                        ]
 
                     let earlyExit, overlapCollisions =
                         // `opts.Command` names the VERB the caller actually typed, not the function about
@@ -4760,7 +5477,10 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             | Ok collisions ->
                                 for other, holder, toks in collisions do
                                     let toksText = sharedTokenText toks
-                                    eprint $"OVERLAP — %s{ref.Short} would collide with %s{other.Short} (worker %s{holder})"
+
+                                    eprint
+                                        $"OVERLAP — %s{ref.Short} would collide with %s{other.Short} (worker %s{holder})"
+
                                     eprint $"  %s{toksText}"
 
                                     eprint
@@ -4815,15 +5535,22 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         // implementation on `.converged` rather than parsing an optimistic sentence (#1369).
                         let receiptCensuses (value: Writes.ForcedClaimCensuses) : ForcedClaimCensusesReceipt =
                             let mapCensus (census: Writes.ClaimMarkerCensus) : ClaimMarkerCensusReceipt =
-                                { WinnerMarkerId = census.WinnerMarkerId
-                                  Markers =
-                                    census.Markers
-                                    |> List.map (fun marker ->
-                                        { MarkerId = marker.MarkerId
-                                          Worker = marker.Worker.Value
-                                          Live = marker.Live }) }
-                            { Before = mapCensus value.Before
-                              After = value.After |> Option.map mapCensus }
+                                {
+                                    WinnerMarkerId = census.WinnerMarkerId
+                                    Markers =
+                                        census.Markers
+                                        |> List.map (fun marker ->
+                                            {
+                                                MarkerId = marker.MarkerId
+                                                Worker = marker.Worker.Value
+                                                Live = marker.Live
+                                            })
+                                }
+
+                            {
+                                Before = mapCensus value.Before
+                                After = value.After |> Option.map mapCensus
+                            }
 
                         let emitForcedClaimOutcome
                             (kind: string)
@@ -4834,22 +5561,25 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             (failedWorker: WorkerId option)
                             (failedMarkerId: int64 option)
                             (reason: string option)
-                            (censuses: Writes.ForcedClaimCensuses) =
+                            (censuses: Writes.ForcedClaimCensuses)
+                            =
                             match opts.Render with
                             | Text -> ()
                             | Json ->
                                 let receipt: ForcedClaimOutcomeReceipt =
-                                    { Ref = ref
-                                      Worker = w.Id
-                                      Kind = kind
-                                      ReplacementMarkerId = replacementMarkerId
-                                      StandingWorker = standingWorker |> Option.map _.Value
-                                      StandingMarkerId = standingMarkerId
-                                      RemovedWorkers = removed |> List.map _.Value
-                                      FailedWorker = failedWorker |> Option.map _.Value
-                                      FailedMarkerId = failedMarkerId
-                                      Reason = reason
-                                      ForcedClaimCensuses = receiptCensuses censuses }
+                                    {
+                                        Ref = ref
+                                        Worker = w.Id
+                                        Kind = kind
+                                        ReplacementMarkerId = replacementMarkerId
+                                        StandingWorker = standingWorker |> Option.map _.Value
+                                        StandingMarkerId = standingMarkerId
+                                        RemovedWorkers = removed |> List.map _.Value
+                                        FailedWorker = failedWorker |> Option.map _.Value
+                                        FailedMarkerId = failedMarkerId
+                                        Reason = reason
+                                        ForcedClaimCensuses = receiptCensuses censuses
+                                    }
 
                                 printfn "%s" (renderForcedClaimOutcomeJson receipt)
 
@@ -4857,10 +5587,20 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             (kind: string)
                             (held: Writes.Held)
                             (forcedClaimCensuses: Writes.ForcedClaimCensuses option)
-                            (projection: Result<BoardStatus * Result<Board.WriteOutcome, Errors.IoError>, string>) =
+                            (projection: Result<BoardStatus * Result<Board.WriteOutcome, Errors.IoError>, string>)
+                            =
                             let markerObserved, markerId =
-                                match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) session ref with
-                                | Ok(Writes.Holds fresh) when fresh.MarkerId = held.MarkerId -> true, Some fresh.MarkerId
+                                match
+                                    Writes.verifyHeld
+                                        ctx.Transport
+                                        opts.LeaseMinutes
+                                        (WorkerId w.Id)
+                                        (selfOf w)
+                                        session
+                                        ref
+                                with
+                                | Ok(Writes.Holds fresh) when fresh.MarkerId = held.MarkerId ->
+                                    true, Some fresh.MarkerId
                                 | Ok(Writes.Holds fresh) -> false, Some fresh.MarkerId
                                 | Ok Writes.DoesNotHold
                                 // #1646. This is a READBACK, so it REPORTS rather than decides: `markerObserved
@@ -4875,19 +5615,25 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 | Ok(Writes.ImpersonatesHolder _)
                                 | Ok(Writes.TwinHolds _) -> false, None
                                 | Error e ->
-                                    eprint $"fsgg-coord-engine: post-claim marker readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+                                    eprint
+                                        $"fsgg-coord-engine: post-claim marker readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+
                                     false, None
 
                             let status, statusRead =
                                 match board.Force() with
                                 | Error e ->
-                                    eprint $"fsgg-coord-engine: post-claim Status readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+                                    eprint
+                                        $"fsgg-coord-engine: post-claim Status readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+
                                     None, "failed"
                                 | Ok b ->
                                     match Board.itemStatus ctx.Transport b ref.Owner ref.Repo ref.Number with
                                     | Ok s -> s |> Option.map statusWireName, "observed"
                                     | Error e ->
-                                        eprint $"fsgg-coord-engine: post-claim Status readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+                                        eprint
+                                            $"fsgg-coord-engine: post-claim Status readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+
                                         None, "failed"
 
                             // The column the lifecycle reducer established for THIS claim, or `None` when it
@@ -4925,27 +5671,29 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             let converged = markerObserved && destination.IsSome && status = destination
 
                             let receipt: ClaimReceipt =
-                                { Ref = ref
-                                  Worker = w.Id
-                                  Kind = kind
-                                  MarkerObserved = markerObserved
-                                  MarkerId = markerId
-                                  // The assignee is account-level decoration, never the worker lock. This
-                                  // client does not mutate it; null is the honest observation, not a success.
-                                  AssigneeObserved = None
-                                  Status = status
-                                  StatusRead = statusRead
-                                  StatusWrite = statusWrite
-                                  PendingBoardWrites = pending
-                                  // #2459 — every live claim this item's declared touch-set collides with,
-                                  // exactly as computed and reported above; empty when the scan found none
-                                  // (or, best-effort, when the scan itself could not run). This is purely
-                                  // informational and never affects `Converged`: the LOCK and BOARD facts
-                                  // above are the postcondition of the mutation, while this is a courtesy
-                                  // report about OTHER items that this claim, once won, does not change.
-                                  Collisions = overlapCollisions
-                                  ForcedClaimCensuses = forcedClaimCensuses |> Option.map receiptCensuses
-                                  Converged = converged }
+                                {
+                                    Ref = ref
+                                    Worker = w.Id
+                                    Kind = kind
+                                    MarkerObserved = markerObserved
+                                    MarkerId = markerId
+                                    // The assignee is account-level decoration, never the worker lock. This
+                                    // client does not mutate it; null is the honest observation, not a success.
+                                    AssigneeObserved = None
+                                    Status = status
+                                    StatusRead = statusRead
+                                    StatusWrite = statusWrite
+                                    PendingBoardWrites = pending
+                                    // #2459 — every live claim this item's declared touch-set collides with,
+                                    // exactly as computed and reported above; empty when the scan found none
+                                    // (or, best-effort, when the scan itself could not run). This is purely
+                                    // informational and never affects `Converged`: the LOCK and BOARD facts
+                                    // above are the postcondition of the mutation, while this is a courtesy
+                                    // report about OTHER items that this claim, once won, does not change.
+                                    Collisions = overlapCollisions
+                                    ForcedClaimCensuses = forcedClaimCensuses |> Option.map receiptCensuses
+                                    Converged = converged
+                                }
 
                             match opts.Render with
                             | Json -> printfn "%s" (renderClaimReceiptJson receipt)
@@ -4960,11 +5708,23 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     | _ -> $"claimed %s{ref.Short} by worker %s{w.Id} ("
 
                                 if converged then
-                                    printfn "%sboard confirmed: marker=%d, Status=%s)" humanPrefix held.MarkerId (destination |> Option.defaultValue "")
+                                    printfn
+                                        "%sboard confirmed: marker=%d, Status=%s)"
+                                        humanPrefix
+                                        held.MarkerId
+                                        (destination |> Option.defaultValue "")
                                 else
                                     let shownStatus = status |> Option.defaultValue "UNREADABLE/UNSET"
-                                    printfn "%slock held; board NOT confirmed: marker=%b, Status=%s, write=%s)" humanPrefix markerObserved shownStatus statusWrite
-                                    eprint $"fsgg-coord-engine: do NOT announce or implement %s{ref.Short} yet — re-run `claim %s{ref.Short} --json` and require `.converged == true`; reconciliation retains CLAIM-STATUS-LAG repair."
+
+                                    printfn
+                                        "%slock held; board NOT confirmed: marker=%b, Status=%s, write=%s)"
+                                        humanPrefix
+                                        markerObserved
+                                        shownStatus
+                                        statusWrite
+
+                                    eprint
+                                        $"fsgg-coord-engine: do NOT announce or implement %s{ref.Short} yet — re-run `claim %s{ref.Short} --json` and require `.converged == true`; reconciliation retains CLAIM-STATUS-LAG repair."
 
                                 // #2459 — the human line stays a one-word summary; the detailed OVERLAP/who/
                                 // shared-tokens lines already went to stderr above, once, at scan time.
@@ -4973,7 +5733,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                         $"fsgg-coord-engine: NOTE — this claim overlaps %d{List.length overlapCollisions} live claim(s); see OVERLAP lines above (or `overlap %s{ref.Short} --active`)."
 
                             match projection with
-                            | Ok(destination, outcome) -> boardWriteNote ref "Status" (statusWireName destination) outcome
+                            | Ok(destination, outcome) ->
+                                boardWriteNote ref "Status" (statusWireName destination) outcome
                             // .github#2645 — a WITHHELD projection is reported here rather than swallowed: the
                             // LOCK is held and the exit code is unaffected (`boardWriteNote`'s own rule for a
                             // non-fatal board write), but the column was deliberately not moved, and a worker
@@ -5019,11 +5780,18 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         // was actually at stake instead of a literal that was only ever true by accident.
                         // `Error reason` is the fail-closed answer the function's own contract demands: a
                         // fact could not be read, so NOTHING is written and the reason is reported.
-                        let setClaimLifecycle (held: Writes.Held) : Result<BoardStatus * Result<Board.WriteOutcome, Errors.IoError>, string> =
+                        let setClaimLifecycle
+                            (held: Writes.Held)
+                            : Result<BoardStatus * Result<Board.WriteOutcome, Errors.IoError>, string> =
                             match board.Force() with
                             | Error e -> Error $"the board could not be read: %s{Errors.explain e}"
                             | Ok b ->
-                                claimLifecycleDestination ctx b (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) ref held
+                                claimLifecycleDestination
+                                    ctx
+                                    b
+                                    (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+                                    ref
+                                    held
                                 |> Result.map (fun destination ->
                                     destination,
                                     Board.boardWrite
@@ -5090,19 +5858,28 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 readPreviousStatus
                                 readPathRepo
                                 (fun () ->
-                                    if opts.Command = Options.Adopt || not (usesLiveHttp ctx) then Ok()
+                                    if opts.Command = Options.Adopt || not (usesLiveHttp ctx) then
+                                        Ok()
                                     else
                                         match Environment.GetEnvironmentVariable "GITHUB_TOKEN" with
-                                        | null | "" -> Error(Errors.RateLimited(Errors.UnknownBudget, None))
+                                        | null
+                                        | "" -> Error(Errors.RateLimited(Errors.UnknownBudget, None))
                                         | token ->
                                             let establish =
-                                                if Budget.fleetState (Budget.readRestObservations token) = Budget.Unknown then
-                                                    Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number |> Result.map ignore
-                                                else Ok()
-                                            establish |> Result.bind (fun () ->
+                                                if
+                                                    Budget.fleetState (Budget.readRestObservations token) =
+                                                        Budget.Unknown
+                                                then
+                                                    Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number
+                                                    |> Result.map ignore
+                                                else
+                                                    Ok()
+
+                                            establish
+                                            |> Result.bind (fun () ->
                                                 match Budget.fleetState (Budget.readRestObservations token) with
                                                 | Budget.Healthy -> Ok()
-                                                | _ -> Error(Errors.RateLimited(Errors.UnknownBudget, None))) )
+                                                | _ -> Error(Errors.RateLimited(Errors.UnknownBudget, None))))
                         with
                         | Error e -> failWith opts.Render e
                         | Ok(Writes.Won(held, collected)) ->
@@ -5122,7 +5899,10 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         | Ok(Writes.ReplacementPostFailed(holder, holderMarkerId, reason, censuses)) ->
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} forced-claim replacement POST FAILED before any incumbent deletion (%s{reason}). The complete post-state census proves worker '%s{holder.Value}' marker %d{holderMarkerId} remains authoritative: the OLD HOLDER STANDS and nothing was taken."
-                            eprint "  Retry is authorized only after a fresh complete marker census; the non-zero exit alone authorizes nothing."
+
+                            eprint
+                                "  Retry is authorized only after a fresh complete marker census; the non-zero exit alone authorizes nothing."
+
                             emitForcedClaimOutcome
                                 "replacement-post-failed"
                                 None
@@ -5133,13 +5913,17 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 None
                                 (Some reason)
                                 censuses
+
                             ExitRed
                         | Ok(Writes.CleanupRequired(replacement, removed, failed, failedMarkerId, reason, censuses)) ->
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} forced-claim cleanup is INCOMPLETE: replacement marker %d{replacement.MarkerId} was posted before eviction; %d{List.length removed} live marker(s) were removed, but worker '%s{failed.Value}' marker %d{failedMarkerId} still stands (%s{reason})."
+
                             eprint
                                 $"  The item is not unclaimed: comment-order still makes the older surviving marker authoritative. Re-run this same `claim %s{ref.Short} --force` as worker '%s{w.Id}' to reuse replacement marker %d{replacement.MarkerId} and reconcile cleanup; do not infer retry authority from the exit code alone."
+
                             let standingMarkerId = censuses.After |> Option.bind _.WinnerMarkerId
+
                             let standingWorker =
                                 censuses.After
                                 |> Option.bind (fun census ->
@@ -5148,6 +5932,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                         census.Markers
                                         |> List.tryFind (fun marker -> marker.MarkerId = markerId)
                                         |> Option.map _.Worker))
+
                             emitForcedClaimOutcome
                                 "cleanup-required"
                                 (Some replacement.MarkerId)
@@ -5158,13 +5943,20 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 (Some failedMarkerId)
                                 (Some reason)
                                 censuses
+
                             ExitRed
                         | Ok(Writes.PostStateUnreadable(replacement, removed, reason, censuses)) ->
-                            let replacementText = replacement |> Option.map (fun held -> string held.MarkerId) |> Option.defaultValue "not established"
+                            let replacementText =
+                                replacement
+                                |> Option.map (fun held -> string held.MarkerId)
+                                |> Option.defaultValue "not established"
+
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} forced-claim post-state is UNREADABLE; replacement marker=%s{replacementText}, observed removals=%d{List.length removed} (%s{reason}). No empty or ownership postcondition is inferred from this failed read."
+
                             eprint
                                 $"  Re-run this same `claim %s{ref.Short} --force` as worker '%s{w.Id}' only after restoring the census read; no ownership verdict was reached."
+
                             emitForcedClaimOutcome
                                 "post-state-unreadable"
                                 (replacement |> Option.map _.MarkerId)
@@ -5175,11 +5967,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 None
                                 (Some reason)
                                 censuses
+
                             ExitNoVerdict
                         | Ok(Writes.OldHolderStands(replacementMarkerId, holder, holderMarkerId, removed, censuses)) ->
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} forced-claim replacement marker %d{replacementMarkerId} is absent in the complete post-state census; worker '%s{holder.Value}' marker %d{holderMarkerId} remains authoritative after %d{List.length removed} observed removal(s). The OLD HOLDER STANDS."
-                            eprint "  Nothing in this result authorizes retry; inspect the live marker census before another mutation."
+
+                            eprint
+                                "  Nothing in this result authorizes retry; inspect the live marker census before another mutation."
+
                             emitForcedClaimOutcome
                                 "old-holder-stands"
                                 (Some replacementMarkerId)
@@ -5190,18 +5986,46 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 None
                                 None
                                 censuses
+
                             ExitRed
                         | Ok(Writes.NoHolderRemaining(replacementMarkerId, removed, censuses)) ->
-                            let replacementText = replacementMarkerId |> Option.map string |> Option.defaultValue "not established"
+                            let replacementText =
+                                replacementMarkerId
+                                |> Option.map string
+                                |> Option.defaultValue "not established"
+
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} forced-claim post-state was readable but NO live marker remained: replacement marker=%s{replacementText} after %d{List.length removed} incumbent marker(s) were removed. This is not an ordinary loss and retry is not authorized by this result."
-                            emitForcedClaimOutcome "no-holder-remaining" replacementMarkerId None None removed None None None censuses
+
+                            emitForcedClaimOutcome
+                                "no-holder-remaining"
+                                replacementMarkerId
+                                None
+                                None
+                                removed
+                                None
+                                None
+                                None
+                                censuses
+
                             ExitRed
                         | Ok(Writes.ForcedClaimLost(winner, censuses)) ->
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} forced-claim cleanup completed, but the complete post-state census names worker '%s{winner.Value}' as the comment-order winner. The replacement did not win and was withdrawn; retry is not authorized by this result."
+
                             let winnerMarkerId = censuses.After |> Option.bind _.WinnerMarkerId
-                            emitForcedClaimOutcome "forced-claim-lost" None (Some winner) winnerMarkerId [] None None None censuses
+
+                            emitForcedClaimOutcome
+                                "forced-claim-lost"
+                                None
+                                (Some winner)
+                                winnerMarkerId
+                                []
+                                None
+                                None
+                                None
+                                censuses
+
                             ExitRed
                         | Ok(Writes.Renewed(held, collected)) ->
                             // A live marker already ours — the claim RENEWED it in place rather than posting a
@@ -5242,7 +6066,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 eprint
                                     $"fsgg-coord-engine: %s{ref.Short} was CLEARED by --force, and then %s{holder.Value} won the open race for it — the steal displaced the previous holder but did NOT give you the item."
 
-                                eprint "  Retry to race for it, or leave it: a fresh holder is a working worker, not the dead one you came to recover."
+                                eprint
+                                    "  Retry to race for it, or leave it: a fresh holder is a working worker, not the dead one you came to recover."
                             else
                                 // .github#2683 — THIS SENTENCE USED TO END "Pick another, or wait for the
                                 // lease.", AND ONE HALF OF THAT WAS AN INSTRUCTION NOBODY MAY FOLLOW.
@@ -5266,7 +6091,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} carries a live marker with YOUR worker id '%s{w.Id}' but a DIFFERENT session (%s{theirs.Value}) — two workers share one id (#419). Adopting it would put both of you on this item, which is the double-claim ADR-0027 exists to prevent."
 
-                            eprint "  Mint a fresh, unique id in THIS shell (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
+                            eprint
+                                "  Mint a fresh, unique id in THIS shell (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
+
                             ExitRed
                         | Ok(Writes.Impersonates(derived, named)) ->
                             // #1646: `claim` is `Held`'s OTHER door, and the re-claim arm walks through it on the
@@ -5275,10 +6102,14 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             // holder's lease and reported the item held. Same refusal as the other four verbs.
                             impersonationRefusal "claim" ref derived named
                         | Ok(Writes.Undecided reason) ->
-                            eprint $"fsgg-coord-engine: could not take %s{ref.Short}: %s{reason}. This is a LOSS, not a win — retry."
+                            eprint
+                                $"fsgg-coord-engine: could not take %s{ref.Short}: %s{reason}. This is a LOSS, not a win — retry."
+
                             ExitRed
                         | Ok Writes.BlockedByUnparseableMarker ->
-                            eprint $"fsgg-coord-engine: %s{ref.Short} carries a marker held by nobody (an unparseable lock). It blocks until reaped."
+                            eprint
+                                $"fsgg-coord-engine: %s{ref.Short} carries a marker held by nobody (an unparseable lock). It blocks until reaped."
+
                             ExitRed
 
     /// #697 — take over an ORPHAN for guarded delivery.
@@ -5444,8 +6275,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     eprint
                                         $"fsgg-coord-engine: PR #%d{pnum} on %s{ref.Short} is ALREADY MERGED — there is nothing to adopt, and nothing to land. The work is done; what is missing is the STAMP."
 
-                                    eprint
-                                        $"  scripts/fsgg-coord delivery %s{ref.Short} --pr %d{pnum} --flip --apply"
+                                    eprint $"  scripts/fsgg-coord delivery %s{ref.Short} --pr %d{pnum} --flip --apply"
 
                                     ExitRed
                                 | PrClosed ->
@@ -5564,7 +6394,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 | Ok board ->
                     match
                         Writes.withBlockedByMutationLease ctx.Transport ref (fun () ->
-                            Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Blocked by" (Board.Set canonical) w.Id)
+                            Board.boardWrite
+                                ctx.Transport
+                                board
+                                ref.Owner
+                                ref.Repo
+                                ref.Number
+                                "Blocked by"
+                                (Board.Set canonical)
+                                w.Id)
                     with
                     | Ok Board.Written -> Ok()
                     | Ok Board.Deferred ->
@@ -5573,7 +6411,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
                         Error Errors.ExRate
                     | Ok Board.NotOnBoard ->
-                        eprint $"fsgg-coord-engine: release --blocked-by: %s{ref.Short} is not an item on this board. Nothing released."
+                        eprint
+                            $"fsgg-coord-engine: release --blocked-by: %s{ref.Short} is not an item on this board. Nothing released."
+
                         Error ExitError
                     | Error e ->
                         eprint
@@ -5602,16 +6442,18 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         | DeliberatePark of string
         | GuardedRestore of string
 
-    let blockedStatusWriterCoverage : BlockedStatusWriter list =
-        [ CannotWriteBlocked "claim (Status=In progress)"
-          CannotWriteBlocked "done (Status=Done)"
-          DeliberatePark "release --status Blocked"
-          DeliberatePark "set-field Status Blocked"
-          DeliberatePark "set-field --batch Status=Blocked"
-          DeliberatePark "add --status Blocked"
-          DeliberatePark "intake apply Status=Blocked"
-          GuardedRestore "release (recorded previous Status=Blocked)"
-          GuardedRestore "reap (recorded previous Status=Blocked)" ]
+    let blockedStatusWriterCoverage: BlockedStatusWriter list =
+        [
+            CannotWriteBlocked "claim (Status=In progress)"
+            CannotWriteBlocked "done (Status=Done)"
+            DeliberatePark "release --status Blocked"
+            DeliberatePark "set-field Status Blocked"
+            DeliberatePark "set-field --batch Status=Blocked"
+            DeliberatePark "add --status Blocked"
+            DeliberatePark "intake apply Status=Blocked"
+            GuardedRestore "release (recorded previous Status=Blocked)"
+            GuardedRestore "reap (recorded previous Status=Blocked)"
+        ]
 
     /// #2098 round 1 (independent review): a pending `Blocked by` CLEAR in the SAME batch is
     /// AUTHORITATIVE, not a cue to fall back on the live field. The live value is about to be overwritten
@@ -5723,212 +6565,238 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         | _, Error c -> c
         | Ok arg, Ok w ->
 
-        match requestedStatus opts with
-        | Error c -> c
-        | Ok requested ->
-            match parseRef ctx arg with
-            | Error msg ->
-                eprint $"fsgg-coord-engine: %s{msg}"
-                ExitError
-            | Ok ref ->
-
-                match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref with
-                | Error e -> fail e
-                | Ok Writes.DoesNotHold ->
-                    eprint $"fsgg-coord-engine: %s{w.Id} does not hold %s{ref.Short} — nothing to release."
-                    noteWorkerDisagreement w
+            match requestedStatus opts with
+            | Error c -> c
+            | Ok requested ->
+                match parseRef ctx arg with
+                | Error msg ->
+                    eprint $"fsgg-coord-engine: %s{msg}"
                     ExitError
-                // #1031: our id, another session. `release` DELETES the marker, so adopting a twin's would drop
-                // a lock they are working behind — the one outcome this verb must never produce.
-                | Ok(Writes.TwinHolds theirs) -> twinRefusal "release" w.Id ref theirs
-                // #1646: the marker really is the NAMED worker's, and we are not them. `release` is the most
-                // destructive of the four — it DELETES the lock — and it is the verb #1620's decision named as
-                // the impersonation route that had to be closed.
-                | Ok(Writes.ImpersonatesHolder(derived, named)) -> impersonationRefusal "release" ref derived named
-                | Ok(Writes.Holds held) ->
+                | Ok ref ->
 
-                // AC1 (.github#2079): `--blocked-by` lands the field FIRST, then the coherence gate — both
-                // AFTER the holder check above and BEFORE the lock drops below.
-                //
-                // THE ORDERING RELATIVE TO THE HOLDER CHECK IS LOAD-BEARING (round-1 review). A caller who
-                // does NOT hold this item still reaches `release <ref> --blocked-by <x>` on argv — `release`
-                // takes no lock to attempt the write, `--blocked-by` doesn't gate on holding — so a write
-                // BEFORE `Writes.verifyHeld` would land a live board mutation from a non-holder even though
-                // the release itself then correctly refuses with "does not hold". `release`'s whole contract
-                // is that it only touches rows it holds; that is worth more than the field write landing a
-                // few lines earlier. So both go HERE, inside `Ok(Writes.Holds held)`, after the ONLY check
-                // that establishes we may touch this row at all — never ahead of it.
-                match writeBlockedByIfRequested ctx w ref opts.BlockedBy with
-                | Error c -> c
-                | Ok() ->
-
-                match requireCoherentParkIfBlocked ctx ref requested with
-                | Error c -> c
-                | Ok() ->
-
-                // .github#2698 — `release <ref> --status Ready` is `set-field <ref> Status Ready`'s third
-                // door, and it is gated HERE, BEFORE `Writes.release` drops the lock, for the reason the
-                // #2079 gate directly above is: a refusal that arrives after the marker is deleted leaves
-                // the holder with no lock and no way to retry, which is strictly worse than the row it was
-                // protecting. Refused here, the lease is untouched — author the receipt and re-run.
-                //
-                // ONLY THE EXPLICIT FLAG. The claim-footprint restore below (`unclaimColumn`'s `ResetTo`,
-                // which can restore `Ready`) is deliberately NOT gated, and the reason is upstream rather
-                // than merely pragmatic: `claim` already runs `requireCurrentDeliveryRoute` on EVERY claim
-                // path including `--force`, so a lock cannot be held on a row without a current receipt in
-                // the first place. Restoring that claim's own footprint therefore promotes nothing that
-                // was not already routed — and the residual window (a receipt invalidated DURING the
-                // lease) is a stated, recorded hole rather than a reason to make lock-release refusable.
-                match requireCurrentRouteIfReady ctx ref requested with
-                | Error c -> c
-                | Ok() ->
-
-                    match Writes.release ctx.Transport held with
+                    match
+                        Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref
+                    with
                     | Error e -> fail e
-                    | Ok previousStatus ->
-                        // THE LEASE IS ALREADY DROPPED, and everything below runs in that shadow. The marker is
-                        // the lock, so a board we cannot read or write from here leaves a column wrong — never a
-                        // claim stranded. That ordering is why the live read below may fail without being fatal.
+                    | Ok Writes.DoesNotHold ->
+                        eprint $"fsgg-coord-engine: %s{w.Id} does not hold %s{ref.Short} — nothing to release."
+                        noteWorkerDisagreement w
+                        ExitError
+                    // #1031: our id, another session. `release` DELETES the marker, so adopting a twin's would drop
+                    // a lock they are working behind — the one outcome this verb must never produce.
+                    | Ok(Writes.TwinHolds theirs) -> twinRefusal "release" w.Id ref theirs
+                    // #1646: the marker really is the NAMED worker's, and we are not them. `release` is the most
+                    // destructive of the four — it DELETES the lock — and it is the verb #1620's decision named as
+                    // the impersonation route that had to be closed.
+                    | Ok(Writes.ImpersonatesHolder(derived, named)) -> impersonationRefusal "release" ref derived named
+                    | Ok(Writes.Holds held) ->
+
+                        // AC1 (.github#2079): `--blocked-by` lands the field FIRST, then the coherence gate — both
+                        // AFTER the holder check above and BEFORE the lock drops below.
                         //
-                        // The board is resolved ONCE and shared by the live read and the write. `bootstrapCached`
-                        // is the same call both would make; resolving it twice would spend #418's budget twice
-                        // for one answer.
-                        let board = Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
+                        // THE ORDERING RELATIVE TO THE HOLDER CHECK IS LOAD-BEARING (round-1 review). A caller who
+                        // does NOT hold this item still reaches `release <ref> --blocked-by <x>` on argv — `release`
+                        // takes no lock to attempt the write, `--blocked-by` doesn't gate on holding — so a write
+                        // BEFORE `Writes.verifyHeld` would land a live board mutation from a non-holder even though
+                        // the release itself then correctly refuses with "does not hold". `release`'s whole contract
+                        // is that it only touches rows it holds; that is worth more than the field write landing a
+                        // few lines earlier. So both go HERE, inside `Ok(Writes.Holds held)`, after the ONLY check
+                        // that establishes we may touch this row at all — never ahead of it.
+                        match writeBlockedByIfRequested ctx w ref opts.BlockedBy with
+                        | Error c -> c
+                        | Ok() ->
 
-                        // WHAT THE COLUMN BECOMES.
-                        //
-                        // #867: an explicit `--status` IS the caller naming the deliberate column, so it beats
-                        // both the recorded restore and the `Ready` fallback — that is #331/#481's precedence,
-                        // and the skill has documented it since. The port dropped the flag on the floor:
-                        // `opts.Status` was never consulted, so the documented way to abandon an item into a
-                        // column was a no-op that exited 0. It is how #732 kept coming back — four workers
-                        // correctly parked it `Blocked`, and the board kept saying `Ready` (#888).
-                        //
-                        // It also spends NO live read: the caller stated the end state, so there is no default
-                        // left to derive, and the read exists only to derive the default.
-                        let decision =
-                            match requested with
-                            | Some s -> Ok(ResetTo s)
-                            | None ->
-                                // #331's read. The recorded column answers "what did the claim overwrite?"; it
-                                // CANNOT answer "did somebody choose a column since?" — the marker was written
-                                // at claim time and never updated. Only the live column knows, so `release`
-                                // asks it rather than reverting a `Blocked` the protocol itself told the worker
-                                // to set.
-                                // The two ways the answer can be missing are REPORTED APART, because they send
-                                // the reader somewhere different: an unresolvable board is an auth/plumbing
-                                // problem, an unreadable column is this item's own read.
-                                match board with
-                                | Error e -> Error $"the board could not be resolved (%s{Errors.explain e})"
-                                | Ok bm ->
-                                    match Board.itemStatus ctx.Transport bm ref.Owner ref.Repo ref.Number with
-                                    | Ok live -> Ok(unclaimColumn live previousStatus)
-                                    // A COLUMN WE COULD NOT READ IS NOT A COLUMN WE MAY OVERWRITE. #266's
-                                    // fail-closed rule, aimed at a WRITER: the obvious read-compare-write fails
-                                    // OPEN here — treat an unreadable column as "not In progress" and you
-                                    // preserve blindly; treat it as "In progress" and you revert a deliberate
-                                    // column on a transient 502. Neither is knowledge. So the column is left
-                                    // alone and SAID SO, naming the repair.
-                                    | Error e -> Error $"its current column could not be read (%s{Errors.explain e})"
+                            match requireCoherentParkIfBlocked ctx ref requested with
+                            | Error c -> c
+                            | Ok() ->
 
-                        match decision with
-                        | Error why ->
-                            eprint
-                                $"fsgg-coord-engine: %s{ref.Short}: %s{why} — the lock is dropped, but the column is UNCHANGED. A column we cannot read is not one we may overwrite (#331). Set it yourself if it needs setting:  scripts/fsgg-coord set-field %s{ref.Short} Status '<column>'"
-
-                            printfn "released %s" ref.Short
-                            ExitGreen
-                        | Ok(Preserve live) ->
-                            // NO WRITE. The column was chosen during the lease, so there is nothing to undo —
-                            // and stdout must not imply `release` put it there.
-                            match live with
-                            | Some s -> printfn "released %s (column left at %s)" ref.Short (statusWireName s)
-                            // NO COLUMN TO RESET — the item is off this board, or on it with no `Status` set.
-                            // SAY THAT. A bare `released <ref>` is this recipe's documented tell for "the
-                            // column did NOT land, and stderr says why", so printing one here would raise that
-                            // alarm with nothing behind it — and it would lose the plain "not an item on this
-                            // board" that the pre-#331 write path reported. `itemStatus` cannot tell the two
-                            // apart (`Ok None` is both), so this states what is TRUE of both rather than
-                            // guessing which.
-                            | None -> printfn "released %s (no column to reset — not on this board, or no Status set)" ref.Short
-
-                            ExitGreen
-                        | Ok(ResetTo restoreTo) ->
-
-                        let name = statusWireName restoreTo
-
-                        // #867: the restore's result is REPORTED, never fatal. The lock really is gone, so a
-                        // failed column must not red the command — but "not fatal" and "not mentioned" are
-                        // different things, and only the second shipped: `|> ignore` discarded all four
-                        // outcomes directly beneath a comment promising they were reported. `Deferred` is the
-                        // one that bites hardest — an exhausted budget QUEUES the write and nothing replays it
-                        // on its own (#510/#878), so a silent defer is a column that never lands.
-                        let landed =
-                            match board with
-                            | Ok board when name <> "" ->
-                                match requireCoherentParkIfBlocked ctx ref (Some restoreTo) with
-                                | Error _ -> false
+                                // .github#2698 — `release <ref> --status Ready` is `set-field <ref> Status Ready`'s third
+                                // door, and it is gated HERE, BEFORE `Writes.release` drops the lock, for the reason the
+                                // #2079 gate directly above is: a refusal that arrives after the marker is deleted leaves
+                                // the holder with no lock and no way to retry, which is strictly worse than the row it was
+                                // protecting. Refused here, the lease is untouched — author the receipt and re-run.
+                                //
+                                // ONLY THE EXPLICIT FLAG. The claim-footprint restore below (`unclaimColumn`'s `ResetTo`,
+                                // which can restore `Ready`) is deliberately NOT gated, and the reason is upstream rather
+                                // than merely pragmatic: `claim` already runs `requireCurrentDeliveryRoute` on EVERY claim
+                                // path including `--force`, so a lock cannot be held on a row without a current receipt in
+                                // the first place. Restoring that claim's own footprint therefore promotes nothing that
+                                // was not already routed — and the residual window (a receipt invalidated DURING the
+                                // lease) is a stated, recorded hole rather than a reason to make lock-release refusable.
+                                match requireCurrentRouteIfReady ctx ref requested with
+                                | Error c -> c
                                 | Ok() ->
-                                    match
-                                        Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set name) w.Id
-                                    with
-                                    | Ok Board.Written ->
-                                        // .github#2690: `release --status <column>` is #867's OTHER door onto
-                                        // the deliberate column — the skill has documented it as the way to
-                                        // abandon an item into one since #331 — so it carries the same intent
-                                        // channel `set-field` does. Only the EXPLICIT flag does: the `None`
-                                        // branch above restores a column off the claim marker, which is this
-                                        // verb undoing its own claim, not an operator choosing anything.
+
+                                    match Writes.release ctx.Transport held with
+                                    | Error e -> fail e
+                                    | Ok previousStatus ->
+                                        // THE LEASE IS ALREADY DROPPED, and everything below runs in that shadow. The marker is
+                                        // the lock, so a board we cannot read or write from here leaves a column wrong — never a
+                                        // claim stranded. That ordering is why the live read below may fail without being fatal.
                                         //
-                                        // REPORTED, NEVER FATAL — #867's rule directly above, and it governs
-                                        // here a fortiori. The lock is already dropped, so this verb may not
-                                        // red; and a missing intent is strictly less damaging than the missing
-                                        // column that rule was written about. stderr carries the consequence.
-                                        match requested with
-                                        | None -> ()
-                                        | Some _ ->
-                                            match
-                                                recordExplicitStatusIntent ctx ref restoreTo $"explicit release --status by %s{w.Id}"
-                                            with
-                                            | Ok() -> ()
-                                            | Error why -> eprint (explicitStatusIntentFailure ref restoreTo why)
+                                        // The board is resolved ONCE and shared by the live read and the write. `bootstrapCached`
+                                        // is the same call both would make; resolving it twice would spend #418's budget twice
+                                        // for one answer.
+                                        let board = Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
 
-                                        true
-                                    | Ok Board.Deferred ->
-                                        eprint
-                                            $"fsgg-coord-engine: the Status restore to '%s{name}' is DEFERRED — the budget is exhausted, so it is QUEUED, not lost, and NOTHING replays it on its own:  scripts/fsgg-coord flush"
+                                        // WHAT THE COLUMN BECOMES.
+                                        //
+                                        // #867: an explicit `--status` IS the caller naming the deliberate column, so it beats
+                                        // both the recorded restore and the `Ready` fallback — that is #331/#481's precedence,
+                                        // and the skill has documented it since. The port dropped the flag on the floor:
+                                        // `opts.Status` was never consulted, so the documented way to abandon an item into a
+                                        // column was a no-op that exited 0. It is how #732 kept coming back — four workers
+                                        // correctly parked it `Blocked`, and the board kept saying `Ready` (#888).
+                                        //
+                                        // It also spends NO live read: the caller stated the end state, so there is no default
+                                        // left to derive, and the read exists only to derive the default.
+                                        let decision =
+                                            match requested with
+                                            | Some s -> Ok(ResetTo s)
+                                            | None ->
+                                                // #331's read. The recorded column answers "what did the claim overwrite?"; it
+                                                // CANNOT answer "did somebody choose a column since?" — the marker was written
+                                                // at claim time and never updated. Only the live column knows, so `release`
+                                                // asks it rather than reverting a `Blocked` the protocol itself told the worker
+                                                // to set.
+                                                // The two ways the answer can be missing are REPORTED APART, because they send
+                                                // the reader somewhere different: an unresolvable board is an auth/plumbing
+                                                // problem, an unreadable column is this item's own read.
+                                                match board with
+                                                | Error e ->
+                                                    Error $"the board could not be resolved (%s{Errors.explain e})"
+                                                | Ok bm ->
+                                                    match
+                                                        Board.itemStatus ctx.Transport bm ref.Owner ref.Repo ref.Number
+                                                    with
+                                                    | Ok live -> Ok(unclaimColumn live previousStatus)
+                                                    // A COLUMN WE COULD NOT READ IS NOT A COLUMN WE MAY OVERWRITE. #266's
+                                                    // fail-closed rule, aimed at a WRITER: the obvious read-compare-write fails
+                                                    // OPEN here — treat an unreadable column as "not In progress" and you
+                                                    // preserve blindly; treat it as "In progress" and you revert a deliberate
+                                                    // column on a transient 502. Neither is knowledge. So the column is left
+                                                    // alone and SAID SO, naming the repair.
+                                                    | Error e ->
+                                                        Error
+                                                            $"its current column could not be read (%s{Errors.explain e})"
 
-                                        false
-                                    | Ok Board.NotOnBoard ->
-                                        eprint
-                                            $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — the lock is dropped, but the column was NOT set to '%s{name}'."
+                                        match decision with
+                                        | Error why ->
+                                            eprint
+                                                $"fsgg-coord-engine: %s{ref.Short}: %s{why} — the lock is dropped, but the column is UNCHANGED. A column we cannot read is not one we may overwrite (#331). Set it yourself if it needs setting:  scripts/fsgg-coord set-field %s{ref.Short} Status '<column>'"
 
-                                        false
-                                    | Error e ->
-                                        eprint
-                                            $"fsgg-coord-engine: the Status restore to '%s{name}' FAILED (%s{Errors.explain e}) — the lock is dropped, but the column is UNCHANGED:  scripts/fsgg-coord set-field %s{ref.Short} Status '%s{name}'"
+                                            printfn "released %s" ref.Short
+                                            ExitGreen
+                                        | Ok(Preserve live) ->
+                                            // NO WRITE. The column was chosen during the lease, so there is nothing to undo —
+                                            // and stdout must not imply `release` put it there.
+                                            match live with
+                                            | Some s ->
+                                                printfn "released %s (column left at %s)" ref.Short (statusWireName s)
+                                            // NO COLUMN TO RESET — the item is off this board, or on it with no `Status` set.
+                                            // SAY THAT. A bare `released <ref>` is this recipe's documented tell for "the
+                                            // column did NOT land, and stderr says why", so printing one here would raise that
+                                            // alarm with nothing behind it — and it would lose the plain "not an item on this
+                                            // board" that the pre-#331 write path reported. `itemStatus` cannot tell the two
+                                            // apart (`Ok None` is both), so this states what is TRUE of both rather than
+                                            // guessing which.
+                                            | None ->
+                                                printfn
+                                                    "released %s (no column to reset — not on this board, or no Status set)"
+                                                    ref.Short
 
-                                        false
-                            | Error e ->
-                                eprint
-                                    $"fsgg-coord-engine: could not resolve the board (%s{Errors.explain e}) — the lock is dropped, but the column was NOT set to '%s{name}'."
+                                            ExitGreen
+                                        | Ok(ResetTo restoreTo) ->
 
-                                false
-                            | Ok _ -> false
+                                            let name = statusWireName restoreTo
 
-                        // NAME THE COLUMN ONLY IF IT LANDED. `release` reporting a bare "released <ref>" is
-                        // what let the ignored `--status` look like it had worked — but a line that names the
-                        // column unconditionally is the SAME defect wearing the fix's clothes: on a deferred
-                        // or failed write it asserts, on stdout and with a green exit, a column the board does
-                        // not hold. stderr already said otherwise, and a caller that reads one of the two
-                        // reads stdout. So stdout states only what is true; the reason it is not true is on
-                        // stderr, immediately above.
-                        if landed then
-                            printfn "released %s → %s" ref.Short name
-                        else
-                            printfn "released %s" ref.Short
+                                            // #867: the restore's result is REPORTED, never fatal. The lock really is gone, so a
+                                            // failed column must not red the command — but "not fatal" and "not mentioned" are
+                                            // different things, and only the second shipped: `|> ignore` discarded all four
+                                            // outcomes directly beneath a comment promising they were reported. `Deferred` is the
+                                            // one that bites hardest — an exhausted budget QUEUES the write and nothing replays it
+                                            // on its own (#510/#878), so a silent defer is a column that never lands.
+                                            let landed =
+                                                match board with
+                                                | Ok board when name <> "" ->
+                                                    match requireCoherentParkIfBlocked ctx ref (Some restoreTo) with
+                                                    | Error _ -> false
+                                                    | Ok() ->
+                                                        match
+                                                            Board.boardWrite
+                                                                ctx.Transport
+                                                                board
+                                                                ref.Owner
+                                                                ref.Repo
+                                                                ref.Number
+                                                                "Status"
+                                                                (Board.Set name)
+                                                                w.Id
+                                                        with
+                                                        | Ok Board.Written ->
+                                                            // .github#2690: `release --status <column>` is #867's OTHER door onto
+                                                            // the deliberate column — the skill has documented it as the way to
+                                                            // abandon an item into one since #331 — so it carries the same intent
+                                                            // channel `set-field` does. Only the EXPLICIT flag does: the `None`
+                                                            // branch above restores a column off the claim marker, which is this
+                                                            // verb undoing its own claim, not an operator choosing anything.
+                                                            //
+                                                            // REPORTED, NEVER FATAL — #867's rule directly above, and it governs
+                                                            // here a fortiori. The lock is already dropped, so this verb may not
+                                                            // red; and a missing intent is strictly less damaging than the missing
+                                                            // column that rule was written about. stderr carries the consequence.
+                                                            match requested with
+                                                            | None -> ()
+                                                            | Some _ ->
+                                                                match
+                                                                    recordExplicitStatusIntent
+                                                                        ctx
+                                                                        ref
+                                                                        restoreTo
+                                                                        $"explicit release --status by %s{w.Id}"
+                                                                with
+                                                                | Ok() -> ()
+                                                                | Error why ->
+                                                                    eprint (
+                                                                        explicitStatusIntentFailure ref restoreTo why
+                                                                    )
 
-                        ExitGreen
+                                                            true
+                                                        | Ok Board.Deferred ->
+                                                            eprint
+                                                                $"fsgg-coord-engine: the Status restore to '%s{name}' is DEFERRED — the budget is exhausted, so it is QUEUED, not lost, and NOTHING replays it on its own:  scripts/fsgg-coord flush"
+
+                                                            false
+                                                        | Ok Board.NotOnBoard ->
+                                                            eprint
+                                                                $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — the lock is dropped, but the column was NOT set to '%s{name}'."
+
+                                                            false
+                                                        | Error e ->
+                                                            eprint
+                                                                $"fsgg-coord-engine: the Status restore to '%s{name}' FAILED (%s{Errors.explain e}) — the lock is dropped, but the column is UNCHANGED:  scripts/fsgg-coord set-field %s{ref.Short} Status '%s{name}'"
+
+                                                            false
+                                                | Error e ->
+                                                    eprint
+                                                        $"fsgg-coord-engine: could not resolve the board (%s{Errors.explain e}) — the lock is dropped, but the column was NOT set to '%s{name}'."
+
+                                                    false
+                                                | Ok _ -> false
+
+                                            // NAME THE COLUMN ONLY IF IT LANDED. `release` reporting a bare "released <ref>" is
+                                            // what let the ignored `--status` look like it had worked — but a line that names the
+                                            // column unconditionally is the SAME defect wearing the fix's clothes: on a deferred
+                                            // or failed write it asserts, on stdout and with a green exit, a column the board does
+                                            // not hold. stderr already said otherwise, and a caller that reads one of the two
+                                            // reads stdout. So stdout states only what is true; the reason it is not true is on
+                                            // stderr, immediately above.
+                                            if landed then
+                                                printfn "released %s → %s" ref.Short name
+                                            else
+                                                printfn "released %s" ref.Short
+
+                                            ExitGreen
 
     let heartbeat (ctx: Context) (opts: Options) : int =
         match oneArg opts "heartbeat: an issue ref", worker opts with
@@ -5940,7 +6808,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 eprint $"fsgg-coord-engine: %s{msg}"
                 ExitError
             | Ok ref ->
-                match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref with
+                match
+                    Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref
+                with
                 | Error e -> fail e
                 // #1646: `heartbeat` is the quiet one — it RENEWS another worker's lease, so an impersonation
                 // here keeps their item alive under our control while they are told nothing. It is refused
@@ -5969,7 +6839,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             // heartbeats successfully is a worker that never learns it was displaced. Name
                             // the possibility, because "held by someone else" reads as a mistake of ours,
                             // and a steal is not.
-                            eprint $"fsgg-coord-engine: %s{ref.Short} is held by %s{m.Worker.Value}, not %s{w.Id} — STOP working it, or reap it."
+                            eprint
+                                $"fsgg-coord-engine: %s{ref.Short} is held by %s{m.Worker.Value}, not %s{w.Id} — STOP working it, or reap it."
 
                             eprint
                                 $"  If you DID hold it, your claim was taken (`claim --force`) — check `inbox` for the notice, and do not push against %s{ref.Short}."
@@ -5977,7 +6848,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             // An EXPIRED lease needs no `--force`: a plain `claim` COLLECTS the stale marker
                             // it claims over. `--force` steals a LIVE claim (#1620), which this is not, and
                             // advertising it here taught workers to reach for the steal by default.
-                            eprint $"fsgg-coord-engine: %s{w.Id}'s lease on %s{ref.Short} has EXPIRED and cannot be renewed in place — re-claim it (a plain `claim` collects the expired marker)."
+                            eprint
+                                $"fsgg-coord-engine: %s{w.Id}'s lease on %s{ref.Short} has EXPIRED and cannot be renewed in place — re-claim it (a plain `claim` collects the expired marker)."
 
                         // #1646: BOTH arms above key on the id the caller NAMED, so both are wrong in the same
                         // way when that id is not this process's own — "your lease expired" about somebody
@@ -6037,7 +6909,14 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             // one real-resource read that establishes one; admission remains enforced by `claim`
             // immediately before its mutation.  Blocking here on an empty cache would deadlock every
             // fresh session (budget -> take could never produce the observation it requires).
-            match scanAndDecide ctx { opts with Limit = Some takeCandidateBound } Cache.Scheduling with
+            match
+                scanAndDecide
+                    ctx
+                    { opts with
+                        Limit = Some takeCandidateBound
+                    }
+                    Cache.Scheduling
+            with
             // #585: a board we could not read is NOT an empty queue — but that distinction is already
             // carried by the code `fail` returns (EX_RATE for a budget, a non-zero read error otherwise),
             // and it is never EX_NONE, so "I could not look" and "I looked, and it is empty" keep
@@ -6047,7 +6926,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | Ok(rows, doc, receipt) ->
                 sayRepoAdvisory receipt
 
-                match renderLiveDecision ctx { opts with Limit = Some takeCandidateBound } rows doc with
+                match
+                    renderLiveDecision
+                        ctx
+                        { opts with
+                            Limit = Some takeCandidateBound
+                        }
+                        rows
+                        doc
+                with
                 | Error code -> code
                 | Ok result ->
                     match result.Chosen with
@@ -6078,13 +6965,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             printfn
                                 "%s"
                                 (Render.renderNoItemJson
-                                    { Worker = w.Id
-                                      PassedOver = List.length (passedOver result)
-                                      // #979's advisory rides IN the document too. `sayRepoAdvisory`
-                                      // above still prints it for the human; to a PARSER, a misspelt
-                                      // `--repo` and an empty board are the same `passedOver:0`, and
-                                      // this is the only place that can tell them apart.
-                                      RepoAdvisory = receipt.RepoAdvisory })
+                                    {
+                                        Worker = w.Id
+                                        PassedOver = List.length (passedOver result)
+                                        // #979's advisory rides IN the document too. `sayRepoAdvisory`
+                                        // above still prints it for the human; to a PARSER, a misspelt
+                                        // `--repo` and an empty board are the same `passedOver:0`, and
+                                        // this is the only place that can tell them apart.
+                                        RepoAdvisory = receipt.RepoAdvisory
+                                    })
 
                             // The reasons and #428's banner stay on stderr, from the same helper
                             // `batch --json` uses — stdout is the document, stderr is the "why nothing".
@@ -6127,7 +7016,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
                                 ExitContended
                             | item :: rest ->
-                                match claim ctx { opts with Args = claimArgsForSelected item } with
+                                match
+                                    claim
+                                        ctx
+                                        { opts with
+                                            Args = claimArgsForSelected item
+                                        }
+                                with
                                 | code when code = ExitGreen -> ExitGreen
                                 | code when code = Errors.ExRate -> code
                                 | _ ->
@@ -6190,9 +7085,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         | Replace
 
     type private OverlapFreeze =
-        { Winner: Ref
-          LoserGeneration: string
-          SharedTokens: string list }
+        {
+            Winner: Ref
+            LoserGeneration: string
+            SharedTokens: string list
+        }
 
     [<Literal>]
     let private OverlapFreezeMarker = "<!-- fsgg:overlap-freeze/v1 -->"
@@ -6201,30 +7098,65 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         $"<!-- fsgg:overlap-freeze-present/v1 generation=%s{generation} -->"
 
     let private parseOverlapFreeze owner repo (body: string) =
-        if not (body.Contains(OverlapFreezeMarker, StringComparison.Ordinal)) then Ok None
+        if not (body.Contains(OverlapFreezeMarker, StringComparison.Ordinal)) then
+            Ok None
         else
             try
-                use doc = JsonDocument.Parse(body.Substring(body.IndexOf(OverlapFreezeMarker, StringComparison.Ordinal) + OverlapFreezeMarker.Length).TrimStart())
+                use doc =
+                    JsonDocument.Parse(
+                        body
+                            .Substring(
+                                body.IndexOf(OverlapFreezeMarker, StringComparison.Ordinal)
+                                + OverlapFreezeMarker.Length
+                            )
+                            .TrimStart()
+                    )
+
                 let root = doc.RootElement
+
                 match Kernel.parseRefIn owner (Some repo) (root.GetProperty("winner").GetString()) with
                 | Error detail -> Error detail
                 | Ok winner ->
                     Ok(
                         Some
-                            { Winner = winner
-                              LoserGeneration = root.GetProperty("loserGeneration").GetString()
-                              SharedTokens = root.GetProperty("sharedTokens").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList }
+                            {
+                                Winner = winner
+                                LoserGeneration = root.GetProperty("loserGeneration").GetString()
+                                SharedTokens =
+                                    root.GetProperty("sharedTokens").EnumerateArray()
+                                    |> Seq.map _.GetString()
+                                    |> Seq.toList
+                            }
                     )
-            with error -> Error $"overlap-freeze receipt is malformed: %s{error.Message}"
+            with error ->
+                Error $"overlap-freeze receipt is malformed: %s{error.Message}"
 
-    let private loserResumeErrors winnerLanded generationCurrent fetchedWinnerBase rebasedHead overlapClear explicitlyRewidened reviewRequired exactHeadReviewed =
-        [ if not winnerLanded then "winner has not landed"
-          if not generationCurrent then "loser claim generation changed"
-          if not fetchedWinnerBase then "winner base was not fetched"
-          if not rebasedHead then "loser head was not rebased"
-          if not overlapClear then "overlap was not re-run clear"
-          if not explicitlyRewidened then "loser reservation was not explicitly re-widened"
-          if reviewRequired && not exactHeadReviewed then "changed loser head lacks exact-head review" ]
+    let private loserResumeErrors
+        winnerLanded
+        generationCurrent
+        fetchedWinnerBase
+        rebasedHead
+        overlapClear
+        explicitlyRewidened
+        reviewRequired
+        exactHeadReviewed
+        =
+        [
+            if not winnerLanded then
+                "winner has not landed"
+            if not generationCurrent then
+                "loser claim generation changed"
+            if not fetchedWinnerBase then
+                "winner base was not fetched"
+            if not rebasedHead then
+                "loser head was not rebased"
+            if not overlapClear then
+                "overlap was not re-run clear"
+            if not explicitlyRewidened then
+                "loser reservation was not explicitly re-widened"
+            if reviewRequired && not exactHeadReviewed then
+                "changed loser head lacks exact-head review"
+        ]
 
     let private runGit (arguments: string list) =
         try
@@ -6237,28 +7169,55 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             let output = gitProcess.StandardOutput.ReadToEnd().Trim()
             gitProcess.WaitForExit()
             if gitProcess.ExitCode = 0 then Some output else None
-        with _ -> None
+        with _ ->
+            None
 
     let private currentGitResumeFacts () =
         let fetchedCurrent =
-            match runGit [ "rev-parse"; "refs/remotes/origin/main" ], runGit [ "ls-remote"; "--exit-code"; "origin"; "refs/heads/main" ] with
+            match
+                runGit [ "rev-parse"; "refs/remotes/origin/main" ],
+                runGit [ "ls-remote"; "--exit-code"; "origin"; "refs/heads/main" ]
+            with
             | Some local, Some remote ->
                 remote.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries)
                 |> Array.tryHead
                 |> Option.exists (fun current -> String.Equals(local, current, StringComparison.OrdinalIgnoreCase))
             | _ -> false
-        let rebased = runGit [ "merge-base"; "--is-ancestor"; "refs/remotes/origin/main"; "HEAD" ] |> Option.isSome
+
+        let rebased =
+            runGit [ "merge-base"; "--is-ancestor"; "refs/remotes/origin/main"; "HEAD" ]
+            |> Option.isSome
+
         fetchedCurrent, rebased
 
     let private exactHeadReviewFacts (ctx: Context) (held: Writes.Held) =
         match Reads.prAlive ctx.Transport held.Ref.Owner held.Ref.Repo held.Ref.Number with
         | Error error -> Error error
         | Ok(LeaseExpiredPrOpen pr) ->
-            match runGit [ "rev-parse"; "HEAD" ], Reads.prHeadSha ctx.Transport held.Ref.Owner held.Ref.Repo pr, Reads.commentsWithIdentity ctx.Transport held.Ref.Owner held.Ref.Repo pr with
+            match
+                runGit [ "rev-parse"; "HEAD" ],
+                Reads.prHeadSha ctx.Transport held.Ref.Owner held.Ref.Repo pr,
+                Reads.commentsWithIdentity ctx.Transport held.Ref.Owner held.Ref.Repo pr
+            with
             | Some localHead, Ok remoteHead, Ok comments ->
-                let reviewComments = comments |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                let reviewComments =
+                    comments
+                    |> List.map (fun comment ->
+                        ({
+                            Id = comment.Id
+                            Url = comment.Url
+                            Body = comment.Body
+                        }
+                        : Driver.ReviewComment))
+
                 let facts = Driver.reviewPhaseFacts reviewComments
-                Ok(true, localHead = remoteHead && facts.LatestReviewedHeadSha = Some localHead && facts.LatestVerdict = Some "pass")
+
+                Ok(
+                    true,
+                    localHead = remoteHead
+                    && facts.LatestReviewedHeadSha = Some localHead
+                    && facts.LatestVerdict = Some "pass"
+                )
             | None, _, _ -> Ok(true, false)
             | _, Error error, _
             | _, _, Error error -> Error error
@@ -6266,6 +7225,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
     let private overlapFreezeFor (ctx: Context) (held: Writes.Held) (issueBody: string) =
         let hint = overlapFreezeHint (string held.MarkerId)
+
         if not (issueBody.Contains(hint, StringComparison.Ordinal)) then
             Ok None
         else
@@ -6276,13 +7236,21 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | [] ->
                         match List.tryLast (List.rev acc) with
                         | Some freeze -> Ok(Some freeze)
-                        | None -> Error(Errors.Malformed(held.Ref.Short, "overlap-freeze hint has no matching durable receipt for the current claim generation"))
+                        | None ->
+                            Error(
+                                Errors.Malformed(
+                                    held.Ref.Short,
+                                    "overlap-freeze hint has no matching durable receipt for the current claim generation"
+                                )
+                            )
                     | body :: rest ->
                         match parseOverlapFreeze held.Ref.Owner held.Ref.Repo body with
                         | Error detail -> Error(Errors.Malformed(held.Ref.Short, detail))
                         | Ok None -> collect acc rest
-                        | Ok(Some freeze) when freeze.LoserGeneration = string held.MarkerId -> collect (freeze :: acc) rest
+                        | Ok(Some freeze) when freeze.LoserGeneration = string held.MarkerId ->
+                            collect (freeze :: acc) rest
                         | Ok(Some _) -> collect acc rest
+
                 collect [] comments)
 
     let private declaredPathTokens (touchSet: TouchSet) : string list =
@@ -6338,10 +7306,14 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 | Ok ref ->
                     // #706 — widen takes the HELD claim. verifyHeld is the only door to it that this command
                     // has, and it fails closed: no capability from a failed read.
-                    match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref with
+                    match
+                        Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref
+                    with
                     | Error e -> fail e
                     | Ok Writes.DoesNotHold ->
-                        eprint $"fsgg-coord-engine: %s{w.Id} does not hold %s{ref.Short} — %s{verb} can only %s{action} the touch-set of a lock you hold (#706)."
+                        eprint
+                            $"fsgg-coord-engine: %s{w.Id} does not hold %s{ref.Short} — %s{verb} can only %s{action} the touch-set of a lock you hold (#706)."
+
                         noteWorkerDisagreement w
                         ExitError
                     // #1031: our id, another session. A path update PATCHes the issue BODY, so a twin's touch-set
@@ -6386,320 +7358,381 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 ExitError
                             else
 
-                            match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
-                            | Error e -> fail e
-                            | Ok body ->
-                                // #1377 — `widen` means union. Its name is now its behaviour: every existing
-                                // token survives and repeated additions are idempotent. Replacement remains
-                                // available only through the deliberately named `set-paths` command, which is
-                                // also the operation used to narrow an over-reservation.
-                                let proposed =
-                                    match update with
-                                    | Replace -> Ok validated
-                                    | Union ->
-                                        let prior = declaredPathTokens (TouchSet.parse body)
-                                        // Arbitration may narrow a loser with no remaining authored path
-                                        // to the file-less `any` sentinel. Its required explicit re-widen
-                                        // replaces that sentinel; mixing it with a real path is structurally
-                                        // invalid and would otherwise make safe resume impossible.
-                                        if prior = [ "any" ] || prior = [ "none" ] then Ok validated
-                                        else prior @ validated.Tokens |> List.distinct |> Writes.validate
+                                match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
+                                | Error e -> fail e
+                                | Ok body ->
+                                    // #1377 — `widen` means union. Its name is now its behaviour: every existing
+                                    // token survives and repeated additions are idempotent. Replacement remains
+                                    // available only through the deliberately named `set-paths` command, which is
+                                    // also the operation used to narrow an over-reservation.
+                                    let proposed =
+                                        match update with
+                                        | Replace -> Ok validated
+                                        | Union ->
+                                            let prior = declaredPathTokens (TouchSet.parse body)
+                                            // Arbitration may narrow a loser with no remaining authored path
+                                            // to the file-less `any` sentinel. Its required explicit re-widen
+                                            // replaces that sentinel; mixing it with a real path is structurally
+                                            // invalid and would otherwise make safe resume impossible.
+                                            if prior = [ "any" ] || prior = [ "none" ] then
+                                                Ok validated
+                                            else
+                                                prior @ validated.Tokens |> List.distinct |> Writes.validate
 
-                                match proposed with
-                                | Error msg ->
-                                    eprint $"fsgg-coord-engine: %s{msg}"
-                                    ExitError
-                                | Ok proposed ->
-                                    let rewritten = Writes.rewrite body proposed
+                                    match proposed with
+                                    | Error msg ->
+                                        eprint $"fsgg-coord-engine: %s{msg}"
+                                        ExitError
+                                    | Ok proposed ->
+                                        let rewritten = Writes.rewrite body proposed
 
-                                    // #1740 AC5 — IS THIS UPDATE A NARROWING? A token-subset of the prior
-                                    // declaration can only ever name FEWER files, so it is provably incapable
-                                    // of introducing a collision: whatever the scan below finds was ALREADY
-                                    // there before this command ran. (The implication runs one way only — a
-                                    // narrowing need not be a token-subset, e.g. `src/**` → `src/A.fs`. So
-                                    // this is a sound test for "provably pre-existing", never a claim that
-                                    // anything else INTRODUCED one.)
-                                    //
-                                    // It exists because the sentence below used to assert causation it had
-                                    // not established, and that cost real time: the worker who filed #1740
-                                    // narrowed a touch-set back to its original declaration, was told the
-                                    // update "introduced a collision", and went looking for a mistake in the
-                                    // narrowing — when the collision belonged to a claim that predated it.
-                                    // A PROPER subset — strictly fewer tokens, all of them already there. The
-                                    // length test is not decoration: without it an update that changes NOTHING
-                                    // satisfies `forall`, and `widen` (a UNION) reaches that arm on every
-                                    // idempotent re-run. It would then announce that it "NARROWED the
-                                    // touch-set" over an identity, which is a different false sentence in
-                                    // place of the one this is removing. Both lists are deduped (`validate` /
-                                    // `List.distinct`), so subset + shorter IS proper.
-                                    let priorTokens = declaredPathTokens (TouchSet.parse body)
-
-                                    let isNarrowing =
-                                        List.length proposed.Tokens < List.length priorTokens
-                                        && proposed.Tokens |> List.forall (fun t -> List.contains t priorTokens)
-
-                                    // #523/#353 — RE-CHECK BEFORE THE PATCH, and let its verdict GATE the write.
-                                    // ADR-0021's "re-declare AND re-check overlap before continuing" is the half a
-                                    // worker cannot do alone. The overlap scan runs against the PROPOSED touch-set
-                                    // (`rewritten.Body`, computed in memory above — `activeCollisions` takes it as an
-                                    // argument and never re-reads THIS item's body, so it needs no landed PATCH) and
-                                    // compares it to the live claims in THIS item's repo. If the scan is UNREADABLE —
-                                    // an exhausted GraphQL budget, a malformed claim — we REFUSE, and the body is left
-                                    // untouched: that is #523. Landing the declaration first and re-checking afterwards
-                                    // (as bash did) meant that on an exhausted budget the touch-set landed UNVERIFIED
-                                    // and the workers it now collided with were never told. Only once we HOLD a verdict
-                                    // do we PATCH. A scan that SUCCEEDS and finds a collision still lands the update
-                                    // and then notifies each colliding worker on their own issue; only an unreadable
-                                    // scan refuses. Same-repo scope: a cross-repo namesake is a phantom (#353).
-                                    match
-                                        // #2351 — `cross-repo` is not a repository; see `pathRepoOrFallback`.
-                                        activeCollisions
-                                            ctx
-                                            opts
-                                            ref
-                                            (Some(held.PathRepo |> pathRepoOrFallback ref.Repo))
-                                            (TouchSet.parse rewritten.Body)
-                                    with
-                                    | Error e -> fail e
-                                    | Ok collisions ->
-                                        let paths = String.Join(", ", proposed.Tokens)
-
-                                        // #2323 round 1 — THE JSON PROJECTION MUST NAME WHAT THE ITEM ACTUALLY DECLARES,
-                                        // NOT WHAT WAS REQUESTED. `Render.fsi`'s own doc for `PathUpdateReceipt.Paths` is
-                                        // "the tokens the item now declares" — on a REFUSED update (`committed = false`)
-                                        // that is `priorTokens`, byte-identical to before the call, never
-                                        // `proposed.Tokens`. The Text projection above already gates on `committed`;
-                                        // this closure takes the SAME flag so the two projections cannot disagree about
-                                        // one call's outcome — a caller gating on the exit code and then trusting this
-                                        // field is exactly the false belief #2306's AC1 exists to rule out, and it is
-                                        // truer of the machine surface than of the human one, since a program reads it
-                                        // unattended.
-                                        let receipt (committed: bool) (collisions: PathCollision list) : string =
-                                            renderPathUpdateJson
-                                                { Ref = ref
-                                                  Worker = w.Id
-                                                  Kind = past
-                                                  Paths = (if committed then proposed.Tokens else priorTokens)
-                                                  Collisions = collisions }
-
-                                        // #2306 — REFUSE THE WRITE ONLY WHEN *THIS CALL'S OWN NEW TOKENS* COLLIDE, NOT
-                                        // WHENEVER THE FULL PROPOSED DECLARATION STILL SHOWS ANY COLLISION AT ALL.
+                                        // #1740 AC5 — IS THIS UPDATE A NARROWING? A token-subset of the prior
+                                        // declaration can only ever name FEWER files, so it is provably incapable
+                                        // of introducing a collision: whatever the scan below finds was ALREADY
+                                        // there before this command ran. (The implication runs one way only — a
+                                        // narrowing need not be a token-subset, e.g. `src/**` → `src/A.fs`. So
+                                        // this is a sound test for "provably pre-existing", never a claim that
+                                        // anything else INTRODUCED one.)
                                         //
-                                        // `collisions` above is unchanged — the #353 scan over the WHOLE proposed body,
-                                        // exactly as it always ran, and it still drives the DISJOINT/OVERLAP verdict and
-                                        // exit code below exactly as before. What #2306 fixes is narrower: `Writes.widen`
-                                        // used to run unconditionally once that scan merely COMPLETED (`Ok _`), so a scan
-                                        // that found a real collision still landed the PATCH — #2248's shape, where a
-                                        // widen's newly REQUESTED path itself overlapped a live claim and got written
-                                        // anyway. But a NARROWING (or an addition of a genuinely disjoint token) can
-                                        // surface a collision that predates the command and that the command's own tokens
-                                        // had no part in — the #1740 AC5 reasoning below — and refusing to write THAT
-                                        // would block the very narrowing this protocol recommends as the remedy (the
-                                        // courtesy notice below says exactly "narrow with `set-paths`"). So the write is
-                                        // gated on whether a NEW token — one `priorTokens` did not already carry — is
-                                        // itself part of a reported collision, not on whether the declaration merely
-                                        // still shows one. `TouchSet.decideUpdate` is the one place the ALL-OR-NOTHING
-                                        // refusal rule for a collision so attributed is stated (see its `.fsi` doc); this
-                                        // call site supplies the attribution, not the threshold.
-                                        let newTokenStems =
-                                            proposed.Tokens
-                                            |> List.filter (fun t -> not (List.contains t priorTokens))
-                                            |> List.map TouchSet.stem
-                                            |> Set.ofList
+                                        // It exists because the sentence below used to assert causation it had
+                                        // not established, and that cost real time: the worker who filed #1740
+                                        // narrowed a touch-set back to its original declaration, was told the
+                                        // update "introduced a collision", and went looking for a mistake in the
+                                        // narrowing — when the collision belonged to a claim that predated it.
+                                        // A PROPER subset — strictly fewer tokens, all of them already there. The
+                                        // length test is not decoration: without it an update that changes NOTHING
+                                        // satisfies `forall`, and `widen` (a UNION) reaches that arm on every
+                                        // idempotent re-run. It would then announce that it "NARROWED the
+                                        // touch-set" over an identity, which is a different false sentence in
+                                        // place of the one this is removing. Both lists are deduped (`validate` /
+                                        // `List.distinct`), so subset + shorter IS proper.
+                                        let priorTokens = declaredPathTokens (TouchSet.parse body)
 
-                                        let introducedCollision =
-                                            collisions
-                                            |> List.exists (fun (_, _, toks) -> toks |> List.exists newTokenStems.Contains)
+                                        let isNarrowing =
+                                            List.length proposed.Tokens < List.length priorTokens
+                                            && proposed.Tokens |> List.forall (fun t -> List.contains t priorTokens)
 
-                                        // A precedence narrow leaves a generation-bound freeze receipt on the
-                                        // losing item. Re-adding one of those shared tokens is a RESUME, not an
-                                        // ordinary widen: the production mutation route itself proves the winner
-                                        // closed, this claim generation is current, origin/main is contained by the
-                                        // current head, overlap is clear, and this call is the explicit re-widen.
-                                        // Any unreadable or false predicate refuses before the PATCH.
-                                        let resumeGate =
-                                            overlapFreezeFor ctx held body
-                                            |> Result.bind (function
-                                                | None -> Ok()
-                                                | Some freeze ->
-                                                    let frozen = freeze.SharedTokens |> List.map TouchSet.stem |> Set.ofList
-                                                    let priorStems = priorTokens |> List.map TouchSet.stem |> Set.ofList
-                                                    let proposedStems = proposed.Tokens |> List.map TouchSet.stem |> Set.ofList
-                                                    let removesFrozenToken =
-                                                        frozen
-                                                        |> Set.exists (fun token -> priorStems.Contains token && not (proposedStems.Contains token))
-                                                    let readdsFrozenToken = newTokenStems |> Set.exists frozen.Contains
-                                                    if removesFrozenToken then
-                                                        Error(Errors.Malformed(ref.Short, "mutual-overlap cycle freeze refused removal of a shared reservation before host precedence"))
-                                                    elif not readdsFrozenToken then Ok()
-                                                    else
-                                                        Reads.issueState ctx.Transport freeze.Winner.Owner freeze.Winner.Repo freeze.Winner.Number
-                                                        |> Result.bind (fun state ->
-                                                            exactHeadReviewFacts ctx held
-                                                            |> Result.bind (fun (reviewRequired, exactHeadReviewed) ->
-                                                                let fetchedCurrentBase, rebasedHead = currentGitResumeFacts ()
-                                                                let errors =
-                                                                    loserResumeErrors
-                                                                        (state = IssueState.Closed)
-                                                                        true
-                                                                        fetchedCurrentBase
-                                                                        rebasedHead
-                                                                        (List.isEmpty collisions)
-                                                                        true
-                                                                        reviewRequired
-                                                                        exactHeadReviewed
-                                                                if List.isEmpty errors then Ok()
-                                                                else Error(Errors.Malformed(ref.Short, "loser resume refused: " + String.concat "; " errors)))))
-
-                                        let write =
-                                            resumeGate
-                                            |> Result.bind (fun () ->
-                                              match TouchSet.decideUpdate introducedCollision with
-                                              | TouchSet.CommitUpdate ->
-                                                Writes.widen ctx.Transport held rewritten |> Result.map (fun () -> true)
-                                            // NO PATCH IS ISSUED ON THIS PATH — that is the whole fix. `held`/`rewritten`
-                                            // are never handed to `Writes.widen`, so the body `Reads.issueBody` read
-                                            // above is exactly what remains: a widen/set-paths refused because ITS OWN
-                                            // requested paths collide leaves `Paths:` byte-identical (#2306 AC1/AC2), for
-                                            // a full collision or a partial one alike, since this command already
-                                            // computes ONE merged/replaced declaration and gates that ONE write — there
-                                            // is no per-token partial commit to leave behind.
-                                              | TouchSet.RefuseUpdate -> Ok false)
-
-                                        match write with
+                                        // #523/#353 — RE-CHECK BEFORE THE PATCH, and let its verdict GATE the write.
+                                        // ADR-0021's "re-declare AND re-check overlap before continuing" is the half a
+                                        // worker cannot do alone. The overlap scan runs against the PROPOSED touch-set
+                                        // (`rewritten.Body`, computed in memory above — `activeCollisions` takes it as an
+                                        // argument and never re-reads THIS item's body, so it needs no landed PATCH) and
+                                        // compares it to the live claims in THIS item's repo. If the scan is UNREADABLE —
+                                        // an exhausted GraphQL budget, a malformed claim — we REFUSE, and the body is left
+                                        // untouched: that is #523. Landing the declaration first and re-checking afterwards
+                                        // (as bash did) meant that on an exhausted budget the touch-set landed UNVERIFIED
+                                        // and the workers it now collided with were never told. Only once we HOLD a verdict
+                                        // do we PATCH. A scan that SUCCEEDS and finds a collision still lands the update
+                                        // and then notifies each colliding worker on their own issue; only an unreadable
+                                        // scan refuses. Same-repo scope: a cross-repo namesake is a phantom (#353).
+                                        match
+                                            // #2351 — `cross-repo` is not a repository; see `pathRepoOrFallback`.
+                                            activeCollisions
+                                                ctx
+                                                opts
+                                                ref
+                                                (Some(held.PathRepo |> pathRepoOrFallback ref.Repo))
+                                                (TouchSet.parse rewritten.Body)
+                                        with
                                         | Error e -> fail e
-                                        | Ok committed ->
-                                            // #1517 — THE RENDER MODE IS HONOURED HERE, and it was not before. `--json`
-                                            // is `Global` in `scopeOf` and `command-contract` advertises it on both
-                                            // verbs, so the parser accepted it, the residue rule had nothing to refuse,
-                                            // and this renderer then printed human prose and exited 0 — #867/#991's
-                                            // "accepted and ignored" defect, arriving through the one door that rule
-                                            // cannot watch. A driver that widens a touch-set had to scrape
-                                            // `widened <ref> → Paths: a, b` out of stdout and the overlap verdict out
-                                            // of STDERR to learn what it had just done.
+                                        | Ok collisions ->
+                                            let paths = String.Join(", ", proposed.Tokens)
+
+                                            // #2323 round 1 — THE JSON PROJECTION MUST NAME WHAT THE ITEM ACTUALLY DECLARES,
+                                            // NOT WHAT WAS REQUESTED. `Render.fsi`'s own doc for `PathUpdateReceipt.Paths` is
+                                            // "the tokens the item now declares" — on a REFUSED update (`committed = false`)
+                                            // that is `priorTokens`, byte-identical to before the call, never
+                                            // `proposed.Tokens`. The Text projection above already gates on `committed`;
+                                            // this closure takes the SAME flag so the two projections cannot disagree about
+                                            // one call's outcome — a caller gating on the exit code and then trusting this
+                                            // field is exactly the false belief #2306's AC1 exists to rule out, and it is
+                                            // truer of the machine surface than of the human one, since a program reads it
+                                            // unattended.
+                                            let receipt (committed: bool) (collisions: PathCollision list) : string =
+                                                renderPathUpdateJson
+                                                    {
+                                                        Ref = ref
+                                                        Worker = w.Id
+                                                        Kind = past
+                                                        Paths = (if committed then proposed.Tokens else priorTokens)
+                                                        Collisions = collisions
+                                                    }
+
+                                            // #2306 — REFUSE THE WRITE ONLY WHEN *THIS CALL'S OWN NEW TOKENS* COLLIDE, NOT
+                                            // WHENEVER THE FULL PROPOSED DECLARATION STILL SHOWS ANY COLLISION AT ALL.
                                             //
-                                            // The TEXT projection is byte-identical to what it has always been WHEN THE
-                                            // WRITE LANDED (`committed`), deliberately: every existing recipe reads it.
-                                            // #2306 — when it did NOT land, the line must not claim it did.
-                                            match opts.Render with
-                                            | Json -> ()
-                                            | Text ->
-                                                if committed then
-                                                    printfn "%s %s → Paths: %s" past ref.Short paths
-                                                else
-                                                    printfn
-                                                        "refused to %s %s's touch-set → Paths: unchanged (%s would overlap a live claim)"
-                                                        action
-                                                        ref.Short
-                                                        paths
+                                            // `collisions` above is unchanged — the #353 scan over the WHOLE proposed body,
+                                            // exactly as it always ran, and it still drives the DISJOINT/OVERLAP verdict and
+                                            // exit code below exactly as before. What #2306 fixes is narrower: `Writes.widen`
+                                            // used to run unconditionally once that scan merely COMPLETED (`Ok _`), so a scan
+                                            // that found a real collision still landed the PATCH — #2248's shape, where a
+                                            // widen's newly REQUESTED path itself overlapped a live claim and got written
+                                            // anyway. But a NARROWING (or an addition of a genuinely disjoint token) can
+                                            // surface a collision that predates the command and that the command's own tokens
+                                            // had no part in — the #1740 AC5 reasoning below — and refusing to write THAT
+                                            // would block the very narrowing this protocol recommends as the remedy (the
+                                            // courtesy notice below says exactly "narrow with `set-paths`"). So the write is
+                                            // gated on whether a NEW token — one `priorTokens` did not already carry — is
+                                            // itself part of a reported collision, not on whether the declaration merely
+                                            // still shows one. `TouchSet.decideUpdate` is the one place the ALL-OR-NOTHING
+                                            // refusal rule for a collision so attributed is stated (see its `.fsi` doc); this
+                                            // call site supplies the attribution, not the threshold.
+                                            let newTokenStems =
+                                                proposed.Tokens
+                                                |> List.filter (fun t -> not (List.contains t priorTokens))
+                                                |> List.map TouchSet.stem
+                                                |> Set.ofList
 
-                                            // Declaration time is the cheap moment to learn that editing a kit source
-                                            // obliges a re-digest (#469); OBSERVED off the tree, advisory, never fatal.
-                                            // It is stderr-only, so it cannot corrupt the JSON projection.
-                                            KitDigest.digestWarn ()
+                                            let introducedCollision =
+                                                collisions
+                                                |> List.exists (fun (_, _, toks) ->
+                                                    toks |> List.exists newTokenStems.Contains)
 
-                                            match collisions with
-                                            | [] ->
-                                                // `collisions = []` implies `committed = true`: an empty scan can never
-                                                // report an introduced collision, so `decideUpdate` always commits here.
-                                                match opts.Render with
-                                                | Json -> printfn "%s" (receipt true [])
-                                                | Text ->
-                                                    printfn "DISJOINT — the updated touch-set clears every live claim in %s/%s (#353)." ref.Owner ref.Repo
+                                            // A precedence narrow leaves a generation-bound freeze receipt on the
+                                            // losing item. Re-adding one of those shared tokens is a RESUME, not an
+                                            // ordinary widen: the production mutation route itself proves the winner
+                                            // closed, this claim generation is current, origin/main is contained by the
+                                            // current head, overlap is clear, and this call is the explicit re-widen.
+                                            // Any unreadable or false predicate refuses before the PATCH.
+                                            let resumeGate =
+                                                overlapFreezeFor ctx held body
+                                                |> Result.bind (function
+                                                    | None -> Ok()
+                                                    | Some freeze ->
+                                                        let frozen =
+                                                            freeze.SharedTokens |> List.map TouchSet.stem |> Set.ofList
 
-                                                ExitGreen
-                                            | collisions ->
-                                                // The notify is the part a worker cannot do alone. A post that fails is
-                                                // reported, but the collision still stands — it does not become DISJOINT.
-                                                // This runs whether or not `committed` — #2306 does not withhold the
-                                                // courtesy notice from a REFUSED attempt: the other holder still benefits
-                                                // from knowing an overlapping request was made, even though nothing
-                                                // landed on this item, and #353's guarantee holds either way.
+                                                        let priorStems =
+                                                            priorTokens |> List.map TouchSet.stem |> Set.ofList
+
+                                                        let proposedStems =
+                                                            proposed.Tokens |> List.map TouchSet.stem |> Set.ofList
+
+                                                        let removesFrozenToken =
+                                                            frozen
+                                                            |> Set.exists (fun token ->
+                                                                priorStems.Contains token
+                                                                && not (proposedStems.Contains token))
+
+                                                        let readdsFrozenToken =
+                                                            newTokenStems |> Set.exists frozen.Contains
+
+                                                        if removesFrozenToken then
+                                                            Error(
+                                                                Errors.Malformed(
+                                                                    ref.Short,
+                                                                    "mutual-overlap cycle freeze refused removal of a shared reservation before host precedence"
+                                                                )
+                                                            )
+                                                        elif not readdsFrozenToken then
+                                                            Ok()
+                                                        else
+                                                            Reads.issueState
+                                                                ctx.Transport
+                                                                freeze.Winner.Owner
+                                                                freeze.Winner.Repo
+                                                                freeze.Winner.Number
+                                                            |> Result.bind (fun state ->
+                                                                exactHeadReviewFacts ctx held
+                                                                |> Result.bind
+                                                                    (fun (reviewRequired, exactHeadReviewed) ->
+                                                                        let fetchedCurrentBase, rebasedHead =
+                                                                            currentGitResumeFacts ()
+
+                                                                        let errors =
+                                                                            loserResumeErrors
+                                                                                (state = IssueState.Closed)
+                                                                                true
+                                                                                fetchedCurrentBase
+                                                                                rebasedHead
+                                                                                (List.isEmpty collisions)
+                                                                                true
+                                                                                reviewRequired
+                                                                                exactHeadReviewed
+
+                                                                        if List.isEmpty errors then
+                                                                            Ok()
+                                                                        else
+                                                                            Error(
+                                                                                Errors.Malformed(
+                                                                                    ref.Short,
+                                                                                    "loser resume refused: "
+                                                                                    + String.concat "; " errors
+                                                                                )
+                                                                            ))))
+
+                                            let write =
+                                                resumeGate
+                                                |> Result.bind (fun () ->
+                                                    match TouchSet.decideUpdate introducedCollision with
+                                                    | TouchSet.CommitUpdate ->
+                                                        Writes.widen ctx.Transport held rewritten
+                                                        |> Result.map (fun () -> true)
+                                                    // NO PATCH IS ISSUED ON THIS PATH — that is the whole fix. `held`/`rewritten`
+                                                    // are never handed to `Writes.widen`, so the body `Reads.issueBody` read
+                                                    // above is exactly what remains: a widen/set-paths refused because ITS OWN
+                                                    // requested paths collide leaves `Paths:` byte-identical (#2306 AC1/AC2), for
+                                                    // a full collision or a partial one alike, since this command already
+                                                    // computes ONE merged/replaced declaration and gates that ONE write — there
+                                                    // is no per-token partial commit to leave behind.
+                                                    | TouchSet.RefuseUpdate -> Ok false)
+
+                                            match write with
+                                            | Error e -> fail e
+                                            | Ok committed ->
+                                                // #1517 — THE RENDER MODE IS HONOURED HERE, and it was not before. `--json`
+                                                // is `Global` in `scopeOf` and `command-contract` advertises it on both
+                                                // verbs, so the parser accepted it, the residue rule had nothing to refuse,
+                                                // and this renderer then printed human prose and exited 0 — #867/#991's
+                                                // "accepted and ignored" defect, arriving through the one door that rule
+                                                // cannot watch. A driver that widens a touch-set had to scrape
+                                                // `widened <ref> → Paths: a, b` out of stdout and the overlap verdict out
+                                                // of STDERR to learn what it had just done.
                                                 //
-                                                // #1517 — the notify OUTCOME is collected as it is printed, because the
-                                                // JSON receipt carries it. The stderr lines below are unchanged and are
-                                                // emitted in BOTH projections: they are operator diagnostics, not the
-                                                // machine contract, and stdout is the only stream `--json` speaks on.
-                                                let notified =
-                                                    [ for other, holder, toks in collisions do
-                                                        let toksText = sharedTokenText toks
-
-                                                        eprint $"OVERLAP — now collides with %s{other.Short} (worker %s{holder})"
-                                                        eprint $"  %s{toksText}"
-
-                                                        // DO NOT RECOMMEND `Blocked by` FOR A BARE OVERLAP (#1090). An
-                                                        // overlap is TRANSIENT — the scheduler already sequences it and
-                                                        // it self-clears the moment a claim drops — whereas `Blocked by`
-                                                        // is a DURABLE edge nothing ever recomputes. Offering the durable
-                                                        // remedy for the transient condition is how a ring got drawn on a
-                                                        // premise withdrawn 60 seconds later and held #1059 hostage: a
-                                                        // category error the tool used to recommend first. `Blocked by` is
-                                                        // correct ONLY for a real logical dependency (this work must be
-                                                        // authored against the other's LANDED result), which outlives any
-                                                        // claim — and that distinction is the thing the worker has to
-                                                        // decide, so the message names it instead of defaulting to the
-                                                        // edge that closes rings.
-                                                        let msg =
-                                                            // #1740 AC5, ON THE MESSAGE THE OTHER WORKER READS. Taking
-                                                            // "introduced" off stderr and leaving "which NOW overlaps"
-                                                            // here would move the false causal claim rather than remove
-                                                            // it — and this is the copy the innocent party reads, so it
-                                                            // is the one that misdirects someone who did nothing.
-                                                            let origin =
-                                                                if isNarrowing then
-                                                                    "That is a NARROWING, so it cannot have caused this — the overlap already existed and predates my command"
-                                                                else
-                                                                    "I do not know which of us declared these paths first, so this may or may not be new"
-
-                                                            // #2306 — NEVER CLAIM A COMPLETED WRITE THAT DID NOT HAPPEN.
-                                                            // When `committed` this is byte-identical to the pre-#2306
-                                                            // copy; when not, it names the ATTEMPT and the REFUSAL instead
-                                                            // of asserting a mutation that never landed.
-                                                            if committed then
-                                                                $"heads up: I %s{past} %s{ref.Short} to `Paths: %s{paths}`, which overlaps your touch-set here (%s{toksText}). %s{origin}. This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
-                                                            else
-                                                                $"heads up: I attempted to %s{action} %s{ref.Short} (to `Paths: %s{paths}`), which would overlap your touch-set here (%s{toksText}). The request was REFUSED, and nothing was changed on my item. %s{origin}. This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
-
-                                                        match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
-                                                        | Error e ->
-                                                            eprint $"  could NOT notify worker %s{holder} on %s{other.Short}: %s{Errors.explain e}"
-
-                                                            yield
-                                                                { Ref = other
-                                                                  Worker = holder
-                                                                  SharedTokens = toks
-                                                                  Notified = false
-                                                                  NotifyError = Some(Errors.explain e) }
-                                                        | Ok() ->
-                                                            eprint $"  notified worker %s{holder} on %s{other.Short}"
-
-                                                            yield
-                                                                { Ref = other
-                                                                  Worker = holder
-                                                                  SharedTokens = toks
-                                                                  Notified = true
-                                                                  NotifyError = None } ]
-
-                                                // #1740 AC5 — NAME WHAT WE KNOW, AND NOTHING MORE. Neither
-                                                // sentence says "introduced" unless that has been shown; on a
-                                                // narrowing we can prove the opposite, so we say THAT.
-                                                if isNarrowing then
-                                                    eprint $"fsgg-coord-engine: this %s{verb} NARROWED the touch-set, so it cannot have introduced the collision — a subset names fewer files. The overlap was ALREADY there, and belongs to a claim that predates this command. Do NOT keep editing the shared paths until it is resolved."
-                                                else
-                                                    eprint "fsgg-coord-engine: the updated touch-set COLLIDES with a live claim (this command may or may not be what introduced it) — do NOT keep editing the shared paths until it is resolved."
-
-                                                // The OVERLAP detail is IN the object, not beside it on stderr — that
-                                                // split is the half of this defect a machine consumer could not work
-                                                // around at all (#1517 AC2).
+                                                // The TEXT projection is byte-identical to what it has always been WHEN THE
+                                                // WRITE LANDED (`committed`), deliberately: every existing recipe reads it.
+                                                // #2306 — when it did NOT land, the line must not claim it did.
                                                 match opts.Render with
-                                                | Json -> printfn "%s" (receipt committed notified)
-                                                | Text -> ()
+                                                | Json -> ()
+                                                | Text ->
+                                                    if committed then
+                                                        printfn "%s %s → Paths: %s" past ref.Short paths
+                                                    else
+                                                        printfn
+                                                            "refused to %s %s's touch-set → Paths: unchanged (%s would overlap a live claim)"
+                                                            action
+                                                            ref.Short
+                                                            paths
 
-                                                // A real same-repo collision exits non-zero (engine ExitContended=6;
-                                                // bash's literal 1 disposed on the record, ADR-0040 §5). UNCHANGED by
-                                                // #1517/#2306: the renderer and the write gate were the bugs, the exit
-                                                // code semantics were not.
-                                                ExitContended
+                                                // Declaration time is the cheap moment to learn that editing a kit source
+                                                // obliges a re-digest (#469); OBSERVED off the tree, advisory, never fatal.
+                                                // It is stderr-only, so it cannot corrupt the JSON projection.
+                                                KitDigest.digestWarn ()
+
+                                                match collisions with
+                                                | [] ->
+                                                    // `collisions = []` implies `committed = true`: an empty scan can never
+                                                    // report an introduced collision, so `decideUpdate` always commits here.
+                                                    match opts.Render with
+                                                    | Json -> printfn "%s" (receipt true [])
+                                                    | Text ->
+                                                        printfn
+                                                            "DISJOINT — the updated touch-set clears every live claim in %s/%s (#353)."
+                                                            ref.Owner
+                                                            ref.Repo
+
+                                                    ExitGreen
+                                                | collisions ->
+                                                    // The notify is the part a worker cannot do alone. A post that fails is
+                                                    // reported, but the collision still stands — it does not become DISJOINT.
+                                                    // This runs whether or not `committed` — #2306 does not withhold the
+                                                    // courtesy notice from a REFUSED attempt: the other holder still benefits
+                                                    // from knowing an overlapping request was made, even though nothing
+                                                    // landed on this item, and #353's guarantee holds either way.
+                                                    //
+                                                    // #1517 — the notify OUTCOME is collected as it is printed, because the
+                                                    // JSON receipt carries it. The stderr lines below are unchanged and are
+                                                    // emitted in BOTH projections: they are operator diagnostics, not the
+                                                    // machine contract, and stdout is the only stream `--json` speaks on.
+                                                    let notified =
+                                                        [
+                                                            for other, holder, toks in collisions do
+                                                                let toksText = sharedTokenText toks
+
+                                                                eprint
+                                                                    $"OVERLAP — now collides with %s{other.Short} (worker %s{holder})"
+
+                                                                eprint $"  %s{toksText}"
+
+                                                                // DO NOT RECOMMEND `Blocked by` FOR A BARE OVERLAP (#1090). An
+                                                                // overlap is TRANSIENT — the scheduler already sequences it and
+                                                                // it self-clears the moment a claim drops — whereas `Blocked by`
+                                                                // is a DURABLE edge nothing ever recomputes. Offering the durable
+                                                                // remedy for the transient condition is how a ring got drawn on a
+                                                                // premise withdrawn 60 seconds later and held #1059 hostage: a
+                                                                // category error the tool used to recommend first. `Blocked by` is
+                                                                // correct ONLY for a real logical dependency (this work must be
+                                                                // authored against the other's LANDED result), which outlives any
+                                                                // claim — and that distinction is the thing the worker has to
+                                                                // decide, so the message names it instead of defaulting to the
+                                                                // edge that closes rings.
+                                                                let msg =
+                                                                    // #1740 AC5, ON THE MESSAGE THE OTHER WORKER READS. Taking
+                                                                    // "introduced" off stderr and leaving "which NOW overlaps"
+                                                                    // here would move the false causal claim rather than remove
+                                                                    // it — and this is the copy the innocent party reads, so it
+                                                                    // is the one that misdirects someone who did nothing.
+                                                                    let origin =
+                                                                        if isNarrowing then
+                                                                            "That is a NARROWING, so it cannot have caused this — the overlap already existed and predates my command"
+                                                                        else
+                                                                            "I do not know which of us declared these paths first, so this may or may not be new"
+
+                                                                    // #2306 — NEVER CLAIM A COMPLETED WRITE THAT DID NOT HAPPEN.
+                                                                    // When `committed` this is byte-identical to the pre-#2306
+                                                                    // copy; when not, it names the ATTEMPT and the REFUSAL instead
+                                                                    // of asserting a mutation that never landed.
+                                                                    if committed then
+                                                                        $"heads up: I %s{past} %s{ref.Short} to `Paths: %s{paths}`, which overlaps your touch-set here (%s{toksText}). %s{origin}. This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
+                                                                    else
+                                                                        $"heads up: I attempted to %s{action} %s{ref.Short} (to `Paths: %s{paths}`), which would overlap your touch-set here (%s{toksText}). The request was REFUSED, and nothing was changed on my item. %s{origin}. This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
+
+                                                                match
+                                                                    Writes.say
+                                                                        ctx.Transport
+                                                                        (WorkerId w.Id)
+                                                                        (WorkerId holder)
+                                                                        other
+                                                                        msg
+                                                                with
+                                                                | Error e ->
+                                                                    eprint
+                                                                        $"  could NOT notify worker %s{holder} on %s{other.Short}: %s{Errors.explain e}"
+
+                                                                    yield
+                                                                        {
+                                                                            Ref = other
+                                                                            Worker = holder
+                                                                            SharedTokens = toks
+                                                                            Notified = false
+                                                                            NotifyError = Some(Errors.explain e)
+                                                                        }
+                                                                | Ok() ->
+                                                                    eprint
+                                                                        $"  notified worker %s{holder} on %s{other.Short}"
+
+                                                                    yield
+                                                                        {
+                                                                            Ref = other
+                                                                            Worker = holder
+                                                                            SharedTokens = toks
+                                                                            Notified = true
+                                                                            NotifyError = None
+                                                                        }
+                                                        ]
+
+                                                    // #1740 AC5 — NAME WHAT WE KNOW, AND NOTHING MORE. Neither
+                                                    // sentence says "introduced" unless that has been shown; on a
+                                                    // narrowing we can prove the opposite, so we say THAT.
+                                                    if isNarrowing then
+                                                        eprint
+                                                            $"fsgg-coord-engine: this %s{verb} NARROWED the touch-set, so it cannot have introduced the collision — a subset names fewer files. The overlap was ALREADY there, and belongs to a claim that predates this command. Do NOT keep editing the shared paths until it is resolved."
+                                                    else
+                                                        eprint
+                                                            "fsgg-coord-engine: the updated touch-set COLLIDES with a live claim (this command may or may not be what introduced it) — do NOT keep editing the shared paths until it is resolved."
+
+                                                    // The OVERLAP detail is IN the object, not beside it on stderr — that
+                                                    // split is the half of this defect a machine consumer could not work
+                                                    // around at all (#1517 AC2).
+                                                    match opts.Render with
+                                                    | Json -> printfn "%s" (receipt committed notified)
+                                                    | Text -> ()
+
+                                                    // A real same-repo collision exits non-zero (engine ExitContended=6;
+                                                    // bash's literal 1 disposed on the record, ADR-0040 §5). UNCHANGED by
+                                                    // #1517/#2306: the renderer and the write gate were the bugs, the exit
+                                                    // code semantics were not.
+                                                    ExitContended
 
     let widen (ctx: Context) (opts: Options) : int = updateTouchSet Union ctx opts
 
@@ -6708,39 +7741,49 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     // .github#2801 — typed facts for the mutual-overlap protocol.  These deliberately live beside the
     // command which consumes them: this is one narrow policy transaction, not a generic graph framework.
     type OverlapWaitReceipt =
-        { Waiter: Ref
-          WaiterGeneration: string
-          Predecessor: Ref
-          PredecessorGeneration: string
-          SharedTokens: string list
-          Host: string
-          Digest: string }
+        {
+            Waiter: Ref
+            WaiterGeneration: string
+            Predecessor: Ref
+            PredecessorGeneration: string
+            SharedTokens: string list
+            Host: string
+            Digest: string
+        }
 
     type OverlapClaimFact =
-        { Item: Ref
-          Generation: string
-          Live: bool }
+        {
+            Item: Ref
+            Generation: string
+            Live: bool
+        }
 
     type OverlapRelation =
-        { Left: Ref
-          Right: Ref
-          SharedTokens: string list }
+        {
+            Left: Ref
+            Right: Ref
+            SharedTokens: string list
+        }
 
     type MutualOverlapSnapshot =
-        { Readable: bool
-          Claims: OverlapClaimFact list
-          Relations: OverlapRelation list
-          Waits: OverlapWaitReceipt list
-          DurableDependencies: (Ref * Ref) list
-          RelatedRoomCycleDigests: string list }
+        {
+            Readable: bool
+            Claims: OverlapClaimFact list
+            Relations: OverlapRelation list
+            Waits: OverlapWaitReceipt list
+            DurableDependencies: (Ref * Ref) list
+            RelatedRoomCycleDigests: string list
+        }
 
     type MutualOverlapCycle =
-        { First: Ref
-          Second: Ref
-          FirstGeneration: string
-          SecondGeneration: string
-          SharedTokens: string list
-          Digest: string }
+        {
+            First: Ref
+            Second: Ref
+            FirstGeneration: string
+            SecondGeneration: string
+            SharedTokens: string list
+            Digest: string
+        }
 
     type MutualOverlapVerdict =
         | NoMutualOverlapCycle
@@ -6748,24 +7791,28 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         | MutualOverlapRefused of reason: string
 
     type OverlapPrecedenceReceipt =
-        { CycleDigest: string
-          Revision: int
-          PreviousDigest: string option
-          Winner: Ref
-          Loser: Ref
-          Host: string
-          Reason: string option
-          Digest: string }
+        {
+            CycleDigest: string
+            Revision: int
+            PreviousDigest: string option
+            Winner: Ref
+            Loser: Ref
+            Host: string
+            Reason: string option
+            Digest: string
+        }
 
     type LoserResumeFacts =
-        { WinnerLanded: bool
-          LoserClaimGenerationCurrent: bool
-          FetchedWinnerBase: bool
-          RebasedHead: bool
-          OverlapClear: bool
-          ExplicitlyRewidened: bool
-          ReviewRequired: bool
-          ExactHeadReviewed: bool }
+        {
+            WinnerLanded: bool
+            LoserClaimGenerationCurrent: bool
+            FetchedWinnerBase: bool
+            RebasedHead: bool
+            OverlapClear: bool
+            ExplicitlyRewidened: bool
+            ReviewRequired: bool
+            ExactHeadReviewed: bool
+        }
 
     [<Literal>]
     let boardOrchestratorAuthority = "FS-GG/.github#2801"
@@ -6773,29 +7820,35 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     // One immutable generation of the Coordination board's sole orchestrator authority. Expiry, rather
     // than a mutable heartbeat body, makes takeover races a generation-scoped CAS and leaves an audit trail.
     type BoardOrchestratorLease =
-        { Board: string
-          HolderRepo: string
-          Holder: string
-          Generation: int64
-          ExpiresAtUnix: int64
-          CommentId: int64
-          Digest: string }
+        {
+            Board: string
+            HolderRepo: string
+            Holder: string
+            Generation: int64
+            ExpiresAtUnix: int64
+            CommentId: int64
+            Digest: string
+        }
 
     type BoardOrchestratorRequest =
-        { Board: string
-          RequestingRepo: string
-          RequestKey: string
-          CoordinationRef: Ref
-          LeaseGeneration: int64
-          CommentId: int64
-          Digest: string }
+        {
+            Board: string
+            RequestingRepo: string
+            RequestKey: string
+            CoordinationRef: Ref
+            LeaseGeneration: int64
+            CommentId: int64
+            Digest: string
+        }
 
     type BoardOrchestratorSnapshot =
-        { Readable: bool
-          NowUnix: int64
-          Board: string
-          Leases: BoardOrchestratorLease list
-          Requests: BoardOrchestratorRequest list }
+        {
+            Readable: bool
+            NowUnix: int64
+            Board: string
+            Leases: BoardOrchestratorLease list
+            Requests: BoardOrchestratorRequest list
+        }
 
     type BoardOrchestratorDecision =
         | RouteRequestTo of BoardOrchestratorLease
@@ -6808,67 +7861,82 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         |> Convert.ToHexString
         |> fun digest -> digest.ToLowerInvariant()
 
-    let private normalizedTokens tokens = tokens |> List.map TouchSet.stem |> List.distinct |> List.sort
+    let private normalizedTokens tokens =
+        tokens |> List.map TouchSet.stem |> List.distinct |> List.sort
 
     let waitReceiptDigest (receipt: OverlapWaitReceipt) =
         String.concat
             "\n"
-            [ "fsgg.coord.overlap-wait/v1"
-              receipt.Waiter.Canonical
-              receipt.WaiterGeneration
-              receipt.Predecessor.Canonical
-              receipt.PredecessorGeneration
-              String.concat "," (normalizedTokens receipt.SharedTokens)
-              receipt.Host ]
+            [
+                "fsgg.coord.overlap-wait/v1"
+                receipt.Waiter.Canonical
+                receipt.WaiterGeneration
+                receipt.Predecessor.Canonical
+                receipt.PredecessorGeneration
+                String.concat "," (normalizedTokens receipt.SharedTokens)
+                receipt.Host
+            ]
         |> sha256
 
     let private cycleDigest (a: Ref) (aGeneration: string) (b: Ref) (bGeneration: string) tokens =
         let first, firstGeneration, second, secondGeneration =
-            if a.Canonical < b.Canonical then a, aGeneration, b, bGeneration else b, bGeneration, a, aGeneration
+            if a.Canonical < b.Canonical then
+                a, aGeneration, b, bGeneration
+            else
+                b, bGeneration, a, aGeneration
 
-        sha256
-            (String.concat
+        sha256 (
+            String.concat
                 "\n"
-                [ "fsgg.coord.mutual-overlap/v1"
-                  first.Canonical
-                  firstGeneration
-                  second.Canonical
-                  secondGeneration
-                  String.concat "," (normalizedTokens tokens) ])
+                [
+                    "fsgg.coord.mutual-overlap/v1"
+                    first.Canonical
+                    firstGeneration
+                    second.Canonical
+                    secondGeneration
+                    String.concat "," (normalizedTokens tokens)
+                ]
+        )
 
     let precedenceReceiptDigest (receipt: OverlapPrecedenceReceipt) =
         String.concat
             "\n"
-            [ "fsgg.coord.overlap-precedence/v1"
-              receipt.CycleDigest
-              string receipt.Revision
-              Option.defaultValue "" receipt.PreviousDigest
-              receipt.Winner.Canonical
-              receipt.Loser.Canonical
-              receipt.Host
-              Option.defaultValue "" receipt.Reason ]
+            [
+                "fsgg.coord.overlap-precedence/v1"
+                receipt.CycleDigest
+                string receipt.Revision
+                Option.defaultValue "" receipt.PreviousDigest
+                receipt.Winner.Canonical
+                receipt.Loser.Canonical
+                receipt.Host
+                Option.defaultValue "" receipt.Reason
+            ]
         |> sha256
 
     let boardOrchestratorLeaseDigest (lease: BoardOrchestratorLease) =
         String.concat
             "\n"
-            [ "fsgg.coord.board-orchestrator-lease/v1"
-              lease.Board
-              lease.HolderRepo
-              lease.Holder
-              string lease.Generation
-              string lease.ExpiresAtUnix ]
+            [
+                "fsgg.coord.board-orchestrator-lease/v1"
+                lease.Board
+                lease.HolderRepo
+                lease.Holder
+                string lease.Generation
+                string lease.ExpiresAtUnix
+            ]
         |> sha256
 
     let boardOrchestratorRequestDigest (request: BoardOrchestratorRequest) =
         String.concat
             "\n"
-            [ "fsgg.coord.board-orchestrator-request/v1"
-              request.Board
-              request.RequestingRepo
-              request.RequestKey
-              request.CoordinationRef.Canonical
-              string request.LeaseGeneration ]
+            [
+                "fsgg.coord.board-orchestrator-request/v1"
+                request.Board
+                request.RequestingRepo
+                request.RequestKey
+                request.CoordinationRef.Canonical
+                string request.LeaseGeneration
+            ]
         |> sha256
 
     // Decide from a complete lease/request census. An external repository can only route to the live
@@ -6895,10 +7963,17 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             BoardOrchestratorRefused "board-orchestrator lease is malformed or has an invalid digest"
         elif snapshot.Requests |> List.exists invalidRequest then
             BoardOrchestratorRefused "board-orchestrator request is malformed or has an invalid digest"
-        elif snapshot.Leases |> List.groupBy _.Generation |> List.exists (fun (_, xs) -> xs |> List.map _.Digest |> List.distinct |> List.length > 1) then
+        elif
+            snapshot.Leases
+            |> List.groupBy _.Generation
+            |> List.exists (fun (_, xs) -> xs |> List.map _.Digest |> List.distinct |> List.length > 1)
+        then
             BoardOrchestratorRefused "board-orchestrator generation conflicts"
         else
-            let active = snapshot.Leases |> List.filter (fun lease -> lease.ExpiresAtUnix > snapshot.NowUnix)
+            let active =
+                snapshot.Leases
+                |> List.filter (fun lease -> lease.ExpiresAtUnix > snapshot.NowUnix)
+
             match active with
             | [] ->
                 let next = snapshot.Leases |> List.map _.Generation |> List.fold max 0L |> (+) 1L
@@ -6906,13 +7981,23 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | [ lease ] ->
                 // Requests preceding the current lease comment belong to historical generations. A request
                 // written after this lease but naming another generation is a stale-authority race.
-                let relevantRequests = snapshot.Requests |> List.filter (fun request -> request.CommentId > lease.CommentId)
-                let currentRequests = relevantRequests |> List.filter (fun request -> request.LeaseGeneration = lease.Generation)
-                let staleRequests = relevantRequests |> List.filter (fun request -> request.LeaseGeneration <> lease.Generation)
+                let relevantRequests =
+                    snapshot.Requests
+                    |> List.filter (fun request -> request.CommentId > lease.CommentId)
+
+                let currentRequests =
+                    relevantRequests
+                    |> List.filter (fun request -> request.LeaseGeneration = lease.Generation)
+
+                let staleRequests =
+                    relevantRequests
+                    |> List.filter (fun request -> request.LeaseGeneration <> lease.Generation)
+
                 let requestConflicts =
                     currentRequests
                     |> List.groupBy (fun request -> request.RequestingRepo, request.RequestKey)
                     |> List.exists (fun (_, xs) -> xs |> List.map _.Digest |> List.distinct |> List.length > 1)
+
                 if not (List.isEmpty staleRequests) then
                     BoardOrchestratorRefused "a request names a stale board-orchestrator generation"
                 elif requestConflicts then
@@ -6925,13 +8010,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         |> List.distinctBy (fun request -> request.RequestingRepo, request.RequestKey, request.Digest)
                         |> List.sortBy (fun request -> request.RequestingRepo, request.RequestKey)
                         |> List.tryHead
+
                     RunBoardOrchestrator(lease, priority)
             | _ -> BoardOrchestratorRefused "more than one live board-orchestrator lease exists"
 
     // Decide only from one authoritative snapshot.  Every missing/stale/conflicting fact refuses; a
     // one-way wait is the sole honest no-cycle result.  Comment order cannot affect the result.
     let detectMutualOverlap (snapshot: MutualOverlapSnapshot) : MutualOverlapVerdict =
-        let samePair a b left right = (a = left && b = right) || (a = right && b = left)
+        let samePair a b left right =
+            (a = left && b = right) || (a = right && b = left)
 
         let claim item generation =
             snapshot.Claims
@@ -6950,17 +8037,27 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 | [ fact ] ->
                     let observed = normalizedTokens fact.SharedTokens
                     let recorded = normalizedTokens wait.SharedTokens
-                    if List.isEmpty observed then Error "the overlap has cleared"
-                    elif observed <> recorded then Error "the shared reservation tokens changed"
-                    else Ok observed
+
+                    if List.isEmpty observed then
+                        Error "the overlap has cleared"
+                    elif observed <> recorded then
+                        Error "the shared reservation tokens changed"
+                    else
+                        Ok observed
                 | [] -> Error "the overlap has cleared"
                 | _ -> Error "overlap state conflicts"
 
         let validateWait wait =
-            if wait.Waiter = wait.Predecessor then Error "self wait edges are invalid"
-            elif String.IsNullOrWhiteSpace wait.Host then Error "wait receipt host authority is missing"
-            elif wait.Digest <> waitReceiptDigest { wait with Digest = "" } then Error "wait receipt digest is invalid"
-            elif snapshot.DurableDependencies |> List.exists (fun (a, b) -> samePair wait.Waiter wait.Predecessor a b) then
+            if wait.Waiter = wait.Predecessor then
+                Error "self wait edges are invalid"
+            elif String.IsNullOrWhiteSpace wait.Host then
+                Error "wait receipt host authority is missing"
+            elif wait.Digest <> waitReceiptDigest { wait with Digest = "" } then
+                Error "wait receipt digest is invalid"
+            elif
+                snapshot.DurableDependencies
+                |> List.exists (fun (a, b) -> samePair wait.Waiter wait.Predecessor a b)
+            then
                 Error "a durable Blocked-by dependency already sequences the pair"
             else
                 claim wait.Waiter wait.WaiterGeneration
@@ -6973,7 +8070,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             let duplicateEdges =
                 snapshot.Waits
                 |> List.groupBy (fun wait -> wait.Waiter, wait.WaiterGeneration)
-                |> List.tryFind (fun (_, waits) -> waits |> List.map (fun wait -> wait.Predecessor, wait.PredecessorGeneration, wait.Digest) |> List.distinct |> List.length > 1)
+                |> List.tryFind (fun (_, waits) ->
+                    waits
+                    |> List.map (fun wait -> wait.Predecessor, wait.PredecessorGeneration, wait.Digest)
+                    |> List.distinct
+                    |> List.length
+                        >
+                        1)
 
             match duplicateEdges with
             | Some _ -> MutualOverlapRefused "wait receipts conflict for one live claim generation"
@@ -6990,28 +8093,45 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 | Error reason -> MutualOverlapRefused reason
                 | Ok waits ->
                     let cycles =
-                        [ for left, leftTokens in waits do
-                              for right, rightTokens in waits do
-                                  if left.Waiter = right.Predecessor
-                                     && left.Predecessor = right.Waiter
-                                     && left.WaiterGeneration = right.PredecessorGeneration
-                                     && left.PredecessorGeneration = right.WaiterGeneration
-                                     && left.Digest < right.Digest then
-                                      let tokens = Set.intersect (Set.ofList leftTokens) (Set.ofList rightTokens) |> Set.toList |> List.sort
-                                      if not (List.isEmpty tokens) then
-                                          let first, firstGeneration, second, secondGeneration =
-                                              if left.Waiter.Canonical < left.Predecessor.Canonical then
-                                                  left.Waiter, left.WaiterGeneration, left.Predecessor, left.PredecessorGeneration
-                                              else
-                                                  left.Predecessor, left.PredecessorGeneration, left.Waiter, left.WaiterGeneration
+                        [
+                            for left, leftTokens in waits do
+                                for right, rightTokens in waits do
+                                    if
+                                        left.Waiter = right.Predecessor
+                                        && left.Predecessor = right.Waiter
+                                        && left.WaiterGeneration = right.PredecessorGeneration
+                                        && left.PredecessorGeneration = right.WaiterGeneration
+                                        && left.Digest < right.Digest
+                                    then
+                                        let tokens =
+                                            Set.intersect (Set.ofList leftTokens) (Set.ofList rightTokens)
+                                            |> Set.toList
+                                            |> List.sort
 
-                                          yield
-                                              { First = first
-                                                Second = second
-                                                FirstGeneration = firstGeneration
-                                                SecondGeneration = secondGeneration
-                                                SharedTokens = tokens
-                                                Digest = cycleDigest first firstGeneration second secondGeneration tokens } ]
+                                        if not (List.isEmpty tokens) then
+                                            let first, firstGeneration, second, secondGeneration =
+                                                if left.Waiter.Canonical < left.Predecessor.Canonical then
+                                                    left.Waiter,
+                                                    left.WaiterGeneration,
+                                                    left.Predecessor,
+                                                    left.PredecessorGeneration
+                                                else
+                                                    left.Predecessor,
+                                                    left.PredecessorGeneration,
+                                                    left.Waiter,
+                                                    left.WaiterGeneration
+
+                                            yield
+                                                {
+                                                    First = first
+                                                    Second = second
+                                                    FirstGeneration = firstGeneration
+                                                    SecondGeneration = secondGeneration
+                                                    SharedTokens = tokens
+                                                    Digest =
+                                                        cycleDigest first firstGeneration second secondGeneration tokens
+                                                }
+                        ]
                         |> List.distinct
 
                     match cycles with
@@ -7030,25 +8150,48 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             match previous, remaining with
             | _, [] -> Error "host precedence receipt is missing"
             | None, current :: rest when current.Revision = 1 && current.PreviousDigest.IsNone ->
-                if current.CycleDigest <> cycle.Digest then Error "precedence receipt names another cycle"
-                elif not (participants current) then Error "precedence winner and loser are not the cycle participants"
-                elif String.IsNullOrWhiteSpace current.Host then Error "precedence host authority is missing"
-                elif current.Digest <> precedenceReceiptDigest { current with Digest = "" } then Error "precedence receipt digest is invalid"
-                elif List.isEmpty rest then Ok current
-                else loop (Some current) rest
-            | Some prior, current :: rest when current.Revision = prior.Revision + 1 && current.PreviousDigest = Some prior.Digest ->
-                if current.CycleDigest <> cycle.Digest then Error "precedence receipt names another cycle"
-                elif not (participants current) then Error "precedence winner and loser are not the cycle participants"
-                elif String.IsNullOrWhiteSpace current.Host then Error "precedence host authority is missing"
-                elif current.Digest <> precedenceReceiptDigest { current with Digest = "" } then Error "precedence receipt digest is invalid"
-                elif current.Winner <> prior.Winner && (current.Reason |> Option.forall String.IsNullOrWhiteSpace) then
+                if current.CycleDigest <> cycle.Digest then
+                    Error "precedence receipt names another cycle"
+                elif not (participants current) then
+                    Error "precedence winner and loser are not the cycle participants"
+                elif String.IsNullOrWhiteSpace current.Host then
+                    Error "precedence host authority is missing"
+                elif current.Digest <> precedenceReceiptDigest { current with Digest = "" } then
+                    Error "precedence receipt digest is invalid"
+                elif List.isEmpty rest then
+                    Ok current
+                else
+                    loop (Some current) rest
+            | Some prior, current :: rest when
+                current.Revision = prior.Revision + 1
+                && current.PreviousDigest = Some prior.Digest
+                ->
+                if current.CycleDigest <> cycle.Digest then
+                    Error "precedence receipt names another cycle"
+                elif not (participants current) then
+                    Error "precedence winner and loser are not the cycle participants"
+                elif String.IsNullOrWhiteSpace current.Host then
+                    Error "precedence host authority is missing"
+                elif current.Digest <> precedenceReceiptDigest { current with Digest = "" } then
+                    Error "precedence receipt digest is invalid"
+                elif
+                    current.Winner <> prior.Winner
+                    && (current.Reason |> Option.forall String.IsNullOrWhiteSpace)
+                then
                     Error "a precedence reversal requires a measured reason"
-                elif List.isEmpty rest then Ok current
-                else loop (Some current) rest
+                elif List.isEmpty rest then
+                    Ok current
+                else
+                    loop (Some current) rest
             | _ -> Error "precedence revisions conflict, are stale, or do not bind the prior digest"
 
         let ordered = receipts |> List.sortBy _.Revision
-        if ordered |> List.groupBy _.Revision |> List.exists (fun (_, sameRevision) -> List.length sameRevision <> 1) then
+
+        if
+            ordered
+            |> List.groupBy _.Revision
+            |> List.exists (fun (_, sameRevision) -> List.length sameRevision <> 1)
+        then
             Error "conflicting same-revision precedence receipts"
         else
             loop None ordered
@@ -7082,28 +8225,32 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         WaitMarker
         + "\n"
         + JsonSerializer.Serialize
-            {| schema = "fsgg.coord.overlap-wait/v1"
-               waiter = receipt.Waiter.Canonical
-               waiterGeneration = receipt.WaiterGeneration
-               predecessor = receipt.Predecessor.Canonical
-               predecessorGeneration = receipt.PredecessorGeneration
-               sharedTokens = normalizedTokens receipt.SharedTokens
-               host = receipt.Host
-               digest = receipt.Digest |}
+            {|
+                schema = "fsgg.coord.overlap-wait/v1"
+                waiter = receipt.Waiter.Canonical
+                waiterGeneration = receipt.WaiterGeneration
+                predecessor = receipt.Predecessor.Canonical
+                predecessorGeneration = receipt.PredecessorGeneration
+                sharedTokens = normalizedTokens receipt.SharedTokens
+                host = receipt.Host
+                digest = receipt.Digest
+            |}
 
     let private precedenceReceiptBody (receipt: OverlapPrecedenceReceipt) =
         PrecedenceMarker
         + "\n"
         + JsonSerializer.Serialize
-            {| schema = "fsgg.coord.overlap-precedence/v1"
-               cycleDigest = receipt.CycleDigest
-               revision = receipt.Revision
-               previousDigest = receipt.PreviousDigest |> Option.toObj
-               winner = receipt.Winner.Canonical
-               loser = receipt.Loser.Canonical
-               host = receipt.Host
-               reason = receipt.Reason |> Option.toObj
-               digest = receipt.Digest |}
+            {|
+                schema = "fsgg.coord.overlap-precedence/v1"
+                cycleDigest = receipt.CycleDigest
+                revision = receipt.Revision
+                previousDigest = receipt.PreviousDigest |> Option.toObj
+                winner = receipt.Winner.Canonical
+                loser = receipt.Loser.Canonical
+                host = receipt.Host
+                reason = receipt.Reason |> Option.toObj
+                digest = receipt.Digest
+            |}
 
     let private boardLeaseBody marker (lease: BoardOrchestratorLease) =
         marker
@@ -7111,13 +8258,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         + BoardLeaseMarker
         + "\n"
         + JsonSerializer.Serialize
-            {| schema = "fsgg.coord.board-orchestrator-lease/v1"
-               board = lease.Board
-               holderRepo = lease.HolderRepo
-               holder = lease.Holder
-               generation = lease.Generation
-               expiresAtUnix = lease.ExpiresAtUnix
-               digest = lease.Digest |}
+            {|
+                schema = "fsgg.coord.board-orchestrator-lease/v1"
+                board = lease.Board
+                holderRepo = lease.HolderRepo
+                holder = lease.Holder
+                generation = lease.Generation
+                expiresAtUnix = lease.ExpiresAtUnix
+                digest = lease.Digest
+            |}
 
     let private boardRequestBody marker (request: BoardOrchestratorRequest) =
         marker
@@ -7125,113 +8274,182 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         + BoardRequestMarker
         + "\n"
         + JsonSerializer.Serialize
-            {| schema = "fsgg.coord.board-orchestrator-request/v1"
-               board = request.Board
-               requestingRepo = request.RequestingRepo
-               requestKey = request.RequestKey
-               coordinationRef = request.CoordinationRef.Canonical
-               leaseGeneration = request.LeaseGeneration
-               digest = request.Digest |}
+            {|
+                schema = "fsgg.coord.board-orchestrator-request/v1"
+                board = request.Board
+                requestingRepo = request.RequestingRepo
+                requestKey = request.RequestKey
+                coordinationRef = request.CoordinationRef.Canonical
+                leaseGeneration = request.LeaseGeneration
+                digest = request.Digest
+            |}
 
     let private parseStructuredRef owner repo (raw: string) = parseRefIn owner (Some repo) raw
 
     let private parseBoardLease commentId (body: string) : Result<BoardOrchestratorLease option, string> =
-        if not (body.Contains(BoardLeaseMarker, StringComparison.Ordinal)) then Ok None
+        if not (body.Contains(BoardLeaseMarker, StringComparison.Ordinal)) then
+            Ok None
         else
             try
                 let markerAt = body.IndexOf(BoardLeaseMarker, StringComparison.Ordinal)
-                use doc = JsonDocument.Parse(body.Substring(markerAt + BoardLeaseMarker.Length).TrimStart())
-                let root = doc.RootElement
-                Ok(Some
-                    { Board = root.GetProperty("board").GetString()
-                      HolderRepo = root.GetProperty("holderRepo").GetString()
-                      Holder = root.GetProperty("holder").GetString()
-                      Generation = root.GetProperty("generation").GetInt64()
-                      ExpiresAtUnix = root.GetProperty("expiresAtUnix").GetInt64()
-                      CommentId = commentId
-                      Digest = root.GetProperty("digest").GetString() })
-            with error -> Error $"board-orchestrator lease is malformed: %s{error.Message}"
 
-    let private parseBoardRequest owner repo commentId (body: string) : Result<BoardOrchestratorRequest option, string> =
-        if not (body.Contains(BoardRequestMarker, StringComparison.Ordinal)) then Ok None
+                use doc =
+                    JsonDocument.Parse(body.Substring(markerAt + BoardLeaseMarker.Length).TrimStart())
+
+                let root = doc.RootElement
+
+                Ok(
+                    Some
+                        {
+                            Board = root.GetProperty("board").GetString()
+                            HolderRepo = root.GetProperty("holderRepo").GetString()
+                            Holder = root.GetProperty("holder").GetString()
+                            Generation = root.GetProperty("generation").GetInt64()
+                            ExpiresAtUnix = root.GetProperty("expiresAtUnix").GetInt64()
+                            CommentId = commentId
+                            Digest = root.GetProperty("digest").GetString()
+                        }
+                )
+            with error ->
+                Error $"board-orchestrator lease is malformed: %s{error.Message}"
+
+    let private parseBoardRequest
+        owner
+        repo
+        commentId
+        (body: string)
+        : Result<BoardOrchestratorRequest option, string> =
+        if not (body.Contains(BoardRequestMarker, StringComparison.Ordinal)) then
+            Ok None
         else
             try
                 let markerAt = body.IndexOf(BoardRequestMarker, StringComparison.Ordinal)
-                use doc = JsonDocument.Parse(body.Substring(markerAt + BoardRequestMarker.Length).TrimStart())
+
+                use doc =
+                    JsonDocument.Parse(body.Substring(markerAt + BoardRequestMarker.Length).TrimStart())
+
                 let root = doc.RootElement
+
                 match parseStructuredRef owner repo (root.GetProperty("coordinationRef").GetString()) with
                 | Error _ -> Error "board-orchestrator request contains an invalid coordination ref"
                 | Ok coordinationRef ->
-                    Ok(Some
-                        { Board = root.GetProperty("board").GetString()
-                          RequestingRepo = root.GetProperty("requestingRepo").GetString()
-                          RequestKey = root.GetProperty("requestKey").GetString()
-                          CoordinationRef = coordinationRef
-                          LeaseGeneration = root.GetProperty("leaseGeneration").GetInt64()
-                          CommentId = commentId
-                          Digest = root.GetProperty("digest").GetString() })
-            with error -> Error $"board-orchestrator request is malformed: %s{error.Message}"
+                    Ok(
+                        Some
+                            {
+                                Board = root.GetProperty("board").GetString()
+                                RequestingRepo = root.GetProperty("requestingRepo").GetString()
+                                RequestKey = root.GetProperty("requestKey").GetString()
+                                CoordinationRef = coordinationRef
+                                LeaseGeneration = root.GetProperty("leaseGeneration").GetInt64()
+                                CommentId = commentId
+                                Digest = root.GetProperty("digest").GetString()
+                            }
+                    )
+            with error ->
+                Error $"board-orchestrator request is malformed: %s{error.Message}"
 
     let private parseWaitReceipt owner repo (body: string) : Result<OverlapWaitReceipt option, string> =
-        if not (body.Contains(WaitMarker, StringComparison.Ordinal)) then Ok None
+        if not (body.Contains(WaitMarker, StringComparison.Ordinal)) then
+            Ok None
         else
             try
                 let markerAt = body.IndexOf(WaitMarker, StringComparison.Ordinal)
-                if markerAt > 0 && (body.Substring(0, markerAt).Split('\n') |> Array.exists (fun line -> not (String.IsNullOrWhiteSpace line) && not (line.StartsWith("<!-- fsgg:overlap-wait-key/v1 ", StringComparison.Ordinal)))) then
+
+                if
+                    markerAt > 0
+                    && (body.Substring(0, markerAt).Split('\n')
+                        |> Array.exists (fun line ->
+                            not (String.IsNullOrWhiteSpace line)
+                            && not (line.StartsWith("<!-- fsgg:overlap-wait-key/v1 ", StringComparison.Ordinal))))
+                then
                     raise (JsonException "overlap-wait marker is not anchored after its optional idempotence key")
-                use doc = JsonDocument.Parse(body.Substring(markerAt + WaitMarker.Length).TrimStart())
+
+                use doc =
+                    JsonDocument.Parse(body.Substring(markerAt + WaitMarker.Length).TrimStart())
+
                 let root = doc.RootElement
                 let text (name: string) = root.GetProperty(name).GetString()
-                let tokens = root.GetProperty("sharedTokens").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
-                match parseStructuredRef owner repo (text "waiter"), parseStructuredRef owner repo (text "predecessor") with
+
+                let tokens =
+                    root.GetProperty("sharedTokens").EnumerateArray()
+                    |> Seq.map _.GetString()
+                    |> Seq.toList
+
+                match
+                    parseStructuredRef owner repo (text "waiter"), parseStructuredRef owner repo (text "predecessor")
+                with
                 | Ok waiter, Ok predecessor ->
                     Ok(
                         Some
-                            { Waiter = waiter
-                              WaiterGeneration = text "waiterGeneration"
-                              Predecessor = predecessor
-                              PredecessorGeneration = text "predecessorGeneration"
-                              SharedTokens = tokens
-                              Host = text "host"
-                              Digest = text "digest" }
+                            {
+                                Waiter = waiter
+                                WaiterGeneration = text "waiterGeneration"
+                                Predecessor = predecessor
+                                PredecessorGeneration = text "predecessorGeneration"
+                                SharedTokens = tokens
+                                Host = text "host"
+                                Digest = text "digest"
+                            }
                     )
                 | _ -> Error "overlap-wait receipt contains an invalid item ref"
             with
             | :? JsonException as error -> Error $"overlap-wait receipt is malformed JSON: %s{error.Message}"
-            | :? InvalidOperationException as error -> Error $"overlap-wait receipt has an invalid field: %s{error.Message}"
+            | :? InvalidOperationException as error ->
+                Error $"overlap-wait receipt has an invalid field: %s{error.Message}"
             | :? KeyNotFoundException as error -> Error $"overlap-wait receipt is missing a field: %s{error.Message}"
 
     let private parsePrecedenceReceipt owner repo (body: string) : Result<OverlapPrecedenceReceipt option, string> =
-        if not (body.Contains(PrecedenceMarker, StringComparison.Ordinal)) then Ok None
+        if not (body.Contains(PrecedenceMarker, StringComparison.Ordinal)) then
+            Ok None
         else
             try
                 let markerAt = body.IndexOf(PrecedenceMarker, StringComparison.Ordinal)
-                if markerAt > 0 && (body.Substring(0, markerAt).Split('\n') |> Array.exists (fun line -> not (String.IsNullOrWhiteSpace line) && not (line.StartsWith("<!-- fsgg:overlap-precedence-key/v1 ", StringComparison.Ordinal)))) then
+
+                if
+                    markerAt > 0
+                    && (body.Substring(0, markerAt).Split('\n')
+                        |> Array.exists (fun line ->
+                            not (String.IsNullOrWhiteSpace line)
+                            && not (line.StartsWith("<!-- fsgg:overlap-precedence-key/v1 ", StringComparison.Ordinal))))
+                then
                     raise (JsonException "overlap-precedence marker is not anchored after its optional idempotence key")
-                use doc = JsonDocument.Parse(body.Substring(markerAt + PrecedenceMarker.Length).TrimStart())
+
+                use doc =
+                    JsonDocument.Parse(body.Substring(markerAt + PrecedenceMarker.Length).TrimStart())
+
                 let root = doc.RootElement
                 let text (name: string) = root.GetProperty(name).GetString()
+
                 let optional (name: string) =
                     let value = root.GetProperty name
-                    if value.ValueKind = JsonValueKind.Null then None else Some(value.GetString())
+
+                    if value.ValueKind = JsonValueKind.Null then
+                        None
+                    else
+                        Some(value.GetString())
+
                 match parseStructuredRef owner repo (text "winner"), parseStructuredRef owner repo (text "loser") with
                 | Ok winner, Ok loser ->
                     Ok(
                         Some
-                            { CycleDigest = text "cycleDigest"
-                              Revision = root.GetProperty("revision").GetInt32()
-                              PreviousDigest = optional "previousDigest"
-                              Winner = winner
-                              Loser = loser
-                              Host = text "host"
-                              Reason = optional "reason"
-                              Digest = text "digest" }
+                            {
+                                CycleDigest = text "cycleDigest"
+                                Revision = root.GetProperty("revision").GetInt32()
+                                PreviousDigest = optional "previousDigest"
+                                Winner = winner
+                                Loser = loser
+                                Host = text "host"
+                                Reason = optional "reason"
+                                Digest = text "digest"
+                            }
                     )
                 | _ -> Error "overlap-precedence receipt contains an invalid item ref"
             with
             | :? JsonException as error -> Error $"overlap-precedence receipt is malformed JSON: %s{error.Message}"
-            | :? InvalidOperationException as error -> Error $"overlap-precedence receipt has an invalid field: %s{error.Message}"
-            | :? KeyNotFoundException as error -> Error $"overlap-precedence receipt is missing a field: %s{error.Message}"
+            | :? InvalidOperationException as error ->
+                Error $"overlap-precedence receipt has an invalid field: %s{error.Message}"
+            | :? KeyNotFoundException as error ->
+                Error $"overlap-precedence receipt is missing a field: %s{error.Message}"
 
     let private parseReceiptSet parser comments =
         let rec loop acc remaining =
@@ -7242,6 +8460,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 | Error error -> Error error
                 | Ok None -> loop acc rest
                 | Ok(Some receipt) -> loop (receipt :: acc) rest
+
         loop [] comments
 
     let private liveClaimMarker (ctx: Context) (opts: Options) (ref: Ref) =
@@ -7253,7 +8472,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | None -> Error(Errors.Malformed(ref.Short, "mutual-overlap sequencing requires a live claim")))
 
     let private mutualOverlapFacts (ctx: Context) (opts: Options) (a: Ref) (b: Ref) =
-        if not (sameRepo a b) then Error(Errors.Malformed(a.Short, "automatic mutual-overlap arbitration is intra-repo"))
+        if not (sameRepo a b) then
+            Error(Errors.Malformed(a.Short, "automatic mutual-overlap arbitration is intra-repo"))
         else
             match
                 liveClaimMarker ctx opts a,
@@ -7284,67 +8504,119 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     let dependencies =
                         [ a, b, aBlocked; b, a, bBlocked ]
                         |> List.choose (fun (waiter, predecessor, raw) ->
-                            match raw |> Option.bind (fun value -> Blockers.canonicalizeBlockedBy waiter.Owner waiter.Repo value |> Result.toOption |> Option.flatten) with
-                            | Some canonical when canonical.Split(',') |> Array.exists (fun value -> value.Trim() = predecessor.Canonical) -> Some(waiter, predecessor)
+                            match
+                                raw
+                                |> Option.bind (fun value ->
+                                    Blockers.canonicalizeBlockedBy waiter.Owner waiter.Repo value
+                                    |> Result.toOption
+                                    |> Option.flatten)
+                            with
+                            | Some canonical when
+                                canonical.Split(',')
+                                |> Array.exists (fun value -> value.Trim() = predecessor.Canonical)
+                                ->
+                                Some(waiter, predecessor)
                             | _ -> None)
+
                     let pairs = TouchSet.conflicts (TouchSet.parse aBody) (TouchSet.parse bBody)
                     let tokens = sharedTokens pairs
+
                     Ok(
                         aMarker,
                         bMarker,
                         aBody,
                         bBody,
-                        { Readable = true
-                          Claims =
-                            [ { Item = a; Generation = string aMarker.Id; Live = true }
-                              { Item = b; Generation = string bMarker.Id; Live = true } ]
-                          Relations = [ { Left = a; Right = b; SharedTokens = tokens } ]
-                          Waits = waits
-                          DurableDependencies = dependencies
-                          RelatedRoomCycleDigests = [] }
+                        {
+                            Readable = true
+                            Claims =
+                                [
+                                    {
+                                        Item = a
+                                        Generation = string aMarker.Id
+                                        Live = true
+                                    }
+                                    {
+                                        Item = b
+                                        Generation = string bMarker.Id
+                                        Live = true
+                                    }
+                                ]
+                            Relations =
+                                [
+                                    {
+                                        Left = a
+                                        Right = b
+                                        SharedTokens = tokens
+                                    }
+                                ]
+                            Waits = waits
+                            DurableDependencies = dependencies
+                            RelatedRoomCycleDigests = []
+                        }
                     )
 
     let private ensureCycleRoom (ctx: Context) (cycle: MutualOverlapCycle) =
         let marker = $"<!-- fsgg:mutual-overlap-room/v1 cycle=%s{cycle.Digest} -->"
-        let title = $"mutual-overlap arbitration: %s{cycle.First.Short} ↔ %s{cycle.Second.Short}"
+
+        let title =
+            $"mutual-overlap arbitration: %s{cycle.First.Short} ↔ %s{cycle.Second.Short}"
+
         let body =
             marker
             + $"\n\nAutomatic coordination room (ADR-0051) for %s{cycle.First.Canonical} and %s{cycle.Second.Canonical}. Both holders are frozen against edits to %s{sharedTokenText cycle.SharedTokens} until one current host precedence receipt is applied.\n\nPaths: none"
+
         Writes.ensureRoom ctx.Transport cycle.First.Owner cycle.First.Repo marker title body
         |> Result.bind (fun outcome ->
             let room =
                 match outcome with
                 | Writes.RoomCreated room
                 | Writes.RoomAlreadyPresent room -> room
+
             let roomToken = $"#%d{room.Number}"
+
             Writes.ensureRoomRef ctx.Transport cycle.First roomToken
             |> Result.bind (fun () -> Writes.ensureRoomRef ctx.Transport cycle.Second roomToken)
             |> Result.map (fun () -> room))
 
-    let private overlapFreezeBody (cycle: MutualOverlapCycle) (subjectGeneration: string) (peer: Ref) (sharedTokens: string list) (phase: string) =
-        let key = $"<!-- fsgg:overlap-freeze-key/v1 cycle=%s{cycle.Digest} subject-generation=%s{subjectGeneration} phase=%s{phase} -->"
+    let private overlapFreezeBody
+        (cycle: MutualOverlapCycle)
+        (subjectGeneration: string)
+        (peer: Ref)
+        (sharedTokens: string list)
+        (phase: string)
+        =
+        let key =
+            $"<!-- fsgg:overlap-freeze-key/v1 cycle=%s{cycle.Digest} subject-generation=%s{subjectGeneration} phase=%s{phase} -->"
+
         key,
         key
         + "\n"
         + OverlapFreezeMarker
         + "\n"
         + JsonSerializer.Serialize(
-            {| schema = "fsgg.coord.overlap-freeze/v1"
-               cycleDigest = cycle.Digest
-               winner = peer.Canonical
-               loserGeneration = subjectGeneration
-               sharedTokens = normalizedTokens sharedTokens |})
+            {|
+                schema = "fsgg.coord.overlap-freeze/v1"
+                cycleDigest = cycle.Digest
+                winner = peer.Canonical
+                loserGeneration = subjectGeneration
+                sharedTokens = normalizedTokens sharedTokens
+            |}
+        )
 
     let private freezeCycleParticipants (ctx: Context) (cycle: MutualOverlapCycle) =
-        let firstKey, firstBody = overlapFreezeBody cycle cycle.FirstGeneration cycle.Second cycle.SharedTokens "cycle"
-        let secondKey, secondBody = overlapFreezeBody cycle cycle.SecondGeneration cycle.First cycle.SharedTokens "cycle"
+        let firstKey, firstBody =
+            overlapFreezeBody cycle cycle.FirstGeneration cycle.Second cycle.SharedTokens "cycle"
+
+        let secondKey, secondBody =
+            overlapFreezeBody cycle cycle.SecondGeneration cycle.First cycle.SharedTokens "cycle"
         // Hint first. From this write boundary onward the production path writer either loads a durable
         // receipt or refuses the orphan hint; it can never skip a freeze comment that already exists.
         // A response-lost/failed comment leaves a loud, retryable orphan hint, and ensureBodyMarker is
         // idempotent on retry, so fail-closed ordering does not become an unrecoverable silent state.
         Writes.ensureBodyMarker ctx.Transport cycle.First (overlapFreezeHint cycle.FirstGeneration)
         |> Result.bind (fun () -> Writes.writeDurableComment ctx.Transport cycle.First firstKey firstBody)
-        |> Result.bind (fun _ -> Writes.ensureBodyMarker ctx.Transport cycle.Second (overlapFreezeHint cycle.SecondGeneration))
+        |> Result.bind (fun _ ->
+            Writes.ensureBodyMarker ctx.Transport cycle.Second (overlapFreezeHint cycle.SecondGeneration))
         |> Result.bind (fun () -> Writes.writeDurableComment ctx.Transport cycle.Second secondKey secondBody)
         |> Result.map ignore
 
@@ -7359,27 +8631,45 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             match mutualOverlapFacts ctx opts waiter predecessor with
             | Error error -> fail error
             | Ok(waiterMarker, predecessorMarker, _, _, snapshot) when waiterMarker.Worker.Value <> w.Id ->
-                eprint $"fsgg-coord-engine: overlap wait can only be recorded by the live waiter; %s{waiter.Short} is held by %s{waiterMarker.Worker.Value}."
+                eprint
+                    $"fsgg-coord-engine: overlap wait can only be recorded by the live waiter; %s{waiter.Short} is held by %s{waiterMarker.Worker.Value}."
+
                 ExitError
             | Ok(waiterMarker, predecessorMarker, _, _, snapshot) ->
                 let relation = snapshot.Relations.Head
+
                 let draft: OverlapWaitReceipt =
-                    { Waiter = waiter
-                      WaiterGeneration = string waiterMarker.Id
-                      Predecessor = predecessor
-                      PredecessorGeneration = string predecessorMarker.Id
-                      SharedTokens = relation.SharedTokens
-                      Host = host
-                      Digest = "" }
-                let receipt = { draft with Digest = waitReceiptDigest draft }
-                let marker = $"<!-- fsgg:overlap-wait-key/v1 waiter=%s{waiter.Canonical} generation=%s{receipt.WaiterGeneration} -->"
+                    {
+                        Waiter = waiter
+                        WaiterGeneration = string waiterMarker.Id
+                        Predecessor = predecessor
+                        PredecessorGeneration = string predecessorMarker.Id
+                        SharedTokens = relation.SharedTokens
+                        Host = host
+                        Digest = ""
+                    }
+
+                let receipt =
+                    { draft with
+                        Digest = waitReceiptDigest draft
+                    }
+
+                let marker =
+                    $"<!-- fsgg:overlap-wait-key/v1 waiter=%s{waiter.Canonical} generation=%s{receipt.WaiterGeneration} -->"
+
                 let body = marker + "\n" + waitReceiptBody receipt
-                let candidateSnapshot = { snapshot with Waits = snapshot.Waits @ [ receipt ] }
+
+                let candidateSnapshot =
+                    { snapshot with
+                        Waits = snapshot.Waits @ [ receipt ]
+                    }
+
                 let prefreeze =
                     match detectMutualOverlap candidateSnapshot with
                     | MutualOverlapCycle cycle -> freezeCycleParticipants ctx cycle
                     | MutualOverlapRefused reason -> Error(Errors.Malformed(waiter.Short, reason))
                     | NoMutualOverlapCycle -> Ok()
+
                 let persist =
                     prefreeze
                     |> Result.bind (fun () ->
@@ -7389,19 +8679,33 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         mutualOverlapFacts ctx opts waiter predecessor
                         |> Result.bind (fun (currentWaiter, currentPredecessor, _, _, currentSnapshot) ->
                             let currentRelation = currentSnapshot.Relations.Head
+
                             let currentDraft: OverlapWaitReceipt =
-                                { Waiter = waiter
-                                  WaiterGeneration = string currentWaiter.Id
-                                  Predecessor = predecessor
-                                  PredecessorGeneration = string currentPredecessor.Id
-                                  SharedTokens = currentRelation.SharedTokens
-                                  Host = host
-                                  Digest = "" }
-                            let currentReceipt = { currentDraft with Digest = waitReceiptDigest currentDraft }
+                                {
+                                    Waiter = waiter
+                                    WaiterGeneration = string currentWaiter.Id
+                                    Predecessor = predecessor
+                                    PredecessorGeneration = string currentPredecessor.Id
+                                    SharedTokens = currentRelation.SharedTokens
+                                    Host = host
+                                    Digest = ""
+                                }
+
+                            let currentReceipt =
+                                { currentDraft with
+                                    Digest = waitReceiptDigest currentDraft
+                                }
+
                             if currentReceipt.Digest <> receipt.Digest then
-                                Error(Errors.Malformed(waiter.Short, "mutual-overlap participants changed while the cycle freeze was being established"))
+                                Error(
+                                    Errors.Malformed(
+                                        waiter.Short,
+                                        "mutual-overlap participants changed while the cycle freeze was being established"
+                                    )
+                                )
                             else
                                 Writes.writeDurableComment ctx.Transport waiter marker body))
+
                 match persist with
                 | Error error -> fail error
                 | Ok _ ->
@@ -7413,32 +8717,55 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             eprint $"fsgg-coord-engine: mutual-overlap arbitration refused: %s{reason}."
                             ExitError
                         | NoMutualOverlapCycle ->
-                            printfn "WAIT RECORDED — %s generation %s waits for %s generation %s on %s." waiter.Short receipt.WaiterGeneration predecessor.Short receipt.PredecessorGeneration (sharedTokenText receipt.SharedTokens)
+                            printfn
+                                "WAIT RECORDED — %s generation %s waits for %s generation %s on %s."
+                                waiter.Short
+                                receipt.WaiterGeneration
+                                predecessor.Short
+                                receipt.PredecessorGeneration
+                                (sharedTokenText receipt.SharedTokens)
+
                             ExitGreen
                         | MutualOverlapCycle cycle ->
                             match ensureCycleRoom ctx cycle with
                             | Error error -> fail error
                             | Ok room ->
-                                printfn "MUTUAL OVERLAP — %s and %s are frozen in automatic room %s; host precedence required." cycle.First.Short cycle.Second.Short room.Short
+                                printfn
+                                    "MUTUAL OVERLAP — %s and %s are frozen in automatic room %s; host precedence required."
+                                    cycle.First.Short
+                                    cycle.Second.Short
+                                    room.Short
+
                                 ExitContended
 
     let private boardOrchestratorFacts (ctx: Context) (authority: Ref) =
         Reads.commentsWithIdentity ctx.Transport authority.Owner authority.Repo authority.Number
         |> Result.bind (fun comments ->
-            let rec collect (leases: BoardOrchestratorLease list) (requests: BoardOrchestratorRequest list) (remaining: Reads.CommentBody list) =
+            let rec collect
+                (leases: BoardOrchestratorLease list)
+                (requests: BoardOrchestratorRequest list)
+                (remaining: Reads.CommentBody list)
+                =
                 match remaining with
                 | [] ->
                     Ok
-                        { Readable = true
-                          NowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-                          Board = authority.Canonical
-                          Leases = List.rev leases
-                          Requests = List.rev requests }
+                        {
+                            Readable = true
+                            NowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                            Board = authority.Canonical
+                            Leases = List.rev leases
+                            Requests = List.rev requests
+                        }
                 | comment :: rest ->
-                    match parseBoardLease comment.Id comment.Body, parseBoardRequest authority.Owner authority.Repo comment.Id comment.Body with
+                    match
+                        parseBoardLease comment.Id comment.Body,
+                        parseBoardRequest authority.Owner authority.Repo comment.Id comment.Body
+                    with
                     | Error detail, _
                     | _, Error detail -> Error(Errors.Malformed(authority.Short, detail))
-                    | Ok lease, Ok request -> collect (Option.toList lease @ leases) (Option.toList request @ requests) rest
+                    | Ok lease, Ok request ->
+                        collect (Option.toList lease @ leases) (Option.toList request @ requests) rest
+
             collect [] [] comments)
 
     let private configuredBoardOrchestratorAuthority (ctx: Context) supplied =
@@ -7446,7 +8773,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         | Error detail, _ -> Error $"configured board-orchestrator authority is invalid: %s{detail}"
         | _, Error detail -> Error detail
         | Ok configured, Ok caller when caller <> configured ->
-            Error $"board-orchestrator authority is configured as %s{configured.Canonical}; caller-supplied %s{caller.Canonical} cannot fracture the lease domain"
+            Error
+                $"board-orchestrator authority is configured as %s{configured.Canonical}; caller-supplied %s{caller.Canonical} cannot fracture the lease domain"
         | Ok configured, Ok _ -> Ok configured
 
     let private overlapArbitrate (ctx: Context) (opts: Options) winnerArg loserArg authorityArg reason =
@@ -7460,7 +8788,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             let authorize () =
                 match configuredBoardOrchestratorAuthority ctx authorityArg with
                 | Error message ->
-                    eprint $"fsgg-coord-engine: overlap arbitrate requires the board-orchestrator authority ref: %s{message}"
+                    eprint
+                        $"fsgg-coord-engine: overlap arbitrate requires the board-orchestrator authority ref: %s{message}"
+
                     Error ExitError
                 | Ok authority ->
                     match boardOrchestratorFacts ctx authority with
@@ -7472,26 +8802,33 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             |> List.tryExactlyOne
                             |> Option.map _.HolderRepo
                             |> Option.defaultValue ""
+
                         match decideBoardOrchestrator activeRepo w.Id snapshot with
                         | RunBoardOrchestrator(lease, _) when lease.Holder = w.Id ->
                             Ok $"%s{authority.Canonical}@%d{lease.Generation}:%s{w.Id}"
                         | RouteRequestTo lease ->
-                            eprint $"fsgg-coord-engine: overlap arbitrate is reserved to live board-orchestrator %s{lease.HolderRepo}/%s{lease.Holder} generation %d{lease.Generation}."
+                            eprint
+                                $"fsgg-coord-engine: overlap arbitrate is reserved to live board-orchestrator %s{lease.HolderRepo}/%s{lease.Holder} generation %d{lease.Generation}."
+
                             Error ExitError
                         | AcquireBoardOrchestrator _ ->
-                            eprint "fsgg-coord-engine: overlap arbitrate requires a live board-orchestrator lease; acquire it through overlap orchestrate first."
+                            eprint
+                                "fsgg-coord-engine: overlap arbitrate requires a live board-orchestrator lease; acquire it through overlap orchestrate first."
+
                             Error ExitError
                         | BoardOrchestratorRefused detail ->
                             eprint $"fsgg-coord-engine: board-orchestrator authority refused: %s{detail}."
                             Error ExitError
                         | RunBoardOrchestrator _ ->
-                            eprint "fsgg-coord-engine: live board-orchestrator lease does not bind the current caller identity."
+                            eprint
+                                "fsgg-coord-engine: live board-orchestrator lease does not bind the current caller identity."
+
                             Error ExitError
 
             match authorize () with
             | Error code -> code
             | Ok authoritativeHost ->
-              match mutualOverlapFacts ctx opts winner loser with
+                match mutualOverlapFacts ctx opts winner loser with
                 | Error error -> fail error
                 | Ok(_, _, _, loserBody, snapshot) ->
                     match detectMutualOverlap snapshot with
@@ -7514,75 +8851,155 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     ExitError
                                 | Ok existing ->
                                     let current = existing |> List.sortBy _.Revision |> List.tryLast
+
                                     let candidate =
                                         match current with
                                         | Some receipt when receipt.Winner = winner && receipt.Loser = loser -> receipt
                                         | prior ->
                                             let draft: OverlapPrecedenceReceipt =
-                                                { CycleDigest = cycle.Digest
-                                                  Revision = prior |> Option.map (fun receipt -> receipt.Revision + 1) |> Option.defaultValue 1
-                                                  PreviousDigest = prior |> Option.map _.Digest
-                                                  Winner = winner
-                                                  Loser = loser
-                                                  Host = authoritativeHost
-                                                  Reason = if String.IsNullOrWhiteSpace reason then None else Some reason
-                                                  Digest = "" }
-                                            { draft with Digest = precedenceReceiptDigest draft }
-                                    match validateOverlapPrecedence cycle (existing @ (if current = Some candidate then [] else [ candidate ])) with
+                                                {
+                                                    CycleDigest = cycle.Digest
+                                                    Revision =
+                                                        prior
+                                                        |> Option.map (fun receipt -> receipt.Revision + 1)
+                                                        |> Option.defaultValue 1
+                                                    PreviousDigest = prior |> Option.map _.Digest
+                                                    Winner = winner
+                                                    Loser = loser
+                                                    Host = authoritativeHost
+                                                    Reason =
+                                                        if String.IsNullOrWhiteSpace reason then
+                                                            None
+                                                        else
+                                                            Some reason
+                                                    Digest = ""
+                                                }
+
+                                            { draft with
+                                                Digest = precedenceReceiptDigest draft
+                                            }
+
+                                    match
+                                        validateOverlapPrecedence
+                                            cycle
+                                            (existing @ (if current = Some candidate then [] else [ candidate ]))
+                                    with
                                     | Error detail ->
                                         eprint $"fsgg-coord-engine: precedence refused: %s{detail}."
                                         ExitError
                                     | Ok precedence ->
-                                        match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) loser with
+                                        match
+                                            Writes.verifyHeld
+                                                ctx.Transport
+                                                opts.LeaseMinutes
+                                                (WorkerId w.Id)
+                                                (selfOf w)
+                                                (sessionOf w)
+                                                loser
+                                        with
                                         | Error error -> fail error
                                         | Ok(Writes.Holds held) ->
                                             let shared = Set.ofList (normalizedTokens cycle.SharedTokens)
+
                                             let remaining =
                                                 declaredPathTokens (TouchSet.parse loserBody)
-                                                |> List.filter (fun token -> not (Set.contains (TouchSet.stem token) shared))
+                                                |> List.filter (fun token ->
+                                                    not (Set.contains (TouchSet.stem token) shared))
+
                                             let narrowedTokens = if List.isEmpty remaining then [ "any" ] else remaining
+
                                             match Writes.validate narrowedTokens with
                                             | Error detail ->
                                                 eprint $"fsgg-coord-engine: cannot narrow loser: %s{detail}"
                                                 ExitError
                                             | Ok valid ->
-                                            let rewritten = Writes.rewrite loserBody valid
-                                            let marker = $"<!-- fsgg:overlap-precedence-key/v1 cycle=%s{cycle.Digest} revision=%d{precedence.Revision} -->"
-                                            let body = marker + "\n" + precedenceReceiptBody precedence
-                                            let freezeKey, freezeBody = overlapFreezeBody cycle (string held.MarkerId) winner cycle.SharedTokens "precedence"
-                                            match Writes.writeDurableComment ctx.Transport loser freezeKey freezeBody with
-                                            | Error error -> fail error
-                                            | Ok _ ->
-                                                match Writes.applyArbitration ctx.Transport held room marker body rewritten with
+                                                let rewritten = Writes.rewrite loserBody valid
+
+                                                let marker =
+                                                    $"<!-- fsgg:overlap-precedence-key/v1 cycle=%s{cycle.Digest} revision=%d{precedence.Revision} -->"
+
+                                                let body = marker + "\n" + precedenceReceiptBody precedence
+
+                                                let freezeKey, freezeBody =
+                                                    overlapFreezeBody
+                                                        cycle
+                                                        (string held.MarkerId)
+                                                        winner
+                                                        cycle.SharedTokens
+                                                        "precedence"
+
+                                                match
+                                                    Writes.writeDurableComment ctx.Transport loser freezeKey freezeBody
+                                                with
                                                 | Error error -> fail error
                                                 | Ok _ ->
-                                                    printfn "PRECEDENCE APPLIED — %s wins; %s remains claimed with shared reservations narrowed and a generation-bound production freeze. After %s lands, %s must fetch/rebase, re-run overlap, explicitly re-widen, and refresh exact-head review when required." winner.Short loser.Short winner.Short loser.Short
-                                                    ExitGreen
+                                                    match
+                                                        Writes.applyArbitration
+                                                            ctx.Transport
+                                                            held
+                                                            room
+                                                            marker
+                                                            body
+                                                            rewritten
+                                                    with
+                                                    | Error error -> fail error
+                                                    | Ok _ ->
+                                                        printfn
+                                                            "PRECEDENCE APPLIED — %s wins; %s remains claimed with shared reservations narrowed and a generation-bound production freeze. After %s lands, %s must fetch/rebase, re-run overlap, explicitly re-widen, and refresh exact-head review when required."
+                                                            winner.Short
+                                                            loser.Short
+                                                            winner.Short
+                                                            loser.Short
+
+                                                        ExitGreen
                                         | Ok Writes.DoesNotHold ->
-                                            eprint $"fsgg-coord-engine: worker %s{w.Id} must hold losing item %s{loser.Short} to apply precedence without releasing its claim."
+                                            eprint
+                                                $"fsgg-coord-engine: worker %s{w.Id} must hold losing item %s{loser.Short} to apply precedence without releasing its claim."
+
                                             ExitError
-                                        | Ok(Writes.TwinHolds theirs) -> twinRefusal "overlap arbitrate" w.Id loser theirs
-                                        | Ok(Writes.ImpersonatesHolder(derived, named)) -> impersonationRefusal "overlap arbitrate" loser derived named
+                                        | Ok(Writes.TwinHolds theirs) ->
+                                            twinRefusal "overlap arbitrate" w.Id loser theirs
+                                        | Ok(Writes.ImpersonatesHolder(derived, named)) ->
+                                            impersonationRefusal "overlap arbitrate" loser derived named
 
     // Standard route for an external repository needing Coordination-board work. A live authority receives
     // one generation-bound blocking request; only absence/expiry opens the next generation's comment CAS.
-    let private overlapOrchestrate (ctx: Context) (opts: Options) authorityText requestingRepo requestKey coordinationText holder =
+    let private overlapOrchestrate
+        (ctx: Context)
+        (opts: Options)
+        authorityText
+        requestingRepo
+        requestKey
+        coordinationText
+        holder
+        =
         match worker opts, configuredBoardOrchestratorAuthority ctx authorityText, parseRef ctx coordinationText with
         | Error code, _, _ -> code
         | _, Error detail, _
         | _, _, Error detail ->
             eprint $"fsgg-coord-engine: %s{detail}"
             ExitError
-        | Ok _, Ok _, Ok _ when String.IsNullOrWhiteSpace requestingRepo || String.IsNullOrWhiteSpace requestKey || String.IsNullOrWhiteSpace holder ->
-            eprint "fsgg-coord-engine: orchestrator route requires non-empty requesting repo, request key, and holder identity."
+        | Ok _, Ok _, Ok _ when
+            String.IsNullOrWhiteSpace requestingRepo
+            || String.IsNullOrWhiteSpace requestKey
+            || String.IsNullOrWhiteSpace holder
+            ->
+            eprint
+                "fsgg-coord-engine: orchestrator route requires non-empty requesting repo, request key, and holder identity."
+
             ExitError
         | Ok w, Ok authority, Ok coordinationRef when requestingRepo <> coordinationRef.Repo || holder <> w.Id ->
-            eprint $"fsgg-coord-engine: orchestrator identity is authoritative: this request ref and caller bind %s{coordinationRef.Repo}/%s{w.Id}; supplied repo/holder strings cannot nominate another actor."
+            eprint
+                $"fsgg-coord-engine: orchestrator identity is authoritative: this request ref and caller bind %s{coordinationRef.Repo}/%s{w.Id}; supplied repo/holder strings cannot nominate another actor."
+
             ExitError
         | Ok w, Ok authority, Ok coordinationRef ->
             let requestingRepo = coordinationRef.Repo
             let holder = w.Id
-            let decide snapshot = decideBoardOrchestrator requestingRepo holder snapshot
+
+            let decide snapshot =
+                decideBoardOrchestrator requestingRepo holder snapshot
+
             match boardOrchestratorFacts ctx authority with
             | Error error -> fail error
             | Ok snapshot ->
@@ -7596,10 +9013,19 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
                         | Error error -> fail error
                         | Ok board ->
-                            match Board.itemId ctx.Transport board request.CoordinationRef.Owner request.CoordinationRef.Repo request.CoordinationRef.Number with
+                            match
+                                Board.itemId
+                                    ctx.Transport
+                                    board
+                                    request.CoordinationRef.Owner
+                                    request.CoordinationRef.Repo
+                                    request.CoordinationRef.Number
+                            with
                             | Error error -> fail error
                             | Ok None ->
-                                eprint $"fsgg-coord-engine: highest-priority blocking request %s{request.CoordinationRef.Short} is not on the authoritative Coordination board; refusing to claim promotion."
+                                eprint
+                                    $"fsgg-coord-engine: highest-priority blocking request %s{request.CoordinationRef.Short} is not on the authoritative Coordination board; refusing to claim promotion."
+
                                 ExitError
                             | Ok(Some itemId) ->
                                 let severity =
@@ -7609,25 +9035,47 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                         |> List.tryFind (fun candidate -> Map.containsKey candidate options)
                                         |> Option.defaultValue "Critical"
                                     | _ -> "Critical"
+
                                 match Board.setField ctx.Transport board itemId "Severity" (Board.Set severity) with
                                 | Error error -> fail error
                                 | Ok() ->
-                                    printfn "BOARD ORCHESTRATOR ACTIVE generation=%d — promoted blocking request %s from %s to board Severity=%s; preserve in-flight safety, then route it before ordinary board work." lease.Generation request.CoordinationRef.Short request.RequestingRepo severity
+                                    printfn
+                                        "BOARD ORCHESTRATOR ACTIVE generation=%d — promoted blocking request %s from %s to board Severity=%s; preserve in-flight safety, then route it before ordinary board work."
+                                        lease.Generation
+                                        request.CoordinationRef.Short
+                                        request.RequestingRepo
+                                        severity
+
                                     ExitGreen
-                    | None -> printfn "BOARD ORCHESTRATOR ACTIVE generation=%d — no external blocking request is pending." lease.Generation
-                              ExitGreen
+                    | None ->
+                        printfn
+                            "BOARD ORCHESTRATOR ACTIVE generation=%d — no external blocking request is pending."
+                            lease.Generation
+
+                        ExitGreen
                 | RouteRequestTo lease ->
-                    let marker = $"<!-- fsgg:board-orchestrator-request-key/v1 generation=%d{lease.Generation} repo=%s{requestingRepo} key=%s{requestKey} -->"
+                    let marker =
+                        $"<!-- fsgg:board-orchestrator-request-key/v1 generation=%d{lease.Generation} repo=%s{requestingRepo} key=%s{requestKey} -->"
+
                     let draft: BoardOrchestratorRequest =
-                        { Board = authority.Canonical
-                          RequestingRepo = requestingRepo
-                          RequestKey = requestKey
-                          CoordinationRef = coordinationRef
-                          LeaseGeneration = lease.Generation
-                          CommentId = 1L
-                          Digest = "" }
-                    let request = { draft with Digest = boardOrchestratorRequestDigest draft }
-                    match Writes.writeDurableComment ctx.Transport authority marker (boardRequestBody marker request) with
+                        {
+                            Board = authority.Canonical
+                            RequestingRepo = requestingRepo
+                            RequestKey = requestKey
+                            CoordinationRef = coordinationRef
+                            LeaseGeneration = lease.Generation
+                            CommentId = 1L
+                            Digest = ""
+                        }
+
+                    let request =
+                        { draft with
+                            Digest = boardOrchestratorRequestDigest draft
+                        }
+
+                    match
+                        Writes.writeDurableComment ctx.Transport authority marker (boardRequestBody marker request)
+                    with
                     | Error error -> fail error
                     | Ok _ ->
                         match boardOrchestratorFacts ctx authority with
@@ -7635,30 +9083,55 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         | Ok current ->
                             match decide current with
                             | RouteRequestTo currentLease when currentLease.Generation = lease.Generation ->
-                                printfn "ROUTED — %s must not start a competing Coordination lane; generation %d holder %s/%s now owns blocking request %s (%s)." requestingRepo lease.Generation lease.HolderRepo lease.Holder coordinationRef.Short requestKey
+                                printfn
+                                    "ROUTED — %s must not start a competing Coordination lane; generation %d holder %s/%s now owns blocking request %s (%s)."
+                                    requestingRepo
+                                    lease.Generation
+                                    lease.HolderRepo
+                                    lease.Holder
+                                    coordinationRef.Short
+                                    requestKey
+
                                 ExitGreen
                             | BoardOrchestratorRefused reason ->
-                                eprint $"fsgg-coord-engine: request write raced stale authority and is refused: %s{reason}."
+                                eprint
+                                    $"fsgg-coord-engine: request write raced stale authority and is refused: %s{reason}."
+
                                 ExitError
                             | _ ->
-                                eprint "fsgg-coord-engine: board-orchestrator generation changed while routing the request; re-read and retry."
+                                eprint
+                                    "fsgg-coord-engine: board-orchestrator generation changed while routing the request; re-read and retry."
+
                                 ExitError
                 | AcquireBoardOrchestrator generation ->
-                    let expires = DateTimeOffset.UtcNow.AddMinutes(float opts.LeaseMinutes).ToUnixTimeSeconds()
-                    let marker = $"<!-- fsgg:board-orchestrator-lease-key/v1 board=%s{authority.Canonical} generation=%d{generation} -->"
+                    let expires =
+                        DateTimeOffset.UtcNow.AddMinutes(float opts.LeaseMinutes).ToUnixTimeSeconds()
+
+                    let marker =
+                        $"<!-- fsgg:board-orchestrator-lease-key/v1 board=%s{authority.Canonical} generation=%d{generation} -->"
+
                     let draft: BoardOrchestratorLease =
-                        { Board = authority.Canonical
-                          HolderRepo = requestingRepo
-                          Holder = holder
-                          Generation = generation
-                          ExpiresAtUnix = expires
-                          CommentId = 1L
-                          Digest = "" }
-                    let lease = { draft with Digest = boardOrchestratorLeaseDigest draft }
+                        {
+                            Board = authority.Canonical
+                            HolderRepo = requestingRepo
+                            Holder = holder
+                            Generation = generation
+                            ExpiresAtUnix = expires
+                            CommentId = 1L
+                            Digest = ""
+                        }
+
+                    let lease =
+                        { draft with
+                            Digest = boardOrchestratorLeaseDigest draft
+                        }
+
                     match Writes.acquireDurableLease ctx.Transport authority marker (boardLeaseBody marker lease) with
                     | Error error -> fail error
                     | Ok(Writes.LeaseContended winnerId) ->
-                        eprint $"fsgg-coord-engine: board-orchestrator generation %d{generation} was won by comment %d{winnerId}; this repository must route to that authority."
+                        eprint
+                            $"fsgg-coord-engine: board-orchestrator generation %d{generation} was won by comment %d{winnerId}; this repository must route to that authority."
+
                         ExitContended
                     | Ok(Writes.LeaseAcquired _)
                     | Ok(Writes.LeaseAlreadyHeld _) ->
@@ -7667,10 +9140,17 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         | Ok current ->
                             match decide current with
                             | RunBoardOrchestrator(currentLease, _) when currentLease.Generation = generation ->
-                                printfn "ACQUIRED — %s/%s is the sole board orchestrator for generation %d and must execute the standard board protocol." requestingRepo holder generation
+                                printfn
+                                    "ACQUIRED — %s/%s is the sole board orchestrator for generation %d and must execute the standard board protocol."
+                                    requestingRepo
+                                    holder
+                                    generation
+
                                 ExitGreen
                             | BoardOrchestratorRefused reason ->
-                                eprint $"fsgg-coord-engine: acquired lease could not be authorized on re-read: %s{reason}."
+                                eprint
+                                    $"fsgg-coord-engine: acquired lease could not be authorized on re-read: %s{reason}."
+
                                 ExitError
                             | _ ->
                                 eprint "fsgg-coord-engine: acquired lease lost authoritative precedence on re-read."
@@ -7709,8 +9189,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         | [ "orchestrate"; authority; requestingRepo; requestKey; coordinationRef; holder ] when not opts.Active ->
             overlapOrchestrate ctx opts authority requestingRepo requestKey coordinationRef holder
 
-        | [ "wait"; waiter; predecessor; host ] when not opts.Active ->
-            overlapWait ctx opts waiter predecessor host
+        | [ "wait"; waiter; predecessor; host ] when not opts.Active -> overlapWait ctx opts waiter predecessor host
 
         | "arbitrate" :: winner :: loser :: host :: reason when not opts.Active ->
             overlapArbitrate ctx opts winner loser host (String.concat " " reason)
@@ -7731,7 +9210,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         ExitGreen
                     | Ok collisions ->
                         for other, holder, toks in collisions do
-                            printfn "OVERLAP — %s collides with %s held by %s on %s" ref.Short other.Short holder (sharedTokenText toks)
+                            printfn
+                                "OVERLAP — %s collides with %s held by %s on %s"
+                                ref.Short
+                                other.Short
+                                holder
+                                (sharedTokenText toks)
 
                         ExitContended
 
@@ -7751,7 +9235,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     // one a rostered value) compared unequal and was reported DISJOINT BY CONSTRUCTION
                     // without ever reading either touch-set — authorizing exactly the collision #353's
                     // short-circuit exists to rule out.
-                    let pathRepoOf (r: Ref) = Map.tryFind r scopes |> pathRepoOrFallback r.Repo
+                    let pathRepoOf (r: Ref) =
+                        Map.tryFind r scopes |> pathRepoOrFallback r.Repo
+
                     let samePathRepo =
                         String.Equals(pathRepoOf ra, pathRepoOf rb, StringComparison.OrdinalIgnoreCase)
 
@@ -7784,14 +9270,25 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     |> TouchSet.excludeGenerated generated
                                 with
                                 | [] ->
-                                    printfn "DISJOINT — %s and %s share no touch-set token; they may run in parallel." ra.Short rb.Short
+                                    printfn
+                                        "DISJOINT — %s and %s share no touch-set token; they may run in parallel."
+                                        ra.Short
+                                        rb.Short
+
                                     ExitGreen
                                 | pairs ->
-                                    printfn "OVERLAP — %s and %s share %s" ra.Short rb.Short (sharedTokenText (sharedTokens pairs))
+                                    printfn
+                                        "OVERLAP — %s and %s share %s"
+                                        ra.Short
+                                        rb.Short
+                                        (sharedTokenText (sharedTokens pairs))
+
                                     ExitContended
 
         | _ ->
-            eprint "fsgg-coord-engine: overlap needs <ref> --active, two refs, `wait <waiter> <predecessor> <host>`, or `arbitrate <winner> <loser> <host> [measured reason]`."
+            eprint
+                "fsgg-coord-engine: overlap needs <ref> --active, two refs, `wait <waiter> <predecessor> <host>`, or `arbitrate <winner> <loser> <host> [measured reason]`."
+
             ExitError
 
     let say (ctx: Context) (opts: Options) : int = Handlers.say ctx opts
@@ -7822,7 +9319,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         let script = Path.Combine(root, "scripts", "generated-paths")
 
         let failed reason =
-            eprint $"fsgg-coord-engine: %s{reason} — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
+            eprint
+                $"fsgg-coord-engine: %s{reason} — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
+
             Error reason
 
         if not (File.Exists script) then
@@ -7888,24 +9387,27 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         | _ -> 30_000
 
                 if not (p.WaitForExit timeoutMs) then
-                    (try p.Kill true with _ -> ())
+                    (try
+                        p.Kill true
+                     with _ ->
+                         ())
 
                     failed $"scripts/generated-paths did not finish within %d{timeoutMs}ms and was killed"
                 else
 
-                // The child is gone; this second, unbounded wait is the documented way to let the async
-                // handlers flush what it wrote before exiting. It cannot hang — the process has exited.
-                p.WaitForExit()
-                let out = lock sync (fun () -> stdout.ToString())
+                    // The child is gone; this second, unbounded wait is the documented way to let the async
+                    // handlers flush what it wrote before exiting. It cannot hang — the process has exited.
+                    p.WaitForExit()
+                    let out = lock sync (fun () -> stdout.ToString())
 
-                if p.ExitCode <> 0 then
-                    failed $"scripts/generated-paths exited %d{p.ExitCode}"
-                else
-                    out.Split('\n')
-                    |> Array.map (fun l -> l.Trim())
-                    |> Array.filter (fun l -> l <> "")
-                    |> Set.ofArray
-                    |> Ok
+                    if p.ExitCode <> 0 then
+                        failed $"scripts/generated-paths exited %d{p.ExitCode}"
+                    else
+                        out.Split('\n')
+                        |> Array.map (fun l -> l.Trim())
+                        |> Array.filter (fun l -> l <> "")
+                        |> Set.ofArray
+                        |> Ok
             with ex ->
                 failed $"could not run scripts/generated-paths (%s{ex.Message})"
 
@@ -7918,6 +9420,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         let unknown why =
             eprint
                 $"fsgg-coord-engine: could not establish %s{issue.Short}'s delivery route (%s{why}) — NOTHING is subtracted for the sdd-required route's mandatory work/<id> + readiness/<id> output, so it will be reported as drift below."
+
             Delivery.AuthorityUnknown why
 
         match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.readDeliveryRouteComments ctx issue with
@@ -7927,7 +9430,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | DeliveryRoute.Current receipt ->
                 Delivery.AuthorityKnown(
                     $"delivery-route:%s{receipt.SubjectRevision}",
-                    DeliveryRoute.mandatorySddPaths receipt |> List.map TouchSet.classify)
+                    DeliveryRoute.mandatorySddPaths receipt |> List.map TouchSet.classify
+                )
             | DeliveryRoute.Stale reasons
             | DeliveryRoute.Unreadable reasons -> unknown (String.concat "; " reasons)
 
@@ -7935,11 +9439,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         let unknown reason =
             eprint
                 $"fsgg-coord-engine: could not establish generated-path authority (%s{reason}) — NOTHING is subtracted, so generated paths will be reported as drift below."
+
             Delivery.AuthorityUnknown reason
 
         match gitRemoteRepo () with
-        | Some slug
-            when not (String.Equals(slug, $"%s{issue.Owner}/%s{issue.Repo}", StringComparison.OrdinalIgnoreCase)) ->
+        | Some slug when
+            not (String.Equals(slug, $"%s{issue.Owner}/%s{issue.Repo}", StringComparison.OrdinalIgnoreCase))
+            ->
             unknown $"checkout %s{slug} is not the subject repository %s{issue.Owner}/%s{issue.Repo}"
         | None -> unknown "the checkout repository could not be read"
         | Some _ ->
@@ -7963,10 +9469,15 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
     /// The one route-qualified classifier shared by live delivery and verify-paths.
     let classifyDeliveryPaths (ctx: Context) (issue: Ref) (touchSet: TouchSet) (files: string list) =
-        let unread = Delivery.AuthorityUnknown "authority read deferred because every path may already be declared"
+        let unread =
+            Delivery.AuthorityUnknown "authority read deferred because every path may already be declared"
+
         let preliminary = Delivery.classifyPaths touchSet unread unread files
 
-        if preliminary |> List.forall (fun classification -> classification.Admission = Delivery.DeclaredPath) then
+        if
+            preliminary
+            |> List.forall (fun classification -> classification.Admission = Delivery.DeclaredPath)
+        then
             preliminary
         else
             Delivery.classifyPaths touchSet (generatedPathAuthority issue) (sddPackageAuthority ctx issue) files
@@ -7999,7 +9510,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     eprint
                         "fsgg-coord-engine: WARNING — this id was derived from a session that shares one id across every subagent, so a fan-out of workers would all draw it and collide on each other's locks (#419)."
 
-                    eprint "  Give EACH worker a unique id (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
+                    eprint
+                        "  Give EACH worker a unique id (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
                 | _ -> ()
 
                 ExitGreen
@@ -8019,10 +9531,22 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
         let assertion: Result<RegistryPredicate.Assertion option, string> =
             match opts.Args with
-            | [ id; field; value ] -> Ok(Some { Id = id; Field = field; Value = value })
+            | [ id; field; value ] ->
+                Ok(
+                    Some
+                        {
+                            Id = id
+                            Field = field
+                            Value = value
+                        }
+                )
             | [] ->
                 let body = Console.In.ReadToEnd()
-                if body.Trim() = "" then Ok None else Ok(RegistryPredicate.parseAssertion body)
+
+                if body.Trim() = "" then
+                    Ok None
+                else
+                    Ok(RegistryPredicate.parseAssertion body)
             | _ -> Error "predicate: give `<id> <field> <value>`, or a cross-repo-request body on stdin"
 
         match assertion with
@@ -8045,7 +9569,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             registryPath
                     )
                 else
-                    let rows = RegistryPredicate.parseRows(File.ReadAllText registryPath)
+                    let rows = RegistryPredicate.parseRows (File.ReadAllText registryPath)
 
                     // classify short-circuits on a missing row / unsupported field before it reads `owner`,
                     // so resolve the manifest only when it will actually be consulted.
@@ -8060,22 +9584,24 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             match opts.Render with
             | Json ->
                 let result: Render.PredicateResult =
-                    { Verdict = RegistryPredicate.name verdict
-                      Id = a.Id
-                      Field = a.Field
-                      Value = a.Value
-                      OwnerValue =
-                        match verdict with
-                        | RegistryPredicate.Contradicts(ov, _) -> Some ov
-                        | _ -> None
-                      Note =
-                        match verdict with
-                        | RegistryPredicate.Contradicts(_, n) -> Some n
-                        | _ -> None
-                      Reason =
-                        match verdict with
-                        | RegistryPredicate.Unknown r -> Some r
-                        | _ -> None }
+                    {
+                        Verdict = RegistryPredicate.name verdict
+                        Id = a.Id
+                        Field = a.Field
+                        Value = a.Value
+                        OwnerValue =
+                            match verdict with
+                            | RegistryPredicate.Contradicts(ov, _) -> Some ov
+                            | _ -> None
+                        Note =
+                            match verdict with
+                            | RegistryPredicate.Contradicts(_, n) -> Some n
+                            | _ -> None
+                        Reason =
+                            match verdict with
+                            | RegistryPredicate.Unknown r -> Some r
+                            | _ -> None
+                    }
 
                 printfn "%s" (Render.renderPredicateJson result)
             | Text ->
@@ -8083,7 +9609,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
                 match verdict with
                 | RegistryPredicate.Agrees -> ()
-                | RegistryPredicate.Contradicts(ov, note) -> eprint (sprintf "  owner declares `%s: %s` — %s" a.Field ov note)
+                | RegistryPredicate.Contradicts(ov, note) ->
+                    eprint (sprintf "  owner declares `%s: %s` — %s" a.Field ov note)
                 | RegistryPredicate.Unknown reason -> eprint (sprintf "  %s" reason)
 
             match verdict with
@@ -8233,7 +9760,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // refusing a live holder has gone with it. Failing closed on it is the honest answer.
                 | Ok(Writes.Stolen _) ->
                     Result.Error(
-                        Undetermined "the CAS reported a steal under RefuseLiveHolder — the force policy and this fence disagree"
+                        Undetermined
+                            "the CAS reported a steal under RefuseLiveHolder — the force policy and this fence disagree"
                     )
                 | Ok(Writes.Lost holder) -> Result.Error(HeldByAnother holder)
                 | Ok(Writes.Twin theirs) -> Result.Error(Twin theirs)
@@ -8307,7 +9835,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         // tenant that repointed one would otherwise silently repoint the other (design §4.1 — "sharing the
         // chore lock's issue would make a chore drain and a dispatch operation serialise against each
         // other, which is two questions answered in one colour").
-        let roster () : Ref list = parseChoreLocks (env "FSGG_COORD_OP_LOCKS" "")
+        let roster () : Ref list =
+            parseChoreLocks (env "FSGG_COORD_OP_LOCKS" "")
 
         // `owner/repo` → `(owner, repo)`, for the two arguments `opLockRef` takes.
         //
@@ -8389,82 +9918,84 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | Error c -> c
             | Ok w ->
 
-            match OpLock.parseDispatch op with
-            | Result.Error msg ->
-                eprint $"fsgg-coord-engine: op-lock acquire: %s{msg}"
-                ExitError
-            | Ok parsedOp ->
+                match OpLock.parseDispatch op with
+                | Result.Error msg ->
+                    eprint $"fsgg-coord-engine: op-lock acquire: %s{msg}"
+                    ExitError
+                | Ok parsedOp ->
 
-            // PURE, AND BEFORE THE WRITE. `Operation.compose` is slice 1's key (`.github#2311`), CALLED
-            // rather than re-derived — it is the same function whose domain the broker transcribed, so the
-            // key printed below is the key the broker recomputes, by construction rather than by agreement.
-            // Its refusals ACCUMULATE, so a caller who fixes one component does not resubmit to find a
-            // second.
-            match Operation.compose item generation receiver parsedOp with
-            | Result.Error refusals ->
-                let why = refusals |> List.map Operation.describe |> String.concat "; "
-                eprint $"fsgg-coord-engine: op-lock acquire: %s{why}"
-                ExitError
-            | Ok(Operation.OpKey opkey) ->
+                    // PURE, AND BEFORE THE WRITE. `Operation.compose` is slice 1's key (`.github#2311`), CALLED
+                    // rather than re-derived — it is the same function whose domain the broker transcribed, so the
+                    // key printed below is the key the broker recomputes, by construction rather than by agreement.
+                    // Its refusals ACCUMULATE, so a caller who fixes one component does not resubmit to find a
+                    // second.
+                    match Operation.compose item generation receiver parsedOp with
+                    | Result.Error refusals ->
+                        let why = refusals |> List.map Operation.describe |> String.concat "; "
+                        eprint $"fsgg-coord-engine: op-lock acquire: %s{why}"
+                        ExitError
+                    | Ok(Operation.OpKey opkey) ->
 
-            match OpLock.splitReceiver receiver with
-            | Result.Error msg ->
-                eprint $"fsgg-coord-engine: op-lock acquire: %s{msg}"
-                ExitError
-            | Ok(receiverOwner, receiverRepo) ->
+                        match OpLock.splitReceiver receiver with
+                        | Result.Error msg ->
+                            eprint $"fsgg-coord-engine: op-lock acquire: %s{msg}"
+                            ExitError
+                        | Ok(receiverOwner, receiverRepo) ->
 
-            match
-                OpLock.acquire
-                    ctx.Transport
-                    (WorkerId w.Id)
-                    (selfOf w)
-                    (sessionOf w)
-                    (OpLock.roster ())
-                    receiverOwner
-                    receiverRepo
-            with
-            | Result.Error refusal ->
-                eprint $"fsgg-coord-engine: op-lock acquire refused: %s{OpLock.describe refusal}"
+                            match
+                                OpLock.acquire
+                                    ctx.Transport
+                                    (WorkerId w.Id)
+                                    (selfOf w)
+                                    (sessionOf w)
+                                    (OpLock.roster ())
+                                    receiverOwner
+                                    receiverRepo
+                            with
+                            | Result.Error refusal ->
+                                eprint $"fsgg-coord-engine: op-lock acquire refused: %s{OpLock.describe refusal}"
 
-                // A CONTENDED LOCK IS NOT A MISCONFIGURED ONE, and the exit codes say so because the
-                // remedies are opposite. `HeldByAnother` is the fence WORKING — another executor is
-                // dispatching against this receiver right now — and the caller should back off and retry,
-                // which is exactly what `ExitContended` documents. Every other arm is a fact somebody must
-                // change before a retry can differ, so retrying on them is a loop.
-                match refusal with
-                | OpLock.HeldByAnother _ -> ExitContended
-                | _ -> ExitError
-            | Ok held ->
-                // THE GRANT IS THE COMMENT ID, AND NOTHING ELSE IS. Nobody can mint one locally, nobody can
-                // choose its value, and nobody can forge its ordering (design §3.2) — which is the whole
-                // reason the broker's step 5 is the one check a requester cannot satisfy by typing.
-                let grant = string held.MarkerId
+                                // A CONTENDED LOCK IS NOT A MISCONFIGURED ONE, and the exit codes say so because the
+                                // remedies are opposite. `HeldByAnother` is the fence WORKING — another executor is
+                                // dispatching against this receiver right now — and the caller should back off and retry,
+                                // which is exactly what `ExitContended` documents. Every other arm is a fact somebody must
+                                // change before a retry can differ, so retrying on them is a loop.
+                                match refusal with
+                                | OpLock.HeldByAnother _ -> ExitContended
+                                | _ -> ExitError
+                            | Ok held ->
+                                // THE GRANT IS THE COMMENT ID, AND NOTHING ELSE IS. Nobody can mint one locally, nobody can
+                                // choose its value, and nobody can forge its ordering (design §3.2) — which is the whole
+                                // reason the broker's step 5 is the one check a requester cannot satisfy by typing.
+                                let grant = string held.MarkerId
 
-                match opts.Render with
-                | Options.Json ->
-                    printfn
-                        "%s"
-                        (JsonSerializer.Serialize
-                            {| item = item
-                               generation = generation
-                               receiver = receiver
-                               op = Operation.wire parsedOp
-                               opkey = opkey
-                               grant = grant
-                               worker = w.Id
-                               leaseMinutes = OpLock.LeaseMinutes |})
-                | Options.Text ->
-                    printfn "grant=%s" grant
-                    printfn "opkey=%s" opkey
-                    printfn "item=%s" item
-                    printfn "generation=%s" generation
-                    printfn "receiver=%s" receiver
-                    printfn "op=%s" (Operation.wire parsedOp)
+                                match opts.Render with
+                                | Options.Json ->
+                                    printfn
+                                        "%s"
+                                        (JsonSerializer.Serialize
+                                            {|
+                                                item = item
+                                                generation = generation
+                                                receiver = receiver
+                                                op = Operation.wire parsedOp
+                                                opkey = opkey
+                                                grant = grant
+                                                worker = w.Id
+                                                leaseMinutes = OpLock.LeaseMinutes
+                                            |})
+                                | Options.Text ->
+                                    printfn "grant=%s" grant
+                                    printfn "opkey=%s" opkey
+                                    printfn "item=%s" item
+                                    printfn "generation=%s" generation
+                                    printfn "receiver=%s" receiver
+                                    printfn "op=%s" (Operation.wire parsedOp)
 
-                    eprint
-                        $"fsgg-coord-engine: %s{w.Id} holds %s{receiver}'s operation lock for %d{OpLock.LeaseMinutes} minutes. Dispatch now, then `op-lock release %s{receiver}` — a grant held across an item's lifetime serialises the fleet on this receiver."
+                                    eprint
+                                        $"fsgg-coord-engine: %s{w.Id} holds %s{receiver}'s operation lock for %d{OpLock.LeaseMinutes} minutes. Dispatch now, then `op-lock release %s{receiver}` — a grant held across an item's lifetime serialises the fleet on this receiver."
 
-                ExitGreen
+                                ExitGreen
         | args ->
             eprint
                 $"fsgg-coord-engine: op-lock acquire needs exactly four arguments — <item> <generation> <receiver> <op> — and got %d{List.length args}. They are `Operation.compose`'s own components, in its own order: item as owner/repo#N, generation as the winning claim marker's comment id, receiver as owner/repo, op as dispatch:<event-type>."
@@ -8488,36 +10019,45 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         | _, Error c -> c
         | Ok arg, Ok w ->
 
-        match OpLock.splitReceiver arg with
-        | Result.Error msg ->
-            eprint $"fsgg-coord-engine: op-lock release: %s{msg}"
-            ExitError
-        | Ok(receiverOwner, receiverRepo) ->
+            match OpLock.splitReceiver arg with
+            | Result.Error msg ->
+                eprint $"fsgg-coord-engine: op-lock release: %s{msg}"
+                ExitError
+            | Ok(receiverOwner, receiverRepo) ->
 
-        match
-            OpLock.held ctx.Transport (WorkerId w.Id) (selfOf w) (sessionOf w) (OpLock.roster ()) receiverOwner receiverRepo
-        with
-        | Result.Error refusal ->
-            eprint $"fsgg-coord-engine: op-lock release refused: %s{OpLock.describe refusal}"
-            ExitError
-        | Ok held ->
-            let grant = string held.MarkerId
+                match
+                    OpLock.held
+                        ctx.Transport
+                        (WorkerId w.Id)
+                        (selfOf w)
+                        (sessionOf w)
+                        (OpLock.roster ())
+                        receiverOwner
+                        receiverRepo
+                with
+                | Result.Error refusal ->
+                    eprint $"fsgg-coord-engine: op-lock release refused: %s{OpLock.describe refusal}"
+                    ExitError
+                | Ok held ->
+                    let grant = string held.MarkerId
 
-            match OpLock.release ctx.Transport held with
-            | Result.Error e -> fail e
-            | Ok() ->
-                match opts.Render with
-                | Options.Json ->
-                    printfn
-                        "%s"
-                        (JsonSerializer.Serialize
-                            {| receiver = arg
-                               grant = grant
-                               worker = w.Id
-                               released = true |})
-                | Options.Text -> printfn "released %s grant=%s" arg grant
+                    match OpLock.release ctx.Transport held with
+                    | Result.Error e -> fail e
+                    | Ok() ->
+                        match opts.Render with
+                        | Options.Json ->
+                            printfn
+                                "%s"
+                                (JsonSerializer.Serialize
+                                    {|
+                                        receiver = arg
+                                        grant = grant
+                                        worker = w.Id
+                                        released = true
+                                    |})
+                        | Options.Text -> printfn "released %s grant=%s" arg grant
 
-                ExitGreen
+                        ExitGreen
 
     /// Build the context — the transport, the board coordinates, the token check. `Error` is a printed
     /// message and an exit code (a missing token is a refusal, never an empty board).
@@ -8547,11 +10087,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 | v -> v
 
             Ok(
-                { Transport = transport
-                  Owner = owner
-                  Title = env "FSGG_COORD_PROJECT" "Coordination"
-                  DefaultRepo = None
-                  ChoreLocks = parseChoreLocks (env "FSGG_COORD_CHORE_LOCKS" "") },
+                {
+                    Transport = transport
+                    Owner = owner
+                    Title = env "FSGG_COORD_PROJECT" "Coordination"
+                    DefaultRepo = None
+                    ChoreLocks = parseChoreLocks (env "FSGG_COORD_CHORE_LOCKS" "")
+                },
                 transport :> IDisposable
             )
 
@@ -8710,7 +10252,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // `resolveRepo` is idempotent, so the second call was a no-op. It was worth deleting
                 // anyway: it was the last thing in the tree implying a verb still resolves for itself,
                 // which is the habit that made the filter five copies in the first place.
-                let scoped = rows |> List.filter (fun r -> not r.IsPullRequest) |> Scan.scope opts.Repo
+                let scoped =
+                    rows |> List.filter (fun r -> not r.IsPullRequest) |> Scan.scope opts.Repo
 
                 scoped.Advisory |> Option.iter eprint
 
@@ -8724,27 +10267,32 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // `bodyNeeded` below — so a copy that drifted would leave one rule reading a body the pass
                 // never fetched.
                 let isSchedulableCandidate (r: Scan.Row) =
-                    r.State = IssueState.Open && (r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog)
+                    r.State = IssueState.Open
+                    && (r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog)
 
                 let mk code severity (r: Scan.Row) detail =
-                    { Code = code
-                      Severity = severity
-                      Id = $"%s{r.Ref.Owner}/%s{r.Ref.Repo}#%d{r.Ref.Number}"
-                      Short = r.Ref.Short
-                      Status = statusWireName r.Status
-                      Url = $"https://github.com/%s{r.Ref.Owner}/%s{r.Ref.Repo}/issues/%d{r.Ref.Number}"
-                      Detail = detail }
+                    {
+                        Code = code
+                        Severity = severity
+                        Id = $"%s{r.Ref.Owner}/%s{r.Ref.Repo}#%d{r.Ref.Number}"
+                        Short = r.Ref.Short
+                        Status = statusWireName r.Status
+                        Url = $"https://github.com/%s{r.Ref.Owner}/%s{r.Ref.Repo}/issues/%d{r.Ref.Number}"
+                        Detail = detail
+                    }
 
                 // The schedulability rules (#496): a Ready/Backlog OPEN item no worker can pick up.
                 let touchSetFindings (r: Scan.Row) (body: string) : LintFinding list =
                     if isSchedulableCandidate r then
                         match TouchSet.parse body with
                         | Undeclared ->
-                            [ mk
-                                  "NO-TOUCH-SET"
-                                  "error"
-                                  r
-                                  $"%s{statusWireName r.Status} but declares no `Paths:` — `batch`/`take` cannot schedule it, so no worker can ever pick it up. Declare a touch-set, or `Paths: none` if it genuinely has none (an epic, a decision item)." ]
+                            [
+                                mk
+                                    "NO-TOUCH-SET"
+                                    "error"
+                                    r
+                                    $"%s{statusWireName r.Status} but declares no `Paths:` — `batch`/`take` cannot schedule it, so no worker can ever pick it up. Declare a touch-set, or `Paths: none` if it genuinely has none (an epic, a decision item)."
+                            ]
                         // ASK, do not decide (#945). This rule used to reach the verdict itself — its own
                         // `List.exists` for the threshold, its own `List.choose` for the offending
                         // tokens, its own `List.forall` for the every/some split. It AGREED with
@@ -8872,8 +10420,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     match rows with
                     | [] -> Ok(acc, touchSets)
                     | r :: rest ->
-                        let isEpic =
-                            r.Title.IndexOf("[epic]", StringComparison.OrdinalIgnoreCase) >= 0
+                        let isEpic = r.Title.IndexOf("[epic]", StringComparison.OrdinalIgnoreCase) >= 0
 
                         let isTouchSetCandidate = isSchedulableCandidate r
 
@@ -8886,7 +10433,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
                         let doneOpenNote =
                             if r.Status = BoardStatus.Done && r.State = IssueState.Open then
-                                [ mk "DONE-STATUS-OPEN-ISSUE" "note" r "board Status is Done but the issue is still open" ]
+                                [
+                                    mk
+                                        "DONE-STATUS-OPEN-ISSUE"
+                                        "note"
+                                        r
+                                        "board Status is Done but the issue is still open"
+                                ]
                             else
                                 []
 
@@ -8918,7 +10471,10 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             r.State = IssueState.Open && r.Status <> BoardStatus.Done
 
                         let bodyNeeded =
-                            isTouchSetCandidate || isEpic || isHumanBlockCandidate || isBlockedByProjectionCandidate
+                            isTouchSetCandidate
+                            || isEpic
+                            || isHumanBlockCandidate
+                            || isBlockedByProjectionCandidate
 
                         let bodyResult =
                             if bodyNeeded then
@@ -8936,8 +10492,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             let humanPark = humanParkFindings r body
                             let clsFindings = classFindings r body
 
-                            let epicResult =
-                                if isEpic then epicFindings r body else Ok []
+                            let epicResult = if isEpic then epicFindings r body else Ok []
 
                             match epicResult with
                             | Error e -> Error e
@@ -8955,20 +10510,24 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 // caller is careful" is the assumption fail-open defects are built on.
                                 let touchSets =
                                     if isTouchSetCandidate then
-                                        { LintApplication.ConsolidationRow.Ref = r.Ref.Short
-                                          // The board issue may live in `.github` while its declaration
-                                          // reserves a receiver worktree. Consolidation is evidence about
-                                          // overlapping files, so it partitions on `Repo Scope`, not the
-                                          // repository that happens to host the coordination issue (#1732).
-                                          //
-                                          // `RepoScope.orFallback` (#2398): a `cross-repo` Repo Scope
-                                          // names no repository, so consolidation falls back to the
-                                          // issue's own hosting repository rather than grouping on the
-                                          // sentinel itself — the same policy `enrich`/`Lanes.partition`
-                                          // apply.
-                                          LintApplication.ConsolidationRow.Repo =
-                                            FS.GG.Coord.RepoScope.orFallback r.Ref.Repo (Options.resolveRepo r.PathRepo)
-                                          LintApplication.ConsolidationRow.TouchSet = TouchSet.parse body }
+                                        {
+                                            LintApplication.ConsolidationRow.Ref = r.Ref.Short
+                                            // The board issue may live in `.github` while its declaration
+                                            // reserves a receiver worktree. Consolidation is evidence about
+                                            // overlapping files, so it partitions on `Repo Scope`, not the
+                                            // repository that happens to host the coordination issue (#1732).
+                                            //
+                                            // `RepoScope.orFallback` (#2398): a `cross-repo` Repo Scope
+                                            // names no repository, so consolidation falls back to the
+                                            // issue's own hosting repository rather than grouping on the
+                                            // sentinel itself — the same policy `enrich`/`Lanes.partition`
+                                            // apply.
+                                            LintApplication.ConsolidationRow.Repo =
+                                                FS.GG.Coord.RepoScope.orFallback
+                                                    r.Ref.Repo
+                                                    (Options.resolveRepo r.PathRepo)
+                                            LintApplication.ConsolidationRow.TouchSet = TouchSet.parse body
+                                        }
                                         :: touchSets
                                     else
                                         touchSets
@@ -8999,10 +10558,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 // deadlock a human must break.
                 let cycleFindings =
                     let byRef = items |> List.map (fun row -> row.Ref, row) |> Map.ofList
+
                     Scan.blockerGraph items
                     |> blockerCycleVerdicts
                     |> List.choose (fun (ref, detail) ->
-                        Map.tryFind ref byRef |> Option.map (fun row -> mk "BLOCKER-CYCLE" "error" row detail))
+                        Map.tryFind ref byRef
+                        |> Option.map (fun row -> mk "BLOCKER-CYCLE" "error" row detail))
 
                 match classify [] [] items with
                 | Error e -> fail e
@@ -9060,6 +10621,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                | [] -> []))
 
                     let findings = perItemFindings @ cycleFindings @ consolidationFindings
+
                     let summary =
                         findings
                         |> List.map (fun finding -> finding.Severity)
@@ -9089,10 +10651,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     // tell a discharged epic from #614's partial fix. Reddening a gate on a question nobody has
                     // been asked yet teaches the lesson #698 names: the gate is noise, merge anyway. `--strict` is
                     // for the caller who wants to be stopped by one.
-                    if summary.Fails then
-                        ExitError
-                    else
-                        ExitGreen
+                    if summary.Fails then ExitError else ExitGreen
 
     /// `issues <repo> [--label L] [--state S] [--refresh]` — list a repo's issues over REST, ETag-revalidated
     /// (#446/#418). The repo is resolved like every OTHER repo-taking command: an `owner/repo` splits and
@@ -9111,43 +10670,81 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     let intakeCmd (ctx: Context) (opts: Options) : int = Handlers.intakeCmd ctx opts
 
     let private graphQlOps (ctx: Context) (opts: Options) : int =
-        let print value = printfn "%s" (JsonSerializer.Serialize value); ExitGreen
-        let result value project = match value with Ok resolved -> print (project resolved) | Error error -> fail error
+        let print value =
+            printfn "%s" (JsonSerializer.Serialize value)
+            ExitGreen
+
+        let result value project =
+            match value with
+            | Ok resolved -> print (project resolved)
+            | Error error -> fail error
 
         match opts.Args with
         | [ "project-visibility"; owner; title ] ->
-            result (OperationalGraphQl.projectVisibility ctx.Transport owner title) (fun publicValue -> {| isPublic = publicValue |})
+            result (OperationalGraphQl.projectVisibility ctx.Transport owner title) (fun publicValue ->
+                {| isPublic = publicValue |})
         | [ "project-id"; owner; number ] ->
             match Int32.TryParse number with
-            | true, value when value > 0 -> result (OperationalGraphQl.projectId ctx.Transport owner value) (fun id -> {| id = id |})
-            | _ -> eprint "fsgg-coord-engine: graphql project-id requires a positive integer project number"; ExitError
+            | true, value when value > 0 ->
+                result (OperationalGraphQl.projectId ctx.Transport owner value) (fun id -> {| id = id |})
+            | _ ->
+                eprint "fsgg-coord-engine: graphql project-id requires a positive integer project number"
+                ExitError
         | [ "repository-policy"; owner; name ] ->
             result (OperationalGraphQl.repositoryPolicy ctx.Transport owner name) (fun policy ->
-                {| issueCreationPolicy = policy.IssueCreationPolicy
-                   hasIssuesEnabled = policy.HasIssuesEnabled
-                   mergeCommitAllowed = policy.MergeCommitAllowed
-                   squashMergeAllowed = policy.SquashMergeAllowed
-                   rebaseMergeAllowed = policy.RebaseMergeAllowed |})
+                {|
+                    issueCreationPolicy = policy.IssueCreationPolicy
+                    hasIssuesEnabled = policy.HasIssuesEnabled
+                    mergeCommitAllowed = policy.MergeCommitAllowed
+                    squashMergeAllowed = policy.SquashMergeAllowed
+                    rebaseMergeAllowed = policy.RebaseMergeAllowed
+                |})
         | [ "meter" ] ->
             result (OperationalGraphQl.meterRemaining ctx.Transport) (fun remaining -> {| remaining = remaining |})
         | [ "archive-scan"; projectId ] ->
             result (OperationalGraphQl.archiveScan ctx.Transport projectId) (fun scan ->
-                {| pages = scan.Pages; spent = scan.Spent
-                   items = scan.Items |> List.map (fun row -> {| itemId = row.ItemId; status = row.Status; blockedBy = row.BlockedBy; number = row.Number; state = row.State; closedAt = row.ClosedAt; repo = row.Repo |}) |})
+                {|
+                    pages = scan.Pages
+                    spent = scan.Spent
+                    items =
+                        scan.Items
+                        |> List.map (fun row ->
+                            {|
+                                itemId = row.ItemId
+                                status = row.Status
+                                blockedBy = row.BlockedBy
+                                number = row.Number
+                                state = row.State
+                                closedAt = row.ClosedAt
+                                repo = row.Repo
+                            |})
+                |})
         | "archive-items" :: projectId :: itemIds when not itemIds.IsEmpty ->
-            result (OperationalGraphQl.archiveItems ctx.Transport projectId itemIds) (fun () -> {| archived = itemIds |})
+            result (OperationalGraphQl.archiveItems ctx.Transport projectId itemIds) (fun () ->
+                {| archived = itemIds |})
         | [ "roster-board"; owner; title ] ->
             result (OperationalGraphQl.rosterBoard ctx.Transport owner title) (fun rows ->
-                rows |> List.map (fun row -> {| owner = row.Owner; repo = row.Repo; number = row.Number; status = row.Status |}))
+                rows
+                |> List.map (fun row ->
+                    {|
+                        owner = row.Owner
+                        repo = row.Repo
+                        number = row.Number
+                        status = row.Status
+                    |}))
         | _ ->
-            eprint "fsgg-coord-engine: graphql: expected project-visibility OWNER TITLE | project-id OWNER NUMBER | repository-policy OWNER NAME | meter | archive-scan PROJECT-ID | archive-items PROJECT-ID ID... | roster-board OWNER TITLE"
+            eprint
+                "fsgg-coord-engine: graphql: expected project-visibility OWNER TITLE | project-id OWNER NUMBER | repository-policy OWNER NAME | meter | archive-scan PROJECT-ID | archive-items PROJECT-ID ID... | roster-board OWNER TITLE"
+
             ExitError
 
     let private selfHostRecord (ctx: Context) (opts: Options) : int =
         match opts.Args with
         | [ "record"; rawRef; receiptPath ] ->
             match parseRef ctx rawRef with
-            | Error message -> eprint $"fsgg-coord-engine: self-host: %s{message}"; ExitError
+            | Error message ->
+                eprint $"fsgg-coord-engine: self-host: %s{message}"
+                ExitError
             | Ok ref ->
                 try
                     match File.ReadAllText receiptPath |> SelfHost.tryDecodeReceipt with
@@ -9161,7 +10758,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | Ok(Some receipt) ->
                         match Writes.selfHostBootstrapReceipt ctx.Transport ref receipt with
                         | Error error -> fail error
-                        | Ok () ->
+                        | Ok() ->
                             printfn "SELF-HOST-RECORDED %s %s" ref.Short receipt.Digest
                             ExitGreen
                 with error ->
@@ -9169,7 +10766,9 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     ExitError
         | [ "replay-record"; rawRef; receiptPath; snapshotPath; decisionKey; actionKey ] ->
             match parseRef ctx rawRef with
-            | Error message -> eprint $"fsgg-coord-engine: self-host: %s{message}"; ExitError
+            | Error message ->
+                eprint $"fsgg-coord-engine: self-host: %s{message}"
+                ExitError
             | Ok ref ->
                 try
                     match File.ReadAllText receiptPath |> SelfHost.tryDecodeReceipt with
@@ -9182,11 +10781,17 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         ExitRed
                     | Ok(Some bootstrap) ->
                         use stream = File.OpenRead snapshotPath
-                        let snapshotHash = SHA256.HashData stream |> Convert.ToHexString |> _.ToLowerInvariant()
+
+                        let snapshotHash =
+                            SHA256.HashData stream |> Convert.ToHexString |> _.ToLowerInvariant()
+
                         SelfHost.createReplayReceipt
                             bootstrap
                             snapshotHash
-                            { DecisionKey = decisionKey; ActionKey = actionKey }
+                            {
+                                DecisionKey = decisionKey
+                                ActionKey = actionKey
+                            }
                             DateTimeOffset.UtcNow
                         |> function
                             | Error errors ->
@@ -9196,14 +10801,16 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             | Ok receipt ->
                                 match Writes.selfHostReplayReceipt ctx.Transport ref receipt with
                                 | Error error -> fail error
-                                | Ok () ->
+                                | Ok() ->
                                     printfn "SELF-HOST-REPLAY-RECORDED %s %s" ref.Short receipt.Digest
                                     ExitGreen
                 with error ->
                     eprint $"fsgg-coord-engine: self-host: could not record replay: %s{error.Message}"
                     ExitError
         | _ ->
-            eprint "fsgg-coord-engine: self-host needs `record <ref> <receipt>` or `replay-record <ref> <receipt> <snapshot> <decision-key> <action-key>`."
+            eprint
+                "fsgg-coord-engine: self-host needs `record <ref> <receipt>` or `replay-record <ref> <receipt> <snapshot> <decision-key> <action-key>`."
+
             ExitError
 
     let executeWithContext (handler: Context -> Options -> int) (opts: Options) : int =
@@ -9232,7 +10839,10 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         let opts =
             match opts.Command with
             | Who ->
-                if opts.AllRepos then opts else { opts with Repo = scopedRepo opts }
+                if opts.AllRepos then
+                    opts
+                else
+                    { opts with Repo = scopedRepo opts }
             | Next
             | BatchCmd
             | Reap
@@ -9248,18 +10858,19 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             ExitError
         | _ ->
 
-        match context () with
-        | Error code -> code
-        | Ok(ctx, disposable) ->
-            use _ = disposable
+            match context () with
+            | Error code -> code
+            | Ok(ctx, disposable) ->
+                use _ = disposable
 
-            // #548: populate the ONE field every `<ref>` parse defaults against, here, so accepting a bare
-            // `<n>` reaches all 15 `parseRef` call sites through a single edit rather than 15.
-            let ctx =
-                { ctx with
-                    DefaultRepo = defaultRepoScope ctx.Owner callerOpts }
+                // #548: populate the ONE field every `<ref>` parse defaults against, here, so accepting a bare
+                // `<n>` reaches all 15 `parseRef` call sites through a single edit rather than 15.
+                let ctx =
+                    { ctx with
+                        DefaultRepo = defaultRepoScope ctx.Owner callerOpts
+                    }
 
-            handler ctx opts
+                handler ctx opts
 
     let run (boardOpsHandlers: Map<Options.Command, HandlerRegistration.Handler>) (opts: Options) : int =
         executeWithContext
@@ -9289,6 +10900,5 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                     | GraphQlOps -> graphQlOps ctx opts
                     | SelfHostCmd -> selfHostRecord ctx opts
                     | LintCmd -> lint ctx opts
-                    | other -> failwith $"Client.run received a non-IO command: %A{other}"
-            )
+                    | other -> failwith $"Client.run received a non-IO command: %A{other}")
             opts

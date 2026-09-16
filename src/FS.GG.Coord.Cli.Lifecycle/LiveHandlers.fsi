@@ -10,18 +10,18 @@ module LiveHandlers =
     /// authoritative record before ambiguity is judged. No match and a genuinely non-unique match
     /// remain fail-closed.
     val selectCompletionEvidence:
-      generation: string ->
+        generation: string ->
         evidence: string ->
         candidates: (FS.GG.Coord.GitHub.Reads.CommentBody * FS.GG.Coord.StructuredDecision.ReviewRecord) list ->
-        Result<string, string>
+            Result<string, string>
 
     /// Preserve the parser's exact malformed-chain diagnostic at the live delivery boundary.  Keeping
     /// this small adapter named and directly testable prevents a future `Result.toOption` from turning
     /// an attempted-but-invalid review into the distinct fact that no review was posted.
     val deliveryReviewEvidence:
-      landable: bool ->
+        landable: bool ->
         comments: FS.GG.Coord.Driver.ReviewComment list ->
-        FS.GG.Coord.Driver.ReviewChain option * string option
+            FS.GG.Coord.Driver.ReviewChain option * string option
 
     /// True when a claimed PR has at least one declared, unverified delivery obligation — the sole
     /// signal the lifecycle reducer needs to keep a row `In review` rather than advance it
@@ -38,9 +38,9 @@ module LiveHandlers =
     /// genuinely outstanding obligation gives. Only a HEAD that reads AND parses AND is fully verified
     /// clears it.
     val outstandingObligations:
-      headFact: FS.GG.Coord.GitHub.Errors.IoResult<string> ->
+        headFact: FS.GG.Coord.GitHub.Errors.IoResult<string> ->
         commentsFact: FS.GG.Coord.GitHub.Errors.IoResult<FS.GG.Coord.GitHub.Reads.CommentBody list> ->
-        bool
+            bool
 
     /// THE MARKER THAT AUTHORIZES ACTING ON A CLAIM — `review`'s and `delivery`'s shared extension of
     /// `Reads.winner`'s live-lease-only answer with the SAME proof-of-life the scheduler already trusts
@@ -58,11 +58,10 @@ module LiveHandlers =
     /// `Error`, a read that could not be made. Callers choose their own refusal wording for `None`;
     /// `review` and `delivery` worded it differently before this function existed and still do.
     val authorizedMarker:
-      leaseMinutes: int ->
+        leaseMinutes: int ->
         markers: FS.GG.Coord.GitHub.Reads.Marker list ->
-        liveness: (unit ->
-                     FS.GG.Coord.GitHub.Errors.IoResult<FS.GG.Coord.Types.Liveness>) ->
-        FS.GG.Coord.GitHub.Errors.IoResult<FS.GG.Coord.GitHub.Reads.Marker option>
+        liveness: (unit -> FS.GG.Coord.GitHub.Errors.IoResult<FS.GG.Coord.Types.Liveness>) ->
+            FS.GG.Coord.GitHub.Errors.IoResult<FS.GG.Coord.GitHub.Reads.Marker option>
 
     /// The exact marker text `delivery` writes: `v=1 item=<owner/repo>#<n> gen=<claim marker comment
     /// id> opkey=<64 lowercase hex> grant=<election comment id> head=<40-hex sha>`.
@@ -75,9 +74,7 @@ module LiveHandlers =
     /// The two narrower readers are unaffected and need no cutover: `check-claim-generation.py` (the
     /// only marker reader among `main`'s required contexts) and the receiver-side validation job in
     /// `.github/workflows/kit-materialize.yml` each require four fields and accept additional pairs.
-    val authorizationMarker:
-      item: string ->
-        gen: string -> opkey: string -> grant: string -> head: string -> string
+    val authorizationMarker: item: string -> gen: string -> opkey: string -> grant: string -> head: string -> string
 
     /// The one write-worthy fact about a PR body: is its authorization already exactly what the live
     /// claim/head demand, or does it need rebinding? `AuthorizationCurrent` lets the caller skip a PATCH
@@ -102,10 +99,13 @@ module LiveHandlers =
     /// left on an open pull request is not byte-identical to the freshly rendered one, so it is
     /// replaced in place on the next `delivery` call, one marker in and one marker out.
     val rebindAuthorization:
-      body: string ->
+        body: string ->
         item: string ->
         gen: string ->
-        opkey: string -> grant: string -> head: string -> AuthorizationRebind
+        opkey: string ->
+        grant: string ->
+        head: string ->
+            AuthorizationRebind
 
     /// The merge election this pull request's authorization is GROUNDED IN, as `(opkey, grant)` —
     /// posting one only when this delivery target does not already own it (.github#2395, design
@@ -129,10 +129,11 @@ module LiveHandlers =
     /// Not `private` — `tests/FS.GG.Coord.Cli.Lifecycle.Tests` drives it directly against a `Fake.Recorder`,
     /// the same internal-seam idiom `ensureAuthorization` and `authorizedMarker` already use.
     val electionGrounding:
-      ctx: Kernel.Context ->
+        ctx: Kernel.Context ->
         target: FS.GG.Coord.Types.Ref ->
         gen: string ->
-        pr: int -> FS.GG.Coord.GitHub.Errors.IoResult<string * string>
+        pr: int ->
+            FS.GG.Coord.GitHub.Errors.IoResult<string * string>
 
     /// `delivery`'s automatic write-side counterpart to `scripts/check-claim-generation.py`'s read side
     /// (.github#2395). A no-op whenever there is nothing yet to authorize: no PR (`pr = None`), no LIVE
@@ -177,12 +178,13 @@ module LiveHandlers =
     /// conditional `ctx.Transport.Send` PATCH) hermetically testable, not merely the pure
     /// `rebindAuthorization` decision it wraps.
     val ensureAuthorization:
-      ctx: Kernel.Context ->
+        ctx: Kernel.Context ->
         target: FS.GG.Coord.Types.Ref ->
         marker: FS.GG.Coord.GitHub.Reads.Marker option ->
         pr: int option ->
         head: string ->
-        merged: bool -> FS.GG.Coord.GitHub.Errors.IoResult<unit>
+        merged: bool ->
+            FS.GG.Coord.GitHub.Errors.IoResult<unit>
 
     /// `review` — the resumable review/repair protocol (.github#2175) as one typed answer, and `review record`
     /// as its only writer.
@@ -199,52 +201,80 @@ module LiveHandlers =
 
 
     val delivery:
-      completeDelivery: (FS.GG.Coord.Delivery.Snapshot -> FS.GG.Coord.Delivery.Transition -> Kernel.Context -> Options.Options -> int) ->
-        deliveryPathClassifier: (Kernel.Context -> FS.GG.Coord.Types.Ref -> FS.GG.Coord.Types.TouchSet -> string list -> FS.GG.Coord.Delivery.PathClassification list) ->
+        completeDelivery:
+            (FS.GG.Coord.Delivery.Snapshot
+                    -> FS.GG.Coord.Delivery.Transition
+                    -> Kernel.Context
+                    -> Options.Options
+                    -> int) ->
+        deliveryPathClassifier:
+            (Kernel.Context
+                    -> FS.GG.Coord.Types.Ref
+                    -> FS.GG.Coord.Types.TouchSet
+                    -> string list
+                    -> FS.GG.Coord.Delivery.PathClassification list) ->
         projectPathVerdict: (FS.GG.Coord.Delivery.PathClassification list -> bool) ->
-        requireCurrentDeliveryRoute: (Kernel.Context -> FS.GG.Coord.Types.Ref -> Result<FS.GG.Coord.DeliveryRoute.Receipt, FS.GG.Coord.GitHub.Errors.IoError>) ->
-        scanAndDecide: (Kernel.Context -> Options.Options -> FS.GG.Coord.GitHub.Cache.ReadIntent -> FS.GG.Coord.GitHub.Errors.IoResult<FS.GG.Coord.GitHub.Scan.Row list * string * FS.GG.Coord.GitHub.Scan.Receipt>) ->
-        ctx: Kernel.Context -> opts: Options.Options -> int
+        requireCurrentDeliveryRoute:
+            (Kernel.Context
+                    -> FS.GG.Coord.Types.Ref
+                    -> Result<FS.GG.Coord.DeliveryRoute.Receipt, FS.GG.Coord.GitHub.Errors.IoError>) ->
+        scanAndDecide:
+            (Kernel.Context
+                    -> Options.Options
+                    -> FS.GG.Coord.GitHub.Cache.ReadIntent
+                    -> FS.GG.Coord.GitHub.Errors.IoResult<
+                        FS.GG.Coord.GitHub.Scan.Row list * string * FS.GG.Coord.GitHub.Scan.Receipt
+                        >) ->
+        ctx: Kernel.Context ->
+        opts: Options.Options ->
+            int
 
     val landable: ctx: Kernel.Context -> opts: Options.Options -> int
 
     val doneCmd:
-      offerChoreAfterDone: (Kernel.Context -> Options.Options -> FS.GG.Coord.Types.Ref -> unit) ->
-        ctx: Kernel.Context -> opts: Options.Options -> int
+        offerChoreAfterDone: (Kernel.Context -> Options.Options -> FS.GG.Coord.Types.Ref -> unit) ->
+        ctx: Kernel.Context ->
+        opts: Options.Options ->
+            int
 
     val completeDelivery:
-      offerChoreAfterDone: (Kernel.Context -> Options.Options -> FS.GG.Coord.Types.Ref -> unit) ->
+        offerChoreAfterDone: (Kernel.Context -> Options.Options -> FS.GG.Coord.Types.Ref -> unit) ->
         facts: FS.GG.Coord.Delivery.Snapshot ->
         transition: FS.GG.Coord.Delivery.Transition ->
-        ctx: Kernel.Context -> opts: Options.Options -> int
+        ctx: Kernel.Context ->
+        opts: Options.Options ->
+            int
 
     val sddReadinessEvidenceErrors: workId: string -> raw: string -> string list
 
     val sddEvidenceErrors: receipt: FS.GG.Coord.DeliveryRoute.Receipt -> string list
 
     val readDeliveryRouteComments:
-      ctx: Kernel.Context ->
-        target: FS.GG.Coord.Types.Ref ->
-        FS.GG.Coord.GitHub.Errors.IoResult<string list>
+        ctx: Kernel.Context -> target: FS.GG.Coord.Types.Ref -> FS.GG.Coord.GitHub.Errors.IoResult<string list>
 
-    val routeEvidence:
-      subject: string -> comments: string list -> FS.GG.Coord.DeliveryRoute.Verdict
+    val routeEvidence: subject: string -> comments: string list -> FS.GG.Coord.DeliveryRoute.Verdict
 
     val readDeliveryRouteVerdict:
-      ctx: Kernel.Context -> target: FS.GG.Coord.Types.Ref -> FS.GG.Coord.DeliveryRoute.Verdict
+        ctx: Kernel.Context -> target: FS.GG.Coord.Types.Ref -> FS.GG.Coord.DeliveryRoute.Verdict
 
     val requireCurrentDeliveryRoute:
-      ctx: Kernel.Context ->
+        ctx: Kernel.Context ->
         target: FS.GG.Coord.Types.Ref ->
-        Result<FS.GG.Coord.DeliveryRoute.Receipt, FS.GG.Coord.GitHub.Errors.IoError>
+            Result<FS.GG.Coord.DeliveryRoute.Receipt, FS.GG.Coord.GitHub.Errors.IoError>
 
     val verifyPaths:
-      deliveryPathClassifier: (Kernel.Context -> FS.GG.Coord.Types.Ref -> FS.GG.Coord.Types.TouchSet -> string list -> FS.GG.Coord.Delivery.PathClassification list) ->
+        deliveryPathClassifier:
+            (Kernel.Context
+                    -> FS.GG.Coord.Types.Ref
+                    -> FS.GG.Coord.Types.TouchSet
+                    -> string list
+                    -> FS.GG.Coord.Delivery.PathClassification list) ->
         projectPathVerdict: (FS.GG.Coord.Delivery.PathClassification list -> bool) ->
         digestWarn: (unit -> unit) ->
-        ctx: Kernel.Context -> opts: Options.Options -> int
+        ctx: Kernel.Context ->
+        opts: Options.Options ->
+            int
 
-    val followupAudit:
-      ctx: Kernel.Context -> opts: Options.Options -> int
+    val followupAudit: ctx: Kernel.Context -> opts: Options.Options -> int
 
     val deliveryRouteCmd: ctx: Kernel.Context -> opts: Options.Options -> int

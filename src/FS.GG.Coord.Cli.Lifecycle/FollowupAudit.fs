@@ -34,7 +34,7 @@ module FollowupAudit =
         | Ok file ->
             try
                 use stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None)
-                let bytes = Array.zeroCreate<byte> (int stream.Length)
+                let bytes = Array.zeroCreate<byte>(int stream.Length)
                 stream.ReadExactly(bytes, 0, bytes.Length)
 
                 match countLines (Encoding.UTF8.GetString bytes) with
@@ -44,6 +44,7 @@ module FollowupAudit =
             | :? FileNotFoundException
             | :? DirectoryNotFoundException -> Empty
             | :? IOException as error ->
-                Unreadable $"could not open the follow-up queue %s{file}: %s{error.Message} Another `followup` may hold it — retry. This is NOT an empty queue: it is a promise that may still be there."
+                Unreadable
+                    $"could not open the follow-up queue %s{file}: %s{error.Message} Another `followup` may hold it — retry. This is NOT an empty queue: it is a promise that may still be there."
             | :? UnauthorizedAccessException as error ->
                 Unreadable $"could not open the follow-up queue %s{file}: %s{error.Message}"

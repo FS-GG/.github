@@ -16,9 +16,7 @@ module Json =
 
     /// Where the document is malformed, and how. Carries a JSON path, so a fleet-wide failure is
     /// diagnosable from the log alone rather than by re-running it.
-    type Error =
-        { Path: string
-          Message: string }
+    type Error = { Path: string; Message: string }
 
     val err: path: string -> message: string -> Result<'a, Error list>
 

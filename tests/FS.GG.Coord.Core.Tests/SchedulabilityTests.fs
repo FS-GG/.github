@@ -12,37 +12,59 @@ open FS.GG.Coord.Schedulability
 module SchedulabilityTests =
 
     let private ref n =
-        { Owner = "FS-GG"
-          Repo = "FS.GG.SDD"
-          Number = n }
+        {
+            Owner = "FS-GG"
+            Repo = "FS.GG.SDD"
+            Number = n
+        }
 
     let private item n =
-        { Ref = ref n
-          PathRepo = (ref n).Repo
-          Status = Ready
-          State = Open
-          TouchSet = Declared [ Matchable "src/Scene/**" ]
-          Blockers = []
-          Claim = None
-          ItemPr = None
-          ItemPrUnreadable = false
-          HumanBlock = None
-          Predicate = None
-          Class = None
-          Kind = None
-          BoardKind = None
-          CommentCount = None
-          BoardClass = None
-          DeliveryRoute = DeliveryRoute.Current { Schema = DeliveryRoute.Schema; Subject = "test"; SubjectRevision = "test"; Route = Some DeliveryRoute.Lightweight; Agent = "test"; Timestamp = "2026-01-01T00:00:00Z"; ReasonCodes = [ "test" ]; Rationale = "test"; DeclaredImpacts = [ "test" ]; ObservedFacts = [ "test" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
-          Severity = Unset
-          Phase = None
-          AgeDays = None }
+        {
+            Ref = ref n
+            PathRepo = (ref n).Repo
+            Status = Ready
+            State = Open
+            TouchSet = Declared [ Matchable "src/Scene/**" ]
+            Blockers = []
+            Claim = None
+            ItemPr = None
+            ItemPrUnreadable = false
+            HumanBlock = None
+            Predicate = None
+            Class = None
+            Kind = None
+            BoardKind = None
+            CommentCount = None
+            BoardClass = None
+            DeliveryRoute =
+                DeliveryRoute.Current
+                    {
+                        Schema = DeliveryRoute.Schema
+                        Subject = "test"
+                        SubjectRevision = "test"
+                        Route = Some DeliveryRoute.Lightweight
+                        Agent = "test"
+                        Timestamp = "2026-01-01T00:00:00Z"
+                        ReasonCodes = [ "test" ]
+                        Rationale = "test"
+                        DeclaredImpacts = [ "test" ]
+                        ObservedFacts = [ "test" ]
+                        SddWorkId = None
+                        SpecHome = None
+                        RequiredGates = []
+                    }
+            Severity = Unset
+            Phase = None
+            AgeDays = None
+        }
 
     let private claim w =
-        { Worker = WorkerId w
-          Session = None
-          AgeSeconds = 60
-          PreviousStatus = Some Backlog }
+        {
+            Worker = WorkerId w
+            Session = None
+            AgeSeconds = 60
+            PreviousStatus = Some Backlog
+        }
 
     /// The default question: no backlog fallback, nothing in flight.
     let private ask it = schedulable Set.empty false [] it
@@ -52,17 +74,26 @@ module SchedulabilityTests =
     // ================================================================================================
 
     [<Fact>]
-    let ``a Ready, open, declared, unblocked, unheld item is Startable`` () =
-        Assert.Equal(Startable, ask (item 1))
+    let ``a Ready, open, declared, unblocked, unheld item is Startable`` () = Assert.Equal(Startable, ask (item 1))
 
     [<Fact>]
     let ``a missing delivery route is never inferred as lightweight`` () =
-        let actual = ask { item 1 with DeliveryRoute = DeliveryRoute.Stale [ "delivery-route receipt is missing" ] }
+        let actual =
+            ask
+                { item 1 with
+                    DeliveryRoute = DeliveryRoute.Stale [ "delivery-route receipt is missing" ]
+                }
+
         Assert.Equal(AwaitingDeliveryRouteDecision [ "delivery-route receipt is missing" ], actual)
 
     [<Fact>]
     let ``an unreadable delivery route fails closed`` () =
-        let actual = ask { item 1 with DeliveryRoute = DeliveryRoute.Unreadable [ "comments unavailable" ] }
+        let actual =
+            ask
+                { item 1 with
+                    DeliveryRoute = DeliveryRoute.Unreadable [ "comments unavailable" ]
+                }
+
         Assert.Equal(AwaitingDeliveryRouteDecision [ "comments unavailable" ], actual)
 
     // ================================================================================================
@@ -79,13 +110,27 @@ module SchedulabilityTests =
 
     [<Fact>]
     let ``#520 a CLOSED issue is not schedulable, however the board column reads`` () =
-        Assert.Equal(IssueClosed, ask { item 502 with State = Closed; Status = Ready })
+        Assert.Equal(
+            IssueClosed,
+            ask
+                { item 502 with
+                    State = Closed
+                    Status = Ready
+                }
+        )
 
     [<Fact>]
     let ``#520 ...and the issue is asked FIRST — a closed item is never merely 'wrong status'`` () =
         // Order matters: reporting `WrongStatus` for a closed issue sends the worker to fix the column,
         // when the column is the only part that is right.
-        Assert.Equal(IssueClosed, ask { item 502 with State = Closed; Status = Backlog })
+        Assert.Equal(
+            IssueClosed,
+            ask
+                { item 502 with
+                    State = Closed
+                    Status = Backlog
+                }
+        )
 
     // ================================================================================================
     // #437 / #485(c) — A NULL STATUS IS ITS OWN BUG, NOT A BACKLOG.
@@ -152,8 +197,7 @@ module SchedulabilityTests =
         // This is the worse case: the item LOOKS declared, and the unmatchable tokens reserve nothing —
         // so the files they name are invisible to every other worker's overlap check. Scheduling it
         // would be entering the collision the protocol exists to prevent, voluntarily.
-        let half =
-            Declared [ Matchable "src/Ok/**"; Unmatchable "**/bad.json" ]
+        let half = Declared [ Matchable "src/Ok/**"; Unmatchable "**/bad.json" ]
 
         Assert.Equal(UnusableTouchSet [ "**/bad.json" ], ask { item 7 with TouchSet = half })
 
@@ -164,18 +208,36 @@ module SchedulabilityTests =
     [<Fact>]
     let ``#476 an item blocked only by a MERGED PR is startable — the work FINISHED`` () =
         let blockers =
-            [ { Ref = Some { Owner = "FS-GG"; Repo = ".github"; Number = 449 }
-                Raw = ".github#449"
-                State = BlockerMerged } ]
+            [
+                {
+                    Ref =
+                        Some
+                            {
+                                Owner = "FS-GG"
+                                Repo = ".github"
+                                Number = 449
+                            }
+                    Raw = ".github#449"
+                    State = BlockerMerged
+                }
+            ]
 
         Assert.Equal(Startable, ask { item 350 with Blockers = blockers })
 
     [<Fact>]
     let ``#476 an OPEN blocker still holds, and the verdict NAMES it`` () =
         let b =
-            { Ref = Some { Owner = "FS-GG"; Repo = ".github"; Number = 500 }
-              Raw = ".github#500"
-              State = BlockerOpen }
+            {
+                Ref =
+                    Some
+                        {
+                            Owner = "FS-GG"
+                            Repo = ".github"
+                            Number = 500
+                        }
+                Raw = ".github#500"
+                State = BlockerOpen
+            }
 
         match ask { item 8 with Blockers = [ b ] } with
         | BlockedBy [ holding ] -> Assert.Equal(500, holding.Ref.Value.Number)
@@ -184,9 +246,17 @@ module SchedulabilityTests =
     [<Fact>]
     let ``#266 an UNKNOWN blocker holds — a failed lookup is not a cleared blocker`` () =
         let b =
-            { Ref = Some { Owner = "FS-GG"; Repo = ".github"; Number = 999 }
-              Raw = ".github#999"
-              State = BlockerUnknown }
+            {
+                Ref =
+                    Some
+                        {
+                            Owner = "FS-GG"
+                            Repo = ".github"
+                            Number = 999
+                        }
+                Raw = ".github#999"
+                State = BlockerUnknown
+            }
 
         match ask { item 9 with Blockers = [ b ] } with
         | BlockedBy _ -> ()
@@ -205,7 +275,13 @@ module SchedulabilityTests =
 
     [<Fact>]
     let ``a live claim holds the item`` () =
-        Assert.Equal(HeldBy(WorkerId "heron-b71"), ask { item 10 with Claim = Some(claim "heron-b71", LeaseHeld) })
+        Assert.Equal(
+            HeldBy(WorkerId "heron-b71"),
+            ask
+                { item 10 with
+                    Claim = Some(claim "heron-b71", LeaseHeld)
+                }
+        )
 
     [<Fact>]
     let ``#581 an EXPIRED lease with an OPEN item PR still holds it — the lease lapsed, the WORK did not`` () =
@@ -252,7 +328,13 @@ module SchedulabilityTests =
         // No claim marker (Claim = None), but the scan found an open `item/<n>-*` PR. #581 read that
         // proof-of-life only through a marker, so this item used to fall straight through to Startable and
         // get handed out a second time. It must now be ItemPrOpen — not offered.
-        match ask { item 651 with Claim = None; ItemPr = Some 812 } with
+        match
+            ask
+                { item 651 with
+                    Claim = None
+                    ItemPr = Some 812
+                }
+        with
         | ItemPrOpen 812 -> ()
         | other -> failwith $"a markerless item with an open PR must not be offered; got %A{other}"
 
@@ -260,7 +342,14 @@ module SchedulabilityTests =
     let ``#651 negative control — a markerless item with NO item PR is still Startable`` () =
         // Without this, the assertion above is satisfied by a scheduler that stopped offering markerless
         // items altogether. The common case (no PR) must stay startable.
-        Assert.Equal(Startable, ask { item 652 with Claim = None; ItemPr = None })
+        Assert.Equal(
+            Startable,
+            ask
+                { item 652 with
+                    Claim = None
+                    ItemPr = None
+                }
+        )
 
     [<Fact>]
     let ``#651 a LIVE claim outranks the item PR — a claimed item is never double-counted`` () =
@@ -268,7 +357,11 @@ module SchedulabilityTests =
         // the item PR (if any) is the claim's LeaseExpiredPrOpen, checked above. A live claim wins here.
         Assert.Equal(
             HeldBy(WorkerId "heron-b71"),
-            ask { item 653 with Claim = Some(claim "heron-b71", LeaseHeld); ItemPr = Some 999 }
+            ask
+                { item 653 with
+                    Claim = Some(claim "heron-b71", LeaseHeld)
+                    ItemPr = Some 999
+                }
         )
 
     [<Fact>]
@@ -322,35 +415,51 @@ module SchedulabilityTests =
     // the SAME generated token declared, real subjects otherwise disjoint.
 
     [<Fact>]
-    let ``#2305 an item overlapping in-flight work SOLELY on a generated artifact token is Startable, given the roster`` () =
+    let ``#2305 an item overlapping in-flight work SOLELY on a generated artifact token is Startable, given the roster``
+        ()
+        =
         let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
 
         let inFlight =
-            [ Declared
-                  [ Matchable ".claude/skills/drive-board/SKILL.md"
-                    Matchable "registry/driver-skill-manifest.json" ] ]
+            [
+                Declared
+                    [
+                        Matchable ".claude/skills/drive-board/SKILL.md"
+                        Matchable "registry/driver-skill-manifest.json"
+                    ]
+            ]
 
         let candidate =
             { item 2248 with
                 TouchSet =
                     Declared
-                        [ Matchable ".claude/skills/pnext-item/references/independent-review.md"
-                          Matchable "registry/driver-skill-manifest.json" ] }
+                        [
+                            Matchable ".claude/skills/pnext-item/references/independent-review.md"
+                            Matchable "registry/driver-skill-manifest.json"
+                        ]
+            }
 
         // WITHOUT the roster: today's pre-repair-1 defect (the negation this test would have asserted
         // before the fix — the gate-inversion mutation reproduces this exact result).
         match schedulable Set.empty false inFlight candidate with
         | OverlapsInFlight hits -> Assert.NotEmpty hits
-        | other -> failwith $"expected the unaware call to still collide (this is the PRE-repair baseline); got %A{other}"
+        | other ->
+            failwith $"expected the unaware call to still collide (this is the PRE-repair baseline); got %A{other}"
 
         // WITH the roster: the repair. The real subjects never collided.
         Assert.Equal(Startable, schedulable generated false inFlight candidate)
 
     [<Fact>]
-    let ``#2305 negative control — a directory-prefix claim over the generated artifact's parent still overlaps (#309 trap)`` () =
+    let ``#2305 negative control — a directory-prefix claim over the generated artifact's parent still overlaps (#309 trap)``
+        ()
+        =
         let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
         let inFlight = [ Declared [ Matchable "registry/**" ] ]
-        let candidate = { item 15 with TouchSet = Declared [ Matchable "registry/driver-skill-manifest.json" ] }
+
+        let candidate =
+            { item 15 with
+                TouchSet = Declared [ Matchable "registry/driver-skill-manifest.json" ]
+            }
 
         match schedulable generated false inFlight candidate with
         | OverlapsInFlight hits -> Assert.NotEmpty hits
@@ -360,11 +469,16 @@ module SchedulabilityTests =
     let ``#2305 negative control — a genuinely shared non-generated path still overlaps (FS.GG.Kit Version shape)`` () =
         let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
         let inFlight = [ Declared [ Matchable "src/FS.GG.Kit/FS.GG.Kit.csproj" ] ]
-        let candidate = { item 16 with TouchSet = Declared [ Matchable "src/FS.GG.Kit/FS.GG.Kit.csproj" ] }
+
+        let candidate =
+            { item 16 with
+                TouchSet = Declared [ Matchable "src/FS.GG.Kit/FS.GG.Kit.csproj" ]
+            }
 
         match schedulable generated false inFlight candidate with
         | OverlapsInFlight hits -> Assert.NotEmpty hits
-        | other -> failwith $"a genuine single-writer field absent from the generated roster must still block; got %A{other}"
+        | other ->
+            failwith $"a genuine single-writer field absent from the generated roster must still block; got %A{other}"
 
     // ================================================================================================
     // ORDER IS PART OF THE SPEC.
@@ -378,7 +492,8 @@ module SchedulabilityTests =
         let it =
             { item 15 with
                 TouchSet = Declared [ Unmatchable "**/bad.json" ]
-                Claim = Some(claim "heron-b71", LeaseHeld) }
+                Claim = Some(claim "heron-b71", LeaseHeld)
+            }
 
         match ask it with
         | UnusableTouchSet _ -> ()
@@ -391,7 +506,14 @@ module SchedulabilityTests =
                 State = Closed
                 Claim = Some(claim "heron-b71", LeaseHeld)
                 Blockers =
-                    [ { Ref = Some(ref 99); Raw = (ref 99).Short; State = BlockerOpen } ] }
+                    [
+                        {
+                            Ref = Some(ref 99)
+                            Raw = (ref 99).Short
+                            State = BlockerOpen
+                        }
+                    ]
+            }
 
         Assert.Equal(IssueClosed, ask it)
 
@@ -404,18 +526,48 @@ module SchedulabilityTests =
     [<Fact>]
     let ``every verdict can explain itself — a silent skip is how a full queue reads as an empty one`` () =
         let verdicts =
-            [ ask { item 20 with State = Closed }
-              ask { item 21 with Status = NoStatus }
-              ask { item 22 with TouchSet = Undeclared }
-              ask { item 23 with TouchSet = DeclaredNone }
-              ask { item 24 with TouchSet = Declared [ Unmatchable "**/x" ] }
-              ask { item 25 with Blockers = [ { Ref = Some(ref 99); Raw = (ref 99).Short; State = BlockerOpen } ] }
-              ask { item 26 with Claim = Some(claim "w", LeaseHeld) }
-              ask { item 27 with Claim = Some(claim "w", LeaseExpiredPrOpen 1) }
-              ask { item 28 with Claim = Some(claim "w", LivenessUnknown) }
-              ask { item 29 with HumanBlock = Some AwaitingHumanDecision }
-              ask { item 30 with HumanBlock = Some AwaitingHumanAction }
-              schedulable Set.empty false [ Declared [ Matchable "src/Scene/**" ] ] (item 31) ]
+            [
+                ask { item 20 with State = Closed }
+                ask { item 21 with Status = NoStatus }
+                ask { item 22 with TouchSet = Undeclared }
+                ask { item 23 with TouchSet = DeclaredNone }
+                ask
+                    { item 24 with
+                        TouchSet = Declared [ Unmatchable "**/x" ]
+                    }
+                ask
+                    { item 25 with
+                        Blockers =
+                            [
+                                {
+                                    Ref = Some(ref 99)
+                                    Raw = (ref 99).Short
+                                    State = BlockerOpen
+                                }
+                            ]
+                    }
+                ask
+                    { item 26 with
+                        Claim = Some(claim "w", LeaseHeld)
+                    }
+                ask
+                    { item 27 with
+                        Claim = Some(claim "w", LeaseExpiredPrOpen 1)
+                    }
+                ask
+                    { item 28 with
+                        Claim = Some(claim "w", LivenessUnknown)
+                    }
+                ask
+                    { item 29 with
+                        HumanBlock = Some AwaitingHumanDecision
+                    }
+                ask
+                    { item 30 with
+                        HumanBlock = Some AwaitingHumanAction
+                    }
+                schedulable Set.empty false [ Declared [ Matchable "src/Scene/**" ] ] (item 31)
+            ]
 
         for v in verdicts do
             let reason = explain 120 (item 1) v
@@ -436,19 +588,24 @@ module SchedulabilityTests =
                 { item 1887 with
                     Class = Some Decision
                     BoardClass = Some Hardening
-                    HumanBlock = None })
+                    HumanBlock = None
+                }
+        )
 
     [<Fact>]
     let ``#1887 Class decision refuses Backlog even when the caller opts into Backlog`` () =
         Assert.Equal(
             AwaitingHuman AwaitingHumanDecision,
-            schedulable Set.empty
+            schedulable
+                Set.empty
                 true
                 []
                 { item 1887 with
                     Status = Backlog
                     Class = Some Decision
-                    HumanBlock = None })
+                    HumanBlock = None
+                }
+        )
 
     [<Fact>]
     let ``#1887 negative control — a non-decision class with no sentinel remains Startable`` () =
@@ -460,7 +617,9 @@ module SchedulabilityTests =
                 { item 1887 with
                     Class = Some Hardening
                     BoardClass = Some Decision
-                    HumanBlock = None })
+                    HumanBlock = None
+                }
+        )
 
     [<Fact>]
     let ``a human/decision sentinel refuses even a Ready item that carries a real touch-set (#918)`` () =
@@ -468,7 +627,11 @@ module SchedulabilityTests =
         // column cannot withhold it and neither can `Paths:` — only the sentinel can.
         Assert.Equal(
             AwaitingHuman AwaitingHumanDecision,
-            ask { item 918 with HumanBlock = Some AwaitingHumanDecision })
+            ask
+                { item 918 with
+                    HumanBlock = Some AwaitingHumanDecision
+                }
+        )
 
     [<Fact>]
     let ``a human/decision sentinel refuses a Backlog item even with --include-backlog (the #1081 door)`` () =
@@ -477,21 +640,44 @@ module SchedulabilityTests =
         // in does not defeat it.
         Assert.Equal(
             AwaitingHuman AwaitingHumanDecision,
-            schedulable Set.empty true [] { item 918 with Status = Backlog; HumanBlock = Some AwaitingHumanDecision })
+            schedulable
+                Set.empty
+                true
+                []
+                { item 918 with
+                    Status = Backlog
+                    HumanBlock = Some AwaitingHumanDecision
+                }
+        )
 
     [<Fact>]
     let ``a human/action sentinel refuses too, carrying its own case`` () =
         Assert.Equal(
             AwaitingHuman AwaitingHumanAction,
-            ask { item 574 with HumanBlock = Some AwaitingHumanAction })
+            ask
+                { item 574 with
+                    HumanBlock = Some AwaitingHumanAction
+                }
+        )
 
     [<Fact>]
     let ``a concrete open blocker outranks the human-block sentinel — it is more actionable`` () =
         // Both hold the item; `Blocked by #99` is the sentence a worker can act on, so it wins. The
         // sentinel is checked only once the concrete blockers are clear.
-        let b = { Ref = Some(ref 99); Raw = (ref 99).Short; State = BlockerOpen }
+        let b =
+            {
+                Ref = Some(ref 99)
+                Raw = (ref 99).Short
+                State = BlockerOpen
+            }
 
-        match ask { item 8 with Blockers = [ b ]; HumanBlock = Some AwaitingHumanDecision } with
+        match
+            ask
+                { item 8 with
+                    Blockers = [ b ]
+                    HumanBlock = Some AwaitingHumanDecision
+                }
+        with
         | BlockedBy _ -> ()
         | other -> failwith $"expected BlockedBy to outrank the sentinel, got %A{other}"
 
@@ -501,18 +687,38 @@ module SchedulabilityTests =
 
     [<Fact>]
     let ``Paths any is Startable — a chore reserves nothing and is schedulable`` () =
-        Assert.Equal(Startable, ask { item 40 with TouchSet = DeclaredChore })
+        Assert.Equal(
+            Startable,
+            ask
+                { item 40 with
+                    TouchSet = DeclaredChore
+                }
+        )
 
     [<Fact>]
     let ``Paths none and Paths any are NOT the same verdict — that is the whole of leg 8`` () =
         Assert.Equal(DeliberatelyNoTouchSet, ask { item 41 with TouchSet = DeclaredNone })
-        Assert.Equal(Startable, ask { item 42 with TouchSet = DeclaredChore })
+
+        Assert.Equal(
+            Startable,
+            ask
+                { item 42 with
+                    TouchSet = DeclaredChore
+                }
+        )
 
     [<Fact>]
     let ``a chore conflicts with nothing — startable even beside in-flight work on any files`` () =
         Assert.Equal(
             Startable,
-            schedulable Set.empty false [ Declared [ Matchable "src/Scene/**" ] ] { item 43 with TouchSet = DeclaredChore })
+            schedulable
+                Set.empty
+                false
+                [ Declared [ Matchable "src/Scene/**" ] ]
+                { item 43 with
+                    TouchSet = DeclaredChore
+                }
+        )
 
     // ================================================================================================
     // .github#2712 — NOT A UNIT OF WORK
@@ -531,7 +737,12 @@ module SchedulabilityTests =
         for kind in Kind.legalKinds |> List.filter Kind.isStanding do
             for status in [ Ready; Backlog; InProgress; InReview; Blocked; Done; NoStatus ] do
                 for state in [ Open; Closed ] do
-                    let standing = { item 266 with Kind = Some kind; Status = status; State = state }
+                    let standing =
+                        { item 266 with
+                            Kind = Some kind
+                            Status = status
+                            State = state
+                        }
 
                     Assert.Equal(NotAUnitOfWork kind, schedulable Set.empty false [] standing)
                     // `--include-backlog` must not defeat it either: the opt-in is about a COLUMN, and
@@ -548,9 +759,17 @@ module SchedulabilityTests =
                 State = Closed
                 Status = Backlog
                 TouchSet = Undeclared
-                Blockers = [ { Ref = Some(ref 999); Raw = ".github#999"; State = BlockerOpen } ]
+                Blockers =
+                    [
+                        {
+                            Ref = Some(ref 999)
+                            Raw = ".github#999"
+                            State = BlockerOpen
+                        }
+                    ]
                 HumanBlock = Some AwaitingHumanDecision
-                Class = Some Decision }
+                Class = Some Decision
+            }
 
         Assert.Equal(NotAUnitOfWork Anchor, schedulable Set.empty true [] loaded)
 
@@ -571,16 +790,31 @@ module SchedulabilityTests =
         // ADR-0066's direction, and here it also closes a hazard the `Class` axis does not have: were the
         // column allowed to decide, one dropdown edit would make a real work row permanently
         // unschedulable with nothing in its body to explain why.
-        let columnSaysRegister = { item 1 with Kind = None; BoardKind = Some Register }
+        let columnSaysRegister =
+            { item 1 with
+                Kind = None
+                BoardKind = Some Register
+            }
+
         Assert.Equal(Startable, schedulable Set.empty false [] columnSaysRegister)
 
         // And the converse: a body that says `register` is refused even while the column disagrees.
-        let bodySaysRegister = { item 1 with Kind = Some Register; BoardKind = Some Work }
+        let bodySaysRegister =
+            { item 1 with
+                Kind = Some Register
+                BoardKind = Some Work
+            }
+
         Assert.Equal(NotAUnitOfWork Register, schedulable Set.empty false [] bodySaysRegister)
 
     [<Fact>]
     let ``2712 explain names the kind and does not report the Status column`` () =
-        let standing = { item 266 with Kind = Some Anchor; Status = Backlog }
+        let standing =
+            { item 266 with
+                Kind = Some Anchor
+                Status = Backlog
+            }
+
         let text = explain 120 standing (schedulable Set.empty true [] standing)
 
         Assert.Contains("anchor", text)

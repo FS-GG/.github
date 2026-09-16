@@ -11,13 +11,15 @@ module Review =
         | Repair
 
     type Binding =
-        { ItemRef: string
-          Pr: int
-          HeadSha: string
-          ClaimGeneration: string
-          ImplementerIdentity: string
-          Phase: Phase
-          Round: int }
+        {
+            ItemRef: string
+            Pr: int
+            HeadSha: string
+            ClaimGeneration: string
+            ImplementerIdentity: string
+            Phase: Phase
+            Round: int
+        }
 
     type RepairPhaseReceipt = StructuredDecision.RepairPhaseReceipt
 
@@ -31,11 +33,13 @@ module Review =
     // same-critic rule protects is preserved either by the same critic confirming, or by the chain being
     // honestly restarted, never by a stranger silently continuing it (`independent-review.md`).
     type CriticSuccessionReceipt =
-        { OriginalCriticIdentity: string
-          SuccessorCriticIdentity: string
-          GrantedBy: string
-          Reason: string
-          CandidateHeadSha: string }
+        {
+            OriginalCriticIdentity: string
+            SuccessorCriticIdentity: string
+            GrantedBy: string
+            Reason: string
+            CandidateHeadSha: string
+        }
 
     // The accountable grant that lets a repair whose subject is a PR COMMENT rather than the tree
     // advance a round (.github#2549) — the third instance of the same "external fact the pure engine
@@ -57,17 +61,21 @@ module Review =
     // earlier round being replayed against a later one. `CandidateHeadSha` binds it to the head the
     // repair was made at.
     type RepairAssertionReceipt =
-        { AnsweredReviewUrl: string
-          CandidateHeadSha: string
-          GrantedBy: string
-          Reason: string }
+        {
+            AnsweredReviewUrl: string
+            CandidateHeadSha: string
+            GrantedBy: string
+            Reason: string
+        }
 
     type Facts =
-        { Comments: Driver.ReviewComment list
-          Checks: PrState
-          RepairPhaseGranted: RepairPhaseReceipt option
-          RepairRouteAvailable: bool
-          DiffAuditTrusted: SemanticDiff.TrustedAudit option }
+        {
+            Comments: Driver.ReviewComment list
+            Checks: PrState
+            RepairPhaseGranted: RepairPhaseReceipt option
+            RepairRouteAvailable: bool
+            DiffAuditTrusted: SemanticDiff.TrustedAudit option
+        }
 
     type State =
         | AwaitingInitialReview
@@ -86,14 +94,16 @@ module Review =
         | GuardViolation of reason: string
 
     type AcceptedReceipt =
-        { HeadSha: string
-          CriticIdentity: string
-          Rounds: int list
-          RepairPhase: bool
-          ChecksGreen: bool
-          RuntimeRouteEvidence: Driver.RuntimeRouteEvidence option
-          DiffAuditRequired: bool
-          DiffAuditHead: string option }
+        {
+            HeadSha: string
+            CriticIdentity: string
+            Rounds: int list
+            RepairPhase: bool
+            ChecksGreen: bool
+            RuntimeRouteEvidence: Driver.RuntimeRouteEvidence option
+            DiffAuditRequired: bool
+            DiffAuditHead: string option
+        }
 
     type NextAction =
         | DispatchCritic
@@ -108,19 +118,23 @@ module Review =
         | Park of reason: string
 
     type Verdict =
-        { State: State
-          NextAction: NextAction
-          FreshnessToken: string
-          ActionKey: string
-          RetiredChains: Driver.ChainRetirement list }
+        {
+            State: State
+            NextAction: NextAction
+            FreshnessToken: string
+            ActionKey: string
+            RetiredChains: Driver.ChainRetirement list
+        }
 
     type OrdinaryExhaustionFacts =
-        { Phase: Phase
-          HeadSha: string
-          CurrentClaimGeneration: string
-          Checks: PrState
-          Comments: Driver.ReviewComment list
-          WaitState: ReviewWait.State option }
+        {
+            Phase: Phase
+            HeadSha: string
+            CurrentClaimGeneration: string
+            Checks: PrState
+            Comments: Driver.ReviewComment list
+            WaitState: ReviewWait.State option
+        }
 
     [<RequireQualifiedAccess>]
     type OrdinaryExhaustionDecision =
@@ -142,35 +156,45 @@ module Review =
         | Repair -> "repair"
 
     let freshnessToken (binding: Binding) =
-        [ binding.ItemRef
-          string binding.Pr
-          binding.HeadSha
-          binding.ClaimGeneration
-          binding.ImplementerIdentity
-          phaseToken binding.Phase
-          string binding.Round ]
+        [
+            binding.ItemRef
+            string binding.Pr
+            binding.HeadSha
+            binding.ClaimGeneration
+            binding.ImplementerIdentity
+            phaseToken binding.Phase
+            string binding.Round
+        ]
         |> String.concat "\n"
         |> digest
 
     let private makeVerdict binding retiredChains state action =
         let token = freshnessToken binding
         let actionKey = digest $"%s{token}\n%A{state}\n%A{action}"
-        { State = state
-          NextAction = action
-          FreshnessToken = token
-          ActionKey = actionKey
-          RetiredChains = retiredChains }
+
+        {
+            State = state
+            NextAction = action
+            FreshnessToken = token
+            ActionKey = actionKey
+            RetiredChains = retiredChains
+        }
 
     let private missing value label =
-        if String.IsNullOrWhiteSpace(value: string) then Some label else None
+        if String.IsNullOrWhiteSpace(value: string) then
+            Some label
+        else
+            None
 
     let private validateBinding (binding: Binding) =
-        [ missing binding.ItemRef "item ref"
-          (if binding.Pr <= 0 then Some "pull request" else None)
-          missing binding.HeadSha "head SHA"
-          missing binding.ClaimGeneration "claim generation"
-          missing binding.ImplementerIdentity "implementer identity"
-          (if binding.Round < 1 then Some "round" else None) ]
+        [
+            missing binding.ItemRef "item ref"
+            (if binding.Pr <= 0 then Some "pull request" else None)
+            missing binding.HeadSha "head SHA"
+            missing binding.ClaimGeneration "claim generation"
+            missing binding.ImplementerIdentity "implementer identity"
+            (if binding.Round < 1 then Some "round" else None)
+        ]
         |> List.choose id
 
     let private ceilingFor phase =
@@ -188,6 +212,7 @@ module Review =
     let private ordinaryExhaustionTerminal headSha checks comments =
         let live = Driver.liveReviewComments headSha comments
         let marker = "<!-- fsgg:review-decision/v2 -->"
+
         let reviewRecords =
             live.Live
             |> List.sortBy _.Id
@@ -200,6 +225,7 @@ module Review =
             |> List.filter (fun record ->
                 record.Kind = StructuredDecision.Initial
                 || record.Kind = StructuredDecision.Confirmation)
+
         let precedingChangesRequired =
             match reviewRecords with
             | initial :: roundOne :: roundTwo :: _ ->
@@ -212,9 +238,11 @@ module Review =
                 && [ initial; roundOne; roundTwo ]
                    |> List.forall (fun record -> record.Verdict = StructuredDecision.ChangesRequired)
             | _ -> false
+
         let confirmations =
             reviewRecords
             |> List.filter (fun record -> record.Kind = StructuredDecision.Confirmation)
+
         let latest = reviewRecords |> List.tryLast
 
         let prefixAdmitted =
@@ -227,16 +255,19 @@ module Review =
             && (confirmations.Length > Protocol.reviewPolicy.MaxAutomatedRepairRounds
                 || precedingChangesRequired)
 
-        if List.isEmpty live.StructuredErrors
-           && prefixAdmitted
-           && confirmations.Length >= Protocol.reviewPolicy.MaxAutomatedRepairRounds then
+        if
+            List.isEmpty live.StructuredErrors
+            && prefixAdmitted
+            && confirmations.Length >= Protocol.reviewPolicy.MaxAutomatedRepairRounds
+        then
             match latest, checks with
-            | Some terminal, _
-                when terminal.HeadSha = headSha
-                     && terminal.Verdict = StructuredDecision.ChangesRequired -> Some terminal
-            | Some terminal, PrRed
-                when terminal.HeadSha = headSha
-                     && terminal.Verdict = StructuredDecision.Pass -> Some terminal
+            | Some terminal, _ when
+                terminal.HeadSha = headSha
+                && terminal.Verdict = StructuredDecision.ChangesRequired
+                ->
+                Some terminal
+            | Some terminal, PrRed when terminal.HeadSha = headSha && terminal.Verdict = StructuredDecision.Pass ->
+                Some terminal
             | _ -> None
         else
             None
@@ -247,18 +278,17 @@ module Review =
     let decideOrdinaryExhaustion (facts: OrdinaryExhaustionFacts) =
         let completedWait (terminal: StructuredDecision.ReviewRecord) =
             match facts.WaitState with
-            | Some (ReviewWait.Completed (receipt, _))
-                when receipt.Kind = ReviewWait.RepairConfirmation
-                     && receipt.ClaimGeneration <> facts.CurrentClaimGeneration
-                     && receipt.ReviewGeneration =
-                        ReviewWait.generationToken
-                            facts.HeadSha
-                            ReviewWait.RepairConfirmation
-                            terminal.Round ->
+            | Some(ReviewWait.Completed(receipt, _)) when
+                receipt.Kind = ReviewWait.RepairConfirmation
+                && receipt.ClaimGeneration <> facts.CurrentClaimGeneration
+                && receipt.ReviewGeneration =
+                    ReviewWait.generationToken facts.HeadSha ReviewWait.RepairConfirmation terminal.Round
+                ->
                 OrdinaryExhaustionDecision.CompletedOrdinaryExhaustion
-            | Some (ReviewWait.Completed _) ->
-                OrdinaryExhaustionDecision.NotExhausted "the completed wait does not bind the terminal head, round, or prior claim generation"
-            | Some (ReviewWait.Invalid errors) ->
+            | Some(ReviewWait.Completed _) ->
+                OrdinaryExhaustionDecision.NotExhausted
+                    "the completed wait does not bind the terminal head, round, or prior claim generation"
+            | Some(ReviewWait.Invalid errors) ->
                 let detail = String.concat "; " errors
                 OrdinaryExhaustionDecision.NotExhausted($"the review-wait ledger is invalid: %s{detail}")
             | Some _ -> OrdinaryExhaustionDecision.NotExhausted "the terminal review wait is not completed"
@@ -275,8 +305,12 @@ module Review =
                     match facts.Checks with
                     | PrPending -> OrdinaryExhaustionDecision.AwaitChecks
                     | PrGreen -> OrdinaryExhaustionDecision.HostAcceptanceEligible
-                    | _ -> OrdinaryExhaustionDecision.NotExhausted "the terminal pass has neither settled red nor remained eligible for host acceptance"
-                | _ -> OrdinaryExhaustionDecision.NotExhausted "the ordinary review ledger has not reached the bounded terminal set"
+                    | _ ->
+                        OrdinaryExhaustionDecision.NotExhausted
+                            "the terminal pass has neither settled red nor remained eligible for host acceptance"
+                | _ ->
+                    OrdinaryExhaustionDecision.NotExhausted
+                        "the ordinary review ledger has not reached the bounded terminal set"
 
     let private ordinaryExhaustionOutcome (facts: Facts) =
         match facts.RepairPhaseGranted with
@@ -287,9 +321,12 @@ module Review =
                     "the ordinary review chain is exhausted; the host must mint the one permitted "
                     + "fresh repair phase (new claim, branch/PR, implementer, critic) and re-inspect "
                     + "with a repair-phase receipt supplied"
+
                 OrdinaryExhaustion, Park reason
             else
-                let reason = "the ordinary review chain is exhausted and no repair route is available"
+                let reason =
+                    "the ordinary review chain is exhausted and no repair route is available"
+
                 TerminalHumanPark reason, Park reason
 
     // Re-project a verdict from the complete live decision. This consumer deliberately does not
@@ -537,7 +574,8 @@ module Review =
     // never grants one reads exactly the message it always did, and a REFUSED grant says so rather than
     // looking like no grant at all.
     let private resumeImplementerReason (repairAssertionGranted: RepairAssertionReceipt option) =
-        let baseReason = "the critic requested changes at the current head; no new commit has landed yet"
+        let baseReason =
+            "the critic requested changes at the current head; no new commit has landed yet"
 
         match repairAssertionGranted with
         | Some _ ->
@@ -565,6 +603,7 @@ module Review =
     // would disagree about which chain a PR carrying a retired one is being judged on.
     let private acceptanceOutcome (binding: Binding) (facts: Facts) (live: Driver.ReviewComment list) =
         let mechanicallyRequired = facts.DiffAuditTrusted.IsSome
+
         match Driver.parseReviewCommentsWithFacts mechanicallyRequired facts.DiffAuditTrusted live with
         | Error errors -> MalformedEvidence errors, Park(String.concat "; " errors)
         | Ok chain ->
@@ -578,14 +617,16 @@ module Review =
             match Driver.validateReviewChainStructure ceiling chainWithChecks, chain.CriticIdentity with
             | [], Some critic when chain.HeadSha = Some binding.HeadSha ->
                 let receipt =
-                    { HeadSha = binding.HeadSha
-                      CriticIdentity = critic
-                      Rounds = chain.Rounds
-                      RepairPhase = chain.RepairPhase
-                      ChecksGreen = checksGreen
-                      RuntimeRouteEvidence = chain.RuntimeRouteEvidence
-                      DiffAuditRequired = chain.DiffAuditRequired
-                      DiffAuditHead = chain.DiffAuditHead }
+                    {
+                        HeadSha = binding.HeadSha
+                        CriticIdentity = critic
+                        Rounds = chain.Rounds
+                        RepairPhase = chain.RepairPhase
+                        ChecksGreen = checksGreen
+                        RuntimeRouteEvidence = chain.RuntimeRouteEvidence
+                        DiffAuditRequired = chain.DiffAuditRequired
+                        DiffAuditHead = chain.DiffAuditHead
+                    }
 
                 // Exhaustive over `PrState` with NO wildcard: a future check state cannot silently fall
                 // into whichever arm happens to be last. The state is the same in every non-green case —
@@ -646,7 +687,9 @@ module Review =
                         + "no longer open; no routine review action remains"
                     )
             | [], Some _ ->
-                let reason = "the accepted review chain is bound to a different head than the current commit"
+                let reason =
+                    "the accepted review chain is bound to a different head than the current commit"
+
                 MalformedEvidence [ reason ], Park reason
             | [], None ->
                 let reason = "the accepted review chain carries no critic identity"
@@ -661,7 +704,8 @@ module Review =
     // message is unchanged when no near miss is found, so every existing malformed-verdict case keeps
     // its prior wording.
     let private malformedVerdictReason (phaseFacts: Driver.ReviewPhaseFacts) =
-        let baseReason = "the latest review verdict is neither readable pass nor changes-required"
+        let baseReason =
+            "the latest review verdict is neither readable pass nor changes-required"
 
         match phaseFacts.LatestVerdictNearMissHints with
         | [] -> baseReason
@@ -676,7 +720,8 @@ module Review =
     // moved after acceptance (a full fresh review) looked indistinguishable from a stranger hijacking
     // someone else's chain. Same near-miss-naming convention as `malformedVerdictReason` (#2369).
     let private competingInitialMarkerReason (count: int) (diagnostics: string list) =
-        let baseReason = $"the initial review marker is carried by %d{count} comments; exactly one is required"
+        let baseReason =
+            $"the initial review marker is carried by %d{count} comments; exactly one is required"
 
         let rule =
             "a second chain is admitted only when a host-acceptance marker names an earlier chain's "
@@ -711,7 +756,9 @@ module Review =
         if not (List.isEmpty phaseFacts.StructuredErrors) then
             MalformedEvidence phaseFacts.StructuredErrors, Park(String.concat "; " phaseFacts.StructuredErrors)
         elif phaseFacts.CriticIdentity = Some binding.ImplementerIdentity then
-            let reason = "the critic identity equals the implementer identity; an implementer cannot act as its own critic"
+            let reason =
+                "the critic identity equals the implementer identity; an implementer cannot act as its own critic"
+
             GuardViolation reason, Park reason
         elif phaseFacts.InitialCount > 1 then
             let reason = competingInitialMarkerReason phaseFacts.InitialCount diagnostics
@@ -719,6 +766,7 @@ module Review =
         elif phaseFacts.AcceptanceCount > 1 then
             let reason =
                 $"the host-acceptance marker is carried by %d{phaseFacts.AcceptanceCount} comments; exactly one is required"
+
             MalformedEvidence [ reason ], Park reason
         else
             let ceiling = ceilingFor binding.Phase
@@ -740,9 +788,12 @@ module Review =
                         let reason =
                             "binding declares an active repair phase but no repair-phase marker is present in "
                             + "comments and no repair-phase receipt was supplied"
+
                         TerminalHumanPark reason, Park reason
                 elif exhausted then
-                    let reason = "the repair-phase confirmation round ceiling is exhausted with no acceptance; no further automatic route exists"
+                    let reason =
+                        "the repair-phase confirmation round ceiling is exhausted with no acceptance; no further automatic route exists"
+
                     TerminalHumanPark reason, Park reason
                 elif phaseFacts.AcceptancePresent then
                     acceptanceOutcome binding facts live
@@ -750,6 +801,7 @@ module Review =
                     RepairPhaseSetup, DispatchCritic
                 else
                     let round = phaseFacts.ConfirmationCount + 1
+
                     match phaseFacts.LatestVerdict with
                     // .github#2487 site 1 of 2 — the REPAIR-phase `pass` arm. Structurally identical to
                     // the ordinary one below and repaired identically; fixing only the branch the defect
@@ -766,7 +818,11 @@ module Review =
                                 RepairPhaseActive round, AwaitChecks
                         | MovedFrom reviewedHead ->
                             RepairPhaseActive round,
-                            successorAction binding phaseFacts successionGranted (movedPassReason reviewedHead binding.HeadSha successionGranted)
+                            successorAction
+                                binding
+                                phaseFacts
+                                successionGranted
+                                (movedPassReason reviewedHead binding.HeadSha successionGranted)
                     | Some "changes-required" ->
                         match reviewedHeadAgainst binding phaseFacts with
                         | Unreadable ->
@@ -781,7 +837,11 @@ module Review =
                                 ResumeImplementer(resumeImplementerReason repairAssertionGranted)
                         | MovedFrom reviewedHead ->
                             RepairPhaseActive round,
-                            successorAction binding phaseFacts successionGranted (resumeSameCriticReason reviewedHead binding.HeadSha successionGranted)
+                            successorAction
+                                binding
+                                phaseFacts
+                                successionGranted
+                                (resumeSameCriticReason reviewedHead binding.HeadSha successionGranted)
                     | _ ->
                         let reason = malformedVerdictReason phaseFacts
                         MalformedEvidence [ reason ], Park reason
@@ -794,6 +854,7 @@ module Review =
                     acceptanceOutcome binding facts live
                 else
                     let round = phaseFacts.ConfirmationCount + 1
+
                     match phaseFacts.LatestVerdict with
                     // .github#2487 site 2 of 2 — the ORDINARY `pass` arm, and the one all three recorded
                     // instances were measured on. AC1 and AC2 name the two answers it used to give at a
@@ -820,7 +881,11 @@ module Review =
                         // the pass arm the only place in the protocol where a moved head has no route.
                         | MovedFrom reviewedHead ->
                             AwaitingSuccessorReview round,
-                            successorAction binding phaseFacts successionGranted (movedPassReason reviewedHead binding.HeadSha successionGranted)
+                            successorAction
+                                binding
+                                phaseFacts
+                                successionGranted
+                                (movedPassReason reviewedHead binding.HeadSha successionGranted)
                     | Some "changes-required" ->
                         match reviewedHeadAgainst binding phaseFacts with
                         | Unreadable ->
@@ -836,7 +901,11 @@ module Review =
                                 ResumeImplementer(resumeImplementerReason repairAssertionGranted)
                         | MovedFrom reviewedHead ->
                             AwaitingSuccessorReview round,
-                            successorAction binding phaseFacts successionGranted (resumeSameCriticReason reviewedHead binding.HeadSha successionGranted)
+                            successorAction
+                                binding
+                                phaseFacts
+                                successionGranted
+                                (resumeSameCriticReason reviewedHead binding.HeadSha successionGranted)
                     | _ ->
                         let reason = malformedVerdictReason phaseFacts
                         MalformedEvidence [ reason ], Park reason
@@ -849,13 +918,17 @@ module Review =
         : Result<Verdict, string list> =
         match validateBinding binding with
         | problems when not (List.isEmpty problems) ->
-            Error(problems |> List.map (fun field -> $"review binding is incomplete: missing %s{field}"))
+            Error(
+                problems
+                |> List.map (fun field -> $"review binding is incomplete: missing %s{field}")
+            )
         | _ ->
             // .github#2527: the retirement partition is computed ONCE, here, and both the classifier
             // and the verdict read the same answer — so what the state was decided from and what the
             // verdict reports as retired can never disagree.
             let partition = Driver.liveReviewComments binding.HeadSha facts.Comments
             let expectedSubject = $"%s{binding.ItemRef}/pr/%d{binding.Pr}"
+
             if not (List.isEmpty partition.StructuredErrors) then
                 let state = MalformedEvidence partition.StructuredErrors
                 Ok(makeVerdict binding partition.Retired state (Park(String.concat "; " partition.StructuredErrors)))
@@ -865,10 +938,15 @@ module Review =
             else
                 let state, action =
                     classify binding facts partition.Live partition.Diagnostics successionGranted repairAssertionGranted
+
                 Ok(makeVerdict binding partition.Retired state action)
 
     let advance freshnessToken actionKey binding facts successionGranted repairAssertionGranted =
         match inspect binding facts successionGranted repairAssertionGranted with
         | Ok verdict when verdict.FreshnessToken = freshnessToken && verdict.ActionKey = actionKey -> Ok verdict
-        | Ok _ -> Error [ "review verdict is stale or does not authorize this transition; re-inspect before advancing" ]
+        | Ok _ ->
+            Error
+                [
+                    "review verdict is stale or does not authorize this transition; re-inspect before advancing"
+                ]
         | Error reasons -> Error reasons

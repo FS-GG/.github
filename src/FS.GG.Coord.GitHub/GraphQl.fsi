@@ -11,12 +11,12 @@ module GraphQl =
         | NotRetryable
 
     type FailureMetadata =
-        { Retry: RetryClassification
-          RateLimit: (RateLimitResource * System.DateTimeOffset option) option }
+        {
+            Retry: RetryClassification
+            RateLimit: (RateLimitResource * System.DateTimeOffset option) option
+        }
 
-    type DrainLimits =
-        { MaxPages: int
-          MaxItems: int }
+    type DrainLimits = { MaxPages: int; MaxItems: int }
 
     type Page<'item>
 
@@ -27,7 +27,10 @@ module GraphQl =
 
     /// Send one GraphQL request and return only the decoder's typed domain value.
     val read:
-        transport: IGitHubTransport -> request: Request -> decoder: (JsonElement -> IoResult<'value>) -> IoResult<'value>
+        transport: IGitHubTransport ->
+        request: Request ->
+        decoder: (JsonElement -> IoResult<'value>) ->
+            IoResult<'value>
 
     /// Decode one Relay connection page. Raw pageInfo never leaves this module.
     val page:
@@ -36,7 +39,7 @@ module GraphQl =
         key: ('item -> string) ->
         decodeNode: (JsonElement -> IoResult<'item>) ->
         connection: JsonElement ->
-        IoResult<Page<'item>>
+            IoResult<Page<'item>>
 
     /// Decode a `first: window` page. An omitted pageInfo is accepted only when the returned node count is
     /// below the window, which independently proves there was no truncated tail.
@@ -47,7 +50,7 @@ module GraphQl =
         key: ('item -> string) ->
         decodeNode: (JsonElement -> IoResult<'item>) ->
         connection: JsonElement ->
-        IoResult<Page<'item>>
+            IoResult<Page<'item>>
 
     /// Drain a connection with bounded pages/items and fail on repeated cursors, duplicate identities,
     /// changing totalCount, empty continuing pages, or a final count that disagrees with totalCount.
@@ -56,8 +59,7 @@ module GraphQl =
         what: string ->
         limits: DrainLimits ->
         fetch: (string option -> IoResult<Page<'item>>) ->
-        IoResult<'item list>
+            IoResult<'item list>
 
     /// Extract partial-mutation facts without exposing the mixed data/errors envelope.
-    val partialMutation:
-        subject: string -> body: string -> IoResult<string list * (string * string) list>
+    val partialMutation: subject: string -> body: string -> IoResult<string list * (string * string) list>

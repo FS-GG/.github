@@ -44,14 +44,16 @@ module FollowupsTests =
     /// per-worker path exists to prevent. Defence in depth is only depth if the inner layer is tested
     /// without the outer one.
     let private workerWithRawId (id: string) : Identity.Worker =
-        { Id = id
-          Session = None
-          Provenance = Identity.FromFlag
-          // #1646 — `Derived` is the LOCK boundary's question (does this process's own id agree with the one
-          // it named?) and the follow-up queue is not a lock: it is a per-worker FILE, keyed on the id in
-          // use. `None` says this hand-built worker derives nothing, which is what a `Worker` assembled
-          // outside `Identity.resolve` honestly is.
-          Derived = None }
+        {
+            Id = id
+            Session = None
+            Provenance = Identity.FromFlag
+            // #1646 — `Derived` is the LOCK boundary's question (does this process's own id agree with the one
+            // it named?) and the follow-up queue is not a lock: it is a per-worker FILE, keyed on the id in
+            // use. `None` says this hand-built worker derives nothing, which is what a `Worker` assembled
+            // outside `Identity.resolve` honestly is.
+            Derived = None
+        }
 
     /// Run `f` against a THROWAWAY cache root.
     ///
@@ -62,7 +64,9 @@ module FollowupsTests =
     /// stands up a cache dir, which is precisely the "nobody else is looking" defence `Followups.fsi`
     /// argues a component must not rely on.
     let private withCache (f: string -> 'a) : 'a =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-followups-" + Guid.NewGuid().ToString("n"))
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-followups-" + Guid.NewGuid().ToString("n"))
+
         let prior = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
 
@@ -76,7 +80,12 @@ module FollowupsTests =
             with _ ->
                 ()
 
-    let private ref' owner repo n : Ref = { Owner = owner; Repo = repo; Number = n }
+    let private ref' owner repo n : Ref =
+        {
+            Owner = owner
+            Repo = repo
+            Number = n
+        }
 
     let private writeQueue (cache: string) (worker: string) (text: string) (written: DateTime) =
         let directory = Path.Combine(cache, "followups")
@@ -111,8 +120,7 @@ module FollowupsTests =
     [<InlineData("FS.GG.Audio#12", "FS-GG", "FS.GG.Audio", 12)>]
     [<InlineData("https://github.com/FS-GG/FS.GG.SDD/issues/393", "FS-GG", "FS.GG.SDD", 393)>]
     let ``every QUALIFIED form is accepted`` (raw: string) (owner: string) (repo: string) (n: int) =
-        withCache (fun _ ->
-            Assert.Equal(Added(ref' owner repo n), apply (workerNamed "rook-test") (Add raw)))
+        withCache (fun _ -> Assert.Equal(Added(ref' owner repo n), apply (workerNamed "rook-test") (Add raw)))
 
     [<Fact>]
     let ``junk is refused with the canonical parser message, not the queue's bare-ref one`` () =
@@ -177,8 +185,14 @@ module FollowupsTests =
         withCache (fun _ ->
             let w = workerNamed "rook-audit-locked"
             apply w (Add "FS.GG.Game#171") |> ignore
-            let file = match path w with | Ok value -> value | Error why -> failwith why
+
+            let file =
+                match path w with
+                | Ok value -> value
+                | Error why -> failwith why
+
             use held = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None)
+
             match FollowupAudit.inspect w with
             | FollowupAudit.Unreadable why -> Assert.Contains("NOT an empty queue", why)
             | other -> failwith $"a held queue must fail closed, got %A{other}")
@@ -314,7 +328,16 @@ module FollowupsTests =
             apply w (Add "FS.GG.Audio#2") |> ignore
             apply w (Add "FS.GG.SDD#3") |> ignore
 
-            Assert.Equal(Listed [ ref' "FS-GG" "FS.GG.Game" 1; ref' "FS-GG" "FS.GG.Audio" 2; ref' "FS-GG" "FS.GG.SDD" 3 ], apply w List)
+            Assert.Equal(
+                Listed
+                    [
+                        ref' "FS-GG" "FS.GG.Game" 1
+                        ref' "FS-GG" "FS.GG.Audio" 2
+                        ref' "FS-GG" "FS.GG.SDD" 3
+                    ],
+                apply w List
+            )
+
             Assert.Equal(Popped(ref' "FS-GG" "FS.GG.Game" 1), apply w Pop)
             Assert.Equal(Popped(ref' "FS-GG" "FS.GG.Audio" 2), apply w Pop)
             Assert.Equal(Popped(ref' "FS-GG" "FS.GG.SDD" 3), apply w Pop)
@@ -379,6 +402,7 @@ module FollowupsTests =
                 match path w with
                 | Ok value -> value
                 | Error why -> failwith why
+
             Assert.Equal("FS-GG/FS.GG.Game#1\nnot-a-ref\n", File.ReadAllText file))
 
     [<Fact>]
@@ -391,18 +415,20 @@ module FollowupsTests =
                 apply w (Add $"FS.GG.Game#%d{i}") |> ignore
 
             let popped =
-                [| for _ in 1..n ->
-                       Task.Run(fun () ->
-                           let rec attempt tries =
-                               match apply w Pop with
-                               | Unreadable _ when tries > 0 ->
-                                   // Back off. A spin with no yield livelocks on a 2-core runner, which is
-                                   // how the first draft of this test failed in CI and passed here.
-                                   Thread.Sleep 1
-                                   attempt (tries - 1)
-                               | o -> o
+                [|
+                    for _ in 1..n ->
+                        Task.Run(fun () ->
+                            let rec attempt tries =
+                                match apply w Pop with
+                                | Unreadable _ when tries > 0 ->
+                                    // Back off. A spin with no yield livelocks on a 2-core runner, which is
+                                    // how the first draft of this test failed in CI and passed here.
+                                    Thread.Sleep 1
+                                    attempt (tries - 1)
+                                | o -> o
 
-                           attempt 200) |]
+                            attempt 200)
+                |]
                 |> Task.WhenAll
                 |> fun t -> t.Result
 

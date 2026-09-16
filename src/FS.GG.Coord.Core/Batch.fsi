@@ -56,59 +56,69 @@ module Batch =
     /// candidate that nothing is actually holding (#312, #353). Every comparison below projects the
     /// reservation set onto the candidate's own repo first.
     type Reservation =
-        { Owner: string
-          Repo: string
-          Paths: TouchSet
-          Holder: Holder }
+        {
+            Owner: string
+            Repo: string
+            Paths: TouchSet
+            Holder: Holder
+        }
 
     /// One candidate, and why.
     type Decision =
-        { Item: Item
-          Result: Schedulability
-          /// When `Result` is `OverlapsInFlight`, who holds the tokens it collided with. `None` for
-          /// every other verdict.
-          CollidedWith: Holder option
-          /// The derived priority the fold ORDERED this candidate by (.github#1598).
-          ///
-          /// Carried on the decision, never recomputed by a renderer. `--explain` exists to show the
-          /// ordering the scheduler actually used, and a rank derived a second time downstream is a
-          /// second answer with nothing asserting it matches the first — which is the drift this repo
-          /// closed five times in one day.
-          Rank: Rank.Rank }
+        {
+            Item: Item
+            Result: Schedulability
+            /// When `Result` is `OverlapsInFlight`, who holds the tokens it collided with. `None` for
+            /// every other verdict.
+            CollidedWith: Holder option
+            /// The derived priority the fold ORDERED this candidate by (.github#1598).
+            ///
+            /// Carried on the decision, never recomputed by a renderer. `--explain` exists to show the
+            /// ordering the scheduler actually used, and a rank derived a second time downstream is a
+            /// second answer with nothing asserting it matches the first — which is the drift this repo
+            /// closed five times in one day.
+            Rank: Rank.Rank
+        }
 
     type BatchResult =
-        { /// The items that may run in parallel, in the order they were ADMITTED — which is derived-rank
-          /// order (.github#1598), not issue order.
-          Chosen: Item list
+        {
+            /// The items that may run in parallel, in the order they were ADMITTED — which is derived-rank
+            /// order (.github#1598), not issue order.
+            Chosen: Item list
 
-          /// Every candidate the scheduler EVALUATED, with its verdict — including the ones it chose.
-          ///
-          /// A passed-over candidate is not dropped, it is REPORTED. "Nothing to do" and "everything
-          /// is blocked" are the same empty list and two completely different operator instructions,
-          /// and printing the first over the second is what sent a worker home from a full queue
-          /// (#440, #488).
-          Decisions: Decision list
+            /// Every candidate the scheduler EVALUATED, with its verdict — including the ones it chose.
+            ///
+            /// A passed-over candidate is not dropped, it is REPORTED. "Nothing to do" and "everything
+            /// is blocked" are the same empty list and two completely different operator instructions,
+            /// and printing the first over the second is what sent a worker home from a full queue
+            /// (#440, #488).
+            Decisions: Decision list
 
-          /// True iff `limit` stopped the fold early, leaving later candidates unevaluated.
-          ///
-          /// A cap that is not reported reads as "we looked at everything and this is all there was"
-          /// — which is a lie the caller cannot detect. `Decisions` covers only what was evaluated,
-          /// and this says so.
-          Truncated: bool }
+            /// True iff `limit` stopped the fold early, leaving later candidates unevaluated.
+            ///
+            /// A cap that is not reported reads as "we looked at everything and this is all there was"
+            /// — which is a lie the caller cannot detect. `Decisions` covers only what was evaluated,
+            /// and this says so.
+            Truncated: bool
+        }
 
     /// The host's concurrency model, read from the machine-readable declaration in `host-loop.md`.
     /// The engine deliberately does not own these numbers: the document that governs dispatch does.
     type WaveModel =
-        { Waves: int
-          ImplementerSlotsPerWave: int
-          ReviewSlots: int
-          ConsolidationThreshold: int }
+        {
+            Waves: int
+            ImplementerSlotsPerWave: int
+            ReviewSlots: int
+            ConsolidationThreshold: int
+        }
 
     /// Fleet occupancy at the instant `batch` made its scheduling decision.
     type WaveOccupancy =
-        { ActiveItems: int
-          WaveCapacity: int
-          OpenSlots: int }
+        {
+            ActiveItems: int
+            WaveCapacity: int
+            OpenSlots: int
+        }
 
     /// What occupies an implementer slot, and what merely looks busy (.github#2678).
     ///
@@ -118,12 +128,14 @@ module Batch =
     /// fields here are two different facts, and keeping them apart is the fix: a row with work and no
     /// holder is real and worth reporting, but it is a disagreement to reconcile, not a busy worker.
     type SlotOccupancy =
-        { /// The distinct items a worker is holding right now — the only list `waveOccupancy` may count.
-          Occupying: Ref list
+        {
+            /// The distinct items a worker is holding right now — the only list `waveOccupancy` may count.
+            Occupying: Ref list
 
-          /// The distinct items showing work that nobody holds. Disjoint from `Occupying` by
-          /// construction, so a reader may add the two without double-counting a ref.
-          WorkWithoutClaim: Ref list }
+            /// The distinct items showing work that nobody holds. Disjoint from `Occupying` by
+            /// construction, so a reader may add the two without double-counting a ref.
+            WorkWithoutClaim: Ref list
+        }
 
     /// Project a scheduler snapshot's candidates and reservations onto the implementer-slot question.
     ///

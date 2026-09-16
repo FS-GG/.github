@@ -14,39 +14,64 @@ open FS.GG.Coord.Types
 module RankTests =
 
     let private ref n =
-        { Owner = "FS-GG"
-          Repo = ".github"
-          Number = n }
+        {
+            Owner = "FS-GG"
+            Repo = ".github"
+            Number = n
+        }
 
     let private item n =
-        { Ref = ref n
-          PathRepo = (ref n).Repo
-          Status = Ready
-          State = Open
-          TouchSet = Declared [ Matchable $"src/f%d{n}.fs" ]
-          Blockers = []
-          Claim = None
-          ItemPr = None
-          ItemPrUnreadable = false
-          HumanBlock = None
-          Predicate = None
-          Class = None
-          Kind = None
-          BoardKind = None
-          CommentCount = None
-          BoardClass = None
-          DeliveryRoute = DeliveryRoute.Current { Schema = DeliveryRoute.Schema; Subject = "test"; SubjectRevision = "test"; Route = Some DeliveryRoute.Lightweight; Agent = "test"; Timestamp = "2026-01-01T00:00:00Z"; ReasonCodes = [ "test" ]; Rationale = "test"; DeclaredImpacts = [ "test" ]; ObservedFacts = [ "test" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
-          Severity = Unset
-          Phase = None
-          AgeDays = None }
+        {
+            Ref = ref n
+            PathRepo = (ref n).Repo
+            Status = Ready
+            State = Open
+            TouchSet = Declared [ Matchable $"src/f%d{n}.fs" ]
+            Blockers = []
+            Claim = None
+            ItemPr = None
+            ItemPrUnreadable = false
+            HumanBlock = None
+            Predicate = None
+            Class = None
+            Kind = None
+            BoardKind = None
+            CommentCount = None
+            BoardClass = None
+            DeliveryRoute =
+                DeliveryRoute.Current
+                    {
+                        Schema = DeliveryRoute.Schema
+                        Subject = "test"
+                        SubjectRevision = "test"
+                        Route = Some DeliveryRoute.Lightweight
+                        Agent = "test"
+                        Timestamp = "2026-01-01T00:00:00Z"
+                        ReasonCodes = [ "test" ]
+                        Rationale = "test"
+                        DeclaredImpacts = [ "test" ]
+                        ObservedFacts = [ "test" ]
+                        SddWorkId = None
+                        SpecHome = None
+                        RequiredGates = []
+                    }
+            Severity = Unset
+            Phase = None
+            AgeDays = None
+        }
 
     let private blockedBy n state (it: Item) =
         { it with
             Blockers =
                 it.Blockers
-                @ [ { Ref = Some(ref n)
-                      Raw = (ref n).Short
-                      State = state } ] }
+                @ [
+                    {
+                        Ref = Some(ref n)
+                        Raw = (ref n).Short
+                        State = state
+                    }
+                ]
+        }
 
     /// The candidates in the order `Rank.key` puts them.
     let private order (items: Item list) =
@@ -84,9 +109,11 @@ module RankTests =
         Assert.True(Rank.isUnranked (Rank.ofItem counts (item 1)))
 
         for withEvidence in
-            [ { item 1 with Class = Some Hardening }
-              { item 1 with Phase = Some P8Net }
-              { item 1 with AgeDays = Some 0 } ] do
+            [
+                { item 1 with Class = Some Hardening }
+                { item 1 with Phase = Some P8Net }
+                { item 1 with AgeDays = Some 0 }
+            ] do
             Assert.False(Rank.isUnranked (Rank.ofItem counts withEvidence))
 
     // ================================================================================================
@@ -107,15 +134,18 @@ module RankTests =
     [<Fact>]
     let ``#1598 blocking count is the number of OPEN items whose edge is still HOLDING`` () =
         let items =
-            [ item 1
-              item 2 |> blockedBy 1 BlockerOpen
-              item 3 |> blockedBy 1 BlockerOpen
-              // RESOLVED — a dependency that cleared is not a dependent, so it must not keep promoting
-              // the thing it used to wait on.
-              item 4 |> blockedBy 1 BlockerClosed
-              // A CLOSED issue is not a dependent either: nobody is waiting on anything.
-              { (item 5 |> blockedBy 1 BlockerOpen) with
-                  State = Closed } ]
+            [
+                item 1
+                item 2 |> blockedBy 1 BlockerOpen
+                item 3 |> blockedBy 1 BlockerOpen
+                // RESOLVED — a dependency that cleared is not a dependent, so it must not keep promoting
+                // the thing it used to wait on.
+                item 4 |> blockedBy 1 BlockerClosed
+                // A CLOSED issue is not a dependent either: nobody is waiting on anything.
+                { (item 5 |> blockedBy 1 BlockerOpen) with
+                    State = Closed
+                }
+            ]
 
         Assert.Equal(2, Rank.blockingCounts items |> Map.find (ref 1))
 
@@ -127,9 +157,14 @@ module RankTests =
         let prose =
             { item 2 with
                 Blockers =
-                    [ { Ref = None
-                        Raw = "RESOLVED: shipped last week"
-                        State = BlockerUnparseable } ] }
+                    [
+                        {
+                            Ref = None
+                            Raw = "RESOLVED: shipped last week"
+                            State = BlockerUnparseable
+                        }
+                    ]
+            }
 
         Assert.True(Rank.blockingCounts [ item 1; prose ] |> Map.isEmpty)
 
@@ -148,30 +183,51 @@ module RankTests =
         let defect = { item 1 with Class = Some Defect }
 
         let items =
-            [ hub
-              defect
-              item 60 |> blockedBy 50 BlockerOpen
-              item 61 |> blockedBy 50 BlockerOpen ]
+            [
+                hub
+                defect
+                item 60 |> blockedBy 50 BlockerOpen
+                item 61 |> blockedBy 50 BlockerOpen
+            ]
 
         Assert.Equal(50, order items |> List.head)
 
     [<Fact>]
     let ``#1901 Severity ranks above Class and Unset ranks last`` () =
         let items =
-            [ { item 1 with Severity = Low; Class = Some Defect }
-              { item 2 with Severity = High; Class = Some Hardening }
-              { item 3 with Severity = Critical; Class = None }
-              { item 4 with Severity = Medium; Class = Some Defect }
-              { item 5 with Severity = Unset; Class = Some Defect } ]
+            [
+                { item 1 with
+                    Severity = Low
+                    Class = Some Defect
+                }
+                { item 2 with
+                    Severity = High
+                    Class = Some Hardening
+                }
+                { item 3 with
+                    Severity = Critical
+                    Class = None
+                }
+                { item 4 with
+                    Severity = Medium
+                    Class = Some Defect
+                }
+                { item 5 with
+                    Severity = Unset
+                    Class = Some Defect
+                }
+            ]
 
         Assert.Equal<int list>([ 3; 2; 4; 1; 5 ], order items)
 
     [<Fact>]
     let ``#1598 defect outranks hardening, and both outrank an unclassed row`` () =
         let items =
-            [ { item 1 with Class = Some Hardening }
-              { item 2 with Class = Some Defect }
-              item 3 ]
+            [
+                { item 1 with Class = Some Hardening }
+                { item 2 with Class = Some Defect }
+                item 3
+            ]
 
         Assert.Equal<int list>([ 2; 1; 3 ], order items)
 
@@ -186,8 +242,10 @@ module RankTests =
         // as a second line of defence and for reports that display the complete board, but it is no longer
         // the only thing between a sentinel-less decision row and blind `take`.
         let items =
-            [ { item 1 with Class = Some Decision }
-              { item 2 with Class = Some Hardening } ]
+            [
+                { item 1 with Class = Some Decision }
+                { item 2 with Class = Some Hardening }
+            ]
 
         Assert.Equal<int list>([ 2; 1 ], order items)
 
@@ -197,30 +255,34 @@ module RankTests =
     [<Fact>]
     let ``#1598 Class outranks Phase — a P8 defect beats a P0 hardening item`` () =
         let items =
-            [ { item 1 with
-                  Class = Some Hardening
-                  Phase = Some P0Decisions }
-              { item 2 with
-                  Class = Some Defect
-                  Phase = Some P8Net } ]
+            [
+                { item 1 with
+                    Class = Some Hardening
+                    Phase = Some P0Decisions
+                }
+                { item 2 with
+                    Class = Some Defect
+                    Phase = Some P8Net
+                }
+            ]
 
         Assert.Equal<int list>([ 2; 1 ], order items)
 
     [<Fact>]
     let ``#1598 Phase orders by PLAN ORDER, and an unphased row sorts after every phase`` () =
         let items =
-            [ item 1
-              { item 2 with Phase = Some P8Net }
-              { item 3 with Phase = Some P0Decisions } ]
+            [
+                item 1
+                { item 2 with Phase = Some P8Net }
+                { item 3 with Phase = Some P0Decisions }
+            ]
 
         Assert.Equal<int list>([ 3; 2; 1 ], order items)
 
     [<Fact>]
     let ``#1598 age breaks a tie oldest-first, and an unknown age is never the oldest`` () =
         let items =
-            [ item 1
-              { item 2 with AgeDays = Some 5 }
-              { item 3 with AgeDays = Some 40 } ]
+            [ item 1; { item 2 with AgeDays = Some 5 }; { item 3 with AgeDays = Some 40 } ]
 
         // #3 (40d) then #2 (5d) then #1 (unknown). An unread age must not sort as ancient — that would
         // let a failed read outrank the whole board.
@@ -235,12 +297,17 @@ module RankTests =
         let disagreeing =
             { item 1 with
                 Class = Some Defect
-                BoardClass = Some Hardening }
+                BoardClass = Some Hardening
+            }
 
         Assert.Equal(Some Defect, (Rank.ofItem counts disagreeing).Class)
 
         // ...and the column IS read when the text is silent, which is the whole reason both fields exist.
-        let projectedOnly = { item 1 with BoardClass = Some Hardening }
+        let projectedOnly =
+            { item 1 with
+                BoardClass = Some Hardening
+            }
+
         Assert.Equal(Some Hardening, (Rank.ofItem counts projectedOnly).Class)
 
     // ================================================================================================
@@ -251,13 +318,15 @@ module RankTests =
     let ``#1598 AC4 a long-starved Ready item escalates above class and phase entirely`` () =
         let starved =
             { item 9 with
-                AgeDays = Some(Rank.StarvationDays + 1) }
+                AgeDays = Some(Rank.StarvationDays + 1)
+            }
 
         let freshDefect =
             { item 1 with
                 Class = Some Defect
                 Phase = Some P0Decisions
-                AgeDays = Some 0 }
+                AgeDays = Some 0
+            }
 
         // The starved item is UNCLASSED, UNPHASED and has the larger number — it loses every single term
         // — and it still leads, because escalation is the tier above all of them. Without that, an item
@@ -274,14 +343,17 @@ module RankTests =
 
         let starved =
             { item 9 with
-                AgeDays = Some(Rank.StarvationDays + 1) }
+                AgeDays = Some(Rank.StarvationDays + 1)
+            }
 
         let items =
-            [ hub
-              starved
-              item 20 |> blockedBy 1 BlockerOpen
-              item 21 |> blockedBy 1 BlockerOpen
-              item 22 |> blockedBy 1 BlockerOpen ]
+            [
+                hub
+                starved
+                item 20 |> blockedBy 1 BlockerOpen
+                item 21 |> blockedBy 1 BlockerOpen
+                item 22 |> blockedBy 1 BlockerOpen
+            ]
 
         Assert.Equal(9, order items |> List.head)
 
@@ -310,10 +382,12 @@ module RankTests =
     [<Fact>]
     let ``#1598 the order is total and input-order-independent`` () =
         let items =
-            [ { item 4 with Class = Some Defect }
-              { item 2 with Phase = Some P2Sdd }
-              item 9
-              { item 7 with AgeDays = Some 3 } ]
+            [
+                { item 4 with Class = Some Defect }
+                { item 2 with Phase = Some P2Sdd }
+                item 9
+                { item 7 with AgeDays = Some 3 }
+            ]
 
         let expected = order items
         Assert.Equal<int list>(expected, order (List.rev items))
@@ -342,7 +416,8 @@ module RankTests =
                 { item 1 with
                     Class = Some Defect
                     Phase = Some P0Decisions
-                    AgeDays = Some 4 }
+                    AgeDays = Some 4
+                }
 
         let text = Rank.explain r
 
@@ -374,7 +449,8 @@ module RankTests =
                 Rank.ofItem
                     counts
                     { item 1 with
-                        AgeDays = Some(Rank.StarvationDays + 5) }
+                        AgeDays = Some(Rank.StarvationDays + 5)
+                    }
             )
 
         Assert.Contains("STARVED", text)
@@ -399,9 +475,11 @@ module RankTests =
     // ================================================================================================
 
     let private otherRepo n =
-        { Owner = "FS-GG"
-          Repo = "FS.GG.SDD"
-          Number = n }
+        {
+            Owner = "FS-GG"
+            Repo = "FS.GG.SDD"
+            Number = n
+        }
 
     /// An item in the OTHER repo, blocked by `.github#hub`. `Scan.snapshot --repo .github` never puts one
     /// of these on the candidate list, which is exactly what made the undercount invisible.
@@ -409,17 +487,18 @@ module RankTests =
         { item n with
             Ref = otherRepo n
             Blockers =
-                [ { Ref = Some(ref hub)
-                    Raw = (ref hub).Short
-                    State = BlockerOpen } ] }
+                [
+                    {
+                        Ref = Some(ref hub)
+                        Raw = (ref hub).Short
+                        State = BlockerOpen
+                    }
+                ]
+        }
 
     /// The whole board: the hub and one ordinary item in `.github`, three dependents in `FS.GG.SDD`.
     let private wholeBoard =
-        [ item 10
-          item 11
-          dependent 200 10
-          dependent 201 10
-          dependent 202 10 ]
+        [ item 10; item 11; dependent 200 10; dependent 201 10; dependent 202 10 ]
 
     /// What `--repo .github` leaves on the candidate list.
     let private scopedToGithub =
@@ -473,9 +552,14 @@ module RankTests =
             { item 300 with
                 Ref = otherRepo 300
                 Blockers =
-                    [ { Ref = None
-                        Raw = "waiting on the platform team"
-                        State = BlockerUnparseable } ] }
+                    [
+                        {
+                            Ref = None
+                            Raw = "waiting on the platform team"
+                            State = BlockerUnparseable
+                        }
+                    ]
+            }
 
         // An OFF-BOARD ref: parseable, so it is credited — but to a node no candidate can be, so no rank
         // ever reads it. It must not land on the hub.
@@ -483,9 +567,14 @@ module RankTests =
             { item 301 with
                 Ref = otherRepo 301
                 Blockers =
-                    [ { Ref = Some(otherRepo 9999)
-                        Raw = "FS-GG/FS.GG.SDD#9999"
-                        State = BlockerUnknown } ] }
+                    [
+                        {
+                            Ref = Some(otherRepo 9999)
+                            Raw = "FS-GG/FS.GG.SDD#9999"
+                            State = BlockerUnknown
+                        }
+                    ]
+            }
 
         let counts = Rank.blockingCounts (wholeBoard @ [ prose; offBoard ])
 
@@ -568,8 +657,7 @@ module RankTests =
         // the batch, and concluding the scheduler was broken.
         match Batch.scheduleWith Set.empty wholeBoardCounts false None [] scopedToGithub with
         | Green r ->
-            let hubLine =
-                Batch.explainRanking r |> List.find (fun l -> l.Contains ".github#10")
+            let hubLine = Batch.explainRanking r |> List.find (fun l -> l.Contains ".github#10")
 
             Assert.Contains("blocking 3", hubLine)
         | other -> failwith $"the batch must be schedulable — got %A{other}"

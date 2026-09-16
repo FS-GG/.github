@@ -12,34 +12,44 @@ open FS.GG.Coord.Cli.BoardOps
 
 let private ok body =
     Ok
-        { Status = 200
-          Body = body
-          ETag = None
-          NextLink = None
-          Headers = Map.empty }
+        {
+            Status = 200
+            Body = body
+            ETag = None
+            NextLink = None
+            Headers = Map.empty
+        }
 
 let private paginated body =
     Ok
-        { Status = 200
-          Body = body
-          ETag = None
-          // `HttpTransport.Send` preserves page one's link after it has followed and merged every page.
-          NextLink = Some "https://example.test/comments?page=2"
-          Headers = Map.empty }
+        {
+            Status = 200
+            Body = body
+            ETag = None
+            // `HttpTransport.Send` preserves page one's link after it has followed and merged every page.
+            NextLink = Some "https://example.test/comments?page=2"
+            Headers = Map.empty
+        }
 
 let private comment id body =
     JsonSerializer.Serialize(
-        [| {| id = id
-              html_url = $"https://example.test/comments/%d{id}"
-              body = body |} |]
+        [|
+            {|
+                id = id
+                html_url = $"https://example.test/comments/%d{id}"
+                body = body
+            |}
+        |]
     )
 
 let private comments (values: (int64 * string) list) =
     values
     |> List.map (fun (id, body) ->
-        {| id = id
-           html_url = $"https://example.test/comments/%d{id}"
-           body = body |})
+        {|
+            id = id
+            html_url = $"https://example.test/comments/%d{id}"
+            body = body
+        |})
     |> List.toArray
     |> JsonSerializer.Serialize
 
@@ -47,9 +57,13 @@ let private liveClaim worker =
     let updatedAt = DateTimeOffset.UtcNow.ToString "O"
 
     JsonSerializer.Serialize(
-        [| {| id = 9001L
-              body = $"<!-- fsgg:claim worker=%s{worker} lease=120 -->\nheld"
-              updated_at = updatedAt |} |]
+        [|
+            {|
+                id = 9001L
+                body = $"<!-- fsgg:claim worker=%s{worker} lease=120 -->\nheld"
+                updated_at = updatedAt
+            |}
+        |]
     )
 
 let private lifecycleBody run unit revision predecessor =
@@ -61,11 +75,13 @@ let private lifecycleBody run unit revision predecessor =
     $"<!-- fsgg:item-lifecycle/v1 -->\n```json\n{{\"run_id\":\"%s{run}\",\"unit_id\":\"%s{unit}\",\"revision\":%d{revision},\"sequence\":%d{revision},\"previous_digest\":%s{previous}}}\n```\n"
 
 let private context (transport: IGitHubTransport) : Kernel.Context =
-    { Transport = transport
-      Owner = "FS-GG"
-      Title = "Coordination"
-      DefaultRepo = Some ".github"
-      ChoreLocks = [] }
+    {
+        Transport = transport
+        Owner = "FS-GG"
+        Title = "Coordination"
+        DefaultRepo = Some ".github"
+        ChoreLocks = []
+    }
 
 [<Fact>]
 let ``comment command exposes only create and explicit-id amend forms`` () =
@@ -95,9 +111,11 @@ let ``verified create reads the exact new comment back from the collection`` () 
     match
         Writes.createVerifiedComment
             transport
-            { Owner = "FS-GG"
-              Repo = ".github"
-              Number = 42 }
+            {
+                Owner = "FS-GG"
+                Repo = ".github"
+                Number = 42
+            }
             "hello π"
     with
     | Error error -> failwith (Errors.explain error)
@@ -124,9 +142,11 @@ let ``verified amend addresses the supplied comment id and reads it back`` () =
     match
         Writes.amendVerifiedComment
             transport
-            { Owner = "FS-GG"
-              Repo = ".github"
-              Number = 42 }
+            {
+                Owner = "FS-GG"
+                Repo = ".github"
+                Number = 42
+            }
             77L
             "replacement"
     with
@@ -143,6 +163,7 @@ let ``verified amend addresses the supplied comment id and reads it back`` () =
 [<Fact>]
 let ``amend refuses before PATCH when the comment is not owned by the declared target`` () =
     let requests = ResizeArray<Request>()
+
     let transport =
         Fake.Recorder(fun request ->
             requests.Add request
@@ -151,9 +172,11 @@ let ``amend refuses before PATCH when the comment is not owned by the declared t
     match
         Writes.amendVerifiedComment
             transport
-            { Owner = "FS-GG"
-              Repo = ".github"
-              Number = 42 }
+            {
+                Owner = "FS-GG"
+                Repo = ".github"
+                Number = 42
+            }
             77L
             "replacement"
     with
@@ -175,9 +198,11 @@ let ``mismatched readback is a refusal rather than a write receipt`` () =
     match
         Writes.createVerifiedComment
             transport
-            { Owner = "FS-GG"
-              Repo = ".github"
-              Number = 42 }
+            {
+                Owner = "FS-GG"
+                Repo = ".github"
+                Number = 42
+            }
             "intended"
     with
     | Ok receipt -> failwithf "mismatch unexpectedly produced receipt %A" receipt
@@ -197,13 +222,16 @@ let ``lifecycle create accepts only its server-ordered append-key winner`` () =
 
         let queue =
             System.Collections.Generic.Queue<IoResult<Response>>(
-                [ ok (liveClaim worker)
-                  ok "{\"id\":42}"
-                  ok (comment 42L body)
-                  ok (comments [ 42L, body ]) ]
+                [
+                    ok (liveClaim worker)
+                    ok "{\"id\":42}"
+                    ok (comment 42L body)
+                    ok (comments [ 42L, body ])
+                ]
             )
 
         let transport = Fake.Recorder(fun _ -> queue.Dequeue())
+
         let opts =
             Options.parse [ "comment"; "create"; ".github#42"; ".github#42"; source; "--json" ]
             |> Result.defaultWith failwith
@@ -229,10 +257,12 @@ let ``lifecycle create preserves and rejects a later same-key sibling`` () =
 
         let queue =
             System.Collections.Generic.Queue<IoResult<Response>>(
-                [ ok (liveClaim worker)
-                  ok "{\"id\":42}"
-                  ok (comment 42L body)
-                  ok (comments [ 41L, body; 42L, body ]) ]
+                [
+                    ok (liveClaim worker)
+                    ok "{\"id\":42}"
+                    ok (comment 42L body)
+                    ok (comments [ 41L, body; 42L, body ])
+                ]
             )
 
         let transport = Fake.Recorder(fun _ -> queue.Dequeue())
@@ -270,19 +300,21 @@ let ``lifecycle election sees a same-key competitor beyond one merged page`` () 
         Environment.SetEnvironmentVariable("FSGG_WORKER", worker)
 
         let unrelated =
-            [ 1L..100L ]
-            |> List.map (fun id -> id, $"ordinary comment %d{id}")
+            [ 1L .. 100L ] |> List.map (fun id -> id, $"ordinary comment %d{id}")
 
         // The competitor is deliberately element 101, beyond GitHub's requested page size. The fake
         // response has the same already-merged shape `HttpTransport.Send` supplies and retains the
         // first page's NextLink, so this test fails if the election truncates that transport contract.
         let merged = unrelated @ [ 101L, body; 200L, body ]
+
         let queue =
             System.Collections.Generic.Queue<IoResult<Response>>(
-                [ ok (liveClaim worker)
-                  ok "{\"id\":200}"
-                  ok (comment 200L body)
-                  paginated (comments merged) ]
+                [
+                    ok (liveClaim worker)
+                    ok "{\"id\":200}"
+                    ok (comment 200L body)
+                    paginated (comments merged)
+                ]
             )
 
         let transport = Fake.Recorder(fun _ -> queue.Dequeue())

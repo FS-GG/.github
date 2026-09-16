@@ -78,16 +78,20 @@ module Followups =
 
     /// One queue the local fleet audit could read.
     type AuditedQueue =
-        { Worker: string
-          Age: TimeSpan
-          Refs: Ref list }
+        {
+            Worker: string
+            Age: TimeSpan
+            Refs: Ref list
+        }
 
     /// The local fact before GitHub correlation: queues old enough to need a live-claim check, or files
     /// that could not be read. `Unreadable` is never represented as an empty queue.
     type Audit =
-        { Stale: AuditedQueue list
-          Fresh: AuditedQueue list
-          Unreadable: (string * string) list }
+        {
+            Stale: AuditedQueue list
+            Fresh: AuditedQueue list
+            Unreadable: (string * string) list
+        }
 
     /// The answer, as a TYPE — not a bool, not an option, and never an int at this layer.
     ///

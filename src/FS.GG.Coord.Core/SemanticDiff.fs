@@ -25,29 +25,35 @@ module SemanticDiff =
         | Unresolved
 
     type Occurrence =
-        { Id: string
-          Path: string
-          Line: int
-          Classification: Classification
-          Confidence: int
-          Before: string
-          After: string
-          Disposition: Disposition }
+        {
+            Id: string
+            Path: string
+            Line: int
+            Classification: Classification
+            Confidence: int
+            Before: string
+            After: string
+            Disposition: Disposition
+        }
 
     type Receipt =
-        { SchemaVersion: int
-          Repository: string
-          BaseSha: string
-          HeadSha: string
-          OldToken: string
-          NewToken: string
-          DeclaredPaths: string list
-          Required: bool
-          Occurrences: Occurrence list }
+        {
+            SchemaVersion: int
+            Repository: string
+            BaseSha: string
+            HeadSha: string
+            OldToken: string
+            NewToken: string
+            DeclaredPaths: string list
+            Required: bool
+            Occurrences: Occurrence list
+        }
 
     type TrustedAudit =
-        { Expected: Receipt list
-          Discovered: Occurrence list }
+        {
+            Expected: Receipt list
+            Discovered: Occurrence list
+        }
 
     let classificationName =
         function
@@ -122,33 +128,38 @@ module SemanticDiff =
 
         let used = Collections.Generic.HashSet<int>()
 
-        [ for oldIndex, oldLine in oldLines |> Array.indexed do
-              if containsToken oldToken oldLine then
-                  let projected = renameProjection oldToken newToken oldLine
+        [
+            for oldIndex, oldLine in oldLines |> Array.indexed do
+                if containsToken oldToken oldLine then
+                    let projected = renameProjection oldToken newToken oldLine
 
-                  match
-                      candidates
-                      |> Array.tryFind (fun (newIndex, newLine) -> not (used.Contains newIndex) && newLine = projected)
-                  with
-                  | Some(newIndex, newLine) ->
-                      used.Add newIndex |> ignore
-                      let classification, confidence = classify path oldLine
+                    match
+                        candidates
+                        |> Array.tryFind (fun (newIndex, newLine) ->
+                            not (used.Contains newIndex) && newLine = projected)
+                    with
+                    | Some(newIndex, newLine) ->
+                        used.Add newIndex |> ignore
+                        let classification, confidence = classify path oldLine
 
-                      if confidence > 0 then
-                          let id =
-                              digest
-                                  $"v2\n{path}\n{oldIndex + 1}\n{newIndex + 1}\n{classificationName classification}\n{oldLine}\n{newLine}"
+                        if confidence > 0 then
+                            let id =
+                                digest
+                                    $"v2\n{path}\n{oldIndex + 1}\n{newIndex + 1}\n{classificationName classification}\n{oldLine}\n{newLine}"
 
-                          yield
-                              { Id = id
-                                Path = path
-                                Line = oldIndex + 1
-                                Classification = classification
-                                Confidence = confidence
-                                Before = oldLine
-                                After = newLine
-                                Disposition = Unresolved }
-                  | None -> () ]
+                            yield
+                                {
+                                    Id = id
+                                    Path = path
+                                    Line = oldIndex + 1
+                                    Classification = classification
+                                    Confidence = confidence
+                                    Before = oldLine
+                                    After = newLine
+                                    Disposition = Unresolved
+                                }
+                    | None -> ()
+        ]
 
     // Every maximal word run and separator run of a line, in order.  Word runs use exactly the
     // character class `containsToken`'s look-arounds use, so a run boundary here IS a rename boundary
@@ -158,7 +169,8 @@ module SemanticDiff =
         |> Seq.map (fun m -> m.Value)
         |> Seq.toArray
 
-    let private isWordRun (value: string) = Regex.IsMatch(value, @"^[A-Za-z0-9_]+$")
+    let private isWordRun (value: string) =
+        Regex.IsMatch(value, @"^[A-Za-z0-9_]+$")
 
     // The line with every word run blanked and every separator run kept verbatim.
     //
@@ -183,13 +195,10 @@ module SemanticDiff =
         if left.Length <> right.Length then
             None
         else
-            let differing =
-                Array.zip left right |> Array.filter (fun (x, y) -> x <> y)
+            let differing = Array.zip left right |> Array.filter (fun (x, y) -> x <> y)
 
             match differing |> Array.distinct with
-            | [| (oldToken, newToken) |] when
-                oldToken <> newToken && isWordRun oldToken && isWordRun newToken
-                ->
+            | [| (oldToken, newToken) |] when oldToken <> newToken && isWordRun oldToken && isWordRun newToken ->
                 Some(oldToken, newToken)
             | _ -> None
 
@@ -244,17 +253,20 @@ module SemanticDiff =
             let mutable index = lo
 
             while found < 0 && index < hi do
-                if alignKey lines[index] = key then found <- index
+                if alignKey lines[index] = key then
+                    found <- index
+
                 index <- index + 1
 
             found
 
-        [| for KeyValue(key, n) in oldCounts do
-               if n = 1 then
-                   match newCounts.TryGetValue key with
-                   | true, 1 ->
-                       yield firstIndex oldLines oldLo oldHi key, firstIndex newLines newLo newHi key
-                   | _ -> () |]
+        [|
+            for KeyValue(key, n) in oldCounts do
+                if n = 1 then
+                    match newCounts.TryGetValue key with
+                    | true, 1 -> yield firstIndex oldLines oldLo oldHi key, firstIndex newLines newLo newHi key
+                    | _ -> ()
+        |]
         |> Array.sortBy fst
 
     // The longest strictly increasing subsequence by second coordinate, over anchors already sorted by
@@ -273,10 +285,19 @@ module SemanticDiff =
 
                 while lo < hi do
                     let mid = (lo + hi) / 2
-                    if snd anchors[tailIndex[mid]] < value then lo <- mid + 1 else hi <- mid
 
-                if lo > 0 then previous[index] <- tailIndex[lo - 1]
-                if lo = tailIndex.Count then tailIndex.Add index else tailIndex[lo] <- index
+                    if snd anchors[tailIndex[mid]] < value then
+                        lo <- mid + 1
+                    else
+                        hi <- mid
+
+                if lo > 0 then
+                    previous[index] <- tailIndex[lo - 1]
+
+                if lo = tailIndex.Count then
+                    tailIndex.Add index
+                else
+                    tailIndex[lo] <- index
 
             let result = ResizeArray<int * int>()
             let mutable cursor = tailIndex[tailIndex.Count - 1]
@@ -348,65 +369,69 @@ module SemanticDiff =
         regions
 
     let discoverRenames (files: (string * string * string) list) =
-        [ for _, before, after in files do
-              let oldLines = before.Replace("\r\n", "\n").Split '\n'
-              let newLines = after.Replace("\r\n", "\n").Split '\n'
+        [
+            for _, before, after in files do
+                let oldLines = before.Replace("\r\n", "\n").Split '\n'
+                let newLines = after.Replace("\r\n", "\n").Split '\n'
 
-              // Pair ONLY inside a replace region the diff actually produced.  Scoping the search this
-              // way is what separates a rename from a coincidence: `else` and `Some` share a skeleton
-              // wherever they appear, so with the whole file in scope they paired across 400 lines.
-              for removed, added in replaceRegions oldLines newLines do
-                  let added = List.toArray added
+                // Pair ONLY inside a replace region the diff actually produced.  Scoping the search this
+                // way is what separates a rename from a coincidence: `else` and `Some` share a skeleton
+                // wherever they appear, so with the whole file in scope they paired across 400 lines.
+                for removed, added in replaceRegions oldLines newLines do
+                    let added = List.toArray added
 
-                  // Within the region, pairing is still by skeleton bucket rather than by position.
-                  // That is what keeps discovery robust to a line inserted or deleted INSIDE the region
-                  // (the shifted-rename case round 1 of the #2149 chain was repaired for), and it keeps
-                  // the bulk-rename shape linear rather than quadratic — each bucket holds the handful
-                  // of candidates that could possibly pair, in ascending index order, so first-match
-                  // picks exactly what an unbucketed scan would.
-                  let buckets = Collections.Generic.Dictionary<string, ResizeArray<int>>()
+                    // Within the region, pairing is still by skeleton bucket rather than by position.
+                    // That is what keeps discovery robust to a line inserted or deleted INSIDE the region
+                    // (the shifted-rename case round 1 of the #2149 chain was repaired for), and it keeps
+                    // the bulk-rename shape linear rather than quadratic — each bucket holds the handful
+                    // of candidates that could possibly pair, in ascending index order, so first-match
+                    // picks exactly what an unbucketed scan would.
+                    let buckets = Collections.Generic.Dictionary<string, ResizeArray<int>>()
 
-                  added
-                  |> Array.iteri (fun index line ->
-                      let key = skeleton (runs line)
+                    added
+                    |> Array.iteri (fun index line ->
+                        let key = skeleton (runs line)
 
-                      match buckets.TryGetValue key with
-                      | true, bucket -> bucket.Add index
-                      | _ ->
-                          let bucket = ResizeArray<int>()
-                          bucket.Add index
-                          buckets[key] <- bucket)
+                        match buckets.TryGetValue key with
+                        | true, bucket -> bucket.Add index
+                        | _ ->
+                            let bucket = ResizeArray<int>()
+                            bucket.Add index
+                            buckets[key] <- bucket)
 
-                  let used = Collections.Generic.HashSet<int>()
+                    let used = Collections.Generic.HashSet<int>()
 
-                  for removedLine in removed do
-                      match buckets.TryGetValue(skeleton (runs removedLine)) with
-                      | true, bucket ->
-                          match
-                              bucket
-                              |> Seq.tryPick (fun index ->
-                                  if used.Contains index then
-                                      None
-                                  else
-                                      singleSubstitution removedLine added[index]
-                                      |> Option.map (fun pair -> index, pair))
-                          with
-                          | Some(index, (oldToken, newToken)) ->
-                              used.Add index |> ignore
+                    for removedLine in removed do
+                        match buckets.TryGetValue(skeleton (runs removedLine)) with
+                        | true, bucket ->
+                            match
+                                bucket
+                                |> Seq.tryPick (fun index ->
+                                    if used.Contains index then
+                                        None
+                                    else
+                                        singleSubstitution removedLine added[index]
+                                        |> Option.map (fun pair -> index, pair))
+                            with
+                            | Some(index, (oldToken, newToken)) ->
+                                used.Add index |> ignore
 
-                              if plausibleRenameToken oldToken && plausibleRenameToken newToken then
-                                  yield oldToken, newToken
-                          | None -> ()
-                      | _ -> () ]
+                                if plausibleRenameToken oldToken && plausibleRenameToken newToken then
+                                    yield oldToken, newToken
+                            | None -> ()
+                        | _ -> ()
+        ]
         |> List.distinct
         |> List.sort
 
     let discoveredOccurrences (files: (string * string * string) list) =
         let pairs = discoverRenames files
 
-        [ for oldToken, newToken in pairs do
-              for path, before, after in files do
-                  yield! inventory path before after oldToken newToken ]
+        [
+            for oldToken, newToken in pairs do
+                for path, before, after in files do
+                    yield! inventory path before after oldToken newToken
+        ]
         |> List.distinctBy _.Id
 
     let activationRequired (threshold: int) (occurrenceCount: int) (commitMessage: string) itemBody =
@@ -429,54 +454,58 @@ module SemanticDiff =
         (required: bool)
         (occurrences: Occurrence list)
         =
-        { SchemaVersion = 1
-          Repository = repository
-          BaseSha = baseSha
-          HeadSha = headSha
-          OldToken = oldToken
-          NewToken = newToken
-          DeclaredPaths = declaredPaths |> List.distinct |> List.sort
-          Required = required
-          Occurrences = occurrences }
+        {
+            SchemaVersion = 1
+            Repository = repository
+            BaseSha = baseSha
+            HeadSha = headSha
+            OldToken = oldToken
+            NewToken = newToken
+            DeclaredPaths = declaredPaths |> List.distinct |> List.sort
+            Required = required
+            Occurrences = occurrences
+        }
 
     let validate (expectedBase: string) (expectedHead: string) (receipt: Receipt) =
-        [ if receipt.SchemaVersion <> 1 then
-              "diff-audit receipt schema version is unsupported"
-          if String.IsNullOrWhiteSpace receipt.Repository then
-              "diff-audit repository is missing"
-          if receipt.BaseSha <> expectedBase then
-              "diff-audit receipt base SHA is stale"
-          if receipt.HeadSha <> expectedHead then
-              "diff-audit receipt head SHA is stale"
-          if
-              String.IsNullOrWhiteSpace receipt.OldToken
-              || String.IsNullOrWhiteSpace receipt.NewToken
-          then
-              "diff-audit rename tokens are missing"
-          if List.isEmpty receipt.DeclaredPaths then
-              "diff-audit declared paths are missing"
-          if receipt.Required && List.isEmpty receipt.Occurrences then
-              "required diff-audit inventory is empty"
-          let ids = receipt.Occurrences |> List.map _.Id
+        [
+            if receipt.SchemaVersion <> 1 then
+                "diff-audit receipt schema version is unsupported"
+            if String.IsNullOrWhiteSpace receipt.Repository then
+                "diff-audit repository is missing"
+            if receipt.BaseSha <> expectedBase then
+                "diff-audit receipt base SHA is stale"
+            if receipt.HeadSha <> expectedHead then
+                "diff-audit receipt head SHA is stale"
+            if
+                String.IsNullOrWhiteSpace receipt.OldToken
+                || String.IsNullOrWhiteSpace receipt.NewToken
+            then
+                "diff-audit rename tokens are missing"
+            if List.isEmpty receipt.DeclaredPaths then
+                "diff-audit declared paths are missing"
+            if receipt.Required && List.isEmpty receipt.Occurrences then
+                "required diff-audit inventory is empty"
+            let ids = receipt.Occurrences |> List.map _.Id
 
-          if ids |> List.distinct |> List.length <> ids.Length then
-              "diff-audit occurrence ids are duplicated"
+            if ids |> List.distinct |> List.length <> ids.Length then
+                "diff-audit occurrence ids are duplicated"
 
-          for occurrence in receipt.Occurrences do
-              if
-                  String.IsNullOrWhiteSpace occurrence.Id
-                  || String.IsNullOrWhiteSpace occurrence.Path
-              then
-                  "diff-audit occurrence identity is missing"
+            for occurrence in receipt.Occurrences do
+                if
+                    String.IsNullOrWhiteSpace occurrence.Id
+                    || String.IsNullOrWhiteSpace occurrence.Path
+                then
+                    "diff-audit occurrence identity is missing"
 
-              if occurrence.Line < 1 then
-                  "diff-audit occurrence line is invalid"
+                if occurrence.Line < 1 then
+                    "diff-audit occurrence line is invalid"
 
-              if occurrence.Confidence < 0 || occurrence.Confidence > 100 then
-                  "diff-audit occurrence confidence is invalid"
+                if occurrence.Confidence < 0 || occurrence.Confidence > 100 then
+                    "diff-audit occurrence confidence is invalid"
 
-              if occurrence.Disposition = Unresolved then
-                  "diff-audit has an unresolved occurrence" ]
+                if occurrence.Disposition = Unresolved then
+                    "diff-audit has an unresolved occurrence"
+        ]
 
     let validateAgainst (expected: Receipt) (submitted: Receipt) =
         let identity occurrence =
@@ -488,23 +517,25 @@ module SemanticDiff =
             occurrence.Before,
             occurrence.After
 
-        [ yield! validate expected.BaseSha expected.HeadSha submitted
-          if submitted.Repository <> expected.Repository then
-              "diff-audit repository does not match the live inventory"
-          if
-              submitted.OldToken <> expected.OldToken
-              || submitted.NewToken <> expected.NewToken
-          then
-              "diff-audit rename tokens do not match the live inventory"
-          if submitted.DeclaredPaths <> expected.DeclaredPaths then
-              "diff-audit paths do not match the live inventory"
-          if submitted.Required <> expected.Required then
-              "diff-audit activation does not match the live inventory"
-          if
-              (submitted.Occurrences |> List.map identity)
-              <> (expected.Occurrences |> List.map identity)
-          then
-              "diff-audit occurrences do not match the live inventory" ]
+        [
+            yield! validate expected.BaseSha expected.HeadSha submitted
+            if submitted.Repository <> expected.Repository then
+                "diff-audit repository does not match the live inventory"
+            if
+                submitted.OldToken <> expected.OldToken
+                || submitted.NewToken <> expected.NewToken
+            then
+                "diff-audit rename tokens do not match the live inventory"
+            if submitted.DeclaredPaths <> expected.DeclaredPaths then
+                "diff-audit paths do not match the live inventory"
+            if submitted.Required <> expected.Required then
+                "diff-audit activation does not match the live inventory"
+            if
+                (submitted.Occurrences |> List.map identity)
+                <> (expected.Occurrences |> List.map identity)
+            then
+                "diff-audit occurrences do not match the live inventory"
+        ]
 
     let toJson (receipt: Receipt) =
         use stream = new IO.MemoryStream()
@@ -558,23 +589,27 @@ module SemanticDiff =
                 | _ -> None
 
             let rows =
-                [ for row in root.GetProperty("occurrences").EnumerateArray() do
-                      match
-                          classification (row.GetProperty("classification").GetString()),
-                          dispositionOfName (row.GetProperty("disposition").GetString())
-                      with
-                      | Some kind, Some decision ->
-                          yield
-                              Ok
-                                  { Id = row.GetProperty("id").GetString()
-                                    Path = row.GetProperty("path").GetString()
-                                    Line = row.GetProperty("line").GetInt32()
-                                    Classification = kind
-                                    Confidence = row.GetProperty("confidence").GetInt32()
-                                    Before = row.GetProperty("before").GetString()
-                                    After = row.GetProperty("after").GetString()
-                                    Disposition = decision }
-                      | _ -> yield Error "diff-audit occurrence classification or disposition is unknown" ]
+                [
+                    for row in root.GetProperty("occurrences").EnumerateArray() do
+                        match
+                            classification (row.GetProperty("classification").GetString()),
+                            dispositionOfName (row.GetProperty("disposition").GetString())
+                        with
+                        | Some kind, Some decision ->
+                            yield
+                                Ok
+                                    {
+                                        Id = row.GetProperty("id").GetString()
+                                        Path = row.GetProperty("path").GetString()
+                                        Line = row.GetProperty("line").GetInt32()
+                                        Classification = kind
+                                        Confidence = row.GetProperty("confidence").GetInt32()
+                                        Before = row.GetProperty("before").GetString()
+                                        After = row.GetProperty("after").GetString()
+                                        Disposition = decision
+                                    }
+                        | _ -> yield Error "diff-audit occurrence classification or disposition is unknown"
+                ]
 
             let errors =
                 rows
@@ -586,19 +621,21 @@ module SemanticDiff =
                 Error errors
             else
                 Ok
-                    { SchemaVersion = root.GetProperty("schemaVersion").GetInt32()
-                      Repository = str "repository"
-                      BaseSha = str "baseSha"
-                      HeadSha = str "headSha"
-                      OldToken = str "oldToken"
-                      NewToken = str "newToken"
-                      DeclaredPaths = [ for p in root.GetProperty("declaredPaths").EnumerateArray() -> p.GetString() ]
-                      Required = root.GetProperty("required").GetBoolean()
-                      Occurrences =
-                        rows
-                        |> List.choose (function
-                            | Ok row -> Some row
-                            | _ -> None) }
+                    {
+                        SchemaVersion = root.GetProperty("schemaVersion").GetInt32()
+                        Repository = str "repository"
+                        BaseSha = str "baseSha"
+                        HeadSha = str "headSha"
+                        OldToken = str "oldToken"
+                        NewToken = str "newToken"
+                        DeclaredPaths = [ for p in root.GetProperty("declaredPaths").EnumerateArray() -> p.GetString() ]
+                        Required = root.GetProperty("required").GetBoolean()
+                        Occurrences =
+                            rows
+                            |> List.choose (function
+                                | Ok row -> Some row
+                                | _ -> None)
+                    }
         with ex ->
             Error [ $"diff-audit receipt is malformed: %s{ex.Message}" ]
 

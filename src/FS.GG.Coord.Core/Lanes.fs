@@ -19,26 +19,28 @@ module Lanes =
             | UnusableTokens(i, _) -> i
 
     type Lane =
-        { Id: Ref
-          Owner: string
-          Repo: string
-          Items: Item list
-          Tokens: string list
-          HeldBy: WorkerId list }
+        {
+            Id: Ref
+            Owner: string
+            Repo: string
+            Items: Item list
+            Tokens: string list
+            HeldBy: WorkerId list
+        }
 
     type Partition =
-        { Lanes: Lane list
-          Unlanable: Unlanable list }
+        {
+            Lanes: Lane list
+            Unlanable: Unlanable list
+        }
 
     let private matchable (ts: TouchSet) =
         match ts with
         | Declared tokens ->
             tokens
-            |> List.choose (
-                function
+            |> List.choose (function
                 | Matchable t -> Some t
-                | Unmatchable _ -> None
-            )
+                | Unmatchable _ -> None)
         | Undeclared
         | DeclaredNone
         // A chore reserves no files, so it names no matchable token — it lanes as a degenerate singleton
@@ -153,24 +155,33 @@ module Lanes =
             [ 0 .. n - 1 ]
             |> List.groupBy find
             |> List.map (fun (_, idxs) ->
-                let members = idxs |> List.map (fun i -> arr[i]) |> List.sortBy (fun it -> it.Ref.Number)
+                let members =
+                    idxs |> List.map (fun i -> arr[i]) |> List.sortBy (fun it -> it.Ref.Number)
 
                 let head = List.head members
 
-                { Id = head.Ref
-                  Owner = head.Ref.Owner
-                  Repo = pathRepoOf head
-                  Items = members
-                  Tokens = members |> List.collect (fun it -> matchable it.TouchSet) |> List.distinct |> List.sort
-                  HeldBy = members |> List.choose holder |> List.distinct })
+                {
+                    Id = head.Ref
+                    Owner = head.Ref.Owner
+                    Repo = pathRepoOf head
+                    Items = members
+                    Tokens =
+                        members
+                        |> List.collect (fun it -> matchable it.TouchSet)
+                        |> List.distinct
+                        |> List.sort
+                    HeldBy = members |> List.choose holder |> List.distinct
+                })
             |> List.sortBy (fun lane -> (lane.Owner, lane.Repo, lane.Id.Number))
 
         { Lanes = lanes; Unlanable = unlanable }
 
     type Glue =
-        { Token: string
-          DeclaredBy: Ref list
-          SplitsInto: int }
+        {
+            Token: string
+            DeclaredBy: Ref list
+            SplitsInto: int
+        }
 
     // The number of connected components among `items`, comparing touch-sets with `tokens` of each item
     // projected out. Same repo throughout (a lane never spans repos), so no repo test is needed here.
@@ -180,11 +191,9 @@ module Lanes =
                 match it.TouchSet with
                 | Declared tokens ->
                     tokens
-                    |> List.filter (
-                        function
+                    |> List.filter (function
                         | Matchable t -> t <> drop
-                        | Unmatchable _ -> true
-                    )
+                        | Unmatchable _ -> true)
                 | other -> []
 
             { it with TouchSet = Declared kept }
@@ -219,28 +228,28 @@ module Lanes =
             []
         else
 
-        lane.Tokens
-        |> List.map (fun token ->
-            let declaredBy =
-                lane.Items
-                |> List.filter (fun it ->
-                    match it.TouchSet with
-                    | Declared tokens ->
-                        tokens
-                        |> List.exists (
-                            function
-                            | Matchable t -> t = token
-                            | Unmatchable _ -> false
-                        )
-                    | _ -> false)
-                |> List.map (fun it -> it.Ref)
+            lane.Tokens
+            |> List.map (fun token ->
+                let declaredBy =
+                    lane.Items
+                    |> List.filter (fun it ->
+                        match it.TouchSet with
+                        | Declared tokens ->
+                            tokens
+                            |> List.exists (function
+                                | Matchable t -> t = token
+                                | Unmatchable _ -> false)
+                        | _ -> false)
+                    |> List.map (fun it -> it.Ref)
 
-            { Token = token
-              DeclaredBy = declaredBy
-              SplitsInto = componentsWithout token lane.Items })
-        // Highest payoff first, then by the number of issues that would have to be edited (cheapest
-        // first), then by name so the ranking is deterministic and two workers agree on the target.
-        |> List.sortBy (fun g -> (-g.SplitsInto, List.length g.DeclaredBy, g.Token))
+                {
+                    Token = token
+                    DeclaredBy = declaredBy
+                    SplitsInto = componentsWithout token lane.Items
+                })
+            // Highest payoff first, then by the number of issues that would have to be edited (cheapest
+            // first), then by name so the ranking is deterministic and two workers agree on the target.
+            |> List.sortBy (fun g -> (-g.SplitsInto, List.length g.DeclaredBy, g.Token))
 
     let free (startable: Item -> bool) (partition: Partition) : Lane list =
         // A lane is FREE only if nobody is standing in it AND there is something in it to start. Both
@@ -253,108 +262,109 @@ module Lanes =
     let explain (startable: Item -> bool) (partition: Partition) : string list =
         let freeLanes = free startable partition
 
-        [ let total = List.length partition.Lanes
+        [
+            let total = List.length partition.Lanes
 
-          yield $"%d{total} lane(s) — %d{List.length freeLanes} free, %d{total - List.length freeLanes} occupied or with no startable work."
-
-          yield ""
-
-          for lane in partition.Lanes do
-            let held =
-                match lane.HeldBy with
-                | [] -> ""
-                | ws -> "  HELD by " + (ws |> List.map (fun w -> w.Value) |> String.concat ", ")
-
-            let starts = lane.Items |> List.filter startable |> List.length
-
-            yield $"lane %s{lane.Id.Short}  (%d{List.length lane.Items} item(s), %d{starts} startable)%s{held}"
-
-            for item in lane.Items do
-                let mark = if startable item then "→" else " "
-                yield $"  %s{mark} %s{item.Ref.Short}"
-
-            // THE GLUE, and it is the actionable half. A lane of forty items is not forty items of
-            // naturally-coupled work — it is a handful of over-broad declarations holding unrelated
-            // things together. Only tokens whose removal actually BUYS something are worth printing;
-            // one that splits the lane into 1 is load-bearing, and narrowing it would be a lie.
-            let worthwhile = glue lane |> List.filter (fun g -> g.SplitsInto > 1)
-
-            if not (List.isEmpty worthwhile) then
-                yield "  the declarations gluing this lane together:"
-
-                for g in worthwhile |> List.truncate 5 do
-                    let refs = g.DeclaredBy |> List.map (fun r -> r.Short) |> String.concat ", "
-
-                    yield
-                        $"    %s{g.Token}  — declared by %d{List.length g.DeclaredBy}; drop it and this lane becomes %d{g.SplitsInto} lanes"
-
-                    yield $"        ({refs})"
+            yield
+                $"%d{total} lane(s) — %d{List.length freeLanes} free, %d{total - List.length freeLanes} occupied or with no startable work."
 
             yield ""
 
-          // THE CEILING. Fan out wider than this and the extra workers are handed NOTHING — and `take`
-          // reports an empty queue over a board that is full of work.
-          yield $"CEILING: %d{List.length freeLanes} worker(s) can start right now, provably without colliding."
+            for lane in partition.Lanes do
+                let held =
+                    match lane.HeldBy with
+                    | [] -> ""
+                    | ws -> "  HELD by " + (ws |> List.map (fun w -> w.Value) |> String.concat ", ")
 
-          // The chore, and it is the actionable half of this whole report.
-          let chores =
-              partition.Unlanable
-              |> List.filter (
-                  function
-                  | DeliberatelyNone _ -> false // correct, and never a chore
-                  | _ -> true
-              )
+                let starts = lane.Items |> List.filter startable |> List.length
 
-          if not (List.isEmpty chores) then
-              yield ""
+                yield $"lane %s{lane.Id.Short}  (%d{List.length lane.Items} item(s), %d{starts} startable)%s{held}"
 
-              yield
-                  $"%d{List.length chores} item(s) CANNOT be laned — they are invisible to every worker who asks for work:"
+                for item in lane.Items do
+                    let mark = if startable item then "→" else " "
+                    yield $"  %s{mark} %s{item.Ref.Short}"
 
-              for chore in chores do
-                  match chore with
-                  | NoTouchSet item -> yield $"  %s{item.Ref.Short}  no `Paths:` at all — somebody forgot. It is real work, and nobody can pick it up."
-                  | Unread(item, reason) ->
-                      // NOT a chore anybody can fix by declaring a touch-set — we never READ the item.
-                      // Saying "somebody forgot" here would send an agent to add a `Paths:` line to a body
-                      // that may already have one.
-                      yield
-                          $"  %s{item.Ref.Short}  its body could not be READ, so its touch-set is unknown — not absent (%s{reason}). Retry; do not declare one for it."
-                  | UnusableTokens(item, tokens) ->
-                      let named = String.concat ", " tokens
+                // THE GLUE, and it is the actionable half. A lane of forty items is not forty items of
+                // naturally-coupled work — it is a handful of over-broad declarations holding unrelated
+                // things together. Only tokens whose removal actually BUYS something are worth printing;
+                // one that splits the lane into 1 is load-bearing, and narrowing it would be a lie.
+                let worthwhile = glue lane |> List.filter (fun g -> g.SplitsInto > 1)
 
-                      // "declares N of M" — because SOME of them being dead is the case that reads as
-                      // fine and is not (#864). Saying "it reserves nothing" here was true only when
-                      // every token was dead; a partly-dead declaration reserves its live tokens and is
-                      // still refused by the scheduler, so the flat claim was a lie on exactly the item
-                      // this list exists to surface.
-                      let declared =
-                          match item.TouchSet with
-                          | Declared ts -> List.length ts
-                          | _ -> List.length tokens
+                if not (List.isEmpty worthwhile) then
+                    yield "  the declarations gluing this lane together:"
 
-                      yield
-                          $"  %s{item.Ref.Short}  declares %d{List.length tokens} of %d{declared} `Paths:` token(s) that match NOTHING (%s{named})"
+                    for g in worthwhile |> List.truncate 5 do
+                        let refs = g.DeclaredBy |> List.map (fun r -> r.Short) |> String.concat ", "
 
-                      yield
-                          "      Those tokens reserve nothing, so the files they name are invisible to every other worker's"
+                        yield
+                            $"    %s{g.Token}  — declared by %d{List.length g.DeclaredBy}; drop it and this lane becomes %d{g.SplitsInto} lanes"
 
-                      yield
-                          "      overlap check — and the scheduler refuses the item outright, so nobody can start it. Worse"
+                        yield $"        ({refs})"
 
-                      yield "      than undeclared: it LOOKS declared."
-                  | DeliberatelyNone _ -> ()
+                yield ""
 
-          let deliberate =
-              partition.Unlanable
-              |> List.filter (
-                  function
-                  | DeliberatelyNone _ -> true
-                  | _ -> false
-              )
+            // THE CEILING. Fan out wider than this and the extra workers are handed NOTHING — and `take`
+            // reports an empty queue over a board that is full of work.
+            yield $"CEILING: %d{List.length freeLanes} worker(s) can start right now, provably without colliding."
 
-          if not (List.isEmpty deliberate) then
-              yield ""
+            // The chore, and it is the actionable half of this whole report.
+            let chores =
+                partition.Unlanable
+                |> List.filter (function
+                    | DeliberatelyNone _ -> false // correct, and never a chore
+                    | _ -> true)
 
-              yield
-                  $"%d{List.length deliberate} item(s) declare `Paths: none` — epics and decisions. Unschedulable BY DESIGN; not a chore." ]
+            if not (List.isEmpty chores) then
+                yield ""
+
+                yield
+                    $"%d{List.length chores} item(s) CANNOT be laned — they are invisible to every worker who asks for work:"
+
+                for chore in chores do
+                    match chore with
+                    | NoTouchSet item ->
+                        yield
+                            $"  %s{item.Ref.Short}  no `Paths:` at all — somebody forgot. It is real work, and nobody can pick it up."
+                    | Unread(item, reason) ->
+                        // NOT a chore anybody can fix by declaring a touch-set — we never READ the item.
+                        // Saying "somebody forgot" here would send an agent to add a `Paths:` line to a body
+                        // that may already have one.
+                        yield
+                            $"  %s{item.Ref.Short}  its body could not be READ, so its touch-set is unknown — not absent (%s{reason}). Retry; do not declare one for it."
+                    | UnusableTokens(item, tokens) ->
+                        let named = String.concat ", " tokens
+
+                        // "declares N of M" — because SOME of them being dead is the case that reads as
+                        // fine and is not (#864). Saying "it reserves nothing" here was true only when
+                        // every token was dead; a partly-dead declaration reserves its live tokens and is
+                        // still refused by the scheduler, so the flat claim was a lie on exactly the item
+                        // this list exists to surface.
+                        let declared =
+                            match item.TouchSet with
+                            | Declared ts -> List.length ts
+                            | _ -> List.length tokens
+
+                        yield
+                            $"  %s{item.Ref.Short}  declares %d{List.length tokens} of %d{declared} `Paths:` token(s) that match NOTHING (%s{named})"
+
+                        yield
+                            "      Those tokens reserve nothing, so the files they name are invisible to every other worker's"
+
+                        yield
+                            "      overlap check — and the scheduler refuses the item outright, so nobody can start it. Worse"
+
+                        yield "      than undeclared: it LOOKS declared."
+                    | DeliberatelyNone _ -> ()
+
+            let deliberate =
+                partition.Unlanable
+                |> List.filter (function
+                    | DeliberatelyNone _ -> true
+                    | _ -> false)
+
+            if not (List.isEmpty deliberate) then
+                yield ""
+
+                yield
+                    $"%d{List.length deliberate} item(s) declare `Paths: none` — epics and decisions. Unschedulable BY DESIGN; not a chore."
+        ]

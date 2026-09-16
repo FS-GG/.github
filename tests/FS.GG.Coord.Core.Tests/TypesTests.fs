@@ -276,6 +276,7 @@ module TypesTests =
     [<Fact>]
     let ``#1901 Severity is the exact closed ordered board vocabulary`` () =
         Assert.Equal(5, List.length everySeverity)
+
         Assert.Equal<string list>(
             [ "Critical"; "High"; "Medium"; "Low"; "Unset" ],
             everySeverity |> List.map (snd >> severityWireName)
@@ -435,7 +436,18 @@ module TypesTests =
         Assert.Equal(Some Anchor, itemKindOfWireName "Anchor")
         // TWO-SIDED. Lookalikes must NOT resolve — and resolving one would be worse here than on the
         // `Class` axis, because the wrong answer removes a real work row from its own lifecycle.
-        for lookalike in [ "registers"; "reg"; "anchors"; "directives"; "standing"; "epic"; ""; "  "; "work " + "​" ] do
+        for lookalike in
+            [
+                "registers"
+                "reg"
+                "anchors"
+                "directives"
+                "standing"
+                "epic"
+                ""
+                "  "
+                "work " + "​"
+            ] do
             Assert.Equal(None, itemKindOfWireName lookalike)
 
     [<Fact>]

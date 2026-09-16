@@ -59,16 +59,20 @@ module OpKeyTests =
     /// Ninety tuples: every component varied over several values, and every case of the vocabulary
     /// represented. The count is asserted so the set cannot silently shrink under a later edit.
     let private tuples =
-        [ for i in [ "FS-GG/.github#2311"; "FS-GG/.github#2312"; "FS-GG/FS.GG.Net#58" ] do
-            for g in [ "1"; "5304654156"; "5304654157" ] do
-                for r in [ "FS-GG/.github"; "FS-GG/FS.GG.Net" ] do
-                    for o in
-                        [ Operation.Merge
-                          Operation.Dispatch "kit-materialize"
-                          Operation.Dispatch "kit-publish"
-                          Operation.Publish "FS.GG.Kit"
-                          Operation.Publish "FS.GG.Drivers" ] do
-                        yield (i, g, r, o) ]
+        [
+            for i in [ "FS-GG/.github#2311"; "FS-GG/.github#2312"; "FS-GG/FS.GG.Net#58" ] do
+                for g in [ "1"; "5304654156"; "5304654157" ] do
+                    for r in [ "FS-GG/.github"; "FS-GG/FS.GG.Net" ] do
+                        for o in
+                            [
+                                Operation.Merge
+                                Operation.Dispatch "kit-materialize"
+                                Operation.Dispatch "kit-publish"
+                                Operation.Publish "FS.GG.Kit"
+                                Operation.Publish "FS.GG.Drivers"
+                            ] do
+                            yield (i, g, r, o)
+        ]
 
     [<Fact>]
     let ``#2311 the same tuple composes the same lowercase 64-hex key every time`` () =
@@ -83,7 +87,9 @@ module OpKeyTests =
         // This is the assertion a CONSTANT digest cannot survive, and it also pins the pre-image's
         // field order and separator to §3.3's `sha256(item \n gen \n receiver \n op)` rather than to
         // whatever the implementation happens to do.
-        let expectedPreimage = "FS-GG/.github#2311\n5304654156\nFS-GG/FS.GG.Net\ndispatch:kit-materialize"
+        let expectedPreimage =
+            "FS-GG/.github#2311\n5304654156\nFS-GG/FS.GG.Net\ndispatch:kit-materialize"
+
         Assert.Equal(expectedPreimage, preimageOf item generation receiver (Operation.Dispatch "kit-materialize"))
 
         let expectedKey =
@@ -152,16 +158,20 @@ module OpKeyTests =
         // exactly that on this module's first head. Collecting the observations first and comparing
         // once means every leg is computed, and a failure shows the whole list rather than its head.
         let observed =
-            [ outcomeOf "FS-GG/.github#2311\n7" "8" receiver Operation.Merge
-              outcomeOf item "7\n8" receiver Operation.Merge
-              outcomeOf item generation "FS-GG/FS.GG.Net\r" Operation.Merge
-              outcomeOf item generation receiver (Operation.Dispatch "kit\tmaterialize") ]
+            [
+                outcomeOf "FS-GG/.github#2311\n7" "8" receiver Operation.Merge
+                outcomeOf item "7\n8" receiver Operation.Merge
+                outcomeOf item generation "FS-GG/FS.GG.Net\r" Operation.Merge
+                outcomeOf item generation receiver (Operation.Dispatch "kit\tmaterialize")
+            ]
 
         Assert.Equal<string list>(
-            [ "ControlCharacter Item"
-              "ControlCharacter Generation"
-              "ControlCharacter Receiver"
-              "ControlCharacter OperationPayload" ],
+            [
+                "ControlCharacter Item"
+                "ControlCharacter Generation"
+                "ControlCharacter Receiver"
+                "ControlCharacter OperationPayload"
+            ],
             observed
         )
 
@@ -191,20 +201,24 @@ module OpKeyTests =
         // a REVERSED pair (low before high) is unpaired too. All six legs are evaluated before the
         // single comparison, for the reason the separator test states.
         let observed =
-            [ outcomeOf highOnly generation receiver Operation.Merge
-              outcomeOf lowOnly generation receiver Operation.Merge
-              outcomeOf item ("530" + string (char 0xD800) + "4654156") receiver Operation.Merge
-              outcomeOf item generation ("FS-GG/FS.GG.Net" + string (char 0xDC00)) Operation.Merge
-              outcomeOf item generation receiver (Operation.Dispatch("kit" + string (char 0xD800) + "materialize"))
-              outcomeOf item generation receiver (Operation.Publish(string (char 0xDC00) + string (char 0xD800))) ]
+            [
+                outcomeOf highOnly generation receiver Operation.Merge
+                outcomeOf lowOnly generation receiver Operation.Merge
+                outcomeOf item ("530" + string (char 0xD800) + "4654156") receiver Operation.Merge
+                outcomeOf item generation ("FS-GG/FS.GG.Net" + string (char 0xDC00)) Operation.Merge
+                outcomeOf item generation receiver (Operation.Dispatch("kit" + string (char 0xD800) + "materialize"))
+                outcomeOf item generation receiver (Operation.Publish(string (char 0xDC00) + string (char 0xD800)))
+            ]
 
         Assert.Equal<string list>(
-            [ "UnpairedSurrogate Item"
-              "UnpairedSurrogate Item"
-              "UnpairedSurrogate Generation"
-              "UnpairedSurrogate Receiver"
-              "UnpairedSurrogate OperationPayload"
-              "UnpairedSurrogate OperationPayload" ],
+            [
+                "UnpairedSurrogate Item"
+                "UnpairedSurrogate Item"
+                "UnpairedSurrogate Generation"
+                "UnpairedSurrogate Receiver"
+                "UnpairedSurrogate OperationPayload"
+                "UnpairedSurrogate OperationPayload"
+            ],
             observed
         )
 
@@ -251,11 +265,13 @@ module OpKeyTests =
         // Injective over the vocabulary: `merge` carries no colon and the other two carry different
         // prefixes, so a Dispatch payload can never spell a Publish and neither can spell a Merge.
         let spellings =
-            [ Operation.Merge
-              Operation.Dispatch "merge"
-              Operation.Dispatch "FS.GG.Kit"
-              Operation.Publish "merge"
-              Operation.Publish "FS.GG.Kit" ]
+            [
+                Operation.Merge
+                Operation.Dispatch "merge"
+                Operation.Dispatch "FS.GG.Kit"
+                Operation.Publish "merge"
+                Operation.Publish "FS.GG.Kit"
+            ]
             |> List.map Operation.wire
 
         Assert.Equal(5, spellings |> List.distinct |> List.length)
@@ -301,10 +317,12 @@ module OpKeyTests =
     [<Fact>]
     let ``#2311 every blank component is refused, and all of them are reported rather than the first`` () =
         Assert.Equal<Operation.Refusal list>(
-            [ Operation.Blank Operation.Item
-              Operation.Blank Operation.Generation
-              Operation.Blank Operation.Receiver
-              Operation.Blank Operation.OperationPayload ],
+            [
+                Operation.Blank Operation.Item
+                Operation.Blank Operation.Generation
+                Operation.Blank Operation.Receiver
+                Operation.Blank Operation.OperationPayload
+            ],
             refusalsOf "" "  " "" (Operation.Dispatch "")
         )
 

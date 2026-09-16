@@ -40,10 +40,13 @@ type private Sandbox() =
 
 let private ok (body: string) =
     Ok
-        { Status = 200
-          Body = body
-          ETag = None
-          NextLink = None; Headers = Map.empty }
+        {
+            Status = 200
+            Body = body
+            ETag = None
+            NextLink = None
+            Headers = Map.empty
+        }
 
 let private scripted (responses: IoResult<Response> list) =
     let queue = System.Collections.Generic.Queue<IoResult<Response>>(responses)
@@ -56,14 +59,17 @@ let private scripted (responses: IoResult<Response> list) =
 
 /// One page of the board. `hasNext` drives the cursor loop.
 let private itemized (nodes: string) =
-    if String.IsNullOrWhiteSpace nodes then nodes else
-    use document = System.Text.Json.JsonDocument.Parse("[" + nodes + "]")
-    document.RootElement.EnumerateArray()
-    |> Seq.mapi (fun index node ->
-        match node.TryGetProperty "id" with
-        | true, _ -> node.GetRawText()
-        | _ -> node.GetRawText().Insert(1, $"\"id\":\"fixture-%d{index}\","))
-    |> String.concat ","
+    if String.IsNullOrWhiteSpace nodes then
+        nodes
+    else
+        use document = System.Text.Json.JsonDocument.Parse("[" + nodes + "]")
+
+        document.RootElement.EnumerateArray()
+        |> Seq.mapi (fun index node ->
+            match node.TryGetProperty "id" with
+            | true, _ -> node.GetRawText()
+            | _ -> node.GetRawText().Insert(1, $"\"id\":\"fixture-%d{index}\","))
+        |> String.concat ","
 
 let private page (nodes: string) (hasNext: bool) (cursor: string) =
     let hn = if hasNext then "true" else "false"
@@ -227,8 +233,10 @@ let ``the board scan PAGINATES on the cursor - a second page is not lost`` () =
     // board has 640 items, so this is seven pages, and six of them would vanish.
     let transport =
         scripted
-            [ ok (page (issueNode 1 "Ready" "" "OPEN") true "CUR1")
-              ok (page (issueNode 2 "Ready" "" "OPEN") false "") ]
+            [
+                ok (page (issueNode 1 "Ready" "" "OPEN") true "CUR1")
+                ok (page (issueNode 2 "Ready" "" "OPEN") false "")
+            ]
 
     match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12 with
     | Ok rows ->
@@ -246,12 +254,16 @@ let ``a failed page ABORTS the scan - it never returns a partial board as a comp
     // offer `item-add` for items that are already there.
     let transport =
         scripted
-            [ ok (page (issueNode 1 "Ready" "" "OPEN") true "CUR1")
-              Error(Http(502, "bad gateway")) ]
+            [
+                ok (page (issueNode 1 "Ready" "" "OPEN") true "CUR1")
+                Error(Http(502, "bad gateway"))
+            ]
 
     match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12 with
     | Error(Http(502, _)) -> ()
-    | Ok rows -> failwith $"a failed page produced a 'complete' board of %d{List.length rows} row(s) — the rest silently vanished"
+    | Ok rows ->
+        failwith
+            $"a failed page produced a 'complete' board of %d{List.length rows} row(s) — the rest silently vanished"
     | other -> failwith $"expected the scan to refuse — got %A{other}"
 
 [<Fact>]
@@ -261,7 +273,8 @@ let ``#421 a rate-limited scan PROPAGATES - it is not an empty board`` () =
 
     match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12 with
     | Error(RateLimited _) -> ()
-    | Ok [] -> failwith "an exhausted budget reported an EMPTY BOARD — this is #344, and every worker is told to go home"
+    | Ok [] ->
+        failwith "an exhausted budget reported an EMPTY BOARD — this is #344, and every worker is told to go home"
     | other -> failwith $"expected RateLimited — got %A{other}"
 
 [<Fact>]
@@ -387,8 +400,10 @@ let ``a RECONCILING scan never serves the cache, however fresh it is`` () =
     // reports drift that was already fixed — or misses drift that is still there. `--fresh` maps here.
     let transport =
         scripted
-            [ ok (page (issueNode 1 "Ready" "" "OPEN") false "")
-              ok (page (issueNode 1 "Ready" "" "OPEN") false "") ]
+            [
+                ok (page (issueNode 1 "Ready" "" "OPEN") false "")
+                ok (page (issueNode 1 "Ready" "" "OPEN") false "")
+            ]
 
     Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12 |> ignore
     Scan.board transport Cache.Reconciling "FS-GG" "Coordination" 12 |> ignore
@@ -421,24 +436,35 @@ let ``#344 a FAILED scan is never written to the cache`` () =
 // it makes a sixth copy unwritable.
 
 let private scopeRow (repo: string) (n: int) : Scan.Row =
-    { Ref = { Owner = "FS-GG"; Repo = repo; Number = n }
-      Title = $"item %d{n}"
-      Status = BoardStatus.Ready
-      BlockedByRaw = ""
-      State = IssueState.Open
-      IsPullRequest = false
-      PathRepo = repo
-      BoardClass = None
-      BoardKind = None
-      CommentCount = None
-      Severity = Unset
-      Phase = None
-      CreatedAt = None
-      SweptBody = None
-      NodeId = Some $"I_scope_%d{n}" }
+    {
+        Ref =
+            {
+                Owner = "FS-GG"
+                Repo = repo
+                Number = n
+            }
+        Title = $"item %d{n}"
+        Status = BoardStatus.Ready
+        BlockedByRaw = ""
+        State = IssueState.Open
+        IsPullRequest = false
+        PathRepo = repo
+        BoardClass = None
+        BoardKind = None
+        CommentCount = None
+        Severity = Unset
+        Phase = None
+        CreatedAt = None
+        SweptBody = None
+        NodeId = Some $"I_scope_%d{n}"
+    }
 
 let private scopeBoard =
-    [ scopeRow "FS.GG.SDD" 99; scopeRow "FS.GG.Rendering" 202; scopeRow ".github" 54 ]
+    [
+        scopeRow "FS.GG.SDD" 99
+        scopeRow "FS.GG.Rendering" 202
+        scopeRow ".github" 54
+    ]
 
 [<Fact>]
 let ``#1732 Repo Scope supplies the path repository while Ref remains the issue repository`` () =
@@ -479,6 +505,7 @@ let ``#2254 Cache.Reconciling reads SweptBody from the typed board response with
         | Some(Ok body) -> Assert.Contains("Class: hardening", body)
         | other -> failwithf "a Reconciling scan of an empty-column closed row must populate SweptBody — got %A" other
     | other -> failwithf "expected one row — got %A" other
+
     Assert.Equal(1, transport.GraphQlCalls)
     Assert.Equal(0, transport.RestCalls)
 
@@ -517,7 +544,9 @@ let ``#979 a --repo naming no board row REPORTS, and does not merely return empt
     Assert.Empty scoped.Rows
 
     // The whole bug: `[]` was the entire answer. The advisory is what makes a green exit MEAN something.
-    let msg = Assert.True(scoped.Advisory.IsSome, "a --repo that names no row must be reported"); scoped.Advisory.Value
+    let msg =
+        Assert.True(scoped.Advisory.IsSome, "a --repo that names no row must be reported")
+        scoped.Advisory.Value
 
     Assert.Contains("no board row names repo `sd`", msg)
     // The known set is derived from the ROWS IN HAND — never a roster (#266's corollary: compare against
@@ -536,7 +565,11 @@ let ``#979 a --repo that MATCHES is silent — the advisory is not noise on the 
 
 [<Fact>]
 let ``#1732 canonical command scope selects a short-id Repo Scope`` () =
-    let row = { scopeRow ".github" 1732 with PathRepo = "audio" }
+    let row =
+        { scopeRow ".github" 1732 with
+            PathRepo = "audio"
+        }
+
     let scoped = Scan.scope (Some "FS.GG.Audio") [ row ]
 
     Assert.Single(scoped.Rows) |> ignore
@@ -553,10 +586,18 @@ let ``#1732 canonical command scope selects a short-id Repo Scope`` () =
 // never a spelling-dependent subset that quietly drops a row the caller has every reason to expect.
 
 let private sirBoard =
-    [ { scopeRow "S.I.R." 1 with PathRepo = "sir" } // the roster short-id, as a human would type it
-      { scopeRow "S.I.R." 2 with PathRepo = "S.I.R." } // the canonical name, as `enrich` would write it
-      { scopeRow "S.I.R." 3 with PathRepo = "Sir" } // a casing a human would also type without thinking
-      scopeRow "FS.GG.SDD" 4 ] // control: a different repo must never be swept in
+    [
+        { scopeRow "S.I.R." 1 with
+            PathRepo = "sir"
+        } // the roster short-id, as a human would type it
+        { scopeRow "S.I.R." 2 with
+            PathRepo = "S.I.R."
+        } // the canonical name, as `enrich` would write it
+        { scopeRow "S.I.R." 3 with
+            PathRepo = "Sir"
+        } // a casing a human would also type without thinking
+        scopeRow "FS.GG.SDD" 4
+    ] // control: a different repo must never be swept in
 
 [<Fact>]
 let ``.github#2363 criterion 4: --repo sir and --repo S.I.R. select the identical row set from a mixed-spelling board``
@@ -642,7 +683,8 @@ let ``#979 snapshot carries the advisory OUT, on the receipt next-batch-take rea
     // candidates, so a snapshot that reads nothing proves the advisory is computed from the rows in hand
     // and needs no IO to say so. If this ever starts failing with a transport error, snapshot has begun
     // reading per-candidate data for candidates it does not have.
-    let transport = Fake.Recorder(fun _ -> Error(Http(500, "no read should happen here")))
+    let transport =
+        Fake.Recorder(fun _ -> Error(Http(500, "no read should happen here")))
 
     match Scan.snapshot transport scopeBoard (Some "sd") false None 120 with
     | Error e -> failwith $"snapshot must not need IO to scope: %A{e}"
@@ -698,8 +740,7 @@ let private offBoardRoutes (list: string) (comments: int -> string) (body: strin
 
             ok $"{{\"data\":{{%s{aliases}}}}}"
         elif path.EndsWith "/comments" then
-            let n =
-                path.Split('/') |> Array.filter (fun s -> s <> "") |> Array.item 4 |> int
+            let n = path.Split('/') |> Array.filter (fun s -> s <> "") |> Array.item 4 |> int
 
             ok (comments n)
         elif path.EndsWith "/issues" then
@@ -738,6 +779,7 @@ let ``#2308 exact fresh zero-comment facts eliminate both per-row REST reads`` (
     use _sandbox = new Sandbox()
 
     let row = scopeRow "FS.GG.SDD" 99
+
     let transport =
         Fake.Recorder(fun (req: Request) ->
             match req.Path, req.Subject with
@@ -762,8 +804,9 @@ let ``#2308 positive count still sees an old marker beyond a 100-comment bound``
 
     let row = scopeRow "FS.GG.SDD" 99
     let old = DateTimeOffset.UtcNow.AddHours(-3).ToString("yyyy-MM-ddTHH:mm:ssZ")
+
     let noise =
-        [ 1 .. 100 ]
+        [ 1..100 ]
         |> List.map (fun id -> $"{{\"id\":%d{9000 + id},\"body\":\"ordinary comment\",\"updated_at\":\"%s{old}\"}}")
 
     let oldClaim =
@@ -793,6 +836,7 @@ let ``#2308 a missing or mismatched fresh node fact refuses rather than deciding
     use _sandbox = new Sandbox()
 
     let row = scopeRow "FS.GG.SDD" 99
+
     let transport =
         Fake.Recorder(fun (req: Request) ->
             match req.Path, req.Subject with
@@ -808,8 +852,13 @@ let ``#2308 a missing or mismatched fresh node fact refuses rather than deciding
 let ``#2308 a legacy cache row without a node id takes the former fresh REST lock path`` () =
     use _sandbox = new Sandbox()
 
-    let row = { scopeRow "FS.GG.SDD" 99 with NodeId = None }
-    let transport = offBoardRoutes "[]" (fun _ -> "[]") """{"number":99,"body":"Paths: src/Board/**"}"""
+    let row =
+        { scopeRow "FS.GG.SDD" 99 with
+            NodeId = None
+        }
+
+    let transport =
+        offBoardRoutes "[]" (fun _ -> "[]") """{"number":99,"body":"Paths: src/Board/**"}"""
 
     match Scan.snapshot transport [ row ] (Some "FS.GG.SDD") false None 120 with
     | Error e -> failwith $"a legacy cache row must remain safely schedulable through REST — got %A{e}"
@@ -826,7 +875,11 @@ let ``#1896 a board candidate with an incomplete marker scan refuses the schedul
     let transport =
         offBoardRoutes
             "[]"
-            (fun n -> if n = 99 then incompleteLiveMarker "visible-holder" 99 else "[]")
+            (fun n ->
+                if n = 99 then
+                    incompleteLiveMarker "visible-holder" 99
+                else
+                    "[]")
             """{"number":99,"body":"Paths: src/Board/**"}"""
 
     match Scan.snapshot transport [ scopeRow "FS.GG.SDD" 99 ] (Some "FS.GG.SDD") false None 120 with
@@ -847,7 +900,11 @@ let ``#1896 an off-board issue with an incomplete marker scan refuses the schedu
     let transport =
         offBoardRoutes
             list
-            (fun n -> if n = 500 then incompleteLiveMarker "visible-holder" 500 else "[]")
+            (fun n ->
+                if n = 500 then
+                    incompleteLiveMarker "visible-holder" 500
+                else
+                    "[]")
             """{"number":99,"body":"Paths: src/Board/**"}"""
 
     match Scan.snapshot transport [ scopeRow "FS.GG.SDD" 99 ] (Some "FS.GG.SDD") false None 120 with
@@ -922,7 +979,8 @@ let ``#1794 an off-board issue with an unreadable body and NO claim reserves not
         """[{"number":99,"state":"open","body":"Paths: src/Board/**"},
             {"number":500,"state":"open"}]"""
 
-    let transport = offBoardRoutes list (fun _ -> "[]") """{"number":99,"body":"Paths: src/Board/**"}"""
+    let transport =
+        offBoardRoutes list (fun _ -> "[]") """{"number":99,"body":"Paths: src/Board/**"}"""
 
     match Scan.snapshot transport [ scopeRow "FS.GG.SDD" 99 ] (Some "FS.GG.SDD") false None 120 with
     | Error e -> failwith $"the sweep must produce a snapshot — got %A{e}"
@@ -940,7 +998,11 @@ let ``#2899 a scoped-out on-board claim reaches the reservation sweep exactly on
     Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
 
     let candidate = scopeRow "FS.GG.SDD" 99
-    let scopedOut = { scopeRow "FS.GG.SDD" 500 with PathRepo = "cross-repo" }
+
+    let scopedOut =
+        { scopeRow "FS.GG.SDD" 500 with
+            PathRepo = "cross-repo"
+        }
 
     let list =
         """[{"number":99,"state":"open","body":"Paths: src/Shared/**"},
@@ -960,7 +1022,9 @@ let ``#2899 a scoped-out on-board claim reaches the reservation sweep exactly on
     | Error e -> failwith $"the scoped snapshot must preserve both reservation arms — got %A{e}"
     | Ok(document, _) ->
         use doc = System.Text.Json.JsonDocument.Parse(document: string)
-        let reservations = doc.RootElement.GetProperty("inFlight").EnumerateArray() |> Seq.toList
+
+        let reservations =
+            doc.RootElement.GetProperty("inFlight").EnumerateArray() |> Seq.toList
 
         let heldNumbers =
             reservations
@@ -986,17 +1050,17 @@ let ``#2899 a scoped-out on-board row with no claim is neither reserved nor inve
     Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
 
     let candidate = scopeRow "FS.GG.SDD" 99
-    let scopedOut = { scopeRow "FS.GG.SDD" 500 with PathRepo = "cross-repo" }
+
+    let scopedOut =
+        { scopeRow "FS.GG.SDD" 500 with
+            PathRepo = "cross-repo"
+        }
 
     let list =
         """[{"number":99,"state":"open","body":"Paths: src/Candidate/**"},
             {"number":500,"state":"open","body":"Paths: src/Other/**"}]"""
 
-    let transport =
-        offBoardRoutes
-            list
-            (fun _ -> "[]")
-            "Paths: src/Candidate/**"
+    let transport = offBoardRoutes list (fun _ -> "[]") "Paths: src/Candidate/**"
 
     match Scan.snapshot transport [ candidate; scopedOut ] (Some "FS.GG.SDD") false None 120 with
     | Error e -> failwith $"a markerless scoped-out row must not damage the snapshot — got %A{e}"
@@ -1020,7 +1084,11 @@ let ``#2899 a scoped-out claim for another path repository is not reserved in th
     Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
 
     let candidate = scopeRow "FS.GG.SDD" 99
-    let scopedOut = { scopeRow "FS.GG.SDD" 500 with PathRepo = "cross-repo" }
+
+    let scopedOut =
+        { scopeRow "FS.GG.SDD" 500 with
+            PathRepo = "cross-repo"
+        }
 
     let list =
         """[{"number":99,"state":"open","body":"Paths: src/Shared/**"},
@@ -1040,7 +1108,9 @@ let ``#2899 a scoped-out claim for another path repository is not reserved in th
     | Error e -> failwith $"the opposite-repository marker must remain a readable non-reservation — got %A{e}"
     | Ok(document, _) ->
         use doc = System.Text.Json.JsonDocument.Parse(document: string)
-        let reservations = doc.RootElement.GetProperty("inFlight").EnumerateArray() |> Seq.toList
+
+        let reservations =
+            doc.RootElement.GetProperty("inFlight").EnumerateArray() |> Seq.toList
 
         let heldNumbers =
             reservations
@@ -1059,7 +1129,10 @@ let ``#2899 a scoped-out claim for another path repository is not reserved in th
 /// An issue node carrying the two new facts, spelled exactly as GitHub answers them.
 let private rankedNode (number: int) (phase: string) (createdAt: string) =
     let phaseField =
-        if phase = "" then "" else $""""phase":{{"name":"%s{phase}"}},"""
+        if phase = "" then
+            ""
+        else
+            $""""phase":{{"name":"%s{phase}"}},"""
 
     $"""{{"id":"PVTI_%d{number}","status":{{"name":"Ready"}},
           "blockedBy":{{"text":""}},
@@ -1177,8 +1250,7 @@ let ``#1598 an entry written before this existed reads as None, never as a zero 
     // A pre-#1598 cache entry has neither key. `None` under-prioritises the row for at most one cache
     // lifetime; a zero age would make it the YOUNGEST possible item, which is the one reading that can
     // never trigger starvation escalation.
-    let transport =
-        scripted [ ok (page (issueNode 1 "Ready" "" "OPEN") false "") ]
+    let transport = scripted [ ok (page (issueNode 1 "Ready" "" "OPEN") false "") ]
 
     match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12 with
     | Ok [ row ] ->
@@ -1205,7 +1277,11 @@ let ``#1933 a body-only 'Blocked by:' line with an EMPTY field yields blockers=[
     use _sandbox = new Sandbox()
     Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
 
-    let row = { scopeRow "FS.GG.SDD" 99 with Status = BoardStatus.Blocked; BlockedByRaw = "" }
+    let row =
+        { scopeRow "FS.GG.SDD" 99 with
+            Status = BoardStatus.Blocked
+            BlockedByRaw = ""
+        }
 
     let transport =
         offBoardRoutes
@@ -1239,12 +1315,14 @@ let ``#1933 the SAME body, with the field set instead, yields the edge - the con
     let row =
         { scopeRow "FS.GG.SDD" 99 with
             Status = BoardStatus.Blocked
-            BlockedByRaw = "FS-GG/FS.GG.SDD#77" }
+            BlockedByRaw = "FS-GG/FS.GG.SDD#77"
+        }
 
     let blocker =
         { scopeRow "FS.GG.SDD" 77 with
             State = IssueState.Open
-            PathRepo = "FS.GG.SDD-blockers-only" }
+            PathRepo = "FS.GG.SDD-blockers-only"
+        }
 
     let transport =
         offBoardRoutes
@@ -1276,7 +1354,9 @@ let ``#1933 the SAME body, with the field set instead, yields the edge - the con
 
 /// A claimed board row already sitting `In review` — the exact column the probe used to skip.
 let private claimedInReviewRow: Scan.Row =
-    { scopeRow "FS.GG.SDD" 99 with Status = BoardStatus.InReview }
+    { scopeRow "FS.GG.SDD" 99 with
+        Status = BoardStatus.InReview
+    }
 
 /// A transport for the claimed-row legs. Fresh node facts supply the body and a comment count of 1 (the
 /// claim marker itself is the one comment); the marker read answers with a LIVE, WITHIN-LEASE claim; and
@@ -1357,7 +1437,11 @@ let ``#2450 a CLAIMED, OPEN 'Blocked' row is NOT probed by this arm - the widene
     use _sandbox = new Sandbox()
     Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
 
-    let blockedRow = { claimedInReviewRow with Status = BoardStatus.Blocked }
+    let blockedRow =
+        { claimedInReviewRow with
+            Status = BoardStatus.Blocked
+        }
+
     let transport, pullsReads, _ =
         claimedRowTransport """[{"number":1911,"head":{"ref":"item/99-already-written"}}]"""
 
@@ -1388,7 +1472,9 @@ let ``#2450 a CLAIMED, OPEN 'Blocked' row is NOT probed by this arm - the widene
 
 /// A markerless board row already sitting `In review` — the exact column the unclaimed probe used to skip.
 let private unclaimedInReviewRow: Scan.Row =
-    { scopeRow "FS.GG.SDD" 99 with Status = BoardStatus.InReview }
+    { scopeRow "FS.GG.SDD" 99 with
+        Status = BoardStatus.InReview
+    }
 
 /// A transport for the markerless-row legs. `/comments` answers with NO claim marker at all (holder =
 /// `None`), so these legs stay on the `| None ->` arm exactly as #2216's own repro was: an OPEN,
@@ -1476,7 +1562,8 @@ let ``#2384 an UNCLAIMED, OPEN 'Blocked' row with an unresolved blocker is NOT p
     let blockedRow =
         { unclaimedInReviewRow with
             Status = BoardStatus.Blocked
-            BlockedByRaw = "" }
+            BlockedByRaw = ""
+        }
 
     let transport, pullsReads, _ =
         unclaimedRowTransport """[{"number":2216,"head":{"ref":"item/99-already-written"}}]"""
@@ -1588,7 +1675,8 @@ let ``.github#2525 an Issue node whose identity will not parse REFUSES instead o
     let transport = scripted [ ok body ]
 
     match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 1 with
-    | Ok rows -> failwith $"an unreadable Issue node must not be silently dropped — got Ok with {List.length rows} row(s)"
+    | Ok rows ->
+        failwith $"an unreadable Issue node must not be silently dropped — got Ok with {List.length rows} row(s)"
     | Error(Malformed(_, detail)) ->
         Assert.Contains("selected as an Issue or PullRequest", detail)
         Assert.Contains("refusing to report a short board as a complete one", detail)
@@ -1606,8 +1694,10 @@ let ``.github#2525 an honest multi-page walk still returns EVERY row`` () =
 
     let transport =
         scripted
-            [ ok (page (issueNode 1 "Ready" "" "OPEN") true "cursor-1")
-              ok (page (issueNode 2 "In progress" "" "OPEN") false "") ]
+            [
+                ok (page (issueNode 1 "Ready" "" "OPEN") true "cursor-1")
+                ok (page (issueNode 2 "In progress" "" "OPEN") false "")
+            ]
 
     match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 1 with
     | Ok rows ->

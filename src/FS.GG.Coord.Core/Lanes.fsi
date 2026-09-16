@@ -73,33 +73,37 @@ module Lanes =
 
     /// A set of items that may contend with each other, and with nothing outside it.
     type Lane =
-        { /// The lowest-numbered item in the lane. A deterministic, stable-ish name — two workers
-          /// partitioning the same board compute the same lane ids, which is what makes a lane
-          /// something you can talk about ("take lane .github#422") rather than a per-call artefact.
-          Id: Ref
+        {
+            /// The lowest-numbered item in the lane. A deterministic, stable-ish name — two workers
+            /// partitioning the same board compute the same lane ids, which is what makes a lane
+            /// something you can talk about ("take lane .github#422") rather than a per-call artefact.
+            Id: Ref
 
-          /// Lanes NEVER span repos. `Paths:` tokens are repo-relative — `scripts/foo` in one repo and
-          /// `scripts/foo` in another name two different files in two different worktrees — so joining
-          /// them would invent a phantom collision and glue two independent lanes into one (#312, #353).
-          Owner: string
-          Repo: string
+            /// Lanes NEVER span repos. `Paths:` tokens are repo-relative — `scripts/foo` in one repo and
+            /// `scripts/foo` in another name two different files in two different worktrees — so joining
+            /// them would invent a phantom collision and glue two independent lanes into one (#312, #353).
+            Owner: string
+            Repo: string
 
-          /// In issue order.
-          Items: Item list
+            /// In issue order.
+            Items: Item list
 
-          /// Every matchable token any item in the lane declares — what the lane RESERVES as a whole.
-          Tokens: string list
+            /// Every matchable token any item in the lane declares — what the lane RESERVES as a whole.
+            Tokens: string list
 
-          /// The workers holding a live claim inside this lane. Non-empty ⇒ the lane is OCCUPIED, and a
-          /// second worker sent here would be scheduled against files somebody is standing in.
-          HeldBy: WorkerId list }
+            /// The workers holding a live claim inside this lane. Non-empty ⇒ the lane is OCCUPIED, and a
+            /// second worker sent here would be scheduled against files somebody is standing in.
+            HeldBy: WorkerId list
+        }
 
     type Partition =
-        { Lanes: Lane list
+        {
+            Lanes: Lane list
 
-          /// Reported, never dropped. An item that cannot be laned is the single most actionable thing
-          /// on the board: it is either work nobody can pick up, or a declaration that protects nothing.
-          Unlanable: Unlanable list }
+            /// Reported, never dropped. An item that cannot be laned is the single most actionable thing
+            /// on the board: it is either work nobody can pick up, or a declaration that protects nothing.
+            Unlanable: Unlanable list
+        }
 
     /// A token that is holding a lane together, and what it COSTS.
     ///
@@ -114,14 +118,16 @@ module Lanes =
     /// left alone — the work really is coupled, and narrowing it would be a lie that puts two workers in
     /// one file.
     type Glue =
-        { Token: string
+        {
+            Token: string
 
-          /// The items that declare it. These are the issues the chore would have to narrow.
-          DeclaredBy: Ref list
+            /// The items that declare it. These are the issues the chore would have to narrow.
+            DeclaredBy: Ref list
 
-          /// How many lanes this lane becomes if this token is removed from every item above.
-          /// `1` means removing it buys NOTHING — the items are coupled by something else too.
-          SplitsInto: int }
+            /// How many lanes this lane becomes if this token is removed from every item above.
+            /// `1` means removing it buys NOTHING — the items are coupled by something else too.
+            SplitsInto: int
+        }
 
     /// Rank a lane's tokens by how much parallelism each one is costing. Highest `SplitsInto` first.
     ///

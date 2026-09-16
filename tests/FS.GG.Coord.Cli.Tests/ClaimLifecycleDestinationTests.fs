@@ -44,48 +44,58 @@ module ClaimLifecycleDestinationTests =
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None
-              Headers = Map.empty }
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            }
 
     let private routeComment () =
-        StructuredFixtures.routeComment "FS-GG/FS.GG.SDD#42" (Some FS.GG.Coord.DeliveryRoute.Lightweight) "fixture-2645" None
+        StructuredFixtures.routeComment
+            "FS-GG/FS.GG.SDD#42"
+            (Some FS.GG.Coord.DeliveryRoute.Lightweight)
+            "fixture-2645"
+            None
 
     /// How this fixture's world is shaped. Every field is a FACT ABOUT THE ITEM that `claim` now reads,
     /// so a leg below differs from its control in exactly one of them — which is what makes each leg an
     /// observation about one input rather than about the fixture as a whole.
     type private World =
-        { /// The board column the item currently shows. The fixture MUTATES it on a served write, so the
-          /// post-claim readback observes what the claim actually did rather than a canned answer.
-          Column: string
-          /// An OPEN pull request on this item's own `item/42-*` branch, if any.
-          ItemPr: int option
-          /// The item's live `Blocked by` COLUMN — ADR-0045's typed dependency edge, and the source
-          /// `claim` resolves blockers from. `""` is "no edge", and costs no further read.
-          BlockedBy: string
-          /// The state the blocker `BlockedBy` names answers with, when it names one.
-          BlockerState: string
-          /// The ITEM issue's own OPEN/CLOSED state.
-          IssueState: string
-          /// Make `Reads.prAlive`'s open-PR list unreadable — a transport failure, not a 404. This is the
-          /// "I could not look" input, and `LivenessUnknown` must never launder into "no PR".
-          PrProbeFails: bool
-          /// A claim marker already live on the item, as `(worker, session)`.
-          Holder: (string * string) option
-          /// A done receipt already on the item's comment thread (`Done.hasReceipt`).
-          DoneStamped: bool }
+        {
+            /// The board column the item currently shows. The fixture MUTATES it on a served write, so the
+            /// post-claim readback observes what the claim actually did rather than a canned answer.
+            Column: string
+            /// An OPEN pull request on this item's own `item/42-*` branch, if any.
+            ItemPr: int option
+            /// The item's live `Blocked by` COLUMN — ADR-0045's typed dependency edge, and the source
+            /// `claim` resolves blockers from. `""` is "no edge", and costs no further read.
+            BlockedBy: string
+            /// The state the blocker `BlockedBy` names answers with, when it names one.
+            BlockerState: string
+            /// The ITEM issue's own OPEN/CLOSED state.
+            IssueState: string
+            /// Make `Reads.prAlive`'s open-PR list unreadable — a transport failure, not a 404. This is the
+            /// "I could not look" input, and `LivenessUnknown` must never launder into "no PR".
+            PrProbeFails: bool
+            /// A claim marker already live on the item, as `(worker, session)`.
+            Holder: (string * string) option
+            /// A done receipt already on the item's comment thread (`Done.hasReceipt`).
+            DoneStamped: bool
+        }
 
     let private world =
-        { Column = "Ready"
-          ItemPr = None
-          BlockedBy = ""
-          BlockerState = "open"
-          IssueState = "open"
-          PrProbeFails = false
-          Holder = None
-          DoneStamped = false }
+        {
+            Column = "Ready"
+            ItemPr = None
+            BlockedBy = ""
+            BlockerState = "open"
+            IssueState = "open"
+            PrProbeFails = false
+            Holder = None
+            DoneStamped = false
+        }
 
     /// The item's comment thread, mutated the way GitHub would: a POST adds a comment with the next id, a
     /// DELETE removes one. Seeded with the current delivery-route receipt (which `claim` requires) and,
@@ -112,11 +122,13 @@ module ClaimLifecycleDestinationTests =
 
             let route =
                 JsonSerializer.Serialize
-                    {| id = 7001L
-                       body = routeComment ()
-                       user = {| login = "EHotwagner" |}
-                       created_at = ts
-                       updated_at = ts |}
+                    {|
+                        id = 7001L
+                        body = routeComment ()
+                        user = {| login = "EHotwagner" |}
+                        created_at = ts
+                        updated_at = ts
+                    |}
 
             let rest =
                 comments
@@ -146,10 +158,12 @@ module ClaimLifecycleDestinationTests =
 
     /// The transport, plus the Status option ids it was asked to write, oldest first.
     type private Fixture =
-        { Transport: Fake.Recorder
-          Thread: Thread
-          StatusWrites: unit -> string list
-          Column: unit -> string }
+        {
+            Transport: Fake.Recorder
+            Thread: Thread
+            StatusWrites: unit -> string list
+            Column: unit -> string
+        }
 
     let private build (w: World) : Fixture =
         let thread = Thread(w.Holder, w.DoneStamped)
@@ -176,7 +190,10 @@ module ClaimLifecycleDestinationTests =
                 let last =
                     variables
                     |> List.tryFind (fun (k, _) -> k = "last")
-                    |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
+                    |> Option.bind (fun (_, v) ->
+                        match v with
+                        | VNumber n -> Some(int n)
+                        | _ -> None)
                     |> Option.defaultValue 100
 
                 let recent =
@@ -187,16 +204,27 @@ module ClaimLifecycleDestinationTests =
                     |> List.map (fun body -> {| body = body |})
                     |> JsonSerializer.Serialize
 
-                ok ("{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":" + recent + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
+                ok (
+                    "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                    + recent
+                    + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+                )
             elif document.Contains "projectsV2" then
-                ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-            elif document.Contains "fields(first" then
                 ok
-                    ("""{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":"""
-                     + options
-                     + """},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}""")
+                    """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+            elif document.Contains "fields(first" then
+                ok (
+                    """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":"""
+                    + options
+                    + """},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                )
             elif document.Contains "items(first" then
-                let blocked = if w.BlockedBy = "" then "null" else $"{{\"text\":\"%s{w.BlockedBy}\"}}"
+                let blocked =
+                    if w.BlockedBy = "" then
+                        "null"
+                    else
+                        $"{{\"text\":\"%s{w.BlockedBy}\"}}"
+
                 let state = w.IssueState.ToUpperInvariant()
 
                 ok
@@ -204,7 +232,11 @@ module ClaimLifecycleDestinationTests =
             elif document.Contains "fieldValueByName(name: \"Blocked by\")" then
                 // `Board.itemBlockedBy` — the source `claim` now resolves this item's live blocker edges
                 // from, rather than asserting `[]`.
-                let value = if w.BlockedBy = "" then "null" else $"{{\"text\":\"%s{w.BlockedBy}\"}}"
+                let value =
+                    if w.BlockedBy = "" then
+                        "null"
+                    else
+                        $"{{\"text\":\"%s{w.BlockedBy}\"}}"
 
                 ok
                     $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"totalCount":1,"nodes":[{{"project":{{"number":12}},"fieldValueByName":%s{value}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
@@ -212,7 +244,8 @@ module ClaimLifecycleDestinationTests =
                 ok
                     $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"totalCount":1,"nodes":[{{"project":{{"number":12}},"fieldValueByName":{{"name":"%s{column}"}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
             elif document.Contains "projectItems" then
-                ok """{"data":{"repository":{"issue":{"projectItems":{"totalCount":1,"nodes":[{"id":"PVTI_42","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                ok
+                    """{"data":{"repository":{"issue":{"projectItems":{"totalCount":1,"nodes":[{"id":"PVTI_42","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
             elif document.Contains "updateProjectV2ItemFieldValue" then
                 // THE WRITE MOVES THE COLUMN. Without this the readback would report the seeded value
                 // forever and `converged` would be measuring the fixture rather than the claim.
@@ -228,68 +261,85 @@ module ClaimLifecycleDestinationTests =
                 Error(Errors.NotFound $"the fixture serves no GraphQL document: %s{document}")
 
         let transport =
-            Fake.Recorder(StructuredFixtures.withIntake <| fun (req: Request) ->
-                let path = req.Path.Trim '/'
+            Fake.Recorder(
+                StructuredFixtures.withIntake
+                <| fun (req: Request) ->
+                    let path = req.Path.Trim '/'
 
-                match req.Method, path with
-                | "POST", "graphql" ->
-                    match req.Body with
-                    | Query(document, variables) -> graphql document variables
-                    | _ -> Error(Errors.NotFound "a graphql call with no document")
-                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-                | "GET", "repos/FS-GG/FS.GG.SDD/issues" ->
-                    ok """[{"number":42,"state":"open","body":"Paths: src/Thing.fs"}]"""
-                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" ->
-                    ok $"""{{"number":42,"state":"%s{w.IssueState}","body":"Paths: src/Thing.fs"}}"""
-                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json())
-                | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
-                    let body =
+                    match req.Method, path with
+                    | "POST", "graphql" ->
                         match req.Body with
-                        | Json payload -> JsonDocument.Parse(payload).RootElement.GetProperty("body").GetString()
-                        | _ -> ""
+                        | Query(document, variables) -> graphql document variables
+                        | _ -> Error(Errors.NotFound "a graphql call with no document")
+                    | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                    | "GET", "repos/FS-GG/FS.GG.SDD/issues" ->
+                        ok """[{"number":42,"state":"open","body":"Paths: src/Thing.fs"}]"""
+                    | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" ->
+                        ok $"""{{"number":42,"state":"%s{w.IssueState}","body":"Paths: src/Thing.fs"}}"""
+                    | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json())
+                    | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
+                        let body =
+                            match req.Body with
+                            | Json payload -> JsonDocument.Parse(payload).RootElement.GetProperty("body").GetString()
+                            | _ -> ""
 
-                    ok (sprintf """{"id":%d}""" (thread.Add body))
-                | "DELETE", _ when path.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
-                    thread.Remove(Int64.Parse(path.Substring(path.LastIndexOf '/' + 1)))
-                    ok ""
-                // The blocker `w.BlockedBy` names — resolved over REST, exactly as `Scan.resolveBlocker`
-                // resolves an off-board edge, because a PR is an issue in REST and only that read
-                // distinguishes MERGED from CLOSED (#476).
-                | "GET", "repos/FS-GG/FS.GG.SDD/issues/999" ->
-                    ok $"""{{"number":999,"state":"%s{w.BlockerState}","body":""}}"""
-                // `Reads.prAlive`, both probes. The open-PR list first; then, only if it found none, the
-                // pushed-branch probe (#1055).
-                | "GET", "repos/FS-GG/FS.GG.SDD/pulls" when w.PrProbeFails ->
-                    Error(Errors.Transport "fixture: the item's open-PR list is UNREADABLE")
-                | "GET", "repos/FS-GG/FS.GG.SDD/pulls" ->
-                    match w.ItemPr with
-                    | Some pr -> ok $"""[{{"number":%d{pr},"head":{{"ref":"item/42-a-slug"}}}}]"""
-                    | None -> ok "[]"
-                | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/42-" -> ok "[]"
-                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+                        ok (sprintf """{"id":%d}""" (thread.Add body))
+                    | "DELETE", _ when path.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
+                        thread.Remove(Int64.Parse(path.Substring(path.LastIndexOf '/' + 1)))
+                        ok ""
+                    // The blocker `w.BlockedBy` names — resolved over REST, exactly as `Scan.resolveBlocker`
+                    // resolves an off-board edge, because a PR is an issue in REST and only that read
+                    // distinguishes MERGED from CLOSED (#476).
+                    | "GET", "repos/FS-GG/FS.GG.SDD/issues/999" ->
+                        ok $"""{{"number":999,"state":"%s{w.BlockerState}","body":""}}"""
+                    // `Reads.prAlive`, both probes. The open-PR list first; then, only if it found none, the
+                    // pushed-branch probe (#1055).
+                    | "GET", "repos/FS-GG/FS.GG.SDD/pulls" when w.PrProbeFails ->
+                        Error(Errors.Transport "fixture: the item's open-PR list is UNREADABLE")
+                    | "GET", "repos/FS-GG/FS.GG.SDD/pulls" ->
+                        match w.ItemPr with
+                        | Some pr -> ok $"""[{{"number":%d{pr},"head":{{"ref":"item/42-a-slug"}}}}]"""
+                        | None -> ok "[]"
+                    | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/42-" -> ok "[]"
+                    | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+            )
 
-        { Transport = transport
-          Thread = thread
-          StatusWrites = fun () -> List.ofSeq writes
-          Column = fun () -> column }
+        {
+            Transport = transport
+            Thread = thread
+            StatusWrites = fun () -> List.ofSeq writes
+            Column = fun () -> column
+        }
 
     let private context (transport: Fake.Recorder) : Kernel.Context =
-        { Transport = transport
-          Owner = "FS-GG"
-          Title = "Coordination"
-          DefaultRepo = Some "FS.GG.SDD"
-          ChoreLocks = [] }
+        {
+            Transport = transport
+            Owner = "FS-GG"
+            Title = "Coordination"
+            DefaultRepo = Some "FS.GG.SDD"
+            ChoreLocks = []
+        }
 
     /// The identity ladder, pinned on BOTH rungs — `ForceStealTests` carries the full argument for why an
     /// unpinned `$FSGG_WORKER`/session makes every leg here an impersonation (#1646/#419).
     let private sessionVars =
-        [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
+        [
+            "CLAUDE_CODE_SESSION_ID"
+            "OPENCODE_SESSION_ID"
+            "FSGG_AGENT_SESSION_ID"
+            "FSGG_WORKER"
+        ]
 
     let private runClaim (transport: Fake.Recorder) (args: string list) : int * string * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2645-" + Guid.NewGuid().ToString "n")
+        let dir =
+            Path.Combine(Path.GetTempPath(), "fsgg-2645-" + Guid.NewGuid().ToString "n")
+
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
-        let previousSessions = sessionVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+
+        let previousSessions =
+            sessionVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+
         let stdout = Console.Out
         let stderr = Console.Error
         use capturedOut = new StringWriter()
@@ -332,7 +382,8 @@ module ClaimLifecycleDestinationTests =
     let private claimArgs (extra: string list) =
         [ "claim"; "FS.GG.SDD#42"; "--worker"; "vole-418"; "--json" ] @ extra
 
-    let private receiptOf (out: string) = JsonDocument.Parse(out.Trim()).RootElement
+    let private receiptOf (out: string) =
+        JsonDocument.Parse(out.Trim()).RootElement
 
     // ---- AC1/AC3/AC5: the measured defect — a mid-review re-affirm ------------------------------------
 
@@ -345,7 +396,8 @@ module ClaimLifecycleDestinationTests =
                 { world with
                     Column = "In review"
                     ItemPr = Some 77
-                    Holder = Some("vole-418", "ed60050b") }
+                    Holder = Some("vole-418", "ed60050b")
+                }
 
         let code, out, _ = runClaim fixture.Transport (claimArgs [])
 
@@ -397,7 +449,8 @@ module ClaimLifecycleDestinationTests =
                 { world with
                     Column = "In review"
                     ItemPr = Some 77
-                    Holder = Some("smew-e1d9", "0e0e0e0e") }
+                    Holder = Some("smew-e1d9", "0e0e0e0e")
+                }
 
         let code, out, _ = runClaim fixture.Transport (claimArgs [ "--force" ])
 
@@ -415,7 +468,12 @@ module ClaimLifecycleDestinationTests =
         // `Blockers = fact []` was the second fabrication. The row's `Blocked by` column names an OPEN
         // issue, so the reducer's blocker arm fires and the claim must not write `In progress` over it —
         // which is also what stops `claim` and `reconcile` arguing about the same row every pass.
-        let fixture = build { world with BlockedBy = "FS-GG/FS.GG.SDD#999"; BlockerState = "open" }
+        let fixture =
+            build
+                { world with
+                    BlockedBy = "FS-GG/FS.GG.SDD#999"
+                    BlockerState = "open"
+                }
 
         let code, out, _ = runClaim fixture.Transport (claimArgs [])
 
@@ -428,7 +486,12 @@ module ClaimLifecycleDestinationTests =
         // The control for the leg above, and it is not decoration: a fix that read the FIELD but not the
         // referenced issue's STATE would block on a dependency that finished, which is #476's defect
         // arriving through this new read.
-        let fixture = build { world with BlockedBy = "FS-GG/FS.GG.SDD#999"; BlockerState = "closed" }
+        let fixture =
+            build
+                { world with
+                    BlockedBy = "FS-GG/FS.GG.SDD#999"
+                    BlockerState = "closed"
+                }
 
         let code, out, _ = runClaim fixture.Transport (claimArgs [])
 
@@ -443,7 +506,12 @@ module ClaimLifecycleDestinationTests =
         // "I could not look" is not "I looked and there is no PR" (#266). This is the arm the old code
         // could not even express: `PullRequest = fact None` had no room for an unknown, so a transport
         // failure and a genuine absence produced the same confident `In progress`.
-        let fixture = build { world with Column = "In review"; PrProbeFails = true }
+        let fixture =
+            build
+                { world with
+                    Column = "In review"
+                    PrProbeFails = true
+                }
 
         let code, out, err = runClaim fixture.Transport (claimArgs [])
 
@@ -569,4 +637,3 @@ module ClaimLifecycleDestinationTests =
     //     probe still fails and still withholds before the observation is ever built), and the read-cost leg
     //     (the mutation changes what the reducer is TOLD, never which reads are made).
     // RESTORED, rebuilt, all eight green — and the full 795-test suite green with them.
-

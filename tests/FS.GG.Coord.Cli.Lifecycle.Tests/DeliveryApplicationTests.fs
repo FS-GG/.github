@@ -10,63 +10,105 @@ open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 
 module DeliveryApplicationTests =
-    let private repositoryRoot = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "..", ".."))
+    let private repositoryRoot =
+        Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "..", ".."))
 
-    let commentWithId id body : Driver.ReviewComment = { Id = id; Url = $"https://example.test/{id}"; Body = body }
+    let commentWithId id body : Driver.ReviewComment =
+        {
+            Id = id
+            Url = $"https://example.test/{id}"
+            Body = body
+        }
+
     let comment body = commentWithId 1L body
 
     let guardedLandingFacts claimGeneration : Delivery.Snapshot =
-        { Freshness =
-            { ItemRef = ".github#2131"
-              ClaimGeneration = claimGeneration
-              Executor = "wren-c948"
-              Branch = "item/2131-pnext-item-protocol"
-              Worktree = "/tmp/2131"
-              PullRequest = Some 2174
-              HeadSha = String.replicate 40 "a"
-              DeclaredPaths = Delivery.Known [ "src/FS.GG.Coord.Cli" ]
-              BoardState = "In review" }
-          ItemBranchCanonical = true
-          ClosingLinkageCanonical = true
-          PathsVerified = true
-          InReview = true
-          Review = Some { MarkerValid = true; Subject = Some ".github#2131/pr/2174"; ClaimGeneration = Some claimGeneration; BaseSha = Some(String.replicate 40 "b"); CriticIdentity = Some "critic"; HeadSha = Some(String.replicate 40 "a"); Rounds = [ 1 ]; RepairPhase = false; ChecksGreen = true; HostAccepted = true; RuntimeRouteEvidence = Some(Driver.NotMeaningful "pure adapter test"); DiffAuditRequired = false; DiffAuditHead = None }
-          ReviewProblem = None
-          Landable = true
-          Merged = false
-          MergeReachable = false
-          IssueClosed = false
-          BoardDone = false
-          ClaimReleased = false
-          PendingWrites = 0
-          CleanupEligible = false
-          ObligationsDeclared = true
-          Obligations = []
-          ParkedReason = None }
+        {
+            Freshness =
+                {
+                    ItemRef = ".github#2131"
+                    ClaimGeneration = claimGeneration
+                    Executor = "wren-c948"
+                    Branch = "item/2131-pnext-item-protocol"
+                    Worktree = "/tmp/2131"
+                    PullRequest = Some 2174
+                    HeadSha = String.replicate 40 "a"
+                    DeclaredPaths = Delivery.Known [ "src/FS.GG.Coord.Cli" ]
+                    BoardState = "In review"
+                }
+            ItemBranchCanonical = true
+            ClosingLinkageCanonical = true
+            PathsVerified = true
+            InReview = true
+            Review =
+                Some
+                    {
+                        MarkerValid = true
+                        Subject = Some ".github#2131/pr/2174"
+                        ClaimGeneration = Some claimGeneration
+                        BaseSha = Some(String.replicate 40 "b")
+                        CriticIdentity = Some "critic"
+                        HeadSha = Some(String.replicate 40 "a")
+                        Rounds = [ 1 ]
+                        RepairPhase = false
+                        ChecksGreen = true
+                        HostAccepted = true
+                        RuntimeRouteEvidence = Some(Driver.NotMeaningful "pure adapter test")
+                        DiffAuditRequired = false
+                        DiffAuditHead = None
+                    }
+            ReviewProblem = None
+            Landable = true
+            Merged = false
+            MergeReachable = false
+            IssueClosed = false
+            BoardDone = false
+            ClaimReleased = false
+            PendingWrites = 0
+            CleanupEligible = false
+            ObligationsDeclared = true
+            Obligations = []
+            ParkedReason = None
+        }
 
     let review id url body : Driver.ReviewComment = { Id = id; Url = url; Body = body }
 
     [<Fact>]
     let ``completion writer consumes the shared decision instead of rebuilding admission`` () =
-        let writer = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"))
+        let writer =
+            File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"))
+
         Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(writer, "Delivery\\.decideCompletion\\b").Count)
+
         Assert.Equal(
             1,
-            System.Text.RegularExpressions.Regex.Matches(
-                writer,
-                "Delivery\\.CompletionDecision\\.ProjectCompletion"
-            ).Count
+            System.Text.RegularExpressions.Regex
+                .Matches(writer, "Delivery\\.CompletionDecision\\.ProjectCompletion")
+                .Count
         )
 
         let doneStart = writer.IndexOf("let private runDone", StringComparison.Ordinal)
         let doneEnd = writer.IndexOf("let doneCmd", doneStart, StringComparison.Ordinal)
         let doneWriter = writer.Substring(doneStart, doneEnd - doneStart)
-        let selfHostReplay = doneWriter.IndexOf("Done.selfHostReplayState", StringComparison.Ordinal)
-        let createReceipt = doneWriter.IndexOf("Delivery.createCompletionReceipt", StringComparison.Ordinal)
-        let receipt = doneWriter.IndexOf("Writes.deliveryCompletionReceipt", StringComparison.Ordinal)
-        let issueClose = doneWriter.IndexOf("Writes.closeIssueCompleted", receipt, StringComparison.Ordinal)
-        let boardDone = doneWriter.IndexOf("Board.boardWrite", issueClose, StringComparison.Ordinal)
-        let claimRelease = doneWriter.IndexOf("Writes.release", boardDone, StringComparison.Ordinal)
+
+        let selfHostReplay =
+            doneWriter.IndexOf("Done.selfHostReplayState", StringComparison.Ordinal)
+
+        let createReceipt =
+            doneWriter.IndexOf("Delivery.createCompletionReceipt", StringComparison.Ordinal)
+
+        let receipt =
+            doneWriter.IndexOf("Writes.deliveryCompletionReceipt", StringComparison.Ordinal)
+
+        let issueClose =
+            doneWriter.IndexOf("Writes.closeIssueCompleted", receipt, StringComparison.Ordinal)
+
+        let boardDone =
+            doneWriter.IndexOf("Board.boardWrite", issueClose, StringComparison.Ordinal)
+
+        let claimRelease =
+            doneWriter.IndexOf("Writes.release", boardDone, StringComparison.Ordinal)
+
         Assert.True(receipt >= 0, "delivery completion receipt writer is not wired")
         Assert.True(selfHostReplay >= 0, "delivery completion does not inspect durable self-host replay")
         Assert.True(createReceipt > selfHostReplay, "completion authority can be minted before self-host replay agrees")
@@ -80,16 +122,35 @@ module DeliveryApplicationTests =
 
     [<Fact>]
     let ``#3274 live guarded landing proves base equivalence and selects policy before the merge callback`` () =
-        let writer = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"))
-        let guardedBranch = writer.IndexOf("transition.Action = Delivery.GuardedLand", StringComparison.Ordinal)
-        let policyRead = writer.IndexOf("OperationalGraphQl.repositoryPolicy", guardedBranch, StringComparison.Ordinal)
-        let authorityRefresh = writer.IndexOf("let currentAuthority", policyRead, StringComparison.Ordinal)
-        let linkageReread = writer.IndexOf("Reads.prClosingRef", authorityRefresh, StringComparison.Ordinal)
-        let obligationReread = writer.IndexOf("Reads.commentsWithIdentity", authorityRefresh, StringComparison.Ordinal)
-        let boardReread = writer.IndexOf("scanAndDecide", authorityRefresh, StringComparison.Ordinal)
-        let equivalenceProof = writer.IndexOf("authorizeBaseAdvance", policyRead, StringComparison.Ordinal)
-        let guardedLanding = writer.IndexOf("DeliveryApplication.guardedLandingWithMergePolicy", policyRead, StringComparison.Ordinal)
-        let mergeWrite = writer.IndexOf("Writes.mergeAtHead", guardedLanding, StringComparison.Ordinal)
+        let writer =
+            File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs"))
+
+        let guardedBranch =
+            writer.IndexOf("transition.Action = Delivery.GuardedLand", StringComparison.Ordinal)
+
+        let policyRead =
+            writer.IndexOf("OperationalGraphQl.repositoryPolicy", guardedBranch, StringComparison.Ordinal)
+
+        let authorityRefresh =
+            writer.IndexOf("let currentAuthority", policyRead, StringComparison.Ordinal)
+
+        let linkageReread =
+            writer.IndexOf("Reads.prClosingRef", authorityRefresh, StringComparison.Ordinal)
+
+        let obligationReread =
+            writer.IndexOf("Reads.commentsWithIdentity", authorityRefresh, StringComparison.Ordinal)
+
+        let boardReread =
+            writer.IndexOf("scanAndDecide", authorityRefresh, StringComparison.Ordinal)
+
+        let equivalenceProof =
+            writer.IndexOf("authorizeBaseAdvance", policyRead, StringComparison.Ordinal)
+
+        let guardedLanding =
+            writer.IndexOf("DeliveryApplication.guardedLandingWithMergePolicy", policyRead, StringComparison.Ordinal)
+
+        let mergeWrite =
+            writer.IndexOf("Writes.mergeAtHead", guardedLanding, StringComparison.Ordinal)
 
         Assert.True(guardedBranch >= 0, "guarded delivery branch is missing")
         Assert.True(policyRead > guardedBranch, "repository merge policy is not observed inside guarded delivery")
@@ -98,7 +159,12 @@ module DeliveryApplicationTests =
         Assert.True(obligationReread > authorityRefresh, "two-phase obligations are not re-read at the merge fence")
         Assert.True(boardReread > authorityRefresh, "owning-item board state is not re-read at the merge fence")
         Assert.True(equivalenceProof > policyRead, "guarded delivery does not prove a moved base at the live boundary")
-        Assert.True(guardedLanding > equivalenceProof, "guarded delivery can select merge before base equivalence is proved")
+
+        Assert.True(
+            guardedLanding > equivalenceProof,
+            "guarded delivery can select merge before base equivalence is proved"
+        )
+
         Assert.True(guardedLanding > policyRead, "observed policy is not passed to the guarded selector")
         Assert.True(mergeWrite > guardedLanding, "the guarded callback does not receive the typed merge write")
 
@@ -106,8 +172,15 @@ module DeliveryApplicationTests =
     let ``#2207 client delivery adapter retains malformed parser diagnostics`` () =
         let malformed =
             [ review 10L "https://reviews/initial" "<!-- fsgg:review-decision/v2 -->\n{}" ]
-        let parsed, problem = FS.GG.Coord.Cli.Lifecycle.LiveHandlers.deliveryReviewEvidence true malformed
-        let facts = { guardedLandingFacts "claim-generation-a" with Review = parsed; ReviewProblem = problem }
+
+        let parsed, problem =
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.deliveryReviewEvidence true malformed
+
+        let facts =
+            { guardedLandingFacts "claim-generation-a" with
+                Review = parsed
+                ReviewProblem = problem
+            }
 
         match Delivery.inspect facts with
         | Delivery.Next transition ->
@@ -119,11 +192,17 @@ module DeliveryApplicationTests =
     [<Fact>]
     let ``#2207 client delivery adapter accepts a real multi-round chain for guarded land`` () =
         let chain =
-            StructuredFixtures.acceptedReviewComments
-                "FS-GG/.github#2131/pr/2174" (String.replicate 40 "a") "kestrel-1"
+            StructuredFixtures.acceptedReviewComments "FS-GG/.github#2131/pr/2174" (String.replicate 40 "a") "kestrel-1"
             |> List.map (fun (id, url, body) -> review id url body)
-        let parsed, problem = FS.GG.Coord.Cli.Lifecycle.LiveHandlers.deliveryReviewEvidence true chain
-        let facts = { guardedLandingFacts "claim-generation-a" with Review = parsed; ReviewProblem = problem }
+
+        let parsed, problem =
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.deliveryReviewEvidence true chain
+
+        let facts =
+            { guardedLandingFacts "claim-generation-a" with
+                Review = parsed
+                ReviewProblem = problem
+            }
 
         match Delivery.inspect facts with
         | Delivery.Next transition -> Assert.Equal(Delivery.GuardedLand, transition.Action)
@@ -138,6 +217,7 @@ module DeliveryApplicationTests =
         let original = Console.Out
         use output = new StringWriter()
         Console.SetOut output
+
         try
             let code = DeliveryApplication.render opts facts
             code, output.ToString()
@@ -148,7 +228,11 @@ module DeliveryApplicationTests =
     [<InlineData("--json")>]
     [<InlineData("--text")>]
     let ``#2773 repairReviewHandoff renders its concrete problem`` format =
-        let facts = { guardedLandingFacts "claim-generation-a" with PathsVerified = false }
+        let facts =
+            { guardedLandingFacts "claim-generation-a" with
+                PathsVerified = false
+            }
+
         let code, rendered = renderDelivery format facts
 
         Assert.Equal(0, code)
@@ -166,21 +250,28 @@ module DeliveryApplicationTests =
             | Delivery.UnknownPath -> false
 
         let admissions =
-            [ Delivery.DeclaredPath
-              Delivery.GeneratedPath
-              Delivery.MandatorySddPath
-              Delivery.UndeclaredAuthoredPath
-              Delivery.UnknownPath ]
+            [
+                Delivery.DeclaredPath
+                Delivery.GeneratedPath
+                Delivery.MandatorySddPath
+                Delivery.UndeclaredAuthoredPath
+                Delivery.UnknownPath
+            ]
 
         for admission in admissions do
             let classification: Delivery.PathClassification =
-                { Path = $"fixture/%A{admission}"
-                  Admission = admission
-                  Reason = "fixture"
-                  AuthorityRevisions = [] }
+                {
+                    Path = $"fixture/%A{admission}"
+                    Admission = admission
+                    Reason = "fixture"
+                    AuthorityRevisions = []
+                }
 
-            let delivery = Client.projectPathVerdict Client.DeliveryReceiptProjection [ classification ]
-            let verifyPaths = Client.projectPathVerdict Client.VerifyPathsProjection [ classification ]
+            let delivery =
+                Client.projectPathVerdict Client.DeliveryReceiptProjection [ classification ]
+
+            let verifyPaths =
+                Client.projectPathVerdict Client.VerifyPathsProjection [ classification ]
 
             Assert.Equal(expected admission, delivery)
             Assert.Equal(delivery, verifyPaths)
@@ -188,8 +279,11 @@ module DeliveryApplicationTests =
     [<Fact>]
     let ``#2131 non-empty obligation receipt is head-bound and verifies only its declared id`` () =
         let comments =
-            [ comment "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->"
-              comment "<!-- fsgg:delivery-receipt id=nuget head=head-a evidence=https://nuget.example/package -->" ]
+            [
+                comment "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->"
+                comment "<!-- fsgg:delivery-receipt id=nuget head=head-a evidence=https://nuget.example/package -->"
+            ]
+
         match DeliveryApplication.obligationsFromComments "head-a" comments with
         | Ok [ obligation ] ->
             Assert.Equal("nuget", obligation.Id)
@@ -200,8 +294,15 @@ module DeliveryApplicationTests =
     [<Fact>]
     let ``#2239 version-bearing obligation and receipt ids are accepted`` () =
         let comments =
-            [ commentWithId 17L "<!-- fsgg:delivery-obligation id=new-sdd-workspace-0.9.0 kind=publication head=head-a -->"
-              commentWithId 18L "<!-- fsgg:delivery-receipt id=new-sdd-workspace-0.9.0 head=head-a evidence=https://nuget.example/package -->" ]
+            [
+                commentWithId
+                    17L
+                    "<!-- fsgg:delivery-obligation id=new-sdd-workspace-0.9.0 kind=publication head=head-a -->"
+                commentWithId
+                    18L
+                    "<!-- fsgg:delivery-receipt id=new-sdd-workspace-0.9.0 head=head-a evidence=https://nuget.example/package -->"
+            ]
+
         match DeliveryApplication.obligationsFromComments "head-a" comments with
         | Ok [ obligation ] ->
             Assert.Equal("new-sdd-workspace-0.9.0", obligation.Id)
@@ -210,7 +311,11 @@ module DeliveryApplicationTests =
 
     [<Fact>]
     let ``#2239 malformed obligation ids name their comment and field`` () =
-        let comments = [ commentWithId 19L "<!-- fsgg:delivery-obligation id=New-Sdd kind=publication head=head-a -->" ]
+        let comments =
+            [
+                commentWithId 19L "<!-- fsgg:delivery-obligation id=New-Sdd kind=publication head=head-a -->"
+            ]
+
         match DeliveryApplication.obligationsFromComments "head-a" comments with
         | Error reason ->
             Assert.Contains("19", reason)
@@ -220,8 +325,13 @@ module DeliveryApplicationTests =
     [<Fact>]
     let ``#2239 malformed receipt ids name their comment and field`` () =
         let comments =
-            [ comment "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->"
-              commentWithId 20L "<!-- fsgg:delivery-receipt id=New-Sdd head=head-a evidence=https://nuget.example/package -->" ]
+            [
+                comment "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->"
+                commentWithId
+                    20L
+                    "<!-- fsgg:delivery-receipt id=New-Sdd head=head-a evidence=https://nuget.example/package -->"
+            ]
+
         match DeliveryApplication.obligationsFromComments "head-a" comments with
         | Error reason ->
             Assert.Contains("20", reason)
@@ -230,7 +340,13 @@ module DeliveryApplicationTests =
 
     [<Fact>]
     let ``#2131 stale and undeclared obligation facts are refused`` () =
-        match DeliveryApplication.obligationsFromComments "head-b" [ comment "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->" ] with
+        match
+            DeliveryApplication.obligationsFromComments
+                "head-b"
+                [
+                    comment "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->"
+                ]
+        with
         | Error reason -> Assert.Contains("stale", reason)
         | other -> failwithf "expected stale declaration refusal, got %A" other
 
@@ -248,8 +364,13 @@ module DeliveryApplicationTests =
     [<Fact>]
     let ``#2347 a declaration with trailing explanatory prose parses successfully`` () =
         let comments =
-            [ comment "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->\n\nThis obligation covers publishing the nuget package once the merge lands."
-              comment "<!-- fsgg:delivery-receipt id=nuget head=head-a evidence=https://nuget.example/package -->\n\nPublished and verified on both feeds." ]
+            [
+                comment
+                    "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->\n\nThis obligation covers publishing the nuget package once the merge lands."
+                comment
+                    "<!-- fsgg:delivery-receipt id=nuget head=head-a evidence=https://nuget.example/package -->\n\nPublished and verified on both feeds."
+            ]
+
         match DeliveryApplication.obligationsFromComments "head-a" comments with
         | Ok [ obligation ] ->
             Assert.Equal("nuget", obligation.Id)
@@ -259,7 +380,11 @@ module DeliveryApplicationTests =
     [<Fact>]
     let ``#2347 the none sentinel with trailing explanatory prose parses successfully`` () =
         let comments =
-            [ comment "<!-- fsgg:delivery-obligations none head=head-a -->\n\nNo package, deployment, or registry surface moves in this change." ]
+            [
+                comment
+                    "<!-- fsgg:delivery-obligations none head=head-a -->\n\nNo package, deployment, or registry surface moves in this change."
+            ]
+
         match DeliveryApplication.obligationsFromComments "head-a" comments with
         | Ok [] -> ()
         | other -> failwithf "expected the none sentinel to clear past the trailing prose, got %A" other
@@ -270,7 +395,11 @@ module DeliveryApplicationTests =
         // same `StartsWith` filter round 1 (.github#2264) already relies on — the leading-line fix
         // must not loosen that boundary.
         let comments =
-            [ comment "For context, a declaration will look like:\n<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->\nonce it is posted." ]
+            [
+                comment
+                    "For context, a declaration will look like:\n<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->\nonce it is posted."
+            ]
+
         match DeliveryApplication.obligationsFromComments "head-a" comments with
         | Error reason -> Assert.Contains("undeclared", reason)
         | other -> failwithf "expected the quoted marker to stay inert and read as undeclared, got %A" other
@@ -278,7 +407,11 @@ module DeliveryApplicationTests =
     [<Fact>]
     let ``#2347 trailing text appended to the marker's own line, not a new line, is still malformed`` () =
         let comments =
-            [ comment "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a --> and more on the same line" ]
+            [
+                comment
+                    "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a --> and more on the same line"
+            ]
+
         match DeliveryApplication.obligationsFromComments "head-a" comments with
         | Error reason -> Assert.Contains("malformed", reason)
         | other -> failwithf "expected same-line trailing text to remain malformed, got %A" other
@@ -296,7 +429,10 @@ released past the newest published version.\n\n\
 This worker does NOT tag or publish — release sequencing is the host's, per explicit dispatch\n\
 instruction. The obligation remains open (no `fsgg:delivery-receipt` yet) until the merged commit is\n\
 tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages and nuget.org."
-        match DeliveryApplication.obligationsFromComments "366b28a43251962de4a03a4fdac39651dc9b72e9" [ comment body ] with
+
+        match
+            DeliveryApplication.obligationsFromComments "366b28a43251962de4a03a4fdac39651dc9b72e9" [ comment body ]
+        with
         | Ok [ obligation ] ->
             Assert.Equal("kit-0.48.0", obligation.Id)
             Assert.Equal("publication", obligation.Kind)
@@ -337,7 +473,10 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
 
     [<Fact>]
     let ``#2544 leg D the marker, a blank line, then prose still parses`` () =
-        let body = noneMarker + "\n\nNo package, deployment, or registry surface moves in this change."
+        let body =
+            noneMarker
+            + "\n\nNo package, deployment, or registry surface moves in this change."
+
         match DeliveryApplication.obligationsFromComments "head-a" [ comment body ] with
         | Ok [] -> ()
         | other -> failwithf "expected .github#2347's fix to remain green, got %A" other
@@ -346,6 +485,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     let ``#2544 leg E prose above the marker stays inert, and the refusal names that comment`` () =
         // The shape four independent lanes posted in a single session, each believing they had declared.
         let body = "## Post-merge obligations: **none**\n\n" + noneMarker
+
         match DeliveryApplication.obligationsFromComments "head-a" [ commentWithId 4242L body ] with
         | Ok _ -> failwith "leg E must NOT become a live declaration; only its diagnostic changes"
         | Error reason ->
@@ -358,8 +498,15 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         // The whole matrix above uses the `none` sentinel; this drives the same repair through the
         // declaration and receipt grammars, which are separately filtered and separately parsed.
         let comments =
-            [ commentWithId 51L "\n<!-- fsgg:delivery-obligation id=kit-0.49.0 kind=publication head=head-a -->\n\nTags and publishes the kit."
-              commentWithId 52L "\n<!-- fsgg:delivery-receipt id=kit-0.49.0 head=head-a evidence=https://nuget.example/kit -->" ]
+            [
+                commentWithId
+                    51L
+                    "\n<!-- fsgg:delivery-obligation id=kit-0.49.0 kind=publication head=head-a -->\n\nTags and publishes the kit."
+                commentWithId
+                    52L
+                    "\n<!-- fsgg:delivery-receipt id=kit-0.49.0 head=head-a evidence=https://nuget.example/kit -->"
+            ]
+
         match DeliveryApplication.obligationsFromComments "head-a" comments with
         | Ok [ obligation ] ->
             Assert.Equal("kit-0.49.0", obligation.Id)
@@ -372,6 +519,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         // The fence is the comment's leading line, so the marker on line 2 is not a declaration. This is
         // the boundary the trimmed pre-filter must not cross, stated as an executed leg rather than a claim.
         let body = "```\n" + noneMarker + "\n```"
+
         match DeliveryApplication.obligationsFromComments "head-a" [ commentWithId 61L body ] with
         | Ok _ -> failwith "a fenced marker must not become a live declaration"
         | Error reason ->
@@ -383,7 +531,9 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         // Prose that merely mentions a marker mid-line is not a misplaced declaration, so the sharper
         // diagnostic must not point at it — a message that names every comment discussing the protocol is
         // no more actionable than the one it replaces.
-        let body = $"For context, a declaration will look like `{noneMarker}` once it is posted."
+        let body =
+            $"For context, a declaration will look like `{noneMarker}` once it is posted."
+
         match DeliveryApplication.obligationsFromComments "head-a" [ commentWithId 62L body ] with
         | Ok _ -> failwith "a marker quoted inside a sentence must not become a live declaration"
         | Error reason ->
@@ -397,6 +547,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let body =
             "<!-- fsgg:delivery-receipt id=kit head=head-a evidence=https://nuget.example/kit -->\n\n\
 <!-- fsgg:delivery-obligation id=kit kind=publication head=head-a -->"
+
         match DeliveryApplication.obligationsFromComments "head-a" [ commentWithId 63L body ] with
         | Ok _ -> failwith "a receipt with no declaration must still refuse"
         | Error reason ->
@@ -412,7 +563,8 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     // generated review-policy block already states the rule this restores — a marker "inside a fence, an
     // indented code block, or prose that only mentions it" is inert.
 
-    let private indentedSample = "    <!-- fsgg:delivery-obligation id=example kind=publication head=head-a -->"
+    let private indentedSample =
+        "    <!-- fsgg:delivery-obligation id=example kind=publication head=head-a -->"
 
     [<Fact>]
     let ``#2544 round 1: a bystander's indented code sample cannot destroy a valid declaration`` () =
@@ -421,6 +573,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         // sample into a second declaration and the pair then collided, so the refusal accused the author
         // of combining `none` with obligations when somebody had merely posted documentation.
         let comments = [ commentWithId 71L noneMarker; commentWithId 72L indentedSample ]
+
         match DeliveryApplication.obligationsFromComments "head-a" comments with
         | Ok [] -> ()
         | other -> failwithf "a code sample must not disturb an existing valid declaration, got %A" other
@@ -430,11 +583,18 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         // The fail-OPEN direction, and the one this subsystem must never move in: under unlimited
         // trimming this pair reported `Verified = true` — a discharged obligation nobody declared.
         let comments =
-            [ commentWithId 73L "    <!-- fsgg:delivery-obligation id=kit kind=publication head=head-a -->"
-              commentWithId 74L "    <!-- fsgg:delivery-receipt id=kit head=head-a evidence=https://nuget.example/kit -->" ]
+            [
+                commentWithId 73L "    <!-- fsgg:delivery-obligation id=kit kind=publication head=head-a -->"
+                commentWithId
+                    74L
+                    "    <!-- fsgg:delivery-receipt id=kit head=head-a evidence=https://nuget.example/kit -->"
+            ]
+
         match DeliveryApplication.obligationsFromComments "head-a" comments with
         | Ok obligations ->
-            failwithf "an indented code sample must never produce an obligation, let alone a verified one, got %A" obligations
+            failwithf
+                "an indented code sample must never produce an obligation, let alone a verified one, got %A"
+                obligations
         | Error reason -> Assert.Contains("undeclared", reason)
 
     [<Fact>]
@@ -597,9 +757,13 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
             // `#2544` exists to kill rather than a lesser version of it.
             | "inert", Error reason when reason.Contains "leading line" -> ()
             | "inert", Error reason ->
-                failures.Add $"%s{name}: inert as expected, but the refusal never names the leading-line rule, so an author who indented a real declaration is not told why it did not take: %s{reason}"
-            | ("declares" | "inert"), actual -> failures.Add $"%s{name}: corpus says %s{verdict}, engine said %A{actual}"
-            | other, _ -> failures.Add $"%s{name}: corpus carries the unknown verdict %s{other}; only `declares` and `inert` are defined"
+                failures.Add
+                    $"%s{name}: inert as expected, but the refusal never names the leading-line rule, so an author who indented a real declaration is not told why it did not take: %s{reason}"
+            | ("declares" | "inert"), actual ->
+                failures.Add $"%s{name}: corpus says %s{verdict}, engine said %A{actual}"
+            | other, _ ->
+                failures.Add
+                    $"%s{name}: corpus carries the unknown verdict %s{other}; only `declares` and `inert` are defined"
 
         // Every entry READ was also EXECUTED. `failures.Count = 0` alone cannot tell "all agreed" from
         // "the loop never ran" (.github#1768).
@@ -630,38 +794,77 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
 
     [<Fact>]
     let ``#2264 round 1: a receipt quoted in prose cannot clear a different obligation`` () =
-        let comments : Reads.CommentBody list =
-            [ commentBody 1L "https://example.test/1" "<!-- fsgg:delivery-obligation id=a kind=publication head=head-a -->"
-              commentBody 2L "https://example.test/2" "<!-- fsgg:delivery-obligation id=b kind=publication head=head-a -->"
-              commentBody 3L "https://example.test/3" "<!-- fsgg:delivery-receipt id=a head=head-a evidence=https://example.test/a -->"
-              // Quotes `b`'s receipt shape in prose, in the org's ordinary reviewer-comment style — never
-              // its own comment's entire body, so the anchored parser cannot mistake it for a real receipt.
-              commentBody 4L "https://example.test/4" "For context, `b`'s receipt will look like:\n`<!-- fsgg:delivery-receipt id=b head=head-a evidence=https://example.test/b -->`\nonce it lands." ]
+        let comments: Reads.CommentBody list =
+            [
+                commentBody
+                    1L
+                    "https://example.test/1"
+                    "<!-- fsgg:delivery-obligation id=a kind=publication head=head-a -->"
+                commentBody
+                    2L
+                    "https://example.test/2"
+                    "<!-- fsgg:delivery-obligation id=b kind=publication head=head-a -->"
+                commentBody
+                    3L
+                    "https://example.test/3"
+                    "<!-- fsgg:delivery-receipt id=a head=head-a evidence=https://example.test/a -->"
+                // Quotes `b`'s receipt shape in prose, in the org's ordinary reviewer-comment style — never
+                // its own comment's entire body, so the anchored parser cannot mistake it for a real receipt.
+                commentBody
+                    4L
+                    "https://example.test/4"
+                    "For context, `b`'s receipt will look like:\n`<!-- fsgg:delivery-receipt id=b head=head-a evidence=https://example.test/b -->`\nonce it lands."
+            ]
+
         Assert.True(FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations (Ok "head-a") (Ok comments))
 
     [<Fact>]
     let ``#2264 round 1: every obligation genuinely receipted clears Outstanding`` () =
-        let comments : Reads.CommentBody list =
-            [ commentBody 1L "https://example.test/1" "<!-- fsgg:delivery-obligation id=a kind=publication head=head-a -->"
-              commentBody 2L "https://example.test/2" "<!-- fsgg:delivery-receipt id=a head=head-a evidence=https://example.test/a -->" ]
+        let comments: Reads.CommentBody list =
+            [
+                commentBody
+                    1L
+                    "https://example.test/1"
+                    "<!-- fsgg:delivery-obligation id=a kind=publication head=head-a -->"
+                commentBody
+                    2L
+                    "https://example.test/2"
+                    "<!-- fsgg:delivery-receipt id=a head=head-a evidence=https://example.test/a -->"
+            ]
+
         Assert.False(FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations (Ok "head-a") (Ok comments))
 
     [<Fact>]
     let ``#2264 round 1: an unreadable head or comment thread fails closed as Outstanding`` () =
-        Assert.True(FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations (Error(Errors.NotFound "no head")) (Ok []))
-        Assert.True(FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations (Ok "head-a") (Error(Errors.NotFound "no comments")))
+        Assert.True(
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations (Error(Errors.NotFound "no head")) (Ok [])
+        )
+
+        Assert.True(
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations
+                (Ok "head-a")
+                (Error(Errors.NotFound "no comments"))
+        )
 
     [<Fact>]
     let ``#2264 round 1: a malformed or stale declaration fails closed as Outstanding`` () =
-        let staleHead : Reads.CommentBody list =
-            [ commentBody 1L "https://example.test/1" "<!-- fsgg:delivery-obligation id=a kind=publication head=old-head -->" ]
+        let staleHead: Reads.CommentBody list =
+            [
+                commentBody
+                    1L
+                    "https://example.test/1"
+                    "<!-- fsgg:delivery-obligation id=a kind=publication head=old-head -->"
+            ]
+
         Assert.True(FS.GG.Coord.Cli.Lifecycle.LiveHandlers.outstandingObligations (Ok "head-a") (Ok staleHead))
 
     [<Fact>]
     let ``#2216 stale declaration identifies its comment and append-proof repair`` () =
         let comments =
-            [ commentWithId 41L "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->"
-              commentWithId 42L "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-b -->" ]
+            [
+                commentWithId 41L "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->"
+                commentWithId 42L "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-b -->"
+            ]
 
         match DeliveryApplication.obligationsFromComments "head-b" comments with
         | Error reason ->
@@ -673,14 +876,30 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     [<Fact>]
     let ``#2131 delivery adapter refuses a stale claim generation before issuing a merge`` () =
         let facts = guardedLandingFacts "claim-generation-a"
+
         let transition =
             match Delivery.inspect facts with
             | Delivery.Next next -> next
             | Delivery.NoVerdict reason -> failwith reason
-        let mutable mergeCalls = 0
-        let attemptMerge () = mergeCalls <- mergeCalls + 1; "merge endpoint was called"
 
-        match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts facts (Some "claim-generation-b") (Some facts.Freshness.HeadSha) (Some(String.replicate 40 "b")) None attemptMerge with
+        let mutable mergeCalls = 0
+
+        let attemptMerge () =
+            mergeCalls <- mergeCalls + 1
+            "merge endpoint was called"
+
+        match
+            DeliveryApplication.guardedLanding
+                transition.FreshnessToken
+                transition.ActionKey
+                facts
+                facts
+                (Some "claim-generation-b")
+                (Some facts.Freshness.HeadSha)
+                (Some(String.replicate 40 "b"))
+                None
+                attemptMerge
+        with
         | Ok result -> failwith result.Result
         | Error reason -> Assert.Contains("generation changed", reason)
 
@@ -689,13 +908,30 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     [<Fact>]
     let ``#2360 guarded landing refuses a moved effective base and names both revisions`` () =
         let facts = guardedLandingFacts "claim-generation-a"
-        let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
+
+        let transition =
+            Delivery.inspect facts
+            |> function
+                | Delivery.Next next -> next
+                | Delivery.NoVerdict reason -> failwith reason
+
         let mutable mergeCalls = 0
         let acceptedBase = String.replicate 40 "b"
         let movedBase = String.replicate 40 "c"
         let attemptMerge () = mergeCalls <- mergeCalls + 1
 
-        match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts facts (Some "claim-generation-a") (Some facts.Freshness.HeadSha) (Some movedBase) None attemptMerge with
+        match
+            DeliveryApplication.guardedLanding
+                transition.FreshnessToken
+                transition.ActionKey
+                facts
+                facts
+                (Some "claim-generation-a")
+                (Some facts.Freshness.HeadSha)
+                (Some movedBase)
+                None
+                attemptMerge
+        with
         | Ok _ -> failwith "a moved base authorized a merge"
         | Error reason ->
             Assert.Contains(acceptedBase, reason)
@@ -706,12 +942,22 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     [<Fact>]
     let ``#3274 guarded landing accepts a separately proven base advance and receipts the live base`` () =
         let facts = guardedLandingFacts "claim-generation-a"
-        let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
+
+        let transition =
+            Delivery.inspect facts
+            |> function
+                | Delivery.Next next -> next
+                | Delivery.NoVerdict reason -> failwith reason
+
         let movedBase = String.replicate 40 "c"
+
         let evidence: DeliveryApplication.BaseAdvanceEvidence =
-            { AcceptedBaseSha = String.replicate 40 "b"
-              CurrentBaseSha = movedBase
-              HeadSha = facts.Freshness.HeadSha }
+            {
+                AcceptedBaseSha = String.replicate 40 "b"
+                CurrentBaseSha = movedBase
+                HeadSha = facts.Freshness.HeadSha
+            }
+
         let mutable mergeCalls = 0
 
         match
@@ -724,7 +970,9 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
                 (Some facts.Freshness.HeadSha)
                 (Some movedBase)
                 (Some evidence)
-                (fun () -> mergeCalls <- mergeCalls + 1; "merged")
+                (fun () ->
+                    mergeCalls <- mergeCalls + 1
+                    "merged")
         with
         | Error reason -> failwith reason
         | Ok receipt ->
@@ -737,12 +985,22 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     [<Fact>]
     let ``#3274 base equivalence cannot replay stale claim or head authority`` () =
         let facts = guardedLandingFacts "claim-generation-a"
-        let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
+
+        let transition =
+            Delivery.inspect facts
+            |> function
+                | Delivery.Next next -> next
+                | Delivery.NoVerdict reason -> failwith reason
+
         let movedBase = String.replicate 40 "c"
+
         let evidence: DeliveryApplication.BaseAdvanceEvidence =
-            { AcceptedBaseSha = String.replicate 40 "b"
-              CurrentBaseSha = movedBase
-              HeadSha = facts.Freshness.HeadSha }
+            {
+                AcceptedBaseSha = String.replicate 40 "b"
+                CurrentBaseSha = movedBase
+                HeadSha = facts.Freshness.HeadSha
+            }
+
         let mutable mergeCalls = 0
         let attemptMerge () = mergeCalls <- mergeCalls + 1
 
@@ -781,20 +1039,35 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     [<Fact>]
     let ``#3274 guarded landing rejects base evidence with any stale binding`` () =
         let facts = guardedLandingFacts "claim-generation-a"
-        let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
+
+        let transition =
+            Delivery.inspect facts
+            |> function
+                | Delivery.Next next -> next
+                | Delivery.NoVerdict reason -> failwith reason
+
         let acceptedBase = String.replicate 40 "b"
         let movedBase = String.replicate 40 "c"
         let mutable mergeCalls = 0
+
         let staleEvidence: DeliveryApplication.BaseAdvanceEvidence list =
-            [ { AcceptedBaseSha = String.replicate 40 "a"
-                CurrentBaseSha = movedBase
-                HeadSha = facts.Freshness.HeadSha }
-              { AcceptedBaseSha = acceptedBase
-                CurrentBaseSha = String.replicate 40 "d"
-                HeadSha = facts.Freshness.HeadSha }
-              { AcceptedBaseSha = acceptedBase
-                CurrentBaseSha = movedBase
-                HeadSha = String.replicate 40 "e" } ]
+            [
+                {
+                    AcceptedBaseSha = String.replicate 40 "a"
+                    CurrentBaseSha = movedBase
+                    HeadSha = facts.Freshness.HeadSha
+                }
+                {
+                    AcceptedBaseSha = acceptedBase
+                    CurrentBaseSha = String.replicate 40 "d"
+                    HeadSha = facts.Freshness.HeadSha
+                }
+                {
+                    AcceptedBaseSha = acceptedBase
+                    CurrentBaseSha = movedBase
+                    HeadSha = String.replicate 40 "e"
+                }
+            ]
 
         for evidence in staleEvidence do
             match
@@ -817,10 +1090,27 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     [<Fact>]
     let ``#2360 guarded landing emits the exact head and base receipt used by the conditional write`` () =
         let facts = guardedLandingFacts "claim-generation-a"
-        let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
+
+        let transition =
+            Delivery.inspect facts
+            |> function
+                | Delivery.Next next -> next
+                | Delivery.NoVerdict reason -> failwith reason
+
         let acceptedBase = String.replicate 40 "b"
 
-        match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts facts (Some "claim-generation-a") (Some facts.Freshness.HeadSha) (Some acceptedBase) None (fun () -> "merged") with
+        match
+            DeliveryApplication.guardedLanding
+                transition.FreshnessToken
+                transition.ActionKey
+                facts
+                facts
+                (Some "claim-generation-a")
+                (Some facts.Freshness.HeadSha)
+                (Some acceptedBase)
+                None
+                (fun () -> "merged")
+        with
         | Error reason -> failwith reason
         | Ok receipt ->
             Assert.Equal(facts.Freshness.HeadSha, receipt.HeadSha)
@@ -829,26 +1119,58 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
 
     [<Fact>]
     let ``#3286 guarded landing revalidates mutable two-phase authority before merge`` () =
-        let acceptanceReceipt : Delivery.Obligation =
-            { Id = "roadmap-acceptance"
-              Kind = "acceptance-receipt"
-              Evidence = None
-              HeadSha = String.replicate 40 "a"
-              Verified = false }
+        let acceptanceReceipt: Delivery.Obligation =
+            {
+                Id = "roadmap-acceptance"
+                Kind = "acceptance-receipt"
+                Evidence = None
+                HeadSha = String.replicate 40 "a"
+                Verified = false
+            }
+
         let inspected =
             { guardedLandingFacts "claim-generation-a" with
-                Freshness = { (guardedLandingFacts "claim-generation-a").Freshness with BoardState = "In progress" }
+                Freshness =
+                    { (guardedLandingFacts "claim-generation-a").Freshness with
+                        BoardState = "In progress"
+                    }
                 ClosingLinkageCanonical = false
-                Obligations = [ acceptanceReceipt ] }
-        let transition = Delivery.inspect inspected |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
+                Obligations = [ acceptanceReceipt ]
+            }
+
+        let transition =
+            Delivery.inspect inspected
+            |> function
+                | Delivery.Next next -> next
+                | Delivery.NoVerdict reason -> failwith reason
+
         let mutations =
-            [ { inspected with ObligationsDeclared = false; Obligations = [] }
-              { inspected with Obligations = [] }
-              { inspected with Obligations = [ { acceptanceReceipt with Verified = true; Evidence = Some "receipt" } ] }
-              { inspected with Freshness = { inspected.Freshness with BoardState = "Ready" } }
-              { inspected with IssueClosed = true }
-              { inspected with BoardDone = true }
-              { inspected with ClaimReleased = true } ]
+            [
+                { inspected with
+                    ObligationsDeclared = false
+                    Obligations = []
+                }
+                { inspected with Obligations = [] }
+                { inspected with
+                    Obligations =
+                        [
+                            { acceptanceReceipt with
+                                Verified = true
+                                Evidence = Some "receipt"
+                            }
+                        ]
+                }
+                { inspected with
+                    Freshness =
+                        { inspected.Freshness with
+                            BoardState = "Ready"
+                        }
+                }
+                { inspected with IssueClosed = true }
+                { inspected with BoardDone = true }
+                { inspected with ClaimReleased = true }
+            ]
+
         let mutable validMergeCalls = 0
 
         match
@@ -889,14 +1211,23 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     [<Fact>]
     let ``#3091 no allowed merge method refuses before invoking the merge adapter`` () =
         let facts = guardedLandingFacts "claim-generation-a"
-        let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
-        let policy : OperationalGraphQl.RepositoryPolicy =
-            { RepositoryId = "R_fixture"
-              IssueCreationPolicy = "COLLABORATORS_ONLY"
-              HasIssuesEnabled = true
-              MergeCommitAllowed = false
-              SquashMergeAllowed = false
-              RebaseMergeAllowed = false }
+
+        let transition =
+            Delivery.inspect facts
+            |> function
+                | Delivery.Next next -> next
+                | Delivery.NoVerdict reason -> failwith reason
+
+        let policy: OperationalGraphQl.RepositoryPolicy =
+            {
+                RepositoryId = "R_fixture"
+                IssueCreationPolicy = "COLLABORATORS_ONLY"
+                HasIssuesEnabled = true
+                MergeCommitAllowed = false
+                SquashMergeAllowed = false
+                RebaseMergeAllowed = false
+            }
+
         let mutable mergeCalls = 0
 
         match
@@ -920,14 +1251,23 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     [<Fact>]
     let ``#3091 squash-only policy invokes one guarded merge with squash`` () =
         let facts = guardedLandingFacts "claim-generation-a"
-        let transition = Delivery.inspect facts |> function Delivery.Next next -> next | Delivery.NoVerdict reason -> failwith reason
-        let policy : OperationalGraphQl.RepositoryPolicy =
-            { RepositoryId = "R_fixture"
-              IssueCreationPolicy = "COLLABORATORS_ONLY"
-              HasIssuesEnabled = true
-              MergeCommitAllowed = false
-              SquashMergeAllowed = true
-              RebaseMergeAllowed = false }
+
+        let transition =
+            Delivery.inspect facts
+            |> function
+                | Delivery.Next next -> next
+                | Delivery.NoVerdict reason -> failwith reason
+
+        let policy: OperationalGraphQl.RepositoryPolicy =
+            {
+                RepositoryId = "R_fixture"
+                IssueCreationPolicy = "COLLABORATORS_ONLY"
+                HasIssuesEnabled = true
+                MergeCommitAllowed = false
+                SquashMergeAllowed = true
+                RebaseMergeAllowed = false
+            }
+
         let observed = ResizeArray<OperationalGraphQl.MergeMethod>()
 
         match
@@ -941,7 +1281,9 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
                 (Some(String.replicate 40 "b"))
                 None
                 policy
-                (fun method -> observed.Add method; "merged")
+                (fun method ->
+                    observed.Add method
+                    "merged")
         with
         | Error reason -> failwith reason
         | Ok receipt -> Assert.Equal("merged", receipt.Result)
@@ -962,6 +1304,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     let private runSnapshot (declaredPathsJson: string) : int * string * string =
         let path = Path.GetTempFileName()
         File.WriteAllText(path, snapshotJson declaredPathsJson)
+
         try
             match Options.parse [ "delivery"; "--snapshot"; path; "--json" ] with
             | Error message -> failwith message
@@ -972,6 +1315,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
                 use capturedErr = new StringWriter()
                 Console.SetOut capturedOut
                 Console.SetError capturedErr
+
                 try
                     let exitCode = DeliveryApplication.run opts
                     exitCode, capturedOut.ToString(), capturedErr.ToString()
@@ -1027,12 +1371,20 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let exitCode, out, err = runSnapshot malformed
         Assert.NotEqual(0, exitCode)
         Assert.DoesNotContain("\"verdict\":\"next\"", out)
-        Assert.True(String.IsNullOrEmpty out, $"expected no verdict document on stdout for a malformed snapshot, got: %s{out}")
+
+        Assert.True(
+            String.IsNullOrEmpty out,
+            $"expected no verdict document on stdout for a malformed snapshot, got: %s{out}"
+        )
         // Every malformed shape names ITS OWN offending field ("declaredPaths" for the shape itself,
         // or "unread" for a malformed value nested inside an otherwise well-shaped object) — never a
         // silent fallback to a confident empty read.
         Assert.False(String.IsNullOrWhiteSpace err, "expected a non-empty diagnostic on stderr")
-        Assert.True(err.Contains("declaredPaths") || err.Contains("unread"), $"expected the diagnostic to name the offending field, got: %s{err}")
+
+        Assert.True(
+            err.Contains("declaredPaths") || err.Contains("unread"),
+            $"expected the diagnostic to name the offending field, got: %s{err}"
+        )
 
     // ============================================================================================
     // .github#2395 — THE MERGE ELECTION AND THE AUTHORIZATION GROUNDED IN IT
@@ -1063,7 +1415,8 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     /// `scripts/check-claim-fence.py`'s independent `compose_opkey` produces for the same four
     /// components — so it pins the WIRE AGREEMENT between the F# producer and the Python gate, which
     /// is the only property check 5 actually needs.
-    let private expectedOpKey = "09ff79967fd2476062df93ab2b293f620d16e614f84276ded003a9e190e8f018"
+    let private expectedOpKey =
+        "09ff79967fd2476062df93ab2b293f620d16e614f84276ded003a9e190e8f018"
 
     // -------------------------------------------------------------------------------------------
     // The authorization marker, pure
@@ -1078,42 +1431,84 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
                 expectedOpKey
                 "5309319124"
                 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
         Assert.Equal(
             $"<!-- fsgg:pr-authorization v=1 item=FS-GG/.github#2395 gen=5267541214 opkey=%s{expectedOpKey} grant=5309319124 head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->",
             marker
         )
 
     let private authMarker gen head =
-        FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizationMarker "FS-GG/.github#2395" gen expectedOpKey "5309319124" head
+        FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizationMarker
+            "FS-GG/.github#2395"
+            gen
+            expectedOpKey
+            "5309319124"
+            head
 
     [<Fact>]
     let ``#2395 a body with no marker at all is rebound, not left missing`` () =
         let body = "Implements the thing.\n\nCloses #2395"
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-a" with
+
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization
+                body
+                "FS-GG/.github#2395"
+                "5267541214"
+                expectedOpKey
+                "5309319124"
+                "head-a"
+        with
         | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationRebound updated ->
             Assert.Contains(authMarker "5267541214" "head-a", updated)
             Assert.Contains("Closes #2395", updated)
-        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent -> failwith "expected a rebind: the body carried no marker at all"
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent ->
+            failwith "expected a rebind: the body carried no marker at all"
 
     [<Fact>]
     let ``#2395 a marker bound to a superseded head is rebound to the current one, not left stale`` () =
         let body = "Implements the thing.\n\n" + authMarker "5267541214" "head-old"
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-new" with
+
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization
+                body
+                "FS-GG/.github#2395"
+                "5267541214"
+                expectedOpKey
+                "5309319124"
+                "head-new"
+        with
         | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationRebound updated ->
             Assert.Contains(authMarker "5267541214" "head-new", updated)
             Assert.DoesNotContain("head-old", updated)
-        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent -> failwith "expected a rebind: the marker's head was superseded"
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent ->
+            failwith "expected a rebind: the marker's head was superseded"
 
     [<Fact>]
     let ``#2395 a marker naming a superseded GRANT is rebound, not left grounded in a lost election`` () =
         let stale =
-            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizationMarker "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319000" "head-a"
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizationMarker
+                "FS-GG/.github#2395"
+                "5267541214"
+                expectedOpKey
+                "5309319000"
+                "head-a"
+
         let body = "Implements the thing.\n\n" + stale
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-a" with
+
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization
+                body
+                "FS-GG/.github#2395"
+                "5267541214"
+                expectedOpKey
+                "5309319124"
+                "head-a"
+        with
         | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationRebound updated ->
             Assert.Contains(authMarker "5267541214" "head-a", updated)
             Assert.DoesNotContain("5309319000", updated)
-        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent -> failwith "expected a rebind: the marker named a different election"
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent ->
+            failwith "expected a rebind: the marker named a different election"
 
     // THE MIGRATION, AS A TEST RATHER THAN A PROMISE. Every pull request open when this landed carries
     // the FOUR-field marker the row's first landing wrote. Nothing rebinds it but this rule: a marker
@@ -1122,37 +1517,75 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     // acceptance and no rebinding campaign.
     [<Fact>]
     let ``#2395 a legacy FOUR-field marker is replaced in place by the six-field one, never left beside it`` () =
-        let legacy = "<!-- fsgg:pr-authorization v=1 item=FS-GG/.github#2395 gen=5267541214 head=head-a -->"
+        let legacy =
+            "<!-- fsgg:pr-authorization v=1 item=FS-GG/.github#2395 gen=5267541214 head=head-a -->"
+
         let body = $"Implements the thing.\n\n{legacy}"
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-a" with
+
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization
+                body
+                "FS-GG/.github#2395"
+                "5267541214"
+                expectedOpKey
+                "5309319124"
+                "head-a"
+        with
         | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationRebound updated ->
             let occurrences =
-                System.Text.RegularExpressions.Regex.Matches(updated, System.Text.RegularExpressions.Regex.Escape "<!-- fsgg:pr-authorization").Count
+                System.Text.RegularExpressions.Regex
+                    .Matches(updated, System.Text.RegularExpressions.Regex.Escape "<!-- fsgg:pr-authorization")
+                    .Count
+
             Assert.Equal(1, occurrences)
             Assert.Contains(authMarker "5267541214" "head-a", updated)
             Assert.DoesNotContain(legacy, updated)
-        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent -> failwith "expected a rebind: a four-field marker is not the six-field one"
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent ->
+            failwith "expected a rebind: a four-field marker is not the six-field one"
 
     [<Fact>]
     let ``#2395 two markers collapse to exactly one, never left duplicated`` () =
         let stale = authMarker "111" "head-old"
         let alsoStale = authMarker "222" "head-older"
         let body = $"Implements the thing.\n\n{stale}\n\n{alsoStale}"
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-new" with
+
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization
+                body
+                "FS-GG/.github#2395"
+                "5267541214"
+                expectedOpKey
+                "5309319124"
+                "head-new"
+        with
         | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationRebound updated ->
             let occurrences =
-                System.Text.RegularExpressions.Regex.Matches(updated, System.Text.RegularExpressions.Regex.Escape "<!-- fsgg:pr-authorization").Count
+                System.Text.RegularExpressions.Regex
+                    .Matches(updated, System.Text.RegularExpressions.Regex.Escape "<!-- fsgg:pr-authorization")
+                    .Count
+
             Assert.Equal(1, occurrences)
             Assert.Contains(authMarker "5267541214" "head-new", updated)
-        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent -> failwith "expected a rebind: two stale markers must collapse to one current one"
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent ->
+            failwith "expected a rebind: two stale markers must collapse to one current one"
 
     [<Fact>]
     let ``#2395 a body already carrying exactly the desired marker is reported current, not rewritten`` () =
         let desired = authMarker "5267541214" "head-current"
         let body = $"Implements the thing.\n\n{desired}"
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization body "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" "head-current" with
+
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.rebindAuthorization
+                body
+                "FS-GG/.github#2395"
+                "5267541214"
+                expectedOpKey
+                "5309319124"
+                "head-current"
+        with
         | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationCurrent -> ()
-        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationRebound updated -> failwithf "expected no rewrite for an already-current marker, got %s" updated
+        | FS.GG.Coord.Cli.Lifecycle.LiveHandlers.AuthorizationRebound updated ->
+            failwithf "expected no rewrite for an already-current marker, got %s" updated
 
     // -------------------------------------------------------------------------------------------
     // The election marker, pure
@@ -1166,7 +1599,11 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         )
 
     let private electionComment id body : Driver.ReviewComment =
-        { Id = id; Url = $"https://example.test/{id}"; Body = body }
+        {
+            Id = id
+            Url = $"https://example.test/{id}"
+            Body = body
+        }
 
     let private anElection pr =
         DeliveryApplication.electionMarker expectedOpKey "FS-GG/.github#2395" "5267541214" "FS-GG/.github" pr
@@ -1186,7 +1623,12 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
 
     [<Fact>]
     let ``#2395 trailing prose after the marker is outside it and pollutes no field`` () =
-        match DeliveryApplication.electionsFromComments [ electionComment 700L (anElection 9001 + "\n\nMerge election for pr=9999 op=nonsense.") ] with
+        match
+            DeliveryApplication.electionsFromComments
+                [
+                    electionComment 700L (anElection 9001 + "\n\nMerge election for pr=9999 op=nonsense.")
+                ]
+        with
         | [ election ] ->
             Assert.Equal(Some "9001", election.Fields.TryFind "pr")
             Assert.Equal(Some "merge", election.Fields.TryFind "op")
@@ -1208,17 +1650,28 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
 
     [<Fact>]
     let ``#2395 a suffixed prefix is a different marker, never this one`` () =
-        let note = (anElection 9001).Replace("fsgg:merge-election", "fsgg:merge-election-note")
+        let note =
+            (anElection 9001).Replace("fsgg:merge-election", "fsgg:merge-election-note")
+
         Assert.Empty(DeliveryApplication.electionsFromComments [ electionComment 700L note ])
 
     [<Fact>]
     let ``#2395 electionsOwnedBy keeps this opkey and this pull request, and nothing else`` () =
         let otherKey = String.replicate 64 "b"
+
         let comments =
-            [ electionComment 700L (anElection 9001)
-              electionComment 701L (anElection 9002)
-              electionComment 702L (DeliveryApplication.electionMarker otherKey "FS-GG/.github#2395" "5267541214" "FS-GG/.github" 9001) ]
-        match DeliveryApplication.electionsFromComments comments |> DeliveryApplication.electionsOwnedBy expectedOpKey 9001 with
+            [
+                electionComment 700L (anElection 9001)
+                electionComment 701L (anElection 9002)
+                electionComment
+                    702L
+                    (DeliveryApplication.electionMarker otherKey "FS-GG/.github#2395" "5267541214" "FS-GG/.github" 9001)
+            ]
+
+        match
+            DeliveryApplication.electionsFromComments comments
+            |> DeliveryApplication.electionsOwnedBy expectedOpKey 9001
+        with
         | [ election ] -> Assert.Equal(700L, election.Id)
         | other -> failwithf "expected exactly the opkey-and-pr match, got %A" other
 
@@ -1241,31 +1694,41 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
 
     let private okResponse (body: string) : Errors.IoResult<Response> =
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None
-              Headers = Map.empty }
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            }
 
     let private ensureAuthorizationTarget: Ref =
-        { Owner = "FS-GG"; Repo = ".github"; Number = 2395 }
+        {
+            Owner = "FS-GG"
+            Repo = ".github"
+            Number = 2395
+        }
 
     let private ensureAuthorizationMarker: Reads.Marker =
-        { Id = 5267541214L
-          Worker = WorkerId "smew-f1e2"
-          Session = None
-          AgeSeconds = 30
-          PreviousStatus = None
-          PathRepo = None
-          AgentContract = None
-          Raw = "<!-- fsgg:claim worker=smew-f1e2 lease=120 -->" }
+        {
+            Id = 5267541214L
+            Worker = WorkerId "smew-f1e2"
+            Session = None
+            AgeSeconds = 30
+            PreviousStatus = None
+            PathRepo = None
+            AgentContract = None
+            Raw = "<!-- fsgg:claim worker=smew-f1e2 lease=120 -->"
+        }
 
     let private ensureAuthorizationContext (transport: Fake.Recorder) : Kernel.Context =
-        { Transport = transport
-          Owner = "FS-GG"
-          Title = "Coordination"
-          DefaultRepo = Some ".github"
-          ChoreLocks = [] }
+        {
+            Transport = transport
+            Owner = "FS-GG"
+            Title = "Coordination"
+            DefaultRepo = Some ".github"
+            ChoreLocks = []
+        }
 
     /// A REST comment listing carrying the given `(id, body)` pairs, exactly as `commentsWithIdentity`
     /// parses it.
@@ -1273,9 +1736,11 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         comments
         |> List.map (fun (id, body) ->
             System.Text.Json.JsonSerializer.Serialize
-                {| id = id
-                   html_url = $"https://example.test/{id}"
-                   body = body |})
+                {|
+                    id = id
+                    html_url = $"https://example.test/{id}"
+                    body = body
+                |})
         |> String.concat ","
         |> sprintf "[%s]"
 
@@ -1283,12 +1748,18 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     /// and the pull request's body. Every request is TALLIED, so a leg can assert that a write did NOT
     /// happen rather than merely that the call returned `Ok`.
     type private World =
-        { mutable Requests: (string * string) list
-          mutable PostedBodies: string list
-          mutable PatchedBodies: string list }
+        {
+            mutable Requests: (string * string) list
+            mutable PostedBodies: string list
+            mutable PatchedBodies: string list
+        }
 
     let private world () =
-        { Requests = []; PostedBodies = []; PatchedBodies = [] }
+        {
+            Requests = []
+            PostedBodies = []
+            PatchedBodies = []
+        }
 
     let private scripted
         (w: World)
@@ -1326,18 +1797,39 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let w = world ()
 
         let transport =
-            scripted w (okResponse (commentListing [])) (okResponse """{"id":5309319124}""") "Implements the thing.\n\nCloses #2395"
+            scripted
+                w
+                (okResponse (commentListing []))
+                (okResponse """{"id":5309319124}""")
+                "Implements the thing.\n\nCloses #2395"
 
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization
+                (ensureAuthorizationContext transport)
+                ensureAuthorizationTarget
+                (Some ensureAuthorizationMarker)
+                (Some 9001)
+                head
+                false
+        with
         | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
         | Ok() ->
             // The election is APPENDED before the authorization is written, and that order is the
             // design's: an election is never deleted, so a failure between the two leaves a durable
             // fact the next call reuses. The reverse would write an authorization naming an election
             // that does not exist.
-            let posted = w.Requests |> List.findIndex (fun (m, p) -> m = "POST" && p = "repos/FS-GG/.github/issues/2395/comments")
-            let patched = w.Requests |> List.findIndex (fun (m, p) -> m = "PATCH" && p = "repos/FS-GG/.github/pulls/9001")
-            Assert.True(posted < patched, $"expected the election POST before the authorization PATCH, got %A{w.Requests}")
+            let posted =
+                w.Requests
+                |> List.findIndex (fun (m, p) -> m = "POST" && p = "repos/FS-GG/.github/issues/2395/comments")
+
+            let patched =
+                w.Requests
+                |> List.findIndex (fun (m, p) -> m = "PATCH" && p = "repos/FS-GG/.github/pulls/9001")
+
+            Assert.True(
+                posted < patched,
+                $"expected the election POST before the authorization PATCH, got %A{w.Requests}"
+            )
 
             // The election comment BEGINS with its marker, because the fence anchors at byte 0.
             let electionBody = Assert.Single w.PostedBodies
@@ -1346,7 +1838,17 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
             Assert.Contains("pr=9001 -->", electionBody)
 
             let body = Assert.Single w.PatchedBodies
-            Assert.Contains(FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizationMarker "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" head, body)
+
+            Assert.Contains(
+                FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizationMarker
+                    "FS-GG/.github#2395"
+                    "5267541214"
+                    expectedOpKey
+                    "5309319124"
+                    head,
+                body
+            )
+
             Assert.Contains("Closes #2395", body)
 
     [<Fact>]
@@ -1360,7 +1862,15 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
                 (Error(Errors.NotFound "a second election must never be posted for the same opkey and pull request"))
                 "Implements the thing."
 
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization
+                (ensureAuthorizationContext transport)
+                ensureAuthorizationTarget
+                (Some ensureAuthorizationMarker)
+                (Some 9001)
+                head
+                false
+        with
         | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
         | Ok() ->
             Assert.Empty w.PostedBodies
@@ -1382,7 +1892,15 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
                 (Error(Errors.NotFound "no election should be posted when this target already owns one"))
                 "Implements the thing."
 
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization
+                (ensureAuthorizationContext transport)
+                ensureAuthorizationTarget
+                (Some ensureAuthorizationMarker)
+                (Some 9001)
+                head
+                false
+        with
         | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
         | Ok() ->
             let body = Assert.Single w.PatchedBodies
@@ -1398,9 +1916,21 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let w = world ()
 
         let transport =
-            scripted w (okResponse (commentListing [ 5309319100L, anElection 9002 ])) (okResponse """{"id":5309319124}""") "Implements the thing."
+            scripted
+                w
+                (okResponse (commentListing [ 5309319100L, anElection 9002 ]))
+                (okResponse """{"id":5309319124}""")
+                "Implements the thing."
 
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization
+                (ensureAuthorizationContext transport)
+                ensureAuthorizationTarget
+                (Some ensureAuthorizationMarker)
+                (Some 9001)
+                head
+                false
+        with
         | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
         | Ok() ->
             Assert.Single w.PostedBodies |> ignore
@@ -1416,9 +1946,21 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let w = world ()
 
         let transport =
-            scripted w (Error(Errors.Malformed("FS-GG/.github#2395", "the fixture refuses this read"))) (okResponse """{"id":1}""") "Implements the thing."
+            scripted
+                w
+                (Error(Errors.Malformed("FS-GG/.github#2395", "the fixture refuses this read")))
+                (okResponse """{"id":1}""")
+                "Implements the thing."
 
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization
+                (ensureAuthorizationContext transport)
+                ensureAuthorizationTarget
+                (Some ensureAuthorizationMarker)
+                (Some 9001)
+                head
+                false
+        with
         | Ok() -> failwith "expected a refusal: the elections could not be read, so nothing grounds an authorization"
         | Error _ ->
             Assert.Empty w.PatchedBodies
@@ -1429,9 +1971,21 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let w = world ()
 
         let transport =
-            scripted w (okResponse (commentListing [])) (Error(Errors.Malformed("FS-GG/.github#2395", "the fixture refuses this write"))) "Implements the thing."
+            scripted
+                w
+                (okResponse (commentListing []))
+                (Error(Errors.Malformed("FS-GG/.github#2395", "the fixture refuses this write")))
+                "Implements the thing."
 
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) head false with
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization
+                (ensureAuthorizationContext transport)
+                ensureAuthorizationTarget
+                (Some ensureAuthorizationMarker)
+                (Some 9001)
+                head
+                false
+        with
         | Ok() -> failwith "expected a refusal: no election was obtained, so no grant exists to name"
         | Error _ -> Assert.Empty w.PatchedBodies
 
@@ -1445,7 +1999,13 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
             ensureAuthorizationTransport (fun req ->
                 Error(Errors.NotFound $"a compose refusal must precede the transport, got %s{req.Method} %s{req.Path}"))
 
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.electionGrounding (ensureAuthorizationContext transport) ensureAuthorizationTarget "released" 9001 with
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.electionGrounding
+                (ensureAuthorizationContext transport)
+                ensureAuthorizationTarget
+                "released"
+                9001
+        with
         | Ok grounding -> failwithf "expected a refusal for the released sentinel, got %A" grounding
         | Error e ->
             let rendered = $"%A{e}"
@@ -1464,11 +2024,28 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         let transport =
             scripted w (okResponse (commentListing [])) (okResponse """{"id":5309319124}""") "Implements the thing."
 
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) plainHead false with
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization
+                (ensureAuthorizationContext transport)
+                ensureAuthorizationTarget
+                (Some ensureAuthorizationMarker)
+                (Some 9001)
+                plainHead
+                false
+        with
         | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
         | Ok() ->
             let body = Assert.Single w.PatchedBodies
-            Assert.Contains(FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizationMarker "FS-GG/.github#2395" "5267541214" expectedOpKey "5309319124" plainHead, body)
+
+            Assert.Contains(
+                FS.GG.Coord.Cli.Lifecycle.LiveHandlers.authorizationMarker
+                    "FS-GG/.github#2395"
+                    "5267541214"
+                    expectedOpKey
+                    "5309319124"
+                    plainHead,
+                body
+            )
 
     // A genuinely still-live no-op: a merged PR's body is never rewritten — nothing further needs
     // authorizing once landing has already happened. Now stronger than before: it also proves the
@@ -1476,8 +2053,17 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     [<Fact>]
     let ``#2488 ensureAuthorization still makes no request once the PR has merged`` () =
         let transport =
-            ensureAuthorizationTransport (fun req -> Error(Errors.NotFound $"expected zero requests once merged, got %s{req.Method} %s{req.Path}"))
+            ensureAuthorizationTransport (fun req ->
+                Error(Errors.NotFound $"expected zero requests once merged, got %s{req.Method} %s{req.Path}"))
 
-        match FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization (ensureAuthorizationContext transport) ensureAuthorizationTarget (Some ensureAuthorizationMarker) (Some 9001) "head-a" true with
+        match
+            FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureAuthorization
+                (ensureAuthorizationContext transport)
+                ensureAuthorizationTarget
+                (Some ensureAuthorizationMarker)
+                (Some 9001)
+                "head-a"
+                true
+        with
         | Error e -> failwithf "expected ensureAuthorization to succeed as a no-op, got %A" e
         | Ok() -> ()

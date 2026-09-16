@@ -41,22 +41,24 @@ module ChurnReadingTests =
     // probe below is this document with exactly one field changed, added or removed, which is what lets
     // each test name the single mutation it reds on.
     let private healthy =
-        [ "schema", "\"fsgg.coord.churn-reading/v1\""
-          "window", """{"start":"2026-08-14T17:00:00Z","end":"2026-08-15T17:00:00Z"}"""
-          "rowsOpened", "17"
-          "rowsClosed", "24"
-          "netRowDelta", "-7"
-          "itemsLanded", """{"count":24,"unit":"issues closed"}"""
-          "causeInstances",
-          """{"searchedNotFound":"folded every open row title and body against the 28 open rows; no two share a cause"}"""
-          "successorGeneratingCauses",
-          """{"searchedNotFound":"walked every row filed by an independent review in the window back to the PR that produced it; no chain exceeds one generation"}"""
-          "alreadyDerived",
-          """{"searchedNotFound":"grepped the scripts/check-*.py corpus for each open row's condition; no row restates a derived one"}"""
-          "jointlyRedCandidates",
-          """{"searchedNotFound":"listed the gate corpora every open row adds a file to; no corpus is touched by two live rows"}"""
-          "remedy", "null"
-          "prose", "\"No pathology. Net -7 against 24 issues closed; the board is absorbing discovery.\"" ]
+        [
+            "schema", "\"fsgg.coord.churn-reading/v1\""
+            "window", """{"start":"2026-08-14T17:00:00Z","end":"2026-08-15T17:00:00Z"}"""
+            "rowsOpened", "17"
+            "rowsClosed", "24"
+            "netRowDelta", "-7"
+            "itemsLanded", """{"count":24,"unit":"issues closed"}"""
+            "causeInstances",
+            """{"searchedNotFound":"folded every open row title and body against the 28 open rows; no two share a cause"}"""
+            "successorGeneratingCauses",
+            """{"searchedNotFound":"walked every row filed by an independent review in the window back to the PR that produced it; no chain exceeds one generation"}"""
+            "alreadyDerived",
+            """{"searchedNotFound":"grepped the scripts/check-*.py corpus for each open row's condition; no row restates a derived one"}"""
+            "jointlyRedCandidates",
+            """{"searchedNotFound":"listed the gate corpora every open row adds a file to; no corpus is touched by two live rows"}"""
+            "remedy", "null"
+            "prose", "\"No pathology. Net -7 against 24 issues closed; the board is absorbing discovery.\""
+        ]
 
     let private render (fields: (string * string) list) =
         fields
@@ -135,18 +137,20 @@ module ChurnReadingTests =
         let result = ChurnReading.parse "{}"
 
         Assert.Equal<string list>(
-            [ "alreadyDerived"
-              "causeInstances"
-              "itemsLanded"
-              "jointlyRedCandidates"
-              "netRowDelta"
-              "prose"
-              "remedy"
-              "rowsClosed"
-              "rowsOpened"
-              "schema"
-              "successorGeneratingCauses"
-              "window" ],
+            [
+                "alreadyDerived"
+                "causeInstances"
+                "itemsLanded"
+                "jointlyRedCandidates"
+                "netRowDelta"
+                "prose"
+                "remedy"
+                "rowsClosed"
+                "rowsOpened"
+                "schema"
+                "successorGeneratingCauses"
+                "window"
+            ],
             fields result
         )
 
@@ -277,7 +281,8 @@ module ChurnReadingTests =
             |> List.map (fun (key, value) ->
                 key,
                 match key with
-                | "alreadyDerived" -> """{"found":[{"row":".github#2648","gate":"scripts/check-engine-freshness.py"}]}"""
+                | "alreadyDerived" ->
+                    """{"found":[{"row":".github#2648","gate":"scripts/check-engine-freshness.py"}]}"""
                 | _ -> value)
             |> render
 
@@ -292,7 +297,8 @@ module ChurnReadingTests =
             |> List.map (fun (key, value) ->
                 key,
                 match key with
-                | "alreadyDerived" -> """{"found":[{"row":".github#2648","gate":"scripts/check-engine-freshness.py"}]}"""
+                | "alreadyDerived" ->
+                    """{"found":[{"row":".github#2648","gate":"scripts/check-engine-freshness.py"}]}"""
                 | "remedy" ->
                     "\"As at 2026-08-15T17:00:00Z: rewrite .github#2648 into the operator decision the gate cannot make, rather than closing it.\""
                 | _ -> value)
@@ -359,7 +365,9 @@ module ChurnReadingTests =
         mentions result "window.start" "must be an explicit UTC instant"
 
     [<Fact>]
-    let ``#2739 a decoded window endpoint carries a ZERO offset, so the verdict cannot depend on the host timezone`` () =
+    let ``#2739 a decoded window endpoint carries a ZERO offset, so the verdict cannot depend on the host timezone``
+        ()
+        =
         let reading = parsed (render healthy)
         Assert.Equal(TimeSpan.Zero, reading.Window.Start.Offset)
         Assert.Equal(TimeSpan.Zero, reading.Window.End.Offset)
@@ -411,7 +419,9 @@ module ChurnReadingTests =
 
     [<Fact>]
     let ``#2739 an itemsLanded CARRYING its unit validates - the control for the refusal above`` () =
-        let reading = validated (replacing "itemsLanded" """{"count":25,"unit":"pull requests merged"}""")
+        let reading =
+            validated (replacing "itemsLanded" """{"count":25,"unit":"pull requests merged"}""")
+
         Assert.Equal(25, reading.ItemsLanded.Count)
         Assert.Equal("pull requests merged", reading.ItemsLanded.Unit)
 
@@ -443,7 +453,8 @@ module ChurnReadingTests =
             |> List.map (fun (key, value) ->
                 key,
                 match key with
-                | "jointlyRedCandidates" -> """{"found":[{"rows":[".github#2666"],"gate":"tests/skill-quality/recency-comment-edit.py"}]}"""
+                | "jointlyRedCandidates" ->
+                    """{"found":[{"rows":[".github#2666"],"gate":"tests/skill-quality/recency-comment-edit.py"}]}"""
                 | "remedy" -> "\"As at 2026-08-15T17:00:00Z: the later row adopts the corpus requirement.\""
                 | _ -> value)
             |> render
@@ -457,7 +468,8 @@ module ChurnReadingTests =
             |> List.map (fun (key, value) ->
                 key,
                 match key with
-                | "jointlyRedCandidates" -> """{"found":[{"rows":[".github#2666",".github#2584"],"gate":"tests/skill-quality/recency-comment-edit.py"}]}"""
+                | "jointlyRedCandidates" ->
+                    """{"found":[{"rows":[".github#2666",".github#2584"],"gate":"tests/skill-quality/recency-comment-edit.py"}]}"""
                 | "remedy" -> "\"As at 2026-08-15T17:00:00Z: the later row adopts the corpus requirement.\""
                 | _ -> value)
             |> render
@@ -490,8 +502,7 @@ module ChurnReadingTests =
         | other -> failwith $"expected one derived row, got %A{other}"
 
         match reading.JointlyRedCandidates with
-        | ChurnReading.Found [ coupling ] ->
-            Assert.Equal("tests/skill-quality/recency-comment-edit.py", coupling.Gate)
+        | ChurnReading.Found [ coupling ] -> Assert.Equal("tests/skill-quality/recency-comment-edit.py", coupling.Gate)
         | other -> failwith $"expected one coupling, got %A{other}"
 
         Assert.True(Option.isSome reading.Remedy)
@@ -515,7 +526,8 @@ module ChurnReadingTests =
             |> List.map (fun (key, value) ->
                 key,
                 match key with
-                | "alreadyDerived" -> """{"found":[{"row":".github#2648","gate":"scripts/check-engine-freshness.py"}]}"""
+                | "alreadyDerived" ->
+                    """{"found":[{"row":".github#2648","gate":"scripts/check-engine-freshness.py"}]}"""
                 | "remedy" -> "\"As at 2026-08-15T17:00:00Z: rewrite the row into the operator decision.\""
                 | _ -> value)
             |> render

@@ -13,25 +13,47 @@ module Identity =
         | FromSharedSession of harness: string * sessionId: string * why: string
 
     type Worker =
-        { Id: string
-          Session: string option
-          Provenance: Provenance
-          /// WHO THIS PROCESS IS WHEN NOBODY TELLS IT — rules 2-4 with `--worker` taken away (#1646).
-          ///
-          /// `Id` is what the caller asked to BE; this is what the caller IS. They differ on exactly one
-          /// shape — `--worker <somebody else>` — and that shape is what turns a shared harness session into
-          /// a working impersonation, because both of the older checks (the id, and `session=`) match on
-          /// facts a sibling of the fan-out legitimately holds.
-          ///
-          /// `None` is "this process resolves nothing of its own": a human operator, a harness exporting no
-          /// session. It is UNASKABLE, never a clean answer — see `Writes.SelfIdentity`.
-          Derived: string option }
+        {
+            Id: string
+            Session: string option
+            Provenance: Provenance
+            /// WHO THIS PROCESS IS WHEN NOBODY TELLS IT — rules 2-4 with `--worker` taken away (#1646).
+            ///
+            /// `Id` is what the caller asked to BE; this is what the caller IS. They differ on exactly one
+            /// shape — `--worker <somebody else>` — and that shape is what turns a shared harness session into
+            /// a working impersonation, because both of the older checks (the id, and `session=`) match on
+            /// facts a sibling of the fan-out legitimately holds.
+            ///
+            /// `None` is "this process resolves nothing of its own": a human operator, a harness exporting no
+            /// session. It is UNASKABLE, never a clean answer — see `Writes.SelfIdentity`.
+            Derived: string option
+        }
 
     /// The word list, VERBATIM from the bash client — a derived id must be the same id on both engines, or a
     /// worker that switched engines mid-loop would appear to be two workers and lose its own lock.
     let private words =
-        [| "finch"; "heron"; "wren"; "swift"; "kite"; "tern"; "rook"; "crake"; "snipe"; "plover"
-           "merlin"; "godwit"; "curlew"; "dunlin"; "teal"; "smew"; "osprey"; "shrike"; "avocet"; "brant" |]
+        [|
+            "finch"
+            "heron"
+            "wren"
+            "swift"
+            "kite"
+            "tern"
+            "rook"
+            "crake"
+            "snipe"
+            "plover"
+            "merlin"
+            "godwit"
+            "curlew"
+            "dunlin"
+            "teal"
+            "smew"
+            "osprey"
+            "shrike"
+            "avocet"
+            "brant"
+        |]
 
     let private env name =
         match Environment.GetEnvironmentVariable(name: string) with
@@ -43,7 +65,11 @@ module Identity =
     let slug (s: string) =
         let cleaned =
             s
-            |> Seq.map (fun c -> if Char.IsLetterOrDigit c || c = '-' || c = '_' then Char.ToLowerInvariant c else '-')
+            |> Seq.map (fun c ->
+                if Char.IsLetterOrDigit c || c = '-' || c = '_' then
+                    Char.ToLowerInvariant c
+                else
+                    '-')
             |> Seq.toArray
             |> String
 
@@ -121,7 +147,10 @@ module Identity =
                     // identity (a single-worker session is the common case and it IS that worker), but the
                     // provenance says so, so a fan-out caller — and any refusal that points back at this id —
                     // can see the hazard.
-                    Some(id, FromSharedSession(harness, sid, $"every subagent of this %s{harness} session shares this id"))
+                    Some(
+                        id,
+                        FromSharedSession(harness, sid, $"every subagent of this %s{harness} session shares this id")
+                    )
             | None -> None
 
     let private derivedId () : string option = derivedIdentity () |> Option.map fst
@@ -155,10 +184,12 @@ module Identity =
                 $"the worker id from %s{source} ('%s{raw}') has no letter or digit in it, so it slugs to NOTHING — and an EMPTY id is one that EVERY worker whose id does this would share, which is the double-claim ADR-0027 exists to prevent (#419). Give this worker a real id (do NOT invent one): eval \"$(scripts/fsgg-coord whoami --mint)\""
         | id ->
             Ok
-                { Id = id
-                  Session = session
-                  Provenance = provenance
-                  Derived = derivedId () }
+                {
+                    Id = id
+                    Session = session
+                    Provenance = provenance
+                    Derived = derivedId ()
+                }
 
     let resolve (worker: string option) : Result<Worker, string> =
         let session = harnessSession () |> Option.map snd
@@ -176,10 +207,12 @@ module Identity =
                 match derivedIdentity () with
                 | Some(id, provenance) ->
                     Ok
-                        { Id = id
-                          Session = session
-                          Provenance = provenance
-                          Derived = Some id }
+                        {
+                            Id = id
+                            Session = session
+                            Provenance = provenance
+                            Derived = Some id
+                        }
                 | None ->
                     // REFUSE rather than invent a shared id. The bash client persists a per-checkout id
                     // here; the engine does not, because a persisted-per-checkout id is itself a shared id
@@ -204,21 +237,23 @@ module Identity =
             | FromSession(harness, sid) -> $"%s{harness} session id (%s{sid}) — per-worker on this harness"
             | FromSharedSession(harness, sid, why) -> $"%s{harness} session id (%s{sid}) — WARNING: %s{why}"
 
-        [ $"worker: %s{worker.Id}"
-          $"derived: %s{rule}"
-          match worker.Session with
-          | Some s -> $"session: %s{s}"
-          | None -> "session: (none)"
-          // WHO THIS PROCESS IS WHEN NOBODY TELLS IT (#1646) — and it is printed ONLY when it disagrees with
-          // the id in use, because that is the only time it says anything the two lines above do not. A
-          // disagreement is the impersonation shape, and `whoami` is where a worker checks its identity
-          // BEFORE a lock command refuses it — a refusal a worker cannot reproduce from `whoami` is one they
-          // have to guess at.
-          match worker.Derived with
-          | Some d when d <> worker.Id ->
-              // NAME WHAT IS ACTUALLY REFUSED. An earlier wording said "over their live marker", which was
-              // true of `release`/`heartbeat`/`widen` and NOT of `claim` — `claim` refuses the argv itself,
-              // live marker or not. A worker who cannot predict from `whoami` which of its verbs will work
-              // has been given a report that costs a failed command to interpret.
-              $"self: %s{d} — this process's OWN id. `--worker %s{worker.Id}` names a DIFFERENT worker, so claim/release/heartbeat/widen on %s{worker.Id}'s items REFUSE (#1646)."
-          | _ -> () ]
+        [
+            $"worker: %s{worker.Id}"
+            $"derived: %s{rule}"
+            match worker.Session with
+            | Some s -> $"session: %s{s}"
+            | None -> "session: (none)"
+            // WHO THIS PROCESS IS WHEN NOBODY TELLS IT (#1646) — and it is printed ONLY when it disagrees with
+            // the id in use, because that is the only time it says anything the two lines above do not. A
+            // disagreement is the impersonation shape, and `whoami` is where a worker checks its identity
+            // BEFORE a lock command refuses it — a refusal a worker cannot reproduce from `whoami` is one they
+            // have to guess at.
+            match worker.Derived with
+            | Some d when d <> worker.Id ->
+                // NAME WHAT IS ACTUALLY REFUSED. An earlier wording said "over their live marker", which was
+                // true of `release`/`heartbeat`/`widen` and NOT of `claim` — `claim` refuses the argv itself,
+                // live marker or not. A worker who cannot predict from `whoami` which of its verbs will work
+                // has been given a report that costs a failed command to interpret.
+                $"self: %s{d} — this process's OWN id. `--worker %s{worker.Id}` names a DIFFERENT worker, so claim/release/heartbeat/widen on %s{worker.Id}'s items REFUSE (#1646)."
+            | _ -> ()
+        ]

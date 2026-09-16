@@ -20,13 +20,15 @@ module Budget =
     let private UnixSecondsMax = 253402300799L
 
     type RestObservation =
-        { Resource: string
-          Limit: int option
-          Remaining: int option
-          Used: int option
-          ResetAt: DateTimeOffset option
-          ObservedAt: DateTimeOffset
-          Source: string }
+        {
+            Resource: string
+            Limit: int option
+            Remaining: int option
+            Used: int option
+            ResetAt: DateTimeOffset option
+            ObservedAt: DateTimeOffset
+            Source: string
+        }
 
     let private observationRoot () =
         match Environment.GetEnvironmentVariable "FSGG_COORD_CACHE" with
@@ -34,21 +36,35 @@ module Budget =
         | "" ->
             match Environment.GetEnvironmentVariable "XDG_CACHE_HOME" with
             | null
-            | "" -> Path.Combine(Environment.GetFolderPath Environment.SpecialFolder.UserProfile, ".cache", "fsgg-coord")
+            | "" ->
+                Path.Combine(Environment.GetFolderPath Environment.SpecialFolder.UserProfile, ".cache", "fsgg-coord")
             | path -> Path.Combine(path, "fsgg-coord")
         | path -> path
 
     let private observationFile (token: string) =
         use sha = SHA256.Create()
-        let key = sha.ComputeHash(Encoding.UTF8.GetBytes token) |> Convert.ToHexString |> fun x -> x.ToLowerInvariant()
+
+        let key =
+            sha.ComputeHash(Encoding.UTF8.GetBytes token)
+            |> Convert.ToHexString
+            |> fun x -> x.ToLowerInvariant()
+
         Path.Combine(observationRoot (), $"budget-%s{key}.json")
 
     let private intHeader (header: string -> string option) name =
-        header name |> Option.bind (fun raw -> match Int32.TryParse(raw.Trim()) with | true, value when value >= 0 -> Some value | _ -> None)
+        header name
+        |> Option.bind (fun raw ->
+            match Int32.TryParse(raw.Trim()) with
+            | true, value when value >= 0 -> Some value
+            | _ -> None)
 
     let private resetHeader (header: string -> string option) =
         header "X-RateLimit-Reset"
-        |> Option.bind (fun raw -> match Int64.TryParse(raw.Trim()) with | true, epoch when epoch >= UnixSecondsMin && epoch <= UnixSecondsMax -> Some(DateTimeOffset.FromUnixTimeSeconds epoch) | _ -> None)
+        |> Option.bind (fun raw ->
+            match Int64.TryParse(raw.Trim()) with
+            | true, epoch when epoch >= UnixSecondsMin && epoch <= UnixSecondsMax ->
+                Some(DateTimeOffset.FromUnixTimeSeconds epoch)
+            | _ -> None)
 
     // Record rate-limit headers from a real REST resource.  The latest live observation wins; callers
     // never manufacture a resource from a missing header.
@@ -58,13 +74,15 @@ module Budget =
         | Some resource when String.IsNullOrWhiteSpace resource -> ()
         | Some resource ->
             let observation =
-                { Resource = resource.Trim()
-                  Limit = intHeader header "X-RateLimit-Limit"
-                  Remaining = intHeader header "X-RateLimit-Remaining"
-                  Used = intHeader header "X-RateLimit-Used"
-                  ResetAt = resetHeader header
-                  ObservedAt = DateTimeOffset.UtcNow
-                  Source = "response-header" }
+                {
+                    Resource = resource.Trim()
+                    Limit = intHeader header "X-RateLimit-Limit"
+                    Remaining = intHeader header "X-RateLimit-Remaining"
+                    Used = intHeader header "X-RateLimit-Used"
+                    ResetAt = resetHeader header
+                    ObservedAt = DateTimeOffset.UtcNow
+                    Source = "response-header"
+                }
 
             try
                 Directory.CreateDirectory(observationRoot ()) |> ignore
@@ -73,44 +91,78 @@ module Budget =
                 // two simultaneous resource responses both read the old ledger then each replace it,
                 // silently dropping one resource — precisely the multi-worker information this ledger
                 // exists to preserve.
-                use gate = new Threading.Mutex(false, "fsgg-coord-budget-" + Path.GetFileNameWithoutExtension file)
+                use gate =
+                    new Threading.Mutex(false, "fsgg-coord-budget-" + Path.GetFileNameWithoutExtension file)
+
                 let held =
-                    try gate.WaitOne(TimeSpan.FromSeconds 2.0)
-                    with :? Threading.AbandonedMutexException -> true
+                    try
+                        gate.WaitOne(TimeSpan.FromSeconds 2.0)
+                    with :? Threading.AbandonedMutexException ->
+                        true
 
                 if held then
                     try
-                        let temp = file + ".tmp." + string Environment.ProcessId + "." + Guid.NewGuid().ToString "N"
+                        let temp =
+                            file
+                            + ".tmp."
+                            + string Environment.ProcessId
+                            + "."
+                            + Guid.NewGuid().ToString "N"
+
                         let existing =
                             if File.Exists file then
-                                try JsonSerializer.Deserialize<RestObservation list>(File.ReadAllText file)
-                                with :? JsonException -> []
-                            else []
+                                try
+                                    JsonSerializer.Deserialize<RestObservation list>(File.ReadAllText file)
+                                with :? JsonException ->
+                                    []
+                            else
+                                []
 
                         let next =
-                            let prior = existing |> List.tryFind (fun value -> value.Resource.Equals(observation.Resource, StringComparison.OrdinalIgnoreCase))
+                            let prior =
+                                existing
+                                |> List.tryFind (fun value ->
+                                    value.Resource.Equals(observation.Resource, StringComparison.OrdinalIgnoreCase))
                             // A late success from the same rate-limit window cannot erase a refusal that
                             // already named zero.  GitHub advances the reset window on genuine recovery;
                             // that later successful response is the only fact allowed to restore dispatch.
                             match prior with
-                            | Some exhausted when exhausted.Remaining = Some 0 && observation.Remaining <> Some 0
-                                                   && observation.ResetAt <= exhausted.ResetAt -> existing
-                            | _ -> observation :: (existing |> List.filter (fun value -> not (value.Resource.Equals(observation.Resource, StringComparison.OrdinalIgnoreCase))))
+                            | Some exhausted when
+                                exhausted.Remaining = Some 0
+                                && observation.Remaining <> Some 0
+                                && observation.ResetAt <= exhausted.ResetAt
+                                ->
+                                existing
+                            | _ ->
+                                observation
+                                :: (existing
+                                    |> List.filter (fun value ->
+                                        not (
+                                            value.Resource.Equals(
+                                                observation.Resource,
+                                                StringComparison.OrdinalIgnoreCase
+                                            )
+                                        )))
 
                         File.WriteAllText(temp, JsonSerializer.Serialize next)
                         File.Move(temp, file, true)
                     finally
                         gate.ReleaseMutex()
-            with :? IOException -> ()
+            with :? IOException ->
+                ()
 
     // Read the one credential-scoped authoritative resource observation, if any. A torn or unreadable
     // ledger is unknown rather than zero; dispatch must not turn a failed cache read into capacity.
     let readRestObservations (token: string) : RestObservation list =
         try
             let file = observationFile token
+
             if File.Exists file then
-                JsonSerializer.Deserialize<RestObservation list>(File.ReadAllText file) |> Option.ofObj |> Option.defaultValue []
-            else []
+                JsonSerializer.Deserialize<RestObservation list>(File.ReadAllText file)
+                |> Option.ofObj
+                |> Option.defaultValue []
+            else
+                []
         with
         | :? IOException
         | :? JsonException -> []
@@ -143,7 +195,11 @@ module Budget =
     let fleetState (observations: RestObservation list) =
         let remaining = observations |> List.choose _.Remaining
 
-        if observations.IsEmpty || remaining.IsEmpty || remaining.Length <> observations.Length then
+        if
+            observations.IsEmpty
+            || remaining.IsEmpty
+            || remaining.Length <> observations.Length
+        then
             Unknown
         elif remaining |> List.exists ((=) 0) then
             Exhausted
@@ -243,9 +299,11 @@ module Budget =
     // separate source-level hypotheses about the drain were wrong by 30x before the missing wiring was
     // found. An unattributable budget is diagnosed by guessing.
     type Spend =
-        { Points: int
-          Calls: int
-          LastRemaining: int option }
+        {
+            Points: int
+            Calls: int
+            LastRemaining: int option
+        }
 
     let private spendGate = obj ()
     let mutable private spentPoints = 0
@@ -284,9 +342,11 @@ module Budget =
     // What this process has spent so far.
     let graphQlSpend () : Spend =
         lock spendGate (fun () ->
-            { Points = spentPoints
-              Calls = spentCalls
-              LastRemaining = lastRemaining })
+            {
+                Points = spentPoints
+                Calls = spentCalls
+                LastRemaining = lastRemaining
+            })
 
     // Reset the counter. Tests only — a process spends once and exits.
     let resetGraphQlSpend () =
@@ -304,13 +364,16 @@ module Budget =
     // print, and die. "What drained the 5,000?" is a question ABOUT THE WINDOW, not about any one process, so
     // the number has to outlive the process that measured it.
     type SpendRecord =
-        { Command: string
-          Points: int
-          Calls: int
-          Worker: string option
-          ObservedAt: DateTimeOffset }
+        {
+            Command: string
+            Points: int
+            Calls: int
+            Worker: string option
+            ObservedAt: DateTimeOffset
+        }
 
-    let private spendLedgerFile () = Path.Combine(observationRoot (), "graphql-spend.jsonl")
+    let private spendLedgerFile () =
+        Path.Combine(observationRoot (), "graphql-spend.jsonl")
 
     // Append this invocation's spend. NEVER throws and never fails a command: telemetry that can break the
     // tool it measures is worse than no telemetry. A zero-call invocation writes nothing — the overwhelming
@@ -329,11 +392,13 @@ module Budget =
 
                 let line =
                     JsonSerializer.Serialize
-                        {| command = command
-                           points = spend.Points
-                           calls = spend.Calls
-                           worker = worker |> Option.toObj
-                           observedAt = DateTimeOffset.UtcNow.ToString("o") |}
+                        {|
+                            command = command
+                            points = spend.Points
+                            calls = spend.Calls
+                            worker = worker |> Option.toObj
+                            observedAt = DateTimeOffset.UtcNow.ToString("o")
+                        |}
 
                 let file = spendLedgerFile ()
                 Directory.CreateDirectory(Path.GetDirectoryName file) |> ignore
@@ -361,43 +426,45 @@ module Budget =
                 []
             else
 
-            let cutoff = DateTimeOffset.UtcNow - window
+                let cutoff = DateTimeOffset.UtcNow - window
 
-            File.ReadAllLines file
-            |> Array.toList
-            |> List.choose (fun line ->
-                if String.IsNullOrWhiteSpace line then
-                    None
-                else
-                    try
-                        use doc = JsonDocument.Parse line
-                        let root = doc.RootElement
+                File.ReadAllLines file
+                |> Array.toList
+                |> List.choose (fun line ->
+                    if String.IsNullOrWhiteSpace line then
+                        None
+                    else
+                        try
+                            use doc = JsonDocument.Parse line
+                            let root = doc.RootElement
 
-                        let str (name: string) =
-                            match root.TryGetProperty name with
-                            | true, v when v.ValueKind = JsonValueKind.String -> Some(v.GetString())
+                            let str (name: string) =
+                                match root.TryGetProperty name with
+                                | true, v when v.ValueKind = JsonValueKind.String -> Some(v.GetString())
+                                | _ -> None
+
+                            let num (name: string) =
+                                match root.TryGetProperty name with
+                                | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                                | _ -> None
+
+                            match str "command", num "points", num "calls", str "observedAt" with
+                            | Some command, Some points, Some calls, Some observedAt ->
+                                match DateTimeOffset.TryParse(observedAt: string) with
+                                | true, at when at >= cutoff ->
+                                    Some
+                                        {
+                                            Command = command
+                                            Points = points
+                                            Calls = calls
+                                            Worker = str "worker"
+                                            ObservedAt = at
+                                        }
+                                | _ -> None
                             | _ -> None
-
-                        let num (name: string) =
-                            match root.TryGetProperty name with
-                            | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
-                            | _ -> None
-
-                        match str "command", num "points", num "calls", str "observedAt" with
-                        | Some command, Some points, Some calls, Some observedAt ->
-                            match DateTimeOffset.TryParse(observedAt: string) with
-                            | true, at when at >= cutoff ->
-                                Some
-                                    { Command = command
-                                      Points = points
-                                      Calls = calls
-                                      Worker = str "worker"
-                                      ObservedAt = at }
-                            | _ -> None
-                        | _ -> None
-                    with :? JsonException ->
-                        None)
-            |> List.sortByDescending (fun r -> r.ObservedAt)
+                        with :? JsonException ->
+                            None)
+                |> List.sortByDescending (fun r -> r.ObservedAt)
         with _ ->
             []
 
@@ -417,32 +484,32 @@ module Budget =
             None
         else
 
-        try
-            use doc = JsonDocument.Parse body
+            try
+                use doc = JsonDocument.Parse body
 
-            // ARRAYS ARE SEARCHED TOO, and that is not hypothetical tidying. This search only ever runs on
-            // a GraphQL body, and a rate-limited GraphQL response nulls `data` and reports the failure in
-            // `errors[]` — an ARRAY. Descending objects alone meant the one shape this fallback exists to
-            // read was the one shape it could not reach, so it always returned `None` and the caller always
-            // said "the reset time could not be read". A search that cannot see its own subject is #266
-            // again, three levels down.
-            let rec find (e: JsonElement) =
-                match e.ValueKind with
-                | JsonValueKind.Object ->
-                    e.EnumerateObject()
-                    |> Seq.tryPick (fun p ->
-                        if p.Name = "resetAt" && p.Value.ValueKind = JsonValueKind.String then
-                            match DateTimeOffset.TryParse(p.Value.GetString()) with
-                            | true, at -> Some at
-                            | _ -> None
-                        else
-                            find p.Value)
-                | JsonValueKind.Array -> e.EnumerateArray() |> Seq.tryPick find
-                | _ -> None
+                // ARRAYS ARE SEARCHED TOO, and that is not hypothetical tidying. This search only ever runs on
+                // a GraphQL body, and a rate-limited GraphQL response nulls `data` and reports the failure in
+                // `errors[]` — an ARRAY. Descending objects alone meant the one shape this fallback exists to
+                // read was the one shape it could not reach, so it always returned `None` and the caller always
+                // said "the reset time could not be read". A search that cannot see its own subject is #266
+                // again, three levels down.
+                let rec find (e: JsonElement) =
+                    match e.ValueKind with
+                    | JsonValueKind.Object ->
+                        e.EnumerateObject()
+                        |> Seq.tryPick (fun p ->
+                            if p.Name = "resetAt" && p.Value.ValueKind = JsonValueKind.String then
+                                match DateTimeOffset.TryParse(p.Value.GetString()) with
+                                | true, at -> Some at
+                                | _ -> None
+                            else
+                                find p.Value)
+                    | JsonValueKind.Array -> e.EnumerateArray() |> Seq.tryPick find
+                    | _ -> None
 
-            find doc.RootElement
-        with :? JsonException ->
-            None
+                find doc.RootElement
+            with :? JsonException ->
+                None
 
     // WHICH budget did GitHub say this was? Read, never inferred.
     //

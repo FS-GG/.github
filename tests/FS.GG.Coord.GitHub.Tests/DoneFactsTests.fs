@@ -19,24 +19,31 @@ open FS.GG.Coord.GitHub.Done
 /// absolutely. A bug in any of those is a bug `verify` cannot catch, because `verify` was told the wrong
 /// facts and has no way to know it.
 let private ref =
-    { Owner = "FS-GG"
-      Repo = "FS.GG.SDD"
-      Number = 350 }
+    {
+        Owner = "FS-GG"
+        Repo = "FS.GG.SDD"
+        Number = 350
+    }
 
 let private board: Board.BoardMap =
-    { Number = 12
-      Id = "PVT_coord"
-      Owner = "FS-GG"
-      Title = "Coordination"
-      Fields = Map.empty }
+    {
+        Number = 12
+        Id = "PVT_coord"
+        Owner = "FS-GG"
+        Title = "Coordination"
+        Fields = Map.empty
+    }
 
 let private serving (body: string) =
     Fake.Recorder(fun _ ->
         Ok
-            { Status = 200
-              Body = body
-              ETag = None
-              NextLink = None; Headers = Map.empty })
+            {
+                Status = 200
+                Body = body
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            })
 
 /// The done-stamp query's response, with the pieces a test wants to vary.
 let private responseWithProjectItems
@@ -75,23 +82,39 @@ let ``#2264 only the immutable done receipt is terminal lifecycle evidence`` () 
 [<Fact>]
 let ``typed delivery completion receipt is accepted only after digest verification`` () =
     let facts: FS.GG.Coord.Delivery.CompletionFacts =
-        { HeadSha = "head"
-          Merged = true
-          MergeReachable = true
-          PostMergeVerification =
-            FS.GG.Coord.Delivery.Verified
-                { MergeSha = "merge-sha"
-                  DefaultBranch = "main"
-                  Runs =
-                    [ { Id = 2905L; Attempt = 1; Workflow = "CI"; Event = "push"; Branch = "main"
-                        Sha = "merge-sha"; Status = "completed"; Conclusion = "success"; Url = "https://run/2905" } ] }
-          IssueClosed = true
-          BoardDone = false
-          ClaimReleased = false
-          PendingWrites = 0
-          CleanupEligible = false
-          ObligationsDeclared = true
-          Obligations = [] }
+        {
+            HeadSha = "head"
+            Merged = true
+            MergeReachable = true
+            PostMergeVerification =
+                FS.GG.Coord.Delivery.Verified
+                    {
+                        MergeSha = "merge-sha"
+                        DefaultBranch = "main"
+                        Runs =
+                            [
+                                {
+                                    Id = 2905L
+                                    Attempt = 1
+                                    Workflow = "CI"
+                                    Event = "push"
+                                    Branch = "main"
+                                    Sha = "merge-sha"
+                                    Status = "completed"
+                                    Conclusion = "success"
+                                    Url = "https://run/2905"
+                                }
+                            ]
+                    }
+            IssueClosed = true
+            BoardDone = false
+            ClaimReleased = false
+            PendingWrites = 0
+            CleanupEligible = false
+            ObligationsDeclared = true
+            Obligations = []
+        }
+
     let signed =
         FS.GG.Coord.Delivery.createCompletionReceipt
             "FS-GG/.github#1"
@@ -102,23 +125,36 @@ let ``typed delivery completion receipt is accepted only after digest verificati
             "action"
             facts
         |> Result.defaultWith (String.concat "; " >> failwith)
+
     let encoded = FS.GG.Coord.Delivery.encodeCompletionReceipt signed
     Assert.True(hasReceipt [ encoded ])
     Assert.False(hasReceipt [ encoded.Replace("merge-sha", "tampered-merge") ])
+
     match receiptState [ encoded ] with
     | VerifiedCompletionReceipt actual -> Assert.Equal(signed, actual)
     | other -> failwithf "expected verified typed receipt, got %A" other
-    let anotherRef = { Owner = "FS-GG"; Repo = ".github"; Number = 99 }
+
+    let anotherRef =
+        {
+            Owner = "FS-GG"
+            Repo = ".github"
+            Number = 99
+        }
+
     match receiptStateFor anotherRef [ encoded ] with
     | InvalidCompletionReceipt errors -> Assert.Contains("does not match", String.concat "; " errors)
     | other -> failwithf "expected item-binding refusal, got %A" other
+
     Assert.False(hasReceiptFor anotherRef [ encoded ])
+
     match receiptState [ encoded; encoded ] with
     | InvalidCompletionReceipt errors -> Assert.Contains("more than one", String.concat "; " errors)
     | other -> failwithf "expected duplicate receipt refusal, got %A" other
+
     match receiptState [ encoded.Replace("merge-sha", "tampered-merge") ] with
     | InvalidCompletionReceipt errors -> Assert.Contains("digest", String.concat "; " errors)
     | other -> failwithf "expected digest-invalid receipt, got %A" other
+
     Assert.Equal(LegacyReceipt, receiptState [ "<!-- fsgg:done-receipt v=1 -->\nverified" ])
     Assert.Equal(NoReceipt, receiptState [ "ordinary comment" ])
 
@@ -130,6 +166,7 @@ let ``completion correction evidence is subject-bound unique and digest-verified
             BoardStatus.InReview
             (System.DateTimeOffset.Parse("2026-08-22T16:00:00Z"))
         |> Result.defaultWith (String.concat "; " >> failwith)
+
     let encoded = FS.GG.Coord.Delivery.encodeCompletionCorrectionReceipt signed
 
     Assert.Equal(VerifiedCompletionCorrection signed, completionCorrectionStateFor ref [ encoded ])
@@ -159,8 +196,7 @@ let private closesThis (n: int) =
 
 [<Fact>]
 let ``a MERGED closing PR is read as a closing PR`` () =
-    let transport =
-        serving (response "CLOSED" (closesThis 399) "" noSubs "null")
+    let transport = serving (response "CLOSED" (closesThis 399) "" noSubs "null")
 
     match facts transport board ref with
     | Ok f ->
@@ -175,7 +211,14 @@ let ``an UNMERGED PR that references the issue does NOT close it`` () =
     // NOTHING — and treating it as the closing act would stamp work done on the strength of a PR somebody
     // threw away, or has not finished. The node is READ (so provenance stays whole), but `verify` filters it.
     let transport =
-        serving (response "CLOSED" """{"number":399,"merged":false,"closingIssuesReferences":{"nodes":[{"number":350,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}""" "" noSubs "null")
+        serving (
+            response
+                "CLOSED"
+                """{"number":399,"merged":false,"closingIssuesReferences":{"nodes":[{"number":350,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}"""
+                ""
+                noSubs
+                "null"
+        )
 
     match facts transport board ref with
     | Ok f ->
@@ -198,18 +241,23 @@ let ``#2981 the CLOSED_EVENT closer preserves its full merge oid and is not list
     // (#928, measured on .github#622). `facts` must therefore read the closer's merge facts out of the EVENT,
     // because there is no listed node to take them from.
     let transport =
-        serving
-            (response
+        serving (
+            response
                 "CLOSED"
                 ""
                 """{"closer":{"__typename":"PullRequest","number":399,"merged":true,"mergedAt":"2026-01-01T00:00:00Z","mergeCommit":{"oid":"32940aa17c930a0452a1778158b7a5c4d28aa711"}}}"""
                 noSubs
-                "null")
+                "null"
+        )
 
     match facts transport board ref with
     | Ok f ->
         Assert.Empty f.ClosingPrs
-        Assert.Contains(f.CloserPrs, fun (p: ClosingPr) -> p.Number = 399 && p.Merged && p.Oid = "32940aa17c930a0452a1778158b7a5c4d28aa711")
+
+        Assert.Contains(
+            f.CloserPrs,
+            fun (p: ClosingPr) -> p.Number = 399 && p.Merged && p.Oid = "32940aa17c930a0452a1778158b7a5c4d28aa711"
+        )
 
         match verify None None f with
         | Green(ClosedByPullRequest(399, "32940aa17c930a0452a1778158b7a5c4d28aa711", _, _)) -> ()
@@ -223,13 +271,14 @@ let ``a COMMIT closer resolves through to its associated PR (#558/#928)`` () =
     // every PR this org's own recipe produces, and it is the case #558 was written for — so it is the case
     // the fixture must serve.
     let transport =
-        serving
-            (response
+        serving (
+            response
                 "CLOSED"
                 ""
                 """{"closer":{"__typename":"Commit","oid":"4cf06e10","associatedPullRequests":{"nodes":[{"number":926,"merged":true,"mergedAt":"2026-07-16T20:51:40Z","mergeCommit":{"oid":"4cf06e1"}}]}}}"""
                 noSubs
-                "null")
+                "null"
+        )
 
     match facts transport board ref with
     | Ok f ->
@@ -247,13 +296,14 @@ let ``an UNMERGED PR associated with the closing commit is read, but does not st
     // node is READ (provenance stays whole, exactly as for the reference list), and `verify` refuses it.
     // This is why the read resolves merge facts instead of letting `verify` assume them.
     let transport =
-        serving
-            (response
+        serving (
+            response
                 "CLOSED"
                 ""
                 """{"closer":{"__typename":"Commit","oid":"deadbeef","associatedPullRequests":{"nodes":[{"number":399,"merged":false}]}}}"""
                 noSubs
-                "null")
+                "null"
+        )
 
     match facts transport board ref with
     | Ok f ->
@@ -291,13 +341,14 @@ let ``#2427 a closedByPullRequestsReferences node's OWN repository is read into 
 [<Fact>]
 let ``#2427 the CLOSED_EVENT PullRequest closer's own repository is read too`` () =
     let transport =
-        serving
-            (response
+        serving (
+            response
                 "CLOSED"
                 ""
                 """{"closer":{"__typename":"PullRequest","number":195,"merged":true,"mergedAt":"2026-08-12T08:19:28Z","mergeCommit":{"oid":"938020f"},"repository":{"nameWithOwner":"EHotwagner/S.I.R."}}}"""
                 noSubs
-                "null")
+                "null"
+        )
 
     match facts transport board ref with
     | Ok f -> Assert.Contains(f.CloserPrs, fun (p: ClosingPr) -> p.Number = 195 && p.Repo = "EHotwagner/S.I.R.")
@@ -306,13 +357,14 @@ let ``#2427 the CLOSED_EVENT PullRequest closer's own repository is read too`` (
 [<Fact>]
 let ``#2427 a COMMIT closer's associated PR carries its own repository too`` () =
     let transport =
-        serving
-            (response
+        serving (
+            response
                 "CLOSED"
                 ""
                 """{"closer":{"__typename":"Commit","oid":"938020f","associatedPullRequests":{"nodes":[{"number":195,"merged":true,"mergedAt":"2026-08-12T08:19:28Z","mergeCommit":{"oid":"938020f"},"repository":{"nameWithOwner":"EHotwagner/S.I.R."}}]}}}"""
                 noSubs
-                "null")
+                "null"
+        )
 
     match facts transport board ref with
     | Ok f -> Assert.Contains(f.CloserPrs, fun (p: ClosingPr) -> p.Number = 195 && p.Repo = "EHotwagner/S.I.R.")
@@ -328,7 +380,8 @@ let ``#2427 end-to-end: facts read + verify prefer the same-repo closer over the
     let retrofit =
         """{"number":195,"merged":true,"mergedAt":"2026-08-12T08:19:28Z","mergeCommit":{"oid":"938020f"},"repository":{"nameWithOwner":"EHotwagner/S.I.R."},"closingIssuesReferences":{"nodes":[{"number":350,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}"""
 
-    let transport = serving (response "CLOSED" $"{sourceFix},{retrofit}" "" noSubs "null")
+    let transport =
+        serving (response "CLOSED" $"{sourceFix},{retrofit}" "" noSubs "null")
 
     match facts transport board ref with
     | Ok f ->
@@ -344,8 +397,7 @@ let ``a truncated sub-issue page is detected - totalCount disagrees with the nod
     // THIS IS WHERE THE TRUNCATION CHECK LIVES, and `verify` trusts it absolutely. `verify` cannot know a
     // page was cut short; it can only act on the `Unverifiable` that `facts` produces. So if `facts` reads
     // truncation wrong, a subject nobody fully saw gets a confident verdict.
-    let subs =
-        """{"totalCount":120,"nodes":[{"number":398,"state":"CLOSED"}]}"""
+    let subs = """{"totalCount":120,"nodes":[{"number":398,"state":"CLOSED"}]}"""
 
     let transport = serving (response "CLOSED" "" "" subs "null")
 
@@ -465,13 +517,9 @@ let ``the parent ref is read, cross-repo, so the roll-up can climb`` () =
         """{"number":417,"repository":{"name":".github","owner":{"login":"FS-GG"}}}"""
 
     let transport =
-        serving
-            (response
-                "CLOSED"
-                """{"number":399,"merged":true,"closingIssuesReferences":{"nodes":[]}}"""
-                ""
-                noSubs
-                parent)
+        serving (
+            response "CLOSED" """{"number":399,"merged":true,"closingIssuesReferences":{"nodes":[]}}""" "" noSubs parent
+        )
 
     match facts transport board ref with
     | Ok f ->

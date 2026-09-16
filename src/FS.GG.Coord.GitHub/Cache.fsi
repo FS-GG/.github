@@ -13,7 +13,15 @@ namespace FS.GG.Coord.GitHub
 module Cache =
     val getIntakeReceipt: draftId: string -> Result<FS.GG.Coord.IntakeReceipt.Receipt option, string>
     val putIntakeReceipt: receipt: FS.GG.Coord.IntakeReceipt.Receipt -> Result<unit, string>
-    type IntakeIntent = { DraftId: string; Owner: string; Repository: string; DraftDigest: string }
+
+    type IntakeIntent =
+        {
+            DraftId: string
+            Owner: string
+            Repository: string
+            DraftDigest: string
+        }
+
     val getIntakeIntent: draftId: string -> Result<IntakeIntent option, string>
     val putIntakeIntent: intent: IntakeIntent -> Result<unit, string>
     /// Serialize one draft's receipt/create boundary. The OS releases the lock on process death.
@@ -153,7 +161,14 @@ module Cache =
     /// the scan actually carries can be folded; anything else leaves the cache untouched rather than
     /// writing a field the scan has no slot for.
     val patchScan:
-        owner: string -> title: string -> issueOwner: string -> repo: string -> number: int -> field: string -> value: string -> unit
+        owner: string ->
+        title: string ->
+        issueOwner: string ->
+        repo: string ->
+        number: int ->
+        field: string ->
+        value: string ->
+            unit
 
     /// Drop the cached scan for a board. Used by `--fresh`.
     val dropScan: owner: string -> title: string -> unit
@@ -231,21 +246,23 @@ module Cache =
     /// the refusal would never reach the operator, and the tool would report success over a write it had
     /// dropped. That is #510, and the type is what stops it being rewritten.
     type Deferred =
-        { Ref: string
-          Field: string
-          Value: string
-          At: string
-          Worker: string
-          /// The board this write was queued against, as `(owner, project title)` (#882).
-          ///
-          /// `Ref` names an ISSUE, and an issue can sit on several boards — so without this, `flush` resolved
-          /// every entry against whatever board the environment happened to point at, found the item missing,
-          /// and dropped the write as "permanently un-writable". It was writable; the board was simply not
-          /// the one it was queued for.
-          ///
-          /// `None` is a pre-#882 entry that recorded no board — replayed against the current board, which is
-          /// the behaviour it was queued under. It is not an invitation to guess.
-          Board: (string * string) option }
+        {
+            Ref: string
+            Field: string
+            Value: string
+            At: string
+            Worker: string
+            /// The board this write was queued against, as `(owner, project title)` (#882).
+            ///
+            /// `Ref` names an ISSUE, and an issue can sit on several boards — so without this, `flush` resolved
+            /// every entry against whatever board the environment happened to point at, found the item missing,
+            /// and dropped the write as "permanently un-writable". It was writable; the board was simply not
+            /// the one it was queued for.
+            ///
+            /// `None` is a pre-#882 entry that recorded no board — replayed against the current board, which is
+            /// the behaviour it was queued under. It is not an invitation to guess.
+            Board: (string * string) option
+        }
 
     /// Do two board identities name the same board?
     ///

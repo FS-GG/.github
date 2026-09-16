@@ -5,20 +5,29 @@ module LifecycleProjection =
     open FS.GG.Coord.Types
 
     type Fact<'a> = { ObservedAt: int64; Value: 'a }
-    type PullRequest = { Number: int; Open: bool; ReviewOrCiActive: bool }
-    type Delivery = { Outstanding: bool; DoneStamped: bool }
+
+    type PullRequest =
+        {
+            Number: int
+            Open: bool
+            ReviewOrCiActive: bool
+        }
+
+    type Delivery =
+        { Outstanding: bool; DoneStamped: bool }
+
     type Observation =
-        { Claim: Fact<(Claim * Liveness) option>
-          PullRequest: Fact<PullRequest option>
-          Blockers: Fact<Blocker list>
-          Delivery: Fact<Delivery>
-          Issue: Fact<IssueState> }
+        {
+            Claim: Fact<(Claim * Liveness) option>
+            PullRequest: Fact<PullRequest option>
+            Blockers: Fact<Blocker list>
+            Delivery: Fact<Delivery>
+            Issue: Fact<IssueState>
+        }
 
     /// An attributable, revisioned scheduling decision.  Status is deliberately absent: this is an
     /// input to the lifecycle reducer, never another spelling of its output.
-    type IntentRecord =
-        { Revision: int64
-          Reason: string }
+    type IntentRecord = { Revision: int64; Reason: string }
 
     /// Human/policy scheduling intent, independent of observed lifecycle facts and Project Status.
     type SchedulingIntent =
@@ -30,8 +39,7 @@ module LifecycleProjection =
     /// True only for a typed human scheduling hold; never derived from mutable Status or prose.
     val isHumanPark: SchedulingIntent -> bool
 
-    type PolicyVersion =
-        | IntentStatusV1
+    type PolicyVersion = | IntentStatusV1
 
     type Result =
         | Project of status: BoardStatus * observedAt: int64
@@ -51,9 +59,11 @@ module LifecycleProjection =
     /// makes an event that arrived late a no-op rather than an opportunity to re-derive an older
     /// column value.
     type Watermark =
-        { ObservedAt: int64
-          Status: BoardStatus
-          Intent: SchedulingIntent }
+        {
+            ObservedAt: int64
+            Status: BoardStatus
+            Intent: SchedulingIntent
+        }
 
     /// Stable, append-only receipt written only after a fresh board verification.
     val watermarkMarker: Watermark -> string

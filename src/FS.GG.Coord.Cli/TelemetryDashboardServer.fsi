@@ -5,26 +5,30 @@ open System.Threading
 open System.Threading.Tasks
 
 type DashboardAsset =
-    { ContentType: string
-      Content: byte array }
+    {
+        ContentType: string
+        Content: byte array
+    }
 
 type TelemetryDashboardServerOptions =
-    { WorkspaceId: string
-      AssetProvider: string -> DashboardAsset option
-      SnapshotProvider: string -> CancellationToken -> Task<Result<byte array, string list>>
-      BootstrapLifetime: TimeSpan
-      SessionIdleTimeout: TimeSpan
-      SessionAbsoluteTimeout: TimeSpan
-      RequestTimeout: TimeSpan
-      SnapshotTimeout: TimeSpan
-      ShutdownTimeout: TimeSpan
-      MaxSessions: int
-      MaxConcurrentRequests: int
-      MaxConcurrentQueries: int
-      MaxRequestBodyBytes: int
-      MaxResponseBodyBytes: int
-      MaxHeaderBytes: int
-      BindAttempts: int }
+    {
+        WorkspaceId: string
+        AssetProvider: string -> DashboardAsset option
+        SnapshotProvider: string -> CancellationToken -> Task<Result<byte array, string list>>
+        BootstrapLifetime: TimeSpan
+        SessionIdleTimeout: TimeSpan
+        SessionAbsoluteTimeout: TimeSpan
+        RequestTimeout: TimeSpan
+        SnapshotTimeout: TimeSpan
+        ShutdownTimeout: TimeSpan
+        MaxSessions: int
+        MaxConcurrentRequests: int
+        MaxConcurrentQueries: int
+        MaxRequestBodyBytes: int
+        MaxResponseBodyBytes: int
+        MaxHeaderBytes: int
+        BindAttempts: int
+    }
 
 type RunningTelemetryDashboardServer =
     inherit IDisposable

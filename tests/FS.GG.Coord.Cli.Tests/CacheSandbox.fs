@@ -22,11 +22,7 @@ module CacheSandbox =
     /// fallback does. Held here rather than recomputed per test so the guard and the thing it guards can
     /// never disagree about which directory is under discussion.
     let RealCacheRoot =
-        IO.Path.Combine(
-            Environment.GetFolderPath Environment.SpecialFolder.UserProfile,
-            ".cache",
-            "fsgg-coord"
-        )
+        IO.Path.Combine(Environment.GetFolderPath Environment.SpecialFolder.UserProfile, ".cache", "fsgg-coord")
 
     let private digestOf (file: string) =
         use sha = Security.Cryptography.SHA256.Create()

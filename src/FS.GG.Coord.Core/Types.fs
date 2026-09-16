@@ -39,17 +39,21 @@ module Types =
         | BlockerUnparseable
 
     type Ref =
-        { Owner: string
-          Repo: string
-          Number: int }
+        {
+            Owner: string
+            Repo: string
+            Number: int
+        }
 
         member this.Short = $"%s{this.Repo}#%d{this.Number}"
         member this.Canonical = $"%s{this.Owner}/%s{this.Repo}#%d{this.Number}"
 
     type Blocker =
-        { Ref: Ref option
-          Raw: string
-          State: BlockerState }
+        {
+            Ref: Ref option
+            Raw: string
+            State: BlockerState
+        }
 
         member this.Display =
             match this.Ref with
@@ -101,10 +105,12 @@ module Types =
         | P8Net
 
     type Claim =
-        { Worker: WorkerId
-          Session: SessionId option
-          AgeSeconds: int
-          PreviousStatus: BoardStatus option }
+        {
+            Worker: WorkerId
+            Session: SessionId option
+            AgeSeconds: int
+            PreviousStatus: BoardStatus option
+        }
 
     type Liveness =
         | LeaseHeld
@@ -123,35 +129,37 @@ module Types =
         | PrClosed
 
     type Item =
-        { Ref: Ref
-          PathRepo: string
-          Status: BoardStatus
-          State: IssueState
-          TouchSet: TouchSet
-          Blockers: Blocker list
-          Claim: (Claim * Liveness) option
-          ItemPr: int option
-          ItemPrUnreadable: bool
-          HumanBlock: HumanBlock option
-          Predicate: RegistryPredicate.Verdict option
+        {
+            Ref: Ref
+            PathRepo: string
+            Status: BoardStatus
+            State: IssueState
+            TouchSet: TouchSet
+            Blockers: Blocker list
+            Claim: (Claim * Liveness) option
+            ItemPr: int option
+            ItemPrUnreadable: bool
+            HumanBlock: HumanBlock option
+            Predicate: RegistryPredicate.Verdict option
 
-          Class: ItemClass option
+            Class: ItemClass option
 
-          BoardClass: ItemClass option
+            BoardClass: ItemClass option
 
-          Kind: ItemKind option
+            Kind: ItemKind option
 
-          BoardKind: ItemKind option
+            BoardKind: ItemKind option
 
-          CommentCount: int option
+            CommentCount: int option
 
-          DeliveryRoute: DeliveryRoute.Verdict
+            DeliveryRoute: DeliveryRoute.Verdict
 
-          Severity: Severity
+            Severity: Severity
 
-          Phase: Phase option
+            Phase: Phase option
 
-          AgeDays: int option }
+            AgeDays: int option
+        }
 
     type Verdict<'a> =
         | Green of 'a
@@ -195,7 +203,13 @@ module Types =
     // and no longer PARSES, which is the round-trip breaking in the one direction a total match cannot
     // see. `TypesTests` pins this list against the union by reflection, so nobody has to remember it.
     let private everyBlockerState =
-        [ BlockerOpen; BlockerClosed; BlockerMerged; BlockerUnknown; BlockerUnparseable ]
+        [
+            BlockerOpen
+            BlockerClosed
+            BlockerMerged
+            BlockerUnknown
+            BlockerUnparseable
+        ]
 
     // THE INVERSE, DERIVED — never a second list of the strings.
     //
@@ -293,6 +307,7 @@ module Types =
             None
         else
             let candidate = s.Trim()
+
             everySeverity
             |> List.tryFind (fun severity ->
                 String.Equals(severityWireName severity, candidate, StringComparison.OrdinalIgnoreCase))
@@ -341,15 +356,17 @@ module Types =
     // vocabulary over: a case missing here renders fine and no longer PARSES, so a board column a
     // human set would read as no phase at all and rank last.
     let private everyPhase =
-        [ P0Decisions
-          P1Rendering
-          P2Sdd
-          P3Governance
-          P4Templates
-          P5Versioning
-          P6Game
-          P7Audio
-          P8Net ]
+        [
+            P0Decisions
+            P1Rendering
+            P2Sdd
+            P3Governance
+            P4Templates
+            P5Versioning
+            P6Game
+            P7Audio
+            P8Net
+        ]
 
     // THE INVERSE, DERIVED — never a second list of the strings (#1012).
     //

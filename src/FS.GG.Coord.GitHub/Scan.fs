@@ -12,84 +12,88 @@ module Scan =
     open Transport
 
     type Row =
-        { Ref: Ref
-          Title: string
-          Status: BoardStatus
-          BlockedByRaw: string
-          State: IssueState
-          IsPullRequest: bool
-          // The repository whose tree this item's `Paths:` tokens name.  This normally equals
-          // `Ref.Repo`; a cross-repository coordination item may instead select `Repo Scope` (#1732).
-          // It is deliberately separate from `Ref`, which continues to identify the issue to read,
-          // claim, and close.
-          PathRepo: string
-          // The `Class` column as OBSERVED (.github#1588). `None` covers three facts the board itself
-          // does not tell apart — the row is unclassed, the value is a word this engine does not speak,
-          // or the project has no `Class` field at all — and all three mean the same thing to the only
-          // consumer: there is no projection here to trust. `lint` reports the gap from the ITEM's text,
-          // which is the authority, so nothing downstream has to guess which of the three this was.
-          BoardClass: ItemClass option
+        {
+            Ref: Ref
+            Title: string
+            Status: BoardStatus
+            BlockedByRaw: string
+            State: IssueState
+            IsPullRequest: bool
+            // The repository whose tree this item's `Paths:` tokens name.  This normally equals
+            // `Ref.Repo`; a cross-repository coordination item may instead select `Repo Scope` (#1732).
+            // It is deliberately separate from `Ref`, which continues to identify the issue to read,
+            // claim, and close.
+            PathRepo: string
+            // The `Class` column as OBSERVED (.github#1588). `None` covers three facts the board itself
+            // does not tell apart — the row is unclassed, the value is a word this engine does not speak,
+            // or the project has no `Class` field at all — and all three mean the same thing to the only
+            // consumer: there is no projection here to trust. `lint` reports the gap from the ITEM's text,
+            // which is the authority, so nothing downstream has to guess which of the three this was.
+            BoardClass: ItemClass option
 
-          BoardKind: ItemKind option
+            BoardKind: ItemKind option
 
-          // **REGISTER DEPTH** — the ISSUE's comment count as observed (.github#2712).
-          //
-          // FREE. `comments { totalCount }` selects no NODES, so it does not multiply the node budget
-          // GraphQL's primary limit is metered by; the board read stays the 7 points this query's own
-          // comment measures. Verified directly before adoption: `comments { totalCount }` on
-          // `.github#2691` answered 83 at `rateLimit.cost` 1.
-          //
-          // `None` means this reader did not look — a pull request (which is not an issue and has no
-          // register semantics), or a cache entry written before this field existed. Never "no
-          // comments": an unread register must not read as an empty one.
-          CommentCount: int option
+            // **REGISTER DEPTH** — the ISSUE's comment count as observed (.github#2712).
+            //
+            // FREE. `comments { totalCount }` selects no NODES, so it does not multiply the node budget
+            // GraphQL's primary limit is metered by; the board read stays the 7 points this query's own
+            // comment measures. Verified directly before adoption: `comments { totalCount }` on
+            // `.github#2691` answered 83 at `rateLimit.cost` 1.
+            //
+            // `None` means this reader did not look — a pull request (which is not an issue and has no
+            // register semantics), or a cache entry written before this field existed. Never "no
+            // comments": an unread register must not read as an empty one.
+            CommentCount: int option
 
-          // The `Severity` column as observed. Missing or unrecognised values are explicitly `Unset`,
-          // which ranks last and remains visible to lint.
-          Severity: Severity
+            // The `Severity` column as observed. Missing or unrecognised values are explicitly `Unset`,
+            // which ranks last and remains visible to lint.
+            Severity: Severity
 
-          Phase: Phase option
+            Phase: Phase option
 
-          // When the ISSUE was created — the board's only usable age timestamp (.github#1598).
-          //
-          // Carried as the INSTANT, not as a day count, precisely because it is cached: a `Row` written
-          // to disk today and read tomorrow must not report yesterday's age. The count is derived where
-          // the clock is read (`Client.enrichBoardFacts`), so the cached fact never goes stale.
-          CreatedAt: DateTimeOffset option
+            // When the ISSUE was created — the board's only usable age timestamp (.github#1598).
+            //
+            // Carried as the INSTANT, not as a day count, precisely because it is cached: a `Row` written
+            // to disk today and read tomorrow must not report yesterday's age. The count is derived where
+            // the clock is read (`Client.enrichBoardFacts`), so the cached fact never goes stale.
+            CreatedAt: DateTimeOffset option
 
-          // .github#2254 REPAIR 1 (`heron-fef6`). The row's own body TEXT — read ONLY for a
-          // closed-and-`Done` candidate whose `BoardClass` was EMPTY at the moment of a `scanFresh` call
-          // made with `Cache.Reconciling` (see `scanFresh`) — never for `Scheduling`/`Offering`, and
-          // never merely to double-check a column that already carries a value.
-          //
-          // `None` is "not applicable, or this scan's intent never asked" — the overwhelming majority of
-          // rows, on every scan. `Some(Ok text)` is the body; `Some(Error e)` mirrors `Scan.snapshot`'s
-          // own `bodyUnreadable` naming, so a failed census read is COUNTED there, never silently dropped
-          // (#266) — `snapshot`'s swept branch reads THIS rather than calling `Reads.issueBody` itself,
-          // which is what keeps the extra read off every caller but `reconcile`: `Client.fs`'s
-          // `scanAndDecide` already forwards its own `Cache.ReadIntent` into `Scan.board` UNCHANGED
-          // (`Scan.board ctx.Transport intent ...`), so gating the read HERE, inside `scanFresh`, needs no
-          // new parameter on `snapshot` and no edit to `Client.fs` at all — the two calls already agree
-          // on intent, they simply never shared this one narrow fact before.
-          //
-          // DELIBERATELY UNCACHED. `renderRows`/`parseRows` never round-trip it: `Cache.getScan` already
-          // refuses to serve a cache hit for `Reconciling`/`Offering` (`Cache.fs`'s own `| Reconciling |
-          // Offering -> None`), so every `Reconciling` scan reaches `scanFresh` fresh regardless — nothing
-          // is lost by leaving this out of the cache file, and leaving it OUT is what stops a `Scheduling`
-          // read that happens to share a cache file from ever being able to inherit a census read it never
-          // asked for and never paid for.
-          SweptBody: IoResult<string> option
+            // .github#2254 REPAIR 1 (`heron-fef6`). The row's own body TEXT — read ONLY for a
+            // closed-and-`Done` candidate whose `BoardClass` was EMPTY at the moment of a `scanFresh` call
+            // made with `Cache.Reconciling` (see `scanFresh`) — never for `Scheduling`/`Offering`, and
+            // never merely to double-check a column that already carries a value.
+            //
+            // `None` is "not applicable, or this scan's intent never asked" — the overwhelming majority of
+            // rows, on every scan. `Some(Ok text)` is the body; `Some(Error e)` mirrors `Scan.snapshot`'s
+            // own `bodyUnreadable` naming, so a failed census read is COUNTED there, never silently dropped
+            // (#266) — `snapshot`'s swept branch reads THIS rather than calling `Reads.issueBody` itself,
+            // which is what keeps the extra read off every caller but `reconcile`: `Client.fs`'s
+            // `scanAndDecide` already forwards its own `Cache.ReadIntent` into `Scan.board` UNCHANGED
+            // (`Scan.board ctx.Transport intent ...`), so gating the read HERE, inside `scanFresh`, needs no
+            // new parameter on `snapshot` and no edit to `Client.fs` at all — the two calls already agree
+            // on intent, they simply never shared this one narrow fact before.
+            //
+            // DELIBERATELY UNCACHED. `renderRows`/`parseRows` never round-trip it: `Cache.getScan` already
+            // refuses to serve a cache hit for `Reconciling`/`Offering` (`Cache.fs`'s own `| Reconciling |
+            // Offering -> None`), so every `Reconciling` scan reaches `scanFresh` fresh regardless — nothing
+            // is lost by leaving this out of the cache file, and leaving it OUT is what stops a `Scheduling`
+            // read that happens to share a cache file from ever being able to inherit a census read it never
+            // asked for and never paid for.
+            SweptBody: IoResult<string> option
 
-          // Stable GraphQL node identity, retained only to make a fresh node-facts query.  It is not a
-          // cached body or lock fact: every snapshot re-reads body and comment totalCount through this id.
-          NodeId: string option }
+            // Stable GraphQL node identity, retained only to make a fresh node-facts query.  It is not a
+            // cached body or lock fact: every snapshot re-reads body and comment totalCount through this id.
+            NodeId: string option
+        }
 
     [<Literal>]
     let OffBoardCap = 60
 
     type Scoped =
-        { Rows: Row list
-          Advisory: string option }
+        {
+            Rows: Row list
+            Advisory: string option
+        }
 
     // Repo Scope is a board vocabulary (`audio`); command scope is canonical (`FS.GG.Audio`).
     // Keep the normalization at the board boundary, before filtering, so a row cannot disappear before
@@ -149,11 +153,13 @@ module Scan =
             { Rows = kept; Advisory = advisory }
 
     type Receipt =
-        { Candidates: int
-          RepoAdvisory: string option
-          OffBoardResolved: int
-          OffBoardSkipped: int
-          BodiesUnreadable: int }
+        {
+            Candidates: int
+            RepoAdvisory: string option
+            OffBoardResolved: int
+            OffBoardSkipped: int
+            BodiesUnreadable: int
+        }
 
     // ---- the thrifty board query --------------------------------------------------------------------
 
@@ -298,54 +304,66 @@ module Scan =
                     | _ -> Open
 
                 let row =
-                    { Ref =
-                        { Owner = parts.[0]
-                          Repo = parts.[1]
-                          Number = n }
-                      Title = str content "title" |> Option.defaultValue ""
-                      Status = nested node "status" "name" |> Option.map boardStatusOf |> Option.defaultValue NoStatus
-                      BlockedByRaw = nested node "blockedBy" "text" |> Option.defaultValue ""
-                      State = state
-                      IsPullRequest = isPr
-                      // A missing field preserves the historic meaning: paths belong to the issue's
-                      // repository.  The client resolves a present roster short-id before it becomes a
-                      // scheduling scope; retaining the raw field here keeps this GraphQL reader free of
-                      // the CLI's resolver table.
-                      PathRepo = nested node "repoScope" "name" |> Option.defaultValue parts.[1]
-                      // COSTS NOTHING TO ADD. `fieldValueByName` is a RESOLVER field — one value per
-                      // item, no node multiplication — so this is the same 7 points over the live board
-                      // that the query's own comment measures. `Option.bind` on the resolved name, so a
-                      // project with no `Class` field (every board before .github#1588, and every parity
-                      // fixture) reads `None` rather than failing the scan.
-                      BoardClass = nested node "class" "name" |> Option.bind itemClassOfWireName
-                      // Same resolver-field shape, same cost, same fail-soft as `class` above: a project
-                      // with no `Kind` field — which is every board today, including the live one —
-                      // reads `None` rather than failing the scan.
-                      BoardKind = nested node "kind" "name" |> Option.bind itemKindOfWireName
-                      // A CONNECTION `totalCount`, not a node selection, so it adds no nodes to the page.
-                      // Absent on a pull-request node (`comments` is selected only on `... on Issue`),
-                      // which reads `None` — "this reader did not look", never "no comments".
-                      CommentCount =
-                        match content.TryGetProperty "comments" with
-                        | true, comments ->
-                            match comments.TryGetProperty "totalCount" with
-                            | true, total when total.ValueKind = JsonValueKind.Number -> Some(total.GetInt32())
+                    {
+                        Ref =
+                            {
+                                Owner = parts.[0]
+                                Repo = parts.[1]
+                                Number = n
+                            }
+                        Title = str content "title" |> Option.defaultValue ""
+                        Status =
+                            nested node "status" "name"
+                            |> Option.map boardStatusOf
+                            |> Option.defaultValue NoStatus
+                        BlockedByRaw = nested node "blockedBy" "text" |> Option.defaultValue ""
+                        State = state
+                        IsPullRequest = isPr
+                        // A missing field preserves the historic meaning: paths belong to the issue's
+                        // repository.  The client resolves a present roster short-id before it becomes a
+                        // scheduling scope; retaining the raw field here keeps this GraphQL reader free of
+                        // the CLI's resolver table.
+                        PathRepo = nested node "repoScope" "name" |> Option.defaultValue parts.[1]
+                        // COSTS NOTHING TO ADD. `fieldValueByName` is a RESOLVER field — one value per
+                        // item, no node multiplication — so this is the same 7 points over the live board
+                        // that the query's own comment measures. `Option.bind` on the resolved name, so a
+                        // project with no `Class` field (every board before .github#1588, and every parity
+                        // fixture) reads `None` rather than failing the scan.
+                        BoardClass = nested node "class" "name" |> Option.bind itemClassOfWireName
+                        // Same resolver-field shape, same cost, same fail-soft as `class` above: a project
+                        // with no `Kind` field — which is every board today, including the live one —
+                        // reads `None` rather than failing the scan.
+                        BoardKind = nested node "kind" "name" |> Option.bind itemKindOfWireName
+                        // A CONNECTION `totalCount`, not a node selection, so it adds no nodes to the page.
+                        // Absent on a pull-request node (`comments` is selected only on `... on Issue`),
+                        // which reads `None` — "this reader did not look", never "no comments".
+                        CommentCount =
+                            match content.TryGetProperty "comments" with
+                            | true, comments ->
+                                match comments.TryGetProperty "totalCount" with
+                                | true, total when total.ValueKind = JsonValueKind.Number -> Some(total.GetInt32())
+                                | _ -> None
                             | _ -> None
-                        | _ -> None
-                      Severity =
-                        nested node "severity" "name"
-                        |> Option.bind severityOfWireName
-                        |> Option.defaultValue Unset
-                      // Same shape, same cost, same fail-soft as `class` above: a project with no `Phase`
-                      // field (every parity fixture, and any board but the live one) reads `None` rather
-                      // than failing the scan.
-                      Phase = nested node "phase" "name" |> Option.bind phaseOfWireName
-                      CreatedAt = str content "createdAt" |> instant
-                      // Filled only by the reconciling variant of the board document below.
-                      SweptBody = None
-                      NodeId = str content "id" }
+                        Severity =
+                            nested node "severity" "name"
+                            |> Option.bind severityOfWireName
+                            |> Option.defaultValue Unset
+                        // Same shape, same cost, same fail-soft as `class` above: a project with no `Phase`
+                        // field (every parity fixture, and any board but the live one) reads `None` rather
+                        // than failing the scan.
+                        Phase = nested node "phase" "name" |> Option.bind phaseOfWireName
+                        CreatedAt = str content "createdAt" |> instant
+                        // Filled only by the reconciling variant of the board document below.
+                        SweptBody = None
+                        NodeId = str content "id"
+                    }
 
-                if carrySweptBody && row.State = Closed && row.Status = Done && row.BoardClass.IsNone then
+                if
+                    carrySweptBody
+                    && row.State = Closed
+                    && row.Status = Done
+                    && row.BoardClass.IsNone
+                then
                     // Match `Reads.issueBody`: null is a successfully observed empty description. A
                     // missing or malformed scalar is different: it is an unreadable declaration and must
                     // reach the snapshot as such rather than suppressing the class projection.
@@ -353,7 +371,8 @@ module Scan =
                         match content.TryGetProperty "body" with
                         | true, body when body.ValueKind = JsonValueKind.String -> Ok(body.GetString())
                         | true, body when body.ValueKind = JsonValueKind.Null -> Ok ""
-                        | _ -> Error(Malformed(row.Ref.Short, "the reconciling board response has no readable issue body"))
+                        | _ ->
+                            Error(Malformed(row.Ref.Short, "the reconciling board response has no readable issue body"))
 
                     Some { row with SweptBody = Some swept }
                 else
@@ -404,6 +423,7 @@ module Scan =
             w.WriteString("repo", r.Ref.Repo)
             w.WriteNumber("number", r.Ref.Number)
             w.WriteString("title", r.Title)
+
             match r.NodeId with
             | Some id -> w.WriteString("nodeId", id)
             | None -> ()
@@ -486,55 +506,54 @@ module Scan =
                     match s "owner", s "repo", num with
                     | Some o, Some rp, Some n ->
                         Some
-                            { Ref = { Owner = o; Repo = rp; Number = n }
-                              Title = s "title" |> Option.defaultValue ""
-                              Status = s "status" |> Option.map boardStatusOf |> Option.defaultValue NoStatus
-                              BlockedByRaw = s "blockedBy" |> Option.defaultValue ""
-                              State =
-                                match s "state" with
-                                | Some "CLOSED" -> Closed
-                                | _ -> Open
-                              IsPullRequest =
-                                match e.TryGetProperty "isPullRequest" with
-                                | true, v -> v.ValueKind = JsonValueKind.True
-                                | _ -> false
-                              // Older cache rows predate #1732's independent path scope.  Their only
-                              // truthful interpretation is the historic one: the issue repository.
-                              PathRepo = s "pathRepo" |> Option.defaultValue rp
-                              // Absent on every cache entry written before .github#1588, and that reads
-                              // as `None` — the fail-closed direction. A stale entry then derives a
-                              // projection chore that rewrites the column it already holds, which costs
-                              // one idempotent board write; the opposite default would suppress a real
-                              // projection because an old cache said nothing.
-                              BoardClass = s "class" |> Option.bind itemClassOfWireName
-                              // Absent on every cache entry written before .github#2712, and that reads
-                              // as `None` — the fail-closed direction, exactly as `class` above: a stale
-                              // entry derives a projection chore that rewrites a column it already holds
-                              // (one idempotent write), where the opposite default would suppress a real
-                              // projection because an old cache said nothing.
-                              BoardKind = s "kind" |> Option.bind itemKindOfWireName
-                              CommentCount =
-                                match e.TryGetProperty "commentCount" with
-                                | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
-                                | _ -> None
-                              Severity =
-                                s "severity"
-                                |> Option.bind severityOfWireName
-                                |> Option.defaultValue Unset
-                              // Absent on every cache entry written before .github#1598, and that reads
-                              // as `None` — which ranks the row LAST rather than promoting it. A stale
-                              // cache therefore under-prioritises for at most one cache lifetime; the
-                              // opposite default would let an unread entry outrank the whole board.
-                              Phase = s "phase" |> Option.bind phaseOfWireName
-                              CreatedAt = s "createdAt" |> instant
-                              // NEVER ROUND-TRIPPED (.github#2254 repair 1) — `renderRows` above never
-                              // writes it, and `Cache.getScan` already refuses to SERVE a hit for
-                              // `Reconciling`/`Offering`, so every scan that could use it reaches
-                              // `scanFresh` fresh regardless. Carrying a cached census read forward here
-                              // would be the one way a `Scheduling` read could inherit a fact it never
-                              // paid for.
-                              SweptBody = None
-                              NodeId = s "nodeId" }
+                            {
+                                Ref = { Owner = o; Repo = rp; Number = n }
+                                Title = s "title" |> Option.defaultValue ""
+                                Status = s "status" |> Option.map boardStatusOf |> Option.defaultValue NoStatus
+                                BlockedByRaw = s "blockedBy" |> Option.defaultValue ""
+                                State =
+                                    match s "state" with
+                                    | Some "CLOSED" -> Closed
+                                    | _ -> Open
+                                IsPullRequest =
+                                    match e.TryGetProperty "isPullRequest" with
+                                    | true, v -> v.ValueKind = JsonValueKind.True
+                                    | _ -> false
+                                // Older cache rows predate #1732's independent path scope.  Their only
+                                // truthful interpretation is the historic one: the issue repository.
+                                PathRepo = s "pathRepo" |> Option.defaultValue rp
+                                // Absent on every cache entry written before .github#1588, and that reads
+                                // as `None` — the fail-closed direction. A stale entry then derives a
+                                // projection chore that rewrites the column it already holds, which costs
+                                // one idempotent board write; the opposite default would suppress a real
+                                // projection because an old cache said nothing.
+                                BoardClass = s "class" |> Option.bind itemClassOfWireName
+                                // Absent on every cache entry written before .github#2712, and that reads
+                                // as `None` — the fail-closed direction, exactly as `class` above: a stale
+                                // entry derives a projection chore that rewrites a column it already holds
+                                // (one idempotent write), where the opposite default would suppress a real
+                                // projection because an old cache said nothing.
+                                BoardKind = s "kind" |> Option.bind itemKindOfWireName
+                                CommentCount =
+                                    match e.TryGetProperty "commentCount" with
+                                    | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                                    | _ -> None
+                                Severity = s "severity" |> Option.bind severityOfWireName |> Option.defaultValue Unset
+                                // Absent on every cache entry written before .github#1598, and that reads
+                                // as `None` — which ranks the row LAST rather than promoting it. A stale
+                                // cache therefore under-prioritises for at most one cache lifetime; the
+                                // opposite default would let an unread entry outrank the whole board.
+                                Phase = s "phase" |> Option.bind phaseOfWireName
+                                CreatedAt = s "createdAt" |> instant
+                                // NEVER ROUND-TRIPPED (.github#2254 repair 1) — `renderRows` above never
+                                // writes it, and `Cache.getScan` already refuses to SERVE a hit for
+                                // `Reconciling`/`Offering`, so every scan that could use it reaches
+                                // `scanFresh` fresh regardless. Carrying a cached census read forward here
+                                // would be the one way a `Scheduling` read could inherit a fact it never
+                                // paid for.
+                                SweptBody = None
+                                NodeId = s "nodeId"
+                            }
                     | _ -> None)
                 |> List.ofSeq
                 |> Some
@@ -573,43 +592,55 @@ module Scan =
                    | None -> [])
 
             let request =
-                { Method = "POST"
-                  Path = "graphql"
-                  Query = []
-                  Body = Query(boardDoc, variables)
-                  Budget = GraphQl
-                  IfNoneMatch = None
-                  Subject = subject }
+                {
+                    Method = "POST"
+                    Path = "graphql"
+                    Query = []
+                    Body = Query(boardDoc, variables)
+                    Budget = GraphQl
+                    IfNoneMatch = None
+                    Subject = subject
+                }
 
             GraphQl.read transport request (fun data ->
                 let items =
-                    data
-                        .GetProperty(ownerField)
-                        .GetProperty("projectV2")
-                        .GetProperty("items")
+                    data.GetProperty(ownerField).GetProperty("projectV2").GetProperty("items")
 
-                GraphQl.page subject "the board scan" (fun (id, _, _) -> id)
+                GraphQl.page
+                    subject
+                    "the board scan"
+                    (fun (id, _, _) -> id)
                     (fun node ->
                         let stableId =
                             match node.TryGetProperty "id" with
-                            | true, id when id.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(id.GetString())) -> Some(id.GetString())
+                            | true, id when
+                                id.ValueKind = JsonValueKind.String
+                                && not (String.IsNullOrWhiteSpace(id.GetString()))
+                                ->
+                                Some(id.GetString())
                             | _ ->
                                 match node.TryGetProperty "content" with
                                 | true, content when content.ValueKind = JsonValueKind.Object ->
                                     match content.TryGetProperty "id" with
-                                    | true, id when id.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(id.GetString())) -> Some(id.GetString())
+                                    | true, id when
+                                        id.ValueKind = JsonValueKind.String
+                                        && not (String.IsNullOrWhiteSpace(id.GetString()))
+                                        ->
+                                        Some(id.GetString())
                                     | _ -> None
                                 | _ -> None
 
                         let row = parseRow carrySweptBody node
                         let issueRow = isIssueRowNode node
+
                         match stableId, row, issueRow with
                         | Some key, _, _ -> Ok(key, row, issueRow)
                         // A typed content identity is sufficient for old recorded test pages that omit
                         // ProjectV2Item.id; raw-node text is never an identity and cannot escape here.
                         | None, Some value, _ -> Ok("ref:" + value.Ref.Canonical, row, issueRow)
                         | None, None, false -> Ok("non-issue-card", row, issueRow)
-                        | None, None, true -> Error(Malformed(subject, "a board issue item omitted every typed stable identity")))
+                        | None, None, true ->
+                            Error(Malformed(subject, "a board issue item omitted every typed stable identity")))
                     items)
 
         match GraphQl.drain subject "the board scan" { MaxPages = 100; MaxItems = 10000 } fetchPage with
@@ -621,15 +652,28 @@ module Scan =
                 |> List.length
 
             if unreadableRows > 0 then
-                Error(Malformed(subject, $"the board scan returned %d{unreadableRows} item node(s) selected as an Issue or PullRequest whose `number`/`repository.nameWithOwner` could not be read — refusing to report a short board as a complete one"))
+                Error(
+                    Malformed(
+                        subject,
+                        $"the board scan returned %d{unreadableRows} item node(s) selected as an Issue or PullRequest whose `number`/`repository.nameWithOwner` could not be read — refusing to report a short board as a complete one"
+                    )
+                )
             else
-            let rows = parsed |> List.choose (fun (_, row, _) -> row)
-            match rows |> List.tryPick (fun row -> row.SweptBody |> Option.bind (function Error error -> Some error | Ok _ -> None)) with
-            | Some error -> Error error
-            | None ->
-                // A FAILED SCAN IS NEVER CACHED (#344), and `putScan` is what enforces it.
-                Cache.putScan owner title (renderRows rows) |> ignore
-                Ok rows
+                let rows = parsed |> List.choose (fun (_, row, _) -> row)
+
+                match
+                    rows
+                    |> List.tryPick (fun row ->
+                        row.SweptBody
+                        |> Option.bind (function
+                            | Error error -> Some error
+                            | Ok _ -> None))
+                with
+                | Some error -> Error error
+                | None ->
+                    // A FAILED SCAN IS NEVER CACHED (#344), and `putScan` is what enforces it.
+                    Cache.putScan owner title (renderRows rows) |> ignore
+                    Ok rows
 
     let board
         (transport: IGitHubTransport)
@@ -673,9 +717,11 @@ module Scan =
 
         if m.Success then
             Some
-                { Owner = m.Groups.["owner"].Value
-                  Repo = m.Groups.["repo"].Value
-                  Number = int m.Groups.["num"].Value }
+                {
+                    Owner = m.Groups.["owner"].Value
+                    Repo = m.Groups.["repo"].Value
+                    Number = int m.Groups.["num"].Value
+                }
         else
             let m = refRe.Match t
 
@@ -695,9 +741,11 @@ module Scan =
                         defaultOwner
 
                 Some
-                    { Owner = owner
-                      Repo = repo
-                      Number = int m.Groups.["num"].Value }
+                    {
+                        Owner = owner
+                        Repo = repo
+                        Number = int m.Groups.["num"].Value
+                    }
 
     // The board's `Blocked by` graph, for `Blockers.cycles` — resolved from the SCANNED ROWS ALONE, with
     // NO transport read (#1090).
@@ -735,27 +783,35 @@ module Scan =
                         // Prose in a dependency field is not a ref: it draws no edge (no `Ref`), and it
                         // BLOCKS every other reader — but a ring cannot run through a node it cannot name.
                         | None ->
-                            { Ref = None
-                              Raw = token
-                              State = BlockerUnparseable }
+                            {
+                                Ref = None
+                                Raw = token
+                                State = BlockerUnparseable
+                            }
                         | Some r ->
                             match Map.tryFind (r.Owner, r.Repo, r.Number) onBoard with
                             // FREE — the scan saw the target. OPEN blocks (a live ring edge); CLOSED is
                             // resolved and `Blockers.cycles` drops it, so a closed blocker breaks a ring.
                             | Some Open ->
-                                { Ref = Some r
-                                  Raw = r.Short
-                                  State = BlockerOpen }
+                                {
+                                    Ref = Some r
+                                    Raw = r.Short
+                                    State = BlockerOpen
+                                }
                             | Some Closed ->
-                                { Ref = Some r
-                                  Raw = r.Short
-                                  State = BlockerClosed }
+                                {
+                                    Ref = Some r
+                                    Raw = r.Short
+                                    State = BlockerClosed
+                                }
                             // OFF THE BOARD — not a node, so no ring edge whatever its state. Placeholder
                             // only; see the note above.
                             | None ->
-                                { Ref = Some r
-                                  Raw = r.Short
-                                  State = BlockerUnknown })
+                                {
+                                    Ref = Some r
+                                    Raw = r.Short
+                                    State = BlockerUnknown
+                                })
 
             row.Ref, blockers)
 
@@ -792,9 +848,7 @@ module Scan =
         | RvNames of string list
         | RvUnreadable of reason: string
 
-    type private FreshNodeFacts =
-        { Body: string
-          CommentCount: int }
+    type private FreshNodeFacts = { Body: string; CommentCount: int }
 
     [<Literal>]
     let private NodeFactsChunkSize = 100
@@ -816,9 +870,7 @@ module Scan =
 
         let readChunk (chunk: (string * string) list) : IoResult<(string * FreshNodeFacts) list> =
             let declarations =
-                chunk
-                |> List.mapi (fun i _ -> $"$id%d{i}: ID!")
-                |> String.concat ", "
+                chunk |> List.mapi (fun i _ -> $"$id%d{i}: ID!") |> String.concat ", "
 
             let selections =
                 chunk
@@ -830,57 +882,74 @@ module Scan =
             let variables = chunk |> List.mapi (fun i (id, _) -> $"id%d{i}", VId id)
 
             let request =
-                { Method = "POST"
-                  Path = "graphql"
-                  Query = []
-                  Body = Query(document, variables)
-                  Budget = GraphQl
-                  IfNoneMatch = None
-                  Subject = "fresh issue body and comment-count facts" }
+                {
+                    Method = "POST"
+                    Path = "graphql"
+                    Query = []
+                    Body = Query(document, variables)
+                    Budget = GraphQl
+                    IfNoneMatch = None
+                    Subject = "fresh issue body and comment-count facts"
+                }
 
             match transport.Send request with
             | Error e -> Error e
             | Ok response ->
                 GraphQl.decode request.Subject response.Body (fun data ->
-                        chunk
-                        |> List.mapi (fun i (expectedId, subject) ->
-                            let alias = $"n%d{i}"
-                            let node = data.GetProperty alias
+                    chunk
+                    |> List.mapi (fun i (expectedId, subject) ->
+                        let alias = $"n%d{i}"
+                        let node = data.GetProperty alias
 
-                            if node.ValueKind <> JsonValueKind.Object then
-                                Error(Malformed(subject, $"fresh node facts omitted %s{alias}"))
-                            else
-                                match str node "id", node.TryGetProperty "body", node.TryGetProperty "comments" with
-                                | Some actualId, (true, body), (true, comments) when actualId = expectedId && comments.ValueKind = JsonValueKind.Object ->
-                                    let text =
-                                        match body.ValueKind with
-                                        | JsonValueKind.String -> Ok(body.GetString())
-                                        | JsonValueKind.Null -> Ok ""
-                                        | _ -> Error(Malformed(subject, "fresh node facts have no readable issue body"))
+                        if node.ValueKind <> JsonValueKind.Object then
+                            Error(Malformed(subject, $"fresh node facts omitted %s{alias}"))
+                        else
+                            match str node "id", node.TryGetProperty "body", node.TryGetProperty "comments" with
+                            | Some actualId, (true, body), (true, comments) when
+                                actualId = expectedId && comments.ValueKind = JsonValueKind.Object
+                                ->
+                                let text =
+                                    match body.ValueKind with
+                                    | JsonValueKind.String -> Ok(body.GetString())
+                                    | JsonValueKind.Null -> Ok ""
+                                    | _ -> Error(Malformed(subject, "fresh node facts have no readable issue body"))
 
-                                    let count =
-                                        match comments.TryGetProperty "totalCount" with
-                                        | true, total when total.ValueKind = JsonValueKind.Number ->
-                                            let parsed, value = total.TryGetInt32()
-                                            if parsed && value >= 0 then Ok value
-                                            else Error(Malformed(subject, "fresh comment totalCount is invalid"))
-                                        | _ -> Error(Malformed(subject, "fresh node facts have no readable comment totalCount"))
+                                let count =
+                                    match comments.TryGetProperty "totalCount" with
+                                    | true, total when total.ValueKind = JsonValueKind.Number ->
+                                        let parsed, value = total.TryGetInt32()
 
-                                    match text, count with
-                                    | Ok body, Ok commentCount -> Ok(expectedId, { Body = body; CommentCount = commentCount })
-                                    | Error e, _
-                                    | _, Error e -> Error e
-                                | Some _, _, _ -> Error(Malformed(subject, "fresh node facts do not match the requested node id"))
-                                | None, _, _ -> Error(Malformed(subject, "fresh node facts have no readable node id")))
-                        |> List.fold
-                            (fun state next ->
-                                match state, next with
+                                        if parsed && value >= 0 then
+                                            Ok value
+                                        else
+                                            Error(Malformed(subject, "fresh comment totalCount is invalid"))
+                                    | _ ->
+                                        Error(
+                                            Malformed(subject, "fresh node facts have no readable comment totalCount")
+                                        )
+
+                                match text, count with
+                                | Ok body, Ok commentCount ->
+                                    Ok(
+                                        expectedId,
+                                        {
+                                            Body = body
+                                            CommentCount = commentCount
+                                        }
+                                    )
                                 | Error e, _
                                 | _, Error e -> Error e
-                                | Ok values, Ok value -> Ok(value :: values))
-                            (Ok [])
-                        |> Result.map List.rev
-                )
+                            | Some _, _, _ ->
+                                Error(Malformed(subject, "fresh node facts do not match the requested node id"))
+                            | None, _, _ -> Error(Malformed(subject, "fresh node facts have no readable node id")))
+                    |> List.fold
+                        (fun state next ->
+                            match state, next with
+                            | Error e, _
+                            | _, Error e -> Error e
+                            | Ok values, Ok value -> Ok(value :: values))
+                        (Ok [])
+                    |> Result.map List.rev)
 
         ids
         |> List.chunkBySize NodeFactsChunkSize
@@ -922,8 +991,7 @@ module Scan =
         // PRs are dropped BEFORE the scope, so the known-repo set `scope` reports names the repos with
         // items of WORK on the board — a repo carrying only PRs is not one a worker can be handed an
         // item in, and offering it as a spelling suggestion would be a lie in the shape of help.
-        let scoped =
-            rows |> List.filter (fun r -> not r.IsPullRequest) |> scope repo
+        let scoped = rows |> List.filter (fun r -> not r.IsPullRequest) |> scope repo
 
         let candidates = scoped.Rows
 
@@ -931,8 +999,7 @@ module Scan =
         // came from cache.  `NodeId` is only an address; accepting cached body/count would turn either into
         // the lower-bound lock decision this scan must never make.
         let activeRows =
-            candidates
-            |> List.filter (fun row -> row.State = Open || row.Status <> Done)
+            candidates |> List.filter (fun row -> row.State = Open || row.Status <> Done)
 
         let initialFailure, nodeFacts =
             match freshNodeFacts transport activeRows with
@@ -957,9 +1024,11 @@ module Scan =
                 // PROSE IN A DEPENDENCY FIELD BLOCKS. It is not a ref, we cannot look it up, and "I could
                 // not read this" is emphatically not "nothing is blocking".
                 Ok
-                    { Ref = None
-                      Raw = token.Trim()
-                      State = BlockerUnparseable }
+                    {
+                        Ref = None
+                        Raw = token.Trim()
+                        State = BlockerUnparseable
+                    }
 
             | Some r ->
                 match Map.tryFind (r.Owner, r.Repo, r.Number) onBoard with
@@ -971,12 +1040,14 @@ module Scan =
                     // SAME verdict (`Blockers.isResolved` clears on both), so #476's bug does not return: it
                     // was clearing on CLOSED *only* and treating MERGED as still-blocking.
                     Ok
-                        { Ref = Some r
-                          Raw = r.Short
-                          State =
-                            match row.State with
-                            | Open -> BlockerOpen
-                            | Closed -> BlockerClosed }
+                        {
+                            Ref = Some r
+                            Raw = r.Short
+                            State =
+                                match row.State with
+                                | Open -> BlockerOpen
+                                | Closed -> BlockerClosed
+                        }
 
                 | None ->
                     // OFF THE BOARD. One REST read — a PR is an issue in REST, so this answers both kinds
@@ -989,9 +1060,11 @@ module Scan =
                         offBoardSkipped <- offBoardSkipped + 1
 
                         Ok
-                            { Ref = Some r
-                              Raw = r.Short
-                              State = BlockerUnknown }
+                            {
+                                Ref = Some r
+                                Raw = r.Short
+                                State = BlockerUnknown
+                            }
                     else
                         match Reads.blockerState transport r.Owner r.Repo r.Number with
                         | Error e -> Error e
@@ -999,9 +1072,11 @@ module Scan =
                             offBoardResolved <- offBoardResolved + 1
 
                             Ok
-                                { Ref = Some r
-                                  Raw = r.Short
-                                  State = state }
+                                {
+                                    Ref = Some r
+                                    Raw = r.Short
+                                    State = state
+                                }
 
         let blockersOf (row: Row) : IoResult<Blocker list> =
             if String.IsNullOrWhiteSpace row.BlockedByRaw then
@@ -1117,335 +1192,335 @@ module Scan =
                 | Closed
                 | Open ->
 
-                let blockers = blockersOf row
+                    let blockers = blockersOf row
 
-                match blockers with
-                | Error e -> failure <- Some e
-                | Ok blockers ->
+                    match blockers with
+                    | Error e -> failure <- Some e
+                    | Ok blockers ->
 
-                // THE FRESH FACTS.  The GraphQL body scalar replaces the per-row REST issue read.  Its
-                // current `totalCount = 0` is the one cheap exact signal: no comment exists, therefore no
-                // claim marker exists.  Positive count never becomes a lower-bound marker decision; it
-                // takes the existing complete, uncached REST pagination, where an old stale-but-unreaped
-                // lowest-id marker remains a reservation until `reap` removes it.
-                let body, markers =
-                    match nodeFacts, row.NodeId with
-                    | Some facts, Some id ->
-                        match Map.tryFind id facts with
-                        | Some fact ->
-                            let markers =
-                                if fact.CommentCount = 0 then
-                                    Ok []
-                                else
-                                    Reads.markerScan transport row.Ref.Owner row.Ref.Repo row.Ref.Number
-                                    |> Result.bind (Reads.requireCompleteMarkerScan row.Ref.Short)
+                        // THE FRESH FACTS.  The GraphQL body scalar replaces the per-row REST issue read.  Its
+                        // current `totalCount = 0` is the one cheap exact signal: no comment exists, therefore no
+                        // claim marker exists.  Positive count never becomes a lower-bound marker decision; it
+                        // takes the existing complete, uncached REST pagination, where an old stale-but-unreaped
+                        // lowest-id marker remains a reservation until `reap` removes it.
+                        let body, markers =
+                            match nodeFacts, row.NodeId with
+                            | Some facts, Some id ->
+                                match Map.tryFind id facts with
+                                | Some fact ->
+                                    let markers =
+                                        if fact.CommentCount = 0 then
+                                            Ok []
+                                        else
+                                            Reads.markerScan transport row.Ref.Owner row.Ref.Repo row.Ref.Number
+                                            |> Result.bind (Reads.requireCompleteMarkerScan row.Ref.Short)
 
-                            Ok fact.Body, markers
-                        | None ->
-                            Error(Malformed(row.Ref.Short, "fresh node facts omitted the board row")), Ok []
-                    | _ ->
-                        Reads.issueBody transport row.Ref.Owner row.Ref.Repo row.Ref.Number,
-                        (Reads.markerScan transport row.Ref.Owner row.Ref.Repo row.Ref.Number
-                         |> Result.bind (Reads.requireCompleteMarkerScan row.Ref.Short))
+                                    Ok fact.Body, markers
+                                | None ->
+                                    Error(Malformed(row.Ref.Short, "fresh node facts omitted the board row")), Ok []
+                            | _ ->
+                                Reads.issueBody transport row.Ref.Owner row.Ref.Repo row.Ref.Number,
+                                (Reads.markerScan transport row.Ref.Owner row.Ref.Repo row.Ref.Number
+                                 |> Result.bind (Reads.requireCompleteMarkerScan row.Ref.Short))
 
-                match markers with
-                // A FAILED MARKER READ IS FATAL, and it is the one read that must be. Guessing the lock
-                // state from a failed read is the one thing a lock may never do — an empty answer would
-                // read as "nobody holds this" (#461), and the item would be handed to a second worker.
-                | Error e -> failure <- Some e
-                | Ok markers ->
+                        match markers with
+                        // A FAILED MARKER READ IS FATAL, and it is the one read that must be. Guessing the lock
+                        // state from a failed read is the one thing a lock may never do — an empty answer would
+                        // read as "nobody holds this" (#461), and the item would be handed to a second worker.
+                        | Error e -> failure <- Some e
+                        | Ok markers ->
 
-                // THE LOCK, NOT JUST THE LIVE WINNER. A stale-but-unreaped marker still holds the item (a
-                // lease is a clock; a lock is broken only by `reap`), so the RESERVATION reads `reserver`.
-                // The candidate's own `claim` block below is written from the same marker — its liveness
-                // then decides whether the item is offered (#581), while the reservation stands regardless.
-                let holder = Reads.reserver leaseMinutes markers
+                            // THE LOCK, NOT JUST THE LIVE WINNER. A stale-but-unreaped marker still holds the item (a
+                            // lease is a clock; a lock is broken only by `reap`), so the RESERVATION reads `reserver`.
+                            // The candidate's own `claim` block below is written from the same marker — its liveness
+                            // then decides whether the item is offered (#581), while the reservation stands regardless.
+                            let holder = Reads.reserver leaseMinutes markers
 
-                // #712/#581: read the proof of life ONCE. The claim block below RENDERS it and the
-                // reservation CARRIES its PR (arm A) — probing again for the reservation would pay the
-                // budget that dies first (#418) twice for one fact. Only a STALE marker is probed: a
-                // within-lease claim needs no proof of life, and a markerless row has no claim to be
-                // alive. A read we could not make is `LivenessUnknown`, never "no PR" (Reads.prAlive's
-                // #581 contract) — and it collapses to `livePr = None`, so `None` never means "unread".
-                let liveness: Liveness option =
-                    match holder with
-                    | Some m when Reads.isStale leaseMinutes m ->
-                        match Reads.prAlive transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
-                        | Ok l -> Some l
-                        | Error _ -> Some LivenessUnknown
-                    | Some _ -> Some LeaseHeld
-                    | None -> None
+                            // #712/#581: read the proof of life ONCE. The claim block below RENDERS it and the
+                            // reservation CARRIES its PR (arm A) — probing again for the reservation would pay the
+                            // budget that dies first (#418) twice for one fact. Only a STALE marker is probed: a
+                            // within-lease claim needs no proof of life, and a markerless row has no claim to be
+                            // alive. A read we could not make is `LivenessUnknown`, never "no PR" (Reads.prAlive's
+                            // #581 contract) — and it collapses to `livePr = None`, so `None` never means "unread".
+                            let liveness: Liveness option =
+                                match holder with
+                                | Some m when Reads.isStale leaseMinutes m ->
+                                    match Reads.prAlive transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
+                                    | Ok l -> Some l
+                                    | Error _ -> Some LivenessUnknown
+                                | Some _ -> Some LeaseHeld
+                                | None -> None
 
-                w.WriteStartObject()
+                            w.WriteStartObject()
 
-                // A REF IS THREE FIELDS ON THE WIRE, not one string. `FS.GG.SDD#42` is the DISPLAY form; the
-                // codec carries owner, repo and number apart, because a ref that has to be re-parsed on the
-                // far side is a ref that can be re-parsed WRONG — and the `Blocked by` free-text field is
-                // already the cautionary tale for exactly that (#435, #497, #548).
-                w.WriteString("owner", row.Ref.Owner)
-                w.WriteString("repo", row.Ref.Repo)
-                w.WriteNumber("number", row.Ref.Number)
-                w.WriteString("status", statusWireName row.Status)
+                            // A REF IS THREE FIELDS ON THE WIRE, not one string. `FS.GG.SDD#42` is the DISPLAY form; the
+                            // codec carries owner, repo and number apart, because a ref that has to be re-parsed on the
+                            // far side is a ref that can be re-parsed WRONG — and the `Blocked by` free-text field is
+                            // already the cautionary tale for exactly that (#435, #497, #548).
+                            w.WriteString("owner", row.Ref.Owner)
+                            w.WriteString("repo", row.Ref.Repo)
+                            w.WriteNumber("number", row.Ref.Number)
+                            w.WriteString("status", statusWireName row.Status)
 
-                w.WriteString(
-                    "state",
-                    match row.State with
-                    | Open -> "OPEN"
-                    | Closed -> "CLOSED"
-                )
+                            w.WriteString(
+                                "state",
+                                match row.State with
+                                | Open -> "OPEN"
+                                | Closed -> "CLOSED"
+                            )
 
-                match body with
-                | Ok text -> w.WriteString("body", text)
-                | Error e ->
-                    bodiesUnreadable <- bodiesUnreadable + 1
-                    w.WriteString("bodyUnreadable", explain e)
+                            match body with
+                            | Ok text -> w.WriteString("body", text)
+                            | Error e ->
+                                bodiesUnreadable <- bodiesUnreadable + 1
+                                w.WriteString("bodyUnreadable", explain e)
 
-                w.WriteStartArray("blockers")
+                            w.WriteStartArray("blockers")
 
-                for b in blockers do
-                    w.WriteStartObject()
+                            for b in blockers do
+                                w.WriteStartObject()
 
-                    match b.Ref with
-                    | Some r ->
-                        w.WriteString("owner", r.Owner)
-                        w.WriteString("repo", r.Repo)
-                        w.WriteNumber("number", r.Number)
-                    // AN UNPARSEABLE BLOCKER HAS NO REF, AND THAT IS ITS WHOLE POINT. Prose in a dependency
-                    // field is not a ref — it has no owner, no repo and no number — and it STILL BLOCKS.
-                    | None -> ()
+                                match b.Ref with
+                                | Some r ->
+                                    w.WriteString("owner", r.Owner)
+                                    w.WriteString("repo", r.Repo)
+                                    w.WriteNumber("number", r.Number)
+                                // AN UNPARSEABLE BLOCKER HAS NO REF, AND THAT IS ITS WHOLE POINT. Prose in a dependency
+                                // field is not a ref — it has no owner, no repo and no number — and it STILL BLOCKS.
+                                | None -> ()
 
-                    w.WriteString("raw", b.Raw)
-                    w.WriteString("state", blockerStateName b.State)
-                    w.WriteEndObject()
+                                w.WriteString("raw", b.Raw)
+                                w.WriteString("state", blockerStateName b.State)
+                                w.WriteEndObject()
 
-                w.WriteEndArray()
+                            w.WriteEndArray()
 
-                match holder with
-                | None -> ()
-                | Some m ->
-                    w.WriteStartObject "claim"
-                    w.WriteString("worker", m.Worker.Value)
-                    w.WriteNumber("ageSeconds", m.AgeSeconds)
+                            match holder with
+                            | None -> ()
+                            | Some m ->
+                                w.WriteStartObject "claim"
+                                w.WriteString("worker", m.Worker.Value)
+                                w.WriteNumber("ageSeconds", m.AgeSeconds)
 
-                    match m.Session with
-                    | Some(SessionId s) -> w.WriteString("session", s)
-                    | None -> ()
+                                match m.Session with
+                                | Some(SessionId s) -> w.WriteString("session", s)
+                                | None -> ()
 
-                    match m.PreviousStatus with
-                    | Some s -> w.WriteString("prevStatus", statusWireName s)
-                    | None -> ()
+                                match m.PreviousStatus with
+                                | Some s -> w.WriteString("prevStatus", statusWireName s)
+                                | None -> ()
 
-                    // LIVENESS. The lease alone may not decide abandonment (#581), so an EXPIRED lease sends
-                    // us to look for the item's own `item/<n>-*` PR — server-side proof of life. A read we
-                    // could not make is `unknown`, never "no PR". Rendered from the single read above (#712).
-                    w.WriteStartObject "liveness"
+                                // LIVENESS. The lease alone may not decide abandonment (#581), so an EXPIRED lease sends
+                                // us to look for the item's own `item/<n>-*` PR — server-side proof of life. A read we
+                                // could not make is `unknown`, never "no PR". Rendered from the single read above (#712).
+                                w.WriteStartObject "liveness"
 
-                    match liveness with
-                    | Some(LeaseExpiredPrOpen pr) ->
-                        w.WriteString("kind", "lease-expired-pr-open")
-                        w.WriteNumber("pr", pr)
-                    | Some LeaseExpiredNoPr -> w.WriteString("kind", "lease-expired-no-pr")
-                    | Some LeaseExpiredBranchPushed -> w.WriteString("kind", "lease-expired-branch-pushed")
-                    | Some LeaseHeld -> w.WriteString("kind", "lease-held")
-                    | Some LivenessUnknown -> w.WriteString("kind", "unknown")
-                    // Unreachable: this block is entered only under `Some m`, where `liveness` is `Some _`.
-                    | None -> w.WriteString("kind", "lease-held")
+                                match liveness with
+                                | Some(LeaseExpiredPrOpen pr) ->
+                                    w.WriteString("kind", "lease-expired-pr-open")
+                                    w.WriteNumber("pr", pr)
+                                | Some LeaseExpiredNoPr -> w.WriteString("kind", "lease-expired-no-pr")
+                                | Some LeaseExpiredBranchPushed -> w.WriteString("kind", "lease-expired-branch-pushed")
+                                | Some LeaseHeld -> w.WriteString("kind", "lease-held")
+                                | Some LivenessUnknown -> w.WriteString("kind", "unknown")
+                                // Unreachable: this block is entered only under `Some m`, where `liveness` is `Some _`.
+                                | None -> w.WriteString("kind", "lease-held")
 
-                    w.WriteEndObject()
-                    w.WriteEndObject()
+                                w.WriteEndObject()
+                                w.WriteEndObject()
 
-                // #651 — a MARKERLESS item with an open `item/<n>-*` PR is a duplicate implementation
-                // already in flight. #581's proof-of-life read the PR only THROUGH a claim marker, so a
-                // Ready/Backlog row whose marker never existed (or was cleaned) fell through to `Startable`
-                // and got handed out a second time. Probe it here — only when there is NO marker (a marker
-                // carries its own liveness above, and offering it is decided by that). An unreadable probe
-                // writes nothing: #651 is a false NEGATIVE we are closing, not a new fail-closed surface.
-                //
-                // #651's OWN JUSTIFICATION FOR THAT — *"fail open to the disjointness check, exactly as a
-                // markerless row behaved before"* — IS TRUE ONLY OF ITS OWN POPULATION, AND IS DELETED HERE
-                // RATHER THAN LEFT TO COVER THE NEW ONE (.github#1738). It holds for a `Ready`/`Backlog` row:
-                // step 5b failing open lands on step 6, disjointness, and offering a row is read-only and
-                // re-decided next scan. It does NOT hold for the `Blocked` rows probed below — step 2 answers
-                // `WrongStatus Blocked` and step 6 is never reached, so there is no disjointness check to
-                // fall open to. What that arm falls open into now is a BOARD WRITE, and the paragraph at the
-                // end of this block is where that is stated. A justification that outlives the population it
-                // was measured on is how a fail-open keeps its cover.
-                //
-                // WHICH COLUMNS ARE PROBED IS THE WHOLE QUESTION, AND `Ready`/`Backlog` ALONE WAS THE WRONG
-                // ANSWER (.github#1738). That set is "the columns a scheduler would OFFER" — the right
-                // subject while `Item.ItemPr`'s only consumer was `Schedulability` step 5b, which is asked
-                // about a row's column AS IT STANDS. It is the wrong subject for the OTHER consumer:
-                // `Chore`'s `BLOCKER-CLEARED` reads the same field to decide whether to WRITE `Ready` onto a
-                // `Blocked` row — the column that makes the row offerable NEXT pass. A `Blocked` row was
-                // never probed, so `ItemPr` was `None` for every single one of them, and the gate that reads
-                // it could never see its subject: green, and blind (#266). Measured on `.github` on
-                // 2026-07-29 — `#1689` is `Blocked` with PR #1911 open on `item/1689-*`, and the snapshot
-                // reported `itemPr: null` for it.
-                //
-                // SO THE PROBE ALSO COVERS THE `BLOCKER-CLEARED` CANDIDATE SET — bounded by the blocker
-                // precondition, and asking `Blockers.cleared` rather than spelling it. Not every `Blocked`
-                // row: only one with at least one blocker and EVERY blocker resolved. `blockers` is already
-                // resolved above, so deciding this costs no read.
-                //
-                // IT IS A SUPERSET OF THE FIRING SET, NOT AN EQUAL — and that direction is the safe one.
-                // `BLOCKER-CLEARED` also requires `humanBlockAllowsFlip` and `predicateAllowsFlip`, so a
-                // human-parked row is probed and will never fire. Narrowing to match all three would make
-                // this population depend on THREE of `Chore`'s gates and drift three ways — and a probe
-                // NARROWER than the rule is the failure this change exists to end (a gate that cannot see
-                // its subject), while a probe wider than the rule costs only requests. One gate, the cheap
-                // and stable one, shared as a `val`.
-                //
-                // THE BOUND IS THE BUDGET ARGUMENT, NOT TIDINESS. This is a REST request per row, on the
-                // budget the claim lock lives on (ADR-0034 §3, #418), and a blanket `| Open, _ ->` would
-                // spend one on every parked, in-progress and blocked row on the board, every scan. Bounded
-                // this way the extra cost is at most one request per row whose blockers have just cleared —
-                // measured at ZERO additional requests on `.github`'s live board, whose one
-                // blocker-carrying `Blocked` row still has an open blocker.
-                //
-                // AND THE `| _ -> ()` BELOW IS A KNOWN FAIL-OPEN WITH A NEW CONSUMER — .github#1924.
-                // `Reads.prAlive : IoResult<Liveness>` has FIVE outcomes and this field carries ONE, so
-                // THREE collapse to "no PR" — count them, because the third is the expensive one:
-                //   * `Ok LeaseExpiredBranchPushed` — #1055's pushed branch, work in flight before its PR;
-                //   * `Ok LivenessUnknown` — the read failed;
-                //   * `Error _`, INCLUDING `RateLimited`, which `Reads.prAlive` propagates DELIBERATELY
-                //     ("an exhausted budget is a fact about the CLIENT, not about this item's PR") and this
-                //     arm then swallows. Rate limiting is SYSTEMIC, not per-row, so one exhausted scan
-                //     answers "no PR" for every row it probes and promotes all of them in one pass — which
-                //     is the shape of the multi-row event #1738 was filed off.
-                // That collapse was #651's deliberate choice while the only consumer was step 5b, which
-                // fails open into OFFERING — read-only, and corrected by the next scan. `BLOCKER-CLEARED`
-                // fails open into a board WRITE, which `choresFor`'s header calls the asymmetry that makes
-                // the mechanism safe to run unattended. Closing it needs a receipt this wire fact cannot
-                // carry, so it is filed rather than bodged: see .github#1924.
-                match holder with
-                | Some _ when row.State = Open && (row.Status = InProgress || row.Status = InReview) ->
-                    // A live claim can already have crossed the implementation/review boundary — OR
-                    // ALREADY CROSSED IT (.github#2450). The bound used to be `InProgress` alone, on the
-                    // reasoning that it is "the one column whose next lifecycle projection is `In review`".
-                    // That reasoning covered `LifecycleProjectionLag`'s FIRST caller
-                    // (the retired lifecycle chore's reserved branch, `In progress` ->
-                    // `In review`) and missed its SECOND: `Client.fs`'s lifecycle projector reads this SAME
-                    // `itemPr` field for a row that is ALREADY `In review`, to decide whether it STAYS
-                    // there. Unprobed, that read sees `None` — a live claim with no PR fact — and projects
-                    // the row BACKWARD to `In progress`, on every reconcile pass, for as long as the review
-                    // lasts (each state is then the other's trigger, since `In progress` IS probed). This
-                    // is the same failure shape `BLOCKER-CLEARED` hit at Scan.fs:1240-1246 one consumer
-                    // earlier: a probe bounded to the first consumer's column left a second, later consumer
-                    // blind to its own subject.
-                    //
-                    // THE BOUND IS STILL A BUDGET BOUND, NOT `| Open, _ ->`. Widening from one column to
-                    // two costs at most one additional REST request per row that is claimed, Open, and
-                    // currently `In review` — exactly the population the review handoff (required of every
-                    // worker, on every item, by this same protocol) puts there, and no more:
-                    // `Ready`/`Backlog`/cleared-`Blocked` keep their own narrower arms below, and
-                    // `Done`/other `Closed` rows are never probed here at all. `prAlive` supplies either
-                    // the actual item PR or an explicit unreadable receipt, never a fabricated negative.
-                    match Reads.prAlive transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
-                    | Ok(LeaseExpiredPrOpen pr) -> w.WriteNumber("itemPr", pr)
-                    | Ok LivenessUnknown
-                    | Error _ -> w.WriteBoolean("itemPrUnreadable", true)
-                    | _ -> ()
-                | Some _ -> ()
-                | None ->
-                    let probe () =
-                        match Reads.prAlive transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
-                        | Ok(LeaseExpiredPrOpen pr) -> w.WriteNumber("itemPr", pr)
-                        | Ok LivenessUnknown
-                        | Error _ -> w.WriteBoolean("itemPrUnreadable", true)
-                        | _ -> ()
+                            // #651 — a MARKERLESS item with an open `item/<n>-*` PR is a duplicate implementation
+                            // already in flight. #581's proof-of-life read the PR only THROUGH a claim marker, so a
+                            // Ready/Backlog row whose marker never existed (or was cleaned) fell through to `Startable`
+                            // and got handed out a second time. Probe it here — only when there is NO marker (a marker
+                            // carries its own liveness above, and offering it is decided by that). An unreadable probe
+                            // writes nothing: #651 is a false NEGATIVE we are closing, not a new fail-closed surface.
+                            //
+                            // #651's OWN JUSTIFICATION FOR THAT — *"fail open to the disjointness check, exactly as a
+                            // markerless row behaved before"* — IS TRUE ONLY OF ITS OWN POPULATION, AND IS DELETED HERE
+                            // RATHER THAN LEFT TO COVER THE NEW ONE (.github#1738). It holds for a `Ready`/`Backlog` row:
+                            // step 5b failing open lands on step 6, disjointness, and offering a row is read-only and
+                            // re-decided next scan. It does NOT hold for the `Blocked` rows probed below — step 2 answers
+                            // `WrongStatus Blocked` and step 6 is never reached, so there is no disjointness check to
+                            // fall open to. What that arm falls open into now is a BOARD WRITE, and the paragraph at the
+                            // end of this block is where that is stated. A justification that outlives the population it
+                            // was measured on is how a fail-open keeps its cover.
+                            //
+                            // WHICH COLUMNS ARE PROBED IS THE WHOLE QUESTION, AND `Ready`/`Backlog` ALONE WAS THE WRONG
+                            // ANSWER (.github#1738). That set is "the columns a scheduler would OFFER" — the right
+                            // subject while `Item.ItemPr`'s only consumer was `Schedulability` step 5b, which is asked
+                            // about a row's column AS IT STANDS. It is the wrong subject for the OTHER consumer:
+                            // `Chore`'s `BLOCKER-CLEARED` reads the same field to decide whether to WRITE `Ready` onto a
+                            // `Blocked` row — the column that makes the row offerable NEXT pass. A `Blocked` row was
+                            // never probed, so `ItemPr` was `None` for every single one of them, and the gate that reads
+                            // it could never see its subject: green, and blind (#266). Measured on `.github` on
+                            // 2026-07-29 — `#1689` is `Blocked` with PR #1911 open on `item/1689-*`, and the snapshot
+                            // reported `itemPr: null` for it.
+                            //
+                            // SO THE PROBE ALSO COVERS THE `BLOCKER-CLEARED` CANDIDATE SET — bounded by the blocker
+                            // precondition, and asking `Blockers.cleared` rather than spelling it. Not every `Blocked`
+                            // row: only one with at least one blocker and EVERY blocker resolved. `blockers` is already
+                            // resolved above, so deciding this costs no read.
+                            //
+                            // IT IS A SUPERSET OF THE FIRING SET, NOT AN EQUAL — and that direction is the safe one.
+                            // `BLOCKER-CLEARED` also requires `humanBlockAllowsFlip` and `predicateAllowsFlip`, so a
+                            // human-parked row is probed and will never fire. Narrowing to match all three would make
+                            // this population depend on THREE of `Chore`'s gates and drift three ways — and a probe
+                            // NARROWER than the rule is the failure this change exists to end (a gate that cannot see
+                            // its subject), while a probe wider than the rule costs only requests. One gate, the cheap
+                            // and stable one, shared as a `val`.
+                            //
+                            // THE BOUND IS THE BUDGET ARGUMENT, NOT TIDINESS. This is a REST request per row, on the
+                            // budget the claim lock lives on (ADR-0034 §3, #418), and a blanket `| Open, _ ->` would
+                            // spend one on every parked, in-progress and blocked row on the board, every scan. Bounded
+                            // this way the extra cost is at most one request per row whose blockers have just cleared —
+                            // measured at ZERO additional requests on `.github`'s live board, whose one
+                            // blocker-carrying `Blocked` row still has an open blocker.
+                            //
+                            // AND THE `| _ -> ()` BELOW IS A KNOWN FAIL-OPEN WITH A NEW CONSUMER — .github#1924.
+                            // `Reads.prAlive : IoResult<Liveness>` has FIVE outcomes and this field carries ONE, so
+                            // THREE collapse to "no PR" — count them, because the third is the expensive one:
+                            //   * `Ok LeaseExpiredBranchPushed` — #1055's pushed branch, work in flight before its PR;
+                            //   * `Ok LivenessUnknown` — the read failed;
+                            //   * `Error _`, INCLUDING `RateLimited`, which `Reads.prAlive` propagates DELIBERATELY
+                            //     ("an exhausted budget is a fact about the CLIENT, not about this item's PR") and this
+                            //     arm then swallows. Rate limiting is SYSTEMIC, not per-row, so one exhausted scan
+                            //     answers "no PR" for every row it probes and promotes all of them in one pass — which
+                            //     is the shape of the multi-row event #1738 was filed off.
+                            // That collapse was #651's deliberate choice while the only consumer was step 5b, which
+                            // fails open into OFFERING — read-only, and corrected by the next scan. `BLOCKER-CLEARED`
+                            // fails open into a board WRITE, which `choresFor`'s header calls the asymmetry that makes
+                            // the mechanism safe to run unattended. Closing it needs a receipt this wire fact cannot
+                            // carry, so it is filed rather than bodged: see .github#1924.
+                            match holder with
+                            | Some _ when row.State = Open && (row.Status = InProgress || row.Status = InReview) ->
+                                // A live claim can already have crossed the implementation/review boundary — OR
+                                // ALREADY CROSSED IT (.github#2450). The bound used to be `InProgress` alone, on the
+                                // reasoning that it is "the one column whose next lifecycle projection is `In review`".
+                                // That reasoning covered `LifecycleProjectionLag`'s FIRST caller
+                                // (the retired lifecycle chore's reserved branch, `In progress` ->
+                                // `In review`) and missed its SECOND: `Client.fs`'s lifecycle projector reads this SAME
+                                // `itemPr` field for a row that is ALREADY `In review`, to decide whether it STAYS
+                                // there. Unprobed, that read sees `None` — a live claim with no PR fact — and projects
+                                // the row BACKWARD to `In progress`, on every reconcile pass, for as long as the review
+                                // lasts (each state is then the other's trigger, since `In progress` IS probed). This
+                                // is the same failure shape `BLOCKER-CLEARED` hit at Scan.fs:1240-1246 one consumer
+                                // earlier: a probe bounded to the first consumer's column left a second, later consumer
+                                // blind to its own subject.
+                                //
+                                // THE BOUND IS STILL A BUDGET BOUND, NOT `| Open, _ ->`. Widening from one column to
+                                // two costs at most one additional REST request per row that is claimed, Open, and
+                                // currently `In review` — exactly the population the review handoff (required of every
+                                // worker, on every item, by this same protocol) puts there, and no more:
+                                // `Ready`/`Backlog`/cleared-`Blocked` keep their own narrower arms below, and
+                                // `Done`/other `Closed` rows are never probed here at all. `prAlive` supplies either
+                                // the actual item PR or an explicit unreadable receipt, never a fabricated negative.
+                                match Reads.prAlive transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
+                                | Ok(LeaseExpiredPrOpen pr) -> w.WriteNumber("itemPr", pr)
+                                | Ok LivenessUnknown
+                                | Error _ -> w.WriteBoolean("itemPrUnreadable", true)
+                                | _ -> ()
+                            | Some _ -> ()
+                            | None ->
+                                let probe () =
+                                    match Reads.prAlive transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
+                                    | Ok(LeaseExpiredPrOpen pr) -> w.WriteNumber("itemPr", pr)
+                                    | Ok LivenessUnknown
+                                    | Error _ -> w.WriteBoolean("itemPrUnreadable", true)
+                                    | _ -> ()
 
-                    // .github#2384 — THE MARKERLESS MATE OF #2450, ONE CONSUMER LATER AGAIN. `In review` was
-                    // never a member of THIS arm's population either: an UNCLAIMED, `Open`, `In review` row
-                    // fell to `| _ -> ()` exactly as a CLAIMED one did before #2450, so `ItemPr` was absent
-                    // for it too. The lifecycle intent reducer (`Client.fs`) reads the same `itemPr` fact
-                    // for a markerless row precisely as it does for a claimed one — `Claim.Value = None` only
-                    // changes which branch of `project` decides the destination, not whether `PullRequest`
-                    // must be populated to decide it correctly. Unprobed, `PullRequest.Value = None` and an
-                    // unclaimed `In review` row with a genuinely open PR falls through `project`'s cascade
-                    // straight to its `Ready` default — flipping a row that is correctly `In review` back to
-                    // `Ready`, and since `Ready` IS probed, the very next pass finds the same open PR and
-                    // flips forward to `In review` again. Each state is again the other's trigger: this is
-                    // `.github#2216`'s oscillation (the issue's own repro), not a new one.
-                    //
-                    // THE BOUND IS UNCHANGED IN SHAPE: one more named column, not `| Open, _ ->`. The extra
-                    // cost is at most one REST request per row that is UNCLAIMED, `Open`, and currently
-                    // `In review` — exactly the population a review left parked with no live claim (a
-                    // released or reaped lease during review) puts there, and no more. `Blocked` keeps its
-                    // own `Blockers.cleared`-gated arm below; every other column stays unprobed.
-                    match row.State, row.Status with
-                    | Open, (Ready | Backlog | InReview) -> probe ()
-                    | Open, Blocked when Blockers.cleared blockers -> probe ()
-                    | _ -> ()
+                                // .github#2384 — THE MARKERLESS MATE OF #2450, ONE CONSUMER LATER AGAIN. `In review` was
+                                // never a member of THIS arm's population either: an UNCLAIMED, `Open`, `In review` row
+                                // fell to `| _ -> ()` exactly as a CLAIMED one did before #2450, so `ItemPr` was absent
+                                // for it too. The lifecycle intent reducer (`Client.fs`) reads the same `itemPr` fact
+                                // for a markerless row precisely as it does for a claimed one — `Claim.Value = None` only
+                                // changes which branch of `project` decides the destination, not whether `PullRequest`
+                                // must be populated to decide it correctly. Unprobed, `PullRequest.Value = None` and an
+                                // unclaimed `In review` row with a genuinely open PR falls through `project`'s cascade
+                                // straight to its `Ready` default — flipping a row that is correctly `In review` back to
+                                // `Ready`, and since `Ready` IS probed, the very next pass finds the same open PR and
+                                // flips forward to `In review` again. Each state is again the other's trigger: this is
+                                // `.github#2216`'s oscillation (the issue's own repro), not a new one.
+                                //
+                                // THE BOUND IS UNCHANGED IN SHAPE: one more named column, not `| Open, _ ->`. The extra
+                                // cost is at most one REST request per row that is UNCLAIMED, `Open`, and currently
+                                // `In review` — exactly the population a review left parked with no live claim (a
+                                // released or reaped lease during review) puts there, and no more. `Blocked` keeps its
+                                // own `Blockers.cleared`-gated arm below; every other column stays unprobed.
+                                match row.State, row.Status with
+                                | Open, (Ready | Backlog | InReview) -> probe ()
+                                | Open, Blocked when Blockers.cleared blockers -> probe ()
+                                | _ -> ()
 
-                w.WriteEndObject()
+                            w.WriteEndObject()
 
-                // THE RESERVATION (arm A of bash's `active_claims`, plus the lock #461). It comes from the
-                // body we ALREADY read — one read, two uses — and it is what stops a second worker being
-                // handed the same files. Two kinds hold a touch-set here:
-                //   • a MARKER (live or stale): named by its worker/item — a lock is a lock (#461/#581).
-                //   • a MARKERLESS `In progress` row: something is evidently editing those files, so it
-                //     reserves too — but there is no worker to name and no lease to wait out, so it is
-                //     `Unowned`. Dressing it up as a holder would send a worker to wait for a marker that is
-                //     never coming (#428). Only the `In progress` COLUMN licenses this: a Ready/Backlog row
-                //     with no marker reserves nothing, because nobody is working it.
-                //
-                // WHERE THIS AGREES WITH THE #353 COLLISION SCAN, AND THE ONE PLACE IT DOES NOT (.github#1792).
-                // `Client.activeCollisions` — behind `overlap --active`, `widen`, `set-paths` — answers the
-                // same question ("who has reserved these files") for the OTHER half of the protocol, and the
-                // two used to disagree about a LAPSED lease: this arm read `Reads.reserver`, that one read
-                // `Reads.winner`, so the scheduler could hold an item reserved while the collision gate called
-                // its files free. #1792 settled that in `reserver`'s favour AT BOTH SITES — a lease is a clock,
-                // a lock is broken only by `reap` (#461/#581) — so MARKER-BACKED reservations now agree
-                // exactly, live or lapsed.
-                //
-                // THE SECOND BULLET ABOVE IS THE DELIBERATE REMAINDER. `RUnowned` is derived from the COLUMN,
-                // and #1779 keyed `activeCollisions` on the marker instead — its candidate set is
-                // `Reads.openIssues`, which has no board state in it — so this reservation is unreachable
-                // there by construction, not by omission. Closing that would cost the collision gate a board
-                // read per call (the GraphQL half #1779 drove to zero, on a verb workers loop, #418/#1666),
-                // and would buy a stop with no protocol exit: a markerless row has nobody to `say` to and no
-                // marker to `reap`, which the scheduler can absorb and a gate a worker is told to believe
-                // cannot. So the rule is: THE TWO SURFACES AGREE ON EVERY MARKER, LIVE OR LAPSED, AND DIVERGE
-                // ONLY WHERE THERE IS NO MARKER. `activeCollisions` carries the same sentence, and
-                // `ApplicationServiceTests` pins both halves so the divergence stays a decision rather than
-                // an accident.
-                // #712: carry the #581 proof of life onto the reservation. `Some pr` ONLY for a lapsed
-                // lease held open by a PR — every other liveness (within lease, no PR, unread) is `None`,
-                // "no proof of life", so the reservation never claims a liveness it does not have.
-                let livePr =
-                    match liveness with
-                    | Some(LeaseExpiredPrOpen pr) -> Some pr
-                    | _ -> None
+                            // THE RESERVATION (arm A of bash's `active_claims`, plus the lock #461). It comes from the
+                            // body we ALREADY read — one read, two uses — and it is what stops a second worker being
+                            // handed the same files. Two kinds hold a touch-set here:
+                            //   • a MARKER (live or stale): named by its worker/item — a lock is a lock (#461/#581).
+                            //   • a MARKERLESS `In progress` row: something is evidently editing those files, so it
+                            //     reserves too — but there is no worker to name and no lease to wait out, so it is
+                            //     `Unowned`. Dressing it up as a holder would send a worker to wait for a marker that is
+                            //     never coming (#428). Only the `In progress` COLUMN licenses this: a Ready/Backlog row
+                            //     with no marker reserves nothing, because nobody is working it.
+                            //
+                            // WHERE THIS AGREES WITH THE #353 COLLISION SCAN, AND THE ONE PLACE IT DOES NOT (.github#1792).
+                            // `Client.activeCollisions` — behind `overlap --active`, `widen`, `set-paths` — answers the
+                            // same question ("who has reserved these files") for the OTHER half of the protocol, and the
+                            // two used to disagree about a LAPSED lease: this arm read `Reads.reserver`, that one read
+                            // `Reads.winner`, so the scheduler could hold an item reserved while the collision gate called
+                            // its files free. #1792 settled that in `reserver`'s favour AT BOTH SITES — a lease is a clock,
+                            // a lock is broken only by `reap` (#461/#581) — so MARKER-BACKED reservations now agree
+                            // exactly, live or lapsed.
+                            //
+                            // THE SECOND BULLET ABOVE IS THE DELIBERATE REMAINDER. `RUnowned` is derived from the COLUMN,
+                            // and #1779 keyed `activeCollisions` on the marker instead — its candidate set is
+                            // `Reads.openIssues`, which has no board state in it — so this reservation is unreachable
+                            // there by construction, not by omission. Closing that would cost the collision gate a board
+                            // read per call (the GraphQL half #1779 drove to zero, on a verb workers loop, #418/#1666),
+                            // and would buy a stop with no protocol exit: a markerless row has nobody to `say` to and no
+                            // marker to `reap`, which the scheduler can absorb and a gate a worker is told to believe
+                            // cannot. So the rule is: THE TWO SURFACES AGREE ON EVERY MARKER, LIVE OR LAPSED, AND DIVERGE
+                            // ONLY WHERE THERE IS NO MARKER. `activeCollisions` carries the same sentence, and
+                            // `ApplicationServiceTests` pins both halves so the divergence stays a decision rather than
+                            // an accident.
+                            // #712: carry the #581 proof of life onto the reservation. `Some pr` ONLY for a lapsed
+                            // lease held open by a PR — every other liveness (within lease, no PR, unread) is `None`,
+                            // "no proof of life", so the reservation never claims a liveness it does not have.
+                            let livePr =
+                                match liveness with
+                                | Some(LeaseExpiredPrOpen pr) -> Some pr
+                                | _ -> None
 
-                let reserveAs =
-                    match holder with
-                    | Some m -> Some(RClaim(m.Worker, row.Ref, m.AgeSeconds, livePr))
-                    | None when row.Status = InProgress -> Some(RUnowned row.Ref)
-                    | None -> None
+                            let reserveAs =
+                                match holder with
+                                | Some m -> Some(RClaim(m.Worker, row.Ref, m.AgeSeconds, livePr))
+                                | None when row.Status = InProgress -> Some(RUnowned row.Ref)
+                                | None -> None
 
-                match reserveAs with
-                | None -> ()
-                | Some held ->
-                    match body with
-                    | Ok text ->
-                        match TouchSet.parse text with
-                        | Declared tokens ->
-                            let names =
-                                tokens
-                                |> List.map (fun t ->
-                                    match t with
-                                    | Matchable s -> s
-                                    | Unmatchable s -> s)
+                            match reserveAs with
+                            | None -> ()
+                            | Some held ->
+                                match body with
+                                | Ok text ->
+                                    match TouchSet.parse text with
+                                    | Declared tokens ->
+                                        let names =
+                                            tokens
+                                            |> List.map (fun t ->
+                                                match t with
+                                                | Matchable s -> s
+                                                | Unmatchable s -> s)
 
-                            inFlight.Add(row.Ref.Owner, row.Ref.Repo, RvNames names, held)
-                        | _ -> ()
-                    // #1150: THE BODY READ FAILED on an item we hold a lock over. Core has a fail-closed
-                    // guard for exactly this (`Batch.unusableReservation`, the `Unreadable` branch) — but it
-                    // only fires if it RECEIVES an `Unreadable` reservation, and the old `| _ -> ()` dropped
-                    // the claim instead, so the guard was dead end-to-end (`BodiesUnreadable` only drove an
-                    // advisory warning). Reserve an UNKNOWN surface: we cannot prove any candidate disjoint
-                    // from files we never saw, so red the batch rather than hand a second worker its tree.
-                    | Error e -> inFlight.Add(row.Ref.Owner, row.Ref.Repo, RvUnreadable(explain e), held)
+                                        inFlight.Add(row.Ref.Owner, row.Ref.Repo, RvNames names, held)
+                                    | _ -> ()
+                                // #1150: THE BODY READ FAILED on an item we hold a lock over. Core has a fail-closed
+                                // guard for exactly this (`Batch.unusableReservation`, the `Unreadable` branch) — but it
+                                // only fires if it RECEIVES an `Unreadable` reservation, and the old `| _ -> ()` dropped
+                                // the claim instead, so the guard was dead end-to-end (`BodiesUnreadable` only drove an
+                                // advisory warning). Reserve an UNKNOWN surface: we cannot prove any candidate disjoint
+                                // from files we never saw, so red the batch rather than hand a second worker its tree.
+                                | Error e -> inFlight.Add(row.Ref.Owner, row.Ref.Repo, RvUnreadable(explain e), held)
 
         w.WriteEndArray()
 
@@ -1473,7 +1548,9 @@ module Scan =
         // this set reaches the sweep, whether genuinely off-board or merely outside the requested path-
         // repository projection. Its marker then decides whether it reserves anything.
         let candidateRefs =
-            candidates |> List.map (fun r -> r.Ref.Owner, r.Ref.Repo, r.Ref.Number) |> Set.ofList
+            candidates
+            |> List.map (fun r -> r.Ref.Owner, r.Ref.Repo, r.Ref.Number)
+            |> Set.ofList
 
         // The repos an off-board claim can live in are the in-scope board's repos (bash derives them the
         // same way). No candidate names a repo → no repo to scan, and no board item means nothing off the
@@ -1651,9 +1728,11 @@ module Scan =
         | None ->
             Ok(
                 Encoding.UTF8.GetString(stream.ToArray()),
-                { Candidates = List.length candidates
-                  RepoAdvisory = scoped.Advisory
-                  OffBoardResolved = offBoardResolved
-                  OffBoardSkipped = offBoardSkipped
-                  BodiesUnreadable = bodiesUnreadable }
+                {
+                    Candidates = List.length candidates
+                    RepoAdvisory = scoped.Advisory
+                    OffBoardResolved = offBoardResolved
+                    OffBoardSkipped = offBoardSkipped
+                    BodiesUnreadable = bodiesUnreadable
+                }
             )

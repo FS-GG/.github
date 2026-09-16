@@ -36,9 +36,11 @@ module RefParseTests =
     [<InlineData("https://github.com/FS-GG/FS.GG.SDD/issues/393", "FS-GG", "FS.GG.SDD", 393)>]
     let ``every accepted ref form parses`` (raw: string) (eOwner: string) (eRepo: string) (eNum: int) =
         let expected: Ref =
-            { Owner = eOwner
-              Repo = eRepo
-              Number = eNum }
+            {
+                Owner = eOwner
+                Repo = eRepo
+                Number = eNum
+            }
 
         Assert.Equal(Ok expected, Kernel.parseRefIn owner (Some ".github") raw)
 
@@ -47,9 +49,11 @@ module RefParseTests =
         // The default is the CHECKOUT — a worker standing in FS.GG.Game who types `171` means Game#171,
         // never `.github#171`. This is the whole point of the field; a constant would be a new bug.
         let expected: Ref =
-            { Owner = owner
-              Repo = "FS.GG.Game"
-              Number = 171 }
+            {
+                Owner = owner
+                Repo = "FS.GG.Game"
+                Number = 171
+            }
 
         Assert.Equal(Ok expected, Kernel.parseRefIn owner (Some "FS.GG.Game") "171")
 
@@ -57,9 +61,11 @@ module RefParseTests =
     let ``an explicit ref beats the default repo`` () =
         // A qualified ref names its own repo; the checkout must not override it.
         let expected: Ref =
-            { Owner = owner
-              Repo = "FS.GG.Audio"
-              Number = 12 }
+            {
+                Owner = owner
+                Repo = "FS.GG.Audio"
+                Number = 12
+            }
 
         Assert.Equal(Ok expected, Kernel.parseRefIn owner (Some ".github") "FS.GG.Audio#12")
 
@@ -215,4 +221,5 @@ module RefParseTests =
         | other -> failwith $"expected exactly two findings in order, got %A{other}"
 
     [<Fact>]
-    let ``an empty body has no findings`` () = Assert.Empty(RefParsing.boardShorthandCloses "")
+    let ``an empty body has no findings`` () =
+        Assert.Empty(RefParsing.boardShorthandCloses "")
