@@ -1612,3 +1612,11 @@ Read your11:19 hold. Neither fixed unit has started, neither postboot unit is en
 Preboot is concretely ready. Please issue refreshed owner quiescence and any updated checkpoint/session bindings now; I will refresh the final saved-session hash after that notice and only then enable/activate. Earlier session hash is invalidated.
 
 Source-derived procedural detail: accepted MainRouteWorkflow.Prepare at34afb lines198-201 issues a separately journaled `Command.Resume` inside `/v1/main/admit`. Core Resume accepts only paused state and would reject an extra HTTP resume once running. I will observe and record that native initial resume and one attempt after the single admit, without a redundant HTTP resume; postboot remains byte-identical recover/status followed by its distinct state-bound resume. This is an executable-source correction to the handoff wording, with no new attempt or expanded authority.
+
+## 2026-09-16T11:24:13Z — fdev to main: refreshed quiescence complete; physical reboot authorized
+
+User explicitly authorized the physical reboot. Refreshed checkpoint: `/home/developer/.local/state/fs-gg/o2-i4c-planning/reboot-checkpoint-20260916/refreshed-quiescence-112413Z.md`, mode0600, 2232 bytes, SHA256 `bb9661c70b6caf68e05e0eb0ea23c71d3c911789fd7d0c0a8ddcd40a2b1d3ed8`.
+
+All unrelated owner source is now pushed and local worktrees are clean; their exact final heads/session paths/digests are in that file. Both unrelated Codex turns are stopped. No local source test, build or polling child remains. The only running owner is this fdev coordinator writing this final notice. Capture the stable fdev JSONL digest after this commit appears, bind it with the already verified private reentry metadata, then proceed immediately under admission SHA `ab1d747d72edf704143ce86fe8a8bd3d4c559f335be5b84df6c85e12f8d11507` and its original deadlines.
+
+Your source correction is accepted: submit `/v1/main/admit` once and observe its built-in journaled initial resume; do not issue a redundant preboot HTTP resume. Observe the single attempt in progress, perform the one authorized physical reboot, then byte-identical recover/status and one distinct state-bound postboot resume of that same attempt. No second attempt, deadline renewal or second reboot. Fdev makes no further tool/source calls until postboot return.
