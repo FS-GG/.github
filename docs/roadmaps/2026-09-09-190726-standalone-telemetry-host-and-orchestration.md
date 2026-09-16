@@ -192,9 +192,12 @@ For this environment, H3 establishes the independently managed Main deployment p
 - [x] O0 — Orchestration state and runner contract: [accepted implementation](https://github.com/FS-GG/FS.GG.Coordination/pull/355), merge `616207d56fedb600f71dc860fbf7603497502f75`. Sixteen tests on PostgreSQL 18.6 exercised the real containerized database and the post-merge suite passed; Main pilot and upstream acceptance remain owned by O1–O3.
 - [x] O1 — Read-only observer and shadow evaluation: [accepted implementation](https://github.com/FS-GG/FS.GG.Coordination/pull/356), merge `64acf326a3bdada6680a1f2c8b571220fc71a695`. The accepted source and all post-merge checks passed; candidate dispatch remains absent and Main pilot authority remains owned by O2.
 - [x] O2 — Trusted bounded Main pilot. The final generation-1 attempt survived one physical reboot, recovered from its unchanged admission after a focused source repair, and completed [`.github` PR #3515](https://github.com/FS-GG/.github/pull/3515) through native merge/readback at `cf840ff9f760d2fdebcdca84caf0ae24f75b8dfa`. Issue [#3514](https://github.com/FS-GG/.github/issues/3514), the claim and the pilot branch are closed; all installed units are stopped and disabled.
-- [ ] O3 — Controlled adoption.
+- [x] O3 — Controlled adoption. Coordination [#398](https://github.com/FS-GG/FS.GG.Coordination/pull/398)
+  qualified the two-project serial profile, and [#400](https://github.com/FS-GG/FS.GG.Coordination/pull/400)
+  supplied the offline installed verifier. Main accepted the exact protected bundle and observed the complete
+  capacity-1 A/B lifecycle with zero terminal effects; all services remain stopped and disabled.
 
-Eleven of the twelve selected milestones are complete (92%). O3 remains pending.
+All twelve selected milestones are complete (100%).
 
 Execution uses the routine route under the user's September 9 instruction to complete this roadmap and make necessary decisions. The proposal's earlier document-only authorization records its original scope; it does not undo that later execution instruction. Stronger runner credential isolation remains deferred. Existing upstream gates and independently checked operation boundaries remain in force.
 
@@ -413,6 +416,24 @@ does not expose a usage hook, so usage or bureaucracy percentages cannot be infe
 ### O3 — Controlled adoption and later options
 
 Expand explicit scope only after pilot evidence and remaining upstream gates pass. Preserve one accountable local owner per canonical subject and external coordination rules. Test multiple projects sharing finite capacity, transient board failures and scoped recovery before broad adoption. Candidate releases continue through the stable delivery route; a successful build cannot activate itself.
+
+O3 completed on September 16. Coordination [#398](https://github.com/FS-GG/FS.GG.Coordination/pull/398)
+qualified shared capacity, canonical ownership, transient observation failure and scoped recovery. The first
+installed attempt stopped safely at a missing non-dispatching interface. Coordination
+[#400](https://github.com/FS-GG/FS.GG.Coordination/pull/400), merge
+`9f506c4e9440e675d87e50d9f756620ebaecb8bb`, added the bounded offline verifier; required checks and real
+PostgreSQL acceptance passed. Protected bundle run
+[35110483612](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/35110483612) produced artifact
+`10452461386` with Host SHA-256 `3c99a152c7d443de79d0a6df7a7bcff2c7b1c8ef47dd9d458f8fdb5c8a1059cd`.
+
+Main installed the exact bundle as image digest
+`sha256:03a51da09d7d25def2d8bb70f64bacd710b881a65df5f14f030eac974d7befdc` and invoked the verifier once on a
+new schema-2 store. A reserved capacity 1, B was refused unchanged, durable reopen retained both intents,
+unknown accounting and mismatched release retained A, and exact release admitted and released the original B
+request. Final readback observed zero active reservations, commands, candidates and external effects; result
+SHA-256 is `b689f89812a7965df83383c1f5667cb8f53809b696fae4b8f38bae30470e7eb7`. No `serve`, runner, provider,
+model, GitHub work item or reboot occurred. All fixed and return units are stopped and disabled. There is no
+SDD/Templates, generated-workspace or lifecycle-default change.
 
 Cooperative untrusted contributors, stronger credential isolation, multi-node failover and any telemetry database replacement remain later decisions. Trusted cooperative execution may be designed against the upstream versioned application protocol, but it must preserve the documented authority limits and cannot silently enable untrusted runners. No Akka cluster enrollment for producers or contributors.
 
