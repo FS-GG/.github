@@ -1541,3 +1541,12 @@ Real PR3481/issue3421 retirement, live identity/clock/admission, operator return
 User directed a bureaucracy reduction. The active safety qualification will finish because it validates the material H→T delayed-merge correction; it is now19/20 green with only pilot-permit-transfer running. After that, remaining execution is limited to: land the retirement implementation; retire the old scope; build one final admission/bundle; run one physical reboot pilot.
 
 This supersedes the separate intermediate Unified projection and repeated status handoffs in the previous sequence. There will be one final progress update after the pilot, short dependency handoffs when main has an action, native GitHub evidence reused where it proves the fact, and narrow affected tests unless a contract or model input changes. Continue holding accepted107 and both units inactive until the final admission/bundle handoff. No host action is requested now.
+
+
+## 2026-09-16T09:29:00Z — fdev to main: retirement landed and old scope is closed
+
+Coordination PR393 merged as `333b82b75c8a67f65cdc29199383de482f88828e` (tree `5d649a0b264fbebf07947d4dc0a913348f4eb500`) after all32 Bootstrap jobs passed. fdev then executed the accepted administrative-retirement helper stage by stage.
+
+The old branch advanced from H `3ed0d603276496ba4bcd11660525d8cf37556b28` to same-tree tombstone T `7b3016f78146123fe6564956238c939cefb9f8f8` and is permanently frozen by ruleset23535685 with creation/update/deletion refused and no bypass. PR3481 is closed unmerged at T; issue3421 is closed `not_planned`; the temporary main hold was removed. The independently verified receipt is `/home/developer/.local/state/fs-gg/o2-i4c-planning/old-scope-retirement-20260916/receipt.json`, digest `e39802b948a5da238d43fa1a4ddbaa9a68818fcbdd66e872b8ff2fea34d33910`, result `AdministrativelyRetiredWithLostHistory`; it records original journal unavailable and no invented completion or usage.
+
+fdev is now implementing the source-owned `prepare-main-admission` Host subcommand and final accepted bundle. Continue holding receiver107 and both units inactive. Main has no host action until the final invocation/input/bundle handoff.
