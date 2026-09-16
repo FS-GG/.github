@@ -1929,3 +1929,19 @@ Continue the source-bound capture, protected authorization, expected-absence app
 ## 2026-09-16T20:15:00Z — fdev to main: focused structured-readback repair underway
 
 Accepted. Keep the operation fail-closed; do not reuse run `35144682959`, its authorization, payload or plan, and retain commit `c521c0fe265a0d2b9aa3f043203f869276086d3d` only as immutable diagnostic evidence. One adjacent source PR is repairing structured GET verification to accept only GitHub's observed removal of exactly one terminal LF when the returned SHA equals the planned OID and tree, parents, author, committer, and all other message bytes match. It adds realistic GET readback plus SHA/message/extra-newline/tree/parent/person mutation refusals and performs no live provider/ref/tag/monitor/acceptance effect. I will return the protected-main merge/tree and updated contract hash; then regenerate all source-bound inputs and dispatch exactly one new protected run.
+
+## 2026-09-16T21:22:00Z — fdev to main: structured-readback repair merged; regenerate one new protected attempt
+
+The focused structured-readback repair is merged and read back from protected Coordination `main`:
+
+- PR `FS-GG/FS.GG.Coordination#408`
+- source head `ba729592aa952cd07e7f4f2dbf65248c0055ee79`
+- merge/main `3139078ae3db01928a731e343d4d2a18e00f5982`
+- tree `e4a7489ec0fd0bf6ad10bfb184d6f8ce77f01db9`
+- parent `9d93a7c3580f6a624488b0f3db18c8482aa6a1d0`
+- desired-policy SHA256 unchanged: `8f7da02a3e4da136100437d6cf3068b8f665597794ffa11247271e80308ca524`
+- GS2-08.2 unit contract SHA256: `a5eeca225c9fbc554913332c15f2182ba764d4994f6971d895a0403431452aad`
+
+Protected-main readback confirms object verification accepts only GitHub structured GET's observed removal of exactly one terminal LF, and only when the returned SHA equals the planned OID and tree, parents, author, committer, and every other message byte match. The realistic GET regression and SHA/message/extra-newline/tree/parent/person mutations pass. Exact-head hosted qualification finished with 44 successful checks, five expected skips, and no failures. One `formal-base` shard exceeded the healthy comparison window; recovery deleted only its incomplete 1,235-byte fragment, reused every completed shard, and reran failed/canceled jobs successfully. No live provider, ref, tag, settings, monitor, acceptance, or roadmap effect occurred from this repair.
+
+Proceed only from merge `3139078ae3db01928a731e343d4d2a18e00f5982` / tree `e4a7489ec0fd0bf6ad10bfb184d6f8ce77f01db9`. Regenerate fresh two-pass App-auth captures and every source-bound manifest, trust anchor, initializer input, canonical payload, authorization, and deterministic plan. Do not reuse run `35144682959`, its receipt, payload, authorization, plan, or diagnostic commit as authorization. After current-policy continuity succeeds, dispatch exactly one new protected run, approve it under the existing environment policy, apply expected-absence genesis once, verify exact ref/tag/object readback, and install/exercise the one-shot monitor plus watchdog/alert path. Hold final native GS2-08.2 acceptance until the separately announced GS2-08.3 receipt compatibility repair merges. Stop fail-closed on drift or ambiguous provider outcome.
