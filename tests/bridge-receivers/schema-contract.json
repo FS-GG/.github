@@ -1,0 +1,25 @@
+{
+  "schema": "fsgg.gs2-08.8-receiver-adoption-contract/1",
+  "reportSchema": "fsgg.gs2-08.8-receiver-adoption/1",
+  "requiredTopLevel": [
+    "schema",
+    "receiver",
+    "release",
+    "packages",
+    "installedCommand",
+    "routes",
+    "callableRoutes",
+    "qualification",
+    "remainingBoundary"
+  ],
+  "routeDispositions": [
+    "bridge-adopted",
+    "read-only-local-only",
+    "gs2-08.9-sealing"
+  ],
+  "revisionBinding": {
+    "receiverRevision": "required qualification input",
+    "receiverTree": "required qualification input",
+    "futureMergeIdentity": "not embedded in the candidate report"
+  }
+}
