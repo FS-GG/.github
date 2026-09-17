@@ -410,6 +410,13 @@ assert immutable >= 0 and immutable_download > immutable and immutable_upload < 
     immutable, immutable_download, immutable_upload
 )
 prepare = (root / ".github/workflows/release-saga-prepare.yml").read_text()
+prepare_doc = yaml.safe_load(prepare)
+prepare_checkout = next(
+    step for step in prepare_doc["jobs"]["prepare"]["steps"]
+    if str(step.get("uses", "")).startswith("actions/checkout@")
+)
+assert prepare_checkout.get("with", {}).get("fetch-depth") == 0, \
+    "bridge qualification needs the accepted producer commit and ancestry in release preparation"
 start_path = root / ".github/workflows/release-saga-start.yml"
 start = start_path.read_text()
 start_doc = yaml.safe_load(start)

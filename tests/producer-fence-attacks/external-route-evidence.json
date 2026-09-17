@@ -88,7 +88,7 @@
     },
     {
       "path": ".github/workflows/release-saga-prepare.yml",
-      "sha256": "f7ef6d0300efb07f6606b0ba5a6ab7c917d8fecd4974ddd0ad86b3dce17523e7",
+      "sha256": "704301a1ed74e863d638d016d835be956c95d68af579213cb5c4b21686877664",
       "status": "artifact-unavailable",
       "gs2089": "unresolved",
       "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists."

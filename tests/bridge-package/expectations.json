@@ -17,7 +17,7 @@
   "componentIdentities": {
     ".github/workflows/release-coord-engine.yml": "7973a57d19123afaafab7cc0cdc8e24a5cb3e891a97c00194be4fed9e1cc3ee5",
     ".github/workflows/release-saga-start.yml": "316e019d8cec6c60cd78059e5b98abb85b925fa1564f6df9f86345cd00b6d912",
-    ".github/workflows/release-saga-prepare.yml": "f7ef6d0300efb07f6606b0ba5a6ab7c917d8fecd4974ddd0ad86b3dce17523e7",
+    ".github/workflows/release-saga-prepare.yml": "704301a1ed74e863d638d016d835be956c95d68af579213cb5c4b21686877664",
     ".github/workflows/release-saga-promote.yml": "d16b8cc4ab40de440e17013431e6c9e028b462cd92a02e081e0830db828d2d56",
     "src/FS.GG.Kit/FS.GG.Kit.csproj": "3f724c94b7b90944246769e542be6cd44322f9084f5b6dec0b230b3c7d00ae43",
     "src/FS.GG.Drivers/FS.GG.Drivers.csproj": "56561c6e951b22ed4f276c1b00cad9bc798abaee4f54f5472a4b2c23a2b9510d",
