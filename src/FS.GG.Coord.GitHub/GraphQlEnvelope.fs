@@ -4,6 +4,15 @@ module internal GraphQlEnvelope =
     open System
     open System.Text.Json
 
+    type MutationResult =
+        | InvalidJson
+        | NotObject
+        | InvalidErrors
+        | Errors
+        | Partial
+        | Applied
+        | NoResult
+
     let tryMeter (body: string) =
         if String.IsNullOrWhiteSpace body then
             None
@@ -37,3 +46,32 @@ module internal GraphQlEnvelope =
             | :? InvalidOperationException
             | :? FormatException
             | :? OverflowException -> None
+
+    let classifyMutation (body: string) =
+        try
+            use document = JsonDocument.Parse body
+            let root = document.RootElement
+
+            if root.ValueKind <> JsonValueKind.Object then
+                NotObject
+            else
+                let hasErrors, errors = root.TryGetProperty "errors"
+                let hasData, data = root.TryGetProperty "data"
+
+                let hasMutationResult =
+                    hasData
+                    && data.ValueKind = JsonValueKind.Object
+                    && (data.EnumerateObject() |> Seq.isEmpty |> not)
+                    && (data.EnumerateObject()
+                        |> Seq.exists (fun property -> property.Value.ValueKind <> JsonValueKind.Null))
+
+                if hasErrors && errors.ValueKind <> JsonValueKind.Array then
+                    InvalidErrors
+                elif hasErrors && errors.GetArrayLength() > 0 then
+                    if hasMutationResult then Partial else Errors
+                elif hasMutationResult then
+                    Applied
+                else
+                    NoResult
+        with :? JsonException ->
+            InvalidJson

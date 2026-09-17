@@ -28,26 +28,22 @@ module Transport =
         | Query of document: string * variables: (string * Var) list
 
     type Request =
-        {
-            Method: string
-            Path: string
-            Query: (string * string) list
-            Body: Payload
-            Budget: Budget
-            IfNoneMatch: string option
-            Subject: string
-        }
+        { Method: string
+          Path: string
+          Query: (string * string) list
+          Body: Payload
+          Budget: Budget
+          IfNoneMatch: string option
+          Subject: string }
 
     type MutationIntent = { EffectId: string; Request: Request }
 
     type Response =
-        {
-            Status: int
-            Body: string
-            Headers: Map<string, string>
-            ETag: string option
-            NextLink: string option
-        }
+        { Status: int
+          Body: string
+          Headers: Map<string, string>
+          ETag: string option
+          NextLink: string option }
 
     let (|NotModified|_|) (response: Response) =
         if response.Status = 304 then Some() else None
@@ -338,42 +334,15 @@ module Transport =
         | status, _ when status < 200 || status >= 300 ->
             V1Admission.Indeterminate(evidenceReason "provider-response-non-success")
         | 200, GraphQl ->
-            try
-                use document = JsonDocument.Parse response.Body
-                let root = document.RootElement
-
-                if root.ValueKind <> JsonValueKind.Object then
-                    V1Admission.Indeterminate(evidenceReason "graphql-response-not-object")
-                else
-                    let hasErrors, errors = root.TryGetProperty "errors"
-
-                    let hasMutationResult =
-                        let hasData, data = root.TryGetProperty "data"
-
-                        hasData
-                        && data.ValueKind = JsonValueKind.Object
-                        && (data.EnumerateObject() |> Seq.isEmpty |> not)
-                        && (data.EnumerateObject()
-                            |> Seq.exists (fun property -> property.Value.ValueKind <> JsonValueKind.Null))
-
-                    let carriesErrors =
-                        hasErrors
-                        && errors.ValueKind = JsonValueKind.Array
-                        && errors.GetArrayLength() > 0
-
-                    if hasErrors && errors.ValueKind <> JsonValueKind.Array then
-                        V1Admission.Indeterminate(evidenceReason "graphql-errors-invalid")
-                    elif carriesErrors then
-                        if hasMutationResult then
-                            V1Admission.Partial(evidenceReason "graphql-partial-data-with-errors")
-                        else
-                            V1Admission.Indeterminate(evidenceReason "graphql-errors")
-                    elif hasMutationResult then
-                        V1Admission.Applied digest
-                    else
-                        V1Admission.Indeterminate(evidenceReason "graphql-response-without-mutation-result")
-            with :? JsonException ->
-                V1Admission.Indeterminate(evidenceReason "graphql-response-invalid-json")
+            match GraphQlEnvelope.classifyMutation response.Body with
+            | GraphQlEnvelope.InvalidJson -> V1Admission.Indeterminate(evidenceReason "graphql-response-invalid-json")
+            | GraphQlEnvelope.NotObject -> V1Admission.Indeterminate(evidenceReason "graphql-response-not-object")
+            | GraphQlEnvelope.InvalidErrors -> V1Admission.Indeterminate(evidenceReason "graphql-errors-invalid")
+            | GraphQlEnvelope.Errors -> V1Admission.Indeterminate(evidenceReason "graphql-errors")
+            | GraphQlEnvelope.Partial -> V1Admission.Partial(evidenceReason "graphql-partial-data-with-errors")
+            | GraphQlEnvelope.Applied -> V1Admission.Applied digest
+            | GraphQlEnvelope.NoResult ->
+                V1Admission.Indeterminate(evidenceReason "graphql-response-without-mutation-result")
         | _, GraphQl -> V1Admission.Indeterminate(evidenceReason "graphql-response-not-definitive")
         | (200 | 201 | 204), (Rest | Free) -> V1Admission.Applied digest
         | _ -> V1Admission.Indeterminate(evidenceReason "provider-response-not-definitive")
@@ -421,15 +390,13 @@ module Transport =
                     Some(value.GetString())
 
             Ok
-                {
-                    Method = root.GetProperty("method").GetString()
-                    Path = root.GetProperty("path").GetString()
-                    Query = query
-                    Body = body
-                    Budget = budget
-                    IfNoneMatch = ifNoneMatch
-                    Subject = "v1 retry " + effectId
-                }
+                { Method = root.GetProperty("method").GetString()
+                  Path = root.GetProperty("path").GetString()
+                  Query = query
+                  Body = body
+                  Budget = budget
+                  IfNoneMatch = ifNoneMatch
+                  Subject = "v1 retry " + effectId }
         with _ ->
             Error "persisted canonical request is unreadable"
 
@@ -560,38 +527,32 @@ module Transport =
                     // HTTP/GraphQL error mapping can discard it. The fence classifies this response and
                     // durably records Partial/Indeterminate evidence before refusing it to the caller.
                     Ok
-                        {
-                            Status = status
-                            Body = body
-                            Headers = headers
-                            ETag = etag
-                            NextLink = headerValue "Link" |> Option.bind parseNextLink
-                        }
+                        { Status = status
+                          Body = body
+                          Headers = headers
+                          ETag = etag
+                          NextLink = headerValue "Link" |> Option.bind parseNextLink }
                 // A 304 IS A SUCCESS. It says "what you already have is current", and it is the whole
                 // reason the conditional path costs nothing. Classifying it as a failure would send the
                 // caller down the error branch on the cheapest correct answer the server can give.
                 else if status = 304 then
                     Ok
-                        {
-                            Status = 304
-                            Body = ""
-                            Headers = headers
-                            ETag = etag
-                            NextLink = None
-                        }
+                        { Status = 304
+                          Body = ""
+                          Headers = headers
+                          ETag = etag
+                          NextLink = None }
                 elif status >= 200 && status < 300 then
                     // The GraphQL counterpart of `observeRestHeaders` above, and it was missing until #2418:
                     // every query document selects `rateLimit { cost remaining }`, `Budget.readMeter` parsed
                     // it correctly, and NOTHING CALLED IT. The fleet paid to transmit its own meter and threw
                     // the reading away, which is why an exhausted budget could not be attributed to anything.
                     Ok
-                        {
-                            Status = status
-                            Body = body
-                            Headers = headers
-                            ETag = etag
-                            NextLink = headerValue "Link" |> Option.bind parseNextLink
-                        }
+                        { Status = status
+                          Body = body
+                          Headers = headers
+                          ETag = etag
+                          NextLink = headerValue "Link" |> Option.bind parseNextLink }
                 else
                     // NO RETRY ON A RATE LIMIT. An exhausted budget is not a transient blip — retrying it
                     // three times spends three more calls confirming the same 403, and delays the back-off
@@ -733,10 +694,8 @@ module Transport =
                         (fun () ->
                             inner.SendMutationOnce request
                             |> Result.map (fun response ->
-                                {
-                                    Request = request
-                                    Response = response
-                                })),
+                                { Request = request
+                                  Response = response })),
                         responseEvidence
                     )
                 with
@@ -764,10 +723,8 @@ module Transport =
                             | Ok request ->
                                 inner.SendMutationOnce request
                                 |> Result.map (fun response ->
-                                    {
-                                        Request = request
-                                        Response = response
-                                    })),
+                                    { Request = request
+                                      Response = response })),
                         responseEvidence
                     )
                 with
