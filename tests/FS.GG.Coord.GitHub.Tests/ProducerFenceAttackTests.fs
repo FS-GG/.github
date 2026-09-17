@@ -13,24 +13,24 @@ open FS.GG.Coordination.GitHub
 
 module Registry = V1AdmissionRegistry
 
-let private digest character =
+let digest character =
     String.replicate 64 character
     |> Registry.sha256Digest
     |> Result.defaultWith failwith
 
-let private oid character =
+let oid character =
     String.replicate 40 character
     |> Registry.gitObjectId
     |> Result.defaultWith failwith
 
-let private bytesDigest (bytes: byte array) =
+let bytesDigest (bytes: byte array) =
     SHA256.HashData bytes
     |> Convert.ToHexString
     |> _.ToLowerInvariant()
     |> Registry.sha256Digest
     |> Result.defaultWith failwith
 
-let private gitOid kind (bytes: byte array) =
+let gitOid kind (bytes: byte array) =
     let header = Encoding.UTF8.GetBytes($"{kind} {bytes.Length}\u0000")
 
     SHA1.HashData(Array.append header bytes)
@@ -39,7 +39,7 @@ let private gitOid kind (bytes: byte array) =
     |> Registry.gitObjectId
     |> Result.defaultWith failwith
 
-let private treeBytes entries =
+let treeBytes entries =
     entries
     |> List.sortBy fst
     |> List.collect (fun (name, value) ->
@@ -47,7 +47,7 @@ let private treeBytes entries =
         @ (Registry.gitObjectIdValue value |> Convert.FromHexString |> Array.toList))
     |> List.toArray
 
-let private authorityObjects phase manifest admissionSeal =
+let authorityObjects phase manifest admissionSeal =
     let trust = digest "b"
 
     let sealFields =
@@ -111,7 +111,28 @@ let private authorityObjects phase manifest admissionSeal =
       ManifestSha256 = manifest
       ClaimJournals = Map.empty }
 
-let private genesisRead manifest =
+let authorityDescendant (parent: AuthorityGitObjects) (child: AuthorityGitObjects) =
+    let original = Encoding.UTF8.GetString child.CommitBytes
+
+    let commitBytes =
+        original.Replace(
+            "author attack <attack@fs.gg> 0 +0000\n",
+            $"parent {Registry.gitObjectIdValue parent.Commit}\nauthor attack <attack@fs.gg> 0 +0000\n"
+        )
+        |> Encoding.UTF8.GetBytes
+
+    let commit = gitOid "commit" commitBytes
+
+    { child with
+        FirstHead = commit
+        TagTarget = commit
+        Commit = commit
+        Parent = Some parent.Commit
+        GenesisCommit = parent.GenesisCommit
+        Ancestry = commit :: parent.Ancestry
+        CommitBytes = commitBytes }
+
+let genesisRead manifest =
     let eventBytes =
         ShardedJournalAdapter.canonicalJson (
             $"{{\"commandId\":\"attack-genesis\",\"kind\":\"initialize\",\"manifestSha256\":\"{Registry.sha256Value manifest}\",\"payload\":{{}},\"round\":1,\"schema\":\"fsgg.github-substrate.admission-event/1\"}}"
@@ -169,12 +190,12 @@ let private genesisRead manifest =
       CommitBytes = Map.ofList [ commit.CommitOid, commitBytes ]
       TreeBytes = Map.ofList [ commit.TreeOid, tree ] }
 
-let private commitsOf read =
+let commitsOf read =
     match read.Observation with
     | JournalComplete(_, commits) -> commits
     | _ -> failwith "attack journal must remain complete"
 
-let private appendRead read proposal =
+let appendRead read proposal =
     let cas, objects = Registry.proposalCas proposal, Registry.proposalObjects proposal
 
     { read with
@@ -184,14 +205,70 @@ let private appendRead read proposal =
         CommitBytes = Map.add (Registry.gitObjectIdValue objects.CommitObjectId) objects.CommitBytes read.CommitBytes
         TreeBytes = Map.add (Registry.gitObjectIdValue objects.TreeObjectId) objects.TreeBytes read.TreeBytes }
 
-let private appendCandidate command current candidate =
+let appendCandidate command current candidate =
     let proposal =
         Registry.planAppend command current candidate
         |> Result.defaultWith (String.concat "," >> failwith)
 
     appendRead current proposal
 
-let private context commit manifest =
+let claimObservation claimId generation =
+    let address =
+        ShardedJournalAdapter.address Claim claimId
+        |> Result.defaultWith (string >> failwith)
+
+    let folder (previous: JournalCommit option, commits: JournalCommit list) currentGeneration =
+        let eventBytes =
+            ShardedJournalAdapter.canonicalJson ($"{{\"claimId\":\"{claimId}\",\"generation\":{currentGeneration}}}")
+            |> Result.defaultWith failwith
+
+        let provisional =
+            { SchemaVersion = 1
+              Address = address
+              Generation = currentGeneration
+              EventDigest = ShardedJournalAdapter.sha256 eventBytes
+              SnapshotDigest = None
+              Terminal = false
+              PriorHeadDigest = previous |> Option.map _.Head.HeadDigest
+              HeadDigest = "" }
+
+        let head =
+            { provisional with
+                HeadDigest =
+                    ShardedJournalAdapter.journalHeadBytes provisional
+                    |> ShardedJournalAdapter.sha256 }
+
+        let headBytes = ShardedJournalAdapter.journalHeadBytes head
+        let eventOid, headOid = gitOid "blob" eventBytes, gitOid "blob" headBytes
+        let tree = treeBytes [ "event.json", eventOid; "head.json", headOid ]
+        let treeOid = gitOid "tree" tree
+
+        let parentLine =
+            previous
+            |> Option.map (fun value -> $"parent {value.CommitOid}\n")
+            |> Option.defaultValue ""
+
+        let commitBytes =
+            Encoding.UTF8.GetBytes(
+                $"tree {Registry.gitObjectIdValue treeOid}\n{parentLine}author attack <attack@fs.gg> 0 +0000\ncommitter attack <attack@fs.gg> 0 +0000\n\nclaim {currentGeneration}\n"
+            )
+
+        let commit =
+            { CommitOid = Registry.gitObjectIdValue (gitOid "commit" commitBytes)
+              ParentOid = previous |> Option.map _.CommitOid
+              TreeOid = Registry.gitObjectIdValue treeOid
+              OperationId = $"claim-{currentGeneration}"
+              Head = head
+              HeadBytes = headBytes
+              Event = { Bytes = eventBytes; Digest = ShardedJournalAdapter.sha256 eventBytes }
+              Checkpoint = None }
+
+        Some commit, commits @ [ commit ]
+
+    let _, commits = [ 1L..generation ] |> List.fold folder (None, [])
+    JournalComplete("claim-attack", commits)
+
+let context commit manifest =
     { Round = 1L
       Manifest = manifest
       OperationId = "attack-op"
@@ -206,9 +283,15 @@ let private context commit manifest =
       OriginatingEpochCommit = commit
       OriginatingEpochGeneration = 1L }
 
-type private AttackRuntime(phase: string, ?casOutcomes: JournalCompareAndSwapOutcome list) =
+type AttackRuntime(
+    phase: string,
+    ?casOutcomes: JournalCompareAndSwapOutcome list,
+    ?claimBinding: string * int64 * JournalObservation
+) =
     let manifest = digest "a"
-    let operating = authorityObjects "OperatingV1" manifest None
+    let claim = claimBinding |> Option.map (fun (id, generation, _) -> TypedClaim(id, generation))
+    let claimJournals = claimBinding |> Option.map (fun (id, _, observation) -> Map.ofList [ id, observation ]) |> Option.defaultValue Map.empty
+    let operating = { authorityObjects "OperatingV1" manifest None with ClaimJournals = claimJournals }
 
     let operatingPort: AuthorityGitPort =
         { ReadObjects = fun () -> Ok operating
@@ -236,7 +319,11 @@ type private AttackRuntime(phase: string, ?casOutcomes: JournalCompareAndSwapOut
 
         let admitted =
             match
-                Registry.admit (Registry.head registry) operatingSnapshot (context operating.Commit manifest) registry
+                Registry.admit
+                    (Registry.head registry)
+                    operatingSnapshot
+                    { context operating.Commit manifest with Claim = defaultArg claim NoClaimRequired }
+                    registry
             with
             | RegistryAdmissionAppended value -> value
             | other -> failwithf "attack admission failed: %A" other
@@ -272,12 +359,21 @@ type private AttackRuntime(phase: string, ?casOutcomes: JournalCompareAndSwapOut
                 Registry.preparingReference durable
                 |> Result.defaultWith (String.concat "," >> failwith)
 
-            authorityObjects phase manifest (Some seal)
+            { authorityDescendant operating (authorityObjects phase manifest (Some seal)) with
+                ClaimJournals = claimJournals }
         else
-            authorityObjects phase manifest None
+            { authorityObjects phase manifest None with ClaimJournals = claimJournals }
 
     member _.AuthorityObjects = authority
     member _.Current = current
+
+    member _.ReplaceCurrent(value: RegistryJournalRead) = current <- value
+
+    member _.AppendRegistry(command: string, candidate: AdmissionRegistry) =
+        current <- appendCandidate command current candidate
+
+    member _.Registry =
+        Registry.restore current |> Result.defaultWith (String.concat "," >> failwith)
 
     member _.SetReadObjects(value) = readObjectsOverride <- Some value
     member _.SetRereadHead(value) = rereadOverride <- Some value
@@ -322,7 +418,7 @@ type private AttackRuntime(phase: string, ?casOutcomes: JournalCompareAndSwapOut
 
         DurableMutationFence(this.Authority, this.Journal, scope) :> IMutationFence
 
-type private ProviderProbe(response: Response) =
+type ProviderProbe(response: Response) =
     let mutable reads = 0
     let mutable mutations = 0
     member _.Reads = reads
@@ -337,14 +433,14 @@ type private ProviderProbe(response: Response) =
             mutations <- mutations + 1
             Ok response
 
-let private response =
+let response =
     { Status = 200
       Body = "{\"data\":{\"update\":{\"id\":\"1\"}}}"
       Headers = Map.empty
       ETag = None
       NextLink = None }
 
-let private restRequest body =
+let restRequest body =
     { Method = "PATCH"
       Path = "repos/FS-GG/.github/issues/2964"
       Query = [ "z", "last"; "a", "first" ]
@@ -353,7 +449,7 @@ let private restRequest body =
       IfNoneMatch = Some "attack-etag"
       Subject = "attack-rest" }
 
-let private graphQlRequest name =
+let graphQlRequest name =
     { Method = "POST"
       Path = "graphql"
       Query = []
@@ -362,10 +458,10 @@ let private graphQlRequest name =
       IfNoneMatch = None
       Subject = "attack-graphql" }
 
-let private applied (body: string) =
+let applied (body: string) =
     Applied(bytesDigest (Encoding.UTF8.GetBytes body))
 
-let private sendDirect
+let sendDirect
     (fence: IMutationFence)
     (effect: string)
     (bytes: byte array)
@@ -373,44 +469,13 @@ let private sendDirect
     =
     fence.Dispatch(effect, bytes, callback, fun value -> applied value)
 
-let private transport (runtime: AttackRuntime) =
+let transport (runtime: AttackRuntime) =
     let probe = ProviderProbe response
 
     let value =
         FencedTransport(probe :> IProviderGitHubTransport, runtime.Fence()) :> IGitHubTransport
 
     value, probe
-
-let private oracleCommands () =
-    let path =
-        Path.Combine(AppContext.BaseDirectory, "producer-fence-attack-oracle.json")
-
-    use document = JsonDocument.Parse(File.ReadAllBytes path)
-
-    document.RootElement.GetProperty("typedWriteCommands").EnumerateArray()
-    |> Seq.map (fun item -> item.GetProperty("name").GetString(), item.GetProperty("entry").GetString())
-    |> Seq.toList
-
-[<Fact>]
-let ``closed typed write census crosses real durable REST and GraphQL entry paths`` () =
-    let commands = oracleCommands ()
-    Assert.Equal(26, commands.Length)
-
-    for name, entry in commands do
-        let runtime = AttackRuntime("OperatingV1")
-        let fenced, probe = transport runtime
-
-        let request =
-            if entry = "rest" then
-                restRequest ($"{{\"command\":\"{name}\"}}")
-            else
-                graphQlRequest "update"
-
-        let effect = mutationEffectId name request
-
-        match fenced.SendMutation { EffectId = effect; Request = request } with
-        | Ok _ -> Assert.Equal(1, probe.Mutations)
-        | Error error -> failwithf "typed write '%s' failed its real durable boundary: %A" name error
 
 [<Theory>]
 [<InlineData("OperatingV1", true)>]

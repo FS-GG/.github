@@ -1,50 +1,281 @@
 {
-  "schema": "fsgg.gs2-08.6-producer-attack-oracle/1",
+  "schema": "fsgg.gs2-08.6-producer-attack-oracle/2",
   "qualityClaims": {
     "q4RealProvider": "unclaimed",
     "reason": "This lane is offline and contains no isolated real-provider evidence."
   },
   "epochs": [
-    { "name": "OperatingV1", "ordinaryEffect": "allow" },
-    { "name": "Preparing", "ordinaryEffect": "allow-eligible-incumbent" },
-    { "name": "FreezeRequested", "ordinaryEffect": "refuse" },
-    { "name": "Frozen", "ordinaryEffect": "refuse" },
-    { "name": "SwitchedV2", "ordinaryEffect": "refuse" },
-    { "name": "VerifiedV2", "ordinaryEffect": "refuse" },
-    { "name": "OpenV2", "ordinaryEffect": "refuse" },
-    { "name": "ObservingV2", "ordinaryEffect": "refuse" },
-    { "name": "ContractingV1", "ordinaryEffect": "refuse" },
-    { "name": "OperatingV2", "ordinaryEffect": "refuse" },
-    { "name": "RollingBack", "ordinaryEffect": "refuse" }
+    {
+      "name": "OperatingV1",
+      "ordinaryEffect": "allow"
+    },
+    {
+      "name": "Preparing",
+      "ordinaryEffect": "allow-eligible-incumbent"
+    },
+    {
+      "name": "FreezeRequested",
+      "ordinaryEffect": "refuse"
+    },
+    {
+      "name": "Frozen",
+      "ordinaryEffect": "refuse"
+    },
+    {
+      "name": "SwitchedV2",
+      "ordinaryEffect": "refuse"
+    },
+    {
+      "name": "VerifiedV2",
+      "ordinaryEffect": "refuse"
+    },
+    {
+      "name": "OpenV2",
+      "ordinaryEffect": "refuse"
+    },
+    {
+      "name": "ObservingV2",
+      "ordinaryEffect": "refuse"
+    },
+    {
+      "name": "ContractingV1",
+      "ordinaryEffect": "refuse"
+    },
+    {
+      "name": "OperatingV2",
+      "ordinaryEffect": "refuse"
+    },
+    {
+      "name": "RollingBack",
+      "ordinaryEffect": "refuse"
+    }
   ],
-  "typedWriteCommands": [
-    { "name": "add", "writes": "always", "entry": "rest" },
-    { "name": "adopt", "writes": "always", "entry": "graphql" },
-    { "name": "child", "writes": "always", "entry": "rest" },
-    { "name": "claim", "writes": "always", "entry": "graphql" },
-    { "name": "comment", "writes": "always", "entry": "rest" },
-    { "name": "delivery", "writes": "conditional", "entry": "graphql" },
-    { "name": "delivery-route", "writes": "always", "entry": "rest" },
-    { "name": "done", "writes": "always", "entry": "graphql" },
-    { "name": "flush", "writes": "conditional", "entry": "rest" },
-    { "name": "graphql", "writes": "conditional", "entry": "graphql" },
-    { "name": "heartbeat", "writes": "always", "entry": "rest" },
-    { "name": "intake", "writes": "always", "entry": "graphql" },
-    { "name": "next", "writes": "conditional", "entry": "rest" },
-    { "name": "op-lock acquire", "writes": "always", "entry": "graphql" },
-    { "name": "op-lock release", "writes": "always", "entry": "rest" },
-    { "name": "reap", "writes": "conditional", "entry": "graphql" },
-    { "name": "reconcile", "writes": "conditional", "entry": "rest" },
-    { "name": "release", "writes": "always", "entry": "graphql" },
-    { "name": "review", "writes": "always", "entry": "rest" },
-    { "name": "room open", "writes": "always", "entry": "graphql" },
-    { "name": "say", "writes": "always", "entry": "rest" },
-    { "name": "self-host", "writes": "always", "entry": "graphql" },
-    { "name": "set-field", "writes": "always", "entry": "rest" },
-    { "name": "set-paths", "writes": "always", "entry": "graphql" },
-    { "name": "take", "writes": "always", "entry": "rest" },
-    { "name": "widen", "writes": "always", "entry": "graphql" }
+  "writerCallsites": [
+    {
+      "id": "comment-post",
+      "path": "src/FS.GG.Coord.GitHub/Writes.fs",
+      "anchor": "sendRestMutation \"comment-post\"",
+      "boundary": "writes-rest-helper"
+    },
+    {
+      "id": "comment-delete",
+      "path": "src/FS.GG.Coord.GitHub/Writes.fs",
+      "anchor": "sendRestMutation \"comment-delete\"",
+      "boundary": "writes-rest-helper"
+    },
+    {
+      "id": "comment-patch",
+      "path": "src/FS.GG.Coord.GitHub/Writes.fs",
+      "anchor": "sendRestMutation \"comment-patch\"",
+      "boundary": "writes-rest-helper"
+    },
+    {
+      "id": "merge-at-head",
+      "path": "src/FS.GG.Coord.GitHub/Writes.fs",
+      "anchor": "sendRestMutation \"merge-at-head\"",
+      "boundary": "writes-rest-helper"
+    },
+    {
+      "id": "issue-body-patch",
+      "path": "src/FS.GG.Coord.GitHub/Writes.fs",
+      "anchor": "sendRestMutation \"issue-body-patch\"",
+      "boundary": "writes-rest-helper"
+    },
+    {
+      "id": "issue-reopen",
+      "path": "src/FS.GG.Coord.GitHub/Writes.fs",
+      "anchor": "sendRestMutation \"issue-reopen\"",
+      "boundary": "writes-rest-helper"
+    },
+    {
+      "id": "issue-close-completed",
+      "path": "src/FS.GG.Coord.GitHub/Writes.fs",
+      "anchor": "sendRestMutation \"issue-close-completed\"",
+      "boundary": "writes-rest-helper"
+    },
+    {
+      "id": "sub-issue-add",
+      "path": "src/FS.GG.Coord.GitHub/Writes.fs",
+      "anchor": "sendRestMutation \"sub-issue-add\"",
+      "boundary": "writes-rest-helper"
+    },
+    {
+      "id": "issue-create",
+      "path": "src/FS.GG.Coord.GitHub/Writes.fs",
+      "anchor": "sendRestMutation \"issue-create\"",
+      "boundary": "writes-rest-helper"
+    },
+    {
+      "id": "intake-body-patch",
+      "path": "src/FS.GG.Coord.GitHub/Writes.fs",
+      "anchor": "sendRestMutation \"intake-body-patch\"",
+      "boundary": "writes-rest-helper"
+    },
+    {
+      "id": "room-close",
+      "path": "src/FS.GG.Coord.GitHub/Writes.fs",
+      "anchor": "sendRestMutation \"room-close\"",
+      "boundary": "writes-rest-helper"
+    },
+    {
+      "id": "epic-rollup-close",
+      "path": "src/FS.GG.Coord.GitHub/Done.fs",
+      "anchor": "sendRestMutation \"epic-rollup-close\"",
+      "boundary": "done-rest-helper"
+    },
+    {
+      "id": "board-add-item",
+      "path": "src/FS.GG.Coord.GitHub/Board.fs",
+      "anchor": "EffectId = mutationEffectId $\"board-add-item:",
+      "boundary": "board-add-item"
+    },
+    {
+      "id": "board-set-field",
+      "path": "src/FS.GG.Coord.GitHub/Board.fs",
+      "anchor": "EffectId = mutationEffectId $\"board-set-field:",
+      "boundary": "board-set-field"
+    },
+    {
+      "id": "board-set-field-batch",
+      "path": "src/FS.GG.Coord.GitHub/Board.fs",
+      "anchor": "EffectId = mutationEffectId $\"board-set-field-batch:",
+      "boundary": "board-set-field-batch"
+    },
+    {
+      "id": "board-archive-items",
+      "path": "src/FS.GG.Coord.GitHub/OperationalGraphQl.fs",
+      "anchor": "EffectId = mutationEffectId $\"board-archive-items:",
+      "boundary": "operational-archive-items"
+    }
   ],
+  "boundaryExecutions": [
+    {
+      "id": "writes-rest-helper",
+      "entry": "rest",
+      "test": "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.real Writes REST helper reaches the durable mutation boundary and succeeds"
+    },
+    {
+      "id": "done-rest-helper",
+      "entry": "rest",
+      "test": "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.real Done roll-up REST helper reaches the durable mutation boundary and succeeds"
+    },
+    {
+      "id": "board-add-item",
+      "entry": "graphql",
+      "test": "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.real Board add-item callsite reaches the durable mutation boundary and succeeds"
+    },
+    {
+      "id": "board-set-field",
+      "entry": "graphql",
+      "test": "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.real Board single-field callsite reaches the durable mutation boundary and succeeds"
+    },
+    {
+      "id": "board-set-field-batch",
+      "entry": "graphql",
+      "test": "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.real Board batch callsite reaches the durable mutation boundary and succeeds"
+    },
+    {
+      "id": "operational-archive-items",
+      "entry": "graphql",
+      "test": "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.real OperationalGraphQl archive callsite reaches the durable mutation boundary and succeeds"
+    }
+  ],
+  "testOracle": {
+    "facts": [
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceAttackTests.stale cache and ledger rewind both refuse before provider I O",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceAttackTests.missing tag wrong manifest and permission loss fail closed",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceAttackTests.crash before send and crash after send cannot duplicate provider mutation",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceAttackTests.lost response concurrent owner and changed generations refuse replay",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceAttackTests.same semantic effect with different request bytes refuses the second send",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceAttackTests.delayed old SHA absence evidence cannot authorize retry",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceAttackTests.retry requires ProvenAbsent and obtains a fresh epoch fence",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceAttackTests.legacy Send preserves allowlisted reads and refuses disguised mutations",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceAttackTests.canonical mutation identity binds exact request bytes",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.real Writes REST helper reaches the durable mutation boundary and succeeds",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.real Done roll-up REST helper reaches the durable mutation boundary and succeeds",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.real Board add-item callsite reaches the durable mutation boundary and succeeds",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.real Board single-field callsite reaches the durable mutation boundary and succeeds",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.real Board batch callsite reaches the durable mutation boundary and succeeds",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.real OperationalGraphQl archive callsite reaches the durable mutation boundary and succeeds",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.actually absent authority tag refuses before provider IO",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.stable but older authority lineage refuses as a rewind",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.valid typed claim replacement invalidates the prior generation",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.Preparing refuses an operation outside the durable sealed cohort",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.durable operation replacement invalidates an old-handle retry",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.admissions-closing survives a restart and preserves only the admitted operation",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.phase change between successive effects refuses the later provider send",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.two owners racing the same durable parent produce one CAS winner and one provider effect",
+      "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.delayed old-SHA request exercises conditional exclusion and remains non-applied"
+    ],
+    "theories": [
+      {
+        "identity": "FS.GG.Coord.GitHub.Tests.ProducerFenceAttackTests.all eleven epochs enforce the independent allow-refuse oracle",
+        "cases": [
+          "(phase: \"OperatingV1\", expectedSend: True)",
+          "(phase: \"Preparing\", expectedSend: True)",
+          "(phase: \"FreezeRequested\", expectedSend: False)",
+          "(phase: \"Frozen\", expectedSend: False)",
+          "(phase: \"SwitchedV2\", expectedSend: False)",
+          "(phase: \"VerifiedV2\", expectedSend: False)",
+          "(phase: \"OpenV2\", expectedSend: False)",
+          "(phase: \"ObservingV2\", expectedSend: False)",
+          "(phase: \"ContractingV1\", expectedSend: False)",
+          "(phase: \"OperatingV2\", expectedSend: False)",
+          "(phase: \"RollingBack\", expectedSend: False)"
+        ]
+      },
+      {
+        "identity": "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.REST and GraphQL positive controls cross the complete epoch matrix",
+        "cases": [
+          "(phase: \"OperatingV1\", entry: \"rest\", allowed: True)",
+          "(phase: \"OperatingV1\", entry: \"graphql\", allowed: True)",
+          "(phase: \"Preparing\", entry: \"rest\", allowed: True)",
+          "(phase: \"Preparing\", entry: \"graphql\", allowed: True)",
+          "(phase: \"FreezeRequested\", entry: \"rest\", allowed: False)",
+          "(phase: \"FreezeRequested\", entry: \"graphql\", allowed: False)",
+          "(phase: \"Frozen\", entry: \"rest\", allowed: False)",
+          "(phase: \"Frozen\", entry: \"graphql\", allowed: False)",
+          "(phase: \"SwitchedV2\", entry: \"rest\", allowed: False)",
+          "(phase: \"SwitchedV2\", entry: \"graphql\", allowed: False)",
+          "(phase: \"VerifiedV2\", entry: \"rest\", allowed: False)",
+          "(phase: \"VerifiedV2\", entry: \"graphql\", allowed: False)",
+          "(phase: \"OpenV2\", entry: \"rest\", allowed: False)",
+          "(phase: \"OpenV2\", entry: \"graphql\", allowed: False)",
+          "(phase: \"ObservingV2\", entry: \"rest\", allowed: False)",
+          "(phase: \"ObservingV2\", entry: \"graphql\", allowed: False)",
+          "(phase: \"ContractingV1\", entry: \"rest\", allowed: False)",
+          "(phase: \"ContractingV1\", entry: \"graphql\", allowed: False)",
+          "(phase: \"OperatingV2\", entry: \"rest\", allowed: False)",
+          "(phase: \"OperatingV2\", entry: \"graphql\", allowed: False)",
+          "(phase: \"RollingBack\", entry: \"rest\", allowed: False)",
+          "(phase: \"RollingBack\", entry: \"graphql\", allowed: False)"
+        ]
+      },
+      {
+        "identity": "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.serialized journal reopen preserves each process-loss cut",
+        "cases": [
+          "(stage: \"intent\", expectedProviderEffects: 0, expectedUnresolved: True)",
+          "(stage: \"before-send\", expectedProviderEffects: 0, expectedUnresolved: True)",
+          "(stage: \"after-send\", expectedProviderEffects: 1, expectedUnresolved: True)",
+          "(stage: \"before-settlement\", expectedProviderEffects: 1, expectedUnresolved: True)",
+          "(stage: \"after-settlement\", expectedProviderEffects: 1, expectedUnresolved: False)"
+        ]
+      },
+      {
+        "identity": "FS.GG.Coord.GitHub.Tests.ProducerFenceCompletionTests.serialized reopen retains exact settlement state and effect count",
+        "cases": [
+          "(expectedStatus: \"applied\", expectedUnresolved: False)",
+          "(expectedStatus: \"proven-absent\", expectedUnresolved: False)",
+          "(expectedStatus: \"partial\", expectedUnresolved: True)",
+          "(expectedStatus: \"indeterminate\", expectedUnresolved: True)"
+        ]
+      }
+    ],
+    "sourceAssertionMinimums": {
+      "tests/FS.GG.Coord.GitHub.Tests/ProducerFenceAttackTests.fs": 40,
+      "tests/FS.GG.Coord.GitHub.Tests/ProducerFenceCompletionTests.fs": 64
+    }
+  },
   "externalWriterSources": [
     ".github/workflows/dispatch-sender.yml",
     ".github/workflows/feed-autofix.yml",
@@ -69,17 +300,58 @@
     "src/FS.GG.Telemetry.Client/RemoteClient.fs",
     "tools/routine-delivery.py"
   ],
-  "externalWriterDisposition": "unresolved-gs2-08.9-blocker",
+  "externalWriterDisposition": "route-specific-gs2-08.9-evidence",
   "legacyClients": [
-    { "version": "0.58.0", "receivers": ["governance"], "disposition": "unresolved-gs2-08.9-blocker" },
-    { "version": "0.75.4", "receivers": ["audio", "game", "net", "rendering", "templates"], "disposition": "unresolved-gs2-08.9-blocker" }
+    {
+      "version": "0.58.0",
+      "receivers": [
+        "governance"
+      ],
+      "disposition": "unresolved-gs2-08.9-blocker"
+    },
+    {
+      "version": "0.75.4",
+      "receivers": [
+        "audio",
+        "game",
+        "net",
+        "rendering",
+        "templates"
+      ],
+      "disposition": "unresolved-gs2-08.9-blocker"
+    }
   ],
   "requiredAttacks": [
-    "all-epochs", "stale-cache", "lost-response", "ledger-rewind", "missing-tag",
-    "wrong-manifest", "permission-loss", "old-clients", "crash-before-send",
-    "crash-after-send", "concurrent-ownership", "changed-operation-generation",
-    "changed-claim-generation", "same-semantic-different-bytes", "delayed-old-sha",
-    "mutation-disguised-as-read", "retry-proven-absent-fresh-fence",
-    "canonical-mutation-identity", "rest-entry", "graphql-entry", "fail-closed-live-composition"
+    "all-epochs",
+    "stale-cache",
+    "lost-response",
+    "ledger-rewind",
+    "missing-tag",
+    "wrong-manifest",
+    "permission-loss",
+    "old-clients",
+    "crash-before-send",
+    "crash-after-send",
+    "concurrent-ownership",
+    "changed-operation-generation",
+    "changed-claim-generation",
+    "same-semantic-different-bytes",
+    "delayed-old-sha",
+    "mutation-disguised-as-read",
+    "retry-proven-absent-fresh-fence",
+    "canonical-mutation-identity",
+    "rest-entry",
+    "graphql-entry",
+    "fail-closed-live-composition",
+    "stable-older-authority",
+    "typed-claim-replacement",
+    "old-handle-operation-replacement",
+    "preparing-nonmember",
+    "durable-admissions-restart",
+    "successive-effect-phase-change",
+    "persistent-five-cut-reopen",
+    "same-parent-two-owner-cas",
+    "exact-settlement-counts",
+    "conditional-old-sha-mechanism"
   ]
 }

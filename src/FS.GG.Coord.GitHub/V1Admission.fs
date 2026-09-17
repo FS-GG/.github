@@ -227,6 +227,60 @@ module V1Admission =
         | Some bytes -> Ok(Array.copy bytes)
         | None -> Error [ "persisted-effect-request-missing" ]
 
+    // A cryptographically valid authority read can still be an older, stable view. Bind every effect to
+    // the operation's durably admitted epoch and require the live authority lineage to contain it. A
+    // two-read head check alone detects movement during this call; it cannot detect a provider serving the
+    // same old commit twice after process/cache loss.
+    let private persistedOperationEpoch operationId (read: RegistryJournalRead) =
+        let commits =
+            match read.Observation with
+            | JournalComplete(_, values) -> values
+            | _ -> []
+
+        let parse (commit: JournalCommit) =
+            try
+                use document = JsonDocument.Parse commit.Event.Bytes
+                let root = document.RootElement
+
+                if root.GetProperty("kind").GetString() <> "admit" then
+                    None
+                else
+                    let context = root.GetProperty("payload").GetProperty("context")
+
+                    if context.GetProperty("operationId").GetString() <> operationId then
+                        None
+                    else
+                        match
+                            V1AdmissionRegistry.gitObjectId (context.GetProperty("originatingEpochCommit").GetString())
+                        with
+                        | Error _ -> Some(Error [ "persisted-operation-epoch-commit" ])
+                        | Ok commit ->
+                            let generation = context.GetProperty("originatingEpochGeneration").GetInt64()
+
+                            if generation < 1L then
+                                Some(Error [ "persisted-operation-epoch-generation" ])
+                            else
+                                Some(Ok(commit, generation))
+            with _ ->
+                Some(Error [ "persisted-operation-epoch" ])
+
+        commits
+        |> List.rev
+        |> List.tryPick parse
+        |> Option.defaultValue (Error [ "persisted-operation-admission-missing" ])
+
+    let private requireAuthorityDescendant operationId observed (objects: AuthorityGitObjects) =
+        persistedOperationEpoch operationId observed
+        |> Result.bind (fun (originCommit, originGeneration) ->
+            epochGeneration objects
+            |> Result.bind (fun currentGeneration ->
+                let containsOrigin = objects.Ancestry |> List.contains originCommit
+
+                if currentGeneration < originGeneration || not containsOrigin then
+                    Error [ "authority-lineage-rewind" ]
+                else
+                    Ok()))
+
     let private appendCandidate journal action operationId effectId observed candidate =
         let port = journalPort journal
 
@@ -362,7 +416,8 @@ module V1Admission =
                 |> Result.bind (fun handle ->
                     readAuthority authority
                     |> Result.bind (fun (objects, snapshot) ->
-                        authorize effectId requestBytes objects snapshot registry handle observed
+                        requireAuthorityDescendant scope.OperationId observed objects
+                        |> Result.bind (fun () -> authorize effectId requestBytes objects snapshot registry handle observed)
                         |> Result.bind (fun () ->
                             match send () with
                             | Error providerError -> Ok(ProviderFailed providerError)
@@ -375,50 +430,53 @@ module V1Admission =
                 |> Result.bind (fun requestBytes ->
                     V1AdmissionRegistry.recoverOperation scope.OperationId registry
                     |> Result.bind (fun handle ->
-                        match
-                            V1AdmissionRegistry.retryAfterProvenAbsence
-                                (V1AdmissionRegistry.head registry)
-                                liveAuthority
-                                handle
-                                scope.Owner
-                                effectId
-                                registry
-                        with
-                        | EffectAlreadyInFlight owner -> Error [ "effect-already-in-flight:" + owner ]
-                        | EffectAlreadySettled _ -> Error [ "retry-requires-proven-absence" ]
-                        | EffectRefused reasons -> Error reasons
-                        | EffectIntentAppended candidate ->
-                            appendCandidate journal "retry" scope.OperationId effectId observed candidate
-                            |> Result.bind (requireAccepted "effect-retry")
-                            |> Result.bind (fun (confirmed, permit) ->
-                                match permit with
-                                | None -> Error [ "effect-retry-not-won-by-this-invocation" ]
-                                | Some initialPermit ->
-                                    V1AdmissionRegistry.refreshDispatch
-                                        port
-                                        liveAuthority
-                                        initialPermit
-                                        handle
-                                        scope.Owner
-                                        effectId
-                                        confirmed
-                                    |> Result.bind (fun fence ->
-                                        match
-                                            V1AdmissionRegistry.authorizeDispatch
-                                                port
-                                                liveAuthority
-                                                fence
-                                                handle
-                                                scope.Owner
-                                                effectId
-                                                confirmed
-                                        with
-                                        | DispatchRefused reasons -> Error reasons
-                                        | DispatchAuthorized ->
-                                            match send (Array.copy requestBytes) with
-                                            | Error providerError -> Ok(ProviderFailed providerError)
-                                            | Ok response ->
-                                                returnAfterSettlement effectId response (responseEvidence response))))))
+                        readAuthority authority
+                        |> Result.bind (fun (objects, _) -> requireAuthorityDescendant scope.OperationId observed objects)
+                        |> Result.bind (fun () ->
+                            match
+                                V1AdmissionRegistry.retryAfterProvenAbsence
+                                    (V1AdmissionRegistry.head registry)
+                                    liveAuthority
+                                    handle
+                                    scope.Owner
+                                    effectId
+                                    registry
+                            with
+                            | EffectAlreadyInFlight owner -> Error [ "effect-already-in-flight:" + owner ]
+                            | EffectAlreadySettled _ -> Error [ "retry-requires-proven-absence" ]
+                            | EffectRefused reasons -> Error reasons
+                            | EffectIntentAppended candidate ->
+                                appendCandidate journal "retry" scope.OperationId effectId observed candidate
+                                |> Result.bind (requireAccepted "effect-retry")
+                                |> Result.bind (fun (confirmed, permit) ->
+                                    match permit with
+                                    | None -> Error [ "effect-retry-not-won-by-this-invocation" ]
+                                    | Some initialPermit ->
+                                        V1AdmissionRegistry.refreshDispatch
+                                            port
+                                            liveAuthority
+                                            initialPermit
+                                            handle
+                                            scope.Owner
+                                            effectId
+                                            confirmed
+                                        |> Result.bind (fun fence ->
+                                            match
+                                                V1AdmissionRegistry.authorizeDispatch
+                                                    port
+                                                    liveAuthority
+                                                    fence
+                                                    handle
+                                                    scope.Owner
+                                                    effectId
+                                                    confirmed
+                                            with
+                                            | DispatchRefused reasons -> Error reasons
+                                            | DispatchAuthorized ->
+                                                match send (Array.copy requestBytes) with
+                                                | Error providerError -> Ok(ProviderFailed providerError)
+                                                | Ok response ->
+                                                    returnAfterSettlement effectId response (responseEvidence response)))))))
 
         interface IMutationFence with
             member _.Dispatch(effectId, canonicalRequestBytes, send, responseEvidence) =

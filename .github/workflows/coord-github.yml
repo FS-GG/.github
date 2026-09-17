@@ -85,7 +85,12 @@ jobs:
             --logger "trx;LogFileName=producer-fence-attacks.trx" \
             --results-directory "$RUNNER_TEMP/producer-fence-attacks"
           python3 tests/producer-fence-attacks/run.py \
-            --trx "$RUNNER_TEMP/producer-fence-attacks/producer-fence-attacks.trx"
+            --trx "$RUNNER_TEMP/producer-fence-attacks/producer-fence-attacks.trx" \
+            --test-assembly tests/FS.GG.Coord.GitHub.Tests/bin/Release/net10.0/FS.GG.Coord.GitHub.Tests.dll \
+            --product-assembly src/FS.GG.Coord.GitHub/bin/Release/net10.0/FS.GG.Coord.GitHub.dll \
+            --source-head "${{ github.event.pull_request.head.sha || github.sha }}"
+          python3 tests/producer-fence-attacks/selftest.py
+          python3 tests/producer-fence-attacks/probe_legacy.py --verify
 
       # A SUITE THAT CANNOT FAIL IS NOT A SUITE (#266, #436). A misconfigured runner that discovers
       # nothing exits 0, and this gate would then go green over an adapter nobody tested — which is epic

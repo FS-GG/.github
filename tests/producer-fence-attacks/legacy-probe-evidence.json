@@ -1,0 +1,50 @@
+{
+  "clients": [
+    {
+      "gs2089": "unresolved",
+      "missing": [
+        "fs.gg.coord.cli/0.58.0/tools/net10.0/any/fsgg-coord-engine.dll",
+        "fs.gg.coord.cli/0.58.0/fs.gg.coord.cli.0.58.0.nupkg"
+      ],
+      "searched": [
+        "fs.gg.coord.cli/0.58.0/tools/net10.0/any/fsgg-coord-engine.dll",
+        "fs.gg.coord.cli/0.58.0/fs.gg.coord.cli.0.58.0.nupkg"
+      ],
+      "status": "artifact-unavailable",
+      "version": "0.58.0"
+    },
+    {
+      "artifact": {
+        "dllSha256": "a46330791f86c0e93079f936315aa666c9d529ded6f280369d4490fb0b94094d",
+        "nupkgSha256": "64c1a287dca9059af1cf41bcc0fd36ca14fed13c57eccf90cd16d3060d654221"
+      },
+      "command": [
+        "comment",
+        "create",
+        "FS.GG.SDD#43",
+        "FS.GG.SDD#42",
+        "<owned-file>",
+        "--json"
+      ],
+      "exitCode": 0,
+      "gs2089": "failure",
+      "providerLedger": {
+        "count": 1,
+        "requests": [
+          {
+            "kind": "rest-mutation",
+            "method": "POST",
+            "path": "/repos/FS-GG/FS.GG.SDD/issues/43/comments"
+          }
+        ]
+      },
+      "status": "bypass-observed",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutSha256": "6ca2ef996ea5c9b0a686b87c5a16fe312bb23210aa17128cd032bf7def6bb5f9",
+      "version": "0.75.4"
+    }
+  ],
+  "isolation": "loopback-stateful-provider; no live GitHub mutation",
+  "schema": "fsgg.gs2-08.6-legacy-intercept/1",
+  "serverSha256": "93d30498f6d79f9e52b375e7d046d85fbd5ec6efafbfe9ad650cf0d306bb6fb5"
+}

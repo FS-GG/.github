@@ -138,26 +138,44 @@ journal state, and permits; records durable settlement evidence before reporting
 preserving reads.
 
 The live client remains fail closed until installation supplies protected authority and journal ports, provider
-reconciliation, credentials, and admitted records. This source candidate therefore demonstrates preserved
-`OperatingV1` and eligible `Preparing` behavior through fixtures without claiming live installation, publication,
-or native GS2-08.4/08.5 acceptance.
+reconciliation, credentials, and admitted records. Coordination merge
+`9588dc819898e8c18f18a0a5eedf95427208ba6d` (tree
+`75ee13d0aab7bf09ec6532a1faa1528478083f64`, reviewed source
+`b3db81ee17a122dfacf9565f036081a0dcca0d67`) now natively accepts the GS2-08.5 source behavior. That acceptance
+does not install the producer in any receiver and does not authorize live provider effects.
 
 ## Producer attack source window: GS2-08.6
 
 - [ ] Independently attack the merged producer boundary across the accepted closed writer population and retain
   offline, content-addressed evidence for native Coordination qualification.
 
-The independently authored oracle binds all 26 typed write roots from the accepted census and exercises both REST
-and GraphQL entry paths through `FencedTransport` and `DurableMutationFence`. The compiled attacks cover all eleven
-epochs, stale and rewound authority, missing tag, wrong manifest, permission loss, lost response, crashes around
-the send, concurrent ownership, operation and claim generation changes, request-byte identity conflicts, delayed
-old-SHA evidence, mutation-shaped legacy reads, and retry only after `ProvenAbsent` under a fresh fence. The live
-composition stays fail closed, while its test escape requires both an explicit flag and an absolute loopback URI.
+Protected `.github` merge `068d5dc3fa24d7e1fca99401c755e2f1f5fafe1d` (tree
+`a3302c16a0ed5f44e6490a87d3a28e5563ea25b9`) delivered bounded partial GS2-08.6 evidence. Coordination merge
+`9588dc819898e8c18f18a0a5eedf95427208ba6d` registers that evidence as partial; it does not accept GS2-08.6.
 
-The structural leg treats the census as a closed population without deriving expected behavior from producer code.
-Every non-CLI workflow, script, publication, telemetry, and direct-delivery writer remains an explicit GS2-08.9
-blocker until it proves the same boundary or is sealed. Installed 0.58.0 and 0.75.4 receivers likewise remain
-explicit GS2-08.9 blockers. This offline lane makes no Q4 real-provider claim and does not itself accept GS2-08.6.
+The completion oracle independently enumerates all 16 concrete production mutation callsites and maps equivalent
+callsites to six public production boundaries. Compiled positive and refusal controls execute those boundaries
+through `FencedTransport` and `DurableMutationFence`, including REST and GraphQL across all eleven epochs. The
+attacks cover stale and stable-rewound authority, an actually absent tag, wrong manifest, permission loss, lost
+response, typed claim and durable-operation replacement, `Preparing` nonmembers, admission close and restart,
+phase change between successive effects, request-byte identity conflicts, mutation-shaped legacy reads, an actual
+conditional old-SHA mismatch, and retry only after `ProvenAbsent` under a fresh fence.
+
+The durable leg serializes and reopens the journal after process-state loss at intent, before send, after send,
+before settlement, and after settlement. It asserts exact `Applied`, `ProvenAbsent`, `Partial`, and `Indeterminate`
+states and provider-effect counts, and runs a deterministic same-parent two-owner CAS race. The live composition
+stays fail closed, while its test escape requires both an explicit flag and an absolute loopback URI.
+
+The structural leg treats the accepted census as a closed population without deriving expected behavior from
+producer code. The retained 0.75.4 client was executed against an isolated intercepting provider and performed a
+write without the fence, so it is an observed GS2-08.9 failure. The exact 0.58.0 artifact is unavailable and remains
+unresolved. The 22 non-CLI workflow, script, publication, and direct-delivery writer sources are recorded with
+content hashes and exact execution blockers; none is represented as an attempted refusal when its control-plane
+envelope or redirectable artifact is unavailable. They remain GS2-08.9 residuals.
+
+This completion is candidate source and offline evidence until its own protected merge and later native
+Coordination acceptance. It does not install behavior in any receiver. Q4 is unclaimed because this lane has no
+isolated GitHub repository, token, ruleset, or authority to perform a safe live-provider mutation.
 
 ## Workspace, authority, and observation boundaries
 

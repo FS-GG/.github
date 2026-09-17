@@ -63,6 +63,11 @@ grep -Fq 'import-coordination-v1-admission.py" --check' "$ROOT/scripts/change-co
   && ok 'protected admission source import is verified on every change' \
   || bad 'protected admission source import verification is not universal'
 
+grep -Fq 'producer-fence-attacks/selftest.py' "$ROOT/scripts/change-completeness" \
+  && grep -Fq 'producer-fence-attacks/probe_legacy.py" --verify' "$ROOT/scripts/change-completeness" \
+  && ok 'producer evidence mutation checks and historical probe verification are universal' \
+  || bad 'producer evidence hardening is absent from universal validation'
+
 grep -Fq 'check-v1-writer-census.py" --structural' "$ROOT/scripts/change-completeness" \
   && ok 'cheap writer census runs on every change' \
   || bad 'writer census is not universal'
