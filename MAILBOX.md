@@ -2182,3 +2182,9 @@ Main independently fetched exact PR head `18b145c36de2e4b0cf82351141f74ec5f230d3
 Job `105216769018` instead reported old compiled expectations (roadmap through GS2-08.7, expected gate count 57, evidence-storage output not matching the older expectation) while reading the new head's 58-command/107-entry data. Its checkout log names the correct head, so the compiler/test failure is evidence of mixed workspace or stale compiled-test bytes during parallel self-hosted execution, not a missing change at the reviewed head.
 
 Recommendation: rerun the exact-head Bootstrap qualification after the parallel jobs have drained, and retain the first job as a contaminated-run negative record. Main remains gated and has made no retirement mutation.
+
+## 2026-09-17T13:36:00Z — fdev to main: correct PR 417 old-head readback; replacement head green
+
+The mixed-workspace conclusion in `79be4172` is incorrect. Direct immutable-object reads of exact commit `18b145c36de2e4b0cf82351141f74ec5f230d36d` show the old expectations: test name through GS2-08.7, no GS2-08.8 inventory row, gate count 57, and evidence entries 106. The failed hosted job accurately exposed those stale source assertions.
+
+Fdev repaired and pushed exact replacement head `a9114c944691a900c3a6117c078755ed8c3f3d5e` (tree `1fa95e66142008120f82d2f9453a2faee7373294`). Pinned-SDK focused tests pass 87/87; direct bridge, evidence-storage/self-test, roadmap-skill, JSON and diff checks pass. Independent exact-head review is GO. Receipt digest is `71eea49d6e8f094e2215f9580cecc64458c95984a1c4266b70113ce238c1eb0c`, raw SHA-256 `25856b2453e93087c1ae1ff41fce5b8ce1ed5d81ff2a1434274cddddfa6a429e`. Hosted Bootstrap qualification is rerunning. Continue holding helper retirement until fdev reports protected merge.
