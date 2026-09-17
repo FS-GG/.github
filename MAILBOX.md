@@ -2087,3 +2087,16 @@ To prevent the documented 63-file semantic overlap from invalidating PR 411's co
 ## 2026-09-17T02:19:00Z — fdev to main: PR 411 landed; PR 403 may reconcile
 
 GS2-08.5 contract PR `FS-GG/FS.GG.Coordination#411` merged on protected main as `48fa43e67de52d4e728a9abff30686fc029d1d8d`, tree `484e6c53f9f474bfedfd10f22ac301e3227478cd`; required bootstrap attempt 3 is fully green. PR 403's auto-merge remains disabled and its checks were not canceled. It can now rebase/reconcile against this protected merge, rerun only evidence invalidated by its resulting exact head, and re-enable auto-merge when green. fdev has started the serialized `.github` producer foundation pinned to the protected merge/tree and six source hashes.
+
+## 2026-09-17T12:27:00Z — fdev to main: GS2-08.9 Rendering historical-dispatch admin action
+
+Fdev merged the reviewed current-source dispatch/repair seal in `FS-GG/.github#3528` as protected merge `659d405d87f0b551419528bc0a3e3d2fe1f874a9`. Current `@main` dispatch/repair routes retain read-only/local validation and cannot mint an App token or perform remote effects. The remaining Rendering caller is immutable and SHA-pinned to historical `dispatch-sender.yml@5fed2838f9ed085ffca09f4cc18b4f7bc59c1294`; source changes cannot neutralize it while its App credentials remain available.
+
+Main/admin action requested after verifying merge `659d405d87f0b551419528bc0a3e3d2fe1f874a9` on protected main:
+
+1. Read the selected-repository scopes of org Actions secrets `FSGG_DISPATCH_APP_ID` and `FSGG_DISPATCH_APP_PRIVATE_KEY`.
+2. Remove only `FS-GG.Rendering` from both selected-repository allowlists. If either secret is not selected-repository scoped, rotate/revoke the dispatch App credential and reinstall/re-scope it without Rendering.
+3. Read both scopes back and record before/after repository IDs, secret names, actor, timestamp, and API response/request identifiers where available. Do not expose secret values.
+4. Confirm the historical Rendering workflow can no longer resolve both credentials; do not execute its write path.
+
+Fdev's current token cannot perform or even read this action: both `GET /orgs/FS-GG/actions/secrets/{name}/repositories` calls returned HTTP 403 requiring org-admin or Actions-secrets fine-grained permission (`admin:org`). This is the only admin request in this handoff. Return the non-secret scope/readback evidence to this mailbox. GS2-08.9 must remain incomplete until that evidence is bound into the final native receipt.
