@@ -177,13 +177,19 @@ This completion is candidate source and offline evidence until its own protected
 Coordination acceptance. It does not install behavior in any receiver. Q4 is unclaimed because this lane has no
 isolated GitHub repository, token, ruleset, or authority to perform a safe live-provider mutation.
 
-## Ready horizon: GS2-08.7 immutable bridge publication
+## Accepted GS2-08.7 publication and ready GS2-08.8 receiver horizon
 
 This horizon supersedes the earlier readiness and pending-status wording in this navigation plan. Coordination's
 protected merge `c8907be5dabc0a1d59dbe3c239ffd53a5541c863` is the single completion authority for GS2-08.1–08.6;
 the GS2-08.6 receipt digest is `4b19806d1c4f9d147368e29e04ab7a480dcb6b798aed32e37159e8ac92a1e0cf`.
-The next bounded outcome is GS2-08.7. Earlier sections remain historical design and source evidence rather than a
-second status ledger.
+GS2-08.7 is accepted by Coordination merge `6d3be73fd80a53c3929818960b4e9dc48293621d`
+([PR #416](https://github.com/FS-GG/FS.GG.Coordination/pull/416)) and receipt digest
+`0cac376a7f981f56143f14ebbbc6a465529251420fce93b5d115d44282e08e55`. The public coherent set is
+`0.90.0`, from source `3adada5a9738464291088830c47a30a3a8fc9561` and tree
+`0f075e251d90a2d33efe556df1dac38394b0a388`, with promoted content id
+`sha256:52b2774de277855c16a3c0852bc5113deea13d9076b866e6a7de0acc84f4b9c4` and release-manifest SHA-256
+`1bbb77f3de10ba3116f9de2ea1df3f5edee38be0de07fa0eaf7c173da3a8456a`. Earlier sections remain
+historical design and source evidence rather than a second status ledger.
 
 - [x] **P1 — Offline immutable-candidate probe.** Bind one explicitly supplied local `FS.GG.Coord.Cli` archive
   to its package id/version, archive and payload digests, source commit/tree, installed assembly digests, accepted
@@ -200,19 +206,33 @@ second status ledger.
   preparation, component publishers, promotion, stored-draft resume, completed-release replay, and the automatic
   patch entry point. Require signed exact-producer-archive attestations while comparing normalized payloads across
   feeds. Fresh read-only feed observations select unused coherent version `0.90.0`; no package or tag is published.
-- [ ] **P4 — Protected coherent publication.** Use separately authorized release-saga operation authority to
+- [x] **P4 — Protected coherent publication.** Use separately authorized release-saga operation authority to
   publish the prepared coherent set and retain prepared and per-feed served archive hashes, normalized payload
   identity, signatures, attestations, journals, and immutable promotion evidence.
-- [ ] **P5 — Public-only readback and native GS2-08.7 acceptance.** Install from the anonymous public read path
+- [x] **P5 — Public-only readback and native GS2-08.7 acceptance.** Install from the anonymous public read path
   with cleared sources and private empty caches, re-run bridge behavior and identity checks, retain exact public
   archive and installed-assembly evidence, and obtain native GS2-08.7 acceptance. Receiver adoption is GS2-08.8.
 
 P1 preserves the current production limitation: `Client.fs` composes `UnavailableProductionMutationFence` until
-protected authority, journal, operation scope, and provider reconciliation are installed. The probe demonstrates
-that refusal and does not wire live admission. Signing, attestation, Coordination registration, release-path
-binding and version preparation are complete. Protected publication and public-only native acceptance remain P4–P5;
-receiver adoption remains GS2-08.8. The observed
+protected authority, journal, operation scope, and provider reconciliation are installed. Publication and
+public-only native acceptance are complete. The probe demonstrates refusal and does not wire live admission. The observed
 0.75.4 bypass, unavailable 0.58.0 artifact, 22 external routes, and Q4 remain GS2-08.9 inputs.
+
+### GS2-08.8 receiver adoption — window A
+
+- [x] Adopt the exact public `0.90.0` CLI pin in the `.github` distribution manifest and provide one shared,
+  revision/tree-bound receiver proof at `tests/bridge-receivers/`. The proof consumes an explicit receiver report,
+  public release manifest and public packages; verifies the CLI, Kit and Drivers version and payload identities;
+  executes the CLI only from its isolated installed location; and proves fake credentials against loopback remain
+  refused by `UnavailableProductionMutationFence` with zero provider mutations. Independent mutations reject a
+  missing receiver, unaccounted route, old CLI, substituted package and a revision-bound dependency falsely called
+  immutable. The per-receiver evidence is `docs/reports/gs2-08-8-bridge-adoption.json`.
+- [ ] Adopt the same evidence contract at the remaining receiver families from their explicit protected revisions
+  and trees, with clean-creation and separately owned upgrade proof where applicable.
+
+Window A changes the `.github` receiver pin and shared proof only. It does not enable production admission or
+complete fleet adoption. Direct workflow, script, publication and delivery writers remain assigned to GS2-08.9;
+this receiver proof does not recategorize them as fenced or immutable.
 
 ## Workspace, authority, and observation boundaries
 

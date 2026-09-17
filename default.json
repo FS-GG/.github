@@ -17,7 +17,8 @@
     ":semanticCommits"
   ],
   "gitIgnoredAuthors": [
-    "297630107+fs-gg-cross-repo-dispatch[bot]@users.noreply.github.com"
+    "297630107+fs-gg-cross-repo-dispatch[bot]@users.noreply.github.com",
+    "41898282+github-actions[bot]@users.noreply.github.com"
   ],
   "nuget": {
     "description": [

@@ -1,0 +1,86 @@
+{
+  "schema": "fsgg.gs2-08.8-receiver-adoption/1",
+  "receiver": "FS-GG/.github",
+  "release": {
+    "version": "0.90.0",
+    "url": "https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.90.0",
+    "manifestUrl": "https://github.com/FS-GG/.github/releases/download/coherent-set%2Fv0.90.0/release-manifest.json",
+    "manifestSha256": "1bbb77f3de10ba3116f9de2ea1df3f5edee38be0de07fa0eaf7c173da3a8456a",
+    "contentId": "sha256:52b2774de277855c16a3c0852bc5113deea13d9076b866e6a7de0acc84f4b9c4",
+    "sourceCommit": "3adada5a9738464291088830c47a30a3a8fc9561",
+    "sourceTree": "0f075e251d90a2d33efe556df1dac38394b0a388"
+  },
+  "packages": [
+    {
+      "id": "FS.GG.Coord.Cli",
+      "version": "0.90.0",
+      "pinPath": "dist/dotnet/.config/dotnet-tools.json",
+      "feed": "https://api.nuget.org/v3/index.json",
+      "publicArchiveSha256": "69a7100358e01c846216cedb3f5ce17f72e99e8328a23be8e75b077dfd82d3e6",
+      "payloadSha256": "sha256:725b46203eeccbe1f73b42667d95ed07c6581dc2ca0886ac8011145c278ee481"
+    },
+    {
+      "id": "FS.GG.Kit",
+      "version": "0.90.0",
+      "pinPath": "Directory.Build.props",
+      "feed": "https://api.nuget.org/v3/index.json",
+      "publicArchiveSha256": "bea35100645f1acb459e385e303d0ef4ff7aa6576fa3f032ef8325cfef38b858",
+      "payloadSha256": "sha256:f2a318f0b900d049c496618bfdd7c2def5f50ffd9e649d8998f5c6585384f1f4"
+    }
+  ],
+  "installedCommand": {
+    "command": "${TOOL_PATH}/fsgg-coord-engine --version",
+    "versionOutput": "0.90.0.0",
+    "executablePath": "${TOOL_PATH}/.store/fs.gg.coord.cli/0.90.0/fs.gg.coord.cli/0.90.0/tools/net10.0/any/fsgg-coord-engine.dll",
+    "executableSha256": "c37d76fa42483e76b91275d8764bdcb04881cb9f3643c6e9fe9b0df3914d3512",
+    "gitHubAssemblySha256": "a11ef52027b9f4485ffc0f959ebf3592002d7b5338723a90c3aaa1240ea9ff49",
+    "resolution": "The isolated public restore supplies the wrapper only under TOOL_PATH; its exact packaged engine and GitHub assemblies are verified before execution."
+  },
+  "routes": [
+    {
+      "entrypoint": "dist/dotnet/.config/dotnet-tools.json",
+      "sha256": "31bcff6fe195cb13c6ade2389cbdc8a5f5ebdde590f99b6923399ce445189f5e",
+      "disposition": "bridge-adopted",
+      "behavior": "manifest-selects-public-cli-0.90.0"
+    },
+    {
+      "entrypoint": "tests/bridge-receivers/run.sh",
+      "sha256": "864dbc6a85042b8d0dad62fad9b93dfee75e8f8b8d2ebf9e8613e1e6bc45531d",
+      "disposition": "read-only-local-only",
+      "behavior": "public-readback-isolated-install-and-loopback-refusal"
+    },
+    {
+      "entrypoint": ".github/workflows/release-saga-tooling.yml",
+      "sha256": "4a9d96d5647ab067ae70c5ff22fa159f7235f4e356e8c1dab02802b0e1049463",
+      "disposition": "read-only-local-only",
+      "behavior": "candidate-revision-qualification"
+    },
+    {
+      "entrypoint": "docs/coordination/v1-writer-receiver-census.json",
+      "sha256": "3d7de0dee094991e08aed09b7478ea1191d6ee7f50baaad0087975a88e8f90db",
+      "disposition": "gs2-08.9-sealing",
+      "reason": "The accepted direct workflow, script, publication and delivery writer population remains assigned to GS2-08.9."
+    }
+  ],
+  "callableRoutes": [
+    {
+      "caller": ".github/workflows/release-saga-tooling.yml",
+      "callerSha256": "4a9d96d5647ab067ae70c5ff22fa159f7235f4e356e8c1dab02802b0e1049463",
+      "target": "FS-GG/.github/tests/bridge-receivers/run.sh",
+      "ref": "receiver-revision",
+      "observedRevision": "qualification-input",
+      "workflowSha256": "864dbc6a85042b8d0dad62fad9b93dfee75e8f8b8d2ebf9e8613e1e6bc45531d",
+      "disposition": "read-only-local-only"
+    }
+  ],
+  "qualification": {
+    "publicRestore": true,
+    "installedCommand": true,
+    "productionMutation": "refused-unavailable-fence",
+    "network": "loopback-only",
+    "credentials": "fake",
+    "mutationRequests": 0,
+    "probe": "The installed public CLI attempted a REST comment intent with fake credentials; UnavailableProductionMutationFence refused before the loopback listener received a mutation request."
+  },
+  "remainingBoundary": "This receiver selects the public bridge and proves installed refusal. Protected authority, journal, operation scope and provider reconciliation remain unavailable; direct workflow, script, publication and delivery writers remain for GS2-08.9 sealing."
+}
