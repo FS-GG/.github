@@ -42,7 +42,13 @@ type private StubFence(allow: bool) =
         member _.Dispatch(_, bytes, send, _) =
             calls <- calls + 1
             observed <- Array.copy bytes
-            if allow then Ok(send ()) else Error [ "test-refusal" ]
+
+            if allow then
+                match send () with
+                | Ok response -> Ok(AppliedResponse response)
+                | Error error -> Ok(ProviderFailed error)
+            else
+                Error [ "test-refusal" ]
 
         member _.Reconcile(_, _) = Ok()
         member _.RetryProvenAbsent(_, _, _) = Error [ "no-retry-fixture" ]
@@ -55,22 +61,22 @@ type private EvidenceFence(retryBytes: byte array) =
         evidence.Add value
 
         match value with
-        | Applied _ -> Ok(Ok response)
-        | _ -> Error [ "provider-response-not-applied" ]
+        | Applied _ -> Ok(AppliedResponse response)
+        | _ -> Ok(UnresolvedResponse response)
 
     member _.Evidence = List.ofSeq evidence
 
     interface IMutationFence with
         member _.Dispatch(_, _, send, classifyResponse) =
             match send () with
-            | Error error -> Ok(Error error)
+            | Error error -> Ok(ProviderFailed error)
             | Ok response -> classify response classifyResponse
 
         member _.Reconcile(_, _) = Ok()
 
         member _.RetryProvenAbsent(_, send, classifyResponse) =
             match send (Array.copy retryBytes) with
-            | Error error -> Ok(Error error)
+            | Error error -> Ok(ProviderFailed error)
             | Ok response -> classify response classifyResponse
 
 let private intent (providerRequest: Request) =
@@ -95,8 +101,10 @@ let private assertInitialAndRetryEvidence providerRequest response predicate =
     let transport =
         FencedTransport(recorder :> IProviderGitHubTransport, fence) :> IGitHubTransport
 
-    Assert.True(transport.SendMutation(intent providerRequest) |> Result.isError)
-    Assert.True(transport.RetryMutation("effect-1") |> Result.isError)
+    let initial = transport.SendMutation(intent providerRequest)
+    let retry = transport.RetryMutation("effect-1")
+    Assert.Equal(Ok response, initial)
+    Assert.Equal(Ok response, retry)
     Assert.Equal(2, recorder.RestCalls + recorder.GraphQlCalls)
     Assert.Equal(2, fence.Evidence.Length)
     Assert.All(fence.Evidence, fun value -> Assert.True(predicate value, $"unexpected evidence: {value}"))
@@ -133,7 +141,7 @@ let ``definitive REST and GraphQL success bind Applied to the response body dige
 [<InlineData(202)>]
 [<InlineData(304)>]
 [<InlineData(500)>]
-let ``initial and retry refuse non-definitive REST responses as Indeterminate`` status =
+let ``initial and retry preserve non-definitive REST responses as Indeterminate`` status =
     let providerRequest =
         { request "repos/o/r/issues/1" Rest with
             Method = "PATCH"
@@ -146,8 +154,9 @@ let ``initial and retry refuse non-definitive REST responses as Indeterminate`` 
 
 [<Theory>]
 [<InlineData("{\"errors\":[{\"message\":\"failed\"}]}", false)>]
-[<InlineData("{\"data\":{\"update\":null},\"errors\":[{\"message\":\"partial\"}]}", true)>]
-let ``initial and retry refuse GraphQL 200 errors and partial data`` body expectedPartial =
+[<InlineData("{\"data\":{\"first\":{\"id\":\"1\"},\"second\":null},\"errors\":[{\"message\":\"partial\",\"path\":[\"second\"]}]}",
+             true)>]
+let ``initial and retry preserve GraphQL 200 errors and partial alias data`` body expectedPartial =
     let providerRequest =
         { request "graphql" GraphQl with
             Method = "POST"
@@ -157,6 +166,23 @@ let ``initial and retry refuse GraphQL 200 errors and partial data`` body expect
     assertInitialAndRetryEvidence providerRequest (providerResponse 200 body) (function
         | Partial reason when expectedPartial -> reason.Contains("response-sha256=")
         | Indeterminate reason when not expectedPartial -> reason.Contains("response-sha256=")
+        | _ -> false)
+
+[<Theory>]
+[<InlineData("{\"data\":null}")>]
+[<InlineData("{\"data\":1}")>]
+[<InlineData("{\"data\":[]}")>]
+[<InlineData("{\"data\":{}}")>]
+[<InlineData("{\"data\":{\"first\":null,\"second\":null}}")>]
+let ``initial and retry keep GraphQL 200 without a non-null mutation result Indeterminate`` body =
+    let providerRequest =
+        { request "graphql" GraphQl with
+            Method = "POST"
+            Body = Query("mutation { update { id } }", [])
+        }
+
+    assertInitialAndRetryEvidence providerRequest (providerResponse 200 body) (function
+        | Indeterminate reason -> reason.Contains("response-sha256=")
         | _ -> false)
 
 [<Fact>]

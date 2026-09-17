@@ -312,6 +312,15 @@ module Transport =
                 else
                     let hasErrors, errors = root.TryGetProperty "errors"
 
+                    let hasMutationResult =
+                        let hasData, data = root.TryGetProperty "data"
+
+                        hasData
+                        && data.ValueKind = JsonValueKind.Object
+                        && (data.EnumerateObject() |> Seq.isEmpty |> not)
+                        && (data.EnumerateObject()
+                            |> Seq.exists (fun property -> property.Value.ValueKind <> JsonValueKind.Null))
+
                     let carriesErrors =
                         hasErrors
                         && errors.ValueKind = JsonValueKind.Array
@@ -320,19 +329,14 @@ module Transport =
                     if hasErrors && errors.ValueKind <> JsonValueKind.Array then
                         V1Admission.Indeterminate(evidenceReason "graphql-errors-invalid")
                     elif carriesErrors then
-                        let hasData, data = root.TryGetProperty "data"
-
-                        if hasData && data.ValueKind <> JsonValueKind.Null then
+                        if hasMutationResult then
                             V1Admission.Partial(evidenceReason "graphql-partial-data-with-errors")
                         else
                             V1Admission.Indeterminate(evidenceReason "graphql-errors")
+                    elif hasMutationResult then
+                        V1Admission.Applied digest
                     else
-                        let hasData, _ = root.TryGetProperty "data"
-
-                        if hasData then
-                            V1Admission.Applied digest
-                        else
-                            V1Admission.Indeterminate(evidenceReason "graphql-response-without-data")
+                        V1Admission.Indeterminate(evidenceReason "graphql-response-without-mutation-result")
             with :? JsonException ->
                 V1Admission.Indeterminate(evidenceReason "graphql-response-invalid-json")
         | _, GraphQl -> V1Admission.Indeterminate(evidenceReason "graphql-response-not-definitive")
@@ -670,8 +674,9 @@ module Transport =
                         responseEvidence
                     )
                 with
-                | Ok(Ok attempt) -> Ok attempt.Response
-                | Ok(Error error) -> Error error
+                | Ok(V1Admission.AppliedResponse attempt)
+                | Ok(V1Admission.UnresolvedResponse attempt) -> Ok attempt.Response
+                | Ok(V1Admission.ProviderFailed error) -> Error error
                 | Error reasons ->
                     Error(Malformed(request.Subject, "v1 admission refused: " + String.Join("; ", reasons)))
 
@@ -700,6 +705,7 @@ module Transport =
                         responseEvidence
                     )
                 with
-                | Ok(Ok attempt) -> Ok attempt.Response
-                | Ok(Error error) -> Error error
+                | Ok(V1Admission.AppliedResponse attempt)
+                | Ok(V1Admission.UnresolvedResponse attempt) -> Ok attempt.Response
+                | Ok(V1Admission.ProviderFailed error) -> Error error
                 | Error reasons -> Error(Malformed(effectId, "v1 retry refused: " + String.Join("; ", reasons)))

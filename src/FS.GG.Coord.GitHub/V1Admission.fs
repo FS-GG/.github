@@ -54,6 +54,11 @@ module V1Admission =
 
     type OperationScope = private OperationScope of Scope
 
+    type DispatchOutcome<'response, 'providerError> =
+        | ProviderFailed of 'providerError
+        | AppliedResponse of 'response
+        | UnresolvedResponse of 'response
+
     let operationScope operationId owner operationGeneration expectedClaimGeneration =
         [
             if String.IsNullOrWhiteSpace operationId then
@@ -84,7 +89,7 @@ module V1Admission =
             canonicalRequestBytes: byte array *
             send: (unit -> Result<'response, 'providerError>) *
             responseEvidence: ('response -> ProviderEvidence) ->
-                Result<Result<'response, 'providerError>, string list>
+                Result<DispatchOutcome<'response, 'providerError>, string list>
 
         abstract Reconcile: effectId: string * provider: ProviderReconciliation -> Result<unit, string list>
 
@@ -92,7 +97,7 @@ module V1Admission =
             effectId: string *
             send: (byte array -> Result<'response, 'providerError>) *
             responseEvidence: ('response -> ProviderEvidence) ->
-                Result<Result<'response, 'providerError>, string list>
+                Result<DispatchOutcome<'response, 'providerError>, string list>
 
     let authorityPort readObjects rereadHead =
         {
@@ -269,13 +274,15 @@ module V1Admission =
             settle effectId scope.Owner provider
 
         let returnAfterSettlement effectId response evidence =
-            settleEvidence effectId evidence
-            |> Result.bind (fun () ->
-                match evidence with
-                | Applied _ -> Ok(Ok response)
-                | Partial reason -> Error [ "provider-response-partial:" + reason ]
-                | Indeterminate reason -> Error [ "provider-response-indeterminate:" + reason ]
-                | StronglyAbsent _ -> Error [ "provider-response-unexpected-absence" ])
+            match evidence with
+            | StronglyAbsent _ -> Error [ "provider-response-unexpected-absence" ]
+            | Applied _ ->
+                settleEvidence effectId evidence
+                |> Result.map (fun () -> AppliedResponse response)
+            | Partial _
+            | Indeterminate _ ->
+                settleEvidence effectId evidence
+                |> Result.map (fun () -> UnresolvedResponse response)
 
         let authorize effectId requestBytes objects snapshot registry handle observed =
             epochGeneration objects
@@ -353,7 +360,7 @@ module V1Admission =
                         authorize effectId requestBytes objects snapshot registry handle observed
                         |> Result.bind (fun () ->
                             match send () with
-                            | Error providerError -> Ok(Error providerError)
+                            | Error providerError -> Ok(ProviderFailed providerError)
                             | Ok response -> returnAfterSettlement effectId response (responseEvidence response)))))
 
         let retry effectId send responseEvidence =
@@ -404,7 +411,7 @@ module V1Admission =
                                         | DispatchRefused reasons -> Error reasons
                                         | DispatchAuthorized ->
                                             match send (Array.copy requestBytes) with
-                                            | Error providerError -> Ok(Error providerError)
+                                            | Error providerError -> Ok(ProviderFailed providerError)
                                             | Ok response ->
                                                 returnAfterSettlement effectId response (responseEvidence response))))))
 

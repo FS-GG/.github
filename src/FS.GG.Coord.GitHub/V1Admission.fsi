@@ -50,6 +50,13 @@ module V1Admission =
     /// business code supplies only an effect id and provider request.
     type OperationScope
 
+    /// Result of one provider attempt after its evidence has been durably settled. Unresolved responses
+    /// remain available to protocol parsers while the registry continues to block replay.
+    type DispatchOutcome<'response, 'providerError> =
+        | ProviderFailed of 'providerError
+        | AppliedResponse of 'response
+        | UnresolvedResponse of 'response
+
     val operationScope:
         operationId: string ->
         owner: string ->
@@ -66,7 +73,7 @@ module V1Admission =
             canonicalRequestBytes: byte array *
             send: (unit -> Result<'response, 'providerError>) *
             responseEvidence: ('response -> ProviderEvidence) ->
-                Result<Result<'response, 'providerError>, string list>
+                Result<DispatchOutcome<'response, 'providerError>, string list>
 
         abstract Reconcile: effectId: string * provider: ProviderReconciliation -> Result<unit, string list>
 
@@ -74,7 +81,7 @@ module V1Admission =
             effectId: string *
             send: (byte array -> Result<'response, 'providerError>) *
             responseEvidence: ('response -> ProviderEvidence) ->
-                Result<Result<'response, 'providerError>, string list>
+                Result<DispatchOutcome<'response, 'providerError>, string list>
 
     val authorityPort:
         readObjects: (unit -> Result<AuthorityGitObjects, string>) ->
