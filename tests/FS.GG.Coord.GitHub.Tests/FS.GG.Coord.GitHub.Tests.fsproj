@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="ProducerFenceAttackTests.fs" />
     <Compile Include="V1AdmissionTests.fs" />
     <Compile Include="TransportTests.fs" />
     <Compile Include="BudgetTests.fs" />
@@ -40,6 +41,10 @@
     <Compile Include="GraphQlErrorsFirstTests.fs" />
     <Compile Include="ConnectionPaginationTests.fs" />
     <Compile Include="GraphQlBoundaryTests.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../producer-fence-attacks/oracle.json" Link="producer-fence-attack-oracle.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
