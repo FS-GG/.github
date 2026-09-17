@@ -1,0 +1,79 @@
+name: bridge-package
+
+on:
+  pull_request:
+    paths:
+      - "tests/bridge-package/**"
+      - "tests/coord-engine-e2e/stateful_server.py"
+      - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.Cli.Kernel/**"
+      - "src/FS.GG.Coord.Cli.BoardOps/**"
+      - "src/FS.GG.Coord.Cli.Lifecycle/**"
+      - "src/FS.GG.Coord.Core/**"
+      - "src/FS.GG.Coord.GitHub/**"
+      - "src/FS.GG.Telemetry.Client/**"
+      - "src/FS.GG.Telemetry.Contracts/**"
+      - "src/FS.GG.Telemetry.Dashboard/**"
+      - "src/FS.GG.Telemetry.Store/**"
+      - "src/FS.GG.Kit/FS.GG.Kit.csproj"
+      - "src/FS.GG.Drivers/FS.GG.Drivers.csproj"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/release-coord-engine.yml"
+      - ".github/workflows/release-saga-start.yml"
+      - ".github/workflows/release-saga-prepare.yml"
+      - ".github/workflows/release-saga-promote.yml"
+      - ".github/workflows/bridge-package.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tests/bridge-package/**"
+      - "tests/coord-engine-e2e/stateful_server.py"
+      - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.Cli.Kernel/**"
+      - "src/FS.GG.Coord.Cli.BoardOps/**"
+      - "src/FS.GG.Coord.Cli.Lifecycle/**"
+      - "src/FS.GG.Coord.Core/**"
+      - "src/FS.GG.Coord.GitHub/**"
+      - "src/FS.GG.Telemetry.Client/**"
+      - "src/FS.GG.Telemetry.Contracts/**"
+      - "src/FS.GG.Telemetry.Dashboard/**"
+      - "src/FS.GG.Telemetry.Store/**"
+      - "src/FS.GG.Kit/FS.GG.Kit.csproj"
+      - "src/FS.GG.Drivers/FS.GG.Drivers.csproj"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/release-coord-engine.yml"
+      - ".github/workflows/release-saga-start.yml"
+      - ".github/workflows/release-saga-prepare.yml"
+      - ".github/workflows/release-saga-promote.yml"
+      - ".github/workflows/bridge-package.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bridge-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Bind the package to the PR head rather than GitHub's synthetic merge ref. Full history keeps the
+      # independently pinned producer commit/tree available for an offline ancestry check after later repairs.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Pack, install and probe the local bridge candidate
+        run: bash tests/bridge-package/run.sh
