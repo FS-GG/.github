@@ -19,25 +19,51 @@
       "path": ".github/workflows/kit-auto-publish.yml",
       "sha256": "538233ef890f6b13463ccd8dab4bbb5950819133e3abb6a1913bf4d0f81f4da5",
       "disposition": "manual-local-qualification-only",
-      "capabilityLoss": ["push-trigger", "schedule-trigger", "app-token", "tag-write", "issue-write", "pull-request-write", "draft-release-call"]
+      "capabilityLoss": [
+        "push-trigger",
+        "schedule-trigger",
+        "app-token",
+        "tag-write",
+        "issue-write",
+        "pull-request-write",
+        "draft-release-call"
+      ]
     },
     {
       "path": ".github/workflows/release-new-sdd-workspace.yml",
       "sha256": "28bb782d48c1d0fbf4f71e1000dc73fb1517fda3a8b71942358c604855a2360f",
       "disposition": "manual-local-pack-only",
-      "capabilityLoss": ["tag-trigger", "packages-write", "oidc-token", "github-package-publish", "nuget-package-publish"]
+      "capabilityLoss": [
+        "tag-trigger",
+        "packages-write",
+        "oidc-token",
+        "github-package-publish",
+        "nuget-package-publish"
+      ]
     },
     {
       "path": ".github/workflows/release-telemetry-host.yml",
       "sha256": "e233ecf159aa8cd5920ddd80c9e05798f7d45c0c0210f073b44f21c0c50d589a",
       "disposition": "manual-source-bound-local-qualification-only",
-      "capabilityLoss": ["contents-write", "packages-write", "oidc-token", "artifact-upload", "tag-write", "package-publish", "release-create"]
+      "capabilityLoss": [
+        "contents-write",
+        "packages-write",
+        "oidc-token",
+        "artifact-upload",
+        "tag-write",
+        "package-publish",
+        "release-create"
+      ]
     },
     {
       "path": "scripts/release-saga-ci.sh",
       "sha256": "cca3f68dd6693e8dff5e8bc750578d28ad3a430a643821ae05ce681ea27841c1",
       "disposition": "read-and-init-retained-effects-sealed",
-      "sealedCommands": ["github", "nuget-probe", "nuget-record"],
+      "sealedCommands": [
+        "github",
+        "nuget-probe",
+        "nuget-record"
+      ],
       "retainedFailurePath": "local journal update and immutable release readback",
       "sealedFailureBoundary": "mutable journal upload",
       "refusalExit": 78
@@ -73,10 +99,15 @@
     "removedWriterRows": [
       ".github/workflows/kit-auto-publish.yml",
       ".github/workflows/release-new-sdd-workspace.yml",
-      ".github/workflows/release-telemetry-host.yml"
+      ".github/workflows/release-telemetry-host.yml",
+      "scripts/NewSddWorkspace/Program.fs",
+      "tools/routine-delivery.py"
     ],
-    "refreshedSourceIdentities": ["scripts/release-saga-ci.sh", "scripts/release-saga-promote-release.sh"],
-    "result": "The three workflows no longer contain a discovered sink; the retained scripts remain conservatively enumerated because unreachable sink syntax remains in their historical implementation."
+    "refreshedSourceIdentities": [
+      "scripts/release-saga-ci.sh",
+      "scripts/release-saga-promote-release.sh"
+    ],
+    "result": "Three unbound publisher workflows and two standalone helper sources no longer form current writer rows. Retained release scripts remain conservatively enumerated because unreachable sink syntax remains in their historical implementation; published helper copies remain subject to separate runtime retirement."
   },
   "residuals": [
     {

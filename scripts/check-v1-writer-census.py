@@ -212,8 +212,8 @@ def validate_source_rows(root: Path, census: dict[str, Any]) -> tuple[int, int]:
             raise CensusError(f"census source identity changed for {path}: expected {row['sha256']}, got {actual_digest}")
 
     direct = by_path.get("tools/routine-delivery.py", {})
-    if direct.get("disposition") != "remote-writer" or "dynamic-process" not in direct.get("sinkKinds", []):
-        raise CensusError("tools/routine-delivery.py direct REST PUT merge must remain an explicit remote writer")
+    if direct.get("disposition") != "read-only" or "dynamic-process" not in direct.get("sinkKinds", []):
+        raise CensusError("tools/routine-delivery.py sealed merge boundary must remain classified read-only")
     for path in (
         "src/FS.GG.Coord.Cli/TelemetryApplication.fs",
         "src/FS.GG.Coord.Cli/TelemetryRuntimeApplication.fs",
@@ -227,7 +227,7 @@ def validate_source_rows(root: Path, census: dict[str, Any]) -> tuple[int, int]:
         ".github/workflows/fsgg-dispatch-broker.yml": "read-only",
         ".github/workflows/github-substrate-v2-authority-qualification.yml": "local-only",
         ".github/workflows/release-coord-engine.yml": "publish-writer",
-        "scripts/NewSddWorkspace/Program.fs": "protected-admin-writer",
+        "scripts/NewSddWorkspace/Program.fs": "read-only",
         "registry/dependencies.yml": "declaration-only",
         "registry/repos.yml": "declaration-only",
         "registry/skills.yml": "declaration-only",

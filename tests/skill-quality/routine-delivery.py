@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import hashlib
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -11,6 +12,7 @@ import unittest
 from dataclasses import asdict
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from unittest import mock
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -53,8 +55,10 @@ class FakeApi:
         self.selections = selections or {}
         self.jobs = jobs or []
         self.job_reads = iter(job_reads) if job_reads is not None else None
+        self.read_attempts = 0
 
     def get_pr(self, repo: str, pr: int) -> dict:
+        self.read_attempts += 1
         return next(self.reads)
 
     def merge(self, repo: str, pr: int, head: str, method: str) -> dict:
@@ -117,6 +121,32 @@ class RoutineDeliveryTests(unittest.TestCase):
         code, result = self.call(api, apply=False)
         self.assertEqual((code, result.outcome, api.attempts), (0, "ready", 0))
         self.assertEqual((asdict(result)["expectedHead"], asdict(result)["observedHead"]), (HEAD, HEAD))
+
+    def test_production_merge_boundary_refuses_before_invoking_gh(self):
+        api = MODULE.GhApi()
+        with (
+            mock.patch.dict(os.environ, {"GH_TOKEN": "fake", "GITHUB_TOKEN": "fake"}),
+            mock.patch.object(MODULE.subprocess, "run") as invoked,
+        ):
+            with self.assertRaisesRegex(
+                MODULE.EffectAdmissionUnavailable,
+                "common v1 effect admission is unavailable",
+            ):
+                api.merge("FS-GG/.github", 7, HEAD, "squash")
+        invoked.assert_not_called()
+
+    def test_admission_refusal_is_not_an_attempt_or_readback_delivery(self):
+        api = FakeApi(
+            [opened(), merged()],
+            [MODULE.EffectAdmissionUnavailable("common v1 effect admission is unavailable")],
+        )
+        code, result = self.call(api)
+        self.assertEqual(
+            (code, result.outcome, result.codeDelivery, result.attempts),
+            (2, "refused", "not-delivered", 0),
+        )
+        self.assertEqual(api.read_attempts, 1)
+        self.assertIn("common v1 effect admission is unavailable", result.reason)
 
     def test_changed_head_refuses_before_a_write(self):
         api = FakeApi([opened("c" * 40)])

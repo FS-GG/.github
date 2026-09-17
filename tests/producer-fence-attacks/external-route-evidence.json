@@ -123,10 +123,10 @@
     },
     {
       "path": "scripts/NewSddWorkspace/Program.fs",
-      "sha256": "f03ea38ce142e315c6c04e4d4d5ed1a0d4567c6684f031dd2b032222f6556cb5",
-      "status": "no-standalone-artifact",
+      "sha256": "b3e3ebe3b88f67b56ea7d85be4865c6f401ae4e94d9cf451c8bae957c15cea3f",
+      "status": "current-revision-retired",
       "gs2089": "unresolved",
-      "reason": "Census row is source/library code without a retained standalone executable plus complete invocation inputs."
+      "reason": "Current source permits explicit GraphQL reads but returns pending before repository or Project mutation. Published and installed historical tool copies remain pending runtime retirement."
     },
     {
       "path": "scripts/release-saga-ci.sh",
@@ -151,10 +151,10 @@
     },
     {
       "path": "tools/routine-delivery.py",
-      "sha256": "045d38b4ab93434fc0cd00e0fc927f2923091ab4e5dba886f720167af52eab0e",
-      "status": "provider-cli-not-redirectable",
+      "sha256": "03adc237c89fc4fd05d29c7fe9191d0d2ab701c3ff8de54c24eacb2e77d0b429",
+      "status": "current-revision-retired",
       "gs2089": "unresolved",
-      "reason": "Executable delegates mutation to authenticated gh against an OWNER/REPO and exposes no isolated provider base; live merge authority is intentionally absent."
+      "reason": "Current source returns a refused delivery with zero mutation attempts before invoking gh. Published and materialized historical Drivers copies remain pending runtime retirement."
     }
   ]
 }

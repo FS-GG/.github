@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Merge one routine PR and report its native delivery result exactly once."""
+"""Inspect one routine PR and report its native delivery result exactly once."""
 
 from __future__ import annotations
 
@@ -51,6 +51,10 @@ class AmbiguousWrite(RuntimeError):
     """The merge request may have reached GitHub, so readback must decide."""
 
 
+class EffectAdmissionUnavailable(RuntimeError):
+    """The accepted common effect admission cannot authorize this provider mutation."""
+
+
 class NativeApi(Protocol):
     def get_pr(self, repo: str, pr: int) -> dict[str, Any]: ...
 
@@ -88,16 +92,11 @@ class GhApi:
         return self._run([f"repos/{repo}/pulls/{pr}"])
 
     def merge(self, repo: str, pr: int, head: str, method: str) -> dict[str, Any]:
-        return self._run(
-            [
-                "--method",
-                "PUT",
-                f"repos/{repo}/pulls/{pr}/merge",
-                "-f",
-                f"sha={head}",
-                "-f",
-                f"merge_method={method}",
-            ]
+        # This source boundary cannot retroactively disable retained/published copies. Operators must
+        # separately remove their credentials or callers before this prepared retirement lands last.
+        raise EffectAdmissionUnavailable(
+            "common v1 effect admission is unavailable; direct REST merge is disabled "
+            "until a qualified admitted delivery boundary replaces it"
         )
 
     def coherent_runs(self, repo: str, workflow: str, head: str) -> list[dict[str, Any]]:
@@ -455,6 +454,11 @@ def summarize(
         attempts += 1
         try:
             response = api.merge(repo, pr_number, expected_head, merge_method)
+        except EffectAdmissionUnavailable as error:
+            return 2, bound(
+                "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
+                "refused", "not-delivered", publication, None, 0, str(error), disposition, coherent,
+            )
         except AmbiguousWrite:
             after = api.get_pr(repo, pr_number)
             allowed, reason = eligible(after, expected_head)

@@ -450,47 +450,66 @@ type private SecurityReport =
         Outcome: Outcome
     }
 
-let private graphql (query: string) (variables: (string * string) list) =
-    let args =
-        [
-            yield "api"
-            yield "graphql"
-            yield "-f"
-            yield "query=" + query
-            for name, value in variables do
-                yield "-F"
-                yield sprintf "%s=%s" name value
-        ]
+let private remoteAdministrationAdmissionUnavailable =
+    "common v1 effect admission is unavailable; remote repository and Project administration remains pending"
 
-    runProcess false "gh" args
+/// Only the explicit operation form used by the retained readers reaches `gh`. GraphQL comments,
+/// fragments, shorthand documents, mutation operations, and unknown syntax all fail closed instead
+/// of relying on a list of spellings that happen to look mutative.
+let private isExplicitGraphQlRead (document: string) =
+    document.TrimStart().StartsWith("query(", StringComparison.Ordinal)
+
+/// Keep the legacy administrative reader available, but close its direct mutation route at the
+/// process boundary. The accepted common v1 effect admission is the only route that may re-enable
+/// these effects; this standalone tool cannot manufacture its protected authority, durable operation
+/// scope, admission journal, generations, or provider reconciliation from an ambient `gh` credential.
+let private graphql (query: string) (variables: (string * string) list) =
+    if isExplicitGraphQlRead query then
+        let args =
+            [
+                yield "api"
+                yield "graphql"
+                yield "-f"
+                yield "query=" + query
+                for name, value in variables do
+                    yield "-F"
+                    yield sprintf "%s=%s" name value
+            ]
+
+        runProcess false "gh" args
+    else
+        1, remoteAdministrationAdmissionUnavailable
 
 /// Send the collaborator list as GraphQL variables. `gh api -F` understands the documented
 /// `array[][field]` spelling and serializes each node id as JSON data; node ids never become query
 /// syntax. Keeping this separate from the scalar helper makes the production request shape visible
 /// to tests and prevents a future fallback to interpolation.
 let private graphqlProjectCollaborators (query: string) (projectId: string) (writers: ResolvedProjectWriter list) =
-    let args =
-        [
-            yield "api"
-            yield "graphql"
-            yield "-f"
-            yield "query=" + query
-            yield "-F"
-            yield "id=" + projectId
-            for writer in writers do
+    if isExplicitGraphQlRead query then
+        let args =
+            [
+                yield "api"
+                yield "graphql"
+                yield "-f"
+                yield "query=" + query
                 yield "-F"
+                yield "id=" + projectId
+                for writer in writers do
+                    yield "-F"
 
-                yield
-                    sprintf
-                        "collaborators[][%s]=%s"
-                        (if writer.ActorKind = "team" then "teamId" else "userId")
-                        writer.ActorId
+                    yield
+                        sprintf
+                            "collaborators[][%s]=%s"
+                            (if writer.ActorKind = "team" then "teamId" else "userId")
+                            writer.ActorId
 
-                yield "-F"
-                yield "collaborators[][role]=WRITER"
-        ]
+                    yield "-F"
+                    yield "collaborators[][role]=WRITER"
+            ]
 
-    runProcess false "gh" args
+        runProcess false "gh" args
+    else
+        1, remoteAdministrationAdmissionUnavailable
 
 /// Apply the repository's typed `IssueCreationPolicy` only after reading it, then re-read the
 /// exact field. This is intentionally not a best-effort security claim: unavailable `gh`, a 404,
@@ -528,7 +547,7 @@ let private secureRepository (repository: string) : RepositoryPolicyReceipt =
                     let changed, _ = graphql mutation [ "id", id ]
 
                     if changed <> 0 then
-                        RepositoryPending(repository, "IssueCreationPolicy mutation failed")
+                        RepositoryPending(repository, remoteAdministrationAdmissionUnavailable)
                     else
                         let reread, verified = graphql read [ "owner", owner; "name", name ]
 
@@ -613,7 +632,7 @@ let private applyProjectVisibility (owner: string) (title: string) (desired: boo
             graphql mutation [ "id", id; "public", if wanted then "true" else "false" ]
 
         if code <> 0 then
-            ProjectPending(project, "Project visibility mutation failed")
+            ProjectPending(project, remoteAdministrationAdmissionUnavailable)
         else
             match inspectProject owner title with
             | ProjectObserved(_, verifiedId, actual, actor) when actual = wanted ->
@@ -684,7 +703,7 @@ let private applyProjectWriters (owner: string) (title: string) (desired: string
             let code, output = graphqlProjectCollaborators mutation id resolved
 
             if code <> 0 then
-                ProjectPending(project, "Project writer allowlist mutation failed")
+                ProjectPending(project, remoteAdministrationAdmissionUnavailable)
             else
                 try
                     let collaborators =
