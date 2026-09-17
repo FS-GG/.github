@@ -163,6 +163,10 @@ for bundle in player studio tactical arcade complete; do
   expect_ok "--bundle $bundle parses for fable-game" -- "$TGT" P --template fable-game --bundle "$bundle"
 done
 
+# Historical admitted-administration tests remain available for the future qualified replacement.
+# They are not part of the current production contract because the common admission is unavailable.
+if [ "${FSGG_TEST_QUALIFIED_REMOTE_ADMIN:-0}" = 1 ]; then
+
 # Project production route. The double rejects the exact defects found in ordinary review: it
 # requires a typed collaborator variable, nested gh fields for JSON object serialization, a selected
 # mutation payload, and forbids node ids in GraphQL source. It also returns the same payload shape as
@@ -446,6 +450,74 @@ EOF
     bad "secure $secure_case must fail closed" "rc=$case_rc: $case_out"
   fi
 done
+
+fi
+
+# GS2-08.9: fake credentials must not turn the legacy repository/Project helpers into authority.
+# The `gh` double serves reads and treats any GraphQL mutation as an attack; production must retain
+# the exact pending obligation without ever invoking that arm.
+SEALED_BIN="$WORK/sealed-admin-bin"; mkdir -p "$SEALED_BIN"
+SEALED_LOG="$WORK/sealed-admin.log"
+SEALED_MUTATION="$WORK/sealed-admin-mutation"
+cat > "$SEALED_BIN/gh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "${SEALED_LOG:?}"
+case " $* " in
+  *'mutation'*) : > "${SEALED_MUTATION:?}"; exit 91 ;;
+  *'repository(owner:'*) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"repository":{"id":"R_1","issueCreationPolicy":"OPEN"}}}' ;;
+  *'projectsV2(first:100)'*) printf '{"data":{"viewer":{"login":"fixture"},"repositoryOwner":{"__typename":"Organization","projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":%s}]}}}}\n' "${SEALED_PROJECT_PUBLIC:-true}" ;;
+  *'user(login:$login)'*) printf '%s\n' '{"data":{"user":{"id":"U_1"}}}' ;;
+  *) echo 'unexpected read route' >&2; exit 92 ;;
+esac
+EOF
+chmod +x "$SEALED_BIN/gh"
+
+SEALED_REPO="$WORK/sealed-repo"; mkdir -p "$SEALED_REPO/.fsgg"
+printf '%s\n' '{"securityObligations":[{"kind":"repository-issue-policy","target":"acme/app"}]}' > "$SEALED_REPO/.fsgg/scaffold-provenance.json"
+cp "$SEALED_REPO/.fsgg/scaffold-provenance.json" "$SEALED_REPO/before.json"
+sealed_rc=0
+sealed_out="$(GH_TOKEN=fake GITHUB_TOKEN=fake SEALED_LOG="$SEALED_LOG" SEALED_MUTATION="$SEALED_MUTATION" PATH="$SEALED_BIN:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$SEALED_REPO" --repo acme/app 2>&1)" || sealed_rc=$?
+if [ "$sealed_rc" -ne 0 ] && cmp -s "$SEALED_REPO/before.json" "$SEALED_REPO/.fsgg/scaffold-provenance.json" \
+  && grep -q 'common v1 effect admission is unavailable' <<<"$sealed_out" \
+  && grep -q 'repository(owner:' "$SEALED_LOG" && [ ! -e "$SEALED_MUTATION" ] && ! grep -q 'mutation' "$SEALED_LOG"; then
+  ok "repository administration reads current state but stays pending without common effect admission"
+else
+  bad "repository administration must refuse before gh mutation with fake credentials" "rc=$sealed_rc: $sealed_out"
+fi
+
+SEALED_PROJECT="$WORK/sealed-project"; mkdir -p "$SEALED_PROJECT/.fsgg"
+printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$SEALED_PROJECT/.fsgg/scaffold-provenance.json"
+cp "$SEALED_PROJECT/.fsgg/scaffold-provenance.json" "$SEALED_PROJECT/before.json"
+: > "$SEALED_LOG"
+sealed_rc=0
+sealed_out="$(GH_TOKEN=fake GITHUB_TOKEN=fake SEALED_LOG="$SEALED_LOG" SEALED_MUTATION="$SEALED_MUTATION" PATH="$SEALED_BIN:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$SEALED_PROJECT" --project acme/Roadmap --public-board --trusted-writers alice 2>&1)" || sealed_rc=$?
+if [ "$sealed_rc" -ne 0 ] && cmp -s "$SEALED_PROJECT/before.json" "$SEALED_PROJECT/.fsgg/scaffold-provenance.json" \
+  && grep -q 'common v1 effect admission is unavailable' <<<"$sealed_out" \
+  && grep -q 'projectsV2(first:100)' "$SEALED_LOG" && grep -q 'user(login:$login)' "$SEALED_LOG" \
+  && [ ! -e "$SEALED_MUTATION" ] && ! grep -q 'mutation' "$SEALED_LOG"; then
+  ok "Project administration preserves reads and pending initialization without common effect admission"
+else
+  bad "Project administration must refuse before gh mutation with fake credentials" "rc=$sealed_rc: $sealed_out"
+fi
+
+# A visibility mismatch exercises the other administrative branch. The private observation must
+# reach the requested-public decision and become pending at the boundary before `gh` sees either
+# updateProjectV2 or the later writer-resolution/read path.
+SEALED_VISIBILITY="$WORK/sealed-project-visibility"; mkdir -p "$SEALED_VISIBILITY/.fsgg"
+printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$SEALED_VISIBILITY/.fsgg/scaffold-provenance.json"
+cp "$SEALED_VISIBILITY/.fsgg/scaffold-provenance.json" "$SEALED_VISIBILITY/before.json"
+: > "$SEALED_LOG"; rm -f "$SEALED_MUTATION"
+sealed_rc=0
+sealed_out="$(GH_TOKEN=fake GITHUB_TOKEN=fake SEALED_PROJECT_PUBLIC=false SEALED_LOG="$SEALED_LOG" SEALED_MUTATION="$SEALED_MUTATION" PATH="$SEALED_BIN:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$SEALED_VISIBILITY" --project acme/Roadmap --public-board --trusted-writers alice 2>&1)" || sealed_rc=$?
+if [ "$sealed_rc" -ne 0 ] && cmp -s "$SEALED_VISIBILITY/before.json" "$SEALED_VISIBILITY/.fsgg/scaffold-provenance.json" \
+  && grep -q 'common v1 effect admission is unavailable' <<<"$sealed_out" \
+  && grep -q 'projectsV2(first:100)' "$SEALED_LOG" && ! grep -q 'user(login:$login)' "$SEALED_LOG" \
+  && [ ! -e "$SEALED_MUTATION" ] && ! grep -q 'updateProjectV2\|mutation' "$SEALED_LOG"; then
+  ok "Project visibility mismatch reaches the effect boundary and stays pending with zero provider effects"
+else
+  bad "Project visibility mismatch must refuse before its gh mutation" "rc=$sealed_rc: $sealed_out; log=$(cat "$SEALED_LOG")"
+fi
 
 # ── Execution leg: a local descriptor server + stub fsgg-sdd prove real provider routing ─────────
 # Parser acceptance alone is insufficient: each invocation below fetches the selected descriptor,

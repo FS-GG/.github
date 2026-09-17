@@ -1,4 +1,31 @@
 open NewSddWorkspace.Program
+open System.Reflection
+
+let graphQlReadBoundary =
+    typeof<Options>.Assembly
+        .GetType("NewSddWorkspace.Program")
+        .GetMethod("isExplicitGraphQlRead", BindingFlags.Static ||| BindingFlags.NonPublic)
+
+if isNull graphQlReadBoundary then
+    failwith "the compiled GraphQL effect boundary is missing"
+
+let graphQlReachesGh document =
+    graphQlReadBoundary.Invoke(null, [| box document |]) :?> bool
+
+if not (graphQlReachesGh "query($owner:String!){viewer{login}}") then
+    failwith "an explicit retained GraphQL query must remain readable"
+
+for disguisedEffect in
+    [
+        "mutation($id:ID!){updateRepository(input:{repositoryId:$id}){repository{id}}}"
+        "# ignored prefix\nmutation($id:ID!){updateRepository(input:{repositoryId:$id}){repository{id}}}"
+        "fragment Repo on Repository{id}\nmutation($id:ID!){updateRepository(input:{repositoryId:$id}){repository{...Repo}}}"
+        "{viewer{login}}"
+        "query NamedRead {viewer{login}}"
+        "not-a-graphql-operation"
+    ] do
+    if graphQlReachesGh disguisedEffect then
+        failwithf "a non-allowlisted GraphQL document reached gh: %s" disguisedEffect
 
 let defaults = assembleWizardOptions "./Pong" "Pong"
 

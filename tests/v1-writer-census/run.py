@@ -134,11 +134,11 @@ with tempfile.TemporaryDirectory(prefix="v1-writer-census-") as temporary:
     wrong_source = json.loads(json.dumps(base_census))
     for row in wrong_source["sources"]:
         if row["path"] == "tools/routine-delivery.py":
-            row["disposition"] = "read-only"
-            row["nonWriterJustification"] = "Mutation deliberately proves a direct writer cannot be called read-only."
+            row["disposition"] = "remote-writer"
+            row.pop("nonWriterJustification", None)
     wrong_source_path = work / "wrong-source.json"
     wrong_source_path.write_text(json.dumps(wrong_source), encoding="utf-8")
-    expect_red(run("--census", str(wrong_source_path), "--structural"), "direct REST PUT merge", "misclassified direct REST writer reds")
+    expect_red(run("--census", str(wrong_source_path), "--structural"), "sealed merge boundary", "sealed routine delivery cannot be relabeled as writable")
 
     clone = work / "repo"
     cloned = subprocess.run(["git", "clone", "--quiet", "--shared", str(ROOT), str(clone)], text=True, capture_output=True, check=False)
