@@ -26,6 +26,44 @@ type private Handler(response: unit -> HttpResponseMessage) =
     inherit HttpMessageHandler()
     override _.SendAsync(_, _) = Task.FromResult(response ())
 
+type private CapturedRequest =
+    {
+        Method: HttpMethod
+        Uri: Uri
+        Authorization: string option
+        Body: byte array
+    }
+
+type private CapturingHandler(response: HttpRequestMessage -> HttpResponseMessage) =
+    inherit HttpMessageHandler()
+    let requests = ResizeArray<CapturedRequest>()
+
+    member _.Requests = requests |> Seq.toArray
+
+    override _.SendAsync(request, cancellationToken) =
+        task {
+            let! body =
+                if isNull request.Content then
+                    Task.FromResult(Array.empty)
+                else
+                    request.Content.ReadAsByteArrayAsync(cancellationToken)
+
+            requests.Add(
+                {
+                    Method = request.Method
+                    Uri = request.RequestUri
+                    Authorization =
+                        if isNull request.Headers.Authorization then
+                            None
+                        else
+                            Some(request.Headers.Authorization.ToString())
+                    Body = body
+                }
+            )
+
+            return response request
+        }
+
 type private DropFirstResponseHandler(inner: HttpMessageHandler) =
     inherit DelegatingHandler(inner)
     let mutable drop = true
@@ -233,6 +271,92 @@ module RemoteTelemetryTests =
 
                 Assert.Equal(RemoteClient.Unacknowledged "receipt-unavailable", malformed)
                 Assert.Equal(5, attempts)
+        }
+
+    [<Fact>]
+    let ``GS2-08.9 client is confined to telemetry submission and rejects authority escalation`` () =
+        task {
+            let fakeCredential = String('f', 48)
+            let mutable credentialResolutions = 0
+
+            let fakeResolve _ _ =
+                credentialResolutions <- credentialResolutions + 1
+                Task.FromResult(Some fakeCredential)
+
+            let loopbackConfig: RemoteContract.ClientConfig =
+                {
+                    Endpoint = Uri("https://127.0.0.1:44443/")
+                    CredentialReference = "fake-loopback-only"
+                }
+
+            use handler =
+                new CapturingHandler(fun _ ->
+                    new HttpResponseMessage(
+                        HttpStatusCode.Accepted,
+                        Content = new ByteArrayContent(receipt "batch-boundary" "durably-received")
+                    ))
+
+            use client = new HttpClient(handler)
+            let submittedEnvelope = envelope "batch-boundary"
+
+            let! accepted =
+                RemoteClient.submitWithClientForTesting
+                    client
+                    loopbackConfig
+                    fakeResolve
+                    scope
+                    submittedEnvelope
+                    CancellationToken.None
+
+            match accepted with
+            | RemoteClient.Acknowledged value -> Assert.Equal("batch-boundary", value.BatchId)
+            | _ -> Assert.Fail "loopback telemetry receipt was not acknowledged"
+
+            let submission = Assert.Single(handler.Requests)
+            Assert.Equal(HttpMethod.Post, submission.Method)
+            Assert.Equal(Uri("https://127.0.0.1:44443/v1/batches"), submission.Uri)
+            Assert.Equal(Some $"Bearer {fakeCredential}", submission.Authorization)
+            Assert.True(submittedEnvelope.AsSpan().SequenceEqual(submission.Body))
+            Assert.Equal(1, credentialResolutions)
+
+            let otherScope = { scope with Producer = "coordination-authority" }
+
+            let! escalation =
+                RemoteClient.submitWithClientForTesting
+                    client
+                    loopbackConfig
+                    fakeResolve
+                    scope
+                    (makeEnvelope otherScope "authority-escalation" 0)
+                    CancellationToken.None
+
+            Assert.Equal(RemoteClient.Unacknowledged "unauthorized-scope", escalation)
+            Assert.Single(handler.Requests) |> ignore
+            Assert.Equal(1, credentialResolutions)
+
+            use redirectHandler =
+                new CapturingHandler(fun _ ->
+                    let response = new HttpResponseMessage(HttpStatusCode.TemporaryRedirect)
+                    response.Headers.Location <- Uri("https://api.github.com/repos/FS-GG/.github/issues/1")
+                    response)
+
+            use redirectClient = new HttpClient(redirectHandler)
+
+            let! redirected =
+                RemoteClient.submitWithClientForTesting
+                    redirectClient
+                    loopbackConfig
+                    fakeResolve
+                    scope
+                    submittedEnvelope
+                    CancellationToken.None
+
+            Assert.Equal(RemoteClient.Unacknowledged "redirect-refused", redirected)
+            let refused = Assert.Single(redirectHandler.Requests)
+            Assert.Equal(Uri("https://127.0.0.1:44443/v1/batches"), refused.Uri)
+
+            use productionHandler = RemoteClient.createHandler ()
+            Assert.False(productionHandler.AllowAutoRedirect)
         }
 
     [<Fact>]
