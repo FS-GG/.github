@@ -25,6 +25,7 @@ on:
     paths:
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.GitHub.Tests/**"
+      - "tests/producer-fence-attacks/**"
       - "src/FS.GG.Coord.Core/**"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
@@ -36,6 +37,7 @@ on:
     paths:
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.GitHub.Tests/**"
+      - "tests/producer-fence-attacks/**"
       - "src/FS.GG.Coord.Core/**"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
@@ -75,6 +77,15 @@ jobs:
       # Every failure here is a refusal the org paid for once already.
       - name: Test — the edge must refuse
         run: dotnet test tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-build -c Release --logger "console;verbosity=normal"
+
+      - name: Verify GS2-08.6 producer attack oracle
+        run: |
+          dotnet test tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-build -c Release \
+            --filter FullyQualifiedName~ProducerFenceAttackTests \
+            --logger "trx;LogFileName=producer-fence-attacks.trx" \
+            --results-directory "$RUNNER_TEMP/producer-fence-attacks"
+          python3 tests/producer-fence-attacks/run.py \
+            --trx "$RUNNER_TEMP/producer-fence-attacks/producer-fence-attacks.trx"
 
       # A SUITE THAT CANNOT FAIL IS NOT A SUITE (#266, #436). A misconfigured runner that discovers
       # nothing exits 0, and this gate would then go green over an adapter nobody tested — which is epic

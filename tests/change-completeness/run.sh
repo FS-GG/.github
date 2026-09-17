@@ -51,6 +51,7 @@ for label in \
   'GS2-08.5 protected source import' \
   'v1 writer census structural closure' \
   'v1 receiver source census offline closure' \
+  'GS2-08.6 independent producer fence attacks' \
   'command catalogue, parser, render, write-ness, contract, and help closure' \
   'v1 writer census candidate-built metadata' \
   'handler ownership and production registration' \

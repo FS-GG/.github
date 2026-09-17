@@ -142,6 +142,23 @@ reconciliation, credentials, and admitted records. This source candidate therefo
 `OperatingV1` and eligible `Preparing` behavior through fixtures without claiming live installation, publication,
 or native GS2-08.4/08.5 acceptance.
 
+## Producer attack source window: GS2-08.6
+
+- [ ] Independently attack the merged producer boundary across the accepted closed writer population and retain
+  offline, content-addressed evidence for native Coordination qualification.
+
+The independently authored oracle binds all 26 typed write roots from the accepted census and exercises both REST
+and GraphQL entry paths through `FencedTransport` and `DurableMutationFence`. The compiled attacks cover all eleven
+epochs, stale and rewound authority, missing tag, wrong manifest, permission loss, lost response, crashes around
+the send, concurrent ownership, operation and claim generation changes, request-byte identity conflicts, delayed
+old-SHA evidence, mutation-shaped legacy reads, and retry only after `ProvenAbsent` under a fresh fence. The live
+composition stays fail closed, while its test escape requires both an explicit flag and an absolute loopback URI.
+
+The structural leg treats the census as a closed population without deriving expected behavior from producer code.
+Every non-CLI workflow, script, publication, telemetry, and direct-delivery writer remains an explicit GS2-08.9
+blocker until it proves the same boundary or is sealed. Installed 0.58.0 and 0.75.4 receivers likewise remain
+explicit GS2-08.9 blockers. This offline lane makes no Q4 real-provider claim and does not itself accept GS2-08.6.
+
 ## Workspace, authority, and observation boundaries
 
 GS2-08.1–08.3 change no generated workspace and enable no runtime behavior. The first possible new-workspace
