@@ -3,10 +3,24 @@ namespace FS.GG.Coord.GitHub
 module Done =
 
     open System
+    open System.Security.Cryptography
     open System.Text.Json
     open FS.GG.Coord.Types
     open Errors
     open Transport
+
+    let private sendRestMutation kind (transport: IGitHubTransport) (request: Request) =
+        let requestDigest =
+            canonicalMutationBytes request
+            |> SHA256.HashData
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+
+        transport.SendMutation
+            {
+                EffectId = $"github.rest.%s{kind}.%s{requestDigest}"
+                Request = request
+            }
 
     exception private IncompleteFactsRead of IoError
 
@@ -781,7 +795,7 @@ module Done =
                 Subject = ref.Short
             }
 
-        transport.Send request |> Result.map ignore
+        sendRestMutation "epic-rollup-close" transport request |> Result.map ignore
 
     // ---- the EPIC-UNLINKED-CHILD set (shared with `lint`, #485) --------------------------------------
 

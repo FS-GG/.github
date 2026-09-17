@@ -68,6 +68,20 @@ let private postedCommentBody (request: Request) =
         document.RootElement.GetProperty("body").GetString()
     | other -> failwith $"expected a JSON comment POST, got %A{other}"
 
+let private expectedEffectId kind (request: Request) =
+    let digest =
+        canonicalMutationBytes request
+        |> System.Security.Cryptography.SHA256.HashData
+        |> System.Convert.ToHexString
+        |> _.ToLowerInvariant()
+
+    $"github.rest.%s{kind}.%s{digest}"
+
+let private assertSingleTypedMutation kind (transport: Fake.Recorder) =
+    let mutation = Assert.Single transport.Mutations
+    Assert.Equal(expectedEffectId kind mutation.Request, mutation.EffectId)
+    mutation
+
 /// A comment the lock reader cannot classify: its id is readable, but its body is not. It may be a claim
 /// marker, so a decision made from the readable markers beside it would be a decision from a lower bound.
 let private unclassifiableComment (id: int) =
@@ -119,7 +133,9 @@ let ``#2131 guarded merge binds GitHub's write to the inspected head SHA`` () =
             ok """{"merged":true}""")
 
     match Writes.mergeAtHead recorder aRef 99 "head-a" OperationalGraphQl.Squash with
-    | Ok true -> Assert.Equal(1, recorder.RestCalls)
+    | Ok true ->
+        Assert.Equal(1, recorder.RestCalls)
+        assertSingleTypedMutation "merge-at-head" recorder |> ignore
     | outcome -> failwithf "expected a guarded merge, got %A" outcome
 
 [<Theory>]
@@ -1304,6 +1320,7 @@ let ``#1620 --force re-claiming our OWN live marker renews it - it does not stea
 
     Assert.Equal(0, transport.Count "comment-post")
     Assert.Equal(0, transport.Count "comment-delete")
+    assertSingleTypedMutation "comment-patch" transport |> ignore
 
 // ---- #481: the column a claim overwrote ------------------------------------------------------------
 
@@ -2151,7 +2168,9 @@ let ``#507 child POSTs the REST id as a JSON NUMBER, not a string`` () =
     let transport = Fake.Recorder(fun _ -> ok "{}")
 
     match child transport aRef 1047L with
-    | Ok() -> Assert.True(transport.Logged "sub-issue-add FS-GG/FS.GG.SDD 42 -F sub_issue_id=1047")
+    | Ok() ->
+        Assert.True(transport.Logged "sub-issue-add FS-GG/FS.GG.SDD 42 -F sub_issue_id=1047")
+        assertSingleTypedMutation "sub-issue-add" transport |> ignore
     | Error e -> failwith $"the child should have been attached — got %A{e}"
 
 // ---- say needs no lock ------------------------------------------------------------------------------
@@ -2163,7 +2182,9 @@ let ``say does NOT require the lock - the worker who lost the race must still be
     let transport = Fake.Recorder(fun _ -> ok """{"id":950}""")
 
     match say transport me them aRef "our touch-sets overlap on src/Audio" with
-    | Ok() -> Assert.True(transport.Logged "comment-post FS-GG/FS.GG.SDD 42")
+    | Ok() ->
+        Assert.True(transport.Logged "comment-post FS-GG/FS.GG.SDD 42")
+        assertSingleTypedMutation "comment-post" transport |> ignore
     | Error e -> failwith $"a message needs no lock — got %A{e}"
 
 [<Fact>]
@@ -2508,6 +2529,10 @@ let ``reopenIssue requires fresh OPEN state and recovers a lost PATCH response``
     state <- "closed"
     loseResponse <- true
     Assert.Equal(Ok(), reopenIssue transport aRef)
+    Assert.Equal(2, transport.Mutations.Length)
+
+    for mutation in transport.Mutations do
+        Assert.Equal(expectedEffectId "issue-reopen" mutation.Request, mutation.EffectId)
 
     let unverified =
         Fake.Recorder(fun request ->
@@ -2539,6 +2564,7 @@ let ``closeIssueCompleted requires fresh CLOSED state`` () =
             | method -> failwithf "unexpected method %s" method)
 
     Assert.Equal(Ok(), closeIssueCompleted transport aRef)
+    assertSingleTypedMutation "issue-close-completed" transport |> ignore
 
 // ---- reap: an expired lease is EVIDENCE of abandonment, not PROOF (#581) ----------------------------
 
@@ -2615,7 +2641,9 @@ let ``#581 reap RE-VERIFIES the marker is still stale, then DELETES it by its co
     | Error e -> failwith $"the fixture marker is reapable — got %A{e}"
     | Ok r ->
         match reap transport 120 r with
-        | Ok Reaped -> Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 880")
+        | Ok Reaped ->
+            Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 880")
+            assertSingleTypedMutation "comment-delete" transport |> ignore
         | other -> failwith $"the reap should have deleted the marker — got %A{other}"
 
 [<Fact>]
@@ -2864,6 +2892,7 @@ let ``createRoom POSTs to the issues endpoint and returns the new room's ref`` (
         )
 
         Assert.True(transport.Logged "issue-list FS-GG/FS.GG.SDD", "createRoom did not hit the repo's issues endpoint")
+        assertSingleTypedMutation "issue-create" transport |> ignore
     | Error e -> failwith $"createRoom must return the new room's ref — got %A{e}"
 
 [<Fact>]
@@ -2917,6 +2946,7 @@ let ``writeRoomRef PATCHes the member issue with the appended Rooms line`` () =
             transport.Logged $"issue-patch FS-GG/FS.GG.SDD %d{aRef.Number}",
             "writeRoomRef did not PATCH the member body"
         )
+        assertSingleTypedMutation "issue-body-patch" transport |> ignore
     | Error e -> failwith $"writeRoomRef must succeed on a 200 — got %A{e}"
 
 [<Fact>]
@@ -2929,6 +2959,7 @@ let ``closeRoom PATCHes the room issue (the derived roll-up close)`` () =
             transport.Logged $"issue-patch FS-GG/FS.GG.SDD %d{aRef.Number}",
             "closeRoom did not PATCH the room issue"
         )
+        assertSingleTypedMutation "room-close" transport |> ignore
     | Error e -> failwith $"closeRoom must succeed on a 200 — got %A{e}"
 
 // ---- #2801 mutual-overlap writer recovery ----------------------------------------------------------

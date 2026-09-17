@@ -12,6 +12,19 @@ module Writes =
     open Errors
     open Transport
 
+    let private sendRestMutation kind (transport: IGitHubTransport) (request: Request) =
+        let requestDigest =
+            canonicalMutationBytes request
+            |> SHA256.HashData
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+
+        transport.SendMutation
+            {
+                EffectId = $"github.rest.%s{kind}.%s{requestDigest}"
+                Request = request
+            }
+
     [<Sealed>]
     type Held
         internal
@@ -266,7 +279,7 @@ module Writes =
                 Subject = ref.Short
             }
 
-        match transport.Send request with
+        match sendRestMutation "comment-post" transport request with
         | Error e -> Error e
         | Ok response ->
             try
@@ -423,7 +436,7 @@ module Writes =
                 Subject = ref.Short
             }
 
-        match transport.Send request with
+        match sendRestMutation "comment-delete" transport request with
         | Ok _ -> Ok()
         | Error(NotFound _) -> Ok()
         | Error e -> Error e
@@ -651,7 +664,7 @@ module Writes =
                 Subject = ref.Short
             }
 
-        transport.Send request |> Result.map ignore
+        sendRestMutation "comment-patch" transport request |> Result.map ignore
 
     let amendVerifiedComment transport ref commentId body =
         Reads.commentsWithIdentity transport ref.Owner ref.Repo ref.Number
@@ -1321,7 +1334,7 @@ module Writes =
                 Subject = ref.Short
             }
 
-        match transport.Send request with
+        match sendRestMutation "merge-at-head" transport request with
         | Error error -> Error error
         | Ok response ->
             try
@@ -1524,7 +1537,7 @@ module Writes =
                 Subject = ref.Short
             }
 
-        transport.Send request |> Result.map ignore
+        sendRestMutation "issue-body-patch" transport request |> Result.map ignore
 
     let widen (transport: IGitHubTransport) (held: Held) (rewritten: Rewritten) : IoResult<unit> =
         // #706 AND #523, BOTH GONE, AND NEITHER BY A CHECK.
@@ -1920,7 +1933,7 @@ module Writes =
                 Subject = ref.Short
             }
 
-        let attempted = transport.Send request
+        let attempted = sendRestMutation "issue-reopen" transport request
 
         match Reads.issueState transport ref.Owner ref.Repo ref.Number with
         | Ok IssueState.Open -> Ok()
@@ -1954,7 +1967,7 @@ module Writes =
                 Subject = ref.Short
             }
 
-        let attempted = transport.Send request
+        let attempted = sendRestMutation "issue-close-completed" transport request
 
         match Reads.issueState transport ref.Owner ref.Repo ref.Number with
         | Ok IssueState.Closed -> Ok()
@@ -2002,7 +2015,7 @@ module Writes =
                 Subject = parent.Short
             }
 
-        transport.Send request |> Result.map ignore
+        sendRestMutation "sub-issue-add" transport request |> Result.map ignore
 
     // ---- coordination rooms (ADR-0051) ---------------------------------------------------------------
 
@@ -2133,7 +2146,7 @@ module Writes =
                 Subject = $"%s{owner}/%s{repo} room"
             }
 
-        match transport.Send request with
+        match sendRestMutation "issue-create" transport request with
         | Error e -> Error e
         | Ok response ->
             try
@@ -2334,7 +2347,7 @@ module Writes =
                                 Subject = issue.Short
                             }
 
-                        transport.Send request |> Result.map ignore
+                        sendRestMutation "intake-body-patch" transport request |> Result.map ignore
 
                     observe ()
                     |> Result.bind (fun before ->
@@ -2394,4 +2407,4 @@ module Writes =
                 Subject = ref.Short
             }
 
-        transport.Send request |> Result.map ignore
+        sendRestMutation "room-close" transport request |> Result.map ignore
