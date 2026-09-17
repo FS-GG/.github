@@ -56,7 +56,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # Bind the package to the PR head rather than GitHub's synthetic merge ref. Full history keeps the
+      # independently pinned producer commit/tree available for an offline ancestry check after later repairs.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v6
         with:
