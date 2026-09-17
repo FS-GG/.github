@@ -647,6 +647,18 @@ module Transport =
 
     type FencedTransport(inner: IProviderGitHubTransport, fence: V1Admission.IMutationFence) =
 
+        let isLegacyMutation (request: Request) =
+            match request.Method.ToUpperInvariant() with
+            | "PUT"
+            | "PATCH"
+            | "DELETE" -> true
+            | "POST" ->
+                match request.Budget, request.Body with
+                | GraphQl, Query(document, _) -> document.TrimStart().StartsWith("mutation", StringComparison.Ordinal)
+                | GraphQl, _ -> false
+                | _ -> true
+            | _ -> false
+
         let responseEvidence attempt =
             mutationResponseEvidence attempt.Request attempt.Response
 
@@ -705,9 +717,11 @@ module Transport =
                     Error(Malformed(request.Subject, "v1 admission refused: " + String.Join("; ", reasons)))
 
         interface IGitHubTransport with
-            // Temporary P1/P2/P3 migration bypass. S2 removes this raw mutation-capable Send surface
-            // once every business write uses SendMutation.
-            member _.Send(request: Request) = inner.Send request
+            member _.Send(request: Request) =
+                if isLegacyMutation request then
+                    Error(Malformed(request.Subject, "mutation requires the typed SendMutation boundary"))
+                else
+                    inner.Send request
 
             member _.SendMutation(mutation: MutationIntent) =
                 dispatch mutation.EffectId mutation.Request

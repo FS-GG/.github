@@ -35,7 +35,7 @@ else
 fi
 
 engine_changed=false
-if grep -Eq '^(src/FS\.GG\.(Coord|Telemetry)\.|tests/FS\.GG\.(Coord|Telemetry)\.|tests/(m6-decision-cutover|delivery-leading-line|coord-engine-|review-critic-succession-wire|ci-runtime-optimization|change-completeness|change-risk-compatibility)/|scripts/(fsgg-coord|fsgg-coord-guards\.sh|record-board-fixture\.py|read-trx-count\.py|change-completeness)|Directory\.(Build|Packages)|dist/dotnet/Directory\.Build\.props|global\.json|\.github/workflows/coord-engine\.yml)' "$PATHS"; then
+if grep -Eq '^(src/FS\.GG\.(Coord|Telemetry)\.|tests/FS\.GG\.(Coord|Telemetry)\.|tests/(m6-decision-cutover|delivery-leading-line|coord-engine-|review-critic-succession-wire|ci-runtime-optimization|change-completeness|change-risk-compatibility)/|scripts/(fsgg-coord|fsgg-coord-guards\.sh|record-board-fixture\.py|read-trx-count\.py|change-completeness|import-coordination-v1-admission\.py)|Directory\.(Build|Packages)|dist/dotnet/Directory\.Build\.props|global\.json|\.github/workflows/coord-engine\.yml)' "$PATHS"; then
   engine_changed=true
 fi
 [ -z "$OUTPUT_FILE" ] || printf 'engine_changed=%s\n' "$engine_changed" >>"$OUTPUT_FILE"
@@ -54,6 +54,9 @@ fi
 
 stage "SDD ship-verdict provenance"
 python3 "$ROOT/scripts/check-ship-verdict-provenance.py" --root "$ROOT"
+
+stage "GS2-08.5 protected source import"
+python3 "$ROOT/scripts/import-coordination-v1-admission.py" --check
 
 # Cheap and universal: this does not build or execute candidate engine bytes. It inventories the
 # tracked executable/product population and refuses an omitted, changed, or unresolved writer source.

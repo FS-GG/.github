@@ -147,6 +147,61 @@ let private assertInitialAndRetryWriterFailure providerRequest response assertEr
     )
 
 [<Fact>]
+let ``fenced transport refuses a REST mutation through the legacy Send boundary`` () =
+    let recorder = Fake.Recorder(fun _ -> ok "{}")
+    let fence = StubFence(true)
+
+    let transport =
+        FencedTransport(recorder :> IProviderGitHubTransport, fence) :> IGitHubTransport
+
+    let result =
+        transport.Send
+            { request "repos/FS-GG/.github/issues/1" Rest with
+                Method = "PATCH"
+                Body = Json """{"state":"closed"}"""
+            }
+
+    match result with
+    | Error(Malformed(_, detail)) -> Assert.Contains("typed SendMutation", detail)
+    | other -> failwith $"legacy REST mutation must refuse before provider I/O, got %A{other}"
+
+    Assert.Equal(0, recorder.RestCalls)
+    Assert.Equal(0, fence.Calls)
+
+[<Fact>]
+let ``fenced transport distinguishes a GraphQL read from a legacy mutation`` () =
+    let recorder = Fake.Recorder(fun _ -> ok "{\"data\":{}}")
+    let fence = StubFence(true)
+
+    let transport =
+        FencedTransport(recorder :> IProviderGitHubTransport, fence) :> IGitHubTransport
+
+    let graphQl document =
+        { request "graphql" GraphQl with
+            Method = "POST"
+            Body = Query(document, [])
+        }
+
+    Assert.Equal(
+        Ok
+            {
+                Status = 200
+                Body = "{\"data\":{}}"
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            },
+        transport.Send(graphQl "query { viewer { login } }")
+    )
+
+    match transport.Send(graphQl "mutation { addComment(input: {}) { clientMutationId } }") with
+    | Error(Malformed(_, detail)) -> Assert.Contains("typed SendMutation", detail)
+    | other -> failwith $"legacy GraphQL mutation must refuse before provider I/O, got %A{other}"
+
+    Assert.Equal(1, recorder.GraphQlCalls)
+    Assert.Equal(0, fence.Calls)
+
+[<Fact>]
 let ``definitive REST and GraphQL success bind Applied to the response body digest`` () =
     let assertApplied (providerRequest: Request) (body: string) =
         let expected =

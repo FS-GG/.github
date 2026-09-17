@@ -113,15 +113,20 @@ def import_from(root: pathlib.Path, source: pathlib.Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=pathlib.Path, help="FS.GG.Coordination checkout used for the exact import")
-    parser.add_argument("--check", action="store_true", help="verify the checked-in subset without reading a source checkout")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--source", type=pathlib.Path, help="FS.GG.Coordination checkout used for the exact import")
+    mode.add_argument("--check", action="store_true", help="verify the checked-in subset without reading a source checkout")
+    mode.add_argument("--list", action="store_true", help="list generated outputs for scripts/generated-paths")
     args = parser.parse_args()
 
     root = pathlib.Path(__file__).resolve().parents[1]
-    if args.check == (args.source is not None):
-        fail("select exactly one of --check or --source PATH")
 
-    if args.check:
+    if args.list:
+        for name, _ in FILES:
+            print(f"v1-admission-source\t{(DESTINATION / name).as_posix()}\t")
+        print(f"v1-admission-source\t{(DESTINATION / 'source-subset.json').as_posix()}\t")
+        return 0
+    elif args.check:
         verify_destination(root)
     else:
         import_from(root, args.source)

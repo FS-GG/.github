@@ -536,6 +536,11 @@ module BlockerLintTests =
                         lock sync (fun () -> comments.Remove id |> ignore)
                         response "{}"
                     | method, path, _ -> Error(Errors.NotFound $"race fixture serves no %s{method} %s{path}")
+
+                member this.SendMutation(mutation: MutationIntent) = this.Send mutation.Request
+
+                member _.RetryMutation(effectId: string) =
+                    Error(Errors.Malformed(effectId, "race fixture has no unresolved mutation to retry"))
             }
 
         let run edge : Errors.IoResult<unit> =
@@ -718,7 +723,7 @@ module BlockerLintTests =
         let chore = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coord.Core/Chore.fs"))
 
         let directStatusWrites =
-            Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
+            Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,500}?\\\"Status\\\"").Count
 
         Assert.Equal(4, directStatusWrites)
         Assert.Equal(13, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
@@ -727,8 +732,8 @@ module BlockerLintTests =
         Assert.Equal(3, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
         Assert.Contains("LifecycleProjectionLag destination -> Some(\"Status\", statusWireName destination)", chore)
 
-        Assert.Contains(
-            "PrematureCompletion destination -> Some(\"Status\", destination |> completionCorrectionStatus |> statusWireName)",
+        Assert.Matches(
+            "PrematureCompletion destination ->\\s*Some\\(\"Status\", destination \\|> completionCorrectionStatus \\|> statusWireName\\)",
             chore
         )
 

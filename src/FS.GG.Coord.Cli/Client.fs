@@ -57,6 +57,38 @@ module Client =
             member _.RetryProvenAbsent(_, _, _) =
                 Error [ ProductionAdmissionUnavailable ]
 
+    // The compiled parity corpus uses a loopback HTTP server so it can exercise the real request encoder and
+    // response parser without touching GitHub.  Its explicit flag cannot open a provider bypass: the selected
+    // API endpoint must also be an absolute loopback URI.
+    type private LoopbackFixtureMutationFence() =
+        interface V1Admission.IMutationFence with
+            member _.Dispatch(_, _, send, responseEvidence) =
+                match send () with
+                | Ok response ->
+                    match responseEvidence response with
+                    | V1Admission.Applied _ -> Ok(V1Admission.AppliedResponse response)
+                    | V1Admission.Partial _
+                    | V1Admission.Indeterminate _
+                    | V1Admission.StronglyAbsent _ -> Ok(V1Admission.UnresolvedResponse response)
+                | Error providerError -> Ok(V1Admission.ProviderFailed providerError)
+
+            member _.Reconcile(_, _) = Ok()
+
+            member _.RetryProvenAbsent(_, _, _) =
+                Error [ "the loopback parity fixture does not retain retry state" ]
+
+    let private productionMutationFence apiBase =
+        let mutable uri = Unchecked.defaultof<Uri>
+
+        if
+            env "FSGG_COORD_TEST_ALLOW_UNFENCED_LOOPBACK_MUTATIONS" "" = "1"
+            && Uri.TryCreate(apiBase, UriKind.Absolute, &uri)
+            && uri.IsLoopback
+        then
+            LoopbackFixtureMutationFence() :> V1Admission.IMutationFence
+        else
+            UnavailableProductionMutationFence() :> V1Admission.IMutationFence
+
     // `Kernel.usesLiveHttp` predates the production wrapper and recognizes only a raw `HttpTransport`.
     // Preserve the one behavior that depends on this distinction (`adopt`'s live admission check) after
     // context replaces the raw transport with `FencedTransport`.
@@ -10103,12 +10135,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
             Result.Error ExitError
         | Some token ->
-            let transport = new Transport.HttpTransport(Transport.apiBaseFromEnv (), token)
+            let apiBase = Transport.apiBaseFromEnv ()
+            let transport = new Transport.HttpTransport(apiBase, token)
 
             let fencedTransport =
                 new Transport.FencedTransport(
                     transport :> Transport.IProviderGitHubTransport,
-                    UnavailableProductionMutationFence() :> V1Admission.IMutationFence
+                    productionMutationFence apiBase
                 )
 
             // The board owner LABEL (subject text, cache key, board JSON). The queries pick org/user/viewer
