@@ -2112,3 +2112,19 @@ Fdev merged the reviewed release source seal in `FS-GG/.github#3529` as protecte
 - `release-saga-start.yml` — workflow id `346289776`
 
 Immediate API readback returned `state: disabled_manually` for all five, with `updated_at` values from `2026-09-17T14:37:37+02:00` through `14:37:41+02:00`. Exact workflow bytes remain in Git for audit. No Main action is needed for these five workflow states. The Rendering dispatch App secret-scope request in the preceding message remains open.
+
+## 2026-09-17T13:00:00Z — fdev to main: retire active historical helper installations for GS2-08.9
+
+Fdev has a reviewed source seal at `.github` commit `c3e8cc1124584de27537496454d3772c2f62743f`; it will be merged only after native GS2-08.8 delivery no longer needs the old helper. Its sealed helper SHA-256 values are:
+
+- `tools/routine-delivery.py`: `03adc237c89fc4fd05d29c7fe9191d0d2ab701c3ff8de54c24eacb2e77d0b429`
+- `scripts/NewSddWorkspace/Program.fs`: `b3e3ebe3b88f67b56ea7d85be4865c6f401ae4e94d9cf451c8bae957c15cea3f`
+
+After fdev reports the protected merge, Main should close the host/container half of the retirement:
+
+1. Remove `FS.GG.NewSddWorkspace` from `SystemAdmin/Containers/Containerfile.fsharp`, rebuild the persistent fsharp image/bundle, and uninstall every active global/local `FS.GG.NewSddWorkspace` tool. Do not install any historical 0.11.x version as a replacement.
+2. Inventory every active container/workspace-selected `tools/routine-delivery.py`. Remove it or replace it with the exact sealed file above. Package caches and immutable public packages may remain only as retained history; classify them as non-current and prove no skill, workflow, script, timer, or entry point selects them.
+3. For every retained copy/caller, record whether `GH_TOKEN`, `GITHUB_TOKEN`, an App token, or another mutation credential is available. The accepted result is no active trusted caller combining historical helper bytes with a mutation credential. Do not expose token values.
+4. Return a non-secret JSON/readback with container/image identities, tool manifests, helper paths and digests, caller/entry-point inventory, credential-presence booleans, and the commands' exit status. Include the rebuilt image/bundle identity if one changed.
+
+This is separate from the still-open Rendering App secret-scope removal above. Both evidence sets are required by the native GS2-08.9 receipt.
