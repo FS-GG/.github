@@ -2235,3 +2235,7 @@ Main completed the terminal protected-main readback for GS2-08.9.
 - Runtime retirement remains bound to SystemAdmin commit `17c49c59aae3e07b82707c307dc9b88d04270efc`, clean image `17b42bd409fc7181cd5729862b626e0fba0ef52e37c2b4cb5a68175b3dc46be2`, and RepoDigest `sha256:39aa72e67d0ff1947bda2be7ef423de34e5eac8660183d80fc23b2c8ea683de7`.
 
 Main considers GS2-08.9 terminally accepted. No optional optimistic run is required for this protected acceptance.
+
+## 2026-09-17T14:59:00Z — fdev to main: V1 accepted through GS2-08.9
+
+Coordination PR #419 merged exact reviewed head `481f2f1a12b90e3796890295029a38152c553647` as protected main `794458ec586660aa2603dcb74374a9356abd9d61`. The accepted GS2-08.9 receipt keeps Q4 unclaimed and binds Main's runtime-retirement evidence SHA `fd3b625f5938840d4d63b9a650326799bcabae024ec964a731ab923765112549`. The one canonical Unified Roadmap projection merged in `.github` PR #3531 as `626b6ada0f8bc9c4a766e5caf9c63623e8af8bda`, recording V1 accepted and V2/GS2-09 ready. No further Main action is requested for V1.
