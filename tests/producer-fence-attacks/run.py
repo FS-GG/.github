@@ -17,6 +17,7 @@ CENSUS_PATH = ROOT / "docs/coordination/v1-writer-census.json"
 RECEIVER_PATH = ROOT / "docs/coordination/v1-writer-receiver-census.json"
 ATTACKS_PATH = ROOT / "tests/FS.GG.Coord.GitHub.Tests/ProducerFenceAttackTests.fs"
 CLIENT_PATH = ROOT / "src/FS.GG.Coord.Cli/Client.fs"
+WRITE_FIXTURE_PATH = ROOT / "tests/coord-engine-e2e/writes.sh"
 
 
 def fail(message: str) -> None:
@@ -134,6 +135,11 @@ def main(trx_path: pathlib.Path | None) -> None:
     ]
     if any(marker not in client_source for marker in live_markers):
         fail("live composition or loopback-only escape is no longer fail closed")
+    write_fixture = WRITE_FIXTURE_PATH.read_text()
+    if 'FSGG_GITHUB_API_BASE="http://127.0.0.1:$PORT"' not in write_fixture:
+        fail("write fixture is not bound to an absolute loopback API base")
+    if "export FSGG_COORD_TEST_ALLOW_UNFENCED_LOOPBACK_MUTATIONS=1" not in write_fixture:
+        fail("hermetic write fixture does not explicitly select its loopback-only escape")
 
     evidence = {
         "schema": "fsgg.gs2-08.6-offline-structural-evidence/1",
@@ -143,6 +149,7 @@ def main(trx_path: pathlib.Path | None) -> None:
         "receiverCensusSha256": hashlib.sha256(RECEIVER_PATH.read_bytes()).hexdigest(),
         "compiledAttackHarnessSha256": hashlib.sha256(ATTACKS_PATH.read_bytes()).hexdigest(),
         "liveCompositionSha256": hashlib.sha256(CLIENT_PATH.read_bytes()).hexdigest(),
+        "loopbackWriteFixtureSha256": hashlib.sha256(WRITE_FIXTURE_PATH.read_bytes()).hexdigest(),
         "epochs": len(actual_epochs),
         "typedWriteCommands": len(actual_commands),
         "externalWriterBlockers": len(actual_sources),

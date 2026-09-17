@@ -54,6 +54,10 @@ for _ in $(seq 1 50); do PORT="$(head -n1 "$SRV_OUT" 2>/dev/null)"; [ -n "$PORT"
 [ -n "$PORT" ] || { bad "the fixture bound a port"; echo "writes: 0 passed, 1 failed"; exit 1; }
 
 export FSGG_GITHUB_API_BASE="http://127.0.0.1:$PORT"
+# The production client refuses every mutation until durable authority is installed. This hermetic
+# write fixture is the one test-only escape: the API base above is an absolute loopback URI, and the
+# explicit flag alone cannot authorize a non-loopback provider.
+export FSGG_COORD_TEST_ALLOW_UNFENCED_LOOPBACK_MUTATIONS=1
 export GITHUB_TOKEN="fixture-token"
 export FSGG_COORD_OWNER="FS-GG" FSGG_COORD_PROJECT="Coordination"
 export FSGG_COORD_CACHE="$CACHE_DIR" FSGG_COORD_SCAN_TTL_SEC=0
