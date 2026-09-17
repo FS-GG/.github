@@ -64,6 +64,8 @@ jobs:
       contents: write     # durable per-package saga journal assets on the prepared draft release
       packages: write
       id-token: write
+      attestations: write
+      artifact-metadata: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -161,7 +163,45 @@ jobs:
           mkdir -p artifacts/packages
           gh release download "coherent-set/v$VERSION" --repo "$GITHUB_REPOSITORY" \
             --pattern "*.nupkg" --pattern release-manifest.json --dir artifacts/packages
+          if jq -e '.descriptor.bridgeQualification != null' artifacts/packages/release-manifest.json >/dev/null; then
+            gh release download "coherent-set/v$VERSION" --repo "$GITHUB_REPOSITORY" \
+              --pattern gs2-08-7-bridge-qualification.json --dir artifacts/packages
+          fi
           bash scripts/release-saga-ci.sh init FS.GG.Drivers "$VERSION" "${{ steps.v.outputs.source_sha }}"
+
+      - name: Inspect durable producer provenance
+        id: bridge-provenance
+        run: |
+          state="$(jq -r --arg package FS.GG.Drivers 'if .descriptor.bridgeQualification == null then "not-applicable" else (.state.provenance.packages[$package].state // "invalid") end' artifacts/packages/journal-FS.GG.Drivers.json)"
+          case "$state" in
+            verified|not-applicable) echo "required=false" >> "$GITHUB_OUTPUT" ;;
+            pending) echo "required=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::unsupported producer provenance state: $state"; exit 1 ;;
+          esac
+
+      - name: Sign and attest the exact producer archive
+        if: steps.bridge-provenance.outputs.required == 'true'
+        id: bridge-attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/packages/FS.GG.Drivers.${{ steps.v.outputs.version }}.nupkg
+
+      - name: Verify and journal exact producer provenance
+        if: steps.bridge-provenance.outputs.required == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE_PATH: ${{ steps.bridge-attestation.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          artifact="$PWD/artifacts/packages/FS.GG.Drivers.${{ steps.v.outputs.version }}.nupkg"
+          verification="$RUNNER_TEMP/FS.GG.Drivers-attestation-verification.json"
+          gh attestation verify "$artifact" --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-drivers.yml" \
+            --format json > "$verification"
+          python3 scripts/release-saga.py record-provenance \
+            --manifest artifacts/packages/journal-FS.GG.Drivers.json \
+            --package FS.GG.Drivers --artifact "$artifact" --bundle "$BUNDLE_PATH" \
+            --verification "$verification" --signer-workflow .github/workflows/release-drivers.yml
 
       # A PACKAGE THAT PACKS BUT DOES NOT RESOLVE FROM A REAL RESTORE is the failure mode here. The gate
       # above packs the nupkg; this drives it the way the SDD CLI will — a throwaway consumer with a real

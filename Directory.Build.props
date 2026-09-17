@@ -580,8 +580,13 @@
        FS.GG.Drivers adds the closed routine policy/helper/native-check workspace payload required by
        installed work-roadmap receivers. FS.GG.Kit and FS.GG.Coord.Cli advance unchanged because the
        three package identities share one coherent version and release transaction. -->
+  <!-- 0.89.0 -> 0.90.0 (GS2-08.7-P3): MINOR. The coherent release descriptor binds the P1
+       bridge qualification and protected Coordination P2 provenance contract. Each publisher must
+       verify signed exact-archive provenance before a feed write. Fresh read-only observations found
+       0.89.0 newest and 0.90.0 unused on both feeds. P3 prepares but does not publish this identity;
+       the automatic patch rail refuses a minor. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.89.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.90.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

@@ -130,12 +130,12 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.89.0 — deliver the installed routine-development policy, helper, and native check closure through the coherent FS.GG.Drivers workspace payload.
+    <PackageReleaseNotes>0.90.0 — bind the independently qualified GS2-08.7 bridge package and Coordination provenance contract into the coherent release saga.
 
-FS.GG.Drivers carries a closed, content-addressed inventory generated from the owner files and exposes
-its workspace content root to the SDD receiver. The installed payload includes the active routine policy,
-merge helper and import closure, trusted eligibility workflow, and validators. FS.GG.Kit and
-FS.GG.Coord.Cli advance unchanged with the coherent set.
+Preparation executes the installed-package bridge probe and binds its exact archive, normalized payload,
+source tree, assemblies, accepted receipts, workflow identities, and public-only readback requirements.
+Each component publisher must produce and verify a signed exact-archive provenance statement before any
+feed write; promotion requires the complete coherent provenance set. Publication remains separately authorized.
 
 $(FsggStandingAdvisories)
 

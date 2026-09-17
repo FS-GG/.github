@@ -1,0 +1,42 @@
+{
+  "schema": "fsgg.gs2-08.7-release-binding/1",
+  "unit": "GS2-08.7",
+  "milestone": "P3",
+  "producer": {
+    "p1Merge": "155f8897424b49906dfb0464ce684e75dd9bda3c",
+    "p1Tree": "52c9dd051467a7782c4e101dd35e0ca561470f81",
+    "probe": "tests/bridge-package/run.sh"
+  },
+  "coordination": {
+    "p2Merge": "09e6eac1b073efdd2da576ef9789e66a96c1415b",
+    "p2Tree": "704e18919d73d957ef8e8709c188b6cffbc64bc8",
+    "contract": "evidence/gs2-08-7/coordination-publication-qualification.json"
+  },
+  "versionSelection": "evidence/gs2-08-7/feed-version-selection.json",
+  "selectedVersion": "0.90.0",
+  "packages": ["FS.GG.Coord.Cli", "FS.GG.Drivers", "FS.GG.Kit"],
+  "attestation": {
+    "predicateType": "https://slsa.dev/provenance/v1",
+    "subject": "exact-producer-archive-sha256",
+    "signature": "sigstore-signature-over-in-toto-statement",
+    "verification": "gh-attestation-exact-repository-and-component-workflow"
+  },
+  "feedIdentity": {
+    "prepared": "archive-sha256",
+    "served": "archive-sha256-per-feed",
+    "crossFeed": "normalized-payload-sha256"
+  },
+  "publicInstall": {
+    "state": "required-before-P5-acceptance",
+    "feed": "nuget-org",
+    "authentication": "anonymous",
+    "ambientSources": "cleared",
+    "caches": "private"
+  },
+  "operation": {
+    "publicationAuthorized": false,
+    "P3": "source-and-version-preparation-only",
+    "P4": "protected-coherent-publication",
+    "P5": "public-only-readback-and-native-acceptance"
+  }
+}

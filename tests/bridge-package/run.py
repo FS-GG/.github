@@ -74,7 +74,26 @@ def package_metadata(package: pathlib.Path) -> tuple[str, str, str, dict[str, di
         for name in sorted(name for name in names if name.startswith("tools/net10.0/any/") and not name.endswith("/")):
             value = archive.read(name)
             payload[name] = {"sha256": sha256_bytes(value), "size": len(value)}
-    return package_id, version, repository_commit, payload, sha256_bytes(canonical(payload))
+        normalized: dict[str, str] = {}
+        for name in sorted(names):
+            lowered = name.lower()
+            if name.endswith("/") or lowered == ".signature.p7s" or lowered.endswith(".psmdcp"):
+                continue
+            value = archive.read(name)
+            if lowered.endswith(".rels") and (lowered.startswith("_rels/") or "/_rels/" in lowered):
+                try:
+                    relationships = ET.fromstring(value)
+                    rows = []
+                    for node in relationships:
+                        attributes = dict(node.attrib)
+                        if node.tag.rsplit("}", 1)[-1] == "Relationship" and attributes.get("Target", "").lower().endswith(".psmdcp"):
+                            continue
+                        rows.append([node.tag.rsplit("}", 1)[-1], attributes])
+                    value = canonical(rows)
+                except ET.ParseError:
+                    pass
+            normalized[name] = sha256_bytes(value)
+    return package_id, version, repository_commit, payload, sha256_bytes(canonical(normalized))
 
 
 def validate_source(commit: str, tree: str, expected: dict[str, object]) -> None:

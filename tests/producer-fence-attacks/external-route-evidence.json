@@ -53,21 +53,21 @@
     },
     {
       "path": ".github/workflows/release-coord-engine.yml",
-      "sha256": "703d51abf54e75638ea3ce959b95093a0b320adbc799edb4257ab486163e2363",
+      "sha256": "7973a57d19123afaafab7cc0cdc8e24a5cb3e891a97c00194be4fed9e1cc3ee5",
       "status": "artifact-unavailable",
       "gs2089": "unresolved",
       "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists."
     },
     {
       "path": ".github/workflows/release-drivers.yml",
-      "sha256": "61e77fb8184521c6a0015cfc6b3aa57374bd381555d62ff75b651ed7c7a46736",
+      "sha256": "b6e33e102ea9d7d30a8400887ab58a9953209c3dd65611eaf22a439de8b2866b",
       "status": "artifact-unavailable",
       "gs2089": "unresolved",
       "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists."
     },
     {
       "path": ".github/workflows/release-kit.yml",
-      "sha256": "4d9afe857dfe3a08c1e6e7bfbae54c655700fe5c8ee9992114184e264b4d2433",
+      "sha256": "caaa1f4dfad50930ccc91582be3fce87335d11bb72386ec9255d3ee62264f626",
       "status": "artifact-unavailable",
       "gs2089": "unresolved",
       "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists."
@@ -88,14 +88,14 @@
     },
     {
       "path": ".github/workflows/release-saga-prepare.yml",
-      "sha256": "6498e57524e0552c0beda369b864a12c8b747e57f5c758da21c0cc4a9b0693d3",
+      "sha256": "f7ef6d0300efb07f6606b0ba5a6ab7c917d8fecd4974ddd0ad86b3dce17523e7",
       "status": "artifact-unavailable",
       "gs2089": "unresolved",
       "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists."
     },
     {
       "path": ".github/workflows/release-saga-start.yml",
-      "sha256": "3bbe4278a08d8797faa5b600bd97cfef48fa26887f0889f6de781f719530880f",
+      "sha256": "be7f5cc222097f43664de2f54d23c06d09db0b8936bbc96c68245f2f24f9483c",
       "status": "artifact-unavailable",
       "gs2089": "unresolved",
       "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists."

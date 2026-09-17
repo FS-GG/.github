@@ -6,7 +6,7 @@ only when no package path is supplied; release and publication workflows are out
 
 ```console
 bash tests/bridge-package/run.sh
-bash tests/bridge-package/run.sh /absolute/path/FS.GG.Coord.Cli.0.89.0.nupkg
+bash tests/bridge-package/run.sh /absolute/path/FS.GG.Coord.Cli.0.90.0.nupkg
 ```
 
 The harness writes a candidate binding in a temporary directory. The binding covers the exact archive and
