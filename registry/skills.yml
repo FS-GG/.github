@@ -107,7 +107,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-09-15"
+updated: "2026-09-17"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -162,9 +162,9 @@ skills:
   - { id: fs-gg-sdd-specify,             scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-specify/SKILL.md,             sha256: f4bd7db58110b6d842bd0f48ab317029e3e5c1911a6a2d2bcb846bb06f976496, materializes-when: always }
   - { id: fs-gg-sdd-tasks,               scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-tasks/SKILL.md,               sha256: 33c3410cab95503c5c0c6b91de785ad2682f21dc3088d8d46d3f1e1d8975d548, materializes-when: always }
   - { id: fs-gg-sdd-troubleshooting,     scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-troubleshooting/SKILL.md,     sha256: e1d92bc789903d8c7c3920a8d56cc5e15c242f211a7b549858137c9431aac1cf, materializes-when: always }
-  - { id: fs-gg-sdd-typed-author,        scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-typed-author/SKILL.md,        sha256: d90ea8872c6ae871b1acf007da42c98c70c95e548a47a5f368d4d5490f1beac1, materializes-when: always }
+  - { id: fs-gg-sdd-typed-author,        scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-typed-author/SKILL.md,        sha256: 75db6adf4e273cd75819569562841c6f11ab215f01737b770492e52d17627d7c, materializes-when: always }
   - { id: fs-gg-sdd-typed-inspect,       scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-typed-inspect/SKILL.md,       sha256: acf98b050f401ad583b2c4e651f8b090921c0df3b350f16a1ae4d9d0543bd266, materializes-when: always }
-  - { id: fs-gg-sdd-typed-migrate,       scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-typed-migrate/SKILL.md,       sha256: 94ecee820b476651a1eb5a1e6b9d6483a14568a6b257eb8e10ffba5b40f7d2d4, materializes-when: always }
+  - { id: fs-gg-sdd-typed-migrate,       scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-typed-migrate/SKILL.md,       sha256: 5e99051e9d179c256fcbe4d449f417183b6b9b05a2bc9107c421c9c867067584, materializes-when: always }
   - { id: fs-gg-sdd-validate,            scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-validate/SKILL.md,            sha256: 87ed462650a26b7deafad23c46fa313928740ea9554385465fe74b5ecc23ec2a, materializes-when: always }
   - { id: fs-gg-sdd-verify,              scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-verify/SKILL.md,              sha256: ea8a770da57bd6c1c076bc115fa324e003e77e346b8aa52188f7c3a8c7548ee5, materializes-when: always }
 
