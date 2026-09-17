@@ -65,7 +65,7 @@ module V1Admission =
             effectId: string *
             canonicalRequestBytes: byte array *
             send: (unit -> Result<'response, 'providerError>) *
-            responseBytes: ('response -> byte array) ->
+            responseEvidence: ('response -> ProviderEvidence) ->
                 Result<Result<'response, 'providerError>, string list>
 
         abstract Reconcile: effectId: string * provider: ProviderReconciliation -> Result<unit, string list>
@@ -73,7 +73,7 @@ module V1Admission =
         abstract RetryProvenAbsent<'response, 'providerError> :
             effectId: string *
             send: (byte array -> Result<'response, 'providerError>) *
-            responseBytes: ('response -> byte array) ->
+            responseEvidence: ('response -> ProviderEvidence) ->
                 Result<Result<'response, 'providerError>, string list>
 
     val authorityPort:

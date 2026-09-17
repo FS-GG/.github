@@ -190,6 +190,10 @@ module Transport =
     /// budget, and conditional header. These are the bytes retained by the durable effect record.
     val canonicalMutationBytes: request: Request -> byte array
 
+    /// Conservatively classify one provider mutation response before durable settlement. Applied evidence
+    /// is emitted only for a completed REST success or a valid GraphQL success without errors.
+    val mutationResponseEvidence: request: Request -> response: Response -> V1Admission.ProviderEvidence
+
     /// Read the API base from the environment, so the corpus can redirect it.
     val apiBaseFromEnv: unit -> string
 

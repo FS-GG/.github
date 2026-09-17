@@ -83,7 +83,7 @@ module V1Admission =
             effectId: string *
             canonicalRequestBytes: byte array *
             send: (unit -> Result<'response, 'providerError>) *
-            responseBytes: ('response -> byte array) ->
+            responseEvidence: ('response -> ProviderEvidence) ->
                 Result<Result<'response, 'providerError>, string list>
 
         abstract Reconcile: effectId: string * provider: ProviderReconciliation -> Result<unit, string list>
@@ -91,7 +91,7 @@ module V1Admission =
         abstract RetryProvenAbsent<'response, 'providerError> :
             effectId: string *
             send: (byte array -> Result<'response, 'providerError>) *
-            responseBytes: ('response -> byte array) ->
+            responseEvidence: ('response -> ProviderEvidence) ->
                 Result<Result<'response, 'providerError>, string list>
 
     let authorityPort readObjects rereadHead =
@@ -263,16 +263,19 @@ module V1Admission =
                             |> Result.bind (requireAccepted "effect-settlement")
                             |> Result.map ignore)))
 
-        let settleApplied effectId responseBytes =
-            requestDigest responseBytes
-            |> Result.mapError List.singleton
-            |> Result.bind (fun digest ->
-                let provider: ProviderReconciliation =
-                    {
-                        Read = fun _ _ _ _ -> Ok(Applied digest)
-                    }
+        let settleEvidence effectId evidence =
+            let provider: ProviderReconciliation = { Read = fun _ _ _ _ -> Ok evidence }
 
-                settle effectId scope.Owner provider)
+            settle effectId scope.Owner provider
+
+        let returnAfterSettlement effectId response evidence =
+            settleEvidence effectId evidence
+            |> Result.bind (fun () ->
+                match evidence with
+                | Applied _ -> Ok(Ok response)
+                | Partial reason -> Error [ "provider-response-partial:" + reason ]
+                | Indeterminate reason -> Error [ "provider-response-indeterminate:" + reason ]
+                | StronglyAbsent _ -> Error [ "provider-response-unexpected-absence" ])
 
         let authorize effectId requestBytes objects snapshot registry handle observed =
             epochGeneration objects
@@ -334,7 +337,7 @@ module V1Admission =
                                 | DispatchAuthorized -> Ok()
                                 | DispatchRefused reasons -> Error reasons)))
 
-        let dispatch effectId canonicalRequestBytes send responseBytes =
+        let dispatch effectId canonicalRequestBytes send responseEvidence =
             let requestBytes =
                 if obj.ReferenceEquals(canonicalRequestBytes, null) then
                     Array.empty
@@ -351,13 +354,9 @@ module V1Admission =
                         |> Result.bind (fun () ->
                             match send () with
                             | Error providerError -> Ok(Error providerError)
-                            | Ok response ->
-                                responseBytes response
-                                |> Array.copy
-                                |> settleApplied effectId
-                                |> Result.map (fun () -> Ok response)))))
+                            | Ok response -> returnAfterSettlement effectId response (responseEvidence response)))))
 
-        let retry effectId send responseBytes =
+        let retry effectId send responseEvidence =
             readRegistry journal
             |> Result.bind (fun (observed, registry) ->
                 persistedRequestBytes effectId observed
@@ -407,15 +406,12 @@ module V1Admission =
                                             match send (Array.copy requestBytes) with
                                             | Error providerError -> Ok(Error providerError)
                                             | Ok response ->
-                                                responseBytes response
-                                                |> Array.copy
-                                                |> settleApplied effectId
-                                                |> Result.map (fun () -> Ok response))))))
+                                                returnAfterSettlement effectId response (responseEvidence response))))))
 
         interface IMutationFence with
-            member _.Dispatch(effectId, canonicalRequestBytes, send, responseBytes) =
-                dispatch effectId canonicalRequestBytes send responseBytes
+            member _.Dispatch(effectId, canonicalRequestBytes, send, responseEvidence) =
+                dispatch effectId canonicalRequestBytes send responseEvidence
 
             member _.Reconcile(effectId, provider) = settle effectId scope.Owner provider
 
-            member _.RetryProvenAbsent(effectId, send, responseBytes) = retry effectId send responseBytes
+            member _.RetryProvenAbsent(effectId, send, responseEvidence) = retry effectId send responseEvidence

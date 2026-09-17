@@ -203,8 +203,8 @@ let ``provider mutation primitive does not follow redirects`` status =
         }
 
     match provider.SendMutationOnce mutation with
-    | Error(Http(actual, _)) ->
-        Assert.Equal(status, actual)
+    | Ok response ->
+        Assert.Equal(status, response.Status)
         Assert.Single(server.Requests) |> ignore
     | other -> failwithf "expected redirect response without a second request, got %A" other
 

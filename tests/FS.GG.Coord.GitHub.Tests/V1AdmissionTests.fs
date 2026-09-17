@@ -285,6 +285,9 @@ type private RuntimeFixture(?outcomes: JournalCompareAndSwapOutcome list) =
 
 let private responseBytes (value: string) = Encoding.UTF8.GetBytes value
 
+let private appliedEvidence value =
+    Applied(bytesDigest (responseBytes value))
+
 let private restored (fixture: RuntimeFixture) =
     Registry.restore fixture.Current
     |> Result.defaultWith (String.concat "," >> failwith)
@@ -319,7 +322,7 @@ let ``durable fence sends and returns success only after accepted intent and App
                 (fun () ->
                     calls <- calls + 1
                     Ok "response"),
-                responseBytes
+                appliedEvidence
             )
 
     Assert.Equal(Ok(Ok "response"), result)
@@ -340,7 +343,7 @@ let ``response-unknown intent never mints a provider send permit`` () =
                 (fun () ->
                     calls <- calls + 1
                     Ok "response"),
-                responseBytes
+                appliedEvidence
             )
 
     Assert.True(Result.isError result)
@@ -360,11 +363,28 @@ let ``provider success is withheld when durable Applied settlement conflicts`` (
                 (fun () ->
                     calls <- calls + 1
                     Ok "response"),
-                responseBytes
+                appliedEvidence
             )
 
     Assert.True(Result.isError result)
     Assert.Equal(1, calls)
+
+[<Fact>]
+let ``initial provider Partial evidence is durably unresolved and refused`` () =
+    let fixture = RuntimeFixture()
+
+    let result =
+        fixture
+            .Fence("worker-a")
+            .Dispatch(
+                "effect-1",
+                Encoding.UTF8.GetBytes "request",
+                (fun () -> Ok "partial-response"),
+                (fun _ -> Partial "response-sha256=fixture")
+            )
+
+    Assert.True(Result.isError result)
+    Assert.Contains("effect-1", restored fixture |> Registry.unresolvedEffects)
 
 [<Fact>]
 let ``fresh authority movement refuses before provider send`` () =
@@ -390,7 +410,7 @@ let ``fresh authority movement refuses before provider send`` () =
                 (fun () ->
                     calls <- calls + 1
                     Ok "response"),
-                responseBytes
+                appliedEvidence
             )
 
     Assert.True(Result.isError result)
@@ -417,7 +437,7 @@ let ``fresh journal movement refuses before provider send`` () =
                 (fun () ->
                     calls <- calls + 1
                     Ok "response"),
-                responseBytes
+                appliedEvidence
             )
 
     Assert.True(Result.isError result)
@@ -430,7 +450,7 @@ let ``competing owner cannot take over an unresolved provider attempt`` () =
 
     Assert.Equal(
         Ok(Error "lost"),
-        fixture.Fence("worker-a").Dispatch("effect-1", request, (fun () -> Error "lost"), responseBytes)
+        fixture.Fence("worker-a").Dispatch("effect-1", request, (fun () -> Error "lost"), appliedEvidence)
     )
 
     let mutable calls = 0
@@ -444,7 +464,7 @@ let ``competing owner cannot take over an unresolved provider attempt`` () =
                 (fun () ->
                     calls <- calls + 1
                     Ok "response"),
-                responseBytes
+                appliedEvidence
             )
 
     Assert.True(Result.isError competing)
@@ -455,7 +475,7 @@ let ``provider lost response remains unresolved and can be reconciled`` () =
     let fixture = RuntimeFixture()
     let fence = fixture.Fence("worker-a")
     let request = Encoding.UTF8.GetBytes "request"
-    Assert.Equal(Ok(Error "lost"), fence.Dispatch("effect-1", request, (fun () -> Error "lost"), responseBytes))
+    Assert.Equal(Ok(Error "lost"), fence.Dispatch("effect-1", request, (fun () -> Error "lost"), appliedEvidence))
     Assert.Contains("effect-1", restored fixture |> Registry.unresolvedEffects)
 
     let provider: ProviderReconciliation =
@@ -471,7 +491,7 @@ let ``ProvenAbsent retry reuses persisted bytes and obtains a fresh permit`` () 
     let fixture = RuntimeFixture()
     let fence = fixture.Fence("worker-a")
     let request = Encoding.UTF8.GetBytes "original-request"
-    Assert.Equal(Ok(Error "lost"), fence.Dispatch("effect-1", request, (fun () -> Error "lost"), responseBytes))
+    Assert.Equal(Ok(Error "lost"), fence.Dispatch("effect-1", request, (fun () -> Error "lost"), appliedEvidence))
 
     let absence: ProviderReconciliation =
         {
@@ -488,11 +508,35 @@ let ``ProvenAbsent retry reuses persisted bytes and obtains a fresh permit`` () 
             (fun persisted ->
                 retried <- Array.copy persisted
                 Ok "response"),
-            responseBytes
+            appliedEvidence
         )
 
     Assert.Equal(Ok(Ok "response"), result)
     Assert.Equal<byte>(Encoding.UTF8.GetBytes "original-request", retried)
+
+[<Fact>]
+let ``retry provider Indeterminate evidence is durably unresolved and refused`` () =
+    let fixture = RuntimeFixture()
+    let fence = fixture.Fence("worker-a")
+    let request = Encoding.UTF8.GetBytes "original-request"
+    Assert.Equal(Ok(Error "lost"), fence.Dispatch("effect-1", request, (fun () -> Error "lost"), appliedEvidence))
+
+    let absence: ProviderReconciliation =
+        {
+            Read = fun _ _ _ observed -> Ok(StronglyAbsent(ConditionalFenceExcluded, bytesDigest observed, digest "9"))
+        }
+
+    Assert.Equal(Ok(), fence.Reconcile("effect-1", absence))
+
+    let result =
+        fence.RetryProvenAbsent(
+            "effect-1",
+            (fun _ -> Ok "unknown-response"),
+            (fun _ -> Indeterminate "response-sha256=fixture")
+        )
+
+    Assert.True(Result.isError result)
+    Assert.Contains("effect-1", restored fixture |> Registry.unresolvedEffects)
 
 [<Theory>]
 [<InlineData("partial")>]
@@ -501,7 +545,7 @@ let ``Partial and Indeterminate settlements never permit retry`` kind =
     let fixture = RuntimeFixture()
     let fence = fixture.Fence("worker-a")
     let request = Encoding.UTF8.GetBytes "request"
-    Assert.Equal(Ok(Error "lost"), fence.Dispatch("effect-1", request, (fun () -> Error "lost"), responseBytes))
+    Assert.Equal(Ok(Error "lost"), fence.Dispatch("effect-1", request, (fun () -> Error "lost"), appliedEvidence))
 
     let provider: ProviderReconciliation =
         {
@@ -522,7 +566,7 @@ let ``Partial and Indeterminate settlements never permit retry`` kind =
             (fun _ ->
                 calls <- calls + 1
                 Ok "response"),
-            responseBytes
+            appliedEvidence
         )
 
     Assert.True(Result.isError result)

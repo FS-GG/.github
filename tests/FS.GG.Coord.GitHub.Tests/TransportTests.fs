@@ -1,6 +1,8 @@
 module FS.GG.Coord.GitHub.Tests.TransportTests
 
 open System
+open System.Security.Cryptography
+open System.Text
 open Xunit
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Errors
@@ -45,11 +47,117 @@ type private StubFence(allow: bool) =
         member _.Reconcile(_, _) = Ok()
         member _.RetryProvenAbsent(_, _, _) = Error [ "no-retry-fixture" ]
 
+type private EvidenceFence(retryBytes: byte array) =
+    let evidence = ResizeArray<ProviderEvidence>()
+
+    let classify response classifyResponse =
+        let value = classifyResponse response
+        evidence.Add value
+
+        match value with
+        | Applied _ -> Ok(Ok response)
+        | _ -> Error [ "provider-response-not-applied" ]
+
+    member _.Evidence = List.ofSeq evidence
+
+    interface IMutationFence with
+        member _.Dispatch(_, _, send, classifyResponse) =
+            match send () with
+            | Error error -> Ok(Error error)
+            | Ok response -> classify response classifyResponse
+
+        member _.Reconcile(_, _) = Ok()
+
+        member _.RetryProvenAbsent(_, send, classifyResponse) =
+            match send (Array.copy retryBytes) with
+            | Error error -> Ok(Error error)
+            | Ok response -> classify response classifyResponse
+
 let private intent (providerRequest: Request) =
     {
         EffectId = "effect-1"
         Request = providerRequest
     }
+
+let private providerResponse status body =
+    {
+        Status = status
+        Body = body
+        ETag = None
+        NextLink = None
+        Headers = Map.empty
+    }
+
+let private assertInitialAndRetryEvidence providerRequest response predicate =
+    let fence = EvidenceFence(canonicalMutationBytes providerRequest)
+    let recorder = Fake.Recorder(fun _ -> Ok response)
+
+    let transport =
+        FencedTransport(recorder :> IProviderGitHubTransport, fence) :> IGitHubTransport
+
+    Assert.True(transport.SendMutation(intent providerRequest) |> Result.isError)
+    Assert.True(transport.RetryMutation("effect-1") |> Result.isError)
+    Assert.Equal(2, recorder.RestCalls + recorder.GraphQlCalls)
+    Assert.Equal(2, fence.Evidence.Length)
+    Assert.All(fence.Evidence, fun value -> Assert.True(predicate value, $"unexpected evidence: {value}"))
+
+[<Fact>]
+let ``definitive REST and GraphQL success bind Applied to the response body digest`` () =
+    let assertApplied (providerRequest: Request) (body: string) =
+        let expected =
+            SHA256.HashData(Encoding.UTF8.GetBytes body)
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+            |> FS.GG.Coordination.GitHub.V1AdmissionRegistry.sha256Digest
+            |> Result.defaultWith failwith
+
+        match mutationResponseEvidence providerRequest (providerResponse 200 body) with
+        | Applied actual -> Assert.Equal(expected, actual)
+        | other -> failwithf "expected Applied evidence, got %A" other
+
+    assertApplied
+        { request "repos/o/r/issues/1" Rest with
+            Method = "PATCH"
+            Body = Json "{}"
+        }
+        "{}"
+
+    assertApplied
+        { request "graphql" GraphQl with
+            Method = "POST"
+            Body = Query("mutation { update { id } }", [])
+        }
+        "{\"data\":{\"update\":{\"id\":\"1\"}}}"
+
+[<Theory>]
+[<InlineData(202)>]
+[<InlineData(304)>]
+[<InlineData(500)>]
+let ``initial and retry refuse non-definitive REST responses as Indeterminate`` status =
+    let providerRequest =
+        { request "repos/o/r/issues/1" Rest with
+            Method = "PATCH"
+            Body = Json "{\"state\":\"closed\"}"
+        }
+
+    assertInitialAndRetryEvidence providerRequest (providerResponse status "{}") (function
+        | Indeterminate reason -> reason.Contains("response-sha256=")
+        | _ -> false)
+
+[<Theory>]
+[<InlineData("{\"errors\":[{\"message\":\"failed\"}]}", false)>]
+[<InlineData("{\"data\":{\"update\":null},\"errors\":[{\"message\":\"partial\"}]}", true)>]
+let ``initial and retry refuse GraphQL 200 errors and partial data`` body expectedPartial =
+    let providerRequest =
+        { request "graphql" GraphQl with
+            Method = "POST"
+            Body = Query("mutation { update { id } }", [])
+        }
+
+    assertInitialAndRetryEvidence providerRequest (providerResponse 200 body) (function
+        | Partial reason when expectedPartial -> reason.Contains("response-sha256=")
+        | Indeterminate reason when not expectedPartial -> reason.Contains("response-sha256=")
+        | _ -> false)
 
 [<Fact>]
 let ``typed SendMutation records the stable producer intent in the fake`` () =

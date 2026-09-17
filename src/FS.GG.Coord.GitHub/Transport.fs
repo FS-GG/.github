@@ -4,6 +4,7 @@ module Transport =
 
     open System
     open System.Net.Http
+    open System.Security.Cryptography
     open System.Text
     open System.Text.Json
     open System.Text.Json.Nodes
@@ -284,6 +285,60 @@ module Transport =
         |> FS.GG.Coordination.GitHub.ShardedJournalAdapter.canonicalJson
         |> Result.defaultWith invalidOp
 
+    let mutationResponseEvidence (request: Request) (response: Response) =
+        let digest =
+            response.Body
+            |> Encoding.UTF8.GetBytes
+            |> SHA256.HashData
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+            |> FS.GG.Coordination.GitHub.V1AdmissionRegistry.sha256Digest
+            |> Result.defaultWith invalidOp
+
+        let evidenceReason reason =
+            $"%s{reason};status=%d{response.Status};response-sha256=%s{FS.GG.Coordination.GitHub.V1AdmissionRegistry.sha256Value digest}"
+
+        match response.Status, request.Budget with
+        | (202 | 206 | 207), _ -> V1Admission.Indeterminate(evidenceReason "provider-response-not-complete")
+        | status, _ when status < 200 || status >= 300 ->
+            V1Admission.Indeterminate(evidenceReason "provider-response-non-success")
+        | 200, GraphQl ->
+            try
+                use document = JsonDocument.Parse response.Body
+                let root = document.RootElement
+
+                if root.ValueKind <> JsonValueKind.Object then
+                    V1Admission.Indeterminate(evidenceReason "graphql-response-not-object")
+                else
+                    let hasErrors, errors = root.TryGetProperty "errors"
+
+                    let carriesErrors =
+                        hasErrors
+                        && errors.ValueKind = JsonValueKind.Array
+                        && errors.GetArrayLength() > 0
+
+                    if hasErrors && errors.ValueKind <> JsonValueKind.Array then
+                        V1Admission.Indeterminate(evidenceReason "graphql-errors-invalid")
+                    elif carriesErrors then
+                        let hasData, data = root.TryGetProperty "data"
+
+                        if hasData && data.ValueKind <> JsonValueKind.Null then
+                            V1Admission.Partial(evidenceReason "graphql-partial-data-with-errors")
+                        else
+                            V1Admission.Indeterminate(evidenceReason "graphql-errors")
+                    else
+                        let hasData, _ = root.TryGetProperty "data"
+
+                        if hasData then
+                            V1Admission.Applied digest
+                        else
+                            V1Admission.Indeterminate(evidenceReason "graphql-response-without-data")
+            with :? JsonException ->
+                V1Admission.Indeterminate(evidenceReason "graphql-response-invalid-json")
+        | _, GraphQl -> V1Admission.Indeterminate(evidenceReason "graphql-response-not-definitive")
+        | (200 | 201 | 204), (Rest | Free) -> V1Admission.Applied digest
+        | _ -> V1Admission.Indeterminate(evidenceReason "provider-response-not-definitive")
+
     let private requestFromCanonicalBytes effectId (bytes: byte array) =
         try
             use document = JsonDocument.Parse bytes
@@ -375,6 +430,7 @@ module Transport =
             (request: Request)
             (url: string)
             (maximumBytes: int option)
+            (rawMutationResponse: bool)
             : IoResult<Response> =
             try
                 let method =
@@ -457,10 +513,25 @@ module Transport =
                 if request.Budget = Rest && not (String.IsNullOrWhiteSpace token) then
                     Budget.observeRestHeaders token headerValue
 
+                if status >= 200 && status < 300 && request.Budget = GraphQl then
+                    Budget.observeGraphQlBody body
+
+                if rawMutationResponse then
+                    // Mutation settlement must observe the provider's actual response before ordinary
+                    // HTTP/GraphQL error mapping can discard it. The fence classifies this response and
+                    // durably records Partial/Indeterminate evidence before refusing it to the caller.
+                    Ok
+                        {
+                            Status = status
+                            Body = body
+                            Headers = headers
+                            ETag = etag
+                            NextLink = headerValue "Link" |> Option.bind parseNextLink
+                        }
                 // A 304 IS A SUCCESS. It says "what you already have is current", and it is the whole
                 // reason the conditional path costs nothing. Classifying it as a failure would send the
                 // caller down the error branch on the cheapest correct answer the server can give.
-                if status = 304 then
+                else if status = 304 then
                     Ok
                         {
                             Status = 304
@@ -474,9 +545,6 @@ module Transport =
                     // every query document selects `rateLimit { cost remaining }`, `Budget.readMeter` parsed
                     // it correctly, and NOTHING CALLED IT. The fleet paid to transmit its own meter and threw
                     // the reading away, which is why an exhausted budget could not be attributed to anything.
-                    if request.Budget = GraphQl then
-                        Budget.observeGraphQlBody body
-
                     Ok
                         {
                             Status = status
@@ -514,7 +582,7 @@ module Transport =
             member _.Send(request: Request) : IoResult<Response> =
                 let url = base' + "/" + request.Path.TrimStart('/') + buildQuery request.Query
 
-                match sendOne client request url None with
+                match sendOne client request url None false with
                 | Error e -> Error e
                 | Ok first ->
 
@@ -527,7 +595,7 @@ module Transport =
                             // and reporting it as complete is the whole failure class this port exists to end.
                             Error(Malformed(request.Subject, "pagination did not terminate within 100 pages"))
                         | Some link ->
-                            match sendOne client request link None with
+                            match sendOne client request link None false with
                             | Error e -> Error e
                             | Ok page ->
                                 match mergePages acc.Body page.Body with
@@ -558,21 +626,25 @@ module Transport =
 
             member _.SendMutationOnce(request: Request) =
                 let url = base' + "/" + request.Path.TrimStart('/') + buildQuery request.Query
-                sendOne singlePageClient request url None
+                sendOne singlePageClient request url None true
 
         interface ISinglePageGitHubTransport with
             member _.SendSingle(request: Request) : IoResult<Response> =
                 let url = base' + "/" + request.Path.TrimStart('/') + buildQuery request.Query
-                sendOne singlePageClient request url (Some(4 * 1024 * 1024))
+                sendOne singlePageClient request url (Some(4 * 1024 * 1024)) false
 
         interface IDisposable with
             member _.Dispose() =
                 client.Dispose()
                 singlePageClient.Dispose()
 
+    type private ProviderAttempt =
+        { Request: Request; Response: Response }
+
     type FencedTransport(inner: IProviderGitHubTransport, fence: V1Admission.IMutationFence) =
 
-        let responseBytes (response: Response) = Encoding.UTF8.GetBytes response.Body
+        let responseEvidence attempt =
+            mutationResponseEvidence attempt.Request attempt.Response
 
         let dispatch effectId request =
             let method = request.Method.ToUpperInvariant()
@@ -585,9 +657,21 @@ module Transport =
                 let canonical = canonicalMutationBytes request |> Array.copy
 
                 match
-                    fence.Dispatch(effectId, canonical, (fun () -> inner.SendMutationOnce request), responseBytes)
+                    fence.Dispatch(
+                        effectId,
+                        canonical,
+                        (fun () ->
+                            inner.SendMutationOnce request
+                            |> Result.map (fun response ->
+                                {
+                                    Request = request
+                                    Response = response
+                                })),
+                        responseEvidence
+                    )
                 with
-                | Ok response -> response
+                | Ok(Ok attempt) -> Ok attempt.Response
+                | Ok(Error error) -> Error error
                 | Error reasons ->
                     Error(Malformed(request.Subject, "v1 admission refused: " + String.Join("; ", reasons)))
 
@@ -606,9 +690,16 @@ module Transport =
                         (fun bytes ->
                             match requestFromCanonicalBytes effectId (Array.copy bytes) with
                             | Error reason -> Error(Malformed(effectId, reason))
-                            | Ok request -> inner.SendMutationOnce request),
-                        responseBytes
+                            | Ok request ->
+                                inner.SendMutationOnce request
+                                |> Result.map (fun response ->
+                                    {
+                                        Request = request
+                                        Response = response
+                                    })),
+                        responseEvidence
                     )
                 with
-                | Ok response -> response
+                | Ok(Ok attempt) -> Ok attempt.Response
+                | Ok(Error error) -> Error error
                 | Error reasons -> Error(Malformed(effectId, "v1 retry refused: " + String.Join("; ", reasons)))
