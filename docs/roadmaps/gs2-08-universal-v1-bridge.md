@@ -177,6 +177,37 @@ This completion is candidate source and offline evidence until its own protected
 Coordination acceptance. It does not install behavior in any receiver. Q4 is unclaimed because this lane has no
 isolated GitHub repository, token, ruleset, or authority to perform a safe live-provider mutation.
 
+## Ready horizon: GS2-08.7 immutable bridge publication
+
+This horizon supersedes the earlier readiness and pending-status wording in this navigation plan. Coordination's
+protected merge `c8907be5dabc0a1d59dbe3c239ffd53a5541c863` is the single completion authority for GS2-08.1–08.6;
+the GS2-08.6 receipt digest is `4b19806d1c4f9d147368e29e04ab7a480dcb6b798aed32e37159e8ac92a1e0cf`.
+The next bounded outcome is GS2-08.7. Earlier sections remain historical design and source evidence rather than a
+second status ledger.
+
+- [x] **P1 — Offline immutable-candidate probe.** Bind one explicitly supplied local `FS.GG.Coord.Cli` archive
+  to its package id/version, archive and payload digests, source commit/tree, installed assembly digests, accepted
+  receipt identities, and exact release-workflow/Kit/Drivers identities. Install it from a local-only source with
+  private caches, execute the installed command, and load only packed fence assemblies for distinct eligible-epoch,
+  refused-epoch, and settlement controls. Negative controls refuse changed or missing bridge assemblies, wrong
+  source or receipt bindings, incomplete evidence, and a substituted same-version archive. The loopback provider
+  records zero effects. Evidence: `tests/bridge-package/` and the `bridge-package` workflow.
+- [ ] **P2 — Signed candidate and native registration.** Add artifact signing and attestation, then register the
+  exact GS2-08.7 candidate with Coordination. Source and P1 evidence alone do not satisfy this outcome.
+- [ ] **P3 — Release-path binding and protected publication.** Bind the release saga to the registered identity,
+  perform the separately authorized protected publication, and read back the immutable feed artifacts. Select and
+  bump the coherent-set version only in this publication window.
+- [ ] **P4 — Public-only installation and readback.** Install from the public read path with empty caches, re-run
+  the bridge behavior and identity checks, and retain exact public archive and assembly evidence.
+- [ ] **P5 — Native acceptance and receiver handoff.** Obtain native GS2-08.7 acceptance for the published identity
+  and hand that one identity to GS2-08.8 receiver adoption. Publication alone does not activate a receiver.
+
+P1 preserves the current production limitation: `Client.fs` composes `UnavailableProductionMutationFence` until
+protected authority, journal, operation scope, and provider reconciliation are installed. The probe demonstrates
+that refusal and does not wire live admission. Signing, attestation, Coordination registration, release-path
+binding, publication, public-only readback, receiver adoption, and native acceptance remain P2–P5. The observed
+0.75.4 bypass, unavailable 0.58.0 artifact, 22 external routes, and Q4 remain GS2-08.9 inputs.
+
 ## Workspace, authority, and observation boundaries
 
 GS2-08.1–08.3 change no generated workspace and enable no runtime behavior. The first possible new-workspace

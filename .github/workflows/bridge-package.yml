@@ -1,0 +1,66 @@
+name: bridge-package
+
+on:
+  pull_request:
+    paths:
+      - "tests/bridge-package/**"
+      - "tests/coord-engine-e2e/stateful_server.py"
+      - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.Cli.Kernel/**"
+      - "src/FS.GG.Coord.Cli.BoardOps/**"
+      - "src/FS.GG.Coord.Cli.Lifecycle/**"
+      - "src/FS.GG.Coord.Core/**"
+      - "src/FS.GG.Coord.GitHub/**"
+      - "src/FS.GG.Kit/FS.GG.Kit.csproj"
+      - "src/FS.GG.Drivers/FS.GG.Drivers.csproj"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/release-coord-engine.yml"
+      - ".github/workflows/release-saga-start.yml"
+      - ".github/workflows/release-saga-prepare.yml"
+      - ".github/workflows/release-saga-promote.yml"
+      - ".github/workflows/bridge-package.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tests/bridge-package/**"
+      - "tests/coord-engine-e2e/stateful_server.py"
+      - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.Cli.Kernel/**"
+      - "src/FS.GG.Coord.Cli.BoardOps/**"
+      - "src/FS.GG.Coord.Cli.Lifecycle/**"
+      - "src/FS.GG.Coord.Core/**"
+      - "src/FS.GG.Coord.GitHub/**"
+      - "src/FS.GG.Kit/FS.GG.Kit.csproj"
+      - "src/FS.GG.Drivers/FS.GG.Drivers.csproj"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/release-coord-engine.yml"
+      - ".github/workflows/release-saga-start.yml"
+      - ".github/workflows/release-saga-prepare.yml"
+      - ".github/workflows/release-saga-promote.yml"
+      - ".github/workflows/bridge-package.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bridge-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Pack, install and probe the local bridge candidate
+        run: bash tests/bridge-package/run.sh
