@@ -69,6 +69,10 @@ jobs:
           # halves matter — the tree decides what is packed, `FSGG_SOURCE_SHA` decides what the
           # manifest and the draft release are bound to — so they are set from one expression.
           ref: ${{ inputs.source-sha != '' && inputs.source-sha || github.sha }}
+          # Bridge qualification proves that this candidate descends from the accepted 08.6
+          # producer commit. The default depth-one checkout cannot resolve that immutable commit,
+          # so preparation would refuse before creating a draft even though the binding is valid.
+          fetch-depth: 0
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
