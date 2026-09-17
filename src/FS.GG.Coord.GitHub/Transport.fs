@@ -650,6 +650,32 @@ module Transport =
         let responseEvidence attempt =
             mutationResponseEvidence attempt.Request attempt.Response
 
+        let unresolvedResult attempt =
+            let request, response = attempt.Request, attempt.Response
+
+            if request.Budget = GraphQl && response.Status = 200 then
+                // Existing GraphQL parsers need the exact alias data and errors to distinguish partial
+                // execution. The durable registry already records this response as unresolved.
+                Ok response
+            elif response.Status = 304 || response.Status < 200 || response.Status >= 300 then
+                Error(Budget.classify request.Subject response.Status response.Body (fun name -> header name response))
+            else
+                let evidence = mutationResponseEvidence request response
+
+                let detail =
+                    match evidence with
+                    | V1Admission.Partial reason -> reason
+                    | V1Admission.Indeterminate reason -> reason
+                    | _ -> $"status=%d{response.Status}"
+
+                Error(Malformed(request.Subject, "unresolved mutation response: " + detail))
+
+        let outcomeResult outcome =
+            match outcome with
+            | V1Admission.AppliedResponse attempt -> Ok attempt.Response
+            | V1Admission.UnresolvedResponse attempt -> unresolvedResult attempt
+            | V1Admission.ProviderFailed error -> Error error
+
         let dispatch effectId request =
             let method = request.Method.ToUpperInvariant()
 
@@ -674,9 +700,7 @@ module Transport =
                         responseEvidence
                     )
                 with
-                | Ok(V1Admission.AppliedResponse attempt)
-                | Ok(V1Admission.UnresolvedResponse attempt) -> Ok attempt.Response
-                | Ok(V1Admission.ProviderFailed error) -> Error error
+                | Ok outcome -> outcomeResult outcome
                 | Error reasons ->
                     Error(Malformed(request.Subject, "v1 admission refused: " + String.Join("; ", reasons)))
 
@@ -705,7 +729,5 @@ module Transport =
                         responseEvidence
                     )
                 with
-                | Ok(V1Admission.AppliedResponse attempt)
-                | Ok(V1Admission.UnresolvedResponse attempt) -> Ok attempt.Response
-                | Ok(V1Admission.ProviderFailed error) -> Error error
+                | Ok outcome -> outcomeResult outcome
                 | Error reasons -> Error(Malformed(effectId, "v1 retry refused: " + String.Join("; ", reasons)))

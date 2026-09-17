@@ -109,6 +109,43 @@ let private assertInitialAndRetryEvidence providerRequest response predicate =
     Assert.Equal(2, fence.Evidence.Length)
     Assert.All(fence.Evidence, fun value -> Assert.True(predicate value, $"unexpected evidence: {value}"))
 
+let private assertInitialAndRetryWriterFailure providerRequest response assertError =
+    let fence = EvidenceFence(canonicalMutationBytes providerRequest)
+    let recorder = Fake.Recorder(fun _ -> Ok response)
+
+    let transport =
+        FencedTransport(recorder :> IProviderGitHubTransport, fence) :> IGitHubTransport
+
+    for write in
+        [
+            (fun () -> transport.SendMutation(intent providerRequest))
+            (fun () -> transport.RetryMutation("effect-1"))
+        ] do
+        let mutable advanced = false
+
+        let result =
+            write ()
+            |> Result.map (fun _ ->
+                advanced <- true
+                ())
+
+        Assert.False(advanced, "Result.map writer continuation must not run")
+
+        match result with
+        | Error error -> assertError error
+        | Ok() -> failwith "unresolved REST response reached the writer continuation"
+
+    Assert.Equal(2, recorder.RestCalls)
+    Assert.Equal(2, fence.Evidence.Length)
+
+    Assert.All(
+        fence.Evidence,
+        fun value ->
+            match value with
+            | Indeterminate reason -> Assert.Contains("response-sha256=", reason)
+            | other -> failwithf "expected Indeterminate evidence, got %A" other
+    )
+
 [<Fact>]
 let ``definitive REST and GraphQL success bind Applied to the response body digest`` () =
     let assertApplied (providerRequest: Request) (body: string) =
@@ -137,20 +174,74 @@ let ``definitive REST and GraphQL success bind Applied to the response body dige
         }
         "{\"data\":{\"update\":{\"id\":\"1\"}}}"
 
+let private restMutation () =
+    { request "repos/o/r/issues/1" Rest with
+        Method = "PATCH"
+        Body = Json "{\"state\":\"closed\"}"
+    }
+
+[<Fact>]
+let ``initial and retry REST 202 cannot advance a Result-map writer`` () =
+    let response = providerResponse 202 "{\"pending\":true}"
+
+    assertInitialAndRetryWriterFailure (restMutation ()) response (function
+        | Malformed(subject, detail) ->
+            Assert.False(String.IsNullOrWhiteSpace subject)
+            Assert.Contains("status=202", detail)
+            Assert.Contains("response-sha256=", detail)
+        | other -> failwithf "expected typed unresolved response, got %A" other)
+
 [<Theory>]
-[<InlineData(202)>]
-[<InlineData(304)>]
-[<InlineData(500)>]
-let ``initial and retry preserve non-definitive REST responses as Indeterminate`` status =
-    let providerRequest =
-        { request "repos/o/r/issues/1" Rest with
-            Method = "PATCH"
-            Body = Json "{\"state\":\"closed\"}"
+[<InlineData(403)>]
+[<InlineData(429)>]
+let ``initial and retry REST rate limits cannot advance a Result-map writer`` status =
+    let response =
+        { providerResponse status "{\"message\":\"API rate limit exceeded\"}" with
+            Headers = Map.ofList [ "X-RateLimit-Resource", "core" ]
         }
 
-    assertInitialAndRetryEvidence providerRequest (providerResponse status "{}") (function
-        | Indeterminate reason -> reason.Contains("response-sha256=")
-        | _ -> false)
+    assertInitialAndRetryWriterFailure (restMutation ()) response (function
+        | RateLimited(RestBudget(Some "core"), _) -> ()
+        | other -> failwithf "expected RateLimited, got %A" other)
+
+[<Fact>]
+let ``initial and retry REST 500 cannot advance a Result-map writer`` () =
+    let response = providerResponse 500 "provider failed"
+
+    assertInitialAndRetryWriterFailure (restMutation ()) response (function
+        | Http(500, "provider failed") -> ()
+        | other -> failwithf "expected HTTP 500, got %A" other)
+
+[<Fact>]
+let ``initial and retry REST 304 return the existing HTTP classification`` () =
+    let response = providerResponse 304 ""
+
+    assertInitialAndRetryWriterFailure (restMutation ()) response (function
+        | Http(304, "") -> ()
+        | other -> failwithf "expected HTTP 304, got %A" other)
+
+[<Theory>]
+[<InlineData(206)>]
+[<InlineData(207)>]
+let ``initial and retry other non-final REST success cannot advance a writer`` status =
+    let response = providerResponse status "{}"
+
+    assertInitialAndRetryWriterFailure (restMutation ()) response (function
+        | Malformed(subject, detail) ->
+            Assert.False(String.IsNullOrWhiteSpace subject)
+            Assert.Contains($"status={status}", detail)
+        | other -> failwithf "expected typed unresolved response, got %A" other)
+
+[<Fact>]
+let ``unresolved REST classification retains durable Indeterminate evidence`` () =
+    let providerRequest = restMutation ()
+
+    let evidence = mutationResponseEvidence providerRequest (providerResponse 202 "{}")
+
+    match evidence with
+    | Indeterminate reason -> reason.Contains("response-sha256=")
+    | _ -> false
+    |> Assert.True
 
 [<Theory>]
 [<InlineData("{\"errors\":[{\"message\":\"failed\"}]}", false)>]
@@ -163,7 +254,12 @@ let ``initial and retry preserve GraphQL 200 errors and partial alias data`` bod
             Body = Query("mutation { update { id } }", [])
         }
 
-    assertInitialAndRetryEvidence providerRequest (providerResponse 200 body) (function
+    let response =
+        { providerResponse 200 body with
+            Headers = Map.ofList [ "X-GitHub-Request-Id", "partial-request" ]
+        }
+
+    assertInitialAndRetryEvidence providerRequest response (function
         | Partial reason when expectedPartial -> reason.Contains("response-sha256=")
         | Indeterminate reason when not expectedPartial -> reason.Contains("response-sha256=")
         | _ -> false)
