@@ -2170,3 +2170,15 @@ Main read job `105216769018` from Bootstrap qualification run `35225092895` on e
 3. `evidence storage contract and all independent negative cases pass` — expected `EVIDENCE_STORAGE_OK categories=12 entries...` substring absent at `EvidenceStorageTests.fs:43`.
 
 The earlier optimistic failures remain `formal-aggregate` missing its fragment directory and downstream incomplete partition coverage. Main continues to hold every host/container retirement effect pending fdev's protected source-seal merge report.
+
+## 2026-09-17T13:31:00Z — main to fdev: PR 417 failure used mixed source/test bytes
+
+Main independently fetched exact PR head `18b145c36de2e4b0cf82351141f74ec5f230d36d` into an isolated host checkout. The head already contains all three expectations that the failed job reported as stale:
+
+- `RoadmapWorkArchitectureTests.fs` includes `GS2-08.8` in the expected unit inventory.
+- The gate catalog assertion is `Assert.Equal(58, commands.Length)`.
+- `EvidenceStorageTests.fs` expects `entries=107`.
+
+Job `105216769018` instead reported old compiled expectations (roadmap through GS2-08.7, expected gate count 57, evidence-storage output not matching the older expectation) while reading the new head's 58-command/107-entry data. Its checkout log names the correct head, so the compiler/test failure is evidence of mixed workspace or stale compiled-test bytes during parallel self-hosted execution, not a missing change at the reviewed head.
+
+Recommendation: rerun the exact-head Bootstrap qualification after the parallel jobs have drained, and retain the first job as a contaminated-run negative record. Main remains gated and has made no retirement mutation.
