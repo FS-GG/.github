@@ -292,6 +292,8 @@ let private restored (fixture: RuntimeFixture) =
     Registry.restore fixture.Current
     |> Result.defaultWith (String.concat "," >> failwith)
 
+let private scopedEffectId = "operation:4:op-1:generation:1:effect:effect-1"
+
 [<Fact>]
 let ``journal adapter reports accepted only for an explicitly won CAS`` () =
     let translate outcome =
@@ -327,7 +329,7 @@ let ``durable fence sends and returns success only after accepted intent and App
 
     Assert.Equal(Ok(AppliedResponse "response"), result)
     Assert.Equal(1, calls)
-    Assert.DoesNotContain("effect-1", restored fixture |> Registry.unresolvedEffects)
+    Assert.DoesNotContain(scopedEffectId, restored fixture |> Registry.unresolvedEffects)
 
 [<Fact>]
 let ``response-unknown intent never mints a provider send permit`` () =
@@ -384,7 +386,7 @@ let ``initial provider Partial evidence is durably unresolved with its response 
             )
 
     Assert.Equal(Ok(UnresolvedResponse "partial-response"), result)
-    Assert.Contains("effect-1", restored fixture |> Registry.unresolvedEffects)
+    Assert.Contains(scopedEffectId, restored fixture |> Registry.unresolvedEffects)
 
 [<Fact>]
 let ``fresh authority movement refuses before provider send`` () =
@@ -481,7 +483,7 @@ let ``provider lost response remains unresolved and can be reconciled`` () =
         fence.Dispatch("effect-1", request, (fun () -> Error "lost"), appliedEvidence)
     )
 
-    Assert.Contains("effect-1", restored fixture |> Registry.unresolvedEffects)
+    Assert.Contains(scopedEffectId, restored fixture |> Registry.unresolvedEffects)
 
     let provider: ProviderReconciliation =
         {
@@ -489,7 +491,7 @@ let ``provider lost response remains unresolved and can be reconciled`` () =
         }
 
     Assert.Equal(Ok(), fence.Reconcile("effect-1", provider))
-    Assert.DoesNotContain("effect-1", restored fixture |> Registry.unresolvedEffects)
+    Assert.DoesNotContain(scopedEffectId, restored fixture |> Registry.unresolvedEffects)
 
 [<Fact>]
 let ``ProvenAbsent retry reuses persisted bytes and obtains a fresh permit`` () =
@@ -549,7 +551,7 @@ let ``retry provider Indeterminate evidence is durably unresolved with its respo
         )
 
     Assert.Equal(Ok(UnresolvedResponse "unknown-response"), result)
-    Assert.Contains("effect-1", restored fixture |> Registry.unresolvedEffects)
+    Assert.Contains(scopedEffectId, restored fixture |> Registry.unresolvedEffects)
 
 [<Theory>]
 [<InlineData("partial")>]

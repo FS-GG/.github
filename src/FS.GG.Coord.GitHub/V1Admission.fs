@@ -2,6 +2,7 @@ namespace FS.GG.Coord.GitHub
 
 open System
 open System.Security.Cryptography
+open System.Text
 open System.Text.Json
 open FS.GG.Coordination.GitHub
 
@@ -247,6 +248,10 @@ module V1Admission =
         let port = journalPort journal
         let liveAuthority = importedAuthorityPort authority
 
+        let scopedEffectId effectId =
+            let operationIdBytes = Encoding.UTF8.GetByteCount scope.OperationId
+            $"operation:%d{operationIdBytes}:%s{scope.OperationId}:generation:%d{scope.OperationGeneration}:effect:%s{effectId}"
+
         let settle effectId owner provider =
             readRegistry journal
             |> Result.bind (fun (observed, registry) ->
@@ -417,8 +422,10 @@ module V1Admission =
 
         interface IMutationFence with
             member _.Dispatch(effectId, canonicalRequestBytes, send, responseEvidence) =
-                dispatch effectId canonicalRequestBytes send responseEvidence
+                dispatch (scopedEffectId effectId) canonicalRequestBytes send responseEvidence
 
-            member _.Reconcile(effectId, provider) = settle effectId scope.Owner provider
+            member _.Reconcile(effectId, provider) =
+                settle (scopedEffectId effectId) scope.Owner provider
 
-            member _.RetryProvenAbsent(effectId, send, responseEvidence) = retry effectId send responseEvidence
+            member _.RetryProvenAbsent(effectId, send, responseEvidence) =
+                retry (scopedEffectId effectId) send responseEvidence

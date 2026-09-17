@@ -465,7 +465,7 @@ let ``a GraphQL variable is serialised WITH ITS TYPE - a number is a number, not
 
     use transport = new HttpTransport(server.Base, "t")
 
-    (transport :> IGitHubTransport).Send
+    (transport :> IProviderGitHubTransport).SendMutationOnce
         { get "graphql" with
             Method = "POST"
             Budget = GraphQl
@@ -504,7 +504,7 @@ let ``a GraphQL document with NO variables omits the variables object entirely``
 
     use transport = new HttpTransport(server.Base, "t")
 
-    (transport :> IGitHubTransport).Send
+    (transport :> IProviderGitHubTransport).SendMutationOnce
         { get "graphql" with
             Method = "POST"
             Budget = GraphQl
@@ -517,6 +517,26 @@ let ``a GraphQL document with NO variables omits the variables object entirely``
         Assert.Contains("f0: update", body)
         Assert.DoesNotContain("\"variables\"", body)
     | other -> failwith $"expected one request — got %A{other}"
+
+[<Fact>]
+let ``raw public transport refuses a mutation before provider IO`` () =
+    use server = new Server()
+    server.On(fun _ res -> server.Json res 200 "{}" [])
+    use transport = new HttpTransport(server.Base, "t")
+
+    let result =
+        (transport :> IGitHubTransport).Send
+            { get "repos/FS-GG/.github/issues/1" with
+                Method = "PATCH"
+                Budget = Rest
+                Body = Json """{"state":"closed"}"""
+            }
+
+    match result with
+    | Error(Malformed(_, detail)) -> Assert.Contains("typed SendMutation", detail)
+    | other -> failwith $"raw public mutation must be refused, got %A{other}"
+
+    Assert.Empty server.Requests
 
 // ---- status classification, on the real wire ----------------------------------------------------------
 

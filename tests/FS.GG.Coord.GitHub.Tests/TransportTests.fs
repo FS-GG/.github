@@ -194,11 +194,36 @@ let ``fenced transport distinguishes a GraphQL read from a legacy mutation`` () 
         transport.Send(graphQl "query { viewer { login } }")
     )
 
+    Assert.Equal(
+        Ok
+            {
+                Status = 200
+                Body = "{\"data\":{}}"
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            },
+        transport.Send(graphQl "# fixture read\nquery { viewer { login } }")
+    )
+
     match transport.Send(graphQl "mutation { addComment(input: {}) { clientMutationId } }") with
     | Error(Malformed(_, detail)) -> Assert.Contains("typed SendMutation", detail)
     | other -> failwith $"legacy GraphQL mutation must refuse before provider I/O, got %A{other}"
 
-    Assert.Equal(1, recorder.GraphQlCalls)
+    match transport.Send(graphQl "# disguised mutation\nmutation { addComment(input: {}) { clientMutationId } }") with
+    | Error(Malformed(_, detail)) -> Assert.Contains("typed SendMutation", detail)
+    | other -> failwith $"comment-prefixed GraphQL mutation must refuse before provider I/O, got %A{other}"
+
+    let ambiguous =
+        { graphQl "query { viewer { login } }" with
+            Body = Json "{\"query\":\"mutation { deleteIssue(input: {}) { clientMutationId } }\"}"
+        }
+
+    match transport.Send ambiguous with
+    | Error(Malformed(_, detail)) -> Assert.Contains("typed SendMutation", detail)
+    | other -> failwith $"ambiguous GraphQL POST must refuse before provider I/O, got %A{other}"
+
+    Assert.Equal(2, recorder.GraphQlCalls)
     Assert.Equal(0, fence.Calls)
 
 [<Fact>]

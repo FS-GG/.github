@@ -758,7 +758,7 @@ module Board =
 
                 let mutation =
                     {
-                        EffectId = $"board-add-item:%s{board.Id}:%s{contentId}"
+                        EffectId = mutationEffectId $"board-add-item:%s{board.Id}:%s{contentId}" request
                         Request = request
                     }
 
@@ -1345,10 +1345,12 @@ module Board =
                         $"mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, %s{varDecls}) {{ updateProjectV2ItemFieldValue(input: {{projectId: $projectId, itemId: $itemId, fieldId: $fieldId, %s{clause}}}) {{ clientMutationId }} }}",
                         common @ valueVars
 
+                let request = query document variables subject
+
                 let mutation =
                     {
-                        EffectId = $"board-set-field:%s{board.Id}:%s{itemId}:%s{field.Id}"
-                        Request = query document variables subject
+                        EffectId = mutationEffectId $"board-set-field:%s{board.Id}:%s{itemId}:%s{field.Id}" request
+                        Request = request
                     }
 
                 match transport.SendMutation mutation with
@@ -1442,11 +1444,12 @@ module Board =
                 // which is fine, because its cost is exactly the thing this function makes constant: one document,
                 // one request, one point at the floor.
                 let document = $"mutation {{ %s{aliases} }}"
+                let request = query document [] subject
 
                 let mutation =
                     {
-                        EffectId = $"board-set-field-batch:%s{board.Id}:%s{itemId}"
-                        Request = query document [] subject
+                        EffectId = mutationEffectId $"board-set-field-batch:%s{board.Id}:%s{itemId}" request
+                        Request = request
                     }
 
                 match transport.SendMutation mutation with

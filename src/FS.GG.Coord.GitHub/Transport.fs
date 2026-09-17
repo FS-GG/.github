@@ -285,6 +285,41 @@ module Transport =
         |> FS.GG.Coordination.GitHub.ShardedJournalAdapter.canonicalJson
         |> Result.defaultWith invalidOp
 
+    let mutationEffectId semanticIdentity request =
+        let requestDigest =
+            canonicalMutationBytes request
+            |> SHA256.HashData
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+
+        $"%s{semanticIdentity}.%s{requestDigest}"
+
+    let private isExplicitGraphQlRead (document: string) =
+        let firstExecutableLine =
+            document.Split([| '\n' |], StringSplitOptions.None)
+            |> Seq.map _.TrimStart()
+            |> Seq.tryFind (fun line -> line.Length > 0 && not (line.StartsWith("#", StringComparison.Ordinal)))
+
+        match firstExecutableLine with
+        | Some line when line.StartsWith("{", StringComparison.Ordinal) -> true
+        | Some line when line.StartsWith("query", StringComparison.Ordinal) ->
+            line.Length = "query".Length
+            || Char.IsWhiteSpace line.["query".Length]
+            || line.["query".Length] = '('
+            || line.["query".Length] = '{'
+        | _ -> false
+
+    let private isLegacyReadRequest (request: Request) =
+        match request.Method.ToUpperInvariant() with
+        | "GET" -> true
+        | "POST" ->
+            request.Budget = GraphQl
+            && request.Path.Trim('/') = "graphql"
+            && (match request.Body with
+                | Query(document, _) -> isExplicitGraphQlRead document
+                | _ -> false)
+        | _ -> false
+
     let mutationResponseEvidence (request: Request) (response: Response) =
         let digest =
             response.Body
@@ -429,7 +464,7 @@ module Transport =
 
         // Send one HTTP request. The URL is absolute, because pagination hands us a fully-qualified
         // `Link` to follow rather than a path to rebuild.
-        let sendOne
+        let sendOneUnchecked
             (http: HttpClient)
             (request: Request)
             (url: string)
@@ -582,6 +617,12 @@ module Transport =
             | :? TaskCanceledException as e -> Error(Transport $"timed out: %s{e.Message}")
             | :? IO.InvalidDataException as e -> Error(Malformed(request.Subject, e.Message))
 
+        let sendOne http request url maximumBytes rawMutationResponse =
+            if rawMutationResponse || isLegacyReadRequest request then
+                sendOneUnchecked http request url maximumBytes rawMutationResponse
+            else
+                Error(Malformed(request.Subject, "mutation requires the typed SendMutation boundary"))
+
         interface IGitHubTransport with
             member _.Send(request: Request) : IoResult<Response> =
                 let url = base' + "/" + request.Path.TrimStart('/') + buildQuery request.Query
@@ -646,19 +687,6 @@ module Transport =
         { Request: Request; Response: Response }
 
     type FencedTransport(inner: IProviderGitHubTransport, fence: V1Admission.IMutationFence) =
-
-        let isLegacyMutation (request: Request) =
-            match request.Method.ToUpperInvariant() with
-            | "PUT"
-            | "PATCH"
-            | "DELETE" -> true
-            | "POST" ->
-                match request.Budget, request.Body with
-                | GraphQl, Query(document, _) -> document.TrimStart().StartsWith("mutation", StringComparison.Ordinal)
-                | GraphQl, _ -> false
-                | _ -> true
-            | _ -> false
-
         let responseEvidence attempt =
             mutationResponseEvidence attempt.Request attempt.Response
 
@@ -718,10 +746,10 @@ module Transport =
 
         interface IGitHubTransport with
             member _.Send(request: Request) =
-                if isLegacyMutation request then
-                    Error(Malformed(request.Subject, "mutation requires the typed SendMutation boundary"))
-                else
+                if isLegacyReadRequest request then
                     inner.Send request
+                else
+                    Error(Malformed(request.Subject, "mutation requires the typed SendMutation boundary"))
 
             member _.SendMutation(mutation: MutationIntent) =
                 dispatch mutation.EffectId mutation.Request

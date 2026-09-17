@@ -338,7 +338,7 @@ module OperationalGraphQl =
 
             let mutation =
                 {
-                    EffectId = $"board-archive-items:%s{projectId}:%s{itemIdentity}"
+                    EffectId = mutationEffectId $"board-archive-items:%s{projectId}:%s{itemIdentity}" req
                     Request = req
                 }
 

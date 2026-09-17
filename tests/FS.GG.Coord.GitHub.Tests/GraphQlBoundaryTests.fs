@@ -315,7 +315,7 @@ let ``operational archive mutation preserves partial alias accounting`` () =
     | other -> failwith $"expected exact partial mutation facts, got %A{other}"
 
     let mutation = Assert.Single transport.Mutations
-    Assert.Equal("board-archive-items:PVT_board:one,two", mutation.EffectId)
+    Assert.Equal(mutationEffectId "board-archive-items:PVT_board:one,two" mutation.Request, mutation.EffectId)
     Assert.Equal(1, transport.GraphQlCalls)
 
 [<Fact>]
