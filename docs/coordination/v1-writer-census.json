@@ -65,7 +65,7 @@
     {"path":"dist/dotnet/Directory.Build.props","disposition":"build-only","sinkKinds":[],"sha256":"f29e3b29afed4f93258003519c5af5676b0a9bfea7623350491f2d60ee082d0c"},
     {"path":"dist/skill-union-assert.sh","disposition":"build-only","sinkKinds":[],"sha256":"e94e25406eda585a770fd29498798067dc1c0bc78c924f581a2b6db23141ce50"},
     {"path":"global.json","disposition":"build-only","sinkKinds":[],"sha256":"abb754e4de3e434515ec3362db26346bb65de9d1eaf47850b75aceb298af6a8f"},
-    {"path":"registry/dependencies.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"ab59242fe0fc619b8a0e0dff7390f7ba1ee306d5485a7f990441461b945da5ed"},
+    {"path":"registry/dependencies.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"8f38b2aca90c00c59707bbbc4c182f69783fb089fdd36dffedde6fae3ffef144"},
     {"path":"registry/repos.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"838f80598dcebea1019ae1b0b38f55180502fb2de155d274c891bc245dd8c29d"},
     {"path":"registry/skills.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"cf6f1b0666d30a6ae2f4b34c914716832a390545eba1fea4a501915d5ffb1328"},
     {"path":"scripts/NewSddWorkspace/Program.fs","disposition":"protected-admin-writer","sinkKinds":["graphql-mutation"],"sha256":"f03ea38ce142e315c6c04e4d4d5ed1a0d4567c6684f031dd2b032222f6556cb5"},
