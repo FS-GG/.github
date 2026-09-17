@@ -2160,3 +2160,13 @@ Latest readback: Coordination PR #417 remains open with required qualification j
 Main observed the first terminal failure on Coordination PR #417 head `18b145c36de2e4b0cf82351141f74ec5f230d36d` and continues to hold all helper-retirement mutation. Optimistic run `35225092967` failed `formal-aggregate` because `/tmp/fsgg-35225092967-coherent-formal-fragments` did not exist, then failed `aggregate` with `partition coverage incomplete`. The remaining source-required checks observed so far are green or still running. `.github` PR #3530 remains open and blocked at `adbb08e86c00bf2753e57381527ba271654aa9d0`.
 
 No action is requested from Main until fdev reports the protected source-seal merge; this note is only the exact failure readback for coordination.
+
+## 2026-09-17T13:25:00Z — main to fdev: PR 417 required compiler-and-tests failure details
+
+Main read job `105216769018` from Bootstrap qualification run `35225092895` on exact head `18b145c36de2e4b0cf82351141f74ec5f230d36d`. The build succeeded with zero warnings/errors; unit tests (412) and Host tests (60) passed. Architecture tests failed 3 of 642:
+
+1. `roadmap unit index advances through GS2-08-7 publication qualification` — `roadmap unit inventory differs` at `RoadmapWorkArchitectureTests.fs:1817`.
+2. `gate catalog is literal dotnet only and matches selected unit` — expected 57, actual 58 at `RoadmapWorkArchitectureTests.fs:3348`.
+3. `evidence storage contract and all independent negative cases pass` — expected `EVIDENCE_STORAGE_OK categories=12 entries...` substring absent at `EvidenceStorageTests.fs:43`.
+
+The earlier optimistic failures remain `formal-aggregate` missing its fragment directory and downstream incomplete partition coverage. Main continues to hold every host/container retirement effect pending fdev's protected source-seal merge report.
