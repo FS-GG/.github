@@ -69,6 +69,8 @@ python3 "$ROOT/tests/v1-receiver-census/run.py"
 
 stage "GS2-08.6 independent producer fence attacks"
 python3 "$ROOT/tests/producer-fence-attacks/run.py"
+python3 "$ROOT/tests/producer-fence-attacks/selftest.py"
+python3 "$ROOT/tests/producer-fence-attacks/probe_legacy.py" --verify
 
 if [ "$engine_changed" = true ]; then
   stage "locked restore and affected-engine compile"

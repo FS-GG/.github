@@ -23,6 +23,7 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="ProducerFenceAttackTests.fs" />
+    <Compile Include="ProducerFenceCompletionTests.fs" />
     <Compile Include="V1AdmissionTests.fs" />
     <Compile Include="TransportTests.fs" />
     <Compile Include="BudgetTests.fs" />
