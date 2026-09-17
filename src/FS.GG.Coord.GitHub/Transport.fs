@@ -37,6 +37,12 @@ module Transport =
             Subject: string
         }
 
+    type MutationEnvelope =
+        {
+            Request: Request
+            Admission: V1Admission.Mutation
+        }
+
     type Response =
         {
             Status: int
@@ -62,6 +68,7 @@ module Transport =
 
     type IGitHubTransport =
         abstract Send: request: Request -> IoResult<Response>
+        abstract SendMutation: mutation: MutationEnvelope -> IoResult<Response>
 
     type ISinglePageGitHubTransport =
         abstract SendSingle: request: Request -> IoResult<Response>
@@ -236,6 +243,45 @@ module Transport =
             node.["variables"] <- varsNode
 
         node.ToJsonString()
+
+    let canonicalMutationBytes (request: Request) =
+        let bodyKind, body =
+            match request.Body with
+            | NoBody -> "none", Array.empty<byte>
+            | Json value -> "json", Encoding.UTF8.GetBytes value
+            | Query(document, variables) -> "graphql", Encoding.UTF8.GetBytes(graphQlPayload document variables)
+
+        let root = JsonObject()
+        root.["bodyBase64"] <- JsonValue.Create(Convert.ToBase64String body)
+        root.["bodyKind"] <- JsonValue.Create bodyKind
+
+        let budget =
+            match request.Budget with
+            | GraphQl -> "graphql"
+            | Rest -> "rest"
+            | Free -> "free"
+
+        root.["budget"] <- JsonValue.Create budget
+
+        match request.IfNoneMatch with
+        | Some value -> root.["ifNoneMatch"] <- JsonValue.Create value
+        | None -> root.["ifNoneMatch"] <- null
+
+        root.["method"] <- JsonValue.Create(request.Method.ToUpperInvariant())
+        root.["path"] <- JsonValue.Create request.Path
+        let query = JsonArray()
+
+        for key, value in request.Query do
+            let pair = JsonArray()
+            pair.Add(JsonValue.Create key)
+            pair.Add(JsonValue.Create value)
+            query.Add pair
+
+        root.["query"] <- query
+
+        root.ToJsonString()
+        |> FS.GG.Coordination.GitHub.ShardedJournalAdapter.canonicalJson
+        |> Result.defaultWith invalidOp
 
     type HttpTransport(apiBase: string, token: string) =
 
@@ -445,6 +491,9 @@ module Transport =
 
                     follow first first.NextLink 100
 
+            member _.SendMutation(mutation: MutationEnvelope) : IoResult<Response> =
+                Error(Malformed(mutation.Request.Subject, "raw HTTP mutation transport is not fenced"))
+
         interface ISinglePageGitHubTransport with
             member _.SendSingle(request: Request) : IoResult<Response> =
                 let url = base' + "/" + request.Path.TrimStart('/') + buildQuery request.Query
@@ -454,3 +503,23 @@ module Transport =
             member _.Dispose() =
                 client.Dispose()
                 singlePageClient.Dispose()
+
+    type FencedTransport(inner: IGitHubTransport, fence: V1Admission.IMutationFence) =
+
+        interface IGitHubTransport with
+            member _.Send(request: Request) = inner.Send request
+
+            member _.SendMutation(mutation: MutationEnvelope) =
+                let request = mutation.Request
+                let method = request.Method.ToUpperInvariant()
+                let canonical = canonicalMutationBytes request
+
+                if not (Set.contains method (set [ "POST"; "PUT"; "PATCH"; "DELETE" ])) then
+                    Error(Malformed(request.Subject, "SendMutation requires a mutating HTTP method"))
+                elif canonical <> mutation.Admission.Request.CanonicalRequestBytes then
+                    Error(Malformed(request.Subject, "admission request bytes differ from the provider request"))
+                else
+                    match fence.Dispatch(mutation.Admission, fun () -> inner.Send request) with
+                    | Ok response -> response
+                    | Error reasons ->
+                        Error(Malformed(request.Subject, "v1 admission refused: " + String.Join("; ", reasons)))

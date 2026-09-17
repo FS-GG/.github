@@ -87,6 +87,13 @@ module Transport =
             Subject: string
         }
 
+    /// A provider request bound to one durable v1 admission/effect identity.
+    type MutationEnvelope =
+        {
+            Request: Request
+            Admission: V1Admission.Mutation
+        }
+
     type Response =
         {
             Status: int
@@ -139,6 +146,10 @@ module Transport =
     type IGitHubTransport =
         abstract Send: request: Request -> IoResult<Response>
 
+        /// The fenced mutation path. Raw live adapters refuse it; `FencedTransport` is the production
+        /// implementation that obtains and consumes a durable dispatch permit before forwarding.
+        abstract SendMutation: mutation: MutationEnvelope -> IoResult<Response>
+
     /// One bounded response page for collectors that own their pagination and completeness evidence.
     /// This seam never follows redirects or `Link` continuations and leaves `Send` unchanged.
     type ISinglePageGitHubTransport =
@@ -159,6 +170,17 @@ module Transport =
         interface IGitHubTransport
         interface ISinglePageGitHubTransport
         interface System.IDisposable
+
+    /// Decorate a raw provider transport with the durable v1 admission fence. `Send` remains temporarily
+    /// available for migration compatibility; new mutation call sites use `SendMutation`.
+    type FencedTransport =
+        new: inner: IGitHubTransport * fence: V1Admission.IMutationFence -> FencedTransport
+
+        interface IGitHubTransport
+
+    /// Stable bytes for the complete provider mutation identity: method, path, ordered query, exact body,
+    /// budget, and conditional header. These are the bytes retained by the durable effect record.
+    val canonicalMutationBytes: request: Request -> byte array
 
     /// Read the API base from the environment, so the corpus can redirect it.
     val apiBaseFromEnv: unit -> string

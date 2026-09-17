@@ -43,6 +43,14 @@
   <ItemGroup>
     <Compile Include="Errors.fsi" />
     <Compile Include="Errors.fs" />
+    <Compile Include="Generated/Coordination/ShardedJournalAdapter.fsi" />
+    <Compile Include="Generated/Coordination/ShardedJournalAdapter.fs" />
+    <Compile Include="Generated/Coordination/V1EffectFenceAdapter.fsi" />
+    <Compile Include="Generated/Coordination/V1EffectFenceAdapter.fs" />
+    <Compile Include="Generated/Coordination/V1AdmissionRegistry.fsi" />
+    <Compile Include="Generated/Coordination/V1AdmissionRegistry.fs" />
+    <Compile Include="V1Admission.fsi" />
+    <Compile Include="V1Admission.fs" />
     <Compile Include="GraphQlEnvelope.fsi" />
     <Compile Include="GraphQlEnvelope.fs" />
     <Compile Include="Budget.fsi" />

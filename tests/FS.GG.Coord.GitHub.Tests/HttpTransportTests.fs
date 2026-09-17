@@ -3,6 +3,7 @@ module FS.GG.Coord.GitHub.Tests.HttpTransportTests
 open System
 open System.Collections.Generic
 open System.Net
+open System.Security.Cryptography
 open System.Text
 open System.Threading
 open Xunit
@@ -10,6 +11,7 @@ open FS.GG.Coord.Types
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Errors
 open FS.GG.Coord.GitHub.Transport
+open FS.GG.Coordination.GitHub
 
 /// THE ADAPTER THAT ACTUALLY SHIPS, AGAINST A SERVER THAT ACTUALLY ANSWERS.
 ///
@@ -118,6 +120,57 @@ let private get (path: string) =
         IfNoneMatch = None
         Subject = path
     }
+
+[<Fact>]
+let ``raw HTTP transport refuses SendMutation without a production fence decorator`` () =
+    use transport = new HttpTransport("http://127.0.0.1:1", "")
+    let raw = transport :> IGitHubTransport
+
+    let request =
+        { get "repos/o/r/issues/1" with
+            Method = "PATCH"
+            Body = Json "{\"state\":\"closed\"}"
+        }
+
+    let bytes = canonicalMutationBytes request
+
+    let requestDigest =
+        SHA256.HashData bytes
+        |> Convert.ToHexString
+        |> _.ToLowerInvariant()
+        |> V1AdmissionRegistry.sha256Digest
+        |> Result.defaultWith failwith
+
+    let epoch =
+        V1AdmissionRegistry.gitObjectId (String.replicate 40 "a")
+        |> Result.defaultWith failwith
+
+    let envelope =
+        {
+            Request = request
+            Admission =
+                {
+                    OperationId = "operation-1"
+                    Owner = "worker-1"
+                    Request =
+                        {
+                            EffectId = "effect-1"
+                            RequestDigest = requestDigest
+                            CanonicalRequestBytes = bytes
+                            Preconditions =
+                                {
+                                    ExpectedEpochCommit = epoch
+                                    ExpectedEpochGeneration = 1L
+                                    ExpectedClaimGeneration = None
+                                    ExpectedOperationGeneration = 1L
+                                }
+                        }
+                }
+        }
+
+    match raw.SendMutation envelope with
+    | Error(Malformed(_, detail)) -> Assert.Contains("not fenced", detail)
+    | other -> failwithf "raw live mutations must refuse, got %A" other
 
 [<Fact>]
 let ``UTEL-04A single-page transport does not paginate and rejects oversized bodies`` () =
