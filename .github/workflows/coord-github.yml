@@ -81,7 +81,7 @@ jobs:
       - name: Verify GS2-08.6 producer attack oracle
         run: |
           dotnet test tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-build -c Release \
-            --filter FullyQualifiedName~ProducerFenceAttackTests \
+            --filter FullyQualifiedName~ProducerFence \
             --logger "trx;LogFileName=producer-fence-attacks.trx" \
             --results-directory "$RUNNER_TEMP/producer-fence-attacks"
           python3 tests/producer-fence-attacks/run.py \
