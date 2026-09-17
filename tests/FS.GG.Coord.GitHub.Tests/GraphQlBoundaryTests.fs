@@ -314,6 +314,10 @@ let ``operational archive mutation preserves partial alias accounting`` () =
     | Error(Partial([ "a0" ], [ ("a1", "denied") ])) -> ()
     | other -> failwith $"expected exact partial mutation facts, got %A{other}"
 
+    let mutation = Assert.Single transport.Mutations
+    Assert.Equal("board-archive-items:PVT_board:one,two", mutation.EffectId)
+    Assert.Equal(1, transport.GraphQlCalls)
+
 [<Fact>]
 let ``operational roster board refuses a partially resolved issue node`` () =
     let projects =

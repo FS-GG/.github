@@ -169,6 +169,9 @@ let ``addItem adds when the read DEFINITELY says not-on-board, and returns the n
     | other -> failwith $"a definite absence licenses the add — got %A{other}"
 
     Assert.True(transport.Logged "item-add", "the add mutation must actually be sent")
+    let mutation = Assert.Single transport.Mutations
+    Assert.Equal("board-add-item:PVT_coord:I_issue42", mutation.EffectId)
+    Assert.Equal(3, transport.GraphQlCalls)
 
 [<Fact>]
 let ``addItem sends the ISSUE's node id as contentId, not the board item id`` () =
@@ -289,6 +292,9 @@ let ``Clear is a DIFFERENT MUTATION, and the log shows it`` () =
     | Ok() ->
         Assert.True(transport.Logged "--clear")
         Assert.False(transport.Logged "--text ")
+        let mutation = Assert.Single transport.Mutations
+        Assert.Equal("board-set-field:PVT_coord:PVTI_coord123:PVTF_blocked", mutation.EffectId)
+        Assert.Equal(1, transport.GraphQlCalls)
     | other -> failwith $"a clear must land — got %A{other}"
 
 // ---- routing by field type -------------------------------------------------------------------------
@@ -458,6 +464,8 @@ let ``#448 THREE fields cost exactly ONE GraphQL call`` () =
     with
     | Ok() ->
         Assert.Equal(1, transport.GraphQlCalls)
+        let mutation = Assert.Single transport.Mutations
+        Assert.Equal("board-set-field-batch:PVT_coord:PVTI_coord123", mutation.EffectId)
         Assert.True(transport.Logged "batch-mutation mutation {")
         Assert.True(transport.Logged "f0: updateProjectV2ItemFieldValue")
         Assert.True(transport.Logged "f2: clearProjectV2ItemFieldValue")

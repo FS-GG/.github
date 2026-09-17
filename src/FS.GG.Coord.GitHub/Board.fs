@@ -756,7 +756,13 @@ module Board =
                 let request =
                     query AddItemDoc [ "projectId", VId board.Id; "contentId", VId contentId ] subject
 
-                match transport.Send request with
+                let mutation =
+                    {
+                        EffectId = $"board-add-item:%s{board.Id}:%s{contentId}"
+                        Request = request
+                    }
+
+                match transport.SendMutation mutation with
                 | Error e -> Error e
                 | Ok response ->
 
@@ -1339,7 +1345,13 @@ module Board =
                         $"mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, %s{varDecls}) {{ updateProjectV2ItemFieldValue(input: {{projectId: $projectId, itemId: $itemId, fieldId: $fieldId, %s{clause}}}) {{ clientMutationId }} }}",
                         common @ valueVars
 
-                match transport.Send(query document variables subject) with
+                let mutation =
+                    {
+                        EffectId = $"board-set-field:%s{board.Id}:%s{itemId}:%s{field.Id}"
+                        Request = query document variables subject
+                    }
+
+                match transport.SendMutation mutation with
                 | Error e -> Error e
                 | Ok response -> GraphQl.decode subject response.Body (fun _ -> Ok())
 
@@ -1431,7 +1443,13 @@ module Board =
                 // one request, one point at the floor.
                 let document = $"mutation {{ %s{aliases} }}"
 
-                match transport.Send(query document [] subject) with
+                let mutation =
+                    {
+                        EffectId = $"board-set-field-batch:%s{board.Id}:%s{itemId}"
+                        Request = query document [] subject
+                    }
+
+                match transport.SendMutation mutation with
                 | Error e -> Error e
                 | Ok response ->
 
