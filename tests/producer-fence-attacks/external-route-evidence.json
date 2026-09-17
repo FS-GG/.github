@@ -1,34 +1,34 @@
 {
   "schema": "fsgg.gs2-08.6-external-route-availability/1",
-  "statement": "Availability assessment only; no row is represented as an executed refusal.",
+  "statement": "GS2-08.6 availability is preserved; GS2-08.9 resolved rows are current-revision source retirements, not executed historical-client refusals.",
   "routes": [
     {
       "path": ".github/workflows/dispatch-sender.yml",
-      "sha256": "0874e00420ec87d22885860257ccc731e5c7b4b0dc2ef6ae94318ad80d32cbbe",
-      "status": "artifact-unavailable",
-      "gs2089": "unresolved",
-      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists."
+      "sha256": "e8dab416cd98c1286b67875875777fa3583c4112af0c4581c7c05da60992894f",
+      "status": "current-revision-retired",
+      "gs2089": "resolved",
+      "reason": "Current workflow bytes retain local request validation without a credential or provider effect. Historical SHA callers remain capable until the shared App capability is revoked."
     },
     {
       "path": ".github/workflows/feed-autofix.yml",
-      "sha256": "f8aeb6384928f6791557dfe37ec6c2795c18e2cfed3ed896e99f1040e858f6c5",
-      "status": "artifact-unavailable",
-      "gs2089": "unresolved",
-      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists."
+      "sha256": "00ef3c3b5f75e02701aa87d1792b8635fcaa30fe3192fd31cb1fc41ee54d66a4",
+      "status": "current-revision-retired",
+      "gs2089": "resolved",
+      "reason": "The scheduled route retains offline fixtures and a read-only feed audit; App mint, registry write, issue, branch, and pull-request effects are absent."
     },
     {
       "path": ".github/workflows/fsgg-dispatch-broker.yml",
-      "sha256": "6da0f197d97129fbb9b43f931879779d4a3b4b0af38b2ef7634eb945eaf6b05c",
-      "status": "artifact-unavailable",
-      "gs2089": "unresolved",
-      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists."
+      "sha256": "daecbf14c8af247beec85a5c4d5f2859cf6c07d717efcb1e01187e9ef161fc6c",
+      "status": "current-revision-retired",
+      "gs2089": "resolved",
+      "reason": "The broker retains request grammar validation only and has no token, receipt, dispatch, or provider read/write boundary."
     },
     {
       "path": ".github/workflows/github-substrate-v2-authority-qualification.yml",
-      "sha256": "0d5051d560fe60207f992f8312410e82b7f1262b19bc0b3f9d2deeb2cec086e3",
-      "status": "artifact-unavailable",
-      "gs2089": "unresolved",
-      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists."
+      "sha256": "78f8d2885ca4a2b7a777ecb68d4b1a50a82b33f4652b7808d7766edca2994dd9",
+      "status": "loopback-local-only",
+      "gs2089": "resolved",
+      "reason": "Qualification now exercises CAS, non-fast-forward, and deletion refusal against a temporary local bare repository without production credentials or calls."
     },
     {
       "path": ".github/workflows/kit-auto-publish.yml",
@@ -39,17 +39,17 @@
     },
     {
       "path": ".github/workflows/kit-materialize.yml",
-      "sha256": "ebe86011063ced545f37c38c89a939a4e35cb38a9d397959847f67c52746ea37",
-      "status": "artifact-unavailable",
-      "gs2089": "unresolved",
-      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists."
+      "sha256": "c665d20100ec37068c2eae8fbadb22ab22cd9f571a539174c1a85dc917b59575",
+      "status": "current-revision-read-only",
+      "gs2089": "resolved",
+      "reason": "The established read-only bump and receiver authorization evaluators remain under their protected context names; the App token and mutating materialize job are absent."
     },
     {
       "path": ".github/workflows/lockfile-sync.yml",
-      "sha256": "f889e54fc8f33c9c37044584a2130a8c73a5740a6d9b3b7229023a0d59a9c4ec",
-      "status": "artifact-unavailable",
-      "gs2089": "unresolved",
-      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists."
+      "sha256": "3340fa6b064183e2f44d55900927577752965838f5b182591cc1545107ca3c4f",
+      "status": "current-revision-retired",
+      "gs2089": "resolved",
+      "reason": "The reusable workflow performs locked restore validation only; force-evaluate, commit, push, and App credential inputs are absent."
     },
     {
       "path": ".github/workflows/release-coord-engine.yml",
@@ -102,24 +102,24 @@
     },
     {
       "path": ".github/workflows/skill-registry-autofix.yml",
-      "sha256": "32f9275322622d698ca711ce351e04c406fa6fb5d3b9cf49d6e382ccab0b6b97",
-      "status": "artifact-unavailable",
-      "gs2089": "unresolved",
-      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists."
+      "sha256": "15c0354feca76dd795843aef9102089b93601c43c58dbe1d88aa4ca59694e81d",
+      "status": "current-revision-retired",
+      "gs2089": "resolved",
+      "reason": "The scheduled route runs local registry validation only and has no App token, registry write, branch, pull-request, merge, comment, or close effect."
     },
     {
       "path": ".github/workflows/skillmirror-redrive.yml",
-      "sha256": "1c12000dbbf3a8e3c8412af25273e0e24f0aa4cbc766401a59111e0d82e26bdb",
-      "status": "artifact-unavailable",
-      "gs2089": "unresolved",
-      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists."
+      "sha256": "fb3a9fd68119ed697cc10e1b48ad2920bff4309e0ff3b8e53c192c33e8b48fdb",
+      "status": "current-revision-retired",
+      "gs2089": "resolved",
+      "reason": "The scheduled route retains its hermetic oracle only; re-pin, branch, pull-request, and close effects are absent."
     },
     {
       "path": ".github/workflows/touch-set-drift.yml",
-      "sha256": "7c821737b9fb3c35fc9322e05c4ed08a4580e6e7ab9a1a442f9af73a0548729e",
-      "status": "artifact-unavailable",
-      "gs2089": "unresolved",
-      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists."
+      "sha256": "1b51744e4c493218d5c8cc59f1469a1fbeee7220178c8185cf4c0dd6e57bae66",
+      "status": "current-revision-read-only",
+      "gs2089": "resolved",
+      "reason": "The check retains issue and pull-request reads and reports to its own log/summary; sticky comment POST, PATCH, and DELETE effects are absent."
     },
     {
       "path": "scripts/NewSddWorkspace/Program.fs",

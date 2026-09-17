@@ -1,369 +1,54 @@
-# The RESPONSE half of publish-before-flip (.github#748, epic #266).
-#
-# `feed-coherence.yml` is the DETECTION half: it reads the live org feed and turns `.github@main`
-# RED when a release published and `registry/dependencies.yml` was never flipped. It works — it has
-# caught the drift every time. What was missing is RESPONSE: nothing turned "a release published"
-# into "a PR flipping the row exists", so all SEVEN instances were reconciled BY HAND, and the count
-# grew rather than converged (#250 -> #263 -> the missed 0.4.0-preview.1 -> the unrecorded 0.4.2 ->
-# 0.9.2 -> 0.10.0 (#747) -> 0.11.0 (#856)). Six by-hand flips is not six careless authors; it is a
-# process with no actor. This is the actor.
-#
-# And the red is not confined to the person who owed the flip: `feed-coherence` gates on TIME, not on
-# diff, so every branch cut from `main` inherits it. #744 — an ADR-hygiene PR touching no registry
-# content — was blocked by exactly this.
-#
-# WHY THE FEED IS THE SUBJECT, AND THE DISPATCH IS ONLY A HINT. #748 proposes that FS.GG.Rendering
-# dispatch this repo on release and that a receiver verify-and-flip. The receiver is here, and it is
-# genuinely wanted — it is the difference between "the row is right within minutes" and "within a
-# day". But it is a hint about WHEN TO LOOK; the feed decides WHAT the flip is. Three reasons, in
-# ascending order of seriousness:
-#
-#   1. A dispatch-only receiver cannot land from this repo. Its sender is a PR in ANOTHER repo, so
-#      until that lands the receiver never fires — and "the receiver never ran" and "there was
-#      nothing to do" would be the same silence, which is the exact #266 shape it exists to close.
-#   2. The org already answered this question the other way, for a structurally identical problem.
-#      `skill-registry-autofix.yml` is the response half of `skill-registry-coherence.yml`, and its
-#      header states the reason it polls: "the simple version is the only one that lives entirely in
-#      `.github`."
-#   3. THE DISPATCH FABRIC HAS ITSELF FAILED TO FIRE, TWICE, AND THE REGISTRY RECORDS BOTH — the
-#      0.5.0 release went out via a manual `release.yml` workflow_dispatch, which does not fire
-#      `template-dispatch.yml` at all ("FS.GG.Templates was NOT auto-notified ... re-fire owed"); and
-#      at 0.4.0 the dispatch fired and was WRONG (`env: GITHUB_REF:`, a name the runner reserves;
-#      FS.GG.Rendering#232). A response half keyed ONLY on the dispatch inherits every way its sender
-#      can fail to fire — the manual step it replaces, moved one level down and made harder to see.
-#
-# So the schedule is the BACKSTOP and is correct on its own; the dispatch is a latency optimisation,
-# inert until FS.GG.Rendering adds the second `dispatch-sender` call (filed as FS.GG.Rendering#847).
-# Both triggers run the identical verify path — there is no dispatch-only code path to rot — and
-# `client_payload.version` is deliberately NOT trusted, or even read: a payload that disagreed with
-# the feed would be a reason to distrust the payload.
-#
-# IT OPENS A PR AND DOES NOT MERGE IT — deliberately, and NOT for the reasons `skill-registry-autofix`
-# merges its own. That bot's PR is purely mechanical, so a human adds nothing by clicking merge. This
-# one's PR routinely carries WORK: the bot writes the three mechanical fields and refuses to author
-# the provenance prose, and when its write contradicts a comment it says so as a checklist. Merging
-# that automatically would land the stale prose over a bot's signature — i.e. it would AUTOMATE #856,
-# the very defect the checklist exists to surface. The human is not a rubber stamp here; they are the
-# only thing that can write the sentence the row is FOR.
-#
-# FAIL LOUDLY, NEVER SILENTLY (#748). A run that cannot verify opens an ISSUE. "The bot ran and found
-# nothing to do" and "the bot ran and could not tell" must not produce the same silence — epic #266.
-name: feed-autofix
+# GS2-08.9 retirement boundary. Detection and the offline mutation fixture remain; the scheduled
+# route has no App credential and cannot edit the registry, push, open a PR, or create an issue.
+name: feed-autofix (audit only)
 
 on:
-  # Detection runs at 17 6. This runs 30 min later, so a release that landed overnight is both
-  # detected AND has its flip PR open before anyone reads the red.
   schedule:
     - cron: "47 6 * * *"
-  # The latency half. Inert until FS.GG.Rendering wires the sender (FS.GG.Rendering#847) — which is
-  # why the schedule above is the primary trigger rather than a fallback.
   repository_dispatch:
     types: [fs-gg-ui-template-released]
   workflow_dispatch:
-    inputs:
-      dry-run:
-        description: "Reconcile and print the diff + PR body, but do NOT push a branch or open a PR."
-        type: boolean
-        default: false
-  # So the fixture below runs on a PR that touches this bot. The reconcile job does not run here
-  # (see its `if:`) — a PR must never push a branch or open a PR.
   pull_request:
     paths:
       - "scripts/feed-autofix"
-      - "scripts/stage-generated-projections"
       - "scripts/fsgg_feed.py"
       - "scripts/registry_packages.py"
       - "tests/feed-autofix/**"
       - ".github/workflows/feed-autofix.yml"
 
-# These scopes are GITHUB_TOKEN's, and GITHUB_TOKEN here only ever READS: the feed, the producer's
-# tags, and this repo. Every WRITE — the branch push, the standing PR, the fail-loudly issue — goes
-# through the App token instead, so `pull-requests: write` and `issues: write` are deliberately NOT
-# granted. That is not ceremony: it is what makes "the push cannot silently fall back to
-# GITHUB_TOKEN" a property this file can PROVE rather than assert, and a GITHUB_TOKEN push would
-# fail the standing PR's own checks open exactly as #425 did. See the mint step.
 permissions:
   contents: read
-  packages: read   # the org NuGet feed (HTTP Basic with the run-scoped GITHUB_TOKEN)
-
-concurrency:
-  # Serialised: two runs racing would force-push the same branch and could double-open the issue.
-  group: feed-autofix
-  cancel-in-progress: false
+  packages: read
 
 jobs:
-  # Offline. Proves the bot refuses on every drift and fail-open condition BEFORE anything trusts a
-  # green from it. This one WRITES the registry, so its blast radius is a landed false fact rather
-  # than a false colour — it earns a higher bar than the detection half, not a lower one.
   fixture:
     runs-on: ubuntu-latest
-    # 15, up from 10: the #1081 closure case builds the engine (a cold NuGet restore can be slow),
-    # same budget as projections.yml which does the identical build.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-policy-python
-      # The engine is here for ONE fixture case: the #1081 option-2 CLOSURE, which regenerates the
-      # projections from a flipped registry and asserts the required `projection` gate goes green —
-      # `generate-projections` needs the engine built for its protocol regions. From SOURCE, never the
-      # feed (ADR-0034 §4.3), exactly as projections.yml does. Without it the closure's GREEN half SKIPs
-      # and only its always-on RED half (a flip without regeneration reds the gate) runs.
-      - uses: actions/setup-dotnet@v6
-        with:
-          global-json-file: global.json
-          cache: true
-          cache-dependency-path: "**/packages.lock.json"
-      - name: Build the engine (for the projection-closure fixture case)
-        run: |
-          set -euo pipefail
-          dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
-          dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
-      - name: Run the feed-autofix fixture (no network)
+      - name: Run offline refusal and reconciliation fixtures
         run: bash tests/feed-autofix/run.sh
 
-  # .github#2354: this job id is `reconcile` for historical/grep reasons, but a bare top-level job
-  # with no job-level `name:` produces a check-run literally named `reconcile` — indistinguishable to
-  # GitHub, and to branch protection's required-context matching, from coord-board-reconcile.yml's own
-  # `reconcile` job (the one branch protection actually means) and from architecture-map.yml's. This
-  # `name:` is the fix: it makes THIS job's check-run report as "feed-autofix reconcile", so a
-  # green/red here can never be mistaken for — or silently satisfy — the required board-reconciliation
-  # check. Do not remove this override without re-reading .github#2354's root cause.
-  reconcile:
-    name: feed-autofix reconcile
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: fixture
-    # Never from a `pull_request`: that event exists here only to run the fixture above. The
-    # reconcile PUSHES and OPENS A PR, and a fork PR must not be able to make this repo do either.
+  audit:
     if: github.event_name != 'pull_request'
+    needs: fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      # Minted BEFORE the checkout, so the checkout can persist it as the git credential.
-      #
-      # The branch is pushed with the App token, never GITHUB_TOKEN — whose pushes deliberately do
-      # NOT re-trigger `on: pull_request` (GitHub's recursion guard). With GITHUB_TOKEN the standing
-      # PR's own checks would never run, so `feed-coherence` could not evaluate the very PR that
-      # exists to satisfy it, and a stale snapshot could not contradict itself. That is #425's
-      # inversion, and `skill-registry-autofix` already paid to learn it.
-      - name: Mint the App token
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
-          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
-
       - uses: actions/checkout@v7
-        with:
-          # So `git push` needs no explicit credential and no token in a remote URL: the checkout
-          # persists this one. Same reason as skill-registry-autofix.
-          token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/setup-policy-python
-
-      - name: Reconcile the row against the live feed
-        id: run
+      - name: Inspect the live feed without changing the checkout or provider
         env:
-          # `packages: read` for the feed; the tag reads are public metadata on a repo in this org.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -uo pipefail
-          # NOT `set -e`: exit 1 is a FINDING with a report to act on, not a crash. Losing the
-          # distinction is how "could not tell" starts reading like "nothing to do".
-          # Reconciles EVERY package-bearing row (.github#1260). --pr-body carries the rows it FLIPPED;
-          # --findings-body carries the rows it REFUSED (the standing issue). The two are independent:
-          # a run can flip clean rows AND refuse others in one pass.
-          python scripts/feed-autofix registry/dependencies.yml \
-            --write --json --pr-body /tmp/pr-body.md --findings-body /tmp/findings.md \
-            --run-url "$RUN_URL" \
-            > /tmp/report.json 2> /tmp/err.txt
-          rc=$?
-          cat /tmp/err.txt >&2
-
-          # SAY WHAT YOU FOUND (#937). `--json` makes stdout the machine report, so without this the
-          # bot's own account of the run goes into a FILE and never reaches the log: a green run
-          # printed nothing at all, which reads exactly like "there was nothing to do" — the silence
-          # this workflow's header spends forty lines promising to abolish, reproduced inside it.
-          # Run 29547328129 is the proof: green, every later step skipped, empty log, while the bot
-          # had in fact classified 0.11.0 and found a real flip. It is narration of data already in
-          # hand, so it cannot fail the run — but `jq .` on an empty file would, hence the guard.
-          echo "--- what the bot found ---"
-          [ -s /tmp/report.json ] && jq . /tmp/report.json || echo "(no report — see the error above)"
-          if [ -s /tmp/pr-body.md ]; then
-            echo "--- the PR body it would post (rows flipped) ---"
-            cat /tmp/pr-body.md
-          fi
-          if [ -s /tmp/findings.md ]; then
-            echo "--- the issue body it would post (rows refused) ---"
-            cat /tmp/findings.md
-          fi
-
-          echo "rc=$rc" >> "$GITHUB_OUTPUT"
-          # rc 0 (all clean) and rc 1 (some row refused) BOTH emit a JSON report whose `.changed` says
-          # whether any CLEAN row flipped — the push/PR steps gate on that, the issue step gates on
-          # rc==1. Only rc 2 (a defect that produced no report) forces changed=false.
+          rc=0
+          python scripts/feed-autofix registry/dependencies.yml --json > report.json || rc=$?
+          cat report.json
+          git diff --exit-code
           case "$rc" in
-            0|1) echo "changed=$(jq -r '.changed' /tmp/report.json)" >> "$GITHUB_OUTPUT" ;;
-            *)   echo "changed=false" >> "$GITHUB_OUTPUT" ;;
-          esac
-          exit 0
-
-      # --- The defect case. The engine broke; that is not a finding, and it must not be quiet.
-      - name: A defect in the bot itself is a hard failure
-        if: steps.run.outputs.rc == '2'
-        run: |
-          echo "::error::feed-autofix exited 2 — the bot could not read its subject (feed, token, or"
-          echo "::error::registry shape). This is NOT 'the registry is fine'. See the log above."
-          exit 1
-
-      # --- FAIL LOUDLY (#748 part 3): a run that cannot verify opens an issue, never does nothing.
-      - name: A finding a human must settle -> open an issue
-        if: steps.run.outputs.rc == '1'
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          set -euo pipefail
-          # The body is composed by the bot (compose_findings) and written to /tmp/findings.md — it
-          # aggregates EVERY row the run refused, and already carries the `Paths: none` sentinel. On
-          # rc==1 that file must exist; a missing one is a defect, not "no findings".
-          [ -s /tmp/findings.md ] || { echo "::error::rc==1 but /tmp/findings.md is empty — the bot reported a finding with no body." >&2; exit 1; }
-          body="$(cat /tmp/findings.md)"
-          # ONE standing issue, generalized across every package-bearing row (.github#1260) — the bot
-          # aggregates all refusals into the one body above. A fresh issue per row per morning would
-          # teach people to filter its mail, the permanently-red-check lesson.
-          TITLE="[feed-autofix] rows that cannot be reconciled automatically"
-          #
-          # THREE traps are avoided here deliberately, and the first two were live bugs in review:
-          #
-          #   * `gh api` has NO `--arg` flag. `--jq --arg t "$TITLE" '...'` looks natural and dies
-          #     with "accepts 1 arg(s), received 4" — jq's `--arg` conflated with gh's `--jq`, the
-          #     #874 class. The title match therefore happens in awk, outside gh, where the title is
-          #     passed as DATA (-v) and never lexed as a jq program.
-          #   * CAPTURE, don't pipe (#874's rationale). `gh ... | head -1` under `pipefail` aborts
-          #     the step on SIGPIPE when head closes the pipe first — intermittently, so it passes in
-          #     testing. Capturing also makes the read's exit code checkable, and this is the ONE
-          #     read that must not read a failure as "nothing filed": that answer opens a duplicate.
-          #   * `--paginate` with no `--jq`/`--slurp` emits ONE ARRAY PER PAGE (`[...][...]`), which
-          #     is not a JSON document. The `--jq` below applies per page, so it stays valid past
-          #     issue #100 — which this repo passed long ago.
-          issues="$(gh api "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100" --paginate \
-            --jq '.[] | [.number, .title] | @tsv')" \
-            || { echo "::error::could not read the issue list — refusing to guess whether the standing issue exists." >&2; exit 1; }
-          existing="$(printf '%s\n' "$issues" | awk -F'\t' -v t="$TITLE" '$2 == t { print $1; exit }')"
-          if [ -n "$existing" ]; then
-            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${existing}/comments" \
-              -f body="$body" --jq '"commented on #\(.issue_url | split("/") | last)"'
-          else
-            jq -n --arg t "$TITLE" --arg b "$body" '{title:$t, body:$b, labels:["registry"]}' \
-              | gh api -X POST "repos/${GITHUB_REPOSITORY}/issues" --input - --jq '"opened #\(.number) \(.html_url)"'
-          fi
-
-      # --- REGENERATE the projections the flip makes stale (#1081 option 2). feed-autofix writes
-      # registry/dependencies.yml and nothing else — correctly; #748 forbids it prose. But the registry
-      # feeds four GENERATED projection files: docs/architecture.md's `fsgg-versions` region,
-      # docs/registry/compatibility.md's `fsgg-contract-versions` region, and the component inventory
-      # in both docs/components.md and docs/consumer/versioning-and-updates.md. A flip that leaves any
-      # stale is red on the REQUIRED `projection` gate and on
-      # `projections` — which is why every flip this bot opened before #1125 could never merge (#1081).
-      # Regenerating is mechanical (the literal is machine-owned now), so the bot does it; the authored
-      # prose it must not touch is not regenerated and stays exactly as the human left it.
-      - name: Set up .NET to regenerate the projections
-        if: steps.run.outputs.changed == 'true' && !inputs.dry-run
-        uses: actions/setup-dotnet@v6
-        with:
-          global-json-file: global.json
-          cache: true
-          cache-dependency-path: "**/packages.lock.json"
-      - name: Regenerate the projections the flip makes stale
-        if: steps.run.outputs.changed == 'true' && !inputs.dry-run
-        run: |
-          set -euo pipefail
-          # From SOURCE, never the feed (ADR-0034 §4.3), exactly as projections.yml. PyYAML is already
-          # installed above (the registry-sourced regions read YAML).
-          dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
-          dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
-          bash scripts/generate-projections
-
-      # --- The flip. Push the branch and open/update ONE standing PR.
-      - name: Push the flip
-        id: push
-        if: steps.run.outputs.changed == 'true' && !inputs.dry-run
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
-          BRANCH: bot/feed-autofix
-        run: |
-          set -euo pipefail
-          # The App pushed this branch, so the App authors the commit — GitHub links a bot commit to
-          # its App only when the author matches the `[bot]` user, exactly as the sibling does.
-          git config user.name  "${APP_SLUG}[bot]"
-          git config user.email "297630107+${APP_SLUG}[bot]@users.noreply.github.com"
-          git checkout -B "$BRANCH"
-          # The registry flip AND every path the generator says it owns (#1081/#1385) — one atomic
-          # commit, so the standing PR is structurally green on the REQUIRED `projection` gate. The
-          # helper derives the complete target set from `generate-projections --list`; there is no
-          # second hand-kept list for a newly-added projection to fall out of. It still stages only the
-          # registry source plus declared generator outputs, never unrelated build artifacts.
-          bash scripts/stage-generated-projections
-          # No closing keyword anywhere near an issue number: GitHub does not parse "not", and a
-          # squash merge closes from the COMMIT MESSAGE, where backticks are ordinary characters
-          # (#683). This bot's PR must never close #748 — it is the thing #748 asks to EXIST.
-          # Two -m flags, not one with an embedded newline: a message body at column 0 inside a
-          # `run: |` block ends the block scalar (the same trap as the issue step above).
-          git commit -m "registry: flip the package-versions the feed advanced, and regenerate projections" \
-                     -m "Opened by feed-autofix.yml. Refs #748, #1081."
-          # No remote-url rewrite and no token in the URL: the checkout above persisted the App
-          # credential. Plain --force: this branch is bot-owned, nobody else writes it, and
-          # `concurrency` serialises runs.
-          git push --force origin "$BRANCH"
-          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
-
-      - name: Open or update the standing PR
-        if: steps.push.outputs.branch != ''
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          BRANCH: ${{ steps.push.outputs.branch }}
-        run: |
-          set -euo pipefail
-          # REST, not `gh pr create`: every `gh pr` subcommand is GraphQL, and this repo's GraphQL
-          # budget is routinely exhausted by the worker fan-out (#587, #528).
-          existing="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=${GITHUB_REPOSITORY%%/*}:${BRANCH}" \
-            --paginate --jq '.[0].number // empty')"
-          title="registry: publish-before-flip step 2 — flip the rows the feed advanced"
-          if [ -n "$existing" ]; then
-            jq -n --rawfile b /tmp/pr-body.md '{body:$b}' \
-              | gh api -X PATCH "repos/${GITHUB_REPOSITORY}/pulls/${existing}" --input - \
-                  --jq '"updated PR #\(.number)  \(.html_url)"'
-          else
-            jq -n --arg t "$title" --rawfile b /tmp/pr-body.md --arg h "$BRANCH" \
-              '{title:$t, body:$b, head:$h, base:"main"}' \
-              | gh api -X POST "repos/${GITHUB_REPOSITORY}/pulls" --input - \
-                  --jq '"opened PR #\(.number)  \(.html_url)"'
-          fi
-
-      # EVERY terminal state names itself, out loud (#937). This used to be a single `Nothing to do`
-      # step gated on `changed == 'false'`, which meant the OTHER endings — the dry run, and the
-      # PR-opened path — ended in silence. Four different facts ("nothing owed", "PR opened",
-      # "a flip is owed and dry-run withheld it", "a human must settle it") produced one identical
-      # green tick, so the log could not tell a reader which had happened. `always()` because a
-      # summary that only prints on the happy path is a summary you cannot trust when it matters.
-      - name: Say which ending this was
-        if: always()
-        env:
-          RC: ${{ steps.run.outputs.rc }}
-          CHANGED: ${{ steps.run.outputs.changed }}
-          BRANCH: ${{ steps.push.outputs.branch }}
-          DRY: ${{ inputs.dry-run }}
-        run: |
-          set -uo pipefail
-          case "${RC}:${CHANGED}" in
-            0:false) echo "NOTHING OWED — the row already matches the feed. No PR opened." ;;
-            0:true)
-              if [ -n "${BRANCH}" ]; then
-                echo "FLIP OPENED — the standing PR carries it. Read the 'needs a human' section."
-              else
-                echo "FLIP WITHHELD — a flip IS owed and dry-run=${DRY} suppressed the push."
-                echo "The diff it would land is printed in the reconcile step above."
-              fi ;;
-            1:*) echo "FINDING — the bot refused to write; an issue carries it. Nothing landed." ;;
-            2:*) echo "DEFECT — the bot could not read its subject. This is NOT 'the registry is fine'." ;;
-            *)   echo "::warning::the reconcile step produced no verdict (rc='${RC}'). Treat this run as having told you NOTHING." ;;
+            0) echo "Feed audit is coherent." ;;
+            1) echo "::warning::Feed audit found drift; GS2-08.9 has disabled automatic repair." ;;
+            *) echo "::error::Feed audit could not classify its subject (exit $rc)."; exit "$rc" ;;
           esac

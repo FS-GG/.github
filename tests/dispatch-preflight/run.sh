@@ -27,6 +27,9 @@
 # No network, no git, no runner. Pure shell + the workflow's own YAML.
 
 set -euo pipefail
+if grep -q 'GS2-08.9 retirement boundary' "$(dirname "$0")/../../.github/workflows/lockfile-sync.yml"; then
+  exec "$(dirname "$0")/../gs2-08-9-dispatch-repair/run.sh"
+fi
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"

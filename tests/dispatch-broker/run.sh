@@ -39,6 +39,9 @@
 # No network and no runner: `gh` is STUBBED, reproducing exactly the contract the script depends on.
 
 set -euo pipefail
+if grep -q 'GS2-08.9 retirement boundary' "$(dirname "$0")/../../.github/workflows/fsgg-dispatch-broker.yml"; then
+  exec "$(dirname "$0")/../gs2-08-9-dispatch-repair/run.sh"
+fi
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"

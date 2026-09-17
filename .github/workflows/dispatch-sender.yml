@@ -1,123 +1,65 @@
-# Reusable cross-repo dispatch sender (FS-GG/.github#22, epic #16 Pillar 4).
+# GS2-08.9 retirement boundary.
 #
-# A producer repo's release workflow calls this via `workflow_call` to notify a downstream
-# repo that a new coherent version exists — e.g. Rendering -> Templates on an fs-gg-ui
-# template release (FS.GG.Rendering H4 #10), or Templates -> SDD on a composition-acceptance
-# registry update (FS.GG.Templates H4 #15). It mints a least-privilege GitHub App
-# installation token scoped to the TARGET repo and POSTs a `repository_dispatch` carrying
-# `{event_type, client_payload:{version, ...}}`. The target's `on: repository_dispatch`
-# workflow then opens the auto-update PR.
-#
-# Why an App token, not GITHUB_TOKEN: a workflow's GITHUB_TOKEN cannot dispatch to another
-# repo or trigger its workflows (research C4) — only a GitHub App installation token can.
-# The App + its `app-id`/`app-private-key` secrets were provisioned by org-admin in
-# FS-GG/.github#21, which is CLOSED: they exist and are live org secrets today
-# (FSGG_DISPATCH_APP_ID / FSGG_DISPATCH_APP_PRIVATE_KEY). This workflow was authored ahead of
-# that provisioning and both its header and its preflight described the pre-#21 world for long
-# after — it is no longer DORMANT, and the preflight no longer says it is. That check still
-# fails closed on an empty secret, but the cause it now names is the real one: a CALLER that
-# cannot SEE the org secrets (not on their selected-repositories list, #468) or is not
-# forwarding them. lockfile-sync.yml's own preflight diagnoses the same failure at length.
-#
-# A `uses:` OF THIS WORKFLOW IS ONLY HALF A FABRIC (.github#1776). The other half is an
-# `on: repository_dispatch` in the TARGET naming the same `event-type`, and NOTHING HERE CAN
-# CHECK THAT IT EXISTS: `POST /repos/{owner}/{repo}/dispatches` is accepted with a 204 whether
-# or not any workflow listens, so a sender wired at a repo with no listener succeeds on every
-# run, forever, and delivers nothing. Wire the listener first and be able to name it. Grading
-# that pairing is filed as .github#1919; `release-kit.yml`'s header records the one live case
-# where a producer weighed calling this and did not, and why.
-name: dispatch-sender
+# This reusable workflow deliberately has no credential use and no remote effect. It preserves the
+# useful payload/target validation for callers that still resolve the current workflow revision. The
+# optional secret declarations are an input-compatibility shim for existing callers and are never read. A
+# caller pinned to an older commit resolves those historical bytes instead; disabling that capability
+# requires revoking the shared dispatch App credentials/installation outside this repository.
+name: dispatch-sender (retired writer; validation only)
 
 on:
   workflow_call:
     inputs:
       target-repo:
-        description: "owner/name of the repo to dispatch to (e.g. FS-GG/FS.GG.Templates)."
+        description: "owner/name that would have received the repository_dispatch."
         type: string
         required: true
       event-type:
-        description: "repository_dispatch event_type the target listens for (e.g. fs-gg-ui-template-released)."
+        description: "repository_dispatch event_type to validate."
         type: string
         required: true
       version:
-        description: "The released/updated version to advertise (becomes client_payload.version)."
+        description: "Version that would have been advertised."
         type: string
         required: true
       payload:
-        description: "Optional extra JSON object merged into client_payload (must be a JSON object string)."
+        description: "Optional extra JSON object to validate."
         type: string
         default: "{}"
     secrets:
       app-id:
-        description: "GitHub App id (org cross-repo dispatch App; provisioned by .github#21)."
-        required: true
+        description: "Deprecated and unused; retained temporarily for caller compatibility."
+        required: false
       app-private-key:
-        description: "GitHub App private key (PEM) for the same App."
-        required: true
+        description: "Deprecated and unused; retained temporarily for caller compatibility."
+        required: false
 
 permissions:
-  contents: read   # the App installation token — not GITHUB_TOKEN — performs the cross-repo write.
+  contents: read
 
 jobs:
-  dispatch:
+  validate:
+    name: Retired dispatch request validation
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
-      - name: Preflight — App credentials present
+      - name: Validate the retired dispatch request locally
         shell: bash
         env:
-          APP_ID: ${{ secrets.app-id }}
-          APP_KEY: ${{ secrets.app-private-key }}
-          TARGET: ${{ inputs.target-repo }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${APP_ID}" || -z "${APP_KEY}" ]]; then
-            echo "::error::dispatch-sender: the caller forwarded an EMPTY app-id/app-private-key." >&2
-            echo "::error::The App itself exists (FS-GG/.github#21, closed). An empty value here means the CALLING repo cannot see the org secrets: add it to the selected-repositories list for BOTH FSGG_DISPATCH_APP_ID and FSGG_DISPATCH_APP_PRIVATE_KEY (FS-GG/.github#468), or the caller is not forwarding them at all." >&2
-            exit 1
-          fi
-          if [[ "${TARGET}" != */* ]]; then
-            echo "::error::target-repo must be 'owner/name', got '${TARGET}'." >&2
-            exit 1
-          fi
-          echo "owner=${TARGET%%/*}"  >> "$GITHUB_OUTPUT"
-          echo "name=${TARGET##*/}"   >> "$GITHUB_OUTPUT"
-        id: target
-
-      - name: Mint installation token (scoped to the target repo only)
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.app-id }}
-          private-key: ${{ secrets.app-private-key }}
-          owner: ${{ steps.target.outputs.owner }}
-          repositories: ${{ steps.target.outputs.name }}
-
-      - name: Build + POST repository_dispatch
-        shell: bash
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           TARGET: ${{ inputs.target-repo }}
           EVENT_TYPE: ${{ inputs.event-type }}
           VERSION: ${{ inputs.version }}
           PAYLOAD: ${{ inputs.payload }}
-          SOURCE_REPO: ${{ github.repository }}
-          SOURCE_SHA: ${{ github.sha }}
-          SOURCE_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          # `--argjson extra "$PAYLOAD"` both validates that PAYLOAD is a JSON object and merges
-          # it last, so a caller can add fields (and override the defaults) without changing this file.
-          body="$(jq -cn \
-            --arg et   "$EVENT_TYPE" \
-            --arg v    "$VERSION" \
-            --arg repo "$SOURCE_REPO" \
-            --arg sha  "$SOURCE_SHA" \
-            --arg ref  "$SOURCE_REF" \
+          [[ "$TARGET" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          [[ "$EVENT_TYPE" =~ ^[A-Za-z0-9_.-]+$ ]]
+          [ -n "$VERSION" ]
+          jq -e 'type == "object"' <<<"$PAYLOAD" >/dev/null
+          jq -n \
+            --arg event_type "$EVENT_TYPE" \
+            --arg version "$VERSION" \
+            --arg target "$TARGET" \
             --argjson extra "$PAYLOAD" \
-            '{event_type: $et,
-              client_payload: ({version: $v, source_repo: $repo, source_sha: $sha, source_ref: $ref} + $extra)}')"
-          echo "Dispatching '${EVENT_TYPE}' (version=${VERSION}) to ${TARGET}:"
-          echo "$body" | jq .
-          echo "$body" | gh api -X POST "repos/${TARGET}/dispatches" --input -
-          echo "Dispatched."
+            '{target:$target,event_type:$event_type,client_payload:({version:$version}+$extra)}'
+          echo "GS2-08.9: validated only; no token was minted and no repository_dispatch was sent."

@@ -1576,6 +1576,18 @@ fi
 #   4. A LEG THAT MUTATES THE FIXTURE SO THE HELPER IS PROVEN TO FIRE -> M1-M4 below, each of which
 #      applies a specific realistic regression and asserts the corresponding leg goes FAIL.
 # =================================================================================================
+if grep -q 'GS2-08.9 retirement boundary' "$WF"; then
+  if grep -q '^  materialize:' "$WF"; then
+    bad "GS2-08.9 retirement: the mutating materialize job still exists"
+  else
+    ok "GS2-08.9 retirement: the real read-only bump evaluators passed and the mutating materialize job is absent"
+  fi
+  echo
+  echo "kit-bump-shape: $pass passed, $failcount failed (obsolete materialize-event legs retired)"
+  [ "$failcount" -eq 0 ] || exit 1
+  exit 0
+fi
+
 echo
 echo "== .github#1845: which jobs run, on which events =="
 

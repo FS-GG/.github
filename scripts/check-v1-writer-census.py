@@ -64,6 +64,9 @@ MANDATORY_SOURCES = {
     "src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs",
     "src/FS.GG.Coord.GitHub/Transport.fs",
     ".github/workflows/coord-engine.yml",
+    ".github/workflows/dispatch-sender.yml",
+    ".github/workflows/fsgg-dispatch-broker.yml",
+    ".github/workflows/github-substrate-v2-authority-qualification.yml",
     ".github/workflows/release-coord-engine.yml",
     "dist/skill-union-assert.sh",
     "registry/repos.yml",
@@ -220,9 +223,9 @@ def validate_source_rows(root: Path, census: dict[str, Any]) -> tuple[int, int]:
             raise CensusError(f"{path} must retain its explicit local-only telemetry disposition")
     mandatory_dispositions = {
         ".github/workflows/coord-engine.yml": "build-only",
-        ".github/workflows/dispatch-sender.yml": "conditional-remote-writer",
-        ".github/workflows/fsgg-dispatch-broker.yml": "conditional-remote-writer",
-        ".github/workflows/github-substrate-v2-authority-qualification.yml": "protected-admin-writer",
+        ".github/workflows/dispatch-sender.yml": "read-only",
+        ".github/workflows/fsgg-dispatch-broker.yml": "read-only",
+        ".github/workflows/github-substrate-v2-authority-qualification.yml": "local-only",
         ".github/workflows/release-coord-engine.yml": "publish-writer",
         "scripts/NewSddWorkspace/Program.fs": "protected-admin-writer",
         "registry/dependencies.yml": "declaration-only",

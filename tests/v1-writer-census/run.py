@@ -92,6 +92,19 @@ with tempfile.TemporaryDirectory(prefix="v1-writer-census-") as temporary:
 
     base_census = json.loads(CENSUS.read_text(encoding="utf-8"))
 
+    retired_writer = json.loads(json.dumps(base_census))
+    next(
+        row for row in retired_writer["sources"]
+        if row["path"] == ".github/workflows/dispatch-sender.yml"
+    )["disposition"] = "conditional-remote-writer"
+    retired_writer_path = work / "retired-writer.json"
+    retired_writer_path.write_text(json.dumps(retired_writer), encoding="utf-8")
+    expect_red(
+        run("--census", str(retired_writer_path), "--structural"),
+        "must remain classified read-only",
+        "retired dispatch sender cannot be relabeled as writable",
+    )
+
     omitted = json.loads(json.dumps(base_census))
     omitted["commandRoots"] = omitted["commandRoots"][1:]
     omitted_path = work / "omitted.json"
