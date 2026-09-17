@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SEALED=false
+grep -Fq 'sealed legacy release effect' "$ROOT/scripts/release-saga-ci.sh" && SEALED=true
 TOOL="${RELEASE_SAGA_TOOL:-$ROOT/scripts/release-saga.py}"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/release-saga.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
@@ -769,26 +771,48 @@ mutable_upload_gate() {
   fi
 }
 
-mutable_upload_gate "$ROOT/scripts/release-saga-ci.sh" "$IMMUTABLE/mutable-calls.log" mutable-control
-MUTABLE_MUTANT_ROOT="$IMMUTABLE/mutable-mutant-root"
-mkdir -p "$MUTABLE_MUTANT_ROOT/scripts"
-cp "$TOOL" "$MUTABLE_MUTANT_ROOT/scripts/release-saga.py"
-MUTABLE_MUTANT="$MUTABLE_MUTANT_ROOT/scripts/release-saga-ci.sh"
-sed '/^[[:space:]]*gh release upload .*--clobber .*"$journal"/d' \
-  "$ROOT/scripts/release-saga-ci.sh" > "$MUTABLE_MUTANT"
-mutable_mutant_rc=0
-mutable_mutant_output="$(mutable_upload_gate \
-  "$MUTABLE_MUTANT" "$IMMUTABLE/mutable-mutant-calls.log" mutable-mutant 2>&1)" \
-  || mutable_mutant_rc=$?
-if [ "$mutable_mutant_rc" -eq 0 ]; then
-  echo "expected mutable upload-removal inversion to red the production-shaped gate" >&2
-  exit 1
+if [ "$SEALED" = true ]; then
+  : > "$IMMUTABLE/mutable-calls.log"
+  cp "$IMMUTABLE/artifacts/packages/.mutable-journal-seed.json" \
+    "$IMMUTABLE/artifacts/packages/journal-FS.GG.Kit.json"
+  mutable_rc=0
+  (
+    cd "$IMMUTABLE"
+    PATH="$IMMUTABLE/bin:$PATH" RELEASE_SAGA_TOOL="$TOOL" RUNNER_TEMP="$IMMUTABLE/runner" \
+      GITHUB_REPOSITORY=example/repo GITHUB_SERVER_URL=https://example.invalid GITHUB_RUN_ID=mutable-sealed \
+      FAKE_RELEASE_IMMUTABLE=false FAKE_GH_CALLS="$IMMUTABLE/mutable-calls.log" FAKE_PACKAGE=FS.GG.Kit \
+      FAKE_REMOTE_JOURNAL="$IMMUTABLE/remote/journal-FS.GG.Kit.json" \
+      bash "$ROOT/scripts/release-saga-ci.sh" failure FS.GG.Kit 9.8.7 \
+        0123456789012345678901234567890123456789
+  ) || mutable_rc=$?
+  [ "$mutable_rc" -eq 78 ] \
+    || { echo "sealed mutable journal write returned $mutable_rc, expected 78" >&2; exit 1; }
+  [ "$(grep -c '^release view ' "$IMMUTABLE/mutable-calls.log")" -eq 1 ]
+  ! grep -Eq '^release (upload|edit|delete)' "$IMMUTABLE/mutable-calls.log" \
+    || { echo "sealed mutable journal recovery reached a release mutation" >&2; exit 1; }
+  echo "mutable release journal recovery: GS2-08.9 refusal passed before upload"
+else
+  mutable_upload_gate "$ROOT/scripts/release-saga-ci.sh" "$IMMUTABLE/mutable-calls.log" mutable-control
+  MUTABLE_MUTANT_ROOT="$IMMUTABLE/mutable-mutant-root"
+  mkdir -p "$MUTABLE_MUTANT_ROOT/scripts"
+  cp "$TOOL" "$MUTABLE_MUTANT_ROOT/scripts/release-saga.py"
+  MUTABLE_MUTANT="$MUTABLE_MUTANT_ROOT/scripts/release-saga-ci.sh"
+  sed '/^[[:space:]]*gh release upload .*--clobber .*"$journal"/d' \
+    "$ROOT/scripts/release-saga-ci.sh" > "$MUTABLE_MUTANT"
+  mutable_mutant_rc=0
+  mutable_mutant_output="$(mutable_upload_gate \
+    "$MUTABLE_MUTANT" "$IMMUTABLE/mutable-mutant-calls.log" mutable-mutant 2>&1)" \
+    || mutable_mutant_rc=$?
+  if [ "$mutable_mutant_rc" -eq 0 ]; then
+    echo "expected mutable upload-removal inversion to red the production-shaped gate" >&2
+    exit 1
+  fi
+  case "$mutable_mutant_output" in
+    *"expected mutable recovery to upload --clobber the exact package journal"*) ;;
+    *) echo "mutable upload-removal inversion failed for the wrong reason: $mutable_mutant_output" >&2; exit 1 ;;
+  esac
+  echo "mutable release journal recovery: production upload --clobber control and removal inversion passed"
 fi
-case "$mutable_mutant_output" in
-  *"expected mutable recovery to upload --clobber the exact package journal"*) ;;
-  *) echo "mutable upload-removal inversion failed for the wrong reason: $mutable_mutant_output" >&2; exit 1 ;;
-esac
-echo "mutable release journal recovery: production upload --clobber control and removal inversion passed"
 
 # Once GitHub publishes a release, repository immutable-release enforcement activates. A queued
 # observer must compare the already-published content and return success; it may not try to clobber
@@ -844,12 +868,23 @@ if PATH="$WORK/promote-bin:$PATH" FAKE_RELEASE_MODE=immutable \
 fi
 mv "$WORK/promote-assets/stable-channel.good" "$WORK/promote-assets/stable-channel.json"
 : > "$WORK/promote-calls.log"
-PATH="$WORK/promote-bin:$PATH" FAKE_RELEASE_MODE=draft \
-  FAKE_RELEASE_ASSETS="$WORK/promote-assets" FAKE_GH_CALLS="$WORK/promote-calls.log" \
-  bash "$ROOT/scripts/release-saga-promote-release.sh" example/repo coherent-set/v9.8.7 \
-    "$WORK/manifest.json" "$WORK/stable.json"
-grep -Eq '^release upload .*--clobber' "$WORK/promote-calls.log"
-grep -Eq '^release edit .*--draft=false' "$WORK/promote-calls.log"
+if [ "$SEALED" = true ]; then
+  promote_rc=0
+  PATH="$WORK/promote-bin:$PATH" FAKE_RELEASE_MODE=draft \
+    FAKE_RELEASE_ASSETS="$WORK/promote-assets" FAKE_GH_CALLS="$WORK/promote-calls.log" \
+    bash "$ROOT/scripts/release-saga-promote-release.sh" example/repo coherent-set/v9.8.7 \
+      "$WORK/manifest.json" "$WORK/stable.json" || promote_rc=$?
+  [ "$promote_rc" -eq 78 ] || { echo "sealed mutable promotion returned $promote_rc, expected 78" >&2; exit 1; }
+  ! grep -Eq '^release (upload|edit)' "$WORK/promote-calls.log" \
+    || { echo "sealed mutable promotion reached a release mutation" >&2; exit 1; }
+else
+  PATH="$WORK/promote-bin:$PATH" FAKE_RELEASE_MODE=draft \
+    FAKE_RELEASE_ASSETS="$WORK/promote-assets" FAKE_GH_CALLS="$WORK/promote-calls.log" \
+    bash "$ROOT/scripts/release-saga-promote-release.sh" example/repo coherent-set/v9.8.7 \
+      "$WORK/manifest.json" "$WORK/stable.json"
+  grep -Eq '^release upload .*--clobber' "$WORK/promote-calls.log"
+  grep -Eq '^release edit .*--draft=false' "$WORK/promote-calls.log"
+fi
 
 # ---------------------------------------------------------------------------------------------
 # Re-preparing over an existing draft resumes instead of wedging (.github#2664).

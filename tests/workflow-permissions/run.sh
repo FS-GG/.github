@@ -224,15 +224,31 @@ expect "the same App-token request is green when the inventory grants it" \
   0 "ok:" "$WAPP" "$RC" \
   --app-grants contents:read,issues:write
 
-# This is the inversion record: changing the real historical bad scope back into the workflow
-# makes the gate red.  It proves the new relation, rather than merely exercising a synthetic parser.
-cp .github/workflows/kit-auto-publish.yml "$RC/.github/workflows/kit-auto-publish.before.yml"
-sed -i '/permission-issues: write/a\          permission-organization-packages: read' \
-  "$RC/.github/workflows/kit-auto-publish.before.yml"
-expect "INVERSION: pre-#2234 kit-auto-publish organisation-packages request red-lights" \
+# GS2-08.9 retires the automatic publisher and its App-token/package request. Pin that capability
+# loss directly, then keep the auditor inversion independent of the retired production workflow.
+if grep -q 'permission-organization-packages:' \
+  "$REPO_ROOT/.github/workflows/kit-auto-publish.yml"; then
+  bad "retired kit-auto-publish no longer requests organisation packages"
+else
+  ok "retired kit-auto-publish no longer requests organisation packages"
+fi
+cat > "$RC/.github/workflows/app-token-org-package-overscope.yml" <<'YAML'
+name: synthetic organisation-package over-scope
+on: { workflow_dispatch: }
+jobs:
+  mint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v3
+        with:
+          app-id: 1
+          private-key: x
+          permission-organization-packages: read
+YAML
+expect "INVERSION: a synthetic organisation-packages over-scope still red-lights" \
   1 "organization_packages: requests read, installation grants none" "$WAPP" "$RC" \
   --app-grants contents:write,issues:write,packages:read,pull_requests:write
-rm "$RC/.github/workflows/kit-auto-publish.before.yml"
+rm "$RC/.github/workflows/app-token-org-package-overscope.yml"
 
 # =============================================================================================
 # 3. Fail closed. "I could not check" is never green, and never a finding either.

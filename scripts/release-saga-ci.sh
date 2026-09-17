@@ -10,6 +10,11 @@ release_tag="coherent-set/v$version"
 manifest="artifacts/packages/release-manifest.json"
 journal="artifacts/packages/journal-$package.json"
 
+sealed_effect() {
+  echo "GS2-08.9 sealed legacy release effect '$1'; the immutable 0.90 bridge is complete" >&2
+  return 78
+}
+
 github_base() {
   curl -fsSL -u "$GITHUB_ACTOR:$GH_TOKEN" https://nuget.pkg.github.com/FS-GG/index.json \
     | jq -r '.resources[] | select(."@type" == "PackageBaseAddress/3.0.0") | ."@id"' | head -1
@@ -39,6 +44,7 @@ upload_journal() {
     --json isImmutable --jq '.isImmutable')"
   case "$immutable" in
     false)
+      sealed_effect mutable-journal-write
       gh release upload "$release_tag" --repo "$GITHUB_REPOSITORY" --clobber "$journal"
       ;;
     true)
@@ -94,6 +100,7 @@ case "$command" in
     fi
     ;;
   github)
+    sealed_effect github-package-and-journal-write
     echo github > "${RUNNER_TEMP:-/tmp}/release-saga-stage"
     mkdir -p artifacts/observed/github
     own="artifacts/observed/github/$package.$version.nupkg"
@@ -134,6 +141,7 @@ case "$command" in
     echo "complete GitHub Packages set did not become observable" >&2; exit 1
     ;;
   nuget-probe)
+    sealed_effect nuget-publication-admission
     echo nuget > "${RUNNER_TEMP:-/tmp}/release-saga-stage"
     mkdir -p artifacts/observed/nuget
     target="artifacts/observed/nuget/$package.$version.nupkg"
@@ -167,6 +175,7 @@ case "$command" in
     fi
     ;;
   nuget-record)
+    sealed_effect nuget-journal-write
     target="artifacts/observed/nuget/$package.$version.nupkg"
     observed=false
     for _ in $(seq 1 24); do

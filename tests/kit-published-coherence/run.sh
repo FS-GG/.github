@@ -1428,21 +1428,22 @@ for path in sorted(glob.glob(os.path.join(sys.argv[2], "release-*.yml"))):
         assert pattern.endswith("*"), f"{path}: unexpected tag trigger {pattern!r}"
         found[pattern[:-1]] = os.path.basename(path)
 assert found, "no release workflow declares a tag trigger — this leg would prove nothing"
-assert len(found) >= 4, f"expected at least 4 tag-triggered release workflows, found {found}"
+expected = {
+    "coord-engine/v": "release-coord-engine.yml",
+    "drivers/v": "release-drivers.yml",
+    "kit/v": "release-kit.yml",
+}
+assert found == expected, f"tag-triggered release workflow set drifted: expected {expected}, found {found}"
 
 uncovered = {p: w for p, w in found.items() if p not in declared}
 assert not uncovered, (
     "a release workflow publishes into a tag namespace RELEASE_NAMESPACES does not name, so its "
     f"tags are unchecked — the exact gap .github#1790 closed: {uncovered}"
 )
-# The reverse is NOT an error: `new-sdd-fullstack/v*` is retired and has no workflow, and its
-# packages are still served, so it stays in the table. Assert that it is deliberate rather than
-# stale by requiring the row to say so.
-for ns in gate.RELEASE_NAMESPACES:
-    if ns.prefix not in found:
-        assert "RETIRED" in ns.note or "retired" in ns.note, (
-            f"{ns.prefix} has no release workflow and its note does not say why it is still listed"
-        )
+# The reverse is NOT an error: the two retired workspace namespaces still describe packages the
+# feed serves. Pin the complete retired set so another live workflow cannot disappear unnoticed.
+without_workflow = {ns.prefix for ns in gate.RELEASE_NAMESPACES if ns.prefix not in found}
+assert without_workflow == {"new-sdd-workspace/v", "new-sdd-fullstack/v"}, without_workflow
 PY
 then
   ok "every release workflow's tag namespace is in RELEASE_NAMESPACES"
@@ -1508,6 +1509,21 @@ OBL="$WORK/obligations"
 mkdir -p "$OBL"
 HEAD_SHA=8de950c37e63f84f87f1a3736eca5847ddc0db97
 
+# The production workflow is deliberately manual-only after GS2-08.9. Keep one assertion against
+# that topology, while running the obligation arm's retained trigger/decision controls against a
+# local merge-triggered fixture. This preserves the arm's logic and inversions without pretending
+# the retired publisher still fires on main.
+OBL_CONTROL_TREE="$WORK/obligation-control-tree"
+mkdir -p "$OBL_CONTROL_TREE/.github/workflows" "$OBL_CONTROL_TREE/scripts"
+cp "$HERE/../../scripts/kit-auto-publish.py" "$OBL_CONTROL_TREE/scripts/kit-auto-publish.py"
+cat > "$OBL_CONTROL_TREE/.github/workflows/kit-auto-publish.yml" <<'YAML'
+name: kit-auto-publish retained obligation control
+on:
+  push:
+    branches: [main]
+jobs: {}
+YAML
+
 declaration() { # $1 file stem; $2 id; $3 kind  — marker at byte 0, prose below, the org's own style
   printf '<!-- fsgg:delivery-obligation id=%s kind=%s head=%s -->\n\nProse the marker is not.' \
     "$2" "$3" "$HEAD_SHA" \
@@ -1523,7 +1539,17 @@ declaration() { # $1 file stem; $2 id; $3 kind  — marker at byte 0, prose belo
 OBL_CANDIDATE=0.51.2   # the NEXT PATCH above the frontier: `decide()` returns `tag`
 OBL_FRONTIER=0.51.1
 
-obl() { # $1 comments file; $@ extra args — run from the REAL repo root, against the REAL workflows
+obl() { # $1 comments file; $@ extra args — retained logic under a local merge-trigger topology
+  local comments="$1"; shift
+  set +e
+  out="$(cd "$OBL_CONTROL_TREE" && python3 "$GATE" --obligation-arm --obligations "$comments" \
+    --obligation-candidate-version "$OBL_CANDIDATE" \
+    --obligation-published-version "$OBL_FRONTIER" "$@" 2>&1)"
+  rc=$?
+  set -e
+}
+
+obl_real() { # $1 comments file; production-topology assertion only
   local comments="$1"; shift
   set +e
   out="$(python3 "$GATE" --obligation-arm --obligations "$comments" \
@@ -1543,10 +1569,13 @@ obl_in() { # $1 tree to run from; $2 comments file; $@ extra args
   set -e
 }
 
-# ---- AC2: the flagged case, measured against THIS repository's own live kit-auto-publish.yml. The
-#      workflow is READ, not restated, so if its trigger ever stops being a merge trigger this leg
-#      changes verdict with nothing here to edit — which is the property the arm is built on.
 declaration release-obligation coherent-set-0.50.6-release package-release
+obl_real "$OBL/release-obligation.json"
+must_pass "production topology: retired kit-auto-publish no longer performs a merge-triggered act" \
+  "no longer trigger on a merge into main"
+
+# ---- AC2: the flagged control. The local workflow pins the former merge-trigger topology so the
+#      retained obligation logic and every inversion below continue to exercise the performing arm.
 obl "$OBL/release-obligation.json"
 must_fail "AC2: a package-release obligation on a PR whose merge triggers kit-auto-publish is flagged" \
   "obligation id=coherent-set-0.50.6-release kind=package-release"
@@ -2239,7 +2268,7 @@ mutate mutant-detection \
   "        automation = mapped.get(declaration.kind)" \
   "        automation = None  # MUTATION: the .github#2533 detection deleted"
 set +e
-out="$(python3 "$MUT_OBL/scripts/mutant-detection.py" --obligation-arm \
+out="$(cd "$OBL_CONTROL_TREE" && python3 "$MUT_OBL/scripts/mutant-detection.py" --obligation-arm \
   --obligations "$OBL/release-obligation.json" 2>&1)"; rc=$?
 set -e
 must_pass "INVERSION M1: with the kind→automation join deleted, the AC2 leg goes GREEN" \
@@ -2272,7 +2301,7 @@ mutate mutant-trigger-only \
   "        decision = None
         if False:  # MUTATION: the .github#2571 decision half deleted"
 set +e
-out="$(python3 "$MUT_OBL/scripts/mutant-trigger-only.py" --obligation-arm \
+out="$(cd "$OBL_CONTROL_TREE" && python3 "$MUT_OBL/scripts/mutant-trigger-only.py" --obligation-arm \
   --obligations "$OBL/release-obligation.json" \
   --obligation-candidate-version 0.52.0 --obligation-published-version 0.51.1 2>&1)"; rc=$?
 set -e
@@ -3052,7 +3081,7 @@ cut_mutant_run mutant-vacuous-inventory "$WORK/empty-tags.txt"
 must_pass "INVERSION M13: with the empty-inventory refusal deleted, a read of NOTHING greens the arm" \
   "No kit/v0.58.1 tag is cut"
 
-EXPECTED_LEGS=270
+EXPECTED_LEGS=271
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \

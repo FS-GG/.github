@@ -18,6 +18,7 @@ CENSUS_PATH = ROOT / "docs/coordination/v1-writer-census.json"
 RECEIVER_PATH = ROOT / "docs/coordination/v1-writer-receiver-census.json"
 LEGACY_PATH = ROOT / "tests/producer-fence-attacks/legacy-probe-evidence.json"
 EXTERNAL_PATH = ROOT / "tests/producer-fence-attacks/external-route-evidence.json"
+GS2089_RELEASE_PATH = ROOT / "docs/reports/gs2-08-9-release-route-dispositions.json"
 CLIENT_PATH = ROOT / "src/FS.GG.Coord.Cli/Client.fs"
 WRITE_FIXTURE_PATH = ROOT / "tests/coord-engine-e2e/writes.sh"
 GLOBAL_JSON = ROOT / "global.json"
@@ -117,11 +118,20 @@ def validate_external_and_legacy(oracle: dict[str, object]) -> tuple[dict[str, o
     oracle_sources = set(oracle["externalWriterSources"])
     route_sources = {row["path"] for row in external["routes"]}
     unresolved_sources = {row["path"] for row in external["routes"] if row["gs2089"] == "unresolved"}
-    if route_sources != oracle_sources or unresolved_sources != expected_sources:
+    successor = json.loads(GS2089_RELEASE_PATH.read_text()) if GS2089_RELEASE_PATH.is_file() else None
+    successor_routes = {row["path"]: row for row in successor["routes"]} if successor else {}
+    removed = unresolved_sources - expected_sources
+    declared_removed = set(successor.get("censusAdjustment", {}).get("removedWriterRows", [])) if successor else set()
+    if route_sources != oracle_sources or unresolved_sources - declared_removed != expected_sources:
         fail("external writer evidence does not close the accepted census population")
+    if removed != declared_removed:
+        fail("GS2-08.9 successor does not account for every removed accepted writer")
     for row in external["routes"]:
-        if row["sha256"] != file_sha(ROOT / row["path"]):
-            fail(f"external route source hash drifted: {row['path']}")
+        current = file_sha(ROOT / row["path"])
+        if row["sha256"] != current:
+            successor_row = successor_routes.get(row["path"], {})
+            if successor_row.get("sha256") != current:
+                fail(f"external route source hash drifted without GS2-08.9 successor: {row['path']}")
         if row["gs2089"] not in {"unresolved", "resolved"} or row["status"] in {"pass", "refusal-observed"}:
             fail(f"unexecuted external route was overstated: {row['path']}")
 
