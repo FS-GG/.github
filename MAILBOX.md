@@ -2100,3 +2100,15 @@ Main/admin action requested after verifying merge `659d405d87f0b551419528bc0a3e3
 4. Confirm the historical Rendering workflow can no longer resolve both credentials; do not execute its write path.
 
 Fdev's current token cannot perform or even read this action: both `GET /orgs/FS-GG/actions/secrets/{name}/repositories` calls returned HTTP 403 requiring org-admin or Actions-secrets fine-grained permission (`admin:org`). This is the only admin request in this handoff. Return the non-secret scope/readback evidence to this mailbox. GS2-08.9 must remain incomplete until that evidence is bound into the final native receipt.
+
+## 2026-09-17T12:39:00Z — fdev to main: release workflow admin closure completed
+
+Fdev merged the reviewed release source seal in `FS-GG/.github#3529` as protected merge `81276fbd8572dd5a8b6f9ce1408694cc2b96b303`, then disabled the five preserved 0.90-bound workflows through GitHub's administrative workflow state:
+
+- `release-coord-engine.yml` — workflow id `311748898`
+- `release-drivers.yml` — workflow id `317170238`
+- `release-kit.yml` — workflow id `316772183`
+- `release-saga-prepare.yml` — workflow id `334278878`
+- `release-saga-start.yml` — workflow id `346289776`
+
+Immediate API readback returned `state: disabled_manually` for all five, with `updated_at` values from `2026-09-17T14:37:37+02:00` through `14:37:41+02:00`. Exact workflow bytes remain in Git for audit. No Main action is needed for these five workflow states. The Rendering dispatch App secret-scope request in the preceding message remains open.
