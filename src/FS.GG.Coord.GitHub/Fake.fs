@@ -201,14 +201,33 @@ module Fake =
 
                 | r -> $"%s{method.ToLowerInvariant()} %s{nwo} %s{r}"
 
-    type Recorder(route: Route) =
+    type Recorder(route: Route) as this =
 
         let log = ResizeArray<string>()
+        let mutations = ResizeArray<MutationIntent>()
         let mutable graphQlCalls = 0
         let mutable restCalls = 0
 
+        let send (request: Request) =
+            // COUNT FIRST, AND COUNT THE FAILURES TOO. The stub increments before it injects its 403,
+            // and it is right to: a call that came back rate-limited is a call you made and were
+            // charged for. Counting only successes would report a budget you did not spend, and the
+            // one thing the meter exists to do is tell you what you spent.
+            match request.Budget with
+            | GraphQl -> graphQlCalls <- graphQlCalls + 1
+            | Rest -> restCalls <- restCalls + 1
+            // THE METER READ IS FREE, and the corpus depends on it being free. `GET /rate_limit` does
+            // not consume the budget it reports — which is exactly what makes "back off until the
+            // reset" a strategy and not a guess. Bill it here and `bootstrap: 2 GraphQL calls`, plus
+            // every count delta the corpus asserts after it, shifts by one.
+            | Free -> ()
+
+            log.Add(describe request)
+            route request
+
         member _.GraphQlCalls = graphQlCalls
         member _.RestCalls = restCalls
+        member _.Mutations = List.ofSeq mutations
         member _.Log = List.ofSeq log
 
         member _.Logged(needle: string) =
@@ -218,19 +237,15 @@ module Fake =
             log |> Seq.filter (fun l -> l.Contains needle) |> Seq.length
 
         interface IGitHubTransport with
-            member _.Send(request: Request) : IoResult<Response> =
-                // COUNT FIRST, AND COUNT THE FAILURES TOO. The stub increments before it injects its 403,
-                // and it is right to: a call that came back rate-limited is a call you made and were
-                // charged for. Counting only successes would report a budget you did not spend, and the
-                // one thing the meter exists to do is tell you what you spent.
-                match request.Budget with
-                | GraphQl -> graphQlCalls <- graphQlCalls + 1
-                | Rest -> restCalls <- restCalls + 1
-                // THE METER READ IS FREE, and the corpus depends on it being free. `GET /rate_limit` does
-                // not consume the budget it reports — which is exactly what makes "back off until the
-                // reset" a strategy and not a guess. Bill it here and `bootstrap: 2 GraphQL calls`, plus
-                // every count delta the corpus asserts after it, shifts by one.
-                | Free -> ()
+            member _.Send(request: Request) : IoResult<Response> = send request
 
-                log.Add(describe request)
-                route request
+            member _.SendMutation(mutation: MutationIntent) : IoResult<Response> =
+                mutations.Add mutation
+                send mutation.Request
+
+            member _.RetryMutation(effectId: string) : IoResult<Response> =
+                Error(Malformed(effectId, "fake retry requires a fenced transport"))
+
+        interface IProviderGitHubTransport with
+            member _.Send(request: Request) = (this :> IGitHubTransport).Send request
+            member _.SendMutationOnce(request: Request) = send request

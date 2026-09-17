@@ -87,6 +87,10 @@ module Transport =
             Subject: string
         }
 
+    /// Stable business-facing mutation input. Authority and generation preconditions are supplied by the
+    /// operation-scoped fence, never by the call site.
+    type MutationIntent = { EffectId: string; Request: Request }
+
     type Response =
         {
             Status: int
@@ -139,6 +143,19 @@ module Transport =
     type IGitHubTransport =
         abstract Send: request: Request -> IoResult<Response>
 
+        /// The fenced mutation path. Raw live adapters refuse it; `FencedTransport` is the production
+        /// implementation that obtains and consumes a durable dispatch permit before forwarding.
+        abstract SendMutation: mutation: MutationIntent -> IoResult<Response>
+
+        /// Retry the persisted original request after durable provider-backed ProvenAbsent settlement.
+        abstract RetryMutation: effectId: string -> IoResult<Response>
+
+    /// Raw provider edge used only behind `FencedTransport`. A mutation attempt is exactly one HTTP request:
+    /// no Link continuation and no automatic redirect.
+    type IProviderGitHubTransport =
+        abstract Send: request: Request -> IoResult<Response>
+        abstract SendMutationOnce: request: Request -> IoResult<Response>
+
     /// One bounded response page for collectors that own their pagination and completeness evidence.
     /// This seam never follows redirects or `Link` continuations and leaves `Send` unchanged.
     type ISinglePageGitHubTransport =
@@ -157,8 +174,28 @@ module Transport =
         new: apiBase: string * token: string -> HttpTransport
 
         interface IGitHubTransport
+        interface IProviderGitHubTransport
         interface ISinglePageGitHubTransport
         interface System.IDisposable
+
+    /// Decorate a raw provider transport with the durable v1 admission fence. `Send` remains temporarily
+    /// available for P1/P2/P3 migration compatibility; S2 removes that bypass after every business write
+    /// uses `SendMutation`.
+    type FencedTransport =
+        new: inner: IProviderGitHubTransport * fence: V1Admission.IMutationFence -> FencedTransport
+
+        interface IGitHubTransport
+
+    /// Stable bytes for the complete provider mutation identity: method, path, ordered query, exact body,
+    /// budget, and conditional header. These are the bytes retained by the durable effect record.
+    val canonicalMutationBytes: request: Request -> byte array
+
+    /// Bind a semantic mutation name to the exact canonical provider request.
+    val mutationEffectId: semanticIdentity: string -> request: Request -> string
+
+    /// Conservatively classify one provider mutation response before durable settlement. Applied evidence
+    /// is emitted only for a completed REST success or a valid GraphQL success without errors.
+    val mutationResponseEvidence: request: Request -> response: Response -> V1Admission.ProviderEvidence
 
     /// Read the API base from the environment, so the corpus can redirect it.
     val apiBaseFromEnv: unit -> string

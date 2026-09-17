@@ -48,6 +48,7 @@ fi
 for label in \
   'closing-keyword and commit-message contract' \
   'SDD ship-verdict provenance' \
+  'GS2-08.5 protected source import' \
   'v1 writer census structural closure' \
   'v1 receiver source census offline closure' \
   'command catalogue, parser, render, write-ness, contract, and help closure' \
@@ -56,6 +57,10 @@ for label in \
   'delivery, review, declared-path, and focused production-route parity'; do
   grep -Fq "$label" "$ROOT/scripts/change-completeness" && ok "named stage: $label" || bad "missing named stage: $label"
 done
+
+grep -Fq 'import-coordination-v1-admission.py" --check' "$ROOT/scripts/change-completeness" \
+  && ok 'protected admission source import is verified on every change' \
+  || bad 'protected admission source import verification is not universal'
 
 grep -Fq 'check-v1-writer-census.py" --structural' "$ROOT/scripts/change-completeness" \
   && ok 'cheap writer census runs on every change' \

@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="V1AdmissionTests.fs" />
     <Compile Include="TransportTests.fs" />
     <Compile Include="BudgetTests.fs" />
     <Compile Include="CacheTests.fs" />

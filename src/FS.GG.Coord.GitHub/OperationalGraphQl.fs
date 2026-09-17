@@ -334,8 +334,15 @@ module OperationalGraphQl =
                 [ "p", VId projectId ] @ (itemIds |> List.mapi (fun i id -> $"i%d{i}", VId id))
 
             let req = request subject $"mutation(%s{declarations}){{%s{aliases}}}" variables
+            let itemIdentity = String.concat "," itemIds
 
-            match transport.Send req with
+            let mutation =
+                {
+                    EffectId = mutationEffectId $"board-archive-items:%s{projectId}:%s{itemIdentity}" req
+                    Request = req
+                }
+
+            match transport.SendMutation mutation with
             | Error error -> Error error
             | Ok response ->
                 match GraphQl.decode subject response.Body (fun _ -> Ok()) with

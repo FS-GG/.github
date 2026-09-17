@@ -260,6 +260,50 @@ let ``the CLI dispatch actually routes op-lock to its handlers - the link that w
     Assert.Matches(@"\|\s*OpLockAcquire\s*->\s*opLockAcquire\s+ctx\s+opts", client)
     Assert.Matches(@"\|\s*OpLockRelease\s*->\s*opLockRelease\s+ctx\s+opts", client)
 
+[<Fact>]
+let ``live context wraps HTTP writes in the fail-closed production admission boundary`` () =
+    let previousGitHub = Environment.GetEnvironmentVariable "GITHUB_TOKEN"
+    let previousGh = Environment.GetEnvironmentVariable "GH_TOKEN"
+
+    try
+        Environment.SetEnvironmentVariable("GITHUB_TOKEN", "fixture-token")
+        Environment.SetEnvironmentVariable("GH_TOKEN", null)
+
+        match Client.context () with
+        | Error code -> failwithf "a configured live context was refused before construction: %d" code
+        | Ok(ctx, disposable) ->
+            use _ = disposable
+            Assert.IsType<FencedTransport>(ctx.Transport) |> ignore
+
+            let request =
+                {
+                    Method = "POST"
+                    Path = "repos/FS-GG/.github/issues/42/comments"
+                    Query = []
+                    Body = Json "{\"body\":\"must not reach GitHub\"}"
+                    Budget = Rest
+                    IfNoneMatch = None
+                    Subject = "FS-GG/.github#42"
+                }
+
+            match
+                ctx.Transport.SendMutation
+                    {
+                        EffectId = "effect-1"
+                        Request = request
+                    }
+            with
+            | Error(Malformed(_, detail)) ->
+                Assert.Contains("production v1 admission is not installed", detail)
+                Assert.Contains("durable operation scope", detail)
+                Assert.Contains("protected authority", detail)
+                Assert.Contains("existing admission journal", detail)
+                Assert.Contains("provider reconciliation", detail)
+            | other -> failwithf "an uninstalled live producer must refuse before provider IO, got %A" other
+    finally
+        Environment.SetEnvironmentVariable("GITHUB_TOKEN", previousGitHub)
+        Environment.SetEnvironmentVariable("GH_TOKEN", previousGh)
+
 // ---- The verb exists on argv, and it is the parser that says so -------------------------------------
 
 [<Fact>]

@@ -4,6 +4,7 @@ module Transport =
 
     open System
     open System.Net.Http
+    open System.Security.Cryptography
     open System.Text
     open System.Text.Json
     open System.Text.Json.Nodes
@@ -27,24 +28,22 @@ module Transport =
         | Query of document: string * variables: (string * Var) list
 
     type Request =
-        {
-            Method: string
-            Path: string
-            Query: (string * string) list
-            Body: Payload
-            Budget: Budget
-            IfNoneMatch: string option
-            Subject: string
-        }
+        { Method: string
+          Path: string
+          Query: (string * string) list
+          Body: Payload
+          Budget: Budget
+          IfNoneMatch: string option
+          Subject: string }
+
+    type MutationIntent = { EffectId: string; Request: Request }
 
     type Response =
-        {
-            Status: int
-            Body: string
-            Headers: Map<string, string>
-            ETag: string option
-            NextLink: string option
-        }
+        { Status: int
+          Body: string
+          Headers: Map<string, string>
+          ETag: string option
+          NextLink: string option }
 
     let (|NotModified|_|) (response: Response) =
         if response.Status = 304 then Some() else None
@@ -62,6 +61,12 @@ module Transport =
 
     type IGitHubTransport =
         abstract Send: request: Request -> IoResult<Response>
+        abstract SendMutation: mutation: MutationIntent -> IoResult<Response>
+        abstract RetryMutation: effectId: string -> IoResult<Response>
+
+    type IProviderGitHubTransport =
+        abstract Send: request: Request -> IoResult<Response>
+        abstract SendMutationOnce: request: Request -> IoResult<Response>
 
     type ISinglePageGitHubTransport =
         abstract SendSingle: request: Request -> IoResult<Response>
@@ -237,7 +242,165 @@ module Transport =
 
         node.ToJsonString()
 
-    type HttpTransport(apiBase: string, token: string) =
+    let canonicalMutationBytes (request: Request) =
+        let bodyKind, body =
+            match request.Body with
+            | NoBody -> "none", Array.empty<byte>
+            | Json value -> "json", Encoding.UTF8.GetBytes value
+            | Query(document, variables) -> "graphql", Encoding.UTF8.GetBytes(graphQlPayload document variables)
+
+        let root = JsonObject()
+        root.["bodyBase64"] <- JsonValue.Create(Convert.ToBase64String body)
+        root.["bodyKind"] <- JsonValue.Create bodyKind
+
+        let budget =
+            match request.Budget with
+            | GraphQl -> "graphql"
+            | Rest -> "rest"
+            | Free -> "free"
+
+        root.["budget"] <- JsonValue.Create budget
+
+        match request.IfNoneMatch with
+        | Some value -> root.["ifNoneMatch"] <- JsonValue.Create value
+        | None -> root.["ifNoneMatch"] <- null
+
+        root.["method"] <- JsonValue.Create(request.Method.ToUpperInvariant())
+        root.["path"] <- JsonValue.Create request.Path
+        let query = JsonArray()
+
+        for key, value in request.Query do
+            let pair = JsonArray()
+            pair.Add(JsonValue.Create key)
+            pair.Add(JsonValue.Create value)
+            query.Add pair
+
+        root.["query"] <- query
+
+        root.ToJsonString()
+        |> FS.GG.Coordination.GitHub.ShardedJournalAdapter.canonicalJson
+        |> Result.defaultWith invalidOp
+
+    let mutationEffectId semanticIdentity request =
+        let requestDigest =
+            canonicalMutationBytes request
+            |> SHA256.HashData
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+
+        $"%s{semanticIdentity}.%s{requestDigest}"
+
+    let private isExplicitGraphQlRead (document: string) =
+        let firstExecutableLine =
+            document.Split([| '\n' |], StringSplitOptions.None)
+            |> Seq.map _.TrimStart()
+            |> Seq.tryFind (fun line -> line.Length > 0 && not (line.StartsWith("#", StringComparison.Ordinal)))
+
+        match firstExecutableLine with
+        | Some line when line.StartsWith("{", StringComparison.Ordinal) -> true
+        | Some line when line.StartsWith("query", StringComparison.Ordinal) ->
+            line.Length = "query".Length
+            || Char.IsWhiteSpace line.["query".Length]
+            || line.["query".Length] = '('
+            || line.["query".Length] = '{'
+        | _ -> false
+
+    let private isLegacyReadRequest (request: Request) =
+        match request.Method.ToUpperInvariant() with
+        | "GET" -> true
+        | "POST" ->
+            request.Budget = GraphQl
+            && request.Path.Trim('/') = "graphql"
+            && (match request.Body with
+                | Query(document, _) -> isExplicitGraphQlRead document
+                | _ -> false)
+        | _ -> false
+
+    let mutationResponseEvidence (request: Request) (response: Response) =
+        let digest =
+            response.Body
+            |> Encoding.UTF8.GetBytes
+            |> SHA256.HashData
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+            |> FS.GG.Coordination.GitHub.V1AdmissionRegistry.sha256Digest
+            |> Result.defaultWith invalidOp
+
+        let evidenceReason reason =
+            $"%s{reason};status=%d{response.Status};response-sha256=%s{FS.GG.Coordination.GitHub.V1AdmissionRegistry.sha256Value digest}"
+
+        match response.Status, request.Budget with
+        | (202 | 206 | 207), _ -> V1Admission.Indeterminate(evidenceReason "provider-response-not-complete")
+        | status, _ when status < 200 || status >= 300 ->
+            V1Admission.Indeterminate(evidenceReason "provider-response-non-success")
+        | 200, GraphQl ->
+            match GraphQlEnvelope.classifyMutation response.Body with
+            | GraphQlEnvelope.InvalidJson -> V1Admission.Indeterminate(evidenceReason "graphql-response-invalid-json")
+            | GraphQlEnvelope.NotObject -> V1Admission.Indeterminate(evidenceReason "graphql-response-not-object")
+            | GraphQlEnvelope.InvalidErrors -> V1Admission.Indeterminate(evidenceReason "graphql-errors-invalid")
+            | GraphQlEnvelope.Errors -> V1Admission.Indeterminate(evidenceReason "graphql-errors")
+            | GraphQlEnvelope.Partial -> V1Admission.Partial(evidenceReason "graphql-partial-data-with-errors")
+            | GraphQlEnvelope.Applied -> V1Admission.Applied digest
+            | GraphQlEnvelope.NoResult ->
+                V1Admission.Indeterminate(evidenceReason "graphql-response-without-mutation-result")
+        | _, GraphQl -> V1Admission.Indeterminate(evidenceReason "graphql-response-not-definitive")
+        | (200 | 201 | 204), (Rest | Free) -> V1Admission.Applied digest
+        | _ -> V1Admission.Indeterminate(evidenceReason "provider-response-not-definitive")
+
+    let private requestFromCanonicalBytes effectId (bytes: byte array) =
+        try
+            use document = JsonDocument.Parse bytes
+            let root = document.RootElement
+            let bodyKind = root.GetProperty("bodyKind").GetString()
+
+            let bodyBytes =
+                root.GetProperty("bodyBase64").GetString() |> Convert.FromBase64String
+
+            let body =
+                match bodyKind with
+                | "none" when bodyBytes.Length = 0 -> NoBody
+                | "json"
+                | "graphql" -> Json(Encoding.UTF8.GetString bodyBytes)
+                | _ -> invalidOp "canonical-mutation-body"
+
+            let budget =
+                match root.GetProperty("budget").GetString() with
+                | "graphql" -> GraphQl
+                | "rest" -> Rest
+                | "free" -> Free
+                | _ -> invalidOp "canonical-mutation-budget"
+
+            let query =
+                root.GetProperty("query").EnumerateArray()
+                |> Seq.map (fun pair ->
+                    let values = pair.EnumerateArray() |> Seq.toArray
+
+                    if values.Length <> 2 then
+                        invalidOp "canonical-mutation-query"
+
+                    values[0].GetString(), values[1].GetString())
+                |> List.ofSeq
+
+            let ifNoneMatch =
+                let value = root.GetProperty("ifNoneMatch")
+
+                if value.ValueKind = JsonValueKind.Null then
+                    None
+                else
+                    Some(value.GetString())
+
+            Ok
+                { Method = root.GetProperty("method").GetString()
+                  Path = root.GetProperty("path").GetString()
+                  Query = query
+                  Body = body
+                  Budget = budget
+                  IfNoneMatch = ifNoneMatch
+                  Subject = "v1 retry " + effectId }
+        with _ ->
+            Error "persisted canonical request is unreadable"
+
+    type HttpTransport(apiBase: string, token: string) as this =
 
         let client = new HttpClient()
         let singlePageHandler = new HttpClientHandler(AllowAutoRedirect = false)
@@ -268,11 +431,12 @@ module Transport =
 
         // Send one HTTP request. The URL is absolute, because pagination hands us a fully-qualified
         // `Link` to follow rather than a path to rebuild.
-        let sendOne
+        let sendOneUnchecked
             (http: HttpClient)
             (request: Request)
             (url: string)
             (maximumBytes: int option)
+            (rawMutationResponse: bool)
             : IoResult<Response> =
             try
                 let method =
@@ -355,34 +519,40 @@ module Transport =
                 if request.Budget = Rest && not (String.IsNullOrWhiteSpace token) then
                     Budget.observeRestHeaders token headerValue
 
+                if status >= 200 && status < 300 && request.Budget = GraphQl then
+                    Budget.observeGraphQlBody body
+
+                if rawMutationResponse then
+                    // Mutation settlement must observe the provider's actual response before ordinary
+                    // HTTP/GraphQL error mapping can discard it. The fence classifies this response and
+                    // durably records Partial/Indeterminate evidence before refusing it to the caller.
+                    Ok
+                        { Status = status
+                          Body = body
+                          Headers = headers
+                          ETag = etag
+                          NextLink = headerValue "Link" |> Option.bind parseNextLink }
                 // A 304 IS A SUCCESS. It says "what you already have is current", and it is the whole
                 // reason the conditional path costs nothing. Classifying it as a failure would send the
                 // caller down the error branch on the cheapest correct answer the server can give.
-                if status = 304 then
+                else if status = 304 then
                     Ok
-                        {
-                            Status = 304
-                            Body = ""
-                            Headers = headers
-                            ETag = etag
-                            NextLink = None
-                        }
+                        { Status = 304
+                          Body = ""
+                          Headers = headers
+                          ETag = etag
+                          NextLink = None }
                 elif status >= 200 && status < 300 then
                     // The GraphQL counterpart of `observeRestHeaders` above, and it was missing until #2418:
                     // every query document selects `rateLimit { cost remaining }`, `Budget.readMeter` parsed
                     // it correctly, and NOTHING CALLED IT. The fleet paid to transmit its own meter and threw
                     // the reading away, which is why an exhausted budget could not be attributed to anything.
-                    if request.Budget = GraphQl then
-                        Budget.observeGraphQlBody body
-
                     Ok
-                        {
-                            Status = status
-                            Body = body
-                            Headers = headers
-                            ETag = etag
-                            NextLink = headerValue "Link" |> Option.bind parseNextLink
-                        }
+                        { Status = status
+                          Body = body
+                          Headers = headers
+                          ETag = etag
+                          NextLink = headerValue "Link" |> Option.bind parseNextLink }
                 else
                     // NO RETRY ON A RATE LIMIT. An exhausted budget is not a transient blip — retrying it
                     // three times spends three more calls confirming the same 403, and delays the back-off
@@ -408,11 +578,17 @@ module Transport =
             | :? TaskCanceledException as e -> Error(Transport $"timed out: %s{e.Message}")
             | :? IO.InvalidDataException as e -> Error(Malformed(request.Subject, e.Message))
 
+        let sendOne http request url maximumBytes rawMutationResponse =
+            if rawMutationResponse || isLegacyReadRequest request then
+                sendOneUnchecked http request url maximumBytes rawMutationResponse
+            else
+                Error(Malformed(request.Subject, "mutation requires the typed SendMutation boundary"))
+
         interface IGitHubTransport with
             member _.Send(request: Request) : IoResult<Response> =
                 let url = base' + "/" + request.Path.TrimStart('/') + buildQuery request.Query
 
-                match sendOne client request url None with
+                match sendOne client request url None false with
                 | Error e -> Error e
                 | Ok first ->
 
@@ -425,7 +601,7 @@ module Transport =
                             // and reporting it as complete is the whole failure class this port exists to end.
                             Error(Malformed(request.Subject, "pagination did not terminate within 100 pages"))
                         | Some link ->
-                            match sendOne client request link None with
+                            match sendOne client request link None false with
                             | Error e -> Error e
                             | Ok page ->
                                 match mergePages acc.Body page.Body with
@@ -445,12 +621,112 @@ module Transport =
 
                     follow first first.NextLink 100
 
+            member _.SendMutation(mutation: MutationIntent) : IoResult<Response> =
+                Error(Malformed(mutation.Request.Subject, "raw HTTP mutation transport is not fenced"))
+
+            member _.RetryMutation(effectId: string) : IoResult<Response> =
+                Error(Malformed(effectId, "raw HTTP mutation retry is not fenced"))
+
+        interface IProviderGitHubTransport with
+            member _.Send(request: Request) = (this :> IGitHubTransport).Send request
+
+            member _.SendMutationOnce(request: Request) =
+                let url = base' + "/" + request.Path.TrimStart('/') + buildQuery request.Query
+                sendOne singlePageClient request url None true
+
         interface ISinglePageGitHubTransport with
             member _.SendSingle(request: Request) : IoResult<Response> =
                 let url = base' + "/" + request.Path.TrimStart('/') + buildQuery request.Query
-                sendOne singlePageClient request url (Some(4 * 1024 * 1024))
+                sendOne singlePageClient request url (Some(4 * 1024 * 1024)) false
 
         interface IDisposable with
             member _.Dispose() =
                 client.Dispose()
                 singlePageClient.Dispose()
+
+    type private ProviderAttempt =
+        { Request: Request; Response: Response }
+
+    type FencedTransport(inner: IProviderGitHubTransport, fence: V1Admission.IMutationFence) =
+        let responseEvidence attempt =
+            mutationResponseEvidence attempt.Request attempt.Response
+
+        let unresolvedResult attempt =
+            let request, response = attempt.Request, attempt.Response
+
+            if request.Budget = GraphQl && response.Status = 200 then
+                // Existing GraphQL parsers need the exact alias data and errors to distinguish partial
+                // execution. The durable registry already records this response as unresolved.
+                Ok response
+            elif response.Status = 304 || response.Status < 200 || response.Status >= 300 then
+                Error(Budget.classify request.Subject response.Status response.Body (fun name -> header name response))
+            else
+                let evidence = mutationResponseEvidence request response
+
+                let detail =
+                    match evidence with
+                    | V1Admission.Partial reason -> reason
+                    | V1Admission.Indeterminate reason -> reason
+                    | _ -> $"status=%d{response.Status}"
+
+                Error(Malformed(request.Subject, "unresolved mutation response: " + detail))
+
+        let outcomeResult outcome =
+            match outcome with
+            | V1Admission.AppliedResponse attempt -> Ok attempt.Response
+            | V1Admission.UnresolvedResponse attempt -> unresolvedResult attempt
+            | V1Admission.ProviderFailed error -> Error error
+
+        let dispatch effectId request =
+            let method = request.Method.ToUpperInvariant()
+
+            if not (Set.contains method (set [ "POST"; "PUT"; "PATCH"; "DELETE" ])) then
+                Error(Malformed(request.Subject, "SendMutation requires a mutating HTTP method"))
+            else
+                // Snapshot at the public entry boundary. The durable record and provider callback receive
+                // independent copies, so a caller cannot change the authorized bytes after admission.
+                let canonical = canonicalMutationBytes request |> Array.copy
+
+                match
+                    fence.Dispatch(
+                        effectId,
+                        canonical,
+                        (fun () ->
+                            inner.SendMutationOnce request
+                            |> Result.map (fun response ->
+                                { Request = request
+                                  Response = response })),
+                        responseEvidence
+                    )
+                with
+                | Ok outcome -> outcomeResult outcome
+                | Error reasons ->
+                    Error(Malformed(request.Subject, "v1 admission refused: " + String.Join("; ", reasons)))
+
+        interface IGitHubTransport with
+            member _.Send(request: Request) =
+                if isLegacyReadRequest request then
+                    inner.Send request
+                else
+                    Error(Malformed(request.Subject, "mutation requires the typed SendMutation boundary"))
+
+            member _.SendMutation(mutation: MutationIntent) =
+                dispatch mutation.EffectId mutation.Request
+
+            member _.RetryMutation(effectId: string) =
+                match
+                    fence.RetryProvenAbsent(
+                        effectId,
+                        (fun bytes ->
+                            match requestFromCanonicalBytes effectId (Array.copy bytes) with
+                            | Error reason -> Error(Malformed(effectId, reason))
+                            | Ok request ->
+                                inner.SendMutationOnce request
+                                |> Result.map (fun response ->
+                                    { Request = request
+                                      Response = response })),
+                        responseEvidence
+                    )
+                with
+                | Ok outcome -> outcomeResult outcome
+                | Error reasons -> Error(Malformed(effectId, "v1 retry refused: " + String.Join("; ", reasons)))

@@ -1,9 +1,13 @@
 module FS.GG.Coord.GitHub.Tests.TransportTests
 
+open System
+open System.Security.Cryptography
+open System.Text
 open Xunit
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Errors
 open FS.GG.Coord.GitHub.Transport
+open FS.GG.Coord.GitHub.V1Admission
 
 /// A response that succeeded, with a body.
 let ok (body: string) =
@@ -26,6 +30,396 @@ let request path budget =
         IfNoneMatch = None
         Subject = path
     }
+
+type private StubFence(allow: bool) =
+    let mutable calls = 0
+    let mutable observed = Array.empty<byte>
+
+    member _.Calls = calls
+    member _.Observed = observed
+
+    interface IMutationFence with
+        member _.Dispatch(_, bytes, send, _) =
+            calls <- calls + 1
+            observed <- Array.copy bytes
+
+            if allow then
+                match send () with
+                | Ok response -> Ok(AppliedResponse response)
+                | Error error -> Ok(ProviderFailed error)
+            else
+                Error [ "test-refusal" ]
+
+        member _.Reconcile(_, _) = Ok()
+        member _.RetryProvenAbsent(_, _, _) = Error [ "no-retry-fixture" ]
+
+type private EvidenceFence(retryBytes: byte array) =
+    let evidence = ResizeArray<ProviderEvidence>()
+
+    let classify response classifyResponse =
+        let value = classifyResponse response
+        evidence.Add value
+
+        match value with
+        | Applied _ -> Ok(AppliedResponse response)
+        | _ -> Ok(UnresolvedResponse response)
+
+    member _.Evidence = List.ofSeq evidence
+
+    interface IMutationFence with
+        member _.Dispatch(_, _, send, classifyResponse) =
+            match send () with
+            | Error error -> Ok(ProviderFailed error)
+            | Ok response -> classify response classifyResponse
+
+        member _.Reconcile(_, _) = Ok()
+
+        member _.RetryProvenAbsent(_, send, classifyResponse) =
+            match send (Array.copy retryBytes) with
+            | Error error -> Ok(ProviderFailed error)
+            | Ok response -> classify response classifyResponse
+
+let private intent (providerRequest: Request) =
+    {
+        EffectId = "effect-1"
+        Request = providerRequest
+    }
+
+let private providerResponse status body =
+    {
+        Status = status
+        Body = body
+        ETag = None
+        NextLink = None
+        Headers = Map.empty
+    }
+
+let private assertInitialAndRetryEvidence providerRequest response predicate =
+    let fence = EvidenceFence(canonicalMutationBytes providerRequest)
+    let recorder = Fake.Recorder(fun _ -> Ok response)
+
+    let transport =
+        FencedTransport(recorder :> IProviderGitHubTransport, fence) :> IGitHubTransport
+
+    let initial = transport.SendMutation(intent providerRequest)
+    let retry = transport.RetryMutation("effect-1")
+    Assert.Equal(Ok response, initial)
+    Assert.Equal(Ok response, retry)
+    Assert.Equal(2, recorder.RestCalls + recorder.GraphQlCalls)
+    Assert.Equal(2, fence.Evidence.Length)
+    Assert.All(fence.Evidence, fun value -> Assert.True(predicate value, $"unexpected evidence: {value}"))
+
+let private assertInitialAndRetryWriterFailure providerRequest response assertError =
+    let fence = EvidenceFence(canonicalMutationBytes providerRequest)
+    let recorder = Fake.Recorder(fun _ -> Ok response)
+
+    let transport =
+        FencedTransport(recorder :> IProviderGitHubTransport, fence) :> IGitHubTransport
+
+    for write in
+        [
+            (fun () -> transport.SendMutation(intent providerRequest))
+            (fun () -> transport.RetryMutation("effect-1"))
+        ] do
+        let mutable advanced = false
+
+        let result =
+            write ()
+            |> Result.map (fun _ ->
+                advanced <- true
+                ())
+
+        Assert.False(advanced, "Result.map writer continuation must not run")
+
+        match result with
+        | Error error -> assertError error
+        | Ok() -> failwith "unresolved REST response reached the writer continuation"
+
+    Assert.Equal(2, recorder.RestCalls)
+    Assert.Equal(2, fence.Evidence.Length)
+
+    Assert.All(
+        fence.Evidence,
+        fun value ->
+            match value with
+            | Indeterminate reason -> Assert.Contains("response-sha256=", reason)
+            | other -> failwithf "expected Indeterminate evidence, got %A" other
+    )
+
+[<Fact>]
+let ``fenced transport refuses a REST mutation through the legacy Send boundary`` () =
+    let recorder = Fake.Recorder(fun _ -> ok "{}")
+    let fence = StubFence(true)
+
+    let transport =
+        FencedTransport(recorder :> IProviderGitHubTransport, fence) :> IGitHubTransport
+
+    let result =
+        transport.Send
+            { request "repos/FS-GG/.github/issues/1" Rest with
+                Method = "PATCH"
+                Body = Json """{"state":"closed"}"""
+            }
+
+    match result with
+    | Error(Malformed(_, detail)) -> Assert.Contains("typed SendMutation", detail)
+    | other -> failwith $"legacy REST mutation must refuse before provider I/O, got %A{other}"
+
+    Assert.Equal(0, recorder.RestCalls)
+    Assert.Equal(0, fence.Calls)
+
+[<Fact>]
+let ``fenced transport distinguishes a GraphQL read from a legacy mutation`` () =
+    let recorder = Fake.Recorder(fun _ -> ok "{\"data\":{}}")
+    let fence = StubFence(true)
+
+    let transport =
+        FencedTransport(recorder :> IProviderGitHubTransport, fence) :> IGitHubTransport
+
+    let graphQl document =
+        { request "graphql" GraphQl with
+            Method = "POST"
+            Body = Query(document, [])
+        }
+
+    Assert.Equal(
+        Ok
+            {
+                Status = 200
+                Body = "{\"data\":{}}"
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            },
+        transport.Send(graphQl "query { viewer { login } }")
+    )
+
+    Assert.Equal(
+        Ok
+            {
+                Status = 200
+                Body = "{\"data\":{}}"
+                ETag = None
+                NextLink = None
+                Headers = Map.empty
+            },
+        transport.Send(graphQl "# fixture read\nquery { viewer { login } }")
+    )
+
+    match transport.Send(graphQl "mutation { addComment(input: {}) { clientMutationId } }") with
+    | Error(Malformed(_, detail)) -> Assert.Contains("typed SendMutation", detail)
+    | other -> failwith $"legacy GraphQL mutation must refuse before provider I/O, got %A{other}"
+
+    match transport.Send(graphQl "# disguised mutation\nmutation { addComment(input: {}) { clientMutationId } }") with
+    | Error(Malformed(_, detail)) -> Assert.Contains("typed SendMutation", detail)
+    | other -> failwith $"comment-prefixed GraphQL mutation must refuse before provider I/O, got %A{other}"
+
+    let ambiguous =
+        { graphQl "query { viewer { login } }" with
+            Body = Json "{\"query\":\"mutation { deleteIssue(input: {}) { clientMutationId } }\"}"
+        }
+
+    match transport.Send ambiguous with
+    | Error(Malformed(_, detail)) -> Assert.Contains("typed SendMutation", detail)
+    | other -> failwith $"ambiguous GraphQL POST must refuse before provider I/O, got %A{other}"
+
+    Assert.Equal(2, recorder.GraphQlCalls)
+    Assert.Equal(0, fence.Calls)
+
+[<Fact>]
+let ``definitive REST and GraphQL success bind Applied to the response body digest`` () =
+    let assertApplied (providerRequest: Request) (body: string) =
+        let expected =
+            SHA256.HashData(Encoding.UTF8.GetBytes body)
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+            |> FS.GG.Coordination.GitHub.V1AdmissionRegistry.sha256Digest
+            |> Result.defaultWith failwith
+
+        match mutationResponseEvidence providerRequest (providerResponse 200 body) with
+        | Applied actual -> Assert.Equal(expected, actual)
+        | other -> failwithf "expected Applied evidence, got %A" other
+
+    assertApplied
+        { request "repos/o/r/issues/1" Rest with
+            Method = "PATCH"
+            Body = Json "{}"
+        }
+        "{}"
+
+    assertApplied
+        { request "graphql" GraphQl with
+            Method = "POST"
+            Body = Query("mutation { update { id } }", [])
+        }
+        "{\"data\":{\"update\":{\"id\":\"1\"}}}"
+
+let private restMutation () =
+    { request "repos/o/r/issues/1" Rest with
+        Method = "PATCH"
+        Body = Json "{\"state\":\"closed\"}"
+    }
+
+[<Fact>]
+let ``initial and retry REST 202 cannot advance a Result-map writer`` () =
+    let response = providerResponse 202 "{\"pending\":true}"
+
+    assertInitialAndRetryWriterFailure (restMutation ()) response (function
+        | Malformed(subject, detail) ->
+            Assert.False(String.IsNullOrWhiteSpace subject)
+            Assert.Contains("status=202", detail)
+            Assert.Contains("response-sha256=", detail)
+        | other -> failwithf "expected typed unresolved response, got %A" other)
+
+[<Theory>]
+[<InlineData(403)>]
+[<InlineData(429)>]
+let ``initial and retry REST rate limits cannot advance a Result-map writer`` status =
+    let response =
+        { providerResponse status "{\"message\":\"API rate limit exceeded\"}" with
+            Headers = Map.ofList [ "X-RateLimit-Resource", "core" ]
+        }
+
+    assertInitialAndRetryWriterFailure (restMutation ()) response (function
+        | RateLimited(RestBudget(Some "core"), _) -> ()
+        | other -> failwithf "expected RateLimited, got %A" other)
+
+[<Fact>]
+let ``initial and retry REST 500 cannot advance a Result-map writer`` () =
+    let response = providerResponse 500 "provider failed"
+
+    assertInitialAndRetryWriterFailure (restMutation ()) response (function
+        | Http(500, "provider failed") -> ()
+        | other -> failwithf "expected HTTP 500, got %A" other)
+
+[<Fact>]
+let ``initial and retry REST 304 return the existing HTTP classification`` () =
+    let response = providerResponse 304 ""
+
+    assertInitialAndRetryWriterFailure (restMutation ()) response (function
+        | Http(304, "") -> ()
+        | other -> failwithf "expected HTTP 304, got %A" other)
+
+[<Theory>]
+[<InlineData(206)>]
+[<InlineData(207)>]
+let ``initial and retry other non-final REST success cannot advance a writer`` status =
+    let response = providerResponse status "{}"
+
+    assertInitialAndRetryWriterFailure (restMutation ()) response (function
+        | Malformed(subject, detail) ->
+            Assert.False(String.IsNullOrWhiteSpace subject)
+            Assert.Contains($"status={status}", detail)
+        | other -> failwithf "expected typed unresolved response, got %A" other)
+
+[<Fact>]
+let ``unresolved REST classification retains durable Indeterminate evidence`` () =
+    let providerRequest = restMutation ()
+
+    let evidence = mutationResponseEvidence providerRequest (providerResponse 202 "{}")
+
+    match evidence with
+    | Indeterminate reason -> reason.Contains("response-sha256=")
+    | _ -> false
+    |> Assert.True
+
+[<Theory>]
+[<InlineData("{\"errors\":[{\"message\":\"failed\"}]}", false)>]
+[<InlineData("{\"data\":{\"first\":{\"id\":\"1\"},\"second\":null},\"errors\":[{\"message\":\"partial\",\"path\":[\"second\"]}]}",
+             true)>]
+let ``initial and retry preserve GraphQL 200 errors and partial alias data`` body expectedPartial =
+    let providerRequest =
+        { request "graphql" GraphQl with
+            Method = "POST"
+            Body = Query("mutation { update { id } }", [])
+        }
+
+    let response =
+        { providerResponse 200 body with
+            Headers = Map.ofList [ "X-GitHub-Request-Id", "partial-request" ]
+        }
+
+    assertInitialAndRetryEvidence providerRequest response (function
+        | Partial reason when expectedPartial -> reason.Contains("response-sha256=")
+        | Indeterminate reason when not expectedPartial -> reason.Contains("response-sha256=")
+        | _ -> false)
+
+[<Theory>]
+[<InlineData("{\"data\":null}")>]
+[<InlineData("{\"data\":1}")>]
+[<InlineData("{\"data\":[]}")>]
+[<InlineData("{\"data\":{}}")>]
+[<InlineData("{\"data\":{\"first\":null,\"second\":null}}")>]
+let ``initial and retry keep GraphQL 200 without a non-null mutation result Indeterminate`` body =
+    let providerRequest =
+        { request "graphql" GraphQl with
+            Method = "POST"
+            Body = Query("mutation { update { id } }", [])
+        }
+
+    assertInitialAndRetryEvidence providerRequest (providerResponse 200 body) (function
+        | Indeterminate reason -> reason.Contains("response-sha256=")
+        | _ -> false)
+
+[<Fact>]
+let ``typed SendMutation records the stable producer intent in the fake`` () =
+    let recorder = Fake.Recorder(fun _ -> ok "{}")
+    let transport = recorder :> IGitHubTransport
+
+    let providerRequest =
+        { request "repos/o/r/issues/1" Rest with
+            Method = "PATCH"
+            Body = Json "{\"state\":\"closed\"}"
+        }
+
+    transport.SendMutation(intent providerRequest) |> ignore
+
+    Assert.Single(recorder.Mutations) |> ignore
+    Assert.Equal(1, recorder.RestCalls)
+
+[<Fact>]
+let ``fenced transport forwards only after the typed fence authorizes exact bytes`` () =
+    let recorder = Fake.Recorder(fun _ -> ok "{}")
+    let fence = StubFence true
+
+    let transport =
+        FencedTransport(recorder :> IProviderGitHubTransport, fence) :> IGitHubTransport
+
+    let providerRequest =
+        { request "repos/o/r/issues/1" Rest with
+            Method = "PATCH"
+            Body = Json "{\"state\":\"closed\"}"
+        }
+
+    let bytes = canonicalMutationBytes providerRequest
+
+    match transport.SendMutation(intent providerRequest) with
+    | Ok _ ->
+        Assert.Equal(1, fence.Calls)
+        Assert.Equal(1, recorder.RestCalls)
+        Assert.Equal<byte>(bytes, fence.Observed)
+    | Error error -> failwithf "expected authorized dispatch, got %A" error
+
+[<Fact>]
+let ``fenced transport does not call the provider when durable admission refuses`` () =
+    let recorder = Fake.Recorder(fun _ -> ok "{}")
+    let fence = StubFence false
+
+    let transport =
+        FencedTransport(recorder :> IProviderGitHubTransport, fence) :> IGitHubTransport
+
+    let providerRequest =
+        { request "repos/o/r/issues/1" Rest with
+            Method = "PATCH"
+            Body = Json "{\"state\":\"closed\"}"
+        }
+
+    match transport.SendMutation(intent providerRequest) with
+    | Error(Malformed(_, detail)) ->
+        Assert.Contains("test-refusal", detail)
+        Assert.Equal(1, fence.Calls)
+        Assert.Equal(0, recorder.RestCalls)
+    | other -> failwithf "expected durable admission refusal, got %A" other
 
 [<Fact>]
 let ``response header lookup is case-insensitive for GitHub rate-limit headers`` () =

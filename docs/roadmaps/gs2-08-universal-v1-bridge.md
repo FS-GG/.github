@@ -127,6 +127,21 @@ regenerates expectations, and refuses incomplete trees, missing or reordered rou
 metadata substitution, or a writer laundered as read-only. This is still a source snapshot: it neither proves
 installed behavior nor creates the GS2-08.4 fence.
 
+## Candidate source windows: GS2-08.4 and GS2-08.5 producer fence
+
+The producer candidate imports the six protected admission sources from Coordination merge
+`48fa43e67de52d4e728a9abff30686fc029d1d8d` (tree
+`484e6c53f9f474bfedfd10f22ac301e3227478cd`) and verifies their recorded hashes on every change. REST and
+GraphQL write entry points now use one typed mutation boundary. That boundary rereads authority, generations,
+journal state, and permits; records durable settlement evidence before reporting success; retries only a
+`ProvenAbsent` original request under a new claim; and refuses the legacy mutation-capable `Send` path while
+preserving reads.
+
+The live client remains fail closed until installation supplies protected authority and journal ports, provider
+reconciliation, credentials, and admitted records. This source candidate therefore demonstrates preserved
+`OperatingV1` and eligible `Preparing` behavior through fixtures without claiming live installation, publication,
+or native GS2-08.4/08.5 acceptance.
+
 ## Workspace, authority, and observation boundaries
 
 GS2-08.1–08.3 change no generated workspace and enable no runtime behavior. The first possible new-workspace

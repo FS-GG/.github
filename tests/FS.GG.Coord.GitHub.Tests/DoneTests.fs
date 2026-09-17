@@ -21,6 +21,15 @@ let private parentRef =
         Number = 350
     }
 
+let private expectedEffectId kind (request: Request) =
+    let digest =
+        canonicalMutationBytes request
+        |> System.Security.Cryptography.SHA256.HashData
+        |> System.Convert.ToHexString
+        |> _.ToLowerInvariant()
+
+    $"github.rest.%s{kind}.%s{digest}"
+
 /// A merged PR whose BODY names this issue — a true closer (`ClosesThis`), the ordinary case. Its `Repo`
 /// defaults to `aRef`'s own repository — the ordinary same-repo case — so cross-repo tests (#2427) override
 /// it explicitly rather than every other test needing to state the obvious.
@@ -698,6 +707,21 @@ let ``#613 a rolled-up parent is stamped Done AND CLOSED - not one or the other`
         // BOTH. The board column AND the issue state.
         Assert.True(transport.Logged "--single-select-option-id opt_done")
         Assert.True(transport.Logged "issue-patch FS-GG/FS.GG.SDD 350")
+        Assert.Equal(2, transport.Mutations.Length)
+
+        let boardMutation =
+            transport.Mutations
+            |> List.find (fun mutation ->
+                mutation.EffectId.StartsWith("board-set-field:", System.StringComparison.Ordinal))
+
+        Assert.Equal("POST", boardMutation.Request.Method)
+
+        let closeMutation =
+            transport.Mutations
+            |> List.find (fun mutation ->
+                mutation.EffectId.StartsWith("github.rest.epic-rollup-close.", System.StringComparison.Ordinal))
+
+        Assert.Equal(expectedEffectId "epic-rollup-close" closeMutation.Request, closeMutation.EffectId)
 
     | other -> failwith $"a rolled-up parent must be stamped AND closed — got %A{other}"
 

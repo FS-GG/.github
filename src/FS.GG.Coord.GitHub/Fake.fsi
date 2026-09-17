@@ -44,12 +44,16 @@ module Fake =
         new: route: Route -> Recorder
 
         interface IGitHubTransport
+        interface IProviderGitHubTransport
 
         /// Calls billed to the GraphQL meter. `GET /rate_limit` is not among them.
         member GraphQlCalls: int
 
         /// Calls billed to the REST meter.
         member RestCalls: int
+
+        /// Typed mutation envelopes presented to the fake's `SendMutation` boundary.
+        member Mutations: MutationIntent list
 
         /// The log, in the `gh` stub's grammar — `issue-get FS-GG/FS.GG.SDD 42`, `comment-post …`,
         /// `item-edit --id … --field-id … --single-select-option-id …`, `batch-mutation mutation {…`.

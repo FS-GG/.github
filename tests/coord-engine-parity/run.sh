@@ -70,6 +70,7 @@ PORT=""; for _ in $(seq 1 50); do PORT="$(head -n1 "$SRV_OUT" 2>/dev/null)"; [ -
 [ -n "$PORT" ] || { bad "fixture bound a port"; echo "parity: 0 passed, 1 failed"; exit 1; }
 
 export FSGG_GITHUB_API_BASE="http://127.0.0.1:$PORT" GITHUB_TOKEN=t
+export FSGG_COORD_TEST_ALLOW_UNFENCED_LOOPBACK_MUTATIONS=1
 export FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$CACHE" FSGG_COORD_SCAN_TTL_SEC=0
 
 # ---- 0. THE FIXTURE DECIDES WHICH WORKER IT IS (.github#1751) ------------------------------------

@@ -48,19 +48,19 @@ mutations:
     target: src/FS.GG.Coord.GitHub/Reads.fs
     find: |-
       | true, n when n.ValueKind <> JsonValueKind.Number ->
-                                  Error(
-                                      Malformed(
-                                          subject,
-                                          $"element %d{index} of %d{total} has a `number` that is not a number (%A{n.ValueKind}) — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                                      Error(
+                                          Malformed(
+                                              subject,
+                                              $"element %d{index} of %d{total} has a `number` that is not a number (%A{n.ValueKind}) — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                                          )
                                       )
-                                  )
-                              | false, _ ->
-                                  Error(
-                                      Malformed(
-                                          subject,
-                                          $"element %d{index} of %d{total} carries no `number` — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                                  | false, _ ->
+                                      Error(
+                                          Malformed(
+                                              subject,
+                                              $"element %d{index} of %d{total} carries no `number` — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                                          )
                                       )
-                                  )
     replace: |-
       | true, n when n.ValueKind <> JsonValueKind.Number -> Ok None
                               | false, _ -> Ok None

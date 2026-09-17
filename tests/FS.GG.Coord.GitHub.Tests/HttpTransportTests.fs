@@ -120,6 +120,27 @@ let private get (path: string) =
     }
 
 [<Fact>]
+let ``raw HTTP transport refuses SendMutation without a production fence decorator`` () =
+    use transport = new HttpTransport("http://127.0.0.1:1", "")
+    let raw = transport :> IGitHubTransport
+
+    let request =
+        { get "repos/o/r/issues/1" with
+            Method = "PATCH"
+            Body = Json "{\"state\":\"closed\"}"
+        }
+
+    let envelope =
+        {
+            EffectId = "effect-1"
+            Request = request
+        }
+
+    match raw.SendMutation envelope with
+    | Error(Malformed(_, detail)) -> Assert.Contains("not fenced", detail)
+    | other -> failwithf "raw live mutations must refuse, got %A" other
+
+[<Fact>]
 let ``UTEL-04A single-page transport does not paginate and rejects oversized bodies`` () =
     use server = new Server()
 
@@ -141,6 +162,51 @@ let ``UTEL-04A single-page transport does not paginate and rejects oversized bod
     match single.SendSingle(get "repos/o/r/oversize") with
     | Error(Malformed(_, detail)) -> Assert.Contains("4 MiB", detail)
     | result -> failwithf "expected bounded rejection, got %A" result
+
+[<Fact>]
+let ``provider mutation primitive ignores Link continuation and makes one request`` () =
+    use server = new Server()
+    server.On(fun _ res -> server.Json res 200 "{}" [ "Link", $"<%s{server.Base}/page2>; rel=\"next\"" ])
+    use transport = new HttpTransport(server.Base, "t")
+    let provider = transport :> IProviderGitHubTransport
+
+    let mutation =
+        { get "repos/o/r/issues/1" with
+            Method = "PATCH"
+            Body = Json "{}"
+        }
+
+    match provider.SendMutationOnce mutation with
+    | Ok response ->
+        Assert.Equal("{}", response.Body)
+        Assert.Single(server.Requests) |> ignore
+    | Error error -> failwithf "%A" error
+
+[<Theory>]
+[<InlineData(307)>]
+[<InlineData(308)>]
+let ``provider mutation primitive does not follow redirects`` status =
+    use server = new Server()
+
+    server.On(fun _ res ->
+        res.StatusCode <- status
+        res.RedirectLocation <- $"%s{server.Base}/redirected"
+        res.ContentLength64 <- 0L)
+
+    use transport = new HttpTransport(server.Base, "t")
+    let provider = transport :> IProviderGitHubTransport
+
+    let mutation =
+        { get "repos/o/r/issues/1" with
+            Method = "PATCH"
+            Body = Json "{}"
+        }
+
+    match provider.SendMutationOnce mutation with
+    | Ok response ->
+        Assert.Equal(status, response.Status)
+        Assert.Single(server.Requests) |> ignore
+    | other -> failwithf "expected redirect response without a second request, got %A" other
 
 // ---- pagination: the Link header ---------------------------------------------------------------------
 
@@ -399,7 +465,7 @@ let ``a GraphQL variable is serialised WITH ITS TYPE - a number is a number, not
 
     use transport = new HttpTransport(server.Base, "t")
 
-    (transport :> IGitHubTransport).Send
+    (transport :> IProviderGitHubTransport).SendMutationOnce
         { get "graphql" with
             Method = "POST"
             Budget = GraphQl
@@ -438,7 +504,7 @@ let ``a GraphQL document with NO variables omits the variables object entirely``
 
     use transport = new HttpTransport(server.Base, "t")
 
-    (transport :> IGitHubTransport).Send
+    (transport :> IProviderGitHubTransport).SendMutationOnce
         { get "graphql" with
             Method = "POST"
             Budget = GraphQl
@@ -451,6 +517,26 @@ let ``a GraphQL document with NO variables omits the variables object entirely``
         Assert.Contains("f0: update", body)
         Assert.DoesNotContain("\"variables\"", body)
     | other -> failwith $"expected one request — got %A{other}"
+
+[<Fact>]
+let ``raw public transport refuses a mutation before provider IO`` () =
+    use server = new Server()
+    server.On(fun _ res -> server.Json res 200 "{}" [])
+    use transport = new HttpTransport(server.Base, "t")
+
+    let result =
+        (transport :> IGitHubTransport).Send
+            { get "repos/FS-GG/.github/issues/1" with
+                Method = "PATCH"
+                Budget = Rest
+                Body = Json """{"state":"closed"}"""
+            }
+
+    match result with
+    | Error(Malformed(_, detail)) -> Assert.Contains("typed SendMutation", detail)
+    | other -> failwith $"raw public mutation must be refused, got %A{other}"
+
+    Assert.Empty server.Requests
 
 // ---- status classification, on the real wire ----------------------------------------------------------
 

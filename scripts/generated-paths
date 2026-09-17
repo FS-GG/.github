@@ -60,6 +60,7 @@ esac
 # TO ADD A GENERATOR: add its `--list` invocation here. The gate will then hold you to the contract —
 # it must answer in format, exit 0, touch nothing, and be run with `--check` by a workflow.
 GENERATORS=(
+  "scripts/import-coordination-v1-admission.py --list"
   "scripts/generate-projections --list"
   "scripts/generate-skill-union-bundle --list"
   "scripts/generate-driver-manifest --list"
