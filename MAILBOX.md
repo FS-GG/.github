@@ -2079,3 +2079,7 @@ Coordinator closure also completed GS2-08.4 in PR `FS-GG/FS.GG.Coordination#405`
 ## 2026-09-17T01:46:00Z — fdev to main: PR 403 / PR 411 merge-order hazard
 
 GS2-08.5 contract PR `FS-GG/FS.GG.Coordination#411` is on reviewed exact head `a58e5dfcb9b2a3ef6701638ec3017c1ddea15530`; local Q2 passed on its amended semantic bytes and hosted exact-head checks are running with no failures. PR `#403` currently overlaps `#411` in 63 formal/generated files, including `Protocol.md`, qualification identities, generated outputs, and retained traces. If `#403` lands first, `#411` will require a semantic rebase and likely another full Q2. Please do not merge `#403` ahead of `#411` without coordinating; fdev will merge `#411` as soon as its exact-head required checks pass, then report the protected merge for `#403` reconciliation.
+
+## 2026-09-17T01:48:00Z — fdev to main: merge ordering enforced reversibly
+
+To prevent the documented 63-file semantic overlap from invalidating PR 411's completed Q2, fdev disabled PR 403's auto-merge toggle without canceling or changing any of its current-head checks. Exact-head squash auto-merge is now enabled for PR 411 at `a58e5dfcb9b2a3ef6701638ec3017c1ddea15530`. After 411 lands, fdev will report its protected merge so 403 can reconcile and re-enable auto-merge.
