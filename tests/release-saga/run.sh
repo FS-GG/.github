@@ -418,12 +418,26 @@ assert start_jobs["prepare"]["uses"] == "./.github/workflows/release-saga-prepar
 assert start_jobs["inspect"]["permissions"]["contents"] == "write", \
     "durable-state inspection cannot see draft releases without push-level contents access"
 publisher_steps = start_jobs["start-publishers"]["steps"]
-app_step = next(step for step in publisher_steps if step.get("id") == "app-token")
 publisher_run_step = next(step for step in publisher_steps if "gh workflow run" in str(step.get("run", "")))
-assert publisher_run_step["env"]["PROMOTION_TOKEN"] == "${{ steps.app-token.outputs.token }}"
+assert publisher_run_step["env"]["GH_TOKEN"] == "${{ github.token }}"
+assert start_jobs["start-publishers"]["permissions"] == {"actions": "write", "contents": "write"}
+for forbidden in ("actions/create-github-app-token", "FSGG_DISPATCH_APP_ID",
+                  "FSGG_DISPATCH_APP_PRIVATE_KEY", "PROMOTION_TOKEN", "app-token.outputs"):
+    assert forbidden not in start, f"release start still depends on private App material: {forbidden}"
+checkout = next(step for step in publisher_steps if str(step.get("uses", "")).startswith("actions/checkout@"))
+assert "token" not in checkout.get("with", {}), "release start checkout overrides the job-scoped token"
 for token in ("release-saga-reconcile", 'repos/$GITHUB_REPOSITORY/dispatches',
               'client_payload[source_sha]=$SOURCE_SHA'):
     assert token in publisher_run_step["run"], token
+for workflow in ("release-kit.yml", "release-drivers.yml", "release-coord-engine.yml"):
+    assert publisher_run_step["run"].count(workflow) == 1, f"{workflow} is not dispatched exactly once"
+dispatch_loop = publisher_run_step["run"].find(
+    "for workflow in release-kit.yml release-drivers.yml release-coord-engine.yml"
+)
+atomic_push = publisher_run_step["run"].find('git push --atomic origin "${push_refs[@]}"')
+reconcile = publisher_run_step["run"].find("gh api --method POST")
+assert 0 <= atomic_push < dispatch_loop < reconcile, \
+    "publishers and reconciliation must follow atomic immutable-tag establishment"
 
 def start_topology_problems(doc):
     jobs = doc.get("jobs", {})
@@ -527,6 +541,84 @@ for workflow in ("release-kit.yml", "release-coord-engine.yml"):
     assert "actions/upload-artifact@v6" in delivery, workflow
 print("production saga topology: pack-once, durable journals, org barrier, resume probes, identity, and promotion wired")
 PY
+
+# Execute the publisher-start shell with fake git/gh/dotnet commands. GITHUB_TOKEN-created tags do
+# not recurse into push workflows, so both a fresh cut and an exact-source recovery must explicitly
+# dispatch each component once and then send one reconciliation event. No network or provider write
+# is possible in this fixture.
+START_PUBLISHERS="$WORK/start-publishers"
+mkdir -p "$START_PUBLISHERS/bin"
+python3 - "$ROOT/.github/workflows/release-saga-start.yml" "$START_PUBLISHERS/run.sh" <<'PY'
+import pathlib, sys, yaml
+workflow = yaml.safe_load(pathlib.Path(sys.argv[1]).read_text())
+for step in workflow["jobs"]["start-publishers"]["steps"]:
+    if isinstance(step, dict) and "gh workflow run" in str(step.get("run", "")):
+        pathlib.Path(sys.argv[2]).write_text("#!/usr/bin/env bash\n" + step["run"])
+        break
+else:
+    raise SystemExit("release-saga-start publisher step is missing")
+PY
+chmod +x "$START_PUBLISHERS/run.sh"
+cat > "$START_PUBLISHERS/bin/dotnet" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' 9.8.7
+SH
+cat > "$START_PUBLISHERS/bin/git" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$FAKE_GIT_CALLS"
+case "$1" in
+  cat-file|config|tag|push) exit 0 ;;
+  ls-remote)
+    case "$FAKE_TAG_MODE" in
+      fresh) exit 0 ;;
+      recovery) printf '%s\t%s\n' "$SOURCE_SHA" "$3" ;;
+      wrong) printf '%s\t%s\n' ffffffffffffffffffffffffffffffffffffffff "$3" ;;
+      *) exit 2 ;;
+    esac
+    ;;
+  *) echo "unexpected fake git call: $*" >&2; exit 2 ;;
+esac
+SH
+cat > "$START_PUBLISHERS/bin/gh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$FAKE_GH_CALLS"
+SH
+chmod +x "$START_PUBLISHERS/bin/"*
+
+run_start_publishers() {
+  local mode="$1" case_dir="$START_PUBLISHERS/$1"
+  mkdir -p "$case_dir"
+  : > "$case_dir/git.calls"
+  : > "$case_dir/gh.calls"
+  PATH="$START_PUBLISHERS/bin:$PATH" \
+    FAKE_TAG_MODE="$mode" FAKE_GIT_CALLS="$case_dir/git.calls" FAKE_GH_CALLS="$case_dir/gh.calls" \
+    GH_TOKEN=fake-github-token SOURCE_SHA=0123456789012345678901234567890123456789 \
+    GITHUB_REPOSITORY=FS-GG/.github GITHUB_STEP_SUMMARY="$case_dir/summary" \
+    "$START_PUBLISHERS/run.sh"
+}
+
+for mode in fresh recovery; do
+  run_start_publishers "$mode"
+  for workflow in release-kit.yml release-drivers.yml release-coord-engine.yml; do
+    [ "$(grep -cFx "workflow run $workflow --repo FS-GG/.github --ref main -f source_sha=0123456789012345678901234567890123456789" "$START_PUBLISHERS/$mode/gh.calls")" -eq 1 ] \
+      || { echo "$mode did not dispatch $workflow exactly once" >&2; exit 1; }
+  done
+  [ "$(grep -c '^api --method POST repos/FS-GG/.github/dispatches ' "$START_PUBLISHERS/$mode/gh.calls")" -eq 1 ] \
+    || { echo "$mode did not send one reconciliation dispatch" >&2; exit 1; }
+done
+[ "$(grep -c '^push --atomic origin refs/tags/kit/v9.8.7 refs/tags/drivers/v9.8.7 refs/tags/coord-engine/v9.8.7$' "$START_PUBLISHERS/fresh/git.calls")" -eq 1 ] \
+  || { echo "fresh start did not atomically push all absent tags" >&2; exit 1; }
+! grep -q '^push\|^tag ' "$START_PUBLISHERS/recovery/git.calls" \
+  || { echo "exact-source recovery attempted to rewrite immutable tags" >&2; exit 1; }
+if run_start_publishers wrong >/dev/null 2>&1; then
+  echo "wrong-source immutable tag did not refuse publisher start" >&2; exit 1
+fi
+[ ! -s "$START_PUBLISHERS/wrong/gh.calls" ] \
+  || { echo "wrong-source refusal dispatched a publisher or reconciliation" >&2; exit 1; }
+echo "release saga start: job token fresh/recovery dispatch and wrong-source refusal passed"
 
 # An exact-source retry after promotion sees an immutable GitHub release. The old adapter attempted
 # `release upload --clobber` here, received HTTP 422, and prevented the later dashboard step in both
