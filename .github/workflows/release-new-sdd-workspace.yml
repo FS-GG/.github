@@ -1,123 +1,26 @@
 name: release-new-sdd-workspace
 
-# Publishes the FS.GG.NewSddWorkspace dotnet tool (the `new-sdd-workspace` workspace
-# scaffolder; ADR-0016) to the org GitHub Packages feed. Unlike the product repos, .github
-# does not normally own a release workflow — this is the exception: the tool lives here, so
-# its publish does too. Version is the EVALUATED fsproj <Version> (msbuild -getProperty), not
-# a grep and not a value pinned in this header (avoids staleness). Push uses the run-scoped
-# GITHUB_TOKEN (packages: write, no PAT), --skip-duplicate, only from the canonical repo.
-#
-# Trigger a release by pushing a tag `new-sdd-workspace/v<version>` matching the fsproj
-# <Version>; or run manually (workflow_dispatch) with publish=true. A manual run with
-# publish=false is a pack-only dry run.
-
+# GS2-08.9 retired this direct package publisher. The manual route remains useful for a local
+# pack qualification, but it carries no package/OIDC credential and has no publish edge.
 on:
-  push:
-    tags: ['new-sdd-workspace/v*']
   workflow_dispatch:
-    inputs:
-      publish:
-        description: "Push to the org feed (false = pack-only dry run)"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
-concurrency:
-  group: release-new-sdd-workspace-${{ github.ref_name }}
-  cancel-in-progress: false
-
 jobs:
-  publish:
-    name: Pack & publish new-sdd-workspace
+  qualify:
+    name: Pack new-sdd-workspace locally
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: github.repository == 'FS-GG/.github'
-    # Least-privilege: only this job gains packages: write; the push uses the run-scoped
-    # GITHUB_TOKEN, never a PAT.
-    permissions:
-      contents: read
-      packages: write
-      id-token: write      # ADR-0013: mint the GitHub OIDC token for nuget.org Trusted Publishing
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
           cache: true
           cache-dependency-path: "**/packages.lock.json"
-
-      - name: Resolve version + publish decision
-        id: v
-        env:
-          EVENT: ${{ github.event_name }}
-          REF: ${{ github.ref_name }}
-          DISPATCH_PUBLISH: ${{ inputs.publish }}
-        run: |
-          set -euo pipefail
-          proj=scripts/NewSddWorkspace/NewSddWorkspace.fsproj
-          version="$(dotnet msbuild "$proj" -getProperty:Version | tr -d '[:space:]')"
-          if [ -z "$version" ]; then
-            echo "::error::could not read <Version> from $proj (build defect); refusing to publish."
-            exit 1
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-          if [ "$EVENT" = "push" ]; then
-            # Tag is a coherence check against the evaluated version, never the source of truth.
-            tag_version="${REF#new-sdd-workspace/v}"
-            if [ "$tag_version" != "$version" ]; then
-              echo "::error::tag $REF ($tag_version) does not match fsproj <Version> ($version)."
-              exit 1
-            fi
-            echo "push=true" >> "$GITHUB_OUTPUT"
-          elif [ "$DISPATCH_PUBLISH" = "true" ]; then
-            echo "push=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "push=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::dry run — packing $version but NOT pushing (manual dispatch, publish=false)."
-          fi
-
-      - name: Pack
+      - name: Pack without publication credentials
         run: dotnet pack scripts/NewSddWorkspace/NewSddWorkspace.fsproj -c Release -o artifacts/packages
-
-      - name: Push to org GitHub Packages feed
-        if: steps.v.outputs.push == 'true'
-        run: |
-          dotnet nuget push "artifacts/packages/FS.GG.NewSddWorkspace.*.nupkg" \
-            --source https://nuget.pkg.github.com/FS-GG/index.json \
-            --api-key ${{ secrets.GITHUB_TOKEN }} \
-            --skip-duplicate
-
-      # ADR-0012 dual-publish to public nuget.org (ADR-0013 auth = Trusted Publishing OIDC, no
-      # stored key). Pushes the BYTE-IDENTICAL org-feed .nupkg (no re-pack). Gated on the repo
-      # variable NUGET_ORG_PUBLISH so it stays DORMANT — org-feed releases keep working —
-      # until an org-owner creates the nuget.org Trusted Publishing policy for this repo +
-      # workflow file and sets `vars.NUGET_ORG_PUBLISH=true` (see FS-GG/.github#156). Without
-      # the policy, NuGet/login fail-closes (401), so the gate avoids breaking every release in
-      # the interim. Login+push live inline here (a cross-repo reusable workflow trips the OIDC
-      # policy match — NuGet/login#6).
-      #
-      # ⚠ The Trusted Publishing policy is bound to BOTH this workflow's FILENAME and the target
-      # package id. Renaming either (as the fullstack→workspace rename did, ADR-0016) invalidates
-      # the OIDC token exchange with a 401 "Workflow mismatch" until an org-owner updates the
-      # nuget.org policy to `release-new-sdd-workspace.yml` + package `FS.GG.NewSddWorkspace`. The
-      # org-feed push above is unaffected (run-scoped GITHUB_TOKEN, not OIDC).
-      - name: NuGet login (OIDC → short-lived key)
-        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
-        id: login
-        uses: NuGet/login@v1
-        with:
-          user: ${{ secrets.NUGET_USER }}
-
-      - name: Push byte-identical package to nuget.org
-        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
-        run: |
-          dotnet nuget push "artifacts/packages/FS.GG.NewSddWorkspace.*.nupkg" \
-            --source https://api.nuget.org/v3/index.json \
-            --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
-            --skip-duplicate
+      - name: Report the sealed route
+        run: echo 'Legacy new-sdd-workspace publication is sealed; the package was prepared only on the runner.'

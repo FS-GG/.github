@@ -1,0 +1,104 @@
+{
+  "schema": "fsgg.gs2-08.9-release-route-dispositions/1",
+  "unit": "GS2-08.9",
+  "partition": "release-publication",
+  "baseCommit": "85a70e9a30e5e6a471d61afddb06f7f597d020ce",
+  "bridge": {
+    "version": "0.90.0",
+    "release": "coherent-set/v0.90.0",
+    "sourceCommit": "3adada5a9738464291088830c47a30a3a8fc9561",
+    "state": "immutable-complete"
+  },
+  "policy": {
+    "commonEffectAdmission": "not-composed-at-legacy-shell-publication-boundaries",
+    "disposition": "retire-effects-fail-closed",
+    "reason": "The public 0.90 bridge is complete; a legacy route without the common admission cannot retain an effect capability."
+  },
+  "routes": [
+    {
+      "path": ".github/workflows/kit-auto-publish.yml",
+      "sha256": "538233ef890f6b13463ccd8dab4bbb5950819133e3abb6a1913bf4d0f81f4da5",
+      "disposition": "manual-local-qualification-only",
+      "capabilityLoss": ["push-trigger", "schedule-trigger", "app-token", "tag-write", "issue-write", "pull-request-write", "draft-release-call"]
+    },
+    {
+      "path": ".github/workflows/release-new-sdd-workspace.yml",
+      "sha256": "28bb782d48c1d0fbf4f71e1000dc73fb1517fda3a8b71942358c604855a2360f",
+      "disposition": "manual-local-pack-only",
+      "capabilityLoss": ["tag-trigger", "packages-write", "oidc-token", "github-package-publish", "nuget-package-publish"]
+    },
+    {
+      "path": ".github/workflows/release-telemetry-host.yml",
+      "sha256": "e233ecf159aa8cd5920ddd80c9e05798f7d45c0c0210f073b44f21c0c50d589a",
+      "disposition": "manual-source-bound-local-qualification-only",
+      "capabilityLoss": ["contents-write", "packages-write", "oidc-token", "artifact-upload", "tag-write", "package-publish", "release-create"]
+    },
+    {
+      "path": "scripts/release-saga-ci.sh",
+      "sha256": "cca3f68dd6693e8dff5e8bc750578d28ad3a430a643821ae05ce681ea27841c1",
+      "disposition": "read-and-init-retained-effects-sealed",
+      "sealedCommands": ["github", "nuget-probe", "nuget-record"],
+      "retainedFailurePath": "local journal update and immutable release readback",
+      "sealedFailureBoundary": "mutable journal upload",
+      "refusalExit": 78
+    },
+    {
+      "path": "scripts/release-saga-promote-release.sh",
+      "sha256": "a7cb6b6a80b02173ccec140433ea525aa15e22b971018397d4aad9322993ea4d",
+      "disposition": "immutable-readback-retained-mutable-promotion-sealed",
+      "refusalExit": 78
+    }
+  ],
+  "preservedBoundWorkflowIdentities": {
+    ".github/workflows/release-coord-engine.yml": "7973a57d19123afaafab7cc0cdc8e24a5cb3e891a97c00194be4fed9e1cc3ee5",
+    ".github/workflows/release-drivers.yml": "b6e33e102ea9d7d30a8400887ab58a9953209c3dd65611eaf22a439de8b2866b",
+    ".github/workflows/release-kit.yml": "caaa1f4dfad50930ccc91582be3fce87335d11bb72386ec9255d3ee62264f626",
+    ".github/workflows/release-saga-prepare.yml": "704301a1ed74e863d638d016d835be956c95d68af579213cb5c4b21686877664",
+    ".github/workflows/release-saga-start.yml": "316e019d8cec6c60cd78059e5b98abb85b925fa1564f6df9f86345cd00b6d912"
+  },
+  "boundRouteConflict": {
+    "disposition": "preserve-immutable-0.90-identities",
+    "affected": [
+      ".github/workflows/release-coord-engine.yml",
+      ".github/workflows/release-drivers.yml",
+      ".github/workflows/release-kit.yml",
+      ".github/workflows/release-saga-prepare.yml",
+      ".github/workflows/release-saga-start.yml"
+    ],
+    "defaultBranchBoundary": "The three package publishers reach the sealed release-saga-ci.sh boundary before package, journal, or receiver-evidence effects. The unchanged release-saga-start.yml still has live tag and workflow/repository dispatch capability pending separately owned administration closure; the completed 0.90 source resolves as complete in its retained graph.",
+    "remainingCapability": "The default-branch release-saga-start.yml can still create the coherent-set tags and dispatch the publisher and reconciliation workflows. A tag or reusable/manual invocation that selects historical workflow bytes can also bypass the default-branch adapter seal; editing these files would invalidate the exact identities retained by the immutable 0.90 qualification.",
+    "requiredClosure": "Disable the five workflows or remove their write-capable credentials through the separately owned repository/organization administration route after confirming no protected recovery obligation remains."
+  },
+  "censusAdjustment": {
+    "removedWriterRows": [
+      ".github/workflows/kit-auto-publish.yml",
+      ".github/workflows/release-new-sdd-workspace.yml",
+      ".github/workflows/release-telemetry-host.yml"
+    ],
+    "refreshedSourceIdentities": ["scripts/release-saga-ci.sh", "scripts/release-saga-promote-release.sh"],
+    "result": "The three workflows no longer contain a discovered sink; the retained scripts remain conservatively enumerated because unreachable sink syntax remains in their historical implementation."
+  },
+  "residuals": [
+    {
+      "kind": "historical-sha-caller",
+      "state": "separately-accounted",
+      "reason": "A caller, tag, or reusable/manual source selection pinned before this seal can still select historical bytes and is outside a default-branch source change."
+    },
+    {
+      "kind": "credential-and-administration-revocation",
+      "state": "separately-accounted",
+      "reason": "Repository, App, package-feed, OIDC-policy, tag-rule, and Actions administration changes require their owning administrative route and were not performed here."
+    }
+  ],
+  "verification": {
+    "mode": "offline-fake-provider-commands",
+    "credentials": "fake-only",
+    "providerMutations": 0,
+    "test": "tests/release-effect-sealing/run.py"
+  },
+  "landingOrder": [
+    "land-after-gs2-08.8-bridge-adoption",
+    "land-this-release-partition-before-final-gs2-08.9-census-and-roadmap-projection",
+    "reconcile-historical-callers-and-administrative-credential-revocation-as-separate-authority-owned-residuals"
+  ]
+}

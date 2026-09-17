@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SEALED=false
+grep -Fq 'GS2-08.9 sealed the legacy automatic publisher' "$root/.github/workflows/kit-auto-publish.yml" && SEALED=true
 work="$(mktemp -d)"
 esc_work="$(mktemp -d)"
 trap 'rm -rf "$work" "$esc_work"' EXIT
@@ -36,6 +38,7 @@ extract_org_frontier_fn() {
     || { echo "observe_org_frontier() function is GONE from kit-auto-publish.yml" >&2; exit 1; }
 }
 
+if [ "$SEALED" != true ]; then
 frontier_work="$work/org-frontier"
 mkdir -p "$frontier_work/bin"
 frontier_fn="$frontier_work/observe-org-frontier.sh"
@@ -70,6 +73,9 @@ checks=$((checks + 1))
 escalation_if="$(grep -A1 'name: Escalate a non-eligible or partial state once' "$root/.github/workflows/kit-auto-publish.yml" | tail -1)"
 case "$escalation_if" in *expectedRefusal*) echo 'coherent-set-minor: expectedRefusal leaked into actionable escalation' >&2; exit 1 ;; esac
 checks=$((checks + 1))
+else
+  echo "kit auto-publish observation topology: skipped because GS2-08.9 retired the workflow observer"
+fi
 
 # ---- .github#2495: `kit/v$version` alone leaves FS.GG.Kit unpublished forever — release-kit.yml's
 #      sibling-tag precondition (.github#2409 DEC-004) refuses until `drivers/v$version` and
@@ -284,6 +290,7 @@ case_run released-after-later-merge openEvidencePr '{"version":"0.27.1","sourceS
 # load-bearing arm: removing any one must make a future review revisit the fallback rather than
 # silently restoring the legacy headSha-only false negative.
 auto_workflow="$root/.github/workflows/kit-auto-publish.yml"
+if [ "$SEALED" != true ]; then
 for required in \
   'coherent-set/v${version}' \
   '--pattern release-manifest.json --pattern stable-channel.json' \
@@ -297,6 +304,9 @@ for required in \
     || { echo "saga release evidence fallback lost required assertion: $required" >&2; exit 1; }
   checks=$((checks + 1))
 done
+else
+  echo "kit auto-publish release evidence topology: skipped because GS2-08.9 retired the workflow observer"
+fi
 
 printf '%s' "$facts" > "$work/escalate.json"
 printf '%s' '{"valid":true,"streak":2,"action":"refuse","reason":"feed-observation-unknown","version":"0.27.1","lastRun":"1"}' > "$work/previous.json"
@@ -310,6 +320,12 @@ state="$(python3 "$root/scripts/kit-auto-publish.py" --facts "$work/escalate.jso
 printf '%s' 'not-json' > "$work/previous.json"
 state="$(python3 "$root/scripts/kit-auto-publish.py" --facts "$work/escalate.json" --previous-escalation "$work/previous.json" --run 4 | jq -c .escalation)"
 [ "$(jq -r .valid <<<"$state")" = false ] || { echo 'malformed marker did not fail closed' >&2; exit 1; }; checks=$((checks + 1))
+
+if [ "$SEALED" = true ]; then
+  python3 "$root/tests/release-effect-sealing/run.py"
+  echo "kit auto-publish: $checks retained decision checks passed; retired workflow mutation fixtures skipped"
+  exit 0
+fi
 
 # ---- Escalation body construction round-trips through this workflow's own readers (.github#2346) --
 #

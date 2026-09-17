@@ -25,6 +25,8 @@ fi
 
 [ "$(jq -r .isDraft <<<"$release_state")" = true ] \
   || { echo "mutable non-draft release $tag is not a valid promotion target" >&2; exit 1; }
+echo "GS2-08.9 sealed legacy release promotion; the immutable 0.90 bridge is complete" >&2
+exit 78
 gh release upload "$tag" --repo "$repo" --clobber "$manifest" "$channel"
 gh release edit "$tag" --repo "$repo" --draft=false --latest \
   --title "FS.GG coherent set $version" \

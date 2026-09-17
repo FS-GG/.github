@@ -142,18 +142,19 @@ must_pass "an UNCONDITIONAL nuget.org publisher is not this gate's subject (gree
 
 # ---- the REALITY leg — run against THIS repo's actual workflows ------------------------------------
 
-# The gate must find the two real policy-gated publishers (release-coord-engine, release-new-sdd-workspace)
+# The gate must find the three remaining policy-gated publishers (coord-engine, drivers, kit)
 # and pass with the flag true — and, sharply, FAIL naming them if the flag were unset. A fixture that never
 # runs against the real tree proves only that the gate agrees with the fixture.
 must_pass "against THIS repo's real workflows, flag=true is GREEN" \
   env NUGET_ORG_PUBLISH=true python3 "$GATE" "$REPO_ROOT/.github/workflows"
 
 real_out="$(env NUGET_ORG_PUBLISH=true python3 "$GATE" "$REPO_ROOT/.github/workflows" 2>&1)"
-case "$real_out" in
-  *release-coord-engine.yml*release-new-sdd-workspace.yml*|*release-new-sdd-workspace.yml*release-coord-engine.yml*)
-    ok "the real run names BOTH .github publishers (Coord.Cli + NewSddWorkspace)" ;;
-  *) bad "the real run names both .github publishers" "$real_out" ;;
-esac
+expected_real='ok: NUGET_ORG_PUBLISH=true, and 3 nuget.org publisher(s) gate on it: release-coord-engine.yml, release-drivers.yml, release-kit.yml.'
+if [ "$real_out" = "$expected_real" ]; then
+  ok "the real run names the exact current .github publisher set"
+else
+  bad "the real run names the exact current .github publisher set" "$real_out"
+fi
 
 must_fail "against THIS repo's real workflows, an UNSET flag is RED and names them" "release-coord-engine.yml" \
   env NUGET_ORG_PUBLISH= python3 "$GATE" "$REPO_ROOT/.github/workflows"
