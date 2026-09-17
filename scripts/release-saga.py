@@ -25,6 +25,9 @@ FEEDS = ("github", "nuget")
 CONTENT_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
 SOURCE_SHA = re.compile(r"[0-9a-f]{40}\Z")
 STABLE_VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z")
+BRIDGE_SCHEMA = "fsgg.gs2-08.7-release-binding/1"
+BRIDGE_CANDIDATE_SCHEMA = "fsgg.gs2-08.7-bridge-candidate/1"
+BRIDGE_PACKAGES = {"FS.GG.Coord.Cli", "FS.GG.Drivers", "FS.GG.Kit"}
 
 
 def now() -> str:
@@ -222,6 +225,11 @@ def assert_bound(manifest_path: pathlib.Path, data: dict, selected: set[str] | N
     expected_content = "sha256:" + hashlib.sha256(canonical(descriptor)).hexdigest()
     if data.get("contentId") != expected_content:
         raise ValueError("manifest descriptor drift: contentId does not match immutable descriptor")
+    bridge = descriptor.get("bridgeQualification")
+    if bridge is not None:
+        qualification = manifest_path.parent / bridge.get("qualificationPath", "")
+        if not qualification.is_file() or sha256(qualification) != bridge.get("qualificationSha256"):
+            raise ValueError("manifest-bound P1 bridge qualification is missing or digest-mismatched")
     known = {row["id"] for row in descriptor["packages"]}
     if selected and not selected <= known:
         raise ValueError(f"unknown package(s): {', '.join(sorted(selected - known))}")
@@ -266,6 +274,107 @@ def stable_channel_identity(path: pathlib.Path) -> dict[str, str]:
     except ValueError as error:
         raise ValueError("stable channel receipt has a malformed promotedAt") from error
     return {"version": version, "contentId": content_id, "sourceSha": source_sha}
+
+
+def bridge_descriptor(args: argparse.Namespace, rows: list[dict]) -> dict | None:
+    if not args.bridge_binding and not args.bridge_qualification:
+        if stable_parts(args.version) == (0, 90, 0):
+            raise ValueError("GS2-08.7 bridge qualification is required from coherent version 0.90.0")
+        return None
+    if not args.bridge_binding or not args.bridge_qualification or not args.source_tree:
+        raise ValueError("bridge binding, qualification, and source tree must be supplied together")
+    repo = pathlib.Path(__file__).resolve().parents[1]
+    binding_path = pathlib.Path(args.bridge_binding).resolve()
+    qualification_path = pathlib.Path(args.bridge_qualification).resolve()
+    binding = json.loads(binding_path.read_text(encoding="utf-8"))
+    qualification = json.loads(qualification_path.read_text(encoding="utf-8"))
+    if binding.get("schema") != BRIDGE_SCHEMA or binding.get("unit") != "GS2-08.7" or binding.get("milestone") != "P3":
+        raise ValueError("GS2-08.7 release binding identity is invalid")
+    if binding.get("selectedVersion") != args.version:
+        raise ValueError("release version differs from the independently selected bridge version")
+    if binding.get("packages") != ["FS.GG.Coord.Cli", "FS.GG.Drivers", "FS.GG.Kit"]:
+        raise ValueError("bridge binding coherent package set is incomplete or reordered")
+    operation = binding.get("operation", {})
+    if operation.get("publicationAuthorized") is not False or operation.get("P3") != "source-and-version-preparation-only":
+        raise ValueError("bridge binding exceeds the P3 operation ceiling")
+    coordination = binding.get("coordination", {})
+    contract_path = repo / str(coordination.get("contract", ""))
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    if (
+        coordination.get("p2Merge") != "09e6eac1b073efdd2da576ef9789e66a96c1415b"
+        or coordination.get("p2Tree") != "704e18919d73d957ef8e8709c188b6cffbc64bc8"
+        or contract.get("schema") != "fsgg.gs2-08.7-publication-qualification/1"
+        or contract.get("state") != "registered"
+        or contract.get("accepted") is not False
+        or contract.get("publicationAuthorized") is not False
+        or contract.get("producer", {}).get("merge") != binding.get("producer", {}).get("p1Merge")
+        or contract.get("producer", {}).get("tree") != binding.get("producer", {}).get("p1Tree")
+    ):
+        raise ValueError("Coordination P2 registration or P1 producer binding is invalid")
+    selection_path = repo / str(binding.get("versionSelection", ""))
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    if selection.get("selectedVersion") != args.version or selection.get("effect") != "none":
+        raise ValueError("fresh feed selection evidence does not bind the prepared version")
+    if len(selection.get("packages", [])) != 3 or any(row.get("selectedVersionPresent") is not False for row in selection["packages"]):
+        raise ValueError("selected bridge version was not unused on every required feed coordinate")
+    package_rows = {row["id"]: row for row in rows}
+    if set(package_rows) != BRIDGE_PACKAGES:
+        raise ValueError("prepared bridge package closure is incomplete")
+    coord = package_rows["FS.GG.Coord.Cli"]
+    expected_receipts = contract.get("producer", {})
+    expectations_path = repo / "tests/bridge-package/expectations.json"
+    expectations = json.loads(expectations_path.read_text(encoding="utf-8"))
+    required_assemblies = set(expectations.get("requiredAssemblies", []))
+    installed_assemblies = qualification.get("installedAssemblyDigests", {})
+    if (
+        qualification.get("schema") != BRIDGE_CANDIDATE_SCHEMA
+        or qualification.get("package") != {"id": "FS.GG.Coord.Cli", "version": args.version}
+        or qualification.get("archiveSha256") != coord["artifact"]["sha256"]
+        or str(qualification.get("payloadSha256", "")).removeprefix("sha256:")
+        != str(coord["artifact"]["payloadSha256"]).removeprefix("sha256:")
+        or qualification.get("source") != {"commit": args.source_sha, "tree": args.source_tree}
+        or qualification.get("producerSource") != {
+            "commit": "bc881a6ed1b4ce32e99d4c30a664b1db686280d3",
+            "tree": "3e43e1e0126ebe923bae8ce4197f7310b486b7a3",
+        }
+        or qualification.get("acceptedReceipts", {}).get("gs2-08.2-08.6-coordination-merge")
+        != "c8907be5dabc0a1d59dbe3c239ffd53a5541c863"
+        or expected_receipts.get("merge") != "155f8897424b49906dfb0464ce684e75dd9bda3c"
+        or qualification.get("acceptedReceipts") != expectations.get("acceptedReceipts")
+        or qualification.get("coherentSet") != expectations.get("coherentSet")
+        or qualification.get("componentIdentities") != expectations.get("componentIdentities")
+        or qualification.get("expectationsSha256") != sha256(expectations_path)
+        or set(installed_assemblies) != required_assemblies
+        or any(re.fullmatch(r"[0-9a-f]{64}", str(value)) is None for value in installed_assemblies.values())
+    ):
+        raise ValueError("P1 bridge qualification does not bind the prepared CLI archive/source")
+    component_identities = qualification.get("componentIdentities")
+    if not isinstance(component_identities, dict) or not component_identities:
+        raise ValueError("P1 bridge qualification omits component identities")
+    for relative, digest in component_identities.items():
+        target = repo / relative
+        if not target.is_file() or sha256(target) != digest:
+            raise ValueError(f"P1 bridge component identity mismatch: {relative}")
+    workflows = {}
+    for relative in (
+        ".github/workflows/release-saga-prepare.yml", ".github/workflows/release-saga-start.yml",
+        ".github/workflows/release-saga-promote.yml", ".github/workflows/release-coord-engine.yml",
+        ".github/workflows/release-drivers.yml", ".github/workflows/release-kit.yml",
+    ):
+        workflows[relative] = sha256(repo / relative)
+    return {
+        "schema": BRIDGE_SCHEMA,
+        "bindingSha256": sha256(binding_path),
+        "coordinationContractSha256": sha256(contract_path),
+        "qualificationPath": qualification_path.name,
+        "qualificationSha256": sha256(qualification_path),
+        "bridgePayloadSha256": qualification["payloadSha256"],
+        "sourceTree": args.source_tree,
+        "workflowSha256": workflows,
+        "attestation": binding["attestation"],
+        "feedIdentity": binding["feedIdentity"],
+        "publicInstall": binding["publicInstall"],
+    }
 
 
 def command_predecessor(args: argparse.Namespace) -> None:
@@ -320,6 +429,9 @@ def command_prepare(args: argparse.Namespace) -> None:
         "feedOrder": list(FEEDS),
         "packages": rows,
     }
+    bridge = bridge_descriptor(args, rows)
+    if bridge is not None:
+        descriptor["bridgeQualification"] = bridge
     if args.dashboard_assets or args.standalone_qualification:
         if not args.dashboard_assets or not args.standalone_qualification:
             raise ValueError("dashboard assets and standalone qualification evidence must be bound together")
@@ -360,6 +472,17 @@ def command_prepare(args: argparse.Namespace) -> None:
         "recovery": {"resumptions": 0, "lastFailure": None},
         "channelPromotion": {"state": "pending", "promotedAt": None, "receipt": None},
     }
+    if bridge is not None:
+        state["provenance"] = {
+            "state": "pending",
+            "packages": {
+                row["id"]: {
+                    "state": "pending", "subjectSha256": row["artifact"]["sha256"],
+                    "signerWorkflow": None, "bundleSha256": None, "verifiedAt": None,
+                }
+                for row in rows
+            },
+        }
     output = pathlib.Path(args.output).resolve()
     write_atomic(output, {"schema": SCHEMA, "contentId": content_id, "descriptor": descriptor, "state": state})
     print(content_id)
@@ -438,6 +561,8 @@ def command_reusable(args: argparse.Namespace) -> None:
     for key in ("releaseId", "version", "sourceSha", "policyVersion", "previousStableVersion", "previousStableContentId", "channel", "feedOrder"):
         if stored["descriptor"].get(key) != candidate["descriptor"].get(key):
             problems.append(f"descriptor.{key}: stored {stored['descriptor'].get(key)!r} != candidate {candidate['descriptor'].get(key)!r}")
+    if stored["descriptor"].get("bridgeQualification") != candidate["descriptor"].get("bridgeQualification"):
+        problems.append("descriptor.bridgeQualification differs from the stored release")
     stored_telemetry = stored["descriptor"].get("standaloneTelemetry")
     candidate_telemetry = candidate["descriptor"].get("standaloneTelemetry")
     stored_packages, candidate_packages = package_map(stored), package_map(candidate)
@@ -504,6 +629,54 @@ def command_identity(args: argparse.Namespace) -> None:
     print("manifest release/version/source/policy identity verified")
 
 
+def command_provenance(args: argparse.Namespace) -> None:
+    path = pathlib.Path(args.manifest).resolve()
+    data = load(path)
+    assert_bound(path, data, {args.package})
+    if "bridgeQualification" not in data["descriptor"] or "provenance" not in data["state"]:
+        raise ValueError("manifest is not bridge-provenance bound")
+    expected_workflows = {
+        "FS.GG.Coord.Cli": ".github/workflows/release-coord-engine.yml",
+        "FS.GG.Drivers": ".github/workflows/release-drivers.yml",
+        "FS.GG.Kit": ".github/workflows/release-kit.yml",
+    }
+    expected_workflow = expected_workflows.get(args.package)
+    if expected_workflow is None or args.signer_workflow != expected_workflow:
+        raise ValueError("attestation signer workflow does not correspond to the package")
+    package = package_map(data)[args.package]
+    artifact = pathlib.Path(args.artifact).resolve()
+    if sha256(artifact) != package["artifact"]["sha256"]:
+        raise ValueError("attestation subject is not the exact producer archive")
+    bundle = pathlib.Path(args.bundle).resolve()
+    verification_path = pathlib.Path(args.verification).resolve()
+    verification = json.loads(verification_path.read_text(encoding="utf-8"))
+    if not isinstance(verification, list) or not verification:
+        raise ValueError("GitHub attestation verification produced no verified statement")
+    rendered = canonical(verification).decode()
+    for token in (package["artifact"]["sha256"], expected_workflow, data["descriptor"]["sourceSha"]):
+        if token not in rendered:
+            raise ValueError(f"verified attestation omits required identity: {token}")
+    row = data["state"]["provenance"]["packages"][args.package]
+    evidence = {
+        "state": "verified",
+        "subjectSha256": package["artifact"]["sha256"],
+        "signerWorkflow": expected_workflow,
+        "bundleSha256": sha256(bundle),
+        "verificationSha256": sha256(verification_path),
+        "verifiedAt": now(),
+    }
+    if row["state"] == "verified" and any(row.get(key) != evidence[key] for key in ("subjectSha256", "signerWorkflow", "bundleSha256", "verificationSha256")):
+        raise ValueError("contradictory producer signature/attestation evidence")
+    data["state"]["provenance"]["packages"][args.package] = evidence
+    data["state"]["provenance"]["state"] = (
+        "verified" if all(value["state"] == "verified" for value in data["state"]["provenance"]["packages"].values())
+        else "partial"
+    )
+    data["state"]["updatedAt"] = now()
+    write_atomic(path, data)
+    print(f"producer signature and provenance verified for {args.package}")
+
+
 def command_merge(args: argparse.Namespace) -> None:
     path = pathlib.Path(args.manifest).resolve()
     data = load(path)
@@ -513,6 +686,20 @@ def command_merge(args: argparse.Namespace) -> None:
         journal = load(journal_path)
         if journal.get("contentId") != data.get("contentId") or journal.get("descriptor") != data.get("descriptor"):
             raise ValueError(f"{journal_path}: journal belongs to different release bytes")
+        if "provenance" in data["state"]:
+            source_provenance = journal.get("state", {}).get("provenance")
+            if not isinstance(source_provenance, dict):
+                raise ValueError(f"{journal_path}: bridge provenance state is missing")
+            for package_id, source_row in source_provenance.get("packages", {}).items():
+                if source_row.get("state") != "verified":
+                    continue
+                target_row = data["state"]["provenance"]["packages"][package_id]
+                if target_row["state"] == "verified" and any(
+                    target_row.get(key) != source_row.get(key)
+                    for key in ("subjectSha256", "signerWorkflow", "bundleSha256", "verificationSha256")
+                ):
+                    raise ValueError(f"{journal_path}: conflicting provenance for {package_id}")
+                data["state"]["provenance"]["packages"][package_id] = source_row
         for feed_name in FEEDS:
             target_feed = data["state"]["feeds"][feed_name]
             source_feed = journal["state"]["feeds"][feed_name]
@@ -542,6 +729,12 @@ def command_merge(args: argparse.Namespace) -> None:
         data["state"]["phase"] = "feeds-complete"
     elif data["state"]["feeds"]["github"]["state"] == "verified":
         data["state"]["phase"] = "org-complete"
+    if "provenance" in data["state"]:
+        data["state"]["provenance"]["state"] = (
+            "verified" if all(row["state"] == "verified" for row in data["state"]["provenance"]["packages"].values())
+            else "partial" if any(row["state"] == "verified" for row in data["state"]["provenance"]["packages"].values())
+            else "pending"
+        )
     data["state"]["updatedAt"] = now()
     write_atomic(path, data)
     print(f"merged {len(args.journal)} durable journal(s)")
@@ -615,6 +808,8 @@ def command_promote(args: argparse.Namespace) -> None:
     incomplete = [feed for feed in FEEDS if data["state"]["feeds"][feed]["state"] != "verified"]
     if incomplete:
         raise ValueError("stable promotion refused; incomplete feeds: " + ", ".join(incomplete))
+    if "bridgeQualification" in data["descriptor"] and data["state"].get("provenance", {}).get("state") != "verified":
+        raise ValueError("stable promotion refused; producer signature/attestation evidence is incomplete")
     existing = data["state"]["channelPromotion"]
     if existing["state"] == "promoted":
         if existing["receipt"]["contentId"] != data["contentId"]:
@@ -760,6 +955,7 @@ def parser() -> argparse.ArgumentParser:
     prepare = commands.add_parser("prepare")
     prepare.add_argument("--release-id", required=True); prepare.add_argument("--version", required=True)
     prepare.add_argument("--source-sha", required=True); prepare.add_argument("--policy-version", required=True)
+    prepare.add_argument("--source-tree"); prepare.add_argument("--bridge-binding"); prepare.add_argument("--bridge-qualification")
     prepare.add_argument("--previous-channel", required=True)
     prepare.add_argument("--artifact-dir", required=True); prepare.add_argument("--expected-package", action="append", required=True)
     prepare.add_argument("--dashboard-assets"); prepare.add_argument("--standalone-qualification")
@@ -783,6 +979,11 @@ def parser() -> argparse.ArgumentParser:
     identity.add_argument("--manifest", required=True); identity.add_argument("--release-id", required=True)
     identity.add_argument("--version", required=True); identity.add_argument("--source-sha", required=True)
     identity.add_argument("--policy-version", required=True); identity.set_defaults(run=command_identity)
+    provenance = commands.add_parser("record-provenance")
+    provenance.add_argument("--manifest", required=True); provenance.add_argument("--package", required=True)
+    provenance.add_argument("--artifact", required=True); provenance.add_argument("--bundle", required=True)
+    provenance.add_argument("--verification", required=True); provenance.add_argument("--signer-workflow", required=True)
+    provenance.set_defaults(run=command_provenance)
     merge = commands.add_parser("merge-journals")
     merge.add_argument("--manifest", required=True); merge.add_argument("--journal", action="append", required=True); merge.set_defaults(run=command_merge)
     failure = commands.add_parser("record-failure")

@@ -59,6 +59,10 @@ jobs:
           # present even when the release is already promoted and this run will only return complete.
           gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
             --pattern release-manifest.json --pattern "*.nupkg" --dir "$work"
+          if jq -e '.descriptor.bridgeQualification != null' "$work/release-manifest.json" >/dev/null; then
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
+              --pattern gs2-08-7-bridge-qualification.json --dir "$work"
+          fi
           python3 scripts/release-saga.py assert-identity \
             --manifest "$work/release-manifest.json" --release-id "github:$version" \
             --version "$version" --source-sha "$SOURCE_SHA" --policy-version release-saga/1

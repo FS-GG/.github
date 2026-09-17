@@ -192,20 +192,26 @@ second status ledger.
   refused-epoch, and settlement controls. Negative controls refuse changed or missing bridge assemblies, wrong
   source or receipt bindings, incomplete evidence, and a substituted same-version archive. The loopback provider
   records zero effects. Evidence: `tests/bridge-package/` and the `bridge-package` workflow.
-- [ ] **P2 — Signed candidate and native registration.** Add artifact signing and attestation, then register the
-  exact GS2-08.7 candidate with Coordination. Source and P1 evidence alone do not satisfy this outcome.
-- [ ] **P3 — Release-path binding and protected publication.** Bind the release saga to the registered identity,
-  perform the separately authorized protected publication, and read back the immutable feed artifacts. Select and
-  bump the coherent-set version only in this publication window.
-- [ ] **P4 — Public-only installation and readback.** Install from the public read path with empty caches, re-run
-  the bridge behavior and identity checks, and retain exact public archive and assembly evidence.
-- [ ] **P5 — Native acceptance and receiver handoff.** Obtain native GS2-08.7 acceptance for the published identity
-  and hand that one identity to GS2-08.8 receiver adoption. Publication alone does not activate a receiver.
+- [x] **P2 — Independent publication qualification registration.** Coordination protected merge
+  `09e6eac1b073efdd2da576ef9789e66a96c1415b` registers the artifact closure, feed, signing,
+  attestation, public-install, workflow, refusal, and operation-ceiling contract without accepting GS2-08.7 or
+  authorizing publication.
+- [x] **P3 — Release-path qualification, provenance binding, and version preparation.** Bind P1 and P2 into
+  preparation, component publishers, promotion, stored-draft resume, completed-release replay, and the automatic
+  patch entry point. Require signed exact-producer-archive attestations while comparing normalized payloads across
+  feeds. Fresh read-only feed observations select unused coherent version `0.90.0`; no package or tag is published.
+- [ ] **P4 — Protected coherent publication.** Use separately authorized release-saga operation authority to
+  publish the prepared coherent set and retain prepared and per-feed served archive hashes, normalized payload
+  identity, signatures, attestations, journals, and immutable promotion evidence.
+- [ ] **P5 — Public-only readback and native GS2-08.7 acceptance.** Install from the anonymous public read path
+  with cleared sources and private empty caches, re-run bridge behavior and identity checks, retain exact public
+  archive and installed-assembly evidence, and obtain native GS2-08.7 acceptance. Receiver adoption is GS2-08.8.
 
 P1 preserves the current production limitation: `Client.fs` composes `UnavailableProductionMutationFence` until
 protected authority, journal, operation scope, and provider reconciliation are installed. The probe demonstrates
 that refusal and does not wire live admission. Signing, attestation, Coordination registration, release-path
-binding, publication, public-only readback, receiver adoption, and native acceptance remain P2–P5. The observed
+binding and version preparation are complete. Protected publication and public-only native acceptance remain P4–P5;
+receiver adoption remains GS2-08.8. The observed
 0.75.4 bypass, unavailable 0.58.0 artifact, 22 external routes, and Q4 remain GS2-08.9 inputs.
 
 ## Workspace, authority, and observation boundaries

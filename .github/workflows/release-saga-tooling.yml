@@ -6,6 +6,9 @@ on:
       - "scripts/release-saga.py"
       - "scripts/release-saga-ci.sh"
       - "tests/release-saga/**"
+      - "tests/bridge-release/**"
+      - "tests/bridge-package/**"
+      - "evidence/gs2-08-7/**"
       - ".github/workflows/release-saga-tooling.yml"
       - ".github/workflows/release-saga-prepare.yml"
       - ".github/workflows/release-saga-start.yml"
@@ -19,6 +22,9 @@ on:
       - "scripts/release-saga.py"
       - "scripts/release-saga-ci.sh"
       - "tests/release-saga/**"
+      - "tests/bridge-release/**"
+      - "tests/bridge-package/**"
+      - "evidence/gs2-08-7/**"
       - ".github/workflows/release-saga-tooling.yml"
       - ".github/workflows/release-saga-prepare.yml"
       - ".github/workflows/release-saga-start.yml"
@@ -38,3 +44,5 @@ jobs:
       - uses: actions/checkout@v7
       - name: Exercise forced mid-publish recovery
         run: bash tests/release-saga/run.sh
+      - name: Exercise GS2-08.7 bridge release binding
+        run: python3 tests/bridge-release/run.py

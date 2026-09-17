@@ -2,7 +2,7 @@
   "schema": "fsgg.gs2-08.7-bridge-expectations/1",
   "package": {
     "id": "FS.GG.Coord.Cli",
-    "version": "0.89.0",
+    "version": "0.90.0",
     "toolCommand": "fsgg-coord-engine"
   },
   "producerSource": {
@@ -15,18 +15,18 @@
     "gs2-08.6": "4b19806d1c4f9d147368e29e04ab7a480dcb6b798aed32e37159e8ac92a1e0cf"
   },
   "componentIdentities": {
-    ".github/workflows/release-coord-engine.yml": "703d51abf54e75638ea3ce959b95093a0b320adbc799edb4257ab486163e2363",
-    ".github/workflows/release-saga-start.yml": "3bbe4278a08d8797faa5b600bd97cfef48fa26887f0889f6de781f719530880f",
-    ".github/workflows/release-saga-prepare.yml": "6498e57524e0552c0beda369b864a12c8b747e57f5c758da21c0cc4a9b0693d3",
+    ".github/workflows/release-coord-engine.yml": "7973a57d19123afaafab7cc0cdc8e24a5cb3e891a97c00194be4fed9e1cc3ee5",
+    ".github/workflows/release-saga-start.yml": "be7f5cc222097f43664de2f54d23c06d09db0b8936bbc96c68245f2f24f9483c",
+    ".github/workflows/release-saga-prepare.yml": "f7ef6d0300efb07f6606b0ba5a6ab7c917d8fecd4974ddd0ad86b3dce17523e7",
     ".github/workflows/release-saga-promote.yml": "d16b8cc4ab40de440e17013431e6c9e028b462cd92a02e081e0830db828d2d56",
     "src/FS.GG.Kit/FS.GG.Kit.csproj": "3f724c94b7b90944246769e542be6cd44322f9084f5b6dec0b230b3c7d00ae43",
     "src/FS.GG.Drivers/FS.GG.Drivers.csproj": "56561c6e951b22ed4f276c1b00cad9bc798abaee4f54f5472a4b2c23a2b9510d",
-    "Directory.Build.props": "3abeea0dd5aa3bae08e162039b40108a6b4e83da88fa4546b25a1c9ffc1ab972"
+    "Directory.Build.props": "95f0698637c177df8d848f8ee8b077b45aa74aa0ebb8c79c20c8dca37274ad38"
   },
   "coherentSet": {
-    "FS.GG.Coord.Cli": "0.89.0",
-    "FS.GG.Kit": "0.89.0",
-    "FS.GG.Drivers": "0.89.0"
+    "FS.GG.Coord.Cli": "0.90.0",
+    "FS.GG.Kit": "0.90.0",
+    "FS.GG.Drivers": "0.90.0"
   },
   "requiredAssemblies": [
     "FS.GG.Coord.Core.dll",

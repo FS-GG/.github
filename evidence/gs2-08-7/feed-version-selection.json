@@ -1,0 +1,19 @@
+{
+  "schema": "fsgg.gs2-08.7-feed-version-selection/1",
+  "observedAt": "2026-09-17T08:15:00Z",
+  "observation": "read-only",
+  "previousStableVersion": "0.89.0",
+  "selectedVersion": "0.90.0",
+  "packages": [
+    {"id": "FS.GG.Coord.Cli", "githubPackagesLatest": "0.89.0", "nugetOrgLatest": "0.89.0", "selectedVersionPresent": false},
+    {"id": "FS.GG.Drivers", "githubPackagesLatest": "0.89.0", "nugetOrgLatest": "0.89.0", "selectedVersionPresent": false},
+    {"id": "FS.GG.Kit", "githubPackagesLatest": "0.89.0", "nugetOrgLatest": "0.89.0", "selectedVersionPresent": false}
+  ],
+  "releaseIdentities": {
+    "coherent-set/v0.90.0": "absent",
+    "coord-engine/v0.90.0": "absent",
+    "drivers/v0.90.0": "absent",
+    "kit/v0.90.0": "absent"
+  },
+  "effect": "none"
+}

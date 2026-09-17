@@ -126,9 +126,15 @@ jobs:
           evidence="$PWD/artifacts/packages/standalone-telemetry-evidence.json"
           runtime_evidence="$PWD/artifacts/packages/standalone-telemetry-runtime-evidence.json"
           FSGG_PACKAGE_SOURCE_SHA="$FSGG_SOURCE_SHA" bash tests/standalone-telemetry-package/run.sh "$package" "$evidence" "$runtime_evidence"
+          bridge_evidence="$PWD/artifacts/packages/gs2-08-7-bridge-qualification.json"
+          FSGG_BRIDGE_BINDING_OUTPUT="$bridge_evidence" bash tests/bridge-package/run.sh "$package"
+          source_tree="$(git rev-parse "$FSGG_SOURCE_SHA^{tree}")"
           python3 scripts/release-saga.py prepare \
             --release-id "github:${{ steps.version.outputs.version }}" \
             --version "${{ steps.version.outputs.version }}" --source-sha "$FSGG_SOURCE_SHA" \
+            --source-tree "$source_tree" \
+            --bridge-binding evidence/gs2-08-7/release-binding.json \
+            --bridge-qualification "$bridge_evidence" \
             --policy-version release-saga/1 \
             --previous-channel artifacts/predecessor/stable-channel.json --artifact-dir artifacts/packages \
             --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit \
@@ -218,7 +224,9 @@ jobs:
             # will consume, so make them this run's outputs too. Otherwise the uploaded artifact and
             # the draft would name different `contentId`s for one release, which is the confusion
             # this branch exists to prevent.
-            cp /tmp/prior/release-manifest.json /tmp/prior/*.nupkg /tmp/prior/standalone-telemetry-runtime-evidence.json artifacts/packages/
+            cp /tmp/prior/release-manifest.json /tmp/prior/*.nupkg \
+              /tmp/prior/standalone-telemetry-runtime-evidence.json \
+              /tmp/prior/gs2-08-7-bridge-qualification.json artifacts/packages/
             echo "Existing draft already holds an equivalent coherent set; no asset was replaced."
           else
             gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$FSGG_SOURCE_SHA" --draft \
