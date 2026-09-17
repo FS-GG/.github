@@ -572,6 +572,9 @@ echo "== 31. the autofix workflow cannot RETIRE on an unverified registry, nor P
 # This case pins the WIRING, structurally, because the condition lives in YAML and cannot be unit-tested:
 # a fail-open here ships green through a fixture that only tests the script.
 WF="$HERE/../../.github/workflows/skill-registry-autofix.yml"
+if grep -q 'GS2-08.9 retirement boundary' "$WF"; then
+  "$HERE/../gs2-08-9-dispatch-repair/run.sh"
+else
 python3 - "$WF" <<'PY' || exit 1
 import sys, json, yaml
 wf = yaml.safe_load(open(sys.argv[1]))          # parses at all — a dedented block scalar fails HERE
@@ -768,6 +771,7 @@ assert "exit 1" in steps[land]["run"], \
 print("   (workflow: retire demands proof; merge is gated and NOT --auto; the two cannot race;")
 print("    stamp is not shell-interpolated; push cannot use github.token)")
 PY
+fi
 echo "   ok"
 
 echo "== 32. the retire gate: FINISHED is not COHERENT, and a blinded check is not a judgement case =="
@@ -1532,7 +1536,7 @@ grep -q "\[parameter-vocabulary\] parameters" <<<"$out" \
   || { echo "FAIL: a missing parameters: list did not fail closed"; echo "$out"; exit 1; }
 echo "   ok"
 
-echo "== 68. the REAL registry's roster sibling exists, and both CI clone loops read --producers =="
+echo "== 68. the REAL registry's roster sibling exists, and active CI clone loops read --producers =="
 REPO_ROOT="$(cd "$HERE/../.." && pwd)" python3 - <<'PY'
 import os, sys
 root = os.environ["REPO_ROOT"]
@@ -1541,18 +1545,28 @@ root = os.environ["REPO_ROOT"]
 # really there — assert the layout the design depends on.
 assert os.path.isfile(os.path.join(root, "registry", "repos.yml")), \
     "registry/repos.yml must sit beside registry/skills.yml — roster_reachable reads it as a sibling"
-# THE POINT OF `--producers` IS THAT THE EXPECTED SET HAS ONE SPELLING. A clone loop keeping its own
-# copy would reintroduce .github#2547's cause with an extra file in the way, so assert that neither
-# workflow lists producers itself.
-for wf in ("skill-registry-coherence.yml", "skill-registry-autofix.yml"):
-    text = open(os.path.join(root, ".github", "workflows", wf)).read()
-    body = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))
-    assert "fsgg-skill-registry-check --producers" in body, \
-        f"{wf} must derive its producer checkouts from `--producers` (.github#2547)"
-    assert "for repo in FS.GG" not in body, \
-        f"{wf} still hardcodes a producer list — that is the .github#2547 cause"
-    assert "yaml.safe_load(open('registry/skills.yml'))" not in body, \
-        f"{wf} still derives producers from the registry it reconciles — self-referential (.github#2547)"
+# THE POINT OF `--producers` IS THAT THE EXPECTED SET HAS ONE SPELLING. The coherence workflow still
+# clones producers and must use it. The retired autofix route performs the full offline regression
+# suite instead; it must not retain a producer clone loop or any former write capability.
+coherence = open(os.path.join(root, ".github", "workflows", "skill-registry-coherence.yml")).read()
+body = "\n".join(l for l in coherence.splitlines() if not l.lstrip().startswith("#"))
+assert "fsgg-skill-registry-check --producers" in body, \
+    "skill-registry-coherence.yml must derive producer checkouts from `--producers` (.github#2547)"
+assert "for repo in FS.GG" not in body, \
+    "skill-registry-coherence.yml still hardcodes a producer list — that is the .github#2547 cause"
+assert "yaml.safe_load(open('registry/skills.yml'))" not in body, \
+    "skill-registry-coherence.yml still derives producers from the registry it reconciles"
+
+autofix = open(os.path.join(root, ".github", "workflows", "skill-registry-autofix.yml")).read()
+autofix_body = "\n".join(l for l in autofix.splitlines() if not l.lstrip().startswith("#"))
+assert "GS2-08.9 retirement boundary" in autofix, \
+    "skill-registry-autofix.yml must declare its retired route"
+assert "bash tests/skill-registry/run.sh" in autofix_body, \
+    "retired skill-registry-autofix.yml must retain the full offline registry suite"
+assert "fsgg-skill-registry-check --producers" not in autofix_body, \
+    "retired skill-registry-autofix.yml must not clone producer repositories"
+assert "create-github-app-token" not in autofix_body and "git push" not in autofix_body, \
+    "retired skill-registry-autofix.yml regained App-token or push capability"
 print("   ok")
 PY
 

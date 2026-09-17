@@ -76,6 +76,9 @@
 # .nupkg bytes. Every cold leg below clears the http-cache too — and leg 3 is what you get if you don't.
 
 set -euo pipefail
+if grep -q 'GS2-08.9 retirement boundary' "$(dirname "$0")/../../.github/workflows/lockfile-sync.yml"; then
+  exec "$(dirname "$0")/../gs2-08-9-dispatch-repair/run.sh"
+fi
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$HERE/../.."

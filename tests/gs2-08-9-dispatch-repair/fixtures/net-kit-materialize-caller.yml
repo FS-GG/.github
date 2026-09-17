@@ -1,0 +1,12 @@
+name: kit-materialize caller fixture
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  materialize:
+    uses: FS-GG/.github/.github/workflows/kit-materialize.yml@main
+    with:
+      receiver-project: .config/kit/FS.GG.Kit.receiver.proj
+    secrets:
+      app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+      app-private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}

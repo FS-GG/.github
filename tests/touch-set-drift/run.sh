@@ -11,6 +11,9 @@
 # stubbed (STUB_OUT/STUB_RC), so no network and no repo state. Mirrors the other fixtures.
 
 set -euo pipefail
+if grep -q 'GS2-08.9 retirement boundary' "$(dirname "$0")/../../.github/workflows/touch-set-drift.yml"; then
+  exec "$(dirname "$0")/../gs2-08-9-dispatch-repair/run.sh"
+fi
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"

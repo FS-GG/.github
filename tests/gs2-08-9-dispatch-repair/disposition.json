@@ -1,0 +1,65 @@
+{
+  "schema": "fsgg.gs2-08.9-dispatch-repair-disposition/1",
+  "scope": "FS-GG/.github current workflow revision",
+  "bridge": {
+    "version": "0.90.0",
+    "receiverReport": "docs/reports/gs2-08-8-bridge-adoption.json@85a70e9a30e5e6a471d61afddb06f7f597d020ce",
+    "admissionAvailability": "unavailable-production-mutation-fence"
+  },
+  "routes": [
+    {
+      "path": ".github/workflows/dispatch-sender.yml",
+      "disposition": "retired-to-local-validation",
+      "retained": "target, event, version, and JSON payload validation",
+      "historicalCapability": {
+        "caller": "FS-GG.Rendering/.github/workflows/template-dispatch.yml",
+        "calleeRevision": "5fed2838f9ed085ffca09f4cc18b4f7bc59c1294",
+        "status": "requires-administrative-revocation",
+        "action": "Remove FS-GG.Rendering from the selected-repository access lists for the FSGG_DISPATCH_APP_ID and FSGG_DISPATCH_APP_PRIVATE_KEY organization Actions secrets, or rotate/revoke the App key, before claiming the historical sender is unable to write. Removing only the current workflow source cannot change a SHA-pinned historical blob."
+      }
+    },
+    {
+      "path": ".github/workflows/fsgg-dispatch-broker.yml",
+      "disposition": "retired-to-local-validation",
+      "retained": "request grammar and operation/event consistency"
+    },
+    {
+      "path": ".github/workflows/feed-autofix.yml",
+      "disposition": "read-only-audit",
+      "retained": "offline refusal fixtures and feed drift report"
+    },
+    {
+      "path": ".github/workflows/skill-registry-autofix.yml",
+      "disposition": "local-validation-only",
+      "retained": "skill registry regression fixtures"
+    },
+    {
+      "path": ".github/workflows/skillmirror-redrive.yml",
+      "disposition": "local-validation-only",
+      "retained": "hermetic derivation and refusal oracle"
+    },
+    {
+      "path": ".github/workflows/kit-materialize.yml",
+      "disposition": "read-only-provider-validation",
+      "retained": "real kit bump classification, contamination/mechanical failure mapping, and receiver authorization validation under the established protected context names"
+    },
+    {
+      "path": ".github/workflows/lockfile-sync.yml",
+      "disposition": "locked-restore-validation",
+      "retained": "read-only restore against committed lock files"
+    },
+    {
+      "path": ".github/workflows/touch-set-drift.yml",
+      "disposition": "read-only-provider-check",
+      "retained": "PR and issue reads with verdict in log and job summary"
+    },
+    {
+      "path": ".github/workflows/github-substrate-v2-authority-qualification.yml",
+      "disposition": "loopback-local-qualification",
+      "retained": "local bare-repository CAS, non-fast-forward, and deletion refusal"
+    }
+  ],
+  "productionCalls": 0,
+  "productionCredentials": 0,
+  "administrativeDependency": "Historical workflow blobs remain executable by SHA while their shared GitHub App capability remains valid. Source delivery must precede credential/installation revocation so current callers retain validation output."
+}

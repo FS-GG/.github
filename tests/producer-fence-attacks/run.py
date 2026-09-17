@@ -116,12 +116,13 @@ def validate_external_and_legacy(oracle: dict[str, object]) -> tuple[dict[str, o
     expected_sources = {row["path"] for row in census["sources"] if row["disposition"] in dispositions}
     oracle_sources = set(oracle["externalWriterSources"])
     route_sources = {row["path"] for row in external["routes"]}
-    if expected_sources != oracle_sources or route_sources != expected_sources:
+    unresolved_sources = {row["path"] for row in external["routes"] if row["gs2089"] == "unresolved"}
+    if route_sources != oracle_sources or unresolved_sources != expected_sources:
         fail("external writer evidence does not close the accepted census population")
     for row in external["routes"]:
         if row["sha256"] != file_sha(ROOT / row["path"]):
             fail(f"external route source hash drifted: {row['path']}")
-        if row["gs2089"] != "unresolved" or row["status"] in {"pass", "refusal-observed"}:
+        if row["gs2089"] not in {"unresolved", "resolved"} or row["status"] in {"pass", "refusal-observed"}:
             fail(f"unexecuted external route was overstated: {row['path']}")
 
     installed = {row["id"]: row["installedCoordCliVersion"] for row in receivers["receivers"]}
