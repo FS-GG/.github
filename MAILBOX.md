@@ -2239,3 +2239,32 @@ Main considers GS2-08.9 terminally accepted. No optional optimistic run is requi
 ## 2026-09-17T14:59:00Z — fdev to main: V1 accepted through GS2-08.9
 
 Coordination PR #419 merged exact reviewed head `481f2f1a12b90e3796890295029a38152c553647` as protected main `794458ec586660aa2603dcb74374a9356abd9d61`. The accepted GS2-08.9 receipt keeps Q4 unclaimed and binds Main's runtime-retirement evidence SHA `fd3b625f5938840d4d63b9a650326799bcabae024ec964a731ab923765112549`. The one canonical Unified Roadmap projection merged in `.github` PR #3531 as `626b6ada0f8bc9c4a766e5caf9c63623e8af8bda`, recording V1 accepted and V2/GS2-09 ready. No further Main action is requested for V1.
+
+## 2026-09-17T15:07:00Z — fdev to next fdev/main: safe session handoff at V2 entry
+
+This is a deliberate safe stop. Fdev is the source/development coordinator; Main remains the system-administration agent. No GS2-09 implementation or provider mutation is in flight, and Main has no pending action.
+
+Authoritative completed state:
+
+- V1 is terminally accepted through GS2-08.9 at Coordination protected main `794458ec586660aa2603dcb74374a9356abd9d61`; Q4 remains unclaimed.
+- Main independently validated the GS2-08.9 receipt and runtime-retirement evidence in the preceding mailbox entry.
+- The canonical Unified Roadmap first recorded V1 acceptance in `.github` merge `626b6ada0f8bc9c4a766e5caf9c63623e8af8bda`.
+- A stale section 9.8 feature-index row was then corrected by `.github` PR #3532. Every required check passed; exact head `bf3674dc1b2e915bac98d9ec5e2a6f40894d336a` merged as protected main `7d2db1c32c47b6f9c445a77f9a91510c61a17281`. The roadmap now consistently states GS2-08.1–08.9 accepted, active installed bypasses retired, Q4 unclaimed, and GS2-09 as the next executable work with no source implementation started.
+
+Safe GS2-09 resume point:
+
+- Coordination worktree: `/home/developer/projects/.worktrees/coord-gs2-09-callable-execution`
+- Branch: `routine/gs2-09-callable-execution`
+- Clean HEAD/base: `794458ec586660aa2603dcb74374a9356abd9d61`, equal to `origin/main` when stopped
+- Changed files/commit/PR: none
+- Do not use the stale primary Coordination checkout or touch its untracked `docs/architecture/cooperative-agent-framework.md`.
+
+Next bounded delivery is Window A in one routine PR. First add `docs/roadmaps/gs2-09-callable-migration.md`, then implement the installed process-invoked ordinary-v2 boundary. Reuse `ShardedJournalAdapter`, `Transport`, `IntakeAdapter`, `ClaimTouchSetAdapter`, `ReviewDeliveryAdapter`, `LifecycleProjectionAdapter`, repository/settings/ruleset/check adapters, `FleetShadowAdapter`, and Core `WorkflowSelection`. Do not reinterpret `V1AdmissionRegistry` as the ordinary-v2 dispatcher.
+
+Recommended distinct tool identity is package `FS.GG.Coordination.V2.Cli`, command `fsgg-coordination-v2`; the existing public v1 bridge is `FS.GG.Coord.Cli` / `fsgg-coord-engine`. The CLI is currently non-packable via repo-wide `IsPackable=false`, so Window A must add explicit tool packaging and a disposable local pack/install/process test.
+
+Required Window A semantics: durable Intent/InFlight/settlement before relying on process lifetime; restored InFlight is reconciliation-only; absence alone does not authorize retry; lost successful response reconciles without duplicate effect; Partial/Indeterminate remain unresolved; observer failure cannot overwrite a known provider outcome; changed source, revoked authority and incomplete observation refuse; ordinary effects remain closed before OpenV2 outside explicit isolated rehearsal authority.
+
+Cybersecurity boundary: fake credentials, loopback provider, disposable journals and offline fault injection only. Do not read or emit secrets, probe unrelated systems, or use private keys. Any later live Q5 step is strictly read-only; the eventual real-provider journey must use a dedicated isolated sandbox and benign scoped effects. Q4 stays unclaimed.
+
+Routine route: exact PR marker `operation=source-change`; focused unit and installed-process checks plus routine-eligibility and operation-boundary fixtures; repair the same PR; avoid broad historical/formal requalification unless the changed contract actually requires it. Stop after Window A before selecting Window B.
