@@ -37,6 +37,35 @@ module Client =
     // (.github#2726–#2729) depend on the Kernel rather than on the module they are being cut out of.
     open FS.GG.Coord.Cli.Kernel
 
+    // GS2-08.5 P3 — the live provider boundary is fenced even before this deployment has installed the
+    // protected authority/journal inputs needed by `DurableMutationFence`.  Refusing here is deliberate:
+    // inventing an operation scope from argv, treating the ambient GitHub token as authority, or creating
+    // registry genesis on the ordinary producer path would each turn missing durable facts into permission.
+    // Reads still flow through `FencedTransport.Send`; fake contexts are never wrapped and retain their
+    // deterministic in-process behavior.
+    let private ProductionAdmissionUnavailable =
+        "production v1 admission is not installed: durable operation scope, protected authority, existing admission journal, and provider reconciliation are unavailable"
+
+    type private UnavailableProductionMutationFence() =
+        interface V1Admission.IMutationFence with
+            member _.Dispatch(_, _, _, _) =
+                Error [ ProductionAdmissionUnavailable ]
+
+            member _.Reconcile(_, _) =
+                Error [ ProductionAdmissionUnavailable ]
+
+            member _.RetryProvenAbsent(_, _, _) =
+                Error [ ProductionAdmissionUnavailable ]
+
+    // `Kernel.usesLiveHttp` predates the production wrapper and recognizes only a raw `HttpTransport`.
+    // Preserve the one behavior that depends on this distinction (`adopt`'s live admission check) after
+    // context replaces the raw transport with `FencedTransport`.
+    let private usesProductionHttp (ctx: Context) =
+        match box ctx.Transport with
+        | :? Transport.HttpTransport
+        | :? Transport.FencedTransport -> true
+        | _ -> false
+
     // Every authoritative `Blocked by` writer shares the same issue-comment lease. Projects v2 has no
     // expected-revision/CAS input, so guarding only add/remove would still let release or reconcile race
     // between the derived writer's final observation and unconditional mutation.
@@ -5858,7 +5887,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                 readPreviousStatus
                                 readPathRepo
                                 (fun () ->
-                                    if opts.Command = Options.Adopt || not (usesLiveHttp ctx) then
+                                    if opts.Command = Options.Adopt || not (usesProductionHttp ctx) then
                                         Ok()
                                     else
                                         match Environment.GetEnvironmentVariable "GITHUB_TOKEN" with
@@ -10076,6 +10105,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         | Some token ->
             let transport = new Transport.HttpTransport(Transport.apiBaseFromEnv (), token)
 
+            let fencedTransport =
+                new Transport.FencedTransport(
+                    transport :> Transport.IProviderGitHubTransport,
+                    UnavailableProductionMutationFence() :> V1Admission.IMutationFence
+                )
+
             // The board owner LABEL (subject text, cache key, board JSON). The queries pick org/user/viewer
             // from `OwnerKind.fromEnv` in the GitHub layer; this is only the human-facing name. `user` with no
             // explicit `FSGG_COORD_OWNER` is viewer-scoped (#1349) — no login in config — so it is labelled
@@ -10088,7 +10123,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
             Ok(
                 {
-                    Transport = transport
+                    Transport = fencedTransport
                     Owner = owner
                     Title = env "FSGG_COORD_PROJECT" "Coordination"
                     DefaultRepo = None
