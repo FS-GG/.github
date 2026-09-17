@@ -56,7 +56,7 @@
     {"path":".github/workflows/release-new-sdd-workspace.yml","disposition":"publish-writer","sinkKinds":["package-publish"],"sha256":"538b9923a2bcb2bf7a7dfe0a595bd8d243bc84cd20eedc2eb0d4d2615cf5073f"},
     {"path":".github/workflows/release-telemetry-host.yml","disposition":"publish-writer","sinkKinds":["gh-release-write","package-publish"],"sha256":"379fa8e792d30ccfc27ee1019c7912b61bc3a91d78654aaab681094366657fe9"},
     {"path":".github/workflows/release-saga-prepare.yml","disposition":"publish-writer","sinkKinds":["gh-release-write"],"sha256":"f7ef6d0300efb07f6606b0ba5a6ab7c917d8fecd4974ddd0ad86b3dce17523e7"},
-    {"path":".github/workflows/release-saga-start.yml","disposition":"publish-writer","sinkKinds":["git-push","rest-write","workflow-dispatch"],"sha256":"be7f5cc222097f43664de2f54d23c06d09db0b8936bbc96c68245f2f24f9483c"},
+    {"path":".github/workflows/release-saga-start.yml","disposition":"publish-writer","sinkKinds":["git-push","rest-write","workflow-dispatch"],"sha256":"316e019d8cec6c60cd78059e5b98abb85b925fa1564f6df9f86345cd00b6d912"},
     {"path":".github/workflows/skill-registry-autofix.yml","disposition":"conditional-remote-writer","sinkKinds":["gh-pr-merge","git-push","rest-write"],"sha256":"32f9275322622d698ca711ce351e04c406fa6fb5d3b9cf49d6e382ccab0b6b97"},
     {"path":".github/workflows/skillmirror-redrive.yml","disposition":"conditional-remote-writer","sinkKinds":["git-push"],"sha256":"1c12000dbbf3a8e3c8412af25273e0e24f0aa4cbc766401a59111e0d82e26bdb"},
     {"path":".github/workflows/touch-set-drift.yml","disposition":"conditional-remote-writer","sinkKinds":["rest-write"],"sha256":"7c821737b9fb3c35fc9322e05c4ed08a4580e6e7ab9a1a442f9af73a0548729e"},
