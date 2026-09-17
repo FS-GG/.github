@@ -4,33 +4,34 @@ open FS.GG.Coordination.GitHub
 
 /// Producer-side adapters over the protected GS2-08.5 admission contract.
 ///
-/// This module deliberately exposes no registry genesis operation. An ordinary producer can restore and
-/// append an existing protected Operation journal, but cannot create the first commit.
+/// This module deliberately exposes no registry genesis operation and no caller-authored eligibility
+/// switch. An ordinary producer can bind an existing admitted operation and append its protected journal.
 module V1Admission =
 
-    /// A CAS outcome reported by the durable journal implementation. `CompareAndSwapWon` is the only
-    /// value translated to `ReceiveAccepted`.
     type JournalCompareAndSwapOutcome =
         | CompareAndSwapWon
         | CompareAndSwapParentConflict
         | CompareAndSwapRefused of reason: string
         | CompareAndSwapResponseUnknown
 
-    /// Durable storage for the already-initialized protected admission journal.
     type DurableJournal =
         {
             Read: AggregateAddress -> RegistryJournalRead
             CompareAndSwap: RegistryAppendProposal -> JournalCompareAndSwapOutcome
         }
 
-    /// Provider evidence kinds that can exclude the original request from arriving late.
+    /// A fresh two-read source for the protected fleet authority.
+    type DurableAuthority =
+        {
+            ReadObjects: unit -> Result<AuthorityGitObjects, string>
+            RereadHead: unit -> Result<GitObjectId, string>
+        }
+
     type ProviderAbsenceKind =
         | IdempotencyKeyExcluded
         | ConditionalFenceExcluded
         | OriginalRequestRetired
 
-    /// Evidence returned by provider-specific reconciliation. Strong absence carries the digest of the
-    /// exact original canonical request bytes; a mismatched digest is refused by `providerPort`.
     type ProviderEvidence =
         | Applied of responseDigest: Sha256Digest
         | StronglyAbsent of
@@ -45,43 +46,50 @@ module V1Admission =
             Read: string -> string -> int64 -> byte array -> Result<ProviderEvidence, string>
         }
 
-    /// A mutation already admitted by the protected registry. Eligibility is recovered from durable
-    /// authority; callers cannot supply an `eligible` flag.
-    type Mutation =
-        {
-            OperationId: string
-            Owner: string
-            Request: MutationRequest
-        }
+    /// Stable operation identity installed once when composing an operation-scoped transport. Per-call
+    /// business code supplies only an effect id and provider request.
+    type OperationScope
 
-    /// The callback is invoked only after this invocation durably wins the effect-intent CAS and consumes
-    /// a fresh, single-use dispatch fence.
+    val operationScope:
+        operationId: string ->
+        owner: string ->
+        operationGeneration: int64 ->
+        expectedClaimGeneration: int64 option ->
+            Result<OperationScope, string list>
+
+    /// One operation-scoped lifecycle. Dispatch includes durable intent, fresh permit, one provider attempt,
+    /// provider evidence, and durable Applied settlement. Retry reads the persisted original bytes and is
+    /// available only after provider-backed ProvenAbsent settlement.
     type IMutationFence =
-        abstract Dispatch<'response> : mutation: Mutation * send: (unit -> 'response) -> Result<'response, string list>
+        abstract Dispatch<'response, 'providerError> :
+            effectId: string *
+            canonicalRequestBytes: byte array *
+            send: (unit -> Result<'response, 'providerError>) *
+            responseBytes: ('response -> byte array) ->
+                Result<Result<'response, 'providerError>, string list>
 
-    /// Adapt a fresh two-read authority source to the imported verifier.
+        abstract Reconcile: effectId: string * provider: ProviderReconciliation -> Result<unit, string list>
+
+        abstract RetryProvenAbsent<'response, 'providerError> :
+            effectId: string *
+            send: (byte array -> Result<'response, 'providerError>) *
+            responseBytes: ('response -> byte array) ->
+                Result<Result<'response, 'providerError>, string list>
+
     val authorityPort:
         readObjects: (unit -> Result<AuthorityGitObjects, string>) ->
         rereadHead: (unit -> Result<GitObjectId, string>) ->
-            AuthorityGitPort
+            DurableAuthority
 
-    /// Adapt the durable journal. Only `CompareAndSwapWon` becomes `ReceiveAccepted`.
+    /// Only `CompareAndSwapWon` is translated to `ReceiveAccepted`.
     val journalPort: DurableJournal -> RegistryJournalPort
 
-    /// Adapt provider reconciliation while binding strong-absence evidence to the exact original bytes.
+    /// Strong-absence evidence is accepted only when it binds the exact persisted original request bytes.
     val providerPort: ProviderReconciliation -> ProviderReconciliationPort
 
-    /// The fixed protected Operation-journal address used by ordinary producers.
     val registryAddress: AggregateAddress
 
-    /// Production mutation fence over existing durable authority and journal adapters.
     type DurableMutationFence =
-        new: authority: AuthorityGitPort * journal: DurableJournal -> DurableMutationFence
+        new: authority: DurableAuthority * journal: DurableJournal * operation: OperationScope -> DurableMutationFence
 
         interface IMutationFence
-
-        /// Reconcile an unresolved effect through provider-specific evidence and durably append its
-        /// settlement. This is the recovery path after an unknown or interrupted provider response.
-        member Reconcile:
-            operationId: string * owner: string * effectId: string * provider: ProviderReconciliation ->
-                Result<DurableAppendDecision, string list>

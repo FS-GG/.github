@@ -3,7 +3,6 @@ module FS.GG.Coord.GitHub.Tests.HttpTransportTests
 open System
 open System.Collections.Generic
 open System.Net
-open System.Security.Cryptography
 open System.Text
 open System.Threading
 open Xunit
@@ -11,7 +10,6 @@ open FS.GG.Coord.Types
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Errors
 open FS.GG.Coord.GitHub.Transport
-open FS.GG.Coordination.GitHub
 
 /// THE ADAPTER THAT ACTUALLY SHIPS, AGAINST A SERVER THAT ACTUALLY ANSWERS.
 ///
@@ -132,40 +130,10 @@ let ``raw HTTP transport refuses SendMutation without a production fence decorat
             Body = Json "{\"state\":\"closed\"}"
         }
 
-    let bytes = canonicalMutationBytes request
-
-    let requestDigest =
-        SHA256.HashData bytes
-        |> Convert.ToHexString
-        |> _.ToLowerInvariant()
-        |> V1AdmissionRegistry.sha256Digest
-        |> Result.defaultWith failwith
-
-    let epoch =
-        V1AdmissionRegistry.gitObjectId (String.replicate 40 "a")
-        |> Result.defaultWith failwith
-
     let envelope =
         {
+            EffectId = "effect-1"
             Request = request
-            Admission =
-                {
-                    OperationId = "operation-1"
-                    Owner = "worker-1"
-                    Request =
-                        {
-                            EffectId = "effect-1"
-                            RequestDigest = requestDigest
-                            CanonicalRequestBytes = bytes
-                            Preconditions =
-                                {
-                                    ExpectedEpochCommit = epoch
-                                    ExpectedEpochGeneration = 1L
-                                    ExpectedClaimGeneration = None
-                                    ExpectedOperationGeneration = 1L
-                                }
-                        }
-                }
         }
 
     match raw.SendMutation envelope with
@@ -194,6 +162,51 @@ let ``UTEL-04A single-page transport does not paginate and rejects oversized bod
     match single.SendSingle(get "repos/o/r/oversize") with
     | Error(Malformed(_, detail)) -> Assert.Contains("4 MiB", detail)
     | result -> failwithf "expected bounded rejection, got %A" result
+
+[<Fact>]
+let ``provider mutation primitive ignores Link continuation and makes one request`` () =
+    use server = new Server()
+    server.On(fun _ res -> server.Json res 200 "{}" [ "Link", $"<%s{server.Base}/page2>; rel=\"next\"" ])
+    use transport = new HttpTransport(server.Base, "t")
+    let provider = transport :> IProviderGitHubTransport
+
+    let mutation =
+        { get "repos/o/r/issues/1" with
+            Method = "PATCH"
+            Body = Json "{}"
+        }
+
+    match provider.SendMutationOnce mutation with
+    | Ok response ->
+        Assert.Equal("{}", response.Body)
+        Assert.Single(server.Requests) |> ignore
+    | Error error -> failwithf "%A" error
+
+[<Theory>]
+[<InlineData(307)>]
+[<InlineData(308)>]
+let ``provider mutation primitive does not follow redirects`` status =
+    use server = new Server()
+
+    server.On(fun _ res ->
+        res.StatusCode <- status
+        res.RedirectLocation <- $"%s{server.Base}/redirected"
+        res.ContentLength64 <- 0L)
+
+    use transport = new HttpTransport(server.Base, "t")
+    let provider = transport :> IProviderGitHubTransport
+
+    let mutation =
+        { get "repos/o/r/issues/1" with
+            Method = "PATCH"
+            Body = Json "{}"
+        }
+
+    match provider.SendMutationOnce mutation with
+    | Error(Http(actual, _)) ->
+        Assert.Equal(status, actual)
+        Assert.Single(server.Requests) |> ignore
+    | other -> failwithf "expected redirect response without a second request, got %A" other
 
 // ---- pagination: the Link header ---------------------------------------------------------------------
 

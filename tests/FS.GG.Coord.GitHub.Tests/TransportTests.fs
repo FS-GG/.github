@@ -1,13 +1,11 @@
 module FS.GG.Coord.GitHub.Tests.TransportTests
 
 open System
-open System.Security.Cryptography
 open Xunit
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Errors
 open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.GitHub.V1Admission
-open FS.GG.Coordination.GitHub
 
 /// A response that succeeded, with a body.
 let ok (body: string) =
@@ -33,50 +31,28 @@ let request path budget =
 
 type private StubFence(allow: bool) =
     let mutable calls = 0
+    let mutable observed = Array.empty<byte>
 
     member _.Calls = calls
+    member _.Observed = observed
 
     interface IMutationFence with
-        member _.Dispatch(_, send) =
+        member _.Dispatch(_, bytes, send, _) =
             calls <- calls + 1
+            observed <- Array.copy bytes
             if allow then Ok(send ()) else Error [ "test-refusal" ]
 
-let private oid value =
-    V1AdmissionRegistry.gitObjectId (String.replicate 40 value)
-    |> Result.defaultWith failwith
+        member _.Reconcile(_, _) = Ok()
+        member _.RetryProvenAbsent(_, _, _) = Error [ "no-retry-fixture" ]
 
-let private digest (bytes: byte array) =
-    SHA256.HashData bytes
-    |> Convert.ToHexString
-    |> _.ToLowerInvariant()
-    |> V1AdmissionRegistry.sha256Digest
-    |> Result.defaultWith failwith
-
-let private envelope (providerRequest: Request) requestBytes =
+let private intent (providerRequest: Request) =
     {
+        EffectId = "effect-1"
         Request = providerRequest
-        Admission =
-            {
-                OperationId = "operation-1"
-                Owner = "worker-1"
-                Request =
-                    {
-                        EffectId = "effect-1"
-                        RequestDigest = digest requestBytes
-                        CanonicalRequestBytes = Array.copy requestBytes
-                        Preconditions =
-                            {
-                                ExpectedEpochCommit = oid "a"
-                                ExpectedEpochGeneration = 1L
-                                ExpectedClaimGeneration = None
-                                ExpectedOperationGeneration = 1L
-                            }
-                    }
-            }
     }
 
 [<Fact>]
-let ``typed SendMutation records the full envelope in the fake`` () =
+let ``typed SendMutation records the stable producer intent in the fake`` () =
     let recorder = Fake.Recorder(fun _ -> ok "{}")
     let transport = recorder :> IGitHubTransport
 
@@ -86,8 +62,7 @@ let ``typed SendMutation records the full envelope in the fake`` () =
             Body = Json "{\"state\":\"closed\"}"
         }
 
-    let bytes = canonicalMutationBytes providerRequest
-    transport.SendMutation(envelope providerRequest bytes) |> ignore
+    transport.SendMutation(intent providerRequest) |> ignore
 
     Assert.Single(recorder.Mutations) |> ignore
     Assert.Equal(1, recorder.RestCalls)
@@ -98,7 +73,7 @@ let ``fenced transport forwards only after the typed fence authorizes exact byte
     let fence = StubFence true
 
     let transport =
-        FencedTransport(recorder :> IGitHubTransport, fence) :> IGitHubTransport
+        FencedTransport(recorder :> IProviderGitHubTransport, fence) :> IGitHubTransport
 
     let providerRequest =
         { request "repos/o/r/issues/1" Rest with
@@ -108,10 +83,11 @@ let ``fenced transport forwards only after the typed fence authorizes exact byte
 
     let bytes = canonicalMutationBytes providerRequest
 
-    match transport.SendMutation(envelope providerRequest bytes) with
+    match transport.SendMutation(intent providerRequest) with
     | Ok _ ->
         Assert.Equal(1, fence.Calls)
         Assert.Equal(1, recorder.RestCalls)
+        Assert.Equal<byte>(bytes, fence.Observed)
     | Error error -> failwithf "expected authorized dispatch, got %A" error
 
 [<Fact>]
@@ -120,7 +96,7 @@ let ``fenced transport does not call the provider when durable admission refuses
     let fence = StubFence false
 
     let transport =
-        FencedTransport(recorder :> IGitHubTransport, fence) :> IGitHubTransport
+        FencedTransport(recorder :> IProviderGitHubTransport, fence) :> IGitHubTransport
 
     let providerRequest =
         { request "repos/o/r/issues/1" Rest with
@@ -128,37 +104,12 @@ let ``fenced transport does not call the provider when durable admission refuses
             Body = Json "{\"state\":\"closed\"}"
         }
 
-    let bytes = canonicalMutationBytes providerRequest
-
-    match transport.SendMutation(envelope providerRequest bytes) with
+    match transport.SendMutation(intent providerRequest) with
     | Error(Malformed(_, detail)) ->
         Assert.Contains("test-refusal", detail)
         Assert.Equal(1, fence.Calls)
         Assert.Equal(0, recorder.RestCalls)
     | other -> failwithf "expected durable admission refusal, got %A" other
-
-[<Fact>]
-let ``fenced transport refuses changed provider bytes before acquiring a permit`` () =
-    let recorder = Fake.Recorder(fun _ -> ok "{}")
-    let fence = StubFence true
-
-    let transport =
-        FencedTransport(recorder :> IGitHubTransport, fence) :> IGitHubTransport
-
-    let providerRequest =
-        { request "repos/o/r/issues/1" Rest with
-            Method = "PATCH"
-            Body = Json "{\"state\":\"closed\"}"
-        }
-
-    let stale = Text.Encoding.UTF8.GetBytes "different"
-
-    match transport.SendMutation(envelope providerRequest stale) with
-    | Error(Malformed(_, detail)) ->
-        Assert.Contains("request bytes differ", detail)
-        Assert.Equal(0, fence.Calls)
-        Assert.Equal(0, recorder.RestCalls)
-    | other -> failwithf "expected exact-byte refusal, got %A" other
 
 [<Fact>]
 let ``response header lookup is case-insensitive for GitHub rate-limit headers`` () =

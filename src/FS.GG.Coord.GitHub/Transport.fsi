@@ -87,12 +87,9 @@ module Transport =
             Subject: string
         }
 
-    /// A provider request bound to one durable v1 admission/effect identity.
-    type MutationEnvelope =
-        {
-            Request: Request
-            Admission: V1Admission.Mutation
-        }
+    /// Stable business-facing mutation input. Authority and generation preconditions are supplied by the
+    /// operation-scoped fence, never by the call site.
+    type MutationIntent = { EffectId: string; Request: Request }
 
     type Response =
         {
@@ -148,7 +145,16 @@ module Transport =
 
         /// The fenced mutation path. Raw live adapters refuse it; `FencedTransport` is the production
         /// implementation that obtains and consumes a durable dispatch permit before forwarding.
-        abstract SendMutation: mutation: MutationEnvelope -> IoResult<Response>
+        abstract SendMutation: mutation: MutationIntent -> IoResult<Response>
+
+        /// Retry the persisted original request after durable provider-backed ProvenAbsent settlement.
+        abstract RetryMutation: effectId: string -> IoResult<Response>
+
+    /// Raw provider edge used only behind `FencedTransport`. A mutation attempt is exactly one HTTP request:
+    /// no Link continuation and no automatic redirect.
+    type IProviderGitHubTransport =
+        abstract Send: request: Request -> IoResult<Response>
+        abstract SendMutationOnce: request: Request -> IoResult<Response>
 
     /// One bounded response page for collectors that own their pagination and completeness evidence.
     /// This seam never follows redirects or `Link` continuations and leaves `Send` unchanged.
@@ -168,13 +174,15 @@ module Transport =
         new: apiBase: string * token: string -> HttpTransport
 
         interface IGitHubTransport
+        interface IProviderGitHubTransport
         interface ISinglePageGitHubTransport
         interface System.IDisposable
 
     /// Decorate a raw provider transport with the durable v1 admission fence. `Send` remains temporarily
-    /// available for migration compatibility; new mutation call sites use `SendMutation`.
+    /// available for P1/P2/P3 migration compatibility; S2 removes that bypass after every business write
+    /// uses `SendMutation`.
     type FencedTransport =
-        new: inner: IGitHubTransport * fence: V1Admission.IMutationFence -> FencedTransport
+        new: inner: IProviderGitHubTransport * fence: V1Admission.IMutationFence -> FencedTransport
 
         interface IGitHubTransport
 

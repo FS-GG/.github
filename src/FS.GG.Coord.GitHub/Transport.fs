@@ -37,11 +37,7 @@ module Transport =
             Subject: string
         }
 
-    type MutationEnvelope =
-        {
-            Request: Request
-            Admission: V1Admission.Mutation
-        }
+    type MutationIntent = { EffectId: string; Request: Request }
 
     type Response =
         {
@@ -68,7 +64,12 @@ module Transport =
 
     type IGitHubTransport =
         abstract Send: request: Request -> IoResult<Response>
-        abstract SendMutation: mutation: MutationEnvelope -> IoResult<Response>
+        abstract SendMutation: mutation: MutationIntent -> IoResult<Response>
+        abstract RetryMutation: effectId: string -> IoResult<Response>
+
+    type IProviderGitHubTransport =
+        abstract Send: request: Request -> IoResult<Response>
+        abstract SendMutationOnce: request: Request -> IoResult<Response>
 
     type ISinglePageGitHubTransport =
         abstract SendSingle: request: Request -> IoResult<Response>
@@ -283,7 +284,62 @@ module Transport =
         |> FS.GG.Coordination.GitHub.ShardedJournalAdapter.canonicalJson
         |> Result.defaultWith invalidOp
 
-    type HttpTransport(apiBase: string, token: string) =
+    let private requestFromCanonicalBytes effectId (bytes: byte array) =
+        try
+            use document = JsonDocument.Parse bytes
+            let root = document.RootElement
+            let bodyKind = root.GetProperty("bodyKind").GetString()
+
+            let bodyBytes =
+                root.GetProperty("bodyBase64").GetString() |> Convert.FromBase64String
+
+            let body =
+                match bodyKind with
+                | "none" when bodyBytes.Length = 0 -> NoBody
+                | "json"
+                | "graphql" -> Json(Encoding.UTF8.GetString bodyBytes)
+                | _ -> invalidOp "canonical-mutation-body"
+
+            let budget =
+                match root.GetProperty("budget").GetString() with
+                | "graphql" -> GraphQl
+                | "rest" -> Rest
+                | "free" -> Free
+                | _ -> invalidOp "canonical-mutation-budget"
+
+            let query =
+                root.GetProperty("query").EnumerateArray()
+                |> Seq.map (fun pair ->
+                    let values = pair.EnumerateArray() |> Seq.toArray
+
+                    if values.Length <> 2 then
+                        invalidOp "canonical-mutation-query"
+
+                    values[0].GetString(), values[1].GetString())
+                |> List.ofSeq
+
+            let ifNoneMatch =
+                let value = root.GetProperty("ifNoneMatch")
+
+                if value.ValueKind = JsonValueKind.Null then
+                    None
+                else
+                    Some(value.GetString())
+
+            Ok
+                {
+                    Method = root.GetProperty("method").GetString()
+                    Path = root.GetProperty("path").GetString()
+                    Query = query
+                    Body = body
+                    Budget = budget
+                    IfNoneMatch = ifNoneMatch
+                    Subject = "v1 retry " + effectId
+                }
+        with _ ->
+            Error "persisted canonical request is unreadable"
+
+    type HttpTransport(apiBase: string, token: string) as this =
 
         let client = new HttpClient()
         let singlePageHandler = new HttpClientHandler(AllowAutoRedirect = false)
@@ -491,8 +547,18 @@ module Transport =
 
                     follow first first.NextLink 100
 
-            member _.SendMutation(mutation: MutationEnvelope) : IoResult<Response> =
+            member _.SendMutation(mutation: MutationIntent) : IoResult<Response> =
                 Error(Malformed(mutation.Request.Subject, "raw HTTP mutation transport is not fenced"))
+
+            member _.RetryMutation(effectId: string) : IoResult<Response> =
+                Error(Malformed(effectId, "raw HTTP mutation retry is not fenced"))
+
+        interface IProviderGitHubTransport with
+            member _.Send(request: Request) = (this :> IGitHubTransport).Send request
+
+            member _.SendMutationOnce(request: Request) =
+                let url = base' + "/" + request.Path.TrimStart('/') + buildQuery request.Query
+                sendOne singlePageClient request url None
 
         interface ISinglePageGitHubTransport with
             member _.SendSingle(request: Request) : IoResult<Response> =
@@ -504,22 +570,45 @@ module Transport =
                 client.Dispose()
                 singlePageClient.Dispose()
 
-    type FencedTransport(inner: IGitHubTransport, fence: V1Admission.IMutationFence) =
+    type FencedTransport(inner: IProviderGitHubTransport, fence: V1Admission.IMutationFence) =
+
+        let responseBytes (response: Response) = Encoding.UTF8.GetBytes response.Body
+
+        let dispatch effectId request =
+            let method = request.Method.ToUpperInvariant()
+
+            if not (Set.contains method (set [ "POST"; "PUT"; "PATCH"; "DELETE" ])) then
+                Error(Malformed(request.Subject, "SendMutation requires a mutating HTTP method"))
+            else
+                // Snapshot at the public entry boundary. The durable record and provider callback receive
+                // independent copies, so a caller cannot change the authorized bytes after admission.
+                let canonical = canonicalMutationBytes request |> Array.copy
+
+                match
+                    fence.Dispatch(effectId, canonical, (fun () -> inner.SendMutationOnce request), responseBytes)
+                with
+                | Ok response -> response
+                | Error reasons ->
+                    Error(Malformed(request.Subject, "v1 admission refused: " + String.Join("; ", reasons)))
 
         interface IGitHubTransport with
+            // Temporary P1/P2/P3 migration bypass. S2 removes this raw mutation-capable Send surface
+            // once every business write uses SendMutation.
             member _.Send(request: Request) = inner.Send request
 
-            member _.SendMutation(mutation: MutationEnvelope) =
-                let request = mutation.Request
-                let method = request.Method.ToUpperInvariant()
-                let canonical = canonicalMutationBytes request
+            member _.SendMutation(mutation: MutationIntent) =
+                dispatch mutation.EffectId mutation.Request
 
-                if not (Set.contains method (set [ "POST"; "PUT"; "PATCH"; "DELETE" ])) then
-                    Error(Malformed(request.Subject, "SendMutation requires a mutating HTTP method"))
-                elif canonical <> mutation.Admission.Request.CanonicalRequestBytes then
-                    Error(Malformed(request.Subject, "admission request bytes differ from the provider request"))
-                else
-                    match fence.Dispatch(mutation.Admission, fun () -> inner.Send request) with
-                    | Ok response -> response
-                    | Error reasons ->
-                        Error(Malformed(request.Subject, "v1 admission refused: " + String.Join("; ", reasons)))
+            member _.RetryMutation(effectId: string) =
+                match
+                    fence.RetryProvenAbsent(
+                        effectId,
+                        (fun bytes ->
+                            match requestFromCanonicalBytes effectId (Array.copy bytes) with
+                            | Error reason -> Error(Malformed(effectId, reason))
+                            | Ok request -> inner.SendMutationOnce request),
+                        responseBytes
+                    )
+                with
+                | Ok response -> response
+                | Error reasons -> Error(Malformed(effectId, "v1 retry refused: " + String.Join("; ", reasons)))

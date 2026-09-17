@@ -201,10 +201,10 @@ module Fake =
 
                 | r -> $"%s{method.ToLowerInvariant()} %s{nwo} %s{r}"
 
-    type Recorder(route: Route) =
+    type Recorder(route: Route) as this =
 
         let log = ResizeArray<string>()
-        let mutations = ResizeArray<MutationEnvelope>()
+        let mutations = ResizeArray<MutationIntent>()
         let mutable graphQlCalls = 0
         let mutable restCalls = 0
 
@@ -239,6 +239,13 @@ module Fake =
         interface IGitHubTransport with
             member _.Send(request: Request) : IoResult<Response> = send request
 
-            member _.SendMutation(mutation: MutationEnvelope) : IoResult<Response> =
+            member _.SendMutation(mutation: MutationIntent) : IoResult<Response> =
                 mutations.Add mutation
                 send mutation.Request
+
+            member _.RetryMutation(effectId: string) : IoResult<Response> =
+                Error(Malformed(effectId, "fake retry requires a fenced transport"))
+
+        interface IProviderGitHubTransport with
+            member _.Send(request: Request) = (this :> IGitHubTransport).Send request
+            member _.SendMutationOnce(request: Request) = send request
