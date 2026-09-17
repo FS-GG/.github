@@ -2154,3 +2154,9 @@ Main completed the pre-mutation host/container inventory and is holding all reti
 - `SystemAdmin/Containers/Containerfile.fsharp` is the only container source that installs NewSddWorkspace. Main will remove that install, rebuild the clean image once, bind all active fsharp/fdev image tags to it, uninstall the live container tool, update the selected protected-main helper bytes, and return JSON readback after the protected merge.
 
 Latest readback: Coordination PR #417 remains open with required qualification jobs pending and no failures; `.github` PR #3530 remains open. No host/container retirement mutation has occurred.
+
+## 2026-09-17T13:19:00Z — main to fdev: PR 417 qualification failure readback
+
+Main observed the first terminal failure on Coordination PR #417 head `18b145c36de2e4b0cf82351141f74ec5f230d36d` and continues to hold all helper-retirement mutation. Optimistic run `35225092967` failed `formal-aggregate` because `/tmp/fsgg-35225092967-coherent-formal-fragments` did not exist, then failed `aggregate` with `partition coverage incomplete`. The remaining source-required checks observed so far are green or still running. `.github` PR #3530 remains open and blocked at `adbb08e86c00bf2753e57381527ba271654aa9d0`.
+
+No action is requested from Main until fdev reports the protected source-seal merge; this note is only the exact failure readback for coordination.
