@@ -110,7 +110,17 @@ def publish_pending(config: HostConfig, state: dict[str, object]) -> None:
     finally:
         batch_path.unlink(missing_ok=True)
     if completed.returncode != 0:
-        raise ConfigurationError(completed.stderr.strip() or "telemetry batch publication failed")
+        message = completed.stderr.strip() or "telemetry batch publication failed"
+        if "invalid-request" in message:
+            # The engine has definitively rejected these bytes, so they cannot
+            # have been applied. Retaining that intent would permanently fence
+            # every corrected observation behind an unreplayable batch. Roll
+            # back only the unpublished cursor; unknown delivery outcomes keep
+            # their exact durable batch and continue to use normal replay.
+            state["sequence"] = sequence - 1
+            del state["pendingPublication"]
+            save_state(config, state)
+        raise ConfigurationError(message)
     state["phase"] = pending["nextPhase"]
     del state["pendingPublication"]
     save_state(config, state)
