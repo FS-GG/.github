@@ -145,5 +145,12 @@
     "incomplete": "Work through the roadmap",
     "negative": "Triage a GitHub project board with no markdown roadmap.",
     "boundary": "Identify the next unchecked milestone, but do not start implementation."
+  },
+  "pipeline-preflight": {
+    "positive": "Assess and add a proportionate preflight for this expensive FS-GG CI pipeline.",
+    "indirect": "This fan-in pipeline fails late; check the job plan cheaply before starting the long tests.",
+    "incomplete": "Sanity-check whether modeling this pipeline would be worth the effort.",
+    "negative": "Fix a typo in the README without changing build or CI behavior.",
+    "boundary": "For this one-off thirty-minute run, compare a short inspection with building a new model; do not assume a model pays back."
   }
 }

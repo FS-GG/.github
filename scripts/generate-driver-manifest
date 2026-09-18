@@ -122,13 +122,15 @@ DESCRIPTION_MAX = 220
 # The workspace initializer is a distinct bootstrap route: it is present before coordination exists,
 # so folding its trigger into a board skill would make discovery depend on the setup it must create.
 # Keep headroom small but real: this remains a prompt-budget guard, not a frozen historical count.
-DESCRIPTION_CEILING = 3850
+# One additional bounded pipeline-preflight route; avoid loading modeling guidance for simple CI.
+DESCRIPTION_CEILING = 4050
 # 4350 -> 4600 admitted the bootstrap initializer; 4600 -> 4750 admits `technical-writer`, whose
 # delivery routing prevents prose-only work from inheriting the implementation lifecycle. Each increase buys one
 # discriminating route, not padding for existing rows; keep the remaining margin bounded.
 # 4750 -> 5000 admits the temporary Unified Roadmap coordinator and its distinct just-in-time
 # feature-planning trigger. Its description allowance grows by 200; retire that allowance with it.
-ROOT_CATALOG_CEILING = 5000
+# 5000 -> 5300 admits pipeline-preflight, including its name and discovery path.
+ROOT_CATALOG_CEILING = 5300
 # DERIVED, not restated (ADR-0058): the effective ceiling is the per-root ceiling once per root Codex
 # actually catalogs. It was the literal 6400 while Codex had two native roots; hard-coding it would
 # now leave a ceiling that can never bind, which is a gate that always passes (#1611 category D).
@@ -264,6 +266,7 @@ ROUTED_VARIANTS = {
 # Absence is a reviewed decision, not an indistinguishable omission. Every other skill directory must
 # appear in DRIVERS or in the coordination-kit manifest.
 REPO_NATIVE_EXEMPTIONS = {
+    "pipeline-preflight": "initial pipeline-preflight standard and helpers; staged kit distribution follows measured pilot adoption",
     "technical-writer": "repo-native technical-writing and lightweight prose landing route; it has no producer manifest",
     "spectre-console": "repo-native co-tenant; it has no producer manifest",
     "work-unified-roadmap": "temporary FS-GG Unified Roadmap coordinator; repo-native, not a shared driver package",

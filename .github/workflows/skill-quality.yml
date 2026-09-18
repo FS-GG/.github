@@ -40,6 +40,8 @@ on:
       - "tests/FS.GG.Coord.Cli.Kernel.Tests/**"
       - "tests/FS.GG.Coord.Cli.BoardOps.Tests/**"
       - "tests/skill-quality/**"
+      - "tests/pipeline-preflight/**"
+      - ".github/workflows/coord-engine.yml"
       - "tools/routine-delivery.py"
       - "tools/routine-observer.py"
       - "tools/routine-telemetry-safety.py"
@@ -84,6 +86,8 @@ on:
       - "tests/FS.GG.Coord.Cli.Kernel.Tests/**"
       - "tests/FS.GG.Coord.Cli.BoardOps.Tests/**"
       - "tests/skill-quality/**"
+      - "tests/pipeline-preflight/**"
+      - ".github/workflows/coord-engine.yml"
       - "tools/routine-delivery.py"
       - "tools/routine-observer.py"
       - "tools/routine-telemetry-safety.py"
@@ -110,5 +114,7 @@ jobs:
           cache-dependency-path: requirements-test.txt
       - name: Provision pinned test dependencies
         run: python3 -m pip install -r requirements-test.txt
+      - name: Check pipeline preflight helpers and actual dependency binding
+        run: python3 tests/pipeline-preflight/run.py
       - name: Validate semantic skill quality and its rejection paths
         run: bash tests/skill-quality/run.sh
