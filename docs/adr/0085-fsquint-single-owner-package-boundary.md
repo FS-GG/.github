@@ -35,8 +35,12 @@ must remain compatible. Retiring the facade requires a separate SDD major API de
 
 FsQuint maintainers own generic API/schema compatibility, regression fixtures and
 release integrity. Consumers own their models, projections and adoption. FsQuint is
-rostered without coordination-kit/build-config receivers: receiving those fabrics is
-not a prerequisite for a standalone library. Existing organization issue-intake policy
+explicitly declared in `outside-fabric`: package ownership does not require board
+scope, coordination-kit or build-config participation. Registry closure accepts a
+contract owner only if rostered or explicitly exempt with a reason. Org closure still
+rejects missing repositories, stale exemptions and contradictory declarations. This
+changes the former rule that every dependency-graph participant must join the roster;
+existing receiver and board policies remain unchanged. Existing organization issue-intake policy
 still applies. The support policy promises no SLA or automatic older-line backports.
 
 ## Consequences

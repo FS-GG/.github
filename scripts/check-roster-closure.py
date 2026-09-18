@@ -15,7 +15,7 @@ audits repos IN the roster, so a repo absent from the roster is absent from the 
 This script asserts the roster is closed, from three directions:
 
   A. REGISTRY closure (offline, no token).  Every repo in `dependencies.yml`'s `repos:` block has a
-     row in `repos.yml`. Audio sat in one and not the other for weeks; this is the cheap, strictly-
+     row in `repos.yml` or an explicit justified outside-fabric declaration (ADR-0085). Audio sat in one and not the other for weeks; this is the cheap, strictly-
      implied invariant that would have caught it.
 
   B. ORG closure (two REST reads). Every repo that actually exists in the GitHub org has a row in
@@ -393,9 +393,18 @@ def board_closure_findings(roster: dict, items: list[dict]) -> list[str]:
 
 
 def check_registry_closure(roster: dict, deps: dict, owner: str) -> list[str]:
-    """(A) Every `dependencies.yml` repo is rostered. Offline; the invariant Audio violated."""
+    """(A) Every contract participant is rostered or explicitly outside the fabric (ADR-0085)."""
     errors: list[str] = []
     rostered = {str(r.get("full", "")).strip() for r in (roster.get("repos") or [])}
+
+    # Independent public package owners can participate in the dependency graph without
+    # joining board/receiver fabrics. An explicit reason is required; org closure below
+    # still checks existence and rejects contradictory or stale exemptions.
+    exempt = {
+        str(row.get("full", "")).strip()
+        for row in (roster.get("outside-fabric") or [])
+        if isinstance(row, dict) and isinstance(row.get("reason"), str) and row["reason"].strip()
+    }
 
     dep_repos = deps.get("repos") or {}
     if not dep_repos:
@@ -414,11 +423,11 @@ def check_registry_closure(roster: dict, deps: dict, owner: str) -> list[str]:
                           f"against the roster.")
             continue
         full = _full(owner, name)
-        if full not in rostered:
+        if full not in rostered and full not in exempt:
             errors.append(
                 f"{full} is a contract participant in registry/dependencies.yml (repos.{key}) but "
                 f"has NO row in registry/repos.yml. Every org fabric iterates the roster, so this "
-                f"repo receives no labels, no coordination kit, and no audit — silently. Add a row.")
+                f"repo is undeclared. Add a roster row or a justified outside-fabric declaration (ADR-0085).")
     return errors
 
 
@@ -728,7 +737,7 @@ def main(argv: list[str]) -> int:
         scopes.append(f"{nboard} board item(s)")
     scope = " and ".join(scopes)
     print(f"ok: {scope} closed — {nrost} rostered repo(s), {nexempt} explicit exemption(s), "
-          f"all {ndeps} dependencies.yml participant(s) rostered.")
+          f"all {ndeps} dependencies.yml participant(s) explicitly declared.")
     return 0
 
 
