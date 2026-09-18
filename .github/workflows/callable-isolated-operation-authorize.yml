@@ -30,12 +30,12 @@ on:
         description: Exact main revision containing this workflow
         required: true
         type: string
-      app_id:
-        description: Observed GitHub App id; never a credential
+      environment_id:
+        description: Observed protected environment id; evidence only
         required: true
         type: string
-      installation_id:
-        description: Observed GitHub App installation id; never a credential
+      credential_bindings_json:
+        description: Exact seven-role App and installation identities; evidence only, never credentials
         required: true
         type: string
       grant_lifetime_minutes:
@@ -64,13 +64,13 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
-      - name: Validate bindings and materialize the bounded grant
+      - name: Validate bindings and materialize the unavailable grant preparation
         env:
-          APP_ID: ${{ inputs.app_id }}
           CONTRACT_SHA256: ${{ inputs.contract_sha256 }}
           COORDINATION_REVISION: ${{ inputs.coordination_revision }}
+          CREDENTIAL_BINDINGS_JSON: ${{ inputs.credential_bindings_json }}
           DOTGITHUB_REVISION: ${{ inputs.dotgithub_revision }}
-          INSTALLATION_ID: ${{ inputs.installation_id }}
+          ENVIRONMENT_ID: ${{ inputs.environment_id }}
           LIFETIME_MINUTES: ${{ inputs.grant_lifetime_minutes }}
           PHASE: ${{ inputs.phase }}
           PLAN_SEAL: ${{ inputs.plan_seal }}
@@ -95,15 +95,16 @@ jobs:
             --workflow-revision "$GITHUB_SHA" \
             --workflow-sha256 "$workflow_sha256" \
             --run-id "$GITHUB_RUN_ID" \
-            --app-id "$APP_ID" \
-            --installation-id "$INSTALLATION_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --environment-id "$ENVIRONMENT_ID" \
+            --credential-bindings-json "$CREDENTIAL_BINDINGS_JSON" \
             --approved-at "$approved_at" \
             --lifetime-minutes "$LIFETIME_MINUTES" \
             --output "$RUNNER_TEMP/callable-isolated-operation-grant.json"
-      - name: Retain the reviewed grant
+      - name: Retain the reviewed prepared-not-authorized grant input
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: callable-isolated-operation-grant-${{ inputs.phase }}-${{ github.run_id }}
+          name: callable-isolated-operation-grant-preparation-${{ inputs.phase }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/callable-isolated-operation-grant.json
           retention-days: 1
           if-no-files-found: error

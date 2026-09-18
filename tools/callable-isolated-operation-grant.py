@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the bounded V2-CALL-01.4b protected authorization grant."""
+"""Build the bounded, deliberately unavailable V2-CALL-01.4b grant preparation."""
 
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ import sys
 
 SCHEMA = "fsgg.coordination.callable-isolated-operation-grant/1"
 OPERATION_IDENTITY = "v2-call-01-4b-isolated-native-v1"
-CONTRACT_SHA256 = "2561b7aa978ade63cbb960310a1154ae62495adeb155085b578e66682338e044"
-SOURCE_SHA256 = "9d0797035c7b71c2b58434d04ba66c61e9a527cc33829d38f7c5d27b0b6ff03a"
-COORDINATION_REVISION = "cbc73c146e6bba88e21ac3c9f3f8b74b54a7bd94"
+CONTRACT_SHA256 = "cc17065452ee941295a17844facfbdb13d305df179d7634b40459c0f63579a25"
+SOURCE_SHA256 = "0335c253aea68061f338cded634f29268303ec1eea31c6b0472b472d7974ba1e"
+COORDINATION_REVISION = "79ffe01f5cc2a0269797f3ec7ff54bf2c23b5c91"
 AUTHORITY_REPOSITORY = "FS-GG/.github"
 WORKFLOW_PATH = ".github/workflows/callable-isolated-operation-authorize.yml"
 ENVIRONMENT = "callable-isolated-operation"
@@ -26,6 +26,16 @@ REVIEWER_LOGIN = "EHotwagner"
 SHA256 = re.compile(r"[0-9a-f]{64}")
 OID = re.compile(r"[0-9a-f]{40}")
 POSITIVE_INTEGER = re.compile(r"[1-9][0-9]{0,18}")
+ROLE_PERMISSIONS = {
+    "app-installation-observer": {},
+    "authority-observer": {"actions": "read", "contents": "read", "metadata": "read"},
+    "reviewer-membership-observer": {"members": "read", "metadata": "read"},
+    "creation": {"administration": "write", "metadata": "read"},
+    "setup": {"actions": "write", "administration": "write", "checks": "read", "contents": "write",
+              "metadata": "read", "pull_requests": "write", "workflows": "write"},
+    "execution": {"checks": "read", "contents": "write", "metadata": "read", "pull_requests": "write"},
+    "cleanup": {"administration": "write", "metadata": "read"},
+}
 
 
 class Refused(ValueError):
@@ -68,8 +78,9 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--workflow-revision", required=True)
     result.add_argument("--workflow-sha256", required=True)
     result.add_argument("--run-id", required=True)
-    result.add_argument("--app-id", required=True)
-    result.add_argument("--installation-id", required=True)
+    result.add_argument("--run-attempt", required=True)
+    result.add_argument("--environment-id", required=True)
+    result.add_argument("--credential-bindings-json", required=True)
     result.add_argument("--approved-at", required=True)
     result.add_argument("--lifetime-minutes", required=True, type=int)
     result.add_argument("--output", required=True)
@@ -95,28 +106,58 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         raise Refused("grant lifetime must be between 1 and 120 minutes")
     approved = timestamp(args.approved_at)
     expires = approved + dt.timedelta(minutes=args.lifetime_minutes)
+    try:
+        bindings = json.loads(args.credential_bindings_json)
+    except json.JSONDecodeError as error:
+        raise Refused("credential bindings must be valid JSON") from error
+    if not isinstance(bindings, dict) or set(bindings) != set(ROLE_PERMISSIONS):
+        raise Refused("credential bindings must name the exact reviewed role set")
+    credentials = {}
+    for role, permissions in ROLE_PERMISSIONS.items():
+        identity = bindings[role]
+        if not isinstance(identity, dict) or set(identity) != {"appId", "installationId"}:
+            raise Refused(f"{role} credential identity is not exact")
+        credentials[role] = {
+            "appId": bounded_id(f"{role}-app-id", str(identity["appId"])),
+            "expiresAt": expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "installationId": bounded_id(f"{role}-installation-id", str(identity["installationId"])),
+            "kind": "github-app-jwt" if role == "app-installation-observer" else "github-app-installation",
+            "permissions": permissions,
+        }
     return {
-        "appId": bounded_id("app-id", args.app_id),
         "approvedAt": approved.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "artifact": {
+            "id": None,
+            "name": "callable-isolated-operation-grant",
+            "sha256": None,
+            "status": "server-assigned-coordinates-unavailable-before-upload",
+        },
         "authority": {
             "environment": ENVIRONMENT,
+            "environmentId": bounded_id("environment-id", args.environment_id),
             "repository": AUTHORITY_REPOSITORY,
             "runId": bounded_id("run-id", args.run_id),
+            "runAttempt": bounded_id("run-attempt", args.run_attempt),
             "workflowPath": WORKFLOW_PATH,
             "workflowRevision": args.workflow_revision,
             "workflowSha256": args.workflow_sha256,
         },
-        "authorized": True,
+        "authorized": False,
+        "blockingReasons": [
+            "grant-payload-cannot-contain-its-own-server-assigned-artifact-id-and-digest",
+            "protected-environment-and-reviewed-app-installations-not-yet-provisioned",
+        ],
         "contractSha256": CONTRACT_SHA256,
         "coordinationRevision": COORDINATION_REVISION,
         "expiresAt": expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "installationId": bounded_id("installation-id", args.installation_id),
+        "credentials": credentials,
         "operationIdentity": OPERATION_IDENTITY,
         "phase": args.phase,
         "planSeal": args.plan_seal,
         "requiredReviewer": {"id": REVIEWER_ID, "login": REVIEWER_LOGIN},
         "schema": SCHEMA,
         "sourceSha256": SOURCE_SHA256,
+        "status": "prepared-not-authorized",
         "target": TARGET,
     }
 
