@@ -89,9 +89,9 @@ jobs:
             --contract-sha256 "$CONTRACT_SHA256" \
             --source-sha256 "$SOURCE_SHA256" \
             --coordination-revision "$COORDINATION_REVISION" \
-            --authority-repository "$GITHUB_REPOSITORY" \
-            --authority-event "$GITHUB_EVENT_NAME" \
-            --authority-ref "$GITHUB_REF" \
+            --grant-repository "$GITHUB_REPOSITORY" \
+            --grant-event "$GITHUB_EVENT_NAME" \
+            --grant-ref "$GITHUB_REF" \
             --workflow-revision "$GITHUB_SHA" \
             --workflow-sha256 "$workflow_sha256" \
             --run-id "$GITHUB_RUN_ID" \
