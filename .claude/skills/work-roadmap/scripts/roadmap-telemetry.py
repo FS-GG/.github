@@ -243,7 +243,8 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
             raise ConfigurationError("dispatch attempt already progressed beyond expectation")
         return {"schema": "fsgg.telemetry.roadmap-dispatch/1", "status": "expected",
                 "token": existing["token"], "coverage": "native-collaboration-usage-unsupported"}
-    if args.parent_token and parent.get("phase") != "started":
+    if (args.parent_token and parent.get("phase") != "started" and
+            not (relation == "follow-up" and parent.get("phase") == "terminal")):
         raise ConfigurationError("parent dispatch must be started before a child is expected")
     token, activation, dispatch, invocation = (uuid.uuid4().hex for _ in range(4))
     root_invocation = invocation
