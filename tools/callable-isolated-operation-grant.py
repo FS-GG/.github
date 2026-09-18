@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the bounded, deliberately unavailable V2-CALL-01.4b grant preparation."""
+"""Build a bounded V2-CALL-01.4b grant from exact live authority evidence."""
 
 from __future__ import annotations
 
@@ -69,6 +69,10 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
     result.add_argument("--phase", required=True, choices=("creation", "identity-bound-operation"))
     result.add_argument("--plan-seal", required=True)
+    result.add_argument("--plan-run-id", required=True)
+    result.add_argument("--plan-run-attempt", required=True)
+    result.add_argument("--plan-artifact-id", required=True)
+    result.add_argument("--plan-artifact-sha256", required=True)
     result.add_argument("--contract-sha256", required=True)
     result.add_argument("--source-sha256", required=True)
     result.add_argument("--coordination-revision", required=True)
@@ -81,6 +85,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--run-attempt", required=True)
     result.add_argument("--environment-id", required=True)
     result.add_argument("--credential-bindings-json", required=True)
+    result.add_argument("--authority-observation-json", required=True)
     result.add_argument("--approved-at", required=True)
     result.add_argument("--lifetime-minutes", required=True, type=int)
     result.add_argument("--output", required=True)
@@ -98,6 +103,8 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     exact("grant ref", args.grant_ref, "refs/heads/main")
     if not SHA256.fullmatch(args.plan_seal):
         raise Refused("plan seal must be a lowercase SHA-256")
+    if not SHA256.fullmatch(args.plan_artifact_sha256):
+        raise Refused("plan artifact digest must be a lowercase SHA-256")
     if not OID.fullmatch(args.workflow_revision):
         raise Refused("workflow revision must be a lowercase Git object id")
     if not SHA256.fullmatch(args.workflow_sha256):
@@ -112,6 +119,39 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         raise Refused("credential bindings must be valid JSON") from error
     if not isinstance(bindings, dict) or set(bindings) != set(ROLE_PERMISSIONS):
         raise Refused("credential bindings must name the exact reviewed role set")
+    try:
+        observation = json.loads(args.authority_observation_json)
+    except json.JSONDecodeError as error:
+        raise Refused("authority observation must be valid JSON") from error
+    required_observation = {"schema", "environment", "reviewerMembership", "installation"}
+    if (not isinstance(observation, dict) or set(observation) != required_observation
+            or observation.get("schema") != "fsgg.github.callable-isolated-operation-authority-observation/1"):
+        raise Refused("authority observation schema or fields are not exact")
+    environment = observation.get("environment")
+    if (not isinstance(environment, dict)
+            or environment != {"id": bounded_id("observed-environment-id", str(environment.get("id"))),
+                               "name": ENVIRONMENT, "preventSelfReview": True,
+                               "requiredReviewerId": REVIEWER_ID, "branchPolicy": "custom-main"}):
+        raise Refused("protected environment observation is not exact")
+    membership = observation.get("reviewerMembership")
+    if membership != {"id": REVIEWER_ID, "login": REVIEWER_LOGIN, "state": "active"}:
+        raise Refused("required reviewer active membership was not observed")
+    installation = observation.get("installation")
+    required_permissions = {
+        "actions": "write", "administration": "write", "checks": "read", "contents": "write",
+        "members": "read", "metadata": "read", "organization_administration": "read",
+        "pull_requests": "write", "workflows": "write",
+    }
+    if (not isinstance(installation, dict)
+            or set(installation) != {"appId", "installationId", "account", "accountType", "repositorySelection", "permissions", "suspendedAt"}
+            or installation.get("account") != "FS-GG" or installation.get("accountType") != "Organization"
+            or installation.get("repositorySelection") != "all" or installation.get("suspendedAt") is not None
+            or installation.get("permissions") != required_permissions):
+        raise Refused("reviewed App installation observation is not exact")
+    observed_app = bounded_id("observed-app-id", str(installation.get("appId")))
+    observed_installation = bounded_id("observed-installation-id", str(installation.get("installationId")))
+    if bounded_id("environment-id", args.environment_id) != environment["id"]:
+        raise Refused("environment input does not match the live observation")
     credentials = {}
     for role, permissions in ROLE_PERMISSIONS.items():
         identity = bindings[role]
@@ -124,6 +164,8 @@ def build(args: argparse.Namespace) -> dict[str, object]:
             "kind": "github-app-jwt" if role == "app-installation-observer" else "github-app-installation",
             "permissions": permissions,
         }
+        if credentials[role]["appId"] != observed_app or credentials[role]["installationId"] != observed_installation:
+            raise Refused(f"{role} credential identity does not match the reviewed installation")
     return {
         "approvedAt": approved.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "authority": {
@@ -136,21 +178,26 @@ def build(args: argparse.Namespace) -> dict[str, object]:
             "workflowRevision": args.workflow_revision,
             "workflowSha256": args.workflow_sha256,
         },
-        "authorized": False,
-        "blockingReasons": [
-            "protected-environment-and-reviewed-app-installations-not-yet-provisioned",
-        ],
+        "authorized": True,
+        "blockingReasons": [],
         "contractSha256": CONTRACT_SHA256,
         "coordinationRevision": COORDINATION_REVISION,
         "expiresAt": expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "credentials": credentials,
         "operationIdentity": OPERATION_IDENTITY,
         "phase": args.phase,
+        "planArtifact": {
+            "artifactId": bounded_id("plan-artifact-id", args.plan_artifact_id),
+            "repository": AUTHORITY_REPOSITORY,
+            "runAttempt": bounded_id("plan-run-attempt", args.plan_run_attempt),
+            "runId": bounded_id("plan-run-id", args.plan_run_id),
+            "sha256": args.plan_artifact_sha256,
+        },
         "planSeal": args.plan_seal,
         "requiredReviewer": {"id": REVIEWER_ID, "login": REVIEWER_LOGIN},
         "schema": SCHEMA,
         "sourceSha256": SOURCE_SHA256,
-        "status": "prepared-not-authorized",
+        "status": "authorized",
         "target": TARGET,
     }
 
