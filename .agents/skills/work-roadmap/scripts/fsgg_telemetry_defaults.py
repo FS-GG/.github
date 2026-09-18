@@ -6,6 +6,8 @@ import json
 import os
 import pathlib
 import re
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -37,6 +39,7 @@ class HostConfig:
     workspace: bool = False
     producer: str | None = None
     binding_digest: str | None = None
+    credential_reference: str | None = None
 
 
 def canonical_github_repository(value: str) -> str:
@@ -106,6 +109,47 @@ def workspace_repository() -> str:
     return discover_checkout_repository()
 
 
+def workspace_credential_reference(value: dict[str, object], binding: dict[str, object], repository: str) -> str:
+    matches = []
+    for association in value.get("associations", []):
+        if (isinstance(association, dict) and association.get("producerId") == binding.get("producerId") and
+                isinstance(association.get("repositories"), list) and repository in association["repositories"]):
+            destination = association.get("destination")
+            if isinstance(destination, dict):
+                matches.append(destination.get("credentialReference"))
+    if len(matches) != 1 or not isinstance(matches[0], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", matches[0]):
+        raise ConfigurationError("telemetry workspace credential association is missing or ambiguous")
+    return matches[0]
+
+
+def credential_environment_name(reference: str) -> str:
+    return "FSGG_TELEMETRY_CREDENTIAL_" + reference.replace("-", "_").upper()
+
+
+def workspace_mutation_command(config: HostConfig, command: list[str]) -> list[str]:
+    """Use the owner-controlled credential client when the selected secret is not already loaded."""
+    if not config.workspace:
+        return command
+    reference = config.credential_reference
+    if not reference:
+        raise ConfigurationError("telemetry workspace credential association is unavailable")
+    if os.environ.get(credential_environment_name(reference)):
+        return command
+    helper_name = "fdev-telemetry"
+    helper_value = shutil.which(helper_name)
+    if not helper_value:
+        raise ConfigurationError("telemetry credential client is unavailable")
+    helper = pathlib.Path(helper_value)
+    try:
+        details = helper.lstat()
+    except OSError as error:
+        raise ConfigurationError("telemetry credential client is unavailable") from error
+    if (helper.is_symlink() or not stat.S_ISREG(details.st_mode) or
+            (hasattr(os, "getuid") and details.st_uid != os.getuid()) or details.st_mode & 0o022):
+        raise ConfigurationError("telemetry credential client is not an owner-controlled executable")
+    return [str(helper.resolve()), "exec", *command]
+
+
 def candidate_config_paths(explicit: str | None = None) -> list[pathlib.Path]:
     if explicit:
         return [pathlib.Path(explicit)]
@@ -156,8 +200,9 @@ def discover_config(explicit: str | None = None) -> HostConfig | None:
                     binding.get("repository") != repository):
                 raise ConfigurationError("telemetry workspace binding result is invalid")
             state_root = pathlib.Path(binding["privateStateRoot"])
+            credential_reference = workspace_credential_reference(value, binding, repository)
             return HostConfig(path.resolve(), state_root, engine, binding["repository"], True,
-                              binding["producerId"], binding["bindingDigest"])
+                              binding["producerId"], binding["bindingDigest"], credential_reference)
         if list(value) != ["schema", "storeRoot", "engine"]:
             raise ConfigurationError("telemetry config has an invalid closed shape")
         if value.get("schema") != CONFIG_SCHEMA:

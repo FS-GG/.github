@@ -24,6 +24,7 @@ from fsgg_telemetry_defaults import (
     discover_config,
     validate_identity,
     validate_workspace,
+    workspace_mutation_command,
     write_private_json,
 )
 
@@ -51,8 +52,20 @@ def digest(prefix: str, *values: str) -> str:
     return prefix + hashlib.sha256(value).hexdigest()[:32]
 
 
-def publish(config: HostConfig, state: dict[str, object], events: list[dict[str, object]]) -> None:
-    validate_workspace(config)
+def prepare_publication(
+    config: HostConfig,
+    state: dict[str, object],
+    operation: str,
+    next_phase: str,
+    events: list[dict[str, object]],
+) -> None:
+    pending = state.get("pendingPublication")
+    if pending is not None:
+        if (not isinstance(pending, dict) or pending.get("operation") != operation or
+                pending.get("nextPhase") != next_phase or
+                not isinstance(pending.get("batch"), dict) or pending["batch"].get("events") != events):
+            raise ConfigurationError("a different telemetry publication is already pending")
+        return
     sequence = int(state["sequence"]) + 1
     state["sequence"] = sequence
     invocation = str(state["invocationId"])
@@ -65,6 +78,22 @@ def publish(config: HostConfig, state: dict[str, object], events: list[dict[str,
         "eventCount": len(events),
         "events": events,
     }
+    state["pendingPublication"] = {"operation": operation, "nextPhase": next_phase, "batch": batch}
+    save_state(config, state)
+
+
+def publish_pending(config: HostConfig, state: dict[str, object]) -> None:
+    validate_workspace(config)
+    pending = state.get("pendingPublication")
+    if not isinstance(pending, dict) or set(pending) != {"operation", "nextPhase", "batch"}:
+        raise ConfigurationError("telemetry publication intent is unavailable")
+    batch = pending["batch"]
+    if (not isinstance(batch, dict) or batch.get("schema") != BATCH_SCHEMA or
+            batch.get("generation") != state.get("invocationId") or
+            batch.get("cursor") != str(state.get("sequence"))):
+        raise ConfigurationError("telemetry publication intent is malformed")
+    invocation = str(state["invocationId"])
+    sequence = int(state["sequence"])
     batch_path = write_private_json(config.store_root / "orchestrator-publish", f"batch-{invocation}-{sequence}", batch)
     try:
         command = ([config.engine, "telemetry", "workspace", "submit", "--config", str(config.path),
@@ -72,7 +101,7 @@ def publish(config: HostConfig, state: dict[str, object], events: list[dict[str,
                     "--binding-digest", str(state.get("associationDigest")), "--input", str(batch_path)] if config.workspace else
                    [config.engine, "telemetry", "store", "publish", "--store-root", str(config.store_root), "--input", str(batch_path)])
         completed = subprocess.run(
-            command,
+            workspace_mutation_command(config, command),
             text=True,
             capture_output=True,
             timeout=20,
@@ -82,6 +111,21 @@ def publish(config: HostConfig, state: dict[str, object], events: list[dict[str,
         batch_path.unlink(missing_ok=True)
     if completed.returncode != 0:
         raise ConfigurationError(completed.stderr.strip() or "telemetry batch publication failed")
+    state["phase"] = pending["nextPhase"]
+    del state["pendingPublication"]
+    save_state(config, state)
+
+
+def publish(
+    config: HostConfig,
+    state: dict[str, object],
+    events: list[dict[str, object]],
+    *,
+    operation: str = "observation",
+    next_phase: str | None = None,
+) -> None:
+    prepare_publication(config, state, operation, next_phase or str(state["phase"]), events)
+    publish_pending(config, state)
 
 
 def state_path(config: HostConfig, token: str) -> pathlib.Path:
@@ -92,8 +136,10 @@ def state_path(config: HostConfig, token: str) -> pathlib.Path:
 
 def drain_command(config: HostConfig) -> list[str]:
     if config.workspace:
-        return [config.engine, "telemetry", "workspace", "drain", "--config", str(config.path),
-                "--repository", str(config.repository), "--binding-digest", str(config.binding_digest)]
+        return workspace_mutation_command(config, [
+            config.engine, "telemetry", "workspace", "drain", "--config", str(config.path),
+            "--repository", str(config.repository), "--binding-digest", str(config.binding_digest),
+        ])
     return [config.engine, "telemetry", "store", "drain", "--store-root", str(config.store_root)]
 
 
@@ -116,6 +162,30 @@ def read_state(config: HostConfig, token: str) -> dict[str, object]:
 
 def save_state(config: HostConfig, state: dict[str, object]) -> None:
     write_private_json(config.store_root / "orchestrator-dispatches", str(state["token"]), state)
+
+
+def matching_dispatch(config: HostConfig, expected: dict[str, object]) -> dict[str, object] | None:
+    directory = config.store_root / "orchestrator-dispatches"
+    if not directory.exists():
+        return None
+    paths = list(directory.glob("*.json"))
+    if len(paths) > 4096:
+        raise ConfigurationError("dispatch state inventory exceeds the recovery bound")
+    identity = {name: expected[name] for name in ("featureId", "itemId", "attemptId")}
+    matches = []
+    for path in paths:
+        if not re.fullmatch(r"[0-9a-f]{32}\.json", path.name):
+            continue
+        state = read_state(config, path.stem)
+        if all(state.get(name) == value for name, value in identity.items()):
+            matches.append(state)
+    if len(matches) > 1:
+        raise ConfigurationError("dispatch identity is ambiguous in private state")
+    if not matches:
+        return None
+    if not all(matches[0].get(name) == value for name, value in expected.items()):
+        raise ConfigurationError("dispatch attempt retry differs from its durable identity")
+    return matches[0]
 
 
 def refresh_dashboard(config: HostConfig) -> dict[str, object]:
@@ -146,9 +216,7 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
     effort = validate_identity("effort", args.effort)
     if args.late_after_seconds < 0:
         raise ConfigurationError("late-after-seconds must be non-negative")
-    token, activation, dispatch, invocation = (uuid.uuid4().hex for _ in range(4))
     parent_dispatch = parent_invocation = None
-    root_invocation = invocation
     relation = "root"
     if args.parent_token:
         parent = read_state(config, args.parent_token)
@@ -156,18 +224,37 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
             raise ConfigurationError("parent dispatch must be started before a child is expected")
         if parent.get("itemId") != item:
             raise ConfigurationError("parent and child dispatches must share the item identity")
-        activation = str(parent["activationId"])
         parent_dispatch = str(parent["dispatchId"])
         parent_invocation = str(parent["invocationId"])
-        root_invocation = str(parent["rootInvocationId"])
         relation = args.relation
     elif args.relation != "root":
         raise ConfigurationError("child and follow-up dispatches require --parent-token")
+    expected = {
+        "featureId": feature, "itemId": item, "attemptId": attempt, "parentAttemptId": parent_attempt,
+        "producerStream": producer, "model": model, "effort": effort, "relation": relation,
+        "parentDispatchId": parent_dispatch, "parentInvocationId": parent_invocation,
+        "lateAfterSeconds": args.late_after_seconds,
+    }
+    existing = matching_dispatch(config, expected)
+    if existing is not None:
+        if existing.get("phase") == "begin-pending":
+            publish_pending(config, existing)
+        elif existing.get("phase") != "expected":
+            raise ConfigurationError("dispatch attempt already progressed beyond expectation")
+        return {"schema": "fsgg.telemetry.roadmap-dispatch/1", "status": "expected",
+                "token": existing["token"], "coverage": "native-collaboration-usage-unsupported"}
+    if args.parent_token and parent.get("phase") != "started":
+        raise ConfigurationError("parent dispatch must be started before a child is expected")
+    token, activation, dispatch, invocation = (uuid.uuid4().hex for _ in range(4))
+    root_invocation = invocation
+    if args.parent_token:
+        activation = str(parent["activationId"])
+        root_invocation = str(parent["rootInvocationId"])
     timestamp = now()
     state: dict[str, object] = {
         "schema": STATE_SCHEMA,
         "token": token,
-        "phase": "expected",
+        "phase": "begin-pending",
         "sequence": 0,
         "featureId": feature,
         "itemId": item,
@@ -183,6 +270,7 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         "parentDispatchId": parent_dispatch,
         "parentInvocationId": parent_invocation,
         "relation": relation,
+        "lateAfterSeconds": args.late_after_seconds,
         "nativeId": None,
         "associationProducer": config.producer,
         "associationDigest": config.binding_digest,
@@ -203,17 +291,27 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
                         dispatchId=dispatch, activationId=activation, relation=relation,
                         parentDispatchId=parent_dispatch, runtime=RUNTIME,
                         expectedAt=timestamp, clockProvenance="host-wall"))
-    publish(config, state, events)
-    save_state(config, state)
+    publish(config, state, events, operation="begin", next_phase="expected")
     return {"schema": "fsgg.telemetry.roadmap-dispatch/1", "status": "expected", "token": token,
             "coverage": "native-collaboration-usage-unsupported"}
 
 
 def started(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
     state = read_state(config, args.token)
-    if state.get("phase") != "expected":
-        raise ConfigurationError("dispatch must be expected exactly once before start")
     native_id = validate_identity("native id", args.native_id)
+    if state.get("phase") == "started":
+        if state.get("nativeId") != native_id:
+            raise ConfigurationError("started dispatch belongs to a different native identity")
+        return {"schema": "fsgg.telemetry.roadmap-dispatch/1", "status": "started", "token": args.token,
+                "coverage": "native-collaboration-usage-unsupported"}
+    if state.get("phase") == "start-pending":
+        if state.get("nativeId") != native_id:
+            raise ConfigurationError("pending start belongs to a different native identity")
+        publish_pending(config, state)
+        return {"schema": "fsgg.telemetry.roadmap-dispatch/1", "status": "started", "token": args.token,
+                "coverage": "native-collaboration-usage-unsupported"}
+    if state.get("phase") != "expected":
+        raise ConfigurationError("dispatch must be expected before start")
     item, invocation = str(state["itemId"]), str(state["invocationId"])
     timestamp = now()
     events = [
@@ -237,32 +335,41 @@ def started(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         event("runtime-gap", f"runtime-gap-{invocation}-native-process", item, invocationId=invocation,
               code="native-process-id-unavailable"),
     ]
-    publish(config, state, events)
-    state["phase"], state["nativeId"] = "started", native_id
-    save_state(config, state)
+    state["phase"], state["nativeId"] = "start-pending", native_id
+    publish(config, state, events, operation="started", next_phase="started")
     return {"schema": "fsgg.telemetry.roadmap-dispatch/1", "status": "started", "token": args.token,
             "coverage": "native-collaboration-usage-unsupported"}
 
 
 def finish(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
     state = read_state(config, args.token)
-    if state.get("phase") != "started":
-        raise ConfigurationError("dispatch must be started exactly once before terminal")
-    item, invocation = str(state["itemId"]), str(state["invocationId"])
-    timestamp = now()
     exit_code = args.exit_code if args.exit_code is not None else (0 if args.outcome == "completed" else 1)
     if exit_code < 0:
         raise ConfigurationError("exit-code must be non-negative")
-    events = [
-        event("runtime-terminal", f"runtime-terminal-{invocation}", item, invocationId=invocation,
-              threadId=state["nativeId"], outcome=args.outcome, exitCode=exit_code),
-        event("event-time", f"event-time-{invocation}-terminal", item, invocationId=invocation,
-              event="terminal", occurredAt=timestamp, occurredClockProvenance="host-wall",
-              observedAt=timestamp, observedClockProvenance="host-wall"),
-    ]
-    publish(config, state, events)
-    state["phase"], state["outcome"] = "terminal", args.outcome
-    save_state(config, state)
+    if state.get("phase") in {"terminal-pending", "terminal"}:
+        if state.get("phase") == "terminal" and "exitCode" not in state:
+            if args.exit_code is not None:
+                raise ConfigurationError("legacy terminal state cannot verify an explicit exit-code retry")
+            state["exitCode"] = exit_code
+            save_state(config, state)
+        if state.get("outcome") != args.outcome or state.get("exitCode") != exit_code:
+            raise ConfigurationError("terminal retry differs from the durable terminal intent")
+        if state.get("phase") == "terminal-pending":
+            publish_pending(config, state)
+    elif state.get("phase") == "started":
+        item, invocation = str(state["itemId"]), str(state["invocationId"])
+        timestamp = now()
+        events = [
+            event("runtime-terminal", f"runtime-terminal-{invocation}", item, invocationId=invocation,
+                  threadId=state["nativeId"], outcome=args.outcome, exitCode=exit_code),
+            event("event-time", f"event-time-{invocation}-terminal", item, invocationId=invocation,
+                  event="terminal", occurredAt=timestamp, occurredClockProvenance="host-wall",
+                  observedAt=timestamp, observedClockProvenance="host-wall"),
+        ]
+        state["phase"], state["outcome"], state["exitCode"] = "terminal-pending", args.outcome, exit_code
+        publish(config, state, events, operation="finish", next_phase="terminal")
+    else:
+        raise ConfigurationError("dispatch must be started before terminal")
     drain = subprocess.run(
         drain_command(config),
         text=True, capture_output=True, timeout=30, check=False,
@@ -289,8 +396,8 @@ def read_contract(path: str, schema: str, fields: set[str]) -> dict[str, object]
 
 
 def record_event(config: HostConfig, state: dict[str, object], value: dict[str, object]) -> dict[str, object]:
-    publish(config, state, [value])
-    save_state(config, state)
+    operation = f"observation:{value.get('kind')}:{value.get('identity')}"
+    publish(config, state, [value], operation=operation)
     drain = subprocess.run(drain_command(config),
                            text=True, capture_output=True, timeout=30, check=False)
     if drain.returncode != 0:
