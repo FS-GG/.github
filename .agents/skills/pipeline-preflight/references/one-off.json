@@ -1,0 +1,14 @@
+{
+  "assumptions": "Illustrative only; costs use one currency. Setup rate: 60/hour; runner rate: 3/hour.",
+  "horizon_runs": 1,
+  "setup_cost": 720,
+  "maintenance_cost": 0,
+  "defect_probability_low": 1,
+  "defect_probability_high": 1,
+  "detection_probability": 1,
+  "avoidable_runner_minutes": 30,
+  "runner_cost_per_minute": 0.05,
+  "preflight_runner_minutes": 0.1,
+  "false_block_probability": 0,
+  "triage_cost": 2
+}

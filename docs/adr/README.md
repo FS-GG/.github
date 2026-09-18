@@ -110,6 +110,8 @@ registry like any other, and this org gates its registries.
 | [0084](0084-semantic-reuse-never-cancels-coherent-validation.md) | **Validated semantic reuse may advance native delivery while an independent coherent run continues.** Current or unvalidated candidates wait; late failure disputes dependent acceptance without rewriting merge history. | Accepted |
 | [0085](0085-fsquint-single-owner-package-boundary.md) | FsQuint owns generic replay; SDD delegates and Coordination qualifies package updates. | Accepted |
 
+| [0086](0086-proportionate-pipeline-preflight.md) | Proportionate preflight for complex pipelines | Accepted |
+
 ## Supersession map
 
 Which record currently rules, and where a decision was amended. Every edge below is recorded in

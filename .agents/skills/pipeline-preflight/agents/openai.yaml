@@ -1,0 +1,6 @@
+interface:
+  display_name: "Pipeline Preflight"
+  short_description: "Choose economical, usable checks before expensive CI"
+  default_prompt: "Use $pipeline-preflight to choose and validate a proportionate check for this CI pipeline, including cost and usability."
+policy:
+  allow_implicit_invocation: true
