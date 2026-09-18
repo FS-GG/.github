@@ -75,8 +75,8 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
     result.add_argument("--phase", choices=("creation", "identity-bound-operation"), required=True)
     result.add_argument("--plan-seal", required=True)
-    result.add_argument("--authorization-run-id", required=True)
-    result.add_argument("--authorization-run-attempt", required=True)
+    result.add_argument("--grant-run-id", required=True)
+    result.add_argument("--grant-run-attempt", required=True)
     result.add_argument("--grant-artifact-id", required=True)
     result.add_argument("--grant-artifact-sha256", required=True)
     result.add_argument("--plan-run-id", required=True)
@@ -88,17 +88,17 @@ def parser() -> argparse.ArgumentParser:
         result.add_argument(f"--{prefix}-run-attempt", default="")
         result.add_argument(f"--{prefix}-artifact-id", default="")
         result.add_argument(f"--{prefix}-artifact-sha256", default="")
-    result.add_argument("--authority-revision", required=True)
+    result.add_argument("--workflow-revision", required=True)
     result.add_argument("--workflow-sha256", required=True)
     result.add_argument("--output", required=True)
     return result
 
 
 def build(args: argparse.Namespace) -> dict[str, object]:
-    if not OID.fullmatch(args.authority_revision):
+    if not OID.fullmatch(args.workflow_revision):
         raise Refused("authority revision must be one lowercase Git object id")
-    grant = artifact(AUTHORITY_REPOSITORY, "grant", args.authorization_run_id,
-                     args.authorization_run_attempt, args.grant_artifact_id, args.grant_artifact_sha256)
+    grant = artifact(AUTHORITY_REPOSITORY, "grant", args.grant_run_id,
+                     args.grant_run_attempt, args.grant_artifact_id, args.grant_artifact_sha256)
     grant.update({
         "environment": ENVIRONMENT,
         "event": "workflow_dispatch",
@@ -123,7 +123,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
             "authority": {
                 "environment": ENVIRONMENT,
                 "repository": AUTHORITY_REPOSITORY,
-                "revision": args.authority_revision,
+                "revision": args.workflow_revision,
                 "workflowPath": EXECUTOR_WORKFLOW,
                 "workflowSha256": sha256("workflow-sha256", args.workflow_sha256),
             },

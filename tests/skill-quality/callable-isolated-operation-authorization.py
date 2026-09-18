@@ -198,13 +198,13 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
     def test_executor_packet_binds_exact_evidence_and_reports_every_blocker(self):
         args = argparse.Namespace(
             phase="identity-bound-operation", plan_seal="1" * 64,
-            authorization_run_id="10", authorization_run_attempt="2",
+            grant_run_id="10", grant_run_attempt="2",
             grant_artifact_id="11", grant_artifact_sha256="2" * 64,
             plan_run_id="12", plan_run_attempt="3", plan_artifact_id="13", plan_artifact_sha256="3" * 64,
             creation_receipt_run_id="14", creation_receipt_run_attempt="4",
             creation_receipt_artifact_id="15", creation_receipt_artifact_sha256="4" * 64,
             checkpoint_run_id="16", checkpoint_run_attempt="5", checkpoint_artifact_id="17",
-            checkpoint_artifact_sha256="5" * 64, authority_revision="6" * 40,
+            checkpoint_artifact_sha256="5" * 64, workflow_revision="6" * 40,
             workflow_sha256="7" * 64, output="unused")
         packet = executor.build(args)
         self.assertFalse(packet["authorized"])
@@ -226,16 +226,16 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
     def test_executor_rejects_cross_phase_partial_and_malformed_evidence(self):
         base = dict(
             phase="creation", plan_seal="1" * 64,
-            authorization_run_id="10", authorization_run_attempt="2", grant_artifact_id="11",
+            grant_run_id="10", grant_run_attempt="2", grant_artifact_id="11",
             grant_artifact_sha256="2" * 64, plan_run_id="12", plan_run_attempt="3",
             plan_artifact_id="13", plan_artifact_sha256="3" * 64,
             creation_receipt_run_id="", creation_receipt_run_attempt="", creation_receipt_artifact_id="",
             creation_receipt_artifact_sha256="", checkpoint_run_id="", checkpoint_run_attempt="",
-            checkpoint_artifact_id="", checkpoint_artifact_sha256="", authority_revision="6" * 40,
+            checkpoint_artifact_id="", checkpoint_artifact_sha256="", workflow_revision="6" * 40,
             workflow_sha256="7" * 64, output="unused")
         cases = (
             {"plan_seal": "A" * 64},
-            {"authorization_run_attempt": "0"},
+            {"grant_run_attempt": "0"},
             {"grant_artifact_sha256": "2" * 63},
             {"checkpoint_run_id": "16"},
             {"creation_receipt_run_id": "14", "creation_receipt_run_attempt": "4",

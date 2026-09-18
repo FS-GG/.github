@@ -139,7 +139,7 @@ jobs:
           workflow_sha256="$(sha256sum .github/workflows/callable-isolated-operation-execute.yml | cut -d ' ' -f 1)"
           python3 tools/callable-isolated-operation-executor.py \
             --phase "$PHASE" --plan-seal "$PLAN_SEAL" \
-            --authorization-run-id "$AUTHORIZATION_RUN_ID" --authorization-run-attempt "$AUTHORIZATION_RUN_ATTEMPT" \
+            --grant-run-id "$AUTHORIZATION_RUN_ID" --grant-run-attempt "$AUTHORIZATION_RUN_ATTEMPT" \
             --grant-artifact-id "$GRANT_ARTIFACT_ID" --grant-artifact-sha256 "$GRANT_ARTIFACT_SHA256" \
             --plan-run-id "$PLAN_RUN_ID" --plan-run-attempt "$PLAN_RUN_ATTEMPT" \
             --plan-artifact-id "$PLAN_ARTIFACT_ID" --plan-artifact-sha256 "$PLAN_ARTIFACT_SHA256" \
@@ -147,7 +147,7 @@ jobs:
             --creation-receipt-artifact-id "$CREATION_RECEIPT_ARTIFACT_ID" --creation-receipt-artifact-sha256 "$CREATION_RECEIPT_ARTIFACT_SHA256" \
             --checkpoint-run-id "$CHECKPOINT_RUN_ID" --checkpoint-run-attempt "$CHECKPOINT_RUN_ATTEMPT" \
             --checkpoint-artifact-id "$CHECKPOINT_ARTIFACT_ID" --checkpoint-artifact-sha256 "$CHECKPOINT_ARTIFACT_SHA256" \
-            --authority-revision "$GITHUB_SHA" --workflow-sha256 "$workflow_sha256" \
+            --workflow-revision "$GITHUB_SHA" --workflow-sha256 "$workflow_sha256" \
             --output "$RUNNER_TEMP/callable-isolated-operation-readiness.json"
           echo 'available=false' >> "$GITHUB_OUTPUT"
       - name: Install and verify the exact public CLI only after every blocker is removed
