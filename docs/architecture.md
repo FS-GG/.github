@@ -8,6 +8,11 @@ description: A newcomer's guide to the FS-GG architecture — the component spli
 
 # FS-GG architecture
 
+[FsQuint](https://github.com/FS-GG/FsQuint) is the independent public Quint–F#
+correspondence library. SDD delegates generic replay through a compatibility facade;
+Coordination owns domain adapters and consumes the same package. Package upgrades
+are qualified separately from tool pins and installed adoption ([ADR-0085](adr/0085-fsquint-single-owner-package-boundary.md)).
+
 > **Audience.** This document is for people who want to understand *how FS-GG is
 > built* — its repositories, boundaries, contracts, and the decisions that shape
 > them. If you only want to *use* FS-GG to build an app, start with the
@@ -591,6 +596,7 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 
 | Contract | Owner | `version` | `package-version` |
 |---|---|---|---|
+| `fsquint-replay` | FsQuint | `0.1.0-preview.2` | `0.1.0-preview.2` |
 | `fsgg-contracts` | FS.GG.SDD | `7.5.2` | `7.5.2` |
 | `governance-reference-gate-set` | FS.GG.Governance | `1.7.0` | `1.7.0` |
 | `fs-gg-ui-template` | FS.GG.Rendering | `0.31.0` | `0.31.0` |
@@ -598,7 +604,7 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 | `game-scene-adapter` | FS.GG.Game | `0.16.0` | `0.16.0` |
 | `fs-gg-audio` | FS.GG.Audio | `0.6.0` | `0.6.0` |
 | `fs-gg-net` | FS.GG.Net | `0.6.0` | `0.6.0` |
-| `coord-engine` | FS-GG/.github | `0.89.0` | `0.89.0` |
+| `coord-engine` | FS-GG/.github | `0.89.0` | `0.90.0` |
 | `new-sdd-workspace` | FS-GG/.github | `0.11.2` | `0.11.2` |
 | `fs-gg-workspace-template` | FS.GG.Templates | `0.14.0` | `0.14.0` |
 | `game-skills` | FS.GG.Game | `0.9.0` | `0.9.0` |

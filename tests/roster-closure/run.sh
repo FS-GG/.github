@@ -319,6 +319,19 @@ printf '["FS-GG/.github", "FS-GG/FS.GG.SDD", "FS-GG/Scratch.Repo"]\n' > "$LIVE_S
 out="$(run "$ROSTER_EXEMPT" "$DEPS" "$LIVE_SCRATCH")" \
   && ok "an explicit outside-fabric exemption is honored" || bad "exemption honored" "$out"
 
+# ADR-0085: an independent package owner is declared without joining board/receiver fabrics.
+DEPS_SCRATCH="$WORK/deps-scratch.yml"
+sed '/^repos:/a\  scratch: { name: Scratch.Repo, role: "independent public package owner" }' "$DEPS" > "$DEPS_SCRATCH"
+out="$(run "$ROSTER_EXEMPT" "$DEPS_SCRATCH" "$LIVE_SCRATCH")" \
+  && ok "a justified outside-fabric package owner closes the dependency graph" \
+  || bad "outside-fabric package owner" "$out"
+ROSTER_UNJUSTIFIED="$WORK/repos-unjustified.yml"
+sed 's/reason: "spike, deliberately outside every fabric"/reason: ""/' "$ROSTER_EXEMPT" > "$ROSTER_UNJUSTIFIED"
+expect_finding "a package owner cannot opt out without a reason" \
+  "Scratch.Repo is a contract participant" "$ROSTER_UNJUSTIFIED" "$DEPS_SCRATCH" "$LIVE_SCRATCH"
+expect_finding "an exempt package owner must still exist in the org" \
+  "Remove the stale exemption" "$ROSTER_EXEMPT" "$DEPS_SCRATCH" "$LIVE"
+
 # A stale exemption is a standing licence to ignore a repo that no longer exists.
 expect_finding "an outside-fabric row naming a repo not in the org fails (stale exemption)" \
   "Remove the stale exemption" "$ROSTER_EXEMPT" "$DEPS" "$LIVE"
