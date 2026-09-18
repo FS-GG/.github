@@ -89,7 +89,7 @@ jobs:
         run: |
           rc=0
           out="$(python scripts/check-workflow-permissions.py --root . --app-grants "$FSGG_APP_GRANTS" \
-            --app-grants-for "CALLABLE_ISOLATED_OPERATION_APP_ID=$CALLABLE_APP_REQUIRED_GRANTS" 2>&1)" || rc=$?
+            --app-grants-for "CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID=$CALLABLE_APP_REQUIRED_GRANTS" 2>&1)" || rc=$?
           [ -z "$out" ] || printf '%s\n' "$out"
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
 

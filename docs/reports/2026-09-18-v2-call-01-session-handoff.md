@@ -101,20 +101,24 @@ an immutable source-only plan workflow, a grant producer that accepts only exact
 and dedicated-App installation observations, strict single-file artifact extraction, distinct expiring role
 tokens, fresh Coordination operator admission, exact public 0.1.0 installation, restart-safe checkpoints, and
 separate creation/settled receipts. It names only the dedicated environment-secret contract
-`CALLABLE_ISOLATED_OPERATION_APP_ID` / `CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY`; it does not reuse the local
-PAT or silently widen the existing dispatch App.
+`CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID` / `CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY` for installation-token
+minting, while the numeric `CALLABLE_ISOLATED_OPERATION_APP_ID` remains separately available only for App JWT
+generation and exact live App/installation identity validation. It does not reuse the local PAT or silently widen
+the existing dispatch App.
 
-This source capability does not itself authorize or dispatch the operation. At its preparation boundary the
-environment exists as id `22246772831` with sole required reviewer `EHotwagner`, self-review permitted for the
-initiating required reviewer, and a custom `main` deployment policy, while the target remains absent and all
-protected workflows have zero runs. This is the explicitly selected single-operator authorization path: the
+This source capability does not itself dispatch the operation. The environment exists as id `22246772831` with
+sole required reviewer `EHotwagner`, self-review permitted for the initiating required reviewer, and a custom
+`main` deployment policy. Its dedicated App ID, client ID, and private key are held as environment secrets. Plan
+run `35387708003` and authorization run `35405327367` proved the exact plan/environment/member/App-installation
+binding and produced grant artifact `10571953149`; the authorization log retained GitHub's `app-id` deprecation
+warning, which this client-ID migration removes. The target remains absent and the executor has zero runs. This is
+the explicitly selected single-operator authorization path: the
 same accountable operator may initiate and approve the protected job, but the environment review remains a
 real GitHub approval boundary and the grant still requires exact live reviewer membership, environment,
 dedicated-App installation, plan, artifact, and capability observations. The
-environment has no secrets or variables; the available PAT cannot observe organization membership or App
-installations; and the previously observed dispatch App lacks the required checks, workflows, and members grants.
-Creation therefore remains pending until a compatible dedicated App installation, its protected credential
-custody, active reviewer-membership readback, and the exact protected grant are independently available.
+available PAT remains outside Actions custody and cannot substitute for any App role. Repository creation remains
+pending until a fresh source-bound plan and authorization grant are produced for the current merged workflow and
+the separately protected executor is explicitly dispatched.
 
 Pipeline preflight remains static and focused: the existing authorization/executor tests, permission-coherence
 fixture, workflow shell census, and repository-native exact-head checks cover this one-field environment/source
