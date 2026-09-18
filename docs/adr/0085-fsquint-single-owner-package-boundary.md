@@ -4,6 +4,13 @@
 - **Date:** 2026-09-18
 - **Affects:** FsQuint, FS.GG.SDD, FS.GG.Coordination, .github
 
+## Context
+
+SDD owned generic replay types and algorithms, while Coordination linked its own
+replay driver engine and retained domain-specific decoding. An ordinary F# consumer
+would otherwise inherit SDD dependencies or copy source. The extraction needs one
+public implementation owner, preserved SDD compatibility and qualified package updates.
+
 ## Decision
 
 [FsQuint](https://github.com/FS-GG/FsQuint) owns generic ITF decoding, canonical
