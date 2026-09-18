@@ -47,6 +47,21 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+Choreo **hosted-writer source and formal qualification complete**, **2026-09-18**:
+Coordination's [C0–C6 programme](https://github.com/FS-GG/FS.GG.Coordination/blob/8135bb68bac07e941897ec556568c52ade6a492c/docs/roadmaps/choreo-akka-fsharp-trace-correspondence.md)
+completed in [PR #428](https://github.com/FS-GG/FS.GG.Coordination/pull/428), merge
+`8135bb68bac07e941897ec556568c52ade6a492c`. The four-process Host/Journal/Runner/GitHubProvider model supplies
+eight genuine Quint traces replayed through production seams with memory and PostgreSQL journals. C4 fixed
+proven absence incorrectly advancing completion and missing PostgreSQL retry-intent metadata. C5 qualified
+64 progress states and 1,162 bounded fault states; fault exploration admits one retry and one completed
+crash/recovery cycle per operation. The retained flat-model safety graph separately covers admission-related
+conditions outside that message model. The complete canonical inventory and fresh-checkout exercise passed.
+Reuse the [qualification decision](https://github.com/FS-GG/FS.GG.Coordination/blob/8135bb68bac07e941897ec556568c52ade6a492c/docs/architecture/choreo-qualification.md)
+and [maintenance guide](https://github.com/FS-GG/FS.GG.Coordination/blob/8135bb68bac07e941897ec556568c52ade6a492c/docs/architecture/choreo-correspondence.md).
+This is additional E1 foundation evidence, not callable-v2 acceptance, installed adoption of the fixes,
+federation qualification or a new V2 prerequisite. The historical installed O3 baseline retains its exact
+artifact scope; the source-to-installed follow-up is owned in section 9.6.
+
 V2-CALL-01 **callable ordinary-v2 producer prepared**, **2026-09-18**:
 Coordination [PR #421](https://github.com/FS-GG/FS.GG.Coordination/pull/421), merge
 `86043ea33398877864f9d82a68d10c3def90c6c2`, delivered V2-CALL-01.1–.2: the owning GS2-09.9 amendment,
@@ -921,6 +936,13 @@ says `sdd`; this document does not flip it to `typed-sdd` or `none`. A lightweig
 lifecycle/backend selection are separate dimensions. If an installed consumer cannot express the intended
 combination, that is a real integration gap to fix before claiming the profile works there.
 
+For changed hosted-writer behavior, reuse the accepted Choreo model and consumer-owned replay. Acceptance
+uses actual model-generated traces against production decisions, negative mutations that fail at the intended
+boundary, and first-divergence diagnostics. Recording adapters supply external facts rather than deciding
+policy or recreating model transitions. Other modeled components use the same correspondence principle where
+applicable; Choreo is not a mandatory library or a new model requirement for every change. Keep sampled,
+bounded exhaustive and temporal evidence distinct, including fairness assumptions and explored fault limits.
+
 ### 4.3 Process selection over operating time
 
 | Period | Ordinary development | V2/migration work | Shared or protected operations | OR/PB |
@@ -1082,6 +1104,15 @@ Coalesce pending refresh hints for the same subject, not durable commands or dis
 grant/approval changes and non-idempotent operation identity. Cancellation of superseded analysis is
 different from cancellation of an applying external effect. Full scheduled audits repair missed hints;
 routine merge should not await a full fleet scan unless a named required predicate actually depends on it.
+
+The completed Choreo work supplies concrete regression requirements for formal qualification: bind model,
+tool/profile, gate scripts, source/license provenance, raw fixtures and retained counterexamples into the
+applicable reuse identity; demonstrate invalidation for changed inputs and preservation for unrelated prose.
+Verify that named scenarios actually execute and that negative controls emit their expected failure evidence.
+Enforce verifier deadlines on child processes, with explicit bounded infrastructure retry accounting; neither
+an empty successful exit nor a killed verifier proves a property. Partition bounded models when justified,
+record their coverage and exclusions, and measure preparation, execution, queueing and superseded-run cost
+separately. These belong to the owning qualification gates, not a manual checklist for every routine PR.
 
 ### 7.2 Measurement has four separate statuses
 
@@ -1448,8 +1479,11 @@ be labeled an optimal solution.
 For the selected O0–O3 single-host scope, Akka.NET is already the implementation choice: Main owns
 durable orchestration and execution-session actors; a provider-neutral boundary connects the bounded
 container executor. The [source window](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md#o2-source-window-after-the-provider-session-correction)
-distinguishes accepted core/adapter/persistence and Main composition source from still-pending artifact
-publication and the installed/live pilot. Do not rerun runtime selection or create a competing executor for this scope.
+records the historical core/adapter/persistence and Main composition delivery. The selected O0–O3 installed
+pilot and controlled adoption are now accepted at their recorded artifact identities. The later Choreo replay
+and two production fixes are separately qualified source; installed inclusion must be established by exact
+artifact readback and the section 9.6 follow-up. Do not rerun runtime selection or create a competing executor
+for this scope.
 Its selected trusted same-user profile retains the explicit deferral of stronger credential isolation;
 it does not qualify hostile contributors or the federation trust boundary below.
 
@@ -1645,6 +1679,16 @@ the owning existing GS2 contract or explicitly amend it; do not silently invent 
 implementation phase or assume a future OR service will supply it. Exercise it through an isolated real
 provider journey, with actor/host absent if the claimed supported baseline requires neither.
 
+Before V2-CALL-01.4 acceptance, Coordination compares its existing production callable recovery evidence
+against the relevant Choreo failure cases: unknown versus absent versus applied outcomes, lost responses,
+stale retry observations, durable intent recovery and native completion. Reuse tests that already establish
+these properties and add only missing coverage through the owning GS2-09.9 contract/amendment route. The
+callable service deliberately runs without Host, actors or PostgreSQL; hosted-writer replay is not proof of
+that separate composition and does not add those dependencies. Preserve the exact prepared/published artifact:
+a required implementation repair takes its own versioned producer/adoption path rather than silently replacing
+frozen bytes. This coverage comparison belongs inside the existing installed qualification window, not a new
+migration stage or a requirement to rebuild the Choreo programme.
+
 GS2-09 supplies full discovery, immutable transforms/manifests, active-operation disposition, sealed
 history, migration, rollback and omission/idempotency proofs. Rehearsals cover actual receiver families,
 not only an adapter fixture. If a provider capability is unavailable, qualify the accepted fallback or
@@ -1689,12 +1733,21 @@ then. Claim each outcome at its actual scope; no efficiency-success label is nee
 
 ### 9.6 E0–E1: later capability development
 
-The single-host actor/execution slice is already selected and underway in
-[standalone O0–O3](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md).
-Continue that ledger through Main composition, actual pilot/recovery and controlled adoption; do not
-reopen its accepted source milestones as a future E1 project. Its evidence can satisfy matching E1
-foundation requirements, but does not establish unmeasured comparative value, a general default or v2
-migration completion. Remaining E0/E1 extensions follow the conditions below.
+The selected single-host actor/execution slice and its installed pilot/recovery and controlled adoption are
+accepted in [standalone O0–O3](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md).
+Reuse that exact baseline and the later completed Choreo source/formal evidence; do not reopen either as a
+future E1 implementation programme. They do not establish unmeasured comparative value, a general default,
+federation or v2 migration completion.
+
+Coordination owns the remaining disposition of the Choreo production fixes with SystemAdmin as installed
+operator: compare the selected installed Host artifact's source identity with the C4 fixes; if absent, prepare
+and publish the appropriate immutable Host/runner artifact and separately authorize its bounded adoption.
+Qualify the affected proven-absence, retry-intent and recovery paths against that installed artifact and its
+supported store, retaining native readback and rollback/recovery ownership. If already included, retain the
+exact artifact and matching qualification evidence instead of repeating adoption. Until then, report the fixes
+as source-qualified only. Historical O3 acceptance and receipts remain unchanged; this is a targeted follow-up,
+not a second O3 programme, authorization to operate, or a blanket prerequisite for callable v2. Remaining
+E0/E1 extensions follow the conditions below.
 
 [LEARN-01](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md) is the
 bounded learning extension across V0 observation, E0 comparison and this selected E1 foundation.
@@ -1750,6 +1803,12 @@ verified delivery. Companion negative cases include a forged result, wrong proje
 duplicate submission, revoked assignment and exhausted verification quota. Their outcomes remain refusal,
 pending recovery or bounded retry as appropriate; none manufactures success from client claims.
 
+When F0 is selected, assess reuse of the Choreo modeling and trace/replay workflow for assignment,
+acknowledgment, reconnect, revocation and duplicate-message semantics. Define this protocol's own bounds,
+invariants and production correspondence before claiming evidence. Hosted-writer qualification does not cover
+bilateral trust, disclosure, tenant isolation or hostile contribution verification, and does not complete
+F0–F3 or authorize a broader Choreo rollout.
+
 The owning implementation selects remaining protocol/library versions, key custody, artifact retention
 and isolation through F0 rather than treating this prose as a published schema. Detailed requirements
 remain in [OR §8A](coordination/2026-08-31-operations-research-first-agent-orchestration-design.md#8a-federated-cooperative-orchestrators--proposed-extension).
@@ -1785,6 +1844,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Stable-policy orchestration and statistical learning — LEARN-01** | V0 measurement, E0 controlled comparison and selected E1 context/allocation extensions: broad fixed profiles, whole-issue context/token efficiency and robust evidence before finer or adaptive routing | `.github` telemetry/policy/analysis owner with Coordination execution integration; SystemAdmin owns installed Main/runner and later isolated community intake. .1–.3 are the first future source window; live .4–.5 require published/adopted artifacts, actual usage support and applicable O2/O3/operation authority | [LEARN-01 design and roadmap](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md), design delivered in [PR #3449](https://github.com/FS-GG/.github/pull/3449). Reuse UTEL and O0–O3; no implementation or experiment started. Later .6 enables consented community reports through Main and reviewed GitHub aggregate releases, independently of the core comparison. Adaptive extensions remain conditional |
 | **Shared bounded execution** | E1: finite attempts, atomic reservations, effect settlement and qualified CLI/runtime correspondence | Coordination; selected trusted single-host scope is already owned by O0–O3; E0 selects only additional gaps | [Standalone telemetry and orchestration](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md#o3--controlled-adoption-and-later-options) and the [O3 controlled-adoption evidence](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/o3-controlled-adoption.md) complete the selected shared Akka session core, PostgreSQL journal, capacity-1 subscription budget, provider-neutral executor/Host composition and installed two-project serial qualification. Reuse accepted source; wider execution profiles remain conditional |
 | **Authenticated hosting and recovery** | E1, relevant H2–H5: one selected host with sessions, durable recovery and a usable CLI fallback | Coordination; selected O0–O3 is complete, then qualify only additional hosting/cooperative requirements | [Standalone telemetry and orchestration](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md) owns the completed selected O0–O3 single-host scope. The accepted pilot, physical-reboot same-attempt recovery and non-dispatching installed adoption establish this bounded profile. Akka.NET is selected for this scope; Codex subscription execution is first, while Claude, OpenCode and DeepSeek share the intended adapter contract. Automatic postboot-helper requalification and other hosting scope remain conditional. |
+| **Hosted-writer Choreo correspondence and fix adoption** | E1 foundation: C0–C6 source/formal qualification complete; installed inclusion of the two production fixes requires exact artifact evidence | Coordination source/qualification owner and SystemAdmin installed operator; section 9.6 owns targeted publication/adoption disposition without reopening historical O3 acceptance | [Completed Choreo roadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/8135bb68bac07e941897ec556568c52ade6a492c/docs/roadmaps/choreo-akka-fsharp-trace-correspondence.md) and [maintenance guide](https://github.com/FS-GG/FS.GG.Coordination/blob/8135bb68bac07e941897ec556568c52ade6a492c/docs/architecture/choreo-correspondence.md). Reuse existing machinery; callable-v2 coverage remains its own qualification, and federation remains conditional |
 | **Scheduling and capacity allocation** | E1, relevant OR/PB scope: one planner over the shared executor, independent feasibility checks and class-specific shadow/canary/adoption | Coordination, with `.github` policy owner; measured scheduling need and required execution foundations | No subroadmap linked yet; conditional, with no second executor |
 | **Cooperative enrollment and sessions** | F0–F1: protocol, bilateral enrollment, outbound client connection, capacity/job offers and reconnect without project execution | Coordination; selected cooperative need; F0 research may precede v2, while F1 needs authenticated session foundations | No subroadmap linked yet; conditional |
 | **Cooperative contribution and verification** | F2–F3: bounded sandbox assignments, local agents, quarantined submissions and owner-controlled verification through recovery | Coordination; the applicable bounded execution, session and verification foundations from section 9.7 | No subroadmap linked yet; conditional |
@@ -1905,6 +1965,9 @@ a mandatory checklist repeated for every ordinary PR.
 | Current grant revoked after a green check | Stale protected effect rejected with declared in-flight ordering | V1/V4 authority qualification |
 | Merge succeeds but response is lost | Native readback identifies delivery without duplicate effect | V2/V4 delivery recovery |
 | Provider outcome remains unknown after timeout | Pending settlement retained; no false cancellation or completion | V2/V4, later E1 |
+| Provider proves absence; an old response arrives after authorized retry | Absence does not advance completion; retry preserves operation identity with an exact retry discriminator, and stale observations cannot settle the new attempt | E1 hosted-writer evidence; V2-CALL-01.4 checks its own applicable production semantics |
+| Process restarts after retry intent is persisted | Recovered intent retains the metadata required by the real store and effect path; no duplicate dispatch or fabricated completion | E1 installed-fix qualification; applicable V2 callable recovery |
+| Trace bytes change or a negative mutation is injected | Changed inputs invalidate reuse; invalid traces or mutations fail at the intended boundary with first-divergence diagnostics | Owning modeled component and formal qualification |
 | Observer disappears or usage is corrupt | Known delivery survives; measurement remains insufficient | V3/V5 profile |
 | Balanced supplied usage omits an attempt | Independent coverage reveals or bounds the omission; no qualified efficiency claim | V3/V6 measurement |
 | Scheduled economics producer and delivery observer meet | Correct source/operation identity, schema and whole-unit join; actual artifact retrievable | Predecessor input verified at V0 |
@@ -1931,7 +1994,8 @@ a mandatory checklist repeated for every ordinary PR.
 | Qualification proves internal artifacts only | Green adapter suite with no installed callable journey | Close runtime/receiver wiring gap before V3 |
 | Efficiency is obtained by exclusions | More refused/deferred work, missing attempts, enlarged tasks or uncharged maintenance | Reject comparison, retain baseline and repair accounting |
 | Budget promises exceed provider control | Cancellation does not bound charges or late work | Mark observational/ineligible for strict cap; qualify a supported adapter before enabling |
-| Formal state space grows with product detail | Check time explodes before useful implementation feedback | Bound the abstraction; retain model/implementation correspondence and supported proof claims |
+| Formal state space grows with product detail | Check time explodes before useful implementation feedback | Bound or partition the abstraction with explicit coverage and exclusions; enforce process deadlines, measure preparation separately and retain production correspondence |
+| Source qualification is mistaken for installed recovery correctness | A source fix has no selected artifact/readback or affected installed-path evidence | Coordination and installed operator disposition the exact artifact delta; preserve historical acceptance without projecting it onto newer bytes |
 | Low volume cannot support tail claims | Wide intervals or too few completed observations | Use insufficient-data and a bounded continuation; do not invent p99 qualification |
 | Trusted-writer scope expands accidentally | Untrusted execution inherits routine credentials/check assumptions | Keep class disabled until separate threat model and controls are qualified |
 | Peripheral programmes consume migration capacity | UI, federation or default flips become assumed dependencies | Apply section 15 dispositions; only demonstrated accepted blockers join GS2 |
@@ -1994,6 +2058,7 @@ by this documentation merge.
 | [September 4 telemetry automation](reports/2026-09-04-fsharp-roadmap-telemetry-and-projection-automation-design.md) | Reuse useful deterministic collection/projection. Do not implement removed routine phase/receipt obligations merely to automate them; protect remaining GS2 evidence contracts |
 | [OR/PB alignment analysis](coordination/2026-09-07-112837-development-flow-proposal-alignment-analysis.md) and [v2 CI integration analysis](coordination/2026-09-07-131445-v2-roadmap-ci-simplification-analysis.md) | Rationale retained; section 10 turns the proposed integration into one explicit owner mapping |
 | [Quint-first migration](coordination/2026-08-25-quint-first-typed-sdd-migration-design.md) and [Q1 amendment](coordination/2026-08-26-adr-0077-q1-qualification-amendment.md) | Reuse actual published SDD capabilities; distinguish backend, consumer and default activation; no restart from dated Q2 wording |
+| [Completed Choreo correspondence programme](https://github.com/FS-GG/FS.GG.Coordination/blob/8135bb68bac07e941897ec556568c52ade6a492c/docs/roadmaps/choreo-akka-fsharp-trace-correspondence.md) | Reuse the pinned source, bounded model, real Quint traces, production replay and qualified gates as E1 foundation evidence. Section 9.6 owns installed-fix disposition; section 9.3 owns the callable coverage comparison. No automatic model migration, federation completion or installed adoption |
 | [Typed SDD/Governance successor](coordination/2026-08-24-174459-typed-sdd-governance-integration-design.md) | Deferred constitutional integration is separate from reuse of already-shipped Governance; changes to defaults respect candidate/epoch rules |
 
 ## 15. Wider portfolio: preserved without hidden prerequisites
