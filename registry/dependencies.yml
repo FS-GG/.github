@@ -80,8 +80,8 @@ repos:
 #                   date-stamp or past-tense historical claims (report §6.6) so present-tense text does not rot.
 contracts:
   - id: fsquint-replay
-    version: "0.1.0-preview.2"
-    package-version: "0.1.0-preview.2"
+    version: "0.1.0"
+    package-version: "0.1.0"
     owner: fsquint
     surface: "FsQuint and FsQuint.Tooling coherent package set; raw ITF, schema-v1 replay and optional bounded Quint process API (ADR-0085)"
     consumers: [sdd, coordination]
