@@ -4,7 +4,13 @@ Feature identity: **FSQUINT-01**
 
 Date: **2026-09-18**
 
-Status: **proposed design; implementation not started**
+Status: **historical approved design; implementation moved to FsQuint**
+
+The single active implementation roadmap is
+[FS-GG/FsQuint — FSQUINT-01](https://github.com/FS-GG/FsQuint/blob/main/docs/roadmaps/fsquint.md).
+Use that owner-maintained document for milestone status, current .NET/tool decisions,
+release receipts and consumer migration evidence. The original plan below is retained
+as design history; its unchecked delivery list is not a second progress ledger.
 
 Proposed repository: **FS-GG/FsQuint**, public; repository and package names remain unreserved.
 
