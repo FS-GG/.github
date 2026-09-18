@@ -28,6 +28,14 @@ on:
         description: Exact grant artifact digest
         required: true
         type: string
+      grant_payload_sha256:
+        description: Exact canonical grant payload digest
+        required: true
+        type: string
+      grant_artifact_expires_at:
+        description: Exact server-observed artifact expiry in canonical UTC seconds
+        required: true
+        type: string
       plan_run_id:
         description: Exact prepared plan run id
         required: true
@@ -101,7 +109,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: FS-GG/FS.GG.Coordination
-          ref: 79ffe01f5cc2a0269797f3ec7ff54bf2c23b5c91
+          ref: d46aa238d0f169c85a5822e62e49ab9df1ebf37d
           fetch-depth: 1
           persist-credentials: false
           path: coordination
@@ -120,6 +128,8 @@ jobs:
           CREATION_RECEIPT_RUN_ID: ${{ inputs.creation_receipt_run_id }}
           GRANT_ARTIFACT_ID: ${{ inputs.grant_artifact_id }}
           GRANT_ARTIFACT_SHA256: ${{ inputs.grant_artifact_sha256 }}
+          GRANT_ARTIFACT_EXPIRES_AT: ${{ inputs.grant_artifact_expires_at }}
+          GRANT_PAYLOAD_SHA256: ${{ inputs.grant_payload_sha256 }}
           PHASE: ${{ inputs.phase }}
           PLAN_ARTIFACT_ID: ${{ inputs.plan_artifact_id }}
           PLAN_ARTIFACT_SHA256: ${{ inputs.plan_artifact_sha256 }}
@@ -133,14 +143,15 @@ jobs:
           test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
           test "$GITHUB_REF" = 'refs/heads/main'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git -C coordination rev-parse HEAD)" = '79ffe01f5cc2a0269797f3ec7ff54bf2c23b5c91'
-          test "$(sha256sum coordination/eng/callable-cli-isolated-operation-contract.json | cut -d ' ' -f 1)" = 'c56cbca184c6477f5d95c3863c227a1eb3eb537e6ed058a193023de6c86a4d3b'
-          test "$(sha256sum coordination/eng/callable-cli-isolated-operation.py | cut -d ' ' -f 1)" = '0335c253aea68061f338cded634f29268303ec1eea31c6b0472b472d7974ba1e'
+          test "$(git -C coordination rev-parse HEAD)" = 'd46aa238d0f169c85a5822e62e49ab9df1ebf37d'
+          test "$(sha256sum coordination/eng/callable-cli-isolated-operation-contract.json | cut -d ' ' -f 1)" = 'cc51765dd011672f0af4b4a1c7fb6c26f5d436b53e1e9d12104831bfe7914815'
+          test "$(sha256sum coordination/eng/callable-cli-isolated-operation.py | cut -d ' ' -f 1)" = 'b5a20b2c511bf37833dac99c35eb1fa420f410f5b324fd26883e5af928cb145c'
           workflow_sha256="$(sha256sum .github/workflows/callable-isolated-operation-execute.yml | cut -d ' ' -f 1)"
           python3 tools/callable-isolated-operation-executor.py \
             --phase "$PHASE" --plan-seal "$PLAN_SEAL" \
             --grant-run-id "$AUTHORIZATION_RUN_ID" --grant-run-attempt "$AUTHORIZATION_RUN_ATTEMPT" \
             --grant-artifact-id "$GRANT_ARTIFACT_ID" --grant-artifact-sha256 "$GRANT_ARTIFACT_SHA256" \
+            --grant-payload-sha256 "$GRANT_PAYLOAD_SHA256" --grant-artifact-expires-at "$GRANT_ARTIFACT_EXPIRES_AT" \
             --plan-run-id "$PLAN_RUN_ID" --plan-run-attempt "$PLAN_RUN_ATTEMPT" \
             --plan-artifact-id "$PLAN_ARTIFACT_ID" --plan-artifact-sha256 "$PLAN_ARTIFACT_SHA256" \
             --creation-receipt-run-id "$CREATION_RECEIPT_RUN_ID" --creation-receipt-run-attempt "$CREATION_RECEIPT_RUN_ATTEMPT" \

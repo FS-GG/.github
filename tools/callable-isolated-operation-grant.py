@@ -14,9 +14,9 @@ import sys
 
 SCHEMA = "fsgg.coordination.callable-isolated-operation-grant/1"
 OPERATION_IDENTITY = "v2-call-01-4b-isolated-native-v1"
-CONTRACT_SHA256 = "cc17065452ee941295a17844facfbdb13d305df179d7634b40459c0f63579a25"
-SOURCE_SHA256 = "0335c253aea68061f338cded634f29268303ec1eea31c6b0472b472d7974ba1e"
-COORDINATION_REVISION = "79ffe01f5cc2a0269797f3ec7ff54bf2c23b5c91"
+CONTRACT_SHA256 = "3ebf436e7e2efdf221b9b08f96b6d5216bbeb22053af26bd7cdd2d0d11ef561d"
+SOURCE_SHA256 = "b5a20b2c511bf37833dac99c35eb1fa420f410f5b324fd26883e5af928cb145c"
+COORDINATION_REVISION = "d46aa238d0f169c85a5822e62e49ab9df1ebf37d"
 AUTHORITY_REPOSITORY = "FS-GG/.github"
 WORKFLOW_PATH = ".github/workflows/callable-isolated-operation-authorize.yml"
 ENVIRONMENT = "callable-isolated-operation"
@@ -126,12 +126,6 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         }
     return {
         "approvedAt": approved.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "artifact": {
-            "id": None,
-            "name": "callable-isolated-operation-grant",
-            "sha256": None,
-            "status": "server-assigned-coordinates-unavailable-before-upload",
-        },
         "authority": {
             "environment": ENVIRONMENT,
             "environmentId": bounded_id("environment-id", args.environment_id),
@@ -144,7 +138,6 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         },
         "authorized": False,
         "blockingReasons": [
-            "grant-payload-cannot-contain-its-own-server-assigned-artifact-id-and-digest",
             "protected-environment-and-reviewed-app-installations-not-yet-provisioned",
         ],
         "contractSha256": CONTRACT_SHA256,
