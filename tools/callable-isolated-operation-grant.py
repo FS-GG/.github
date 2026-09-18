@@ -130,7 +130,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     environment = observation.get("environment")
     if (not isinstance(environment, dict)
             or environment != {"id": bounded_id("observed-environment-id", str(environment.get("id"))),
-                               "name": ENVIRONMENT, "preventSelfReview": True,
+                               "name": ENVIRONMENT, "preventSelfReview": False,
                                "requiredReviewerId": REVIEWER_ID, "branchPolicy": "custom-main"}):
         raise Refused("protected environment observation is not exact")
     membership = observation.get("reviewerMembership")

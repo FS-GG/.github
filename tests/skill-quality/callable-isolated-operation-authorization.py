@@ -36,7 +36,7 @@ def credential_bindings():
 def authority_observation(app_id=7001, installation_id=8001):
     return json.dumps({
         "schema": "fsgg.github.callable-isolated-operation-authority-observation/1",
-        "environment": {"id": 5001, "name": "callable-isolated-operation", "preventSelfReview": True,
+        "environment": {"id": 5001, "name": "callable-isolated-operation", "preventSelfReview": False,
                         "requiredReviewerId": 1645484, "branchPolicy": "custom-main"},
         "reviewerMembership": {"id": 1645484, "login": "EHotwagner", "state": "active"},
         "installation": {"appId": app_id, "installationId": installation_id, "account": "FS-GG",
@@ -139,6 +139,7 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
         self.assertIn("secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY", source)
         self.assertIn("gh api orgs/FS-GG/memberships/EHotwagner", source)
         self.assertIn("deployment-branch-policies", source)
+        self.assertIn('.prevent_self_review ] | if length==1 then .[0] else null end', source)
         lowered = source.lower()
         for forbidden in (
             "git push", "repository_dispatch", "contents: write",
@@ -233,7 +234,7 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
     def test_live_authority_drift_refuses_before_grant(self):
         baseline = json.loads(authority_observation())
         cases = []
-        changed = json.loads(json.dumps(baseline)); changed["environment"]["preventSelfReview"] = False; cases.append(changed)
+        changed = json.loads(json.dumps(baseline)); changed["environment"]["preventSelfReview"] = True; cases.append(changed)
         changed = json.loads(json.dumps(baseline)); changed["environment"]["branchPolicy"] = "other"; cases.append(changed)
         changed = json.loads(json.dumps(baseline)); changed["reviewerMembership"]["state"] = "pending"; cases.append(changed)
         changed = json.loads(json.dumps(baseline)); changed["installation"]["repositorySelection"] = "selected"; cases.append(changed)

@@ -105,12 +105,21 @@ separate creation/settled receipts. It names only the dedicated environment-secr
 PAT or silently widen the existing dispatch App.
 
 This source capability does not itself authorize or dispatch the operation. At its preparation boundary the
-environment exists as id `22246772831` with required reviewer `EHotwagner`, self-review prevention, and a custom
-`main` deployment policy, while the target remains absent and both protected workflows have zero runs. The
+environment exists as id `22246772831` with sole required reviewer `EHotwagner`, self-review permitted for the
+initiating required reviewer, and a custom `main` deployment policy, while the target remains absent and all
+protected workflows have zero runs. This is the explicitly selected single-operator authorization path: the
+same accountable operator may initiate and approve the protected job, but the environment review remains a
+real GitHub approval boundary and the grant still requires exact live reviewer membership, environment,
+dedicated-App installation, plan, artifact, and capability observations. The
 environment has no secrets or variables; the available PAT cannot observe organization membership or App
 installations; and the previously observed dispatch App lacks the required checks, workflows, and members grants.
 Creation therefore remains pending until a compatible dedicated App installation, its protected credential
 custody, active reviewer-membership readback, and the exact protected grant are independently available.
+
+Pipeline preflight remains static and focused: the existing authorization/executor tests, permission-coherence
+fixture, workflow shell census, and repository-native exact-head checks cover this one-field environment/source
+interaction cheaply. No new model is justified because there is no retry, fan-out, cancellation, or shared-state
+ordering defect beyond the existing immutable plan/grant/checkpoint contracts.
 
 Do not dispatch either protected workflow while the environment or credential roles are absent. Do
 not interpret the source-only executor, a 404 target, a pending/unknown provider result, or telemetry
