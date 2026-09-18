@@ -22,9 +22,113 @@ assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
+DEFAULTS = sys.modules["fsgg_telemetry_defaults"]
 
 
 class RoadmapTelemetryTests(unittest.TestCase):
+    def test_repository_environment_precedence_avoids_checkout_discovery(self):
+        with mock.patch.dict(os.environ, {
+            "FSGG_TELEMETRY_REPOSITORY": "FS-GG/explicit",
+            "GITHUB_REPOSITORY": "FS-GG/actions",
+        }, clear=True), mock.patch.object(DEFAULTS.subprocess, "run") as invoked:
+            self.assertEqual(DEFAULTS.workspace_repository(), "FS-GG/explicit")
+            invoked.assert_not_called()
+        with mock.patch.dict(os.environ, {"GITHUB_REPOSITORY": "FS-GG/actions"}, clear=True), \
+             mock.patch.object(DEFAULTS.subprocess, "run") as invoked:
+            self.assertEqual(DEFAULTS.workspace_repository(), "FS-GG/actions")
+            invoked.assert_not_called()
+
+    def test_canonical_github_origin_forms_are_discovered_with_bounded_git_call(self):
+        cases = (
+            "https://github.com/FS-GG/.github.git",
+            "git@github.com:FS-GG/.github.git",
+            "ssh://git@github.com/FS-GG/.github.git",
+        )
+        for origin in cases:
+            with self.subTest(origin=origin), mock.patch.object(
+                DEFAULTS.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, origin + "\n", "")
+            ) as invoked:
+                self.assertEqual(DEFAULTS.discover_checkout_repository(pathlib.Path("checkout")), "FS-GG/.github")
+                self.assertEqual(invoked.call_args.args[0], [
+                    "git", "config", "--local", "--get-all", "remote.origin.url"
+                ])
+                self.assertEqual(invoked.call_args.kwargs, {
+                    "cwd": pathlib.Path("checkout"), "capture_output": True, "text": True,
+                    "timeout": 5, "check": False,
+                })
+
+    def test_detached_linked_worktree_uses_shared_local_origin(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch) / "repository"
+            linked = pathlib.Path(scratch) / "linked"
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.email", "test@example.invalid"], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.name", "Telemetry Test"], check=True)
+            subprocess.run(["git", "-C", str(root), "remote", "add", "origin", "git@github.com:FS-GG/worktree.git"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "--allow-empty", "-qm", "fixture"], check=True)
+            subprocess.run(["git", "-C", str(root), "worktree", "add", "--detach", "-q", str(linked), "HEAD"], check=True)
+            self.assertEqual(DEFAULTS.discover_checkout_repository(linked), "FS-GG/worktree")
+
+    def test_malformed_non_github_ambiguous_and_credential_origins_refuse_without_echo(self):
+        rejected = (
+            "http://github.com/FS-GG/repo.git",
+            "https://example.com/FS-GG/repo.git",
+            "https://token-value@github.com/FS-GG/repo.git",
+            "ssh://root@github.com/FS-GG/repo.git",
+            "https://github.com/FS-GG/repo/extra.git",
+            "git@github.com:FS-GG/../repo.git",
+        )
+        for origin in rejected:
+            with self.subTest(origin=origin), self.assertRaises(DEFAULTS.ConfigurationError) as refused:
+                DEFAULTS.canonical_github_repository(origin)
+            self.assertNotIn("token-value", str(refused.exception))
+        for output in ("", "https://github.com/FS-GG/one.git\nhttps://github.com/FS-GG/two.git\n"):
+            with mock.patch.object(
+                DEFAULTS.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, output, "")
+            ), self.assertRaisesRegex(DEFAULTS.ConfigurationError, "requires one local origin"):
+                DEFAULTS.discover_checkout_repository()
+
+    def test_missing_git_timeout_and_invalid_environment_refuse_without_fallback(self):
+        for error in (FileNotFoundError("git"), subprocess.TimeoutExpired(["git"], 5)):
+            with mock.patch.object(DEFAULTS.subprocess, "run", side_effect=error), \
+                 self.assertRaisesRegex(DEFAULTS.ConfigurationError, "discovery unavailable"):
+                DEFAULTS.discover_checkout_repository()
+        with mock.patch.dict(os.environ, {"FSGG_TELEMETRY_REPOSITORY": "bad", "GITHUB_REPOSITORY": "FS-GG/good"}, clear=True), \
+             mock.patch.object(DEFAULTS, "discover_checkout_repository") as discovery, \
+             self.assertRaisesRegex(DEFAULTS.ConfigurationError, "FSGG_TELEMETRY_REPOSITORY"):
+            DEFAULTS.workspace_repository()
+        discovery.assert_not_called()
+
+    def test_discovered_repository_is_the_only_origin_value_sent_to_workspace_engine(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            spool = root / "spool"
+            spool.mkdir(mode=0o700)
+            config_path = root / "telemetry.json"
+            config_path.write_text(json.dumps({
+                "schema": "fsgg.telemetry.workspace-config/1", "engine": "engine",
+                "associations": [], "retiredAssociations": [],
+            }), encoding="utf-8")
+            config_path.chmod(0o600)
+            binding = {
+                "schema": "fsgg.telemetry.workspace-binding/1", "configPath": str(config_path),
+                "repository": "FS-GG/discovered", "producerId": "producer", "bindingDigest": "a" * 64,
+                "destination": "remote", "privateStateRoot": str(spool),
+            }
+            calls = []
+            def execute(command, **kwargs):
+                calls.append((command, kwargs))
+                if command[0] == "git":
+                    return subprocess.CompletedProcess(command, 0, "https://github.com/FS-GG/discovered.git\n", "")
+                return subprocess.CompletedProcess(command, 0, json.dumps(binding), "")
+            with mock.patch.dict(os.environ, {"FSGG_TELEMETRY_CONFIG": str(config_path)}, clear=True), \
+                 mock.patch.object(DEFAULTS.subprocess, "run", side_effect=execute):
+                discovered = MODULE.discover_config()
+            self.assertEqual(discovered.repository, "FS-GG/discovered")
+            engine = calls[1][0]
+            self.assertEqual(engine[engine.index("--repository") + 1], "FS-GG/discovered")
+            self.assertNotIn("github.com", " ".join(engine))
+
     def test_every_closed_unified_item_updates_the_only_profile_roadmap(self):
         agent_skill = (ROOT / ".agents/skills/work-unified-roadmap/SKILL.md").read_text(encoding="utf-8")
         claude_skill = (ROOT / ".claude/skills/work-unified-roadmap/SKILL.md").read_text(encoding="utf-8")

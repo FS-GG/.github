@@ -80,6 +80,10 @@ terminal evidence is reported once as a coverage gap. Native `collaboration.spaw
 retain `native-collaboration-usage-unsupported`; expected population, lineage, requested model/effort and terminal
 outcome do not establish intercepted usage or complete coverage.
 
+The adapter associates an ordinary local invocation with `FSGG_TELEMETRY_REPOSITORY` first,
+`GITHUB_REPOSITORY` second, then one credential-free canonical GitHub `origin` from the current checkout.
+Malformed, non-GitHub, missing or ambiguous origins refuse; never guess an association or print remote credentials.
+
 Record typed activity spans for planning, implementation, review, validation, delivery, repair and operations;
 use other/unclassified when necessary, and record complications with evidence as they occur. Attribute usage only
 to an exact native usage observation—never by elapsed time—and keep mixed/unclassified explicit. After each

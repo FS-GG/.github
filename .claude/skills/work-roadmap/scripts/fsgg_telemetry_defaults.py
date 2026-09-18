@@ -9,6 +9,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 from dataclasses import dataclass
 
 
@@ -17,6 +18,9 @@ WORKSPACE_CONFIG_SCHEMA = "fsgg.telemetry.workspace-config/1"
 RUNTIME_ASSIGNMENT_SCHEMA = "fsgg.telemetry.codex-assignment/1"
 CI_ASSIGNMENT_SCHEMA = "fsgg.telemetry.ci-assignment/1"
 IDENTITY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}$")
+GITHUB_OWNER_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38}[A-Za-z0-9])?$")
+GITHUB_REPOSITORY_RE = re.compile(r"^(?!\.{1,2}$)[A-Za-z0-9_.-]{1,100}$")
+GITHUB_SCP_RE = re.compile(r"^git@github\.com:([^/]+)/([^/]+)$", re.IGNORECASE)
 sys.dont_write_bytecode = True
 
 
@@ -33,6 +37,73 @@ class HostConfig:
     workspace: bool = False
     producer: str | None = None
     binding_digest: str | None = None
+
+
+def canonical_github_repository(value: str) -> str:
+    """Return OWNER/REPO for one credential-free canonical GitHub remote."""
+    if not isinstance(value, str) or not value or value != value.strip() or any(character.isspace() for character in value):
+        raise ConfigurationError("git origin is not a canonical GitHub repository URL")
+    owner: str
+    repository: str
+    scp = GITHUB_SCP_RE.fullmatch(value)
+    if scp:
+        owner, repository = scp.groups()
+    else:
+        try:
+            parsed = urllib.parse.urlsplit(value)
+            port = parsed.port
+        except ValueError as error:
+            raise ConfigurationError("git origin is not a canonical GitHub repository URL") from error
+        if parsed.query or parsed.fragment or port is not None or parsed.hostname is None or parsed.hostname.lower() != "github.com":
+            raise ConfigurationError("git origin is not a canonical GitHub repository URL")
+        if parsed.scheme == "https":
+            if parsed.username is not None or parsed.password is not None:
+                raise ConfigurationError("git origin is not a canonical GitHub repository URL")
+        elif parsed.scheme == "ssh":
+            if parsed.username != "git" or parsed.password is not None:
+                raise ConfigurationError("git origin is not a canonical GitHub repository URL")
+        else:
+            raise ConfigurationError("git origin is not a canonical GitHub repository URL")
+        parts = parsed.path.removeprefix("/").split("/")
+        if len(parts) != 2:
+            raise ConfigurationError("git origin is not a canonical GitHub repository URL")
+        owner, repository = parts
+    if repository.endswith(".git"):
+        repository = repository[:-4]
+    if not GITHUB_OWNER_RE.fullmatch(owner) or not GITHUB_REPOSITORY_RE.fullmatch(repository):
+        raise ConfigurationError("git origin is not a canonical GitHub repository URL")
+    return f"{owner}/{repository}"
+
+
+def discover_checkout_repository(cwd: pathlib.Path | None = None) -> str:
+    """Resolve one local origin without invoking a shell or exposing its raw value."""
+    try:
+        completed = subprocess.run(
+            ["git", "config", "--local", "--get-all", "remote.origin.url"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ConfigurationError("telemetry repository discovery unavailable") from error
+    if completed.returncode != 0 or len(completed.stdout.encode()) > 4096:
+        raise ConfigurationError("telemetry repository discovery requires one local origin")
+    origins = completed.stdout.splitlines()
+    if len(origins) != 1:
+        raise ConfigurationError("telemetry repository discovery requires one local origin")
+    return canonical_github_repository(origins[0])
+
+
+def workspace_repository() -> str:
+    for name in ("FSGG_TELEMETRY_REPOSITORY", "GITHUB_REPOSITORY"):
+        if name in os.environ:
+            value = os.environ[name]
+            if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38}[A-Za-z0-9])?/(?!\.{1,2}$)[A-Za-z0-9_.-]{1,100}", value):
+                raise ConfigurationError(f"{name} is not a bounded GitHub repository identity")
+            return value
+    return discover_checkout_repository()
 
 
 def candidate_config_paths(explicit: str | None = None) -> list[pathlib.Path]:
@@ -70,9 +141,7 @@ def discover_config(explicit: str | None = None) -> HostConfig | None:
         if value.get("schema") == WORKSPACE_CONFIG_SCHEMA:
             if set(value) != {"schema", "engine", "associations", "retiredAssociations"}:
                 raise ConfigurationError("telemetry workspace config has an invalid closed shape")
-            repository = os.environ.get("FSGG_TELEMETRY_REPOSITORY") or os.environ.get("GITHUB_REPOSITORY")
-            if not repository:
-                raise ConfigurationError("telemetry workspace repository association is required")
+            repository = workspace_repository()
             engine = value["engine"]
             if not isinstance(engine, str) or not engine or "/" in engine or "\\" in engine:
                 raise ConfigurationError("telemetry engine must be an executable name")
@@ -82,7 +151,9 @@ def discover_config(explicit: str | None = None) -> HostConfig | None:
                 raise ConfigurationError(completed.stderr.strip() or "telemetry workspace binding failed")
             binding = json.loads(completed.stdout, object_pairs_hook=reject_duplicates)
             fields = {"schema", "configPath", "repository", "producerId", "bindingDigest", "destination", "privateStateRoot"}
-            if not isinstance(binding, dict) or set(binding) != fields or binding.get("schema") != "fsgg.telemetry.workspace-binding/1":
+            if (not isinstance(binding, dict) or set(binding) != fields or
+                    binding.get("schema") != "fsgg.telemetry.workspace-binding/1" or
+                    binding.get("repository") != repository):
                 raise ConfigurationError("telemetry workspace binding result is invalid")
             state_root = pathlib.Path(binding["privateStateRoot"])
             return HostConfig(path.resolve(), state_root, engine, binding["repository"], True,
