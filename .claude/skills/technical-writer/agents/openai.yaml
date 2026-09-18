@@ -1,0 +1,6 @@
+interface:
+  display_name: "Technical Writer"
+  short_description: "Write concise, evidence-grounded technical prose"
+  default_prompt: "Use $technical-writer to draft concise technical documentation grounded in repository evidence."
+policy:
+  allow_implicit_invocation: true
