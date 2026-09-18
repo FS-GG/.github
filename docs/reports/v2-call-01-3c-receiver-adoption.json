@@ -18,6 +18,7 @@
     "evidenceMerge": "2e92dfb533be94c540b12a1f6a58a914ba7132bd"
   },
   "adoption": {
+    "pullRequest": "https://github.com/FS-GG/.github/pull/3539",
     "manifest": "dist/dotnet/.config/dotnet-tools.json",
     "packageKey": "fs.gg.coordination.cli",
     "command": "fsgg-coordination",
