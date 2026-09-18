@@ -50,7 +50,7 @@ jobs:
         id: authority
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
-          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          client-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID }}
           private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
           owner: FS-GG
           repositories: .github
@@ -60,7 +60,7 @@ jobs:
         id: reviewer
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
-          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          client-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID }}
           private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
           owner: FS-GG
           permission-members: read
@@ -68,7 +68,7 @@ jobs:
         id: creation
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
-          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          client-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID }}
           private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
           owner: FS-GG
           permission-administration: write
@@ -77,7 +77,7 @@ jobs:
         id: setup-creation
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
-          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          client-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID }}
           private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
           owner: FS-GG
           permission-actions: write
@@ -91,7 +91,7 @@ jobs:
         id: setup-operation
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
-          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          client-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID }}
           private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
           owner: FS-GG
           repositories: FS.GG.Coordination.CallableSandbox
@@ -106,7 +106,7 @@ jobs:
         id: execution-creation
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
-          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          client-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID }}
           private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
           owner: FS-GG
           permission-checks: read
@@ -117,7 +117,7 @@ jobs:
         id: execution-operation
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
-          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          client-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID }}
           private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
           owner: FS-GG
           repositories: FS.GG.Coordination.CallableSandbox
@@ -129,7 +129,7 @@ jobs:
         id: cleanup-creation
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
-          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          client-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID }}
           private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
           owner: FS-GG
           permission-administration: write
@@ -138,7 +138,7 @@ jobs:
         id: cleanup-operation
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
-          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          client-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID }}
           private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
           owner: FS-GG
           repositories: FS.GG.Coordination.CallableSandbox

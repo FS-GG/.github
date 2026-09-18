@@ -211,7 +211,7 @@ jobs:
     steps:
       - uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.DEDICATED_APP_ID }}
+          client-id: ${{ secrets.DEDICATED_APP_CLIENT_ID }}
           private-key: x
           permission-issues: write
 YAML
@@ -226,7 +226,7 @@ expect "the same App-token request is green when the inventory grants it" \
 expect "a separately custodied App selects its explicit required grant contract" \
   0 "ok:" "$WAPP" "$RC" \
   --app-grants contents:read \
-  --app-grants-for DEDICATED_APP_ID=contents:read,issues:write
+  --app-grants-for DEDICATED_APP_CLIENT_ID=contents:read,issues:write
 
 # GS2-08.9 retires the automatic publisher and its App-token/package request. Pin that capability
 # loss directly, then keep the auditor inversion independent of the retired production workflow.

@@ -364,7 +364,7 @@ def parse_app_grants(spec: str) -> dict[str, int]:
     return grants
 
 
-APP_ID_SECRET = re.compile(r"\$\{\{\s*secrets\.([A-Z][A-Z0-9_]*)\s*\}\}")
+APP_IDENTITY_SECRET = re.compile(r"\$\{\{\s*secrets\.([A-Z][A-Z0-9_]*)\s*\}\}")
 
 
 def app_token_requests(doc: dict, where: str) -> list[tuple[str, str | None, dict[str, int]]]:
@@ -372,8 +372,9 @@ def app_token_requests(doc: dict, where: str) -> list[tuple[str, str | None, dic
 
     The action treats any ungranted requested scope as fatal. Dynamic permission values cannot
     be compared before merge, so they deliberately produce no verdict rather than a false green.
-    The app-id secret is retained so a separately custodied App can select its own reviewed grant
-    contract instead of being conflated with the repository's default App installation.
+    The client-id or legacy app-id secret is retained so a separately custodied App can select its
+    own reviewed grant contract instead of being conflated with the repository's default App
+    installation.
     """
     found: list[tuple[str, str | None, dict[str, int]]] = []
     jobs = doc.get("jobs")
@@ -390,9 +391,15 @@ def app_token_requests(doc: dict, where: str) -> list[tuple[str, str | None, dic
             inputs = step.get("with", {})
             if not isinstance(inputs, dict):
                 raise GateError(f"{where} [{job_id}] App-token step {index}: `with:` is not a mapping")
+            client_id = inputs.get("client-id")
             app_id = inputs.get("app-id")
-            match = APP_ID_SECRET.fullmatch(app_id) if isinstance(app_id, str) else None
-            app_id_secret = match.group(1) if match else None
+            if client_id is not None and app_id is not None:
+                raise GateError(
+                    f"{where} [{job_id}] App-token step {index}: client-id and app-id are ambiguous"
+                )
+            app_identity = client_id if client_id is not None else app_id
+            match = APP_IDENTITY_SECRET.fullmatch(app_identity) if isinstance(app_identity, str) else None
+            app_identity_secret = match.group(1) if match else None
             requested: dict[str, int] = {}
             for key, value in inputs.items():
                 key = str(key)
@@ -405,7 +412,7 @@ def app_token_requests(doc: dict, where: str) -> list[tuple[str, str | None, dic
                         "none, read, or write value so the grant can be checked before merge"
                     )
                 requested[scope] = LEVELS[value]
-            found.append((f"{where} [{job_id}] App-token step {index}", app_id_secret, requested))
+            found.append((f"{where} [{job_id}] App-token step {index}", app_identity_secret, requested))
     return found
 
 

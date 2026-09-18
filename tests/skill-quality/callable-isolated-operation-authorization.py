@@ -136,6 +136,9 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
         self.assertIn("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", source)
         self.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", source)
         self.assertIn("actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1", source)
+        self.assertIn("client-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID }}", source)
+        self.assertNotIn("app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}", source)
+        self.assertIn("APP_ID: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}", source)
         self.assertIn("secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY", source)
         self.assertIn("gh api orgs/FS-GG/memberships/EHotwagner", source)
         self.assertIn("deployment-branch-policies", source)
@@ -279,6 +282,7 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
             "--grant-payload-sha256 '${{ inputs.grant_payload_sha256 }}'",
             "--grant-artifact-expires-at '${{ inputs.grant_artifact_expires_at }}'",
             "coordination/eng/callable-cli-isolated-operation.py execute",
+            "client-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID }}",
             "secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY",
             "repositories: FS.GG.Coordination.CallableSandbox",
             "callable-isolated-operation-plan-${{ inputs.phase }}-${{ inputs.plan_run_id }}-${{ inputs.plan_run_attempt }}",
@@ -288,6 +292,12 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
             ".creationReceiptSha256",
         ):
             self.assertIn(required, source)
+        self.assertEqual(
+            source.count("actions/create-github-app-token@"),
+            source.count("client-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID }}"),
+        )
+        self.assertNotIn("app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}", source)
+        self.assertIn("APP_ID: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}", source)
         for forbidden_input in ("candidate_revision:", "repository:", "api_endpoint:", "request_path:", "token_name:"):
             self.assertNotIn(forbidden_input, trigger)
         self.assertNotIn("${{ github.token }}", source)
