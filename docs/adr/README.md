@@ -108,6 +108,7 @@ registry like any other, and this org gates its registries.
 | [0082](0082-durable-private-content-addressed-telemetry-receipts.md) | **Private telemetry receipts are durable, content-addressed host evidence.** Collection archives exact bytes outside repositories and temporary storage; later lifecycle operations resolve by digest and fail closed on unsafe placement, collision, tampering, or loss. Historical loss is handled only by an independently reviewed proof that excludes the unverifiable usage rather than reconstructing counts. | Accepted |
 | [0083](0083-human-authorized-synthetic-lifecycle-checkpoints.md) | **Extraordinary immutable lifecycle histories advance only through one explicit human-authorized synthetic checkpoint.** The proof binds exact scope/frontier and passing functional evidence, reconstructs nothing, establishes one new trusted anchor, and returns every later event to strict validation. | Accepted |
 | [0084](0084-semantic-reuse-never-cancels-coherent-validation.md) | **Validated semantic reuse may advance native delivery while an independent coherent run continues.** Current or unvalidated candidates wait; late failure disputes dependent acceptance without rewriting merge history. | Accepted |
+| [0085](0085-fsquint-single-owner-package-boundary.md) | FsQuint owns generic replay; SDD delegates and Coordination qualifies package updates. | Accepted |
 
 ## Supersession map
 

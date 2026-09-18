@@ -3,9 +3,11 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-09-17"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-09-18"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
+  fsquint: { name: FsQuint, role: "Independent public Quint–F# decoding, replay and optional tooling" }
+  coordination: { name: FS.GG.Coordination, role: "Coordination domain models, projections and qualified actor/PostgreSQL replay" }
   sdd:        { name: FS.GG.SDD,        role: "Lifecycle CLI to scaffold a workspace and drive it from charter to ship; ships the typed cross-repo contracts" }
   rendering:  { name: FS.GG.Rendering,  role: "The UI framework — MVU over SkiaSharp/OpenGL with layout, input, controls and themes, plus the fs-gg-ui template" }
   governance: { name: FS.GG.Governance, role: "Optional tooling that checks your artifacts against rules you control — advisory by default" }
@@ -77,6 +79,12 @@ repos:
 #     summary / note / impact / resolved_by / tracking / enforcement / unified_by — OPTIONAL prose;
 #                   date-stamp or past-tense historical claims (report §6.6) so present-tense text does not rot.
 contracts:
+  - id: fsquint-replay
+    version: "0.1.0-preview.2"
+    package-version: "0.1.0-preview.2"
+    owner: fsquint
+    surface: "FsQuint and FsQuint.Tooling coherent package set; raw ITF, schema-v1 replay and optional bounded Quint process API (ADR-0085)"
+    consumers: [sdd, coordination]
   - id: scaffold-provider
     version: "1.1.0"   # 1.1.0 (2026-07-05, additive): optional identifierParameter sink (SDD feature 080; Fsgg.Provider.ProviderDescriptor.IdentifierParameter). Backward-compatible — a descriptor that omits it parses to None and behaves as 1.0.0. PRIOR 1.0.0.
     owner: sdd
@@ -1045,6 +1053,8 @@ contracts:
 
 # Hard dependency edges (downstream -> upstream).
 dependencies:
+  - { from: sdd, to: fsquint, via: "fsquint-replay@0.1 (CLR compatibility facade; generic algorithms owned upstream)" }
+  - { from: coordination, to: fsquint, via: "fsquint-replay@0.1 (domain-owned projection and production replay qualification)" }
   # ADR-0002: vendoring retired. Templates composes the rendering app via scaffold, not a fork.
   # An edge records what the CONSUMER ACTUALLY PINS. .github#250 deliberately left this at 0.2.0 while
   # FS.GG.Templates still pinned 0.2.0; the re-pin landed in FS.GG.Templates#119 (providers/

@@ -109,6 +109,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 
 | Contract | Owner | version | package-version |
 |---|---|---|---|
+| `fsquint-replay` | FsQuint | `0.1.0-preview.2` | `0.1.0-preview.2` |
 | `scaffold-provider` | FS.GG.SDD | `1.1.0` | — |
 | `fsgg-contracts` | FS.GG.SDD | `7.5.2` | `7.5.2` |
 | `scaffold-provenance` | FS.GG.SDD | `1.1.0` | — |
@@ -374,3 +375,11 @@ resolved 2026-06-27 by pinning the template to a tagged, reproducible `FS.GG.UI.
 | Contract | Break | Consumer action |
 |---|---|---|
 | `fs-gg-ui-template` | **Feature 205 (2026-06-27): side-effect-free generation.** The `fs-gg-ui` template no longer auto-runs git-init/chmod post-actions at generation time. `skipGitInit` (opt-out) is **removed**; `initGit` (opt-in, bool, default `false`) is **added**; default generation spawns no process, creates no repo, and never hangs in CI/IDE hosts. No emitted-file changes. Contract: [`fs-gg-ui-template-generation.md`](https://github.com/FS-GG/FS.GG.Rendering/blob/main/specs/205-scaffold-git-init-chmod/contracts/fs-gg-ui-template-generation.md) (Accepted). | **SDD scaffold path** must own repo-init + chmod as explicit post-instantiation steps (contract §5 S1–S3) and stop relying on template auto-init. Direct callers: drop `--skipGitInit true`; pass `--initGit true` (plus `--allow-scripts yes` non-interactively) to reproduce the old auto-init. |
+
+## FsQuint replay ownership
+
+`fsquint-replay` is owned by [FsQuint](https://github.com/FS-GG/FsQuint); its
+coherent packages are FsQuint and FsQuint.Tooling. SDD preserves CLR types through
+a mapping facade; Coordination owns domain projections and production acceptance.
+The registry carries the live published version. Package/tool pins and evidence
+reuse remain distinct ([ADR-0085](../adr/0085-fsquint-single-owner-package-boundary.md)).
