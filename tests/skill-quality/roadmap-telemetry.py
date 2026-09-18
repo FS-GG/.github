@@ -107,7 +107,11 @@ class RoadmapTelemetryTests(unittest.TestCase):
             config_path = root / "telemetry.json"
             config_path.write_text(json.dumps({
                 "schema": "fsgg.telemetry.workspace-config/1", "engine": "engine",
-                "associations": [], "retiredAssociations": [],
+                "associations": [{"workspaceId": "workspace", "producerId": "producer",
+                                  "streamId": "runtime", "repositories": ["FS-GG/discovered"],
+                                  "destination": {"kind": "remote", "endpoint": "https://example.test/",
+                                                  "credentialReference": "main", "spoolRoot": str(spool)}}],
+                "retiredAssociations": [],
             }), encoding="utf-8")
             config_path.chmod(0o600)
             binding = {
@@ -247,8 +251,10 @@ class RoadmapTelemetryTests(unittest.TestCase):
             self.assertEqual((config.store_root, config.repository), (spool, "FS-GG/.github"))
             commands = []
             state = {"sequence": 0, "invocationId": "invocation-a", "producerStream": "roadmap",
-                     "associationProducer": config.producer, "associationDigest": config.binding_digest}
-            with mock.patch.object(MODULE.subprocess, "run", side_effect=lambda command, **_: commands.append(command) or subprocess.CompletedProcess(command, 0, "{}", "")):
+                     "associationProducer": config.producer, "associationDigest": config.binding_digest,
+                     "token": "a" * 32, "phase": "expected"}
+            with mock.patch.dict(os.environ, {"FSGG_TELEMETRY_CREDENTIAL_MAIN": "secret-is-not-observed"}, clear=False), \
+                 mock.patch.object(MODULE.subprocess, "run", side_effect=lambda command, **_: commands.append(command) or subprocess.CompletedProcess(command, 0, "{}", "")):
                 MODULE.publish(config, state, [])
             self.assertEqual(commands[0][:4], ["engine", "telemetry", "workspace", "status"])
             self.assertEqual(commands[1][:4], ["engine", "telemetry", "workspace", "submit"])
@@ -351,18 +357,153 @@ class RoadmapTelemetryTests(unittest.TestCase):
         for relation,outcome,drain,expected in (("root","completed",0,True),("root","failed",0,False),("child","completed",0,False),("root","completed",1,False)):
             state={**base,"relation":relation}
             args.outcome=outcome
+            config=mock.Mock(workspace=False)
             with mock.patch.object(MODULE,"read_state",return_value=state),mock.patch.object(MODULE,"publish"),mock.patch.object(MODULE,"save_state"),mock.patch.object(MODULE.subprocess,"run",return_value=subprocess.CompletedProcess([],drain,"","")),mock.patch.object(MODULE,"refresh_dashboard",return_value={"status":"observed"}) as refresh:
-                result=MODULE.finish(mock.Mock(),args)
+                result=MODULE.finish(config,args)
             self.assertEqual("dashboardPublication" in result,expected)
             self.assertEqual(refresh.call_count,1 if expected else 0)
 
     def test_post_terminal_root_correction_drain_hooks_but_preterminal_and_child_do_not(self):
-        config=mock.Mock(); value={"kind":"complication"}
+        config=mock.Mock(workspace=False); value={"kind":"complication","identity":"complication-a"}
         with mock.patch.object(MODULE,"publish"),mock.patch.object(MODULE,"save_state"),mock.patch.object(MODULE.subprocess,"run",return_value=subprocess.CompletedProcess([],0,"","")),mock.patch.object(MODULE,"refresh_dashboard",return_value={"status":"observed"}) as refresh:
             terminal=MODULE.record_event(config,{"phase":"terminal","relation":"root"},value)
             started=MODULE.record_event(config,{"phase":"started","relation":"root"},value)
             child=MODULE.record_event(config,{"phase":"terminal","relation":"child"},value)
         self.assertIn("dashboardPublication",terminal); self.assertNotIn("dashboardPublication",started); self.assertNotIn("dashboardPublication",child); self.assertEqual(refresh.call_count,1)
+
+    def test_begin_start_and_finish_replay_the_exact_durable_batch_after_unknown_delivery(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            config = self.config(pathlib.Path(scratch))
+            publications = []
+            publish_number = 0
+
+            def unreliable(command, **_):
+                nonlocal publish_number
+                if "publish" in command:
+                    publish_number += 1
+                    source = pathlib.Path(command[command.index("--input") + 1])
+                    publications.append(source.read_bytes())
+                    code = 1 if publish_number in {1, 3, 5} else 0
+                    return subprocess.CompletedProcess(command, code, "", "delivery outcome unknown")
+                if "drain" in command:
+                    return subprocess.CompletedProcess(command, 0, "", "")
+                return subprocess.CompletedProcess(command, 0, "{}", "")
+
+            begin_args = MODULE.parser().parse_args([
+                "begin", "--feature", "UTEL", "--item", "RECOVERY", "--attempt", "a1",
+                "--model", "gpt-5.6-sol", "--effort", "medium",
+            ])
+            with mock.patch.object(MODULE.subprocess, "run", side_effect=unreliable):
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "outcome unknown"):
+                    MODULE.begin(config, begin_args)
+                paths = list((config.store_root / "orchestrator-dispatches").glob("*.json"))
+                self.assertEqual(len(paths), 1)
+                token = paths[0].stem
+                pending = MODULE.read_state(config, token)
+                self.assertEqual((pending["phase"], pending["sequence"], pending["pendingPublication"]["operation"]),
+                                 ("begin-pending", 1, "begin"))
+                self.assertEqual(MODULE.begin(config, begin_args)["token"], token)
+                changed_begin = MODULE.parser().parse_args([
+                    "begin", "--feature", "UTEL", "--item", "RECOVERY", "--attempt", "a1",
+                    "--model", "gpt-5.6-sol", "--effort", "medium", "--late-after-seconds", "1",
+                ])
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "retry differs"):
+                    MODULE.begin(config, changed_begin)
+
+                started_args = MODULE.parser().parse_args([
+                    "started", "--token", token, "--native-id", "root/worker",
+                ])
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "outcome unknown"):
+                    MODULE.started(config, started_args)
+                pending = MODULE.read_state(config, token)
+                self.assertEqual((pending["phase"], pending["sequence"], pending["nativeId"]),
+                                 ("start-pending", 2, "root/worker"))
+                MODULE.started(config, started_args)
+
+                finish_args = MODULE.parser().parse_args([
+                    "finish", "--token", token, "--outcome", "completed",
+                ])
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "outcome unknown"):
+                    MODULE.finish(config, finish_args)
+                pending = MODULE.read_state(config, token)
+                self.assertEqual((pending["phase"], pending["sequence"], pending["outcome"], pending["exitCode"]),
+                                 ("terminal-pending", 3, "completed", 0))
+                changed = MODULE.parser().parse_args([
+                    "finish", "--token", token, "--outcome", "failed",
+                ])
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "differs from the durable terminal intent"):
+                    MODULE.finish(config, changed)
+                result = MODULE.finish(config, finish_args)
+                self.assertEqual((result["status"], result["drain"]), ("terminal", "complete"))
+                publish_count = publish_number
+                self.assertEqual(MODULE.finish(config, finish_args)["status"], "terminal")
+                self.assertEqual(publish_number, publish_count)
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "already progressed"):
+                    MODULE.begin(config, begin_args)
+
+            self.assertEqual(publications[0], publications[1])
+            self.assertEqual(publications[2], publications[3])
+            self.assertEqual(publications[4], publications[5])
+            settled = MODULE.read_state(config, token)
+            self.assertEqual((settled["phase"], settled["sequence"]), ("terminal", 3))
+            self.assertNotIn("pendingPublication", settled)
+
+    def test_workspace_mutations_load_credentials_only_through_owner_controlled_client(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            helper = root / "fdev-telemetry"
+            helper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            helper.chmod(0o755)
+            config = DEFAULTS.HostConfig(
+                root / "telemetry.json", root / "spool", "engine", "FS-GG/.github", True,
+                "producer", "a" * 64, "main",
+            )
+            command = ["engine", "telemetry", "workspace", "submit", "--input", "private.json"]
+            with mock.patch.dict(os.environ, {}, clear=True), \
+                 mock.patch.object(DEFAULTS.shutil, "which", return_value=str(helper)):
+                wrapped = DEFAULTS.workspace_mutation_command(config, command)
+            self.assertEqual(wrapped, [str(helper.resolve()), "exec", *command])
+            self.assertNotIn("secret", " ".join(wrapped).lower())
+            with mock.patch.dict(os.environ, {"FSGG_TELEMETRY_CREDENTIAL_MAIN": "private-value"}, clear=True), \
+                 mock.patch.object(DEFAULTS.shutil, "which") as lookup:
+                self.assertIs(DEFAULTS.workspace_mutation_command(config, command), command)
+                lookup.assert_not_called()
+            helper.chmod(0o775)
+            with mock.patch.dict(os.environ, {}, clear=True), \
+                 mock.patch.object(DEFAULTS.shutil, "which", return_value=str(helper)), \
+                 self.assertRaisesRegex(DEFAULTS.ConfigurationError, "owner-controlled"):
+                DEFAULTS.workspace_mutation_command(config, command)
+
+    def test_workspace_credential_binding_must_be_exact_and_unambiguous(self):
+        binding = {"producerId": "producer"}
+        destination = {"credentialReference": "main"}
+        association = {"producerId": "producer", "repositories": ["FS-GG/.github"], "destination": destination}
+        self.assertEqual(
+            DEFAULTS.workspace_credential_reference({"associations": [association]}, binding, "FS-GG/.github"),
+            "main",
+        )
+        with self.assertRaisesRegex(DEFAULTS.ConfigurationError, "missing or ambiguous"):
+            DEFAULTS.workspace_credential_reference({"associations": [association, association]}, binding, "FS-GG/.github")
+
+    def test_legacy_terminal_state_replays_safely_only_with_its_derived_exit_code(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            config = self.config(pathlib.Path(scratch))
+            state = {
+                "schema": MODULE.STATE_SCHEMA, "token": "a" * 32, "phase": "terminal", "sequence": 3,
+                "itemId": "ITEM", "invocationId": "invocation", "nativeId": "worker", "outcome": "completed",
+                "relation": "root", "associationProducer": None, "associationDigest": None,
+            }
+            MODULE.save_state(config, state)
+            args = MODULE.parser().parse_args(["finish", "--token", "a" * 32, "--outcome", "completed"])
+            with mock.patch.object(MODULE.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "", "")), \
+                 mock.patch.object(MODULE, "refresh_dashboard", return_value={"status": "observed"}):
+                self.assertEqual(MODULE.finish(config, args)["status"], "terminal")
+            self.assertEqual(MODULE.read_state(config, "a" * 32)["exitCode"], 0)
+            explicit = MODULE.parser().parse_args([
+                "finish", "--token", "a" * 32, "--outcome", "completed", "--exit-code", "7",
+            ])
+            with self.assertRaisesRegex(MODULE.ConfigurationError, "differs from the durable terminal intent"):
+                MODULE.finish(config, explicit)
 
 
 if __name__ == "__main__":

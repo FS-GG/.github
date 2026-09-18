@@ -83,6 +83,9 @@ outcome do not establish intercepted usage or complete coverage.
 The adapter associates an ordinary local invocation with `FSGG_TELEMETRY_REPOSITORY` first,
 `GITHUB_REPOSITORY` second, then one credential-free canonical GitHub `origin` from the current checkout.
 Malformed, non-GitHub, missing or ambiguous origins refuse; never guess an association or print remote credentials.
+For workspace mutations, it loads a missing selected credential only through the owner-controlled telemetry client.
+It persists each exact batch and next phase before submission; a retry replays those bytes and never regenerates
+timestamps or identities after an unacknowledged or later-applied delivery.
 
 Record typed activity spans for planning, implementation, review, validation, delivery, repair and operations;
 use other/unclassified when necessary, and record complications with evidence as they occur. Attribute usage only
