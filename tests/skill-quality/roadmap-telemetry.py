@@ -298,6 +298,62 @@ class RoadmapTelemetryTests(unittest.TestCase):
             self.assertEqual((relation["parentId"], relation["childId"]), ("parent", "child"))
             self.assertEqual(child["status"], "expected")
 
+    def test_terminal_parent_admits_only_exact_same_item_follow_up_and_retry(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            config = self.config(pathlib.Path(scratch))
+
+            def fake_run(command, **_):
+                return subprocess.CompletedProcess(command, 0, "{}", "")
+
+            def begin(attempt, *, item="I", parent_token=None, relation="root"):
+                arguments = [
+                    "begin", "--feature", "F", "--item", item, "--attempt", attempt,
+                    "--model", "m", "--effort", "e", "--relation", relation,
+                ]
+                if parent_token is not None:
+                    arguments.extend(["--parent-token", parent_token, "--parent-attempt", "parent"])
+                return MODULE.begin(config, MODULE.parser().parse_args(arguments))
+
+            def terminal_parent(attempt="parent", item="I"):
+                result = begin(attempt, item=item)
+                token = result["token"]
+                MODULE.started(config, MODULE.parser().parse_args([
+                    "started", "--token", token, "--native-id", f"agent-{attempt}",
+                ]))
+                MODULE.finish(config, MODULE.parser().parse_args([
+                    "finish", "--token", token, "--outcome", "completed",
+                ]))
+                return token
+
+            with mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
+                 mock.patch.object(MODULE, "refresh_dashboard", return_value={"status": "observed"}):
+                parent = terminal_parent()
+                follow_up = begin("follow-up-a1", parent_token=parent, relation="follow-up")
+                retry = begin("follow-up-a1", parent_token=parent, relation="follow-up")
+                self.assertEqual(retry["token"], follow_up["token"])
+
+                state = MODULE.read_state(config, follow_up["token"])
+                parent_state = MODULE.read_state(config, parent)
+                self.assertEqual(state["relation"], "follow-up")
+                self.assertEqual(state["parentDispatchId"], parent_state["dispatchId"])
+                self.assertEqual(state["parentInvocationId"], parent_state["invocationId"])
+                self.assertEqual(state["rootInvocationId"], parent_state["rootInvocationId"])
+
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "started before a child"):
+                    begin("terminal-child", parent_token=parent, relation="child")
+
+                unstarted = begin("unstarted-parent")
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "started before a child"):
+                    begin("unstarted-follow-up", parent_token=unstarted["token"], relation="follow-up")
+
+                other_item = terminal_parent("other-parent", "OTHER")
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "share the item identity"):
+                    begin("wrong-item-follow-up", parent_token=other_item, relation="follow-up")
+
+                other_parent = terminal_parent("second-parent")
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "retry differs"):
+                    begin("follow-up-a1", parent_token=other_parent, relation="follow-up")
+
     def test_dispatch_token_cannot_escape_private_state_directory(self):
         with tempfile.TemporaryDirectory() as scratch:
             config = self.config(pathlib.Path(scratch))

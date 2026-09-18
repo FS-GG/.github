@@ -5,7 +5,7 @@
       "id": "work-roadmap",
       "scope": "driver",
       "sha256": "41e05a872d6c222d7c5f9b508510b20b94bae0d4a847ecf5e2ca3b2129decbf6",
-      "tree-sha256": "aa3cb1548f3a0cf8e8614017796f612907c8a9f28b917fd6caa47fa22da10c77",
+      "tree-sha256": "3bce3d298b3961581f72503b2b44ff1be035509650b59721bf7ba8d785cad079",
       "files": [
         {
           "path": "SKILL.md",
@@ -54,7 +54,7 @@
         },
         {
           "path": "scripts/roadmap-telemetry.py",
-          "sha256": "c72f5f19e867915c5858af050b6cf16fc7aaa275ce17e714e50ea956e94cb8cc",
+          "sha256": "4d47cd450d99a330af558e616ef43638f55771ad3e839b86ec4e6d0d11aa944d",
           "executable": false
         }
       ],
