@@ -152,10 +152,10 @@ jobs:
             --run-attempt "$GITHUB_RUN_ATTEMPT" \
             --environment-id "$ENVIRONMENT_ID" \
             --credential-bindings-json "$credential_bindings" \
-            --authority-observation-json "$authority_observation" \
             --approved-at "$approved_at" \
             --lifetime-minutes "$LIFETIME_MINUTES" \
-            --output "$RUNNER_TEMP/callable-isolated-operation-grant.json"
+            --output "$RUNNER_TEMP/callable-isolated-operation-grant.json" \
+            --authority-observation-json "$authority_observation"
       - name: Retain the reviewed authorized grant
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:

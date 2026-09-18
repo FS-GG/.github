@@ -242,10 +242,10 @@ jobs:
           dotnet tool install FS.GG.Coordination.Cli --version 0.1.0 --tool-path "$RUNNER_TEMP/tools" --configfile "$RUNNER_TEMP/NuGet.config"
           python3 coordination/eng/callable-cli-isolated-operation.py execute \
             --plan "$RUNNER_TEMP/plan.json" --grant "$RUNNER_TEMP/grant.json" --grant-artifact-envelope "$RUNNER_TEMP/grant-envelope.json" \
-            --app-installation-observer-token-env APP_INSTALLATION_OBSERVER_TOKEN --authority-observer-token-env AUTHORITY_OBSERVER_TOKEN \
             --reviewer-membership-observer-token-env REVIEWER_MEMBERSHIP_OBSERVER_TOKEN --creation-token-env CREATION_TOKEN \
             --setup-token-env SETUP_TOKEN --execution-token-env EXECUTION_TOKEN --cleanup-token-env CLEANUP_TOKEN \
-            --receipt "$RUNNER_TEMP/checkpoint.json" --command "$RUNNER_TEMP/tools/fsgg-coordination"
+            --receipt "$RUNNER_TEMP/checkpoint.json" --command "$RUNNER_TEMP/tools/fsgg-coordination" \
+            --app-installation-observer-token-env APP_INSTALLATION_OBSERVER_TOKEN --authority-observer-token-env AUTHORITY_OBSERVER_TOKEN
           if [ '${{ inputs.phase }}' = creation ]; then
             jq -c '.creationReceipt' "$RUNNER_TEMP/checkpoint.json" > "$RUNNER_TEMP/callable-isolated-operation-creation-receipt.json"
           else
