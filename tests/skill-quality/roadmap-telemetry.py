@@ -504,6 +504,39 @@ class RoadmapTelemetryTests(unittest.TestCase):
             self.assertEqual((settled["phase"], settled["sequence"]), ("terminal", 3))
             self.assertNotIn("pendingPublication", settled)
 
+    def test_definitive_invalid_request_releases_only_the_rejected_publication(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            config = self.config(pathlib.Path(scratch))
+            token = "a" * 32
+            state = {
+                "schema": MODULE.STATE_SCHEMA,
+                "token": token,
+                "phase": "started",
+                "sequence": 2,
+                "itemId": "RECOVERY",
+                "invocationId": "invocation",
+                "producerStream": "roadmap-orchestrator",
+                "associationProducer": "producer",
+                "associationDigest": "b" * 64,
+            }
+            MODULE.save_state(config, state)
+            rejected = subprocess.CompletedProcess([], 1, "", "telemetry workspace: invalid-request")
+            with mock.patch.object(MODULE.subprocess, "run", return_value=rejected), \
+                 self.assertRaisesRegex(MODULE.ConfigurationError, "invalid-request"):
+                MODULE.publish(config, state, [{"kind": "complication", "identity": "legacy"}])
+
+            recovered = MODULE.read_state(config, token)
+            self.assertEqual((recovered["phase"], recovered["sequence"]), ("started", 2))
+            self.assertNotIn("pendingPublication", recovered)
+
+            unknown = subprocess.CompletedProcess([], 1, "", "delivery outcome unknown")
+            with mock.patch.object(MODULE.subprocess, "run", return_value=unknown), \
+                 self.assertRaisesRegex(MODULE.ConfigurationError, "outcome unknown"):
+                MODULE.publish(config, recovered, [{"kind": "complication", "identity": "corrected"}])
+            retained = MODULE.read_state(config, token)
+            self.assertEqual(retained["sequence"], 3)
+            self.assertEqual(retained["pendingPublication"]["batch"]["events"][0]["identity"], "corrected")
+
     def test_workspace_mutations_load_credentials_only_through_owner_controlled_client(self):
         with tempfile.TemporaryDirectory() as scratch:
             root = pathlib.Path(scratch)
