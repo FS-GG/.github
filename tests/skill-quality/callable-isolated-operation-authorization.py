@@ -16,6 +16,8 @@ WORKFLOW = ROOT / ".github/workflows/callable-isolated-operation-authorize.yml"
 TOOL = ROOT / "tools/callable-isolated-operation-grant.py"
 EXECUTOR_WORKFLOW = ROOT / ".github/workflows/callable-isolated-operation-execute.yml"
 EXECUTOR_TOOL = ROOT / "tools/callable-isolated-operation-executor.py"
+PLAN_WORKFLOW = ROOT / ".github/workflows/callable-isolated-operation-plan.yml"
+ARTIFACT_TOOL = ROOT / "tools/callable-isolated-operation-artifact.py"
 spec = importlib.util.spec_from_file_location("callable_grant", TOOL)
 grant = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
@@ -31,10 +33,29 @@ def credential_bindings():
                        for index, role in enumerate(grant.ROLE_PERMISSIONS, start=1)}, separators=(",", ":"))
 
 
+def authority_observation(app_id=7001, installation_id=8001):
+    return json.dumps({
+        "schema": "fsgg.github.callable-isolated-operation-authority-observation/1",
+        "environment": {"id": 5001, "name": "callable-isolated-operation", "preventSelfReview": False,
+                        "requiredReviewerId": 1645484, "branchPolicy": "custom-main"},
+        "reviewerMembership": {"id": 1645484, "login": "EHotwagner", "state": "active"},
+        "installation": {"appId": app_id, "installationId": installation_id, "account": "FS-GG",
+                         "accountType": "Organization", "repositorySelection": "all", "suspendedAt": None,
+                         "permissions": {"actions": "write", "administration": "write", "checks": "read",
+                                         "contents": "write", "members": "read", "metadata": "read",
+                                         "organization_administration": "read", "pull_requests": "write",
+                                         "workflows": "write"}},
+    }, separators=(",", ":"))
+
+
 def valid_args(**changes):
     values = {
         "phase": "creation",
         "plan_seal": "a" * 64,
+        "plan_run_id": "4001",
+        "plan_run_attempt": "1",
+        "plan_artifact_id": "4002",
+        "plan_artifact_sha256": "d" * 64,
         "contract_sha256": grant.CONTRACT_SHA256,
         "source_sha256": grant.SOURCE_SHA256,
         "coordination_revision": grant.COORDINATION_REVISION,
@@ -46,7 +67,9 @@ def valid_args(**changes):
         "run_id": "6001",
         "run_attempt": "2",
         "environment_id": "5001",
-        "credential_bindings_json": credential_bindings(),
+        "credential_bindings_json": json.dumps({role: {"appId": 7001, "installationId": 8001}
+                                                  for role in grant.ROLE_PERMISSIONS}, separators=(",", ":")),
+        "authority_observation_json": authority_observation(),
         "approved_at": "2026-09-18T12:00:00Z",
         "lifetime_minutes": 120,
         "output": "unused",
@@ -56,6 +79,40 @@ def valid_args(**changes):
 
 
 class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
+    def test_plan_workflow_is_source_only_and_exact_revision_bound(self):
+        source = PLAN_WORKFLOW.read_text()
+        self.assertIn("workflow_dispatch:", source)
+        self.assertIn("ref: d46aa238d0f169c85a5822e62e49ab9df1ebf37d", source)
+        self.assertIn("prepare-create", source)
+        self.assertIn("prepare-operation", source)
+        self.assertIn("callable-isolated-operation-artifact.py extract", source)
+        self.assertIn("callable-isolated-operation-creation-receipt-$CREATION_RECEIPT_RUN_ID-$CREATION_RECEIPT_RUN_ATTEMPT", source)
+        self.assertIn(".digest <<<\"$receipt_artifact\"", source)
+        self.assertIn(".head_sha <<<\"$receipt_run\"", source)
+        for forbidden in ("secrets.", "create-github-app-token", "git push", "contents: write"):
+            self.assertNotIn(forbidden, source.lower())
+
+    def test_artifact_extractor_accepts_one_exact_member_and_rejects_extra(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            archive = root / "artifact.zip"
+            output = root / "output.json"
+            with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
+                bundle.writestr("expected.json", b"{}")
+            completed = subprocess.run(["python3", str(ARTIFACT_TOOL), "extract", "--archive", str(archive),
+                                        "--member", "expected.json", "--output", str(output)],
+                                       capture_output=True, text=True, timeout=5, check=False)
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            self.assertEqual(b"{}", output.read_bytes())
+            extra = root / "extra.zip"
+            with zipfile.ZipFile(extra, "w") as bundle:
+                bundle.writestr("expected.json", b"{}")
+                bundle.writestr("extra", b"x")
+            refused = subprocess.run(["python3", str(ARTIFACT_TOOL), "extract", "--archive", str(extra),
+                                      "--member", "expected.json", "--output", str(root / "extra.json")],
+                                     capture_output=True, text=True, timeout=5, check=False)
+            self.assertEqual(3, refused.returncode)
+
     def test_workflow_is_manual_main_exact_source_and_environment_protected(self):
         source = WORKFLOW.read_text()
         trigger = source.split("permissions:", 1)[0]
@@ -73,24 +130,28 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
         ):
             self.assertIn(required, source)
 
-    def test_workflow_is_minimal_grant_only_and_pins_actions(self):
+    def test_workflow_observes_live_authority_and_pins_actions(self):
         source = WORKFLOW.read_text()
         self.assertIn("permissions:\n  contents: read\n", source)
         self.assertIn("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", source)
         self.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", source)
+        self.assertIn("actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1", source)
+        self.assertIn("secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY", source)
+        self.assertIn("gh api orgs/FS-GG/memberships/EHotwagner", source)
+        self.assertIn("deployment-branch-policies", source)
+        self.assertIn('.prevent_self_review ] | if length==1 then .[0] else null end', source)
         lowered = source.lower()
         for forbidden in (
-            "secrets.", "create-github-app-token", "private-key", "github_token", "gh api", "curl ",
-            "git push", "repository_dispatch", "contents: write", "administration: write",
-            "pull-requests: write", "delete repository", "create repository",
+            "git push", "repository_dispatch", "contents: write",
+            "delete repository", "create repository",
         ):
             self.assertNotIn(forbidden, lowered)
 
     def test_grant_matches_coordination_contract_and_is_canonical(self):
         value = grant.build(valid_args())
         self.assertEqual("fsgg.coordination.callable-isolated-operation-grant/1", value["schema"])
-        self.assertFalse(value["authorized"])
-        self.assertEqual("prepared-not-authorized", value["status"])
+        self.assertTrue(value["authorized"])
+        self.assertEqual("authorized", value["status"])
         self.assertEqual("v2-call-01-4b-isolated-native-v1", value["operationIdentity"])
         self.assertEqual(grant.CONTRACT_SHA256, value["contractSha256"])
         self.assertEqual(grant.SOURCE_SHA256, value["sourceSha256"])
@@ -100,6 +161,8 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
         self.assertEqual(set(grant.ROLE_PERMISSIONS), set(value["credentials"]))
         self.assertEqual("github-app-jwt", value["credentials"]["app-installation-observer"]["kind"])
         self.assertEqual(grant.ROLE_PERMISSIONS["setup"], value["credentials"]["setup"]["permissions"])
+        self.assertEqual({"artifactId": 4002, "repository": "FS-GG/.github", "runAttempt": 1,
+                          "runId": 4001, "sha256": "d" * 64}, value["planArtifact"])
         self.assertNotIn("artifact", value)
         self.assertEqual(
             {
@@ -118,13 +181,16 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
             output = pathlib.Path(directory) / "grant.json"
             command = [
                 "python3", str(TOOL), "--phase", "creation", "--plan-seal", "a" * 64,
+                "--plan-run-id", "4001", "--plan-run-attempt", "1",
+                "--plan-artifact-id", "4002", "--plan-artifact-sha256", "d" * 64,
                 "--contract-sha256", grant.CONTRACT_SHA256, "--source-sha256", grant.SOURCE_SHA256,
                 "--coordination-revision", grant.COORDINATION_REVISION,
                 "--grant-repository", grant.AUTHORITY_REPOSITORY,
                 "--grant-event", "workflow_dispatch", "--grant-ref", "refs/heads/main",
                 "--workflow-revision", "b" * 40, "--workflow-sha256", "c" * 64,
                 "--run-id", "6001", "--run-attempt", "2", "--environment-id", "5001",
-                "--credential-bindings-json", credential_bindings(),
+                "--credential-bindings-json", valid_args().credential_bindings_json,
+                "--authority-observation-json", authority_observation(),
                 "--approved-at", "2026-09-18T12:00:00Z", "--lifetime-minutes", "120",
                 "--output", str(output),
             ]
@@ -138,6 +204,10 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
         cases = (
             ("phase", "release"),
             ("plan_seal", "A" * 64),
+            ("plan_run_id", "0"),
+            ("plan_run_attempt", "0"),
+            ("plan_artifact_id", "0"),
+            ("plan_artifact_sha256", "D" * 64),
             ("contract_sha256", "0" * 64),
             ("source_sha256", "0" * 64),
             ("coordination_revision", "0" * 40),
@@ -151,6 +221,7 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
             ("run_attempt", "0"),
             ("environment_id", "secret"),
             ("credential_bindings_json", "{}"),
+            ("authority_observation_json", "{}"),
             ("approved_at", "2026-09-18T12:00:00+00:00"),
             ("lifetime_minutes", 0),
             ("lifetime_minutes", 121),
@@ -160,23 +231,41 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
                 with self.assertRaises(grant.Refused):
                     grant.build(valid_args(**{field: value}))
 
-    def test_workflow_binds_every_required_grant_input_without_a_token(self):
+    def test_live_authority_drift_refuses_before_grant(self):
+        baseline = json.loads(authority_observation())
+        cases = []
+        changed = json.loads(json.dumps(baseline)); changed["environment"]["preventSelfReview"] = True; cases.append(changed)
+        changed = json.loads(json.dumps(baseline)); changed["environment"]["branchPolicy"] = "other"; cases.append(changed)
+        changed = json.loads(json.dumps(baseline)); changed["reviewerMembership"]["state"] = "pending"; cases.append(changed)
+        changed = json.loads(json.dumps(baseline)); changed["installation"]["repositorySelection"] = "selected"; cases.append(changed)
+        changed = json.loads(json.dumps(baseline)); changed["installation"]["permissions"].pop("checks"); cases.append(changed)
+        changed = json.loads(json.dumps(baseline)); changed["installation"]["suspendedAt"] = "2026-09-18T12:00:00Z"; cases.append(changed)
+        for observation in cases:
+            with self.subTest(observation=observation), self.assertRaises(grant.Refused):
+                grant.build(valid_args(authority_observation_json=json.dumps(observation, separators=(",", ":"))))
+
+    def test_workflow_binds_every_required_grant_input_to_live_observation(self):
         source = WORKFLOW.read_text()
         for value in (
             "--phase \"$PHASE\"", "--plan-seal \"$PLAN_SEAL\"",
+            "--plan-run-id \"$PLAN_RUN_ID\" --plan-run-attempt \"$PLAN_RUN_ATTEMPT\"",
+            "--plan-artifact-id \"$PLAN_ARTIFACT_ID\" --plan-artifact-sha256 \"$PLAN_ARTIFACT_SHA256\"",
             "--contract-sha256 \"$CONTRACT_SHA256\"", "--source-sha256 \"$SOURCE_SHA256\"",
             "--coordination-revision \"$COORDINATION_REVISION\"", "--workflow-revision \"$GITHUB_SHA\"",
             "--workflow-sha256 \"$workflow_sha256\"", "--run-id \"$GITHUB_RUN_ID\"",
             "--run-attempt \"$GITHUB_RUN_ATTEMPT\"", "--environment-id \"$ENVIRONMENT_ID\"",
-            "--credential-bindings-json \"$CREDENTIAL_BINDINGS_JSON\"",
+            "--credential-bindings-json \"$credential_bindings\"",
+            "--authority-observation-json \"$authority_observation\"",
             "--lifetime-minutes \"$LIFETIME_MINUTES\"",
         ):
             self.assertIn(value, source)
-        self.assertNotIn("token", source.lower())
+        self.assertIn("GH_TOKEN: ${{ steps.observer.outputs.token }}", source)
+        self.assertIn(".digest <<<\"$plan_artifact\"", source)
+        self.assertIn(".head_sha <<<\"$plan_run\"", source)
         self.assertIn("name: callable-isolated-operation-grant-${{ github.run_id }}-${{ github.run_attempt }}", source)
         self.assertEqual(1, source.count("${{ runner.temp }}/callable-isolated-operation-grant.json"))
 
-    def test_executor_workflow_is_manual_constant_concurrency_and_deliberately_unavailable(self):
+    def test_executor_workflow_is_manual_constant_concurrency_and_live_admission_guarded(self):
         source = EXECUTOR_WORKFLOW.read_text()
         trigger = source.split("permissions:", 1)[0]
         self.assertIn("workflow_dispatch:", trigger)
@@ -186,21 +275,22 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
             "group: callable-isolated-operation-execute",
             "cancel-in-progress: false",
             "environment: callable-isolated-operation",
-            "execution-unavailable:prepared-not-authorized",
-            "echo 'available=false'",
             "ref: d46aa238d0f169c85a5822e62e49ab9df1ebf37d",
-            "cc51765dd011672f0af4b4a1c7fb6c26f5d436b53e1e9d12104831bfe7914815",
-            "b5a20b2c511bf37833dac99c35eb1fa420f410f5b324fd26883e5af928cb145c",
-            "--grant-payload-sha256 \"$GRANT_PAYLOAD_SHA256\"",
-            "--grant-artifact-expires-at \"$GRANT_ARTIFACT_EXPIRES_AT\"",
+            "--grant-payload-sha256 '${{ inputs.grant_payload_sha256 }}'",
+            "--grant-artifact-expires-at '${{ inputs.grant_artifact_expires_at }}'",
+            "coordination/eng/callable-cli-isolated-operation.py execute",
+            "secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY",
+            "repositories: FS.GG.Coordination.CallableSandbox",
+            "callable-isolated-operation-plan-${{ inputs.phase }}-${{ inputs.plan_run_id }}-${{ inputs.plan_run_attempt }}",
+            ".digest <<<\"$plan_artifact\"",
+            ".digest <<<\"$checkpoint_artifact\"",
+            ".digest <<<\"$receipt_artifact\"",
+            ".creationReceiptSha256",
         ):
             self.assertIn(required, source)
         for forbidden_input in ("candidate_revision:", "repository:", "api_endpoint:", "request_path:", "token_name:"):
             self.assertNotIn(forbidden_input, trigger)
-        lowered = source.lower()
-        for forbidden in ("secrets.", "create-github-app-token", "private-key", "gh api", "curl ",
-                          "git push", "contents: write", "administration: write", "pull-requests: write"):
-            self.assertNotIn(forbidden, lowered)
+        self.assertNotIn("${{ github.token }}", source)
 
     def test_executor_packet_binds_exact_evidence_and_reports_every_blocker(self):
         args = argparse.Namespace(
@@ -216,10 +306,10 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
             workflow_sha256="7" * 64, output="unused")
         packet = executor.build(args)
         self.assertFalse(packet["authorized"])
-        self.assertEqual("unavailable", packet["execution"])
-        self.assertEqual("prepared-not-authorized", packet["status"])
+        self.assertEqual("pending-live-admission", packet["execution"])
+        self.assertEqual("runtime-admission-required", packet["status"])
         self.assertFalse(packet["mutationCredentialsMinted"])
-        self.assertFalse(packet["tokenMinting"]["allowed"])
+        self.assertTrue(packet["tokenMinting"]["allowed"])
         self.assertFalse(packet["recovery"]["automaticMutationRetry"])
         self.assertEqual(executor.COORDINATION_REVISION, packet["bindings"]["coordinationRevision"])
         self.assertEqual(executor.PACKAGE_SERVED_SHA256, packet["bindings"]["package"]["servedSha256"])

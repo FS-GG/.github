@@ -1,89 +1,28 @@
-name: Callable isolated operation executor readiness
+name: Callable isolated operation executor
 
 on:
   workflow_dispatch:
     inputs:
-      phase:
-        description: Exact protected operation phase
-        required: true
-        type: choice
-        options: [creation, identity-bound-operation]
-      plan_seal:
-        description: Exact prepared plan seal
-        required: true
-        type: string
-      authorization_run_id:
-        description: Exact completed authorization run id
-        required: true
-        type: string
-      authorization_run_attempt:
-        description: Exact completed authorization run attempt
-        required: true
-        type: string
-      grant_artifact_id:
-        description: Exact grant artifact id
-        required: true
-        type: string
-      grant_artifact_sha256:
-        description: Exact grant artifact digest
-        required: true
-        type: string
-      grant_payload_sha256:
-        description: Exact canonical grant payload digest
-        required: true
-        type: string
-      grant_artifact_expires_at:
-        description: Exact server-observed artifact expiry in canonical UTC seconds
-        required: true
-        type: string
-      plan_run_id:
-        description: Exact prepared plan run id
-        required: true
-        type: string
-      plan_run_attempt:
-        description: Exact prepared plan run attempt
-        required: true
-        type: string
-      plan_artifact_id:
-        description: Exact prepared plan artifact id
-        required: true
-        type: string
-      plan_artifact_sha256:
-        description: Exact prepared plan artifact digest
-        required: true
-        type: string
-      creation_receipt_run_id:
-        description: Phase-two creation receipt run id; empty for creation
-        required: false
-        type: string
-      creation_receipt_run_attempt:
-        description: Phase-two creation receipt run attempt; empty for creation
-        required: false
-        type: string
-      creation_receipt_artifact_id:
-        description: Phase-two creation receipt artifact id; empty for creation
-        required: false
-        type: string
-      creation_receipt_artifact_sha256:
-        description: Phase-two creation receipt digest; empty for creation
-        required: false
-        type: string
-      checkpoint_run_id:
-        description: Recovery checkpoint run id; all checkpoint fields empty for a fresh attempt
-        required: false
-        type: string
-      checkpoint_run_attempt:
-        description: Recovery checkpoint run attempt
-        required: false
-        type: string
-      checkpoint_artifact_id:
-        description: Recovery checkpoint artifact id
-        required: false
-        type: string
-      checkpoint_artifact_sha256:
-        description: Recovery checkpoint digest
-        required: false
-        type: string
+      phase: {description: Exact protected operation phase, required: true, type: choice, options: [creation, identity-bound-operation]}
+      plan_seal: {description: Exact prepared plan seal, required: true, type: string}
+      authorization_run_id: {description: Exact authorization run id, required: true, type: string}
+      authorization_run_attempt: {description: Exact authorization run attempt, required: true, type: string}
+      grant_artifact_id: {description: Exact grant artifact id, required: true, type: string}
+      grant_artifact_sha256: {description: Exact grant archive SHA-256, required: true, type: string}
+      grant_payload_sha256: {description: Exact canonical grant SHA-256, required: true, type: string}
+      grant_artifact_expires_at: {description: Exact grant artifact expiry, required: true, type: string}
+      plan_run_id: {description: Exact plan run id, required: true, type: string}
+      plan_run_attempt: {description: Exact plan run attempt, required: true, type: string}
+      plan_artifact_id: {description: Exact plan artifact id, required: true, type: string}
+      plan_artifact_sha256: {description: Exact plan archive SHA-256, required: true, type: string}
+      creation_receipt_run_id: {description: Creation receipt run id for phase two, required: false, type: string}
+      creation_receipt_run_attempt: {description: Creation receipt run attempt, required: false, type: string}
+      creation_receipt_artifact_id: {description: Creation receipt artifact id, required: false, type: string}
+      creation_receipt_artifact_sha256: {description: Creation receipt archive SHA-256, required: false, type: string}
+      checkpoint_run_id: {description: Recovery checkpoint run id, required: false, type: string}
+      checkpoint_run_attempt: {description: Recovery checkpoint run attempt, required: false, type: string}
+      checkpoint_artifact_id: {description: Recovery checkpoint artifact id, required: false, type: string}
+      checkpoint_artifact_sha256: {description: Recovery checkpoint archive SHA-256, required: false, type: string}
 
 permissions:
   contents: read
@@ -93,93 +32,236 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  readiness:
-    name: callable-isolated-operation-execution-unavailable
+  execute:
     environment: callable-isolated-operation
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
-      - name: Check out the exact authority revision
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 1
-          persist-credentials: false
-      - name: Check out the exact reviewed Coordination source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {ref: "${{ github.sha }}", fetch-depth: 1, persist-credentials: false}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: FS-GG/FS.GG.Coordination
           ref: d46aa238d0f169c85a5822e62e49ab9df1ebf37d
           fetch-depth: 1
           persist-credentials: false
           path: coordination
-      - name: Verify immutable source and build sealed readiness
-        id: readiness
+      - name: Mint authority observer
+        id: authority
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: .github
+          permission-actions: read
+          permission-contents: read
+      - name: Mint reviewer observer
+        id: reviewer
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          permission-members: read
+      - name: Mint creation credential
+        id: creation
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          permission-administration: write
+      - name: Mint setup credential for creation admission
+        if: ${{ inputs.phase == 'creation' }}
+        id: setup-creation
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          permission-actions: write
+          permission-administration: write
+          permission-checks: read
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+      - name: Mint setup credential for singleton operation
+        if: ${{ inputs.phase == 'identity-bound-operation' }}
+        id: setup-operation
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination.CallableSandbox
+          permission-actions: write
+          permission-administration: write
+          permission-checks: read
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+      - name: Mint execution credential for creation admission
+        if: ${{ inputs.phase == 'creation' }}
+        id: execution-creation
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          permission-checks: read
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Mint execution credential for singleton operation
+        if: ${{ inputs.phase == 'identity-bound-operation' }}
+        id: execution-operation
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination.CallableSandbox
+          permission-checks: read
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Mint cleanup credential for creation admission
+        if: ${{ inputs.phase == 'creation' }}
+        id: cleanup-creation
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          permission-administration: write
+      - name: Mint cleanup credential for singleton operation
+        if: ${{ inputs.phase == 'identity-bound-operation' }}
+        id: cleanup-operation
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination.CallableSandbox
+          permission-administration: write
+      - name: Mint App observer JWT
+        id: app-observer
         env:
-          AUTHORIZATION_RUN_ATTEMPT: ${{ inputs.authorization_run_attempt }}
-          AUTHORIZATION_RUN_ID: ${{ inputs.authorization_run_id }}
+          APP_ID: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          token="$(tools/callable-isolated-operation-app-jwt.sh "$APP_ID" <<<"$APP_PRIVATE_KEY")"
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+      - name: Verify immutable inputs and execute the admitted phase
+        env:
+          APP_INSTALLATION_OBSERVER_TOKEN: ${{ steps.app-observer.outputs.token }}
+          AUTHORITY_OBSERVER_TOKEN: ${{ steps.authority.outputs.token }}
           CHECKPOINT_ARTIFACT_ID: ${{ inputs.checkpoint_artifact_id }}
-          CHECKPOINT_ARTIFACT_SHA256: ${{ inputs.checkpoint_artifact_sha256 }}
-          CHECKPOINT_RUN_ATTEMPT: ${{ inputs.checkpoint_run_attempt }}
-          CHECKPOINT_RUN_ID: ${{ inputs.checkpoint_run_id }}
-          CREATION_RECEIPT_ARTIFACT_ID: ${{ inputs.creation_receipt_artifact_id }}
-          CREATION_RECEIPT_ARTIFACT_SHA256: ${{ inputs.creation_receipt_artifact_sha256 }}
-          CREATION_RECEIPT_RUN_ATTEMPT: ${{ inputs.creation_receipt_run_attempt }}
-          CREATION_RECEIPT_RUN_ID: ${{ inputs.creation_receipt_run_id }}
-          GRANT_ARTIFACT_ID: ${{ inputs.grant_artifact_id }}
-          GRANT_ARTIFACT_SHA256: ${{ inputs.grant_artifact_sha256 }}
-          GRANT_ARTIFACT_EXPIRES_AT: ${{ inputs.grant_artifact_expires_at }}
-          GRANT_PAYLOAD_SHA256: ${{ inputs.grant_payload_sha256 }}
-          PHASE: ${{ inputs.phase }}
-          PLAN_ARTIFACT_ID: ${{ inputs.plan_artifact_id }}
-          PLAN_ARTIFACT_SHA256: ${{ inputs.plan_artifact_sha256 }}
-          PLAN_RUN_ATTEMPT: ${{ inputs.plan_run_attempt }}
-          PLAN_RUN_ID: ${{ inputs.plan_run_id }}
-          PLAN_SEAL: ${{ inputs.plan_seal }}
+          CLEANUP_TOKEN: ${{ steps.cleanup-creation.outputs.token || steps.cleanup-operation.outputs.token }}
+          CREATION_TOKEN: ${{ steps.creation.outputs.token }}
+          EXECUTION_TOKEN: ${{ steps.execution-creation.outputs.token || steps.execution-operation.outputs.token }}
+          GH_TOKEN: ${{ steps.authority.outputs.token }}
+          REVIEWER_MEMBERSHIP_OBSERVER_TOKEN: ${{ steps.reviewer.outputs.token }}
+          SETUP_TOKEN: ${{ steps.setup-creation.outputs.token || steps.setup-operation.outputs.token }}
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'FS-GG/.github'
-          test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
-          test "$GITHUB_REF" = 'refs/heads/main'
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git -C coordination rev-parse HEAD)" = 'd46aa238d0f169c85a5822e62e49ab9df1ebf37d'
-          test "$(sha256sum coordination/eng/callable-cli-isolated-operation-contract.json | cut -d ' ' -f 1)" = 'cc51765dd011672f0af4b4a1c7fb6c26f5d436b53e1e9d12104831bfe7914815'
-          test "$(sha256sum coordination/eng/callable-cli-isolated-operation.py | cut -d ' ' -f 1)" = 'b5a20b2c511bf37833dac99c35eb1fa420f410f5b324fd26883e5af928cb145c'
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git -C coordination rev-parse HEAD)" = d46aa238d0f169c85a5822e62e49ab9df1ebf37d
           workflow_sha256="$(sha256sum .github/workflows/callable-isolated-operation-execute.yml | cut -d ' ' -f 1)"
           python3 tools/callable-isolated-operation-executor.py \
-            --phase "$PHASE" --plan-seal "$PLAN_SEAL" \
-            --grant-run-id "$AUTHORIZATION_RUN_ID" --grant-run-attempt "$AUTHORIZATION_RUN_ATTEMPT" \
-            --grant-artifact-id "$GRANT_ARTIFACT_ID" --grant-artifact-sha256 "$GRANT_ARTIFACT_SHA256" \
-            --grant-payload-sha256 "$GRANT_PAYLOAD_SHA256" --grant-artifact-expires-at "$GRANT_ARTIFACT_EXPIRES_AT" \
-            --plan-run-id "$PLAN_RUN_ID" --plan-run-attempt "$PLAN_RUN_ATTEMPT" \
-            --plan-artifact-id "$PLAN_ARTIFACT_ID" --plan-artifact-sha256 "$PLAN_ARTIFACT_SHA256" \
-            --creation-receipt-run-id "$CREATION_RECEIPT_RUN_ID" --creation-receipt-run-attempt "$CREATION_RECEIPT_RUN_ATTEMPT" \
-            --creation-receipt-artifact-id "$CREATION_RECEIPT_ARTIFACT_ID" --creation-receipt-artifact-sha256 "$CREATION_RECEIPT_ARTIFACT_SHA256" \
-            --checkpoint-run-id "$CHECKPOINT_RUN_ID" --checkpoint-run-attempt "$CHECKPOINT_RUN_ATTEMPT" \
-            --checkpoint-artifact-id "$CHECKPOINT_ARTIFACT_ID" --checkpoint-artifact-sha256 "$CHECKPOINT_ARTIFACT_SHA256" \
-            --workflow-revision "$GITHUB_SHA" --workflow-sha256 "$workflow_sha256" \
-            --output "$RUNNER_TEMP/callable-isolated-operation-readiness.json"
-          echo 'available=false' >> "$GITHUB_OUTPUT"
-      - name: Install and verify the exact public CLI only after every blocker is removed
-        if: ${{ steps.readiness.outputs.available == 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo 'executor source must be revised and requalified before this step can become reachable' >&2
-          exit 1
-      - name: Retain sealed unavailable disposition
+            --phase '${{ inputs.phase }}' --plan-seal '${{ inputs.plan_seal }}' \
+            --grant-run-id '${{ inputs.authorization_run_id }}' --grant-run-attempt '${{ inputs.authorization_run_attempt }}' \
+            --grant-artifact-id '${{ inputs.grant_artifact_id }}' --grant-artifact-sha256 '${{ inputs.grant_artifact_sha256 }}' \
+            --grant-payload-sha256 '${{ inputs.grant_payload_sha256 }}' --grant-artifact-expires-at '${{ inputs.grant_artifact_expires_at }}' \
+            --plan-run-id '${{ inputs.plan_run_id }}' --plan-run-attempt '${{ inputs.plan_run_attempt }}' \
+            --plan-artifact-id '${{ inputs.plan_artifact_id }}' --plan-artifact-sha256 '${{ inputs.plan_artifact_sha256 }}' \
+            --creation-receipt-run-id '${{ inputs.creation_receipt_run_id }}' --creation-receipt-run-attempt '${{ inputs.creation_receipt_run_attempt }}' \
+            --creation-receipt-artifact-id '${{ inputs.creation_receipt_artifact_id }}' --creation-receipt-artifact-sha256 '${{ inputs.creation_receipt_artifact_sha256 }}' \
+            --checkpoint-run-id '${{ inputs.checkpoint_run_id }}' --checkpoint-run-attempt '${{ inputs.checkpoint_run_attempt }}' \
+            --checkpoint-artifact-id '${{ inputs.checkpoint_artifact_id }}' --checkpoint-artifact-sha256 '${{ inputs.checkpoint_artifact_sha256 }}' \
+            --workflow-revision "$GITHUB_SHA" --workflow-sha256 "$workflow_sha256" --output "$RUNNER_TEMP/runtime-admission.json"
+          plan_artifact="$(gh api 'repos/FS-GG/.github/actions/artifacts/${{ inputs.plan_artifact_id }}')"
+          plan_run="$(gh api 'repos/FS-GG/.github/actions/runs/${{ inputs.plan_run_id }}')"
+          test "$(jq -r .id <<<"$plan_artifact")" = '${{ inputs.plan_artifact_id }}'
+          test "$(jq -r .name <<<"$plan_artifact")" = 'callable-isolated-operation-plan-${{ inputs.phase }}-${{ inputs.plan_run_id }}-${{ inputs.plan_run_attempt }}'
+          test "$(jq -r .workflow_run.id <<<"$plan_artifact")" = '${{ inputs.plan_run_id }}'
+          test "$(jq -r .digest <<<"$plan_artifact")" = 'sha256:${{ inputs.plan_artifact_sha256 }}'
+          test "$(jq -r .expired <<<"$plan_artifact")" = false
+          test "$(jq -r .run_attempt <<<"$plan_run")" = '${{ inputs.plan_run_attempt }}'
+          test "$(jq -r .conclusion <<<"$plan_run")" = success
+          test "$(jq -r .path <<<"$plan_run")" = .github/workflows/callable-isolated-operation-plan.yml
+          test "$(jq -r .head_sha <<<"$plan_run")" = "$GITHUB_SHA"
+          for kind in grant plan; do
+            id="${{ inputs.grant_artifact_id }}"; expected="${{ inputs.grant_artifact_sha256 }}"
+            [ "$kind" = plan ] && { id="${{ inputs.plan_artifact_id }}"; expected="${{ inputs.plan_artifact_sha256 }}"; }
+            gh api "repos/FS-GG/.github/actions/artifacts/$id/zip" > "$RUNNER_TEMP/$kind.zip"
+            test "$(sha256sum "$RUNNER_TEMP/$kind.zip" | cut -d ' ' -f 1)" = "$expected"
+          done
+          python3 tools/callable-isolated-operation-artifact.py extract --archive "$RUNNER_TEMP/grant.zip" --member callable-isolated-operation-grant.json --output "$RUNNER_TEMP/grant.json"
+          python3 tools/callable-isolated-operation-artifact.py extract --archive "$RUNNER_TEMP/plan.zip" --member callable-isolated-operation-plan.json --output "$RUNNER_TEMP/plan.json"
+          jq -e --argjson packet "$(cat "$RUNNER_TEMP/runtime-admission.json")" \
+            '.planArtifact == $packet.evidence.plan and .planSeal == $packet.evidence.planSeal and .phase == $packet.phase' \
+            "$RUNNER_TEMP/grant.json" >/dev/null
+          jq -c '.evidence.grantArtifactEnvelope' "$RUNNER_TEMP/runtime-admission.json" > "$RUNNER_TEMP/grant-envelope.json"
+          if [ -n "$CHECKPOINT_ARTIFACT_ID" ]; then
+            checkpoint_artifact="$(gh api 'repos/FS-GG/.github/actions/artifacts/${{ inputs.checkpoint_artifact_id }}')"
+            checkpoint_run="$(gh api 'repos/FS-GG/.github/actions/runs/${{ inputs.checkpoint_run_id }}')"
+            test "$(jq -r .id <<<"$checkpoint_artifact")" = '${{ inputs.checkpoint_artifact_id }}'
+            test "$(jq -r .name <<<"$checkpoint_artifact")" = 'callable-isolated-operation-checkpoint-${{ inputs.phase }}-${{ inputs.checkpoint_run_id }}-${{ inputs.checkpoint_run_attempt }}'
+            test "$(jq -r .workflow_run.id <<<"$checkpoint_artifact")" = '${{ inputs.checkpoint_run_id }}'
+            test "$(jq -r .digest <<<"$checkpoint_artifact")" = 'sha256:${{ inputs.checkpoint_artifact_sha256 }}'
+            test "$(jq -r .expired <<<"$checkpoint_artifact")" = false
+            test "$(jq -r .run_attempt <<<"$checkpoint_run")" = '${{ inputs.checkpoint_run_attempt }}'
+            test "$(jq -r .path <<<"$checkpoint_run")" = .github/workflows/callable-isolated-operation-execute.yml
+            test "$(jq -r .head_sha <<<"$checkpoint_run")" = "$GITHUB_SHA"
+            gh api 'repos/FS-GG/.github/actions/artifacts/${{ inputs.checkpoint_artifact_id }}/zip' > "$RUNNER_TEMP/checkpoint.zip"
+            test "$(sha256sum "$RUNNER_TEMP/checkpoint.zip" | cut -d ' ' -f 1)" = '${{ inputs.checkpoint_artifact_sha256 }}'
+            python3 tools/callable-isolated-operation-artifact.py extract --archive "$RUNNER_TEMP/checkpoint.zip" --member callable-isolated-operation-checkpoint.json --output "$RUNNER_TEMP/checkpoint.json"
+          fi
+          if [ '${{ inputs.phase }}' = identity-bound-operation ]; then
+            receipt_artifact="$(gh api 'repos/FS-GG/.github/actions/artifacts/${{ inputs.creation_receipt_artifact_id }}')"
+            receipt_run="$(gh api 'repos/FS-GG/.github/actions/runs/${{ inputs.creation_receipt_run_id }}')"
+            test "$(jq -r .id <<<"$receipt_artifact")" = '${{ inputs.creation_receipt_artifact_id }}'
+            test "$(jq -r .name <<<"$receipt_artifact")" = 'callable-isolated-operation-creation-receipt-${{ inputs.creation_receipt_run_id }}-${{ inputs.creation_receipt_run_attempt }}'
+            test "$(jq -r .workflow_run.id <<<"$receipt_artifact")" = '${{ inputs.creation_receipt_run_id }}'
+            test "$(jq -r .digest <<<"$receipt_artifact")" = 'sha256:${{ inputs.creation_receipt_artifact_sha256 }}'
+            test "$(jq -r .expired <<<"$receipt_artifact")" = false
+            test "$(jq -r .run_attempt <<<"$receipt_run")" = '${{ inputs.creation_receipt_run_attempt }}'
+            test "$(jq -r .conclusion <<<"$receipt_run")" = success
+            test "$(jq -r .path <<<"$receipt_run")" = .github/workflows/callable-isolated-operation-execute.yml
+            test "$(jq -r .head_sha <<<"$receipt_run")" = "$GITHUB_SHA"
+            gh api 'repos/FS-GG/.github/actions/artifacts/${{ inputs.creation_receipt_artifact_id }}/zip' > "$RUNNER_TEMP/creation-receipt.zip"
+            test "$(sha256sum "$RUNNER_TEMP/creation-receipt.zip" | cut -d ' ' -f 1)" = '${{ inputs.creation_receipt_artifact_sha256 }}'
+            python3 tools/callable-isolated-operation-artifact.py extract --archive "$RUNNER_TEMP/creation-receipt.zip" --member callable-isolated-operation-creation-receipt.json --output "$RUNNER_TEMP/creation-receipt.json"
+            test "$(jq -r .receiptSha256 "$RUNNER_TEMP/creation-receipt.json")" = "$(jq -r .creationReceiptSha256 "$RUNNER_TEMP/plan.json")"
+          fi
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3"/></packageSources></configuration>' > "$RUNNER_TEMP/NuGet.config"
+          dotnet tool install FS.GG.Coordination.Cli --version 0.1.0 --tool-path "$RUNNER_TEMP/tools" --configfile "$RUNNER_TEMP/NuGet.config"
+          python3 coordination/eng/callable-cli-isolated-operation.py execute \
+            --plan "$RUNNER_TEMP/plan.json" --grant "$RUNNER_TEMP/grant.json" --grant-artifact-envelope "$RUNNER_TEMP/grant-envelope.json" \
+            --reviewer-membership-observer-token-env REVIEWER_MEMBERSHIP_OBSERVER_TOKEN --creation-token-env CREATION_TOKEN \
+            --setup-token-env SETUP_TOKEN --execution-token-env EXECUTION_TOKEN --cleanup-token-env CLEANUP_TOKEN \
+            --receipt "$RUNNER_TEMP/checkpoint.json" --command "$RUNNER_TEMP/tools/fsgg-coordination" \
+            --app-installation-observer-token-env APP_INSTALLATION_OBSERVER_TOKEN --authority-observer-token-env AUTHORITY_OBSERVER_TOKEN
+          if [ '${{ inputs.phase }}' = creation ]; then
+            jq -c '.creationReceipt' "$RUNNER_TEMP/checkpoint.json" > "$RUNNER_TEMP/callable-isolated-operation-creation-receipt.json"
+          else
+            cp "$RUNNER_TEMP/checkpoint.json" "$RUNNER_TEMP/callable-isolated-operation-receipt.json"
+          fi
+          cp "$RUNNER_TEMP/checkpoint.json" "$RUNNER_TEMP/callable-isolated-operation-checkpoint.json"
+      - name: Retain restart-safe checkpoint
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: callable-isolated-operation-readiness-${{ inputs.phase }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/callable-isolated-operation-readiness.json
-          retention-days: 30
-          if-no-files-found: error
-      - name: Refuse execution while preparation is unavailable
-        shell: bash
-        run: |
-          test '${{ steps.readiness.outputs.available }}' = false
-          test "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["status"])' "$RUNNER_TEMP/callable-isolated-operation-readiness.json")" = prepared-not-authorized
-          echo 'execution-unavailable:prepared-not-authorized' >&2
-          exit 1
+        with: {name: "callable-isolated-operation-checkpoint-${{ inputs.phase }}-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/callable-isolated-operation-checkpoint.json", retention-days: 30, if-no-files-found: warn}
+      - name: Retain creation receipt
+        if: ${{ success() && inputs.phase == 'creation' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with: {name: "callable-isolated-operation-creation-receipt-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/callable-isolated-operation-creation-receipt.json", retention-days: 30, if-no-files-found: error}
+      - name: Retain settled receipt
+        if: ${{ success() && inputs.phase == 'identity-bound-operation' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with: {name: "callable-isolated-operation-receipt-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/callable-isolated-operation-receipt.json", retention-days: 30, if-no-files-found: error}

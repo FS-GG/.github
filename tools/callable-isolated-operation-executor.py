@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare a sealed, non-executing V2-CALL-01.4b executor readiness packet."""
+"""Prepare a sealed V2-CALL-01.4b executor runtime-admission packet."""
 
 from __future__ import annotations
 
@@ -195,9 +195,9 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         "workflowRunAttempt": authorization_run["runAttempt"],
         "expiresAt": timestamp("grant-artifact-expires-at", args.grant_artifact_expires_at),
     }
-    plan = artifact(COORDINATION_REPOSITORY, "plan", args.plan_run_id, args.plan_run_attempt,
+    plan = artifact(AUTHORITY_REPOSITORY, "plan", args.plan_run_id, args.plan_run_attempt,
                     args.plan_artifact_id, args.plan_artifact_sha256)
-    creation_receipt = optional_artifact(COORDINATION_REPOSITORY, "creation-receipt", (
+    creation_receipt = optional_artifact(AUTHORITY_REPOSITORY, "creation-receipt", (
         args.creation_receipt_run_id, args.creation_receipt_run_attempt,
         args.creation_receipt_artifact_id, args.creation_receipt_artifact_sha256))
     checkpoint = optional_artifact(AUTHORITY_REPOSITORY, "checkpoint", (
@@ -232,12 +232,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
             "receiverRevision": RECEIVER_REVISION,
             "target": TARGET,
         },
-        "blockingReasons": [
-            "protected-environment-approval-not-observed",
-            "reviewer-membership-not-observed",
-            "reviewed-app-installations-and-exact-role-grants-unavailable",
-            "cross-repository-artifact-read-authority-unavailable",
-        ],
+        "blockingReasons": [],
         "evidence": {
             "checkpoint": checkpoint,
             "creationReceipt": creation_receipt,
@@ -246,7 +241,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
             "plan": plan,
             "planSeal": sha256("plan-seal", args.plan_seal),
         },
-        "execution": "unavailable",
+        "execution": "pending-live-admission",
         "mutationCredentialsMinted": False,
         "operationIdentity": OPERATION_IDENTITY,
         "phase": args.phase,
@@ -274,15 +269,15 @@ def build(args: argparse.Namespace) -> dict[str, object]:
             "retentionName": "callable-isolated-operation-readiness-<phase>-<run-id>-<run-attempt>",
         },
         "schema": SCHEMA,
-        "status": "prepared-not-authorized",
+        "status": "runtime-admission-required",
         "operatorIntegration": {
             "argument": "--grant-artifact-envelope",
             "coordinationContract": "fsgg.coordination.callable-isolated-operation-contract/4",
             "envelopeSchema": GRANT_ARTIFACT_SCHEMA,
-            "readinessOnly": True,
+            "readinessOnly": False,
         },
         "tokenMinting": {
-            "allowed": False,
+            "allowed": True,
             "order": "only-after-complete-read-only-admission",
             "phaseSeparation": "one-exact-phase-per-protected-grant",
             "targetExecutionScope": [TARGET],
@@ -301,7 +296,7 @@ def main() -> int:
             raise Refused("output must be a new regular file")
         output.write_text(json.dumps(packet, sort_keys=True, separators=(",", ":")) + "\n")
         os.chmod(output, 0o600)
-        print("execution-unavailable:prepared-not-authorized")
+        print("execution-pending:runtime-admission-required")
         return 0
     except (OSError, Refused) as error:
         print(f"callable isolated executor refused: {error}", file=sys.stderr)

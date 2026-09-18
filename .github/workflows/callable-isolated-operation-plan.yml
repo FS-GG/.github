@@ -1,0 +1,107 @@
+name: Callable isolated operation plan
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Exact protected operation phase
+        required: true
+        type: choice
+        options: [creation, identity-bound-operation]
+      creation_receipt_artifact_id:
+        description: Creation receipt artifact id; required only for identity-bound-operation
+        required: false
+        type: string
+      creation_receipt_run_id:
+        description: Creation receipt run id; required only for identity-bound-operation
+        required: false
+        type: string
+      creation_receipt_run_attempt:
+        description: Creation receipt run attempt; required only for identity-bound-operation
+        required: false
+        type: string
+      creation_receipt_artifact_sha256:
+        description: Creation receipt archive SHA-256; required only for identity-bound-operation
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: callable-isolated-operation-plan-${{ inputs.phase }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: callable-isolated-operation-plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact authority source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Check out exact reviewed Coordination source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: FS-GG/FS.GG.Coordination
+          ref: d46aa238d0f169c85a5822e62e49ab9df1ebf37d
+          fetch-depth: 1
+          persist-credentials: false
+          path: coordination
+      - name: Build the immutable phase plan
+        env:
+          CREATION_RECEIPT_ARTIFACT_ID: ${{ inputs.creation_receipt_artifact_id }}
+          CREATION_RECEIPT_ARTIFACT_SHA256: ${{ inputs.creation_receipt_artifact_sha256 }}
+          CREATION_RECEIPT_RUN_ID: ${{ inputs.creation_receipt_run_id }}
+          CREATION_RECEIPT_RUN_ATTEMPT: ${{ inputs.creation_receipt_run_attempt }}
+          GH_TOKEN: ${{ github.token }}
+          PHASE: ${{ inputs.phase }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'FS-GG/.github'
+          test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$(git -C coordination rev-parse HEAD)" = 'd46aa238d0f169c85a5822e62e49ab9df1ebf37d'
+          test "$(sha256sum coordination/eng/callable-cli-isolated-operation-contract.json | cut -d ' ' -f 1)" = 'cc51765dd011672f0af4b4a1c7fb6c26f5d436b53e1e9d12104831bfe7914815'
+          if [ "$PHASE" = creation ]; then
+            test -z "$CREATION_RECEIPT_RUN_ID$CREATION_RECEIPT_RUN_ATTEMPT$CREATION_RECEIPT_ARTIFACT_ID$CREATION_RECEIPT_ARTIFACT_SHA256"
+            python3 coordination/eng/callable-cli-isolated-operation.py prepare-create \
+              --output "$RUNNER_TEMP/callable-isolated-operation-plan.json"
+          else
+            [[ "$CREATION_RECEIPT_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+            [[ "$CREATION_RECEIPT_RUN_ID" =~ ^[1-9][0-9]*$ && "$CREATION_RECEIPT_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+            [[ "$CREATION_RECEIPT_ARTIFACT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            receipt_artifact="$(gh api "repos/FS-GG/.github/actions/artifacts/$CREATION_RECEIPT_ARTIFACT_ID")"
+            receipt_run="$(gh api "repos/FS-GG/.github/actions/runs/$CREATION_RECEIPT_RUN_ID")"
+            test "$(jq -r .id <<<"$receipt_artifact")" = "$CREATION_RECEIPT_ARTIFACT_ID"
+            test "$(jq -r .name <<<"$receipt_artifact")" = "callable-isolated-operation-creation-receipt-$CREATION_RECEIPT_RUN_ID-$CREATION_RECEIPT_RUN_ATTEMPT"
+            test "$(jq -r .workflow_run.id <<<"$receipt_artifact")" = "$CREATION_RECEIPT_RUN_ID"
+            test "$(jq -r .digest <<<"$receipt_artifact")" = "sha256:$CREATION_RECEIPT_ARTIFACT_SHA256"
+            test "$(jq -r .expired <<<"$receipt_artifact")" = false
+            test "$(jq -r .run_attempt <<<"$receipt_run")" = "$CREATION_RECEIPT_RUN_ATTEMPT"
+            test "$(jq -r .conclusion <<<"$receipt_run")" = success
+            test "$(jq -r .path <<<"$receipt_run")" = .github/workflows/callable-isolated-operation-execute.yml
+            test "$(jq -r .head_sha <<<"$receipt_run")" = "$GITHUB_SHA"
+            gh api "repos/FS-GG/.github/actions/artifacts/$CREATION_RECEIPT_ARTIFACT_ID/zip" > "$RUNNER_TEMP/creation-receipt.zip"
+            test "$(sha256sum "$RUNNER_TEMP/creation-receipt.zip" | cut -d ' ' -f 1)" = "$CREATION_RECEIPT_ARTIFACT_SHA256"
+            python3 tools/callable-isolated-operation-artifact.py extract \
+              --archive "$RUNNER_TEMP/creation-receipt.zip" \
+              --member callable-isolated-operation-creation-receipt.json \
+              --output "$RUNNER_TEMP/callable-isolated-operation-creation-receipt.json"
+            python3 coordination/eng/callable-cli-isolated-operation.py prepare-operation \
+              --creation-receipt "$RUNNER_TEMP/callable-isolated-operation-creation-receipt.json" \
+              --output "$RUNNER_TEMP/callable-isolated-operation-plan.json"
+          fi
+      - name: Retain exact plan bytes
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: callable-isolated-operation-plan-${{ inputs.phase }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/callable-isolated-operation-plan.json
+          retention-days: 30
+          if-no-files-found: error

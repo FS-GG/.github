@@ -59,7 +59,7 @@ HOW A CALLEE IS RESOLVED (this decides what the gate protects)
 
 Usage:
   check-workflow-permissions.py [--root <dir>] [--registry <file>] [--repo <full> ...]
-      [--app-grants scope:level,...]
+      [--app-grants scope:level,...] [--app-grants-for SECRET=scope:level,... ...]
 Exit: 0 = every caller grants at least its callee; 1 = at least one caller cannot start; 2 = no
 verdict, RETRYABLE — a repo or workflow that could not be read (rate limit, auth, outage); 3 = no
 verdict, PERMANENT — an unreadable roster, an audit that examined nothing, a callee that is missing
@@ -364,13 +364,18 @@ def parse_app_grants(spec: str) -> dict[str, int]:
     return grants
 
 
-def app_token_requests(doc: dict, where: str) -> list[tuple[str, dict[str, int]]]:
+APP_ID_SECRET = re.compile(r"\$\{\{\s*secrets\.([A-Z][A-Z0-9_]*)\s*\}\}")
+
+
+def app_token_requests(doc: dict, where: str) -> list[tuple[str, str | None, dict[str, int]]]:
     """Read static create-github-app-token requests in one workflow.
 
-    The action treats any ungranted requested scope as fatal.  Dynamic permission values cannot
+    The action treats any ungranted requested scope as fatal. Dynamic permission values cannot
     be compared before merge, so they deliberately produce no verdict rather than a false green.
+    The app-id secret is retained so a separately custodied App can select its own reviewed grant
+    contract instead of being conflated with the repository's default App installation.
     """
-    found: list[tuple[str, dict[str, int]]] = []
+    found: list[tuple[str, str | None, dict[str, int]]] = []
     jobs = doc.get("jobs")
     if not isinstance(jobs, dict):
         return found
@@ -385,6 +390,9 @@ def app_token_requests(doc: dict, where: str) -> list[tuple[str, dict[str, int]]
             inputs = step.get("with", {})
             if not isinstance(inputs, dict):
                 raise GateError(f"{where} [{job_id}] App-token step {index}: `with:` is not a mapping")
+            app_id = inputs.get("app-id")
+            match = APP_ID_SECRET.fullmatch(app_id) if isinstance(app_id, str) else None
+            app_id_secret = match.group(1) if match else None
             requested: dict[str, int] = {}
             for key, value in inputs.items():
                 key = str(key)
@@ -397,8 +405,20 @@ def app_token_requests(doc: dict, where: str) -> list[tuple[str, dict[str, int]]
                         "none, read, or write value so the grant can be checked before merge"
                     )
                 requested[scope] = LEVELS[value]
-            found.append((f"{where} [{job_id}] App-token step {index}", requested))
+            found.append((f"{where} [{job_id}] App-token step {index}", app_id_secret, requested))
     return found
+
+
+def parse_app_grant_overrides(specs: list[str]) -> dict[str, dict[str, int]]:
+    """Parse SECRET=scope:level inventories for explicitly distinct App identities."""
+    overrides: dict[str, dict[str, int]] = {}
+    for spec in specs:
+        secret, separator, grants = spec.partition("=")
+        if (not separator or not re.fullmatch(r"[A-Z][A-Z0-9_]*", secret)
+                or secret in overrides):
+            raise GateError("--app-grants-for must be a unique SECRET=scope:level,... entry")
+        overrides[secret] = parse_app_grants(grants)
+    return overrides
 
 
 def main(argv: list[str]) -> int:
@@ -412,6 +432,8 @@ def main(argv: list[str]) -> int:
                     help="audit only this repo (repeatable); default: every rostered repo")
     ap.add_argument("--app-grants", default=None,
                     help="pinned installation grants (scope:read|write,...) to compare against App-token requests")
+    ap.add_argument("--app-grants-for", action="append", default=[], metavar="SECRET=GRANTS",
+                    help="required grants for a distinct App selected by its app-id secret (repeatable)")
     args = ap.parse_args(argv)
 
     registry = args.registry or os.path.join(args.root, "registry", "repos.yml")
@@ -422,6 +444,7 @@ def main(argv: list[str]) -> int:
 
     try:
         app_grants = parse_app_grants(args.app_grants) if args.app_grants is not None else None
+        app_grant_overrides = parse_app_grant_overrides(args.app_grants_for)
     except GateError as e:
         print(f"::error::check-workflow-permissions: no verdict — {e}", file=sys.stderr)
         return NO_VERDICT_PERMANENT
@@ -441,11 +464,16 @@ def main(argv: list[str]) -> int:
             except (OSError, GateError) as e:
                 print(f"::error::check-workflow-permissions: no verdict — {e}", file=sys.stderr)
                 return NO_VERDICT_PERMANENT
-            for subject, requested in requests:
+            for subject, app_id_secret, requested in requests:
+                selected_grants = app_grant_overrides.get(app_id_secret, app_grants)
+                if selected_grants is None:
+                    raise GateError(
+                        f"{subject}: no App grant inventory selects app-id secret {app_id_secret!r}"
+                    )
                 short = [
-                    f"{scope}: requests {level_name(want)}, installation grants {level_name(granted(app_grants, scope))}"
+                    f"{scope}: requests {level_name(want)}, installation grants {level_name(granted(selected_grants, scope))}"
                     for scope, want in sorted(requested.items())
-                    if granted(app_grants, scope) < want
+                    if granted(selected_grants, scope) < want
                 ]
                 if short:
                     findings.append(

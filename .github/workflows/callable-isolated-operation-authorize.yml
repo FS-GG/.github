@@ -14,6 +14,10 @@ on:
         description: SHA-256 seal of the prepared Coordination plan
         required: true
         type: string
+      plan_run_id: {description: Exact completed plan run id, required: true, type: string}
+      plan_run_attempt: {description: Exact completed plan run attempt, required: true, type: string}
+      plan_artifact_id: {description: Exact plan artifact id, required: true, type: string}
+      plan_artifact_sha256: {description: Exact plan archive SHA-256, required: true, type: string}
       contract_sha256:
         description: Exact reviewed Coordination contract SHA-256
         required: true
@@ -34,14 +38,10 @@ on:
         description: Observed protected environment id; evidence only
         required: true
         type: string
-      credential_bindings_json:
-        description: Exact seven-role App and installation identities; evidence only, never credentials
-        required: true
-        type: string
       grant_lifetime_minutes:
-        description: Grant lifetime from 1 through 120 minutes
+        description: Grant lifetime from 1 through 45 minutes (inside minted-token lifetime)
         required: true
-        default: 60
+        default: 30
         type: number
 
 permissions:
@@ -64,16 +64,34 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
-      - name: Validate bindings and materialize the unavailable grant preparation
+      - name: Mint the read-only authority observer
+        id: observer
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
+          private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          permission-actions: read
+          permission-administration: read
+          permission-contents: read
+          permission-members: read
+          permission-organization-administration: read
+      - name: Validate live authority and materialize the exact grant
         env:
+          APP_ID: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_ID }}
           CONTRACT_SHA256: ${{ inputs.contract_sha256 }}
           COORDINATION_REVISION: ${{ inputs.coordination_revision }}
-          CREDENTIAL_BINDINGS_JSON: ${{ inputs.credential_bindings_json }}
           DOTGITHUB_REVISION: ${{ inputs.dotgithub_revision }}
           ENVIRONMENT_ID: ${{ inputs.environment_id }}
+          GH_TOKEN: ${{ steps.observer.outputs.token }}
+          INSTALLATION_ID: ${{ steps.observer.outputs.installation-id }}
           LIFETIME_MINUTES: ${{ inputs.grant_lifetime_minutes }}
           PHASE: ${{ inputs.phase }}
           PLAN_SEAL: ${{ inputs.plan_seal }}
+          PLAN_RUN_ID: ${{ inputs.plan_run_id }}
+          PLAN_RUN_ATTEMPT: ${{ inputs.plan_run_attempt }}
+          PLAN_ARTIFACT_ID: ${{ inputs.plan_artifact_id }}
+          PLAN_ARTIFACT_SHA256: ${{ inputs.plan_artifact_sha256 }}
           SOURCE_SHA256: ${{ inputs.source_sha256 }}
         run: |
           set -euo pipefail
@@ -81,11 +99,47 @@ jobs:
           test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
           test "$GITHUB_REF" = 'refs/heads/main'
           test "$GITHUB_SHA" = "$DOTGITHUB_REVISION"
+          test -n "$APP_ID"
+          test -n "$INSTALLATION_ID"
+          test "$LIFETIME_MINUTES" -ge 1
+          test "$LIFETIME_MINUTES" -le 45
+          [[ "$PLAN_RUN_ID" =~ ^[1-9][0-9]*$ && "$PLAN_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ && "$PLAN_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$PLAN_ARTIFACT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          plan_artifact="$(gh api "repos/FS-GG/.github/actions/artifacts/$PLAN_ARTIFACT_ID")"
+          plan_run="$(gh api "repos/FS-GG/.github/actions/runs/$PLAN_RUN_ID")"
+          test "$(jq -r .id <<<"$plan_artifact")" = "$PLAN_ARTIFACT_ID"
+          test "$(jq -r .name <<<"$plan_artifact")" = "callable-isolated-operation-plan-$PHASE-$PLAN_RUN_ID-$PLAN_RUN_ATTEMPT"
+          test "$(jq -r .workflow_run.id <<<"$plan_artifact")" = "$PLAN_RUN_ID"
+          test "$(jq -r .digest <<<"$plan_artifact")" = "sha256:$PLAN_ARTIFACT_SHA256"
+          test "$(jq -r .expired <<<"$plan_artifact")" = false
+          test "$(jq -r .run_attempt <<<"$plan_run")" = "$PLAN_RUN_ATTEMPT"
+          test "$(jq -r .conclusion <<<"$plan_run")" = success
+          test "$(jq -r .path <<<"$plan_run")" = .github/workflows/callable-isolated-operation-plan.yml
+          test "$(jq -r .head_sha <<<"$plan_run")" = "$GITHUB_SHA"
+          gh api "repos/FS-GG/.github/actions/artifacts/$PLAN_ARTIFACT_ID/zip" > "$RUNNER_TEMP/plan.zip"
+          test "$(sha256sum "$RUNNER_TEMP/plan.zip" | cut -d ' ' -f 1)" = "$PLAN_ARTIFACT_SHA256"
+          python3 tools/callable-isolated-operation-artifact.py extract --archive "$RUNNER_TEMP/plan.zip" \
+            --member callable-isolated-operation-plan.json --output "$RUNNER_TEMP/plan.json"
+          test "$(jq -r .seal "$RUNNER_TEMP/plan.json")" = "$PLAN_SEAL"
+          test "$(jq -r .phase "$RUNNER_TEMP/plan.json")" = "$PHASE"
+          environment="$(gh api repos/FS-GG/.github/environments/callable-isolated-operation)"
+          branch_policies="$(gh api repos/FS-GG/.github/environments/callable-isolated-operation/deployment-branch-policies)"
+          membership="$(gh api orgs/FS-GG/memberships/EHotwagner)"
+          installation="$(gh api orgs/FS-GG/installations --jq '.installations[] | select(.id == ('"$INSTALLATION_ID"' | tonumber))')"
+          test -n "$installation"
+          authority_observation="$(jq -cn \
+            --argjson environment "$environment" --argjson branch_policies "$branch_policies" --argjson membership "$membership" --argjson installation "$installation" \
+            --arg app_id "$APP_ID" --arg installation_id "$INSTALLATION_ID" \
+            '{schema:"fsgg.github.callable-isolated-operation-authority-observation/1",environment:{id:$environment.id,name:$environment.name,preventSelfReview:([ $environment.protection_rules[] | select(.type=="required_reviewers") | .prevent_self_review ] | if length==1 then .[0] else null end),requiredReviewerId:([ $environment.protection_rules[] | select(.type=="required_reviewers") | .reviewers[].reviewer.id ] | if length==1 then .[0] else null end),branchPolicy:(if $environment.deployment_branch_policy=={custom_branch_policies:true,protected_branches:false} and $branch_policies.total_count==1 and $branch_policies.branch_policies[0].name=="main" then "custom-main" else "other" end)},reviewerMembership:{id:$membership.user.id,login:$membership.user.login,state:$membership.state},installation:{appId:($app_id|tonumber),installationId:($installation_id|tonumber),account:$installation.account.login,accountType:$installation.account.type,repositorySelection:$installation.repository_selection,permissions:$installation.permissions,suspendedAt:$installation.suspended_at}}')"
+          credential_bindings="$(jq -cn --arg app_id "$APP_ID" --arg installation_id "$INSTALLATION_ID" \
+            '["app-installation-observer","authority-observer","reviewer-membership-observer","creation","setup","execution","cleanup"] as $roles | reduce $roles[] as $role ({}; .[$role]={appId:($app_id|tonumber),installationId:($installation_id|tonumber)})')"
           workflow_sha256="$(sha256sum .github/workflows/callable-isolated-operation-authorize.yml | cut -d ' ' -f 1)"
           approved_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           python3 tools/callable-isolated-operation-grant.py \
             --phase "$PHASE" \
             --plan-seal "$PLAN_SEAL" \
+            --plan-run-id "$PLAN_RUN_ID" --plan-run-attempt "$PLAN_RUN_ATTEMPT" \
+            --plan-artifact-id "$PLAN_ARTIFACT_ID" --plan-artifact-sha256 "$PLAN_ARTIFACT_SHA256" \
             --contract-sha256 "$CONTRACT_SHA256" \
             --source-sha256 "$SOURCE_SHA256" \
             --coordination-revision "$COORDINATION_REVISION" \
@@ -97,11 +151,12 @@ jobs:
             --run-id "$GITHUB_RUN_ID" \
             --run-attempt "$GITHUB_RUN_ATTEMPT" \
             --environment-id "$ENVIRONMENT_ID" \
-            --credential-bindings-json "$CREDENTIAL_BINDINGS_JSON" \
+            --credential-bindings-json "$credential_bindings" \
             --approved-at "$approved_at" \
             --lifetime-minutes "$LIFETIME_MINUTES" \
-            --output "$RUNNER_TEMP/callable-isolated-operation-grant.json"
-      - name: Retain the reviewed prepared-not-authorized grant input
+            --output "$RUNNER_TEMP/callable-isolated-operation-grant.json" \
+            --authority-observation-json "$authority_observation"
+      - name: Retain the reviewed authorized grant
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: callable-isolated-operation-grant-${{ github.run_id }}-${{ github.run_attempt }}
