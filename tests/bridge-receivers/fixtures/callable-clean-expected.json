@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "fs.gg.coordination.cli": {
+      "version": "0.1.0",
+      "commands": [
+        "fsgg-coordination"
+      ],
+      "rollForward": false
+    }
+  }
+}

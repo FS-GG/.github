@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "receiverNote": "preserve-me",
+  "tools": {
+    "fs.gg.coord.cli": {
+      "version": "0.90.0",
+      "commands": [
+        "fsgg-coord-engine"
+      ]
+    },
+    "user.tool": {
+      "version": "7.4.2",
+      "commands": [
+        "user-tool"
+      ]
+    }
+  }
+}

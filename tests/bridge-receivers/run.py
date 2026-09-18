@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -28,6 +29,7 @@ EXPECTED_ROUTES = {
     "docs/coordination/v1-writer-receiver-census.json": ("gs2-08.9-sealing", "3d7de0dee094991e08aed09b7478ea1191d6ee7f50baaad0087975a88e8f90db"),
 }
 DISPOSITIONS = {"bridge-adopted", "read-only-local-only", "gs2-08.9-sealing"}
+HERE = pathlib.Path(__file__).resolve().parent
 SERVER = pathlib.Path(__file__).resolve().parents[1] / "coord-engine-e2e/stateful_server.py"
 
 
@@ -116,6 +118,16 @@ def git_file(root: pathlib.Path, revision: str, path: str) -> bytes:
     return result.stdout
 
 
+def accepted_v1_route_bytes(entrypoint: str, value: bytes) -> bytes:
+    """Project the immutable V1 manifest bytes while allowing the additive V2 opt-in pin."""
+    if entrypoint != "dist/dotnet/.config/dotnet-tools.json":
+        return value
+    manifest = json.loads(value)
+    projected = copy.deepcopy(manifest)
+    projected.get("tools", {}).pop("fs.gg.coordination.cli", None)
+    return (json.dumps(projected, indent=2) + "\n").encode()
+
+
 def validate(evidence_path: pathlib.Path, manifest_path: pathlib.Path, packages: pathlib.Path,
              root: pathlib.Path, revision: str, tree: str, bind_tree: bool = False) -> dict[str, pathlib.Path]:
     validate_receiver(root, revision, tree)
@@ -191,6 +203,7 @@ def validate(evidence_path: pathlib.Path, manifest_path: pathlib.Path, packages:
         if row.get("disposition") != disposition or row.get("disposition") not in DISPOSITIONS or row.get("sha256") != digest:
             fail(f"invalid route disposition or identity: {entrypoint}")
         path_bytes = git_file(root, revision, entrypoint) if bind_tree else (root / entrypoint).read_bytes()
+        path_bytes = accepted_v1_route_bytes(entrypoint, path_bytes)
         if sha256_bytes(path_bytes) != digest:
             fail(f"route bytes do not match the receiver manifest: {entrypoint}")
 
@@ -320,6 +333,13 @@ def main() -> None:
                      args.receiver_revision, args.receiver_tree, bind_tree=args.command == "qualify")
     if args.command == "qualify":
         execute(paths["FS.GG.Coord.Cli"])
+        adopted = run([
+            "python3", str(HERE / "callable-adoption-selftest.py"),
+            "--receiver-root", str(args.receiver_root),
+        ], timeout=180)
+        if adopted.returncode:
+            fail(f"callable adoption qualification failed: {adopted.stdout}{adopted.stderr}")
+        print(adopted.stdout.strip())
     print(f"bridge-receivers: {args.command} passed for {args.receiver_revision}/{args.receiver_tree}")
 
 
