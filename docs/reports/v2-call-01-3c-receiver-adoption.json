@@ -1,0 +1,42 @@
+{
+  "schema": "fsgg.v2-callable-receiver-adoption/v1",
+  "feature": "V2-CALL-01.3c",
+  "receiver": "FS-GG/.github",
+  "source": {
+    "repository": "FS-GG/FS.GG.Coordination",
+    "commit": "1bd60a3e2dddc37827a7562b133305e1282e2c20",
+    "tree": "79de47c7e9627ce040b32ebaed91b151ce17750e"
+  },
+  "publication": {
+    "package": "FS.GG.Coordination.Cli",
+    "version": "0.1.0",
+    "candidateSha256": "ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf",
+    "nugetOrgServedSha256": "e7f440a2a1f94d51dbcdd7146494c97e6386f9dcc8034a028e3e851d364390e3",
+    "normalizedPayloadIdentity": true,
+    "tag": "v0.1.0",
+    "release": "https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.0",
+    "evidenceMerge": "2e92dfb533be94c540b12a1f6a58a914ba7132bd"
+  },
+  "adoption": {
+    "manifest": "dist/dotnet/.config/dotnet-tools.json",
+    "packageKey": "fs.gg.coordination.cli",
+    "command": "fsgg-coordination",
+    "legacyBridgeRetained": "FS.GG.Coord.Cli 0.90.0",
+    "cleanAndRetainedOptIn": true,
+    "idempotent": true,
+    "conflictRefusesBeforeWrite": true,
+    "uninstallPreservesPeers": true,
+    "publicSourceOnlyResolution": true,
+    "preOpenV2Refusal": true
+  },
+  "status": {
+    "sourceDelivered": true,
+    "published": true,
+    "receiverPinned": true,
+    "installedProviderAcceptance": false,
+    "productionEffectsEnabled": false,
+    "openV2": false,
+    "q4Accepted": false,
+    "gs209MigrationComplete": false
+  }
+}
