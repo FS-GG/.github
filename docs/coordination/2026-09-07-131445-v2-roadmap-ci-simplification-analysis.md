@@ -200,7 +200,7 @@ compiler behavior. Passing those checks is documentation/parser compatibility ev
 any proposed simplification.
 
 This is ordinary documentation work for an execution-bound roadmap, using one focused PR. The
-[min-docs skill](../../.agents/skills/min-docs/SKILL.md) excludes parsed documentation and changes to required
+[technical-writer skill](../../.agents/skills/technical-writer/SKILL.md) excludes parsed documentation and changes to required
 evidence; its proportionate delivery principles still inform the scope. No accepted ADR, workflow,
 settings, registry, schema, unit catalog, release artifact or required check is changed. Adopting the
 prospective unit amendments remains an explicit future contract/policy operation, not a documentation waiver.
