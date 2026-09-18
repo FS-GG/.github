@@ -211,7 +211,7 @@ jobs:
     steps:
       - uses: actions/create-github-app-token@v3
         with:
-          app-id: 1
+          app-id: ${{ secrets.DEDICATED_APP_ID }}
           private-key: x
           permission-issues: write
 YAML
@@ -223,6 +223,10 @@ expect "an App-token request outside the pinned installation grants is caught be
 expect "the same App-token request is green when the inventory grants it" \
   0 "ok:" "$WAPP" "$RC" \
   --app-grants contents:read,issues:write
+expect "a separately custodied App selects its explicit required grant contract" \
+  0 "ok:" "$WAPP" "$RC" \
+  --app-grants contents:read \
+  --app-grants-for DEDICATED_APP_ID=contents:read,issues:write
 
 # GS2-08.9 retires the automatic publisher and its App-token/package request. Pin that capability
 # loss directly, then keep the auditor inversion independent of the retired production workflow.

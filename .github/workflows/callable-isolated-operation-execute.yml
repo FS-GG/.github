@@ -157,6 +157,7 @@ jobs:
         env:
           APP_INSTALLATION_OBSERVER_TOKEN: ${{ steps.app-observer.outputs.token }}
           AUTHORITY_OBSERVER_TOKEN: ${{ steps.authority.outputs.token }}
+          CHECKPOINT_ARTIFACT_ID: ${{ inputs.checkpoint_artifact_id }}
           CLEANUP_TOKEN: ${{ steps.cleanup-creation.outputs.token || steps.cleanup-operation.outputs.token }}
           CREATION_TOKEN: ${{ steps.creation.outputs.token }}
           EXECUTION_TOKEN: ${{ steps.execution-creation.outputs.token || steps.execution-operation.outputs.token }}
@@ -206,7 +207,7 @@ jobs:
             '.planArtifact == $packet.evidence.plan and .planSeal == $packet.evidence.planSeal and .phase == $packet.phase' \
             "$RUNNER_TEMP/grant.json" >/dev/null
           jq -c '.evidence.grantArtifactEnvelope' "$RUNNER_TEMP/runtime-admission.json" > "$RUNNER_TEMP/grant-envelope.json"
-          if [ -n '${{ inputs.checkpoint_artifact_id }}' ]; then
+          if [ -n "$CHECKPOINT_ARTIFACT_ID" ]; then
             checkpoint_artifact="$(gh api 'repos/FS-GG/.github/actions/artifacts/${{ inputs.checkpoint_artifact_id }}')"
             checkpoint_run="$(gh api 'repos/FS-GG/.github/actions/runs/${{ inputs.checkpoint_run_id }}')"
             test "$(jq -r .id <<<"$checkpoint_artifact")" = '${{ inputs.checkpoint_artifact_id }}'

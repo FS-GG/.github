@@ -82,9 +82,14 @@ jobs:
           # alongside every grant already listed below. Every other value here is unchanged from 2026-08-08.
           # Hyphens are action input spelling; underscores are GitHub's API spelling.
           FSGG_APP_GRANTS: administration:write,contents:write,issues:write,metadata:read,organization_administration:read,organization_projects:write,packages:read,pull_requests:write
+          # Required contract for the distinct, environment-custodied protected-operation App.
+          # This is not a claim that the App exists: authorization observes an exact live
+          # installation before issuing a grant, and a missing secret/grant makes token minting fail.
+          CALLABLE_APP_REQUIRED_GRANTS: actions:write,administration:write,checks:read,contents:write,members:read,metadata:read,organization_administration:read,pull_requests:write,workflows:write
         run: |
           rc=0
-          out="$(python scripts/check-workflow-permissions.py --root . --app-grants "$FSGG_APP_GRANTS" 2>&1)" || rc=$?
+          out="$(python scripts/check-workflow-permissions.py --root . --app-grants "$FSGG_APP_GRANTS" \
+            --app-grants-for "CALLABLE_ISOLATED_OPERATION_APP_ID=$CALLABLE_APP_REQUIRED_GRANTS" 2>&1)" || rc=$?
           [ -z "$out" ] || printf '%s\n' "$out"
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
 
