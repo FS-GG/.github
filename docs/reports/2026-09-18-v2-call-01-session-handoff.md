@@ -12,12 +12,13 @@ contract, and telemetry recovery needed to reach the external-authority boundary
 dispatched, no credential was minted, and no GitHub environment, App grant, target repository,
 provider resource, epoch, journal, package, or acceptance state was changed.
 
-The authoritative default-branch readbacks at handoff are:
+The authoritative default-branch readbacks used by the final authority audit are:
 
-- `FS-GG/.github`: `d12ea72fda81456c5e5f76e7af38219da2d140f4`;
+- `FS-GG/.github`: `e041ea3f85b4dcf1a0ceb1376eda0464f144912a` (the documentation-only
+  landing of this final update follows that audit baseline);
 - `FS-GG/FS.GG.Coordination`: `d46aa238d0f169c85a5822e62e49ab9df1ebf37d`;
-- telemetry host: `ready`; the root attempt ended `cancelled` with exit code 130 because the user
-  requested this handoff, and its queue drained completely.
+- telemetry host: `ready`; the final follow-up attempt ended `blocked` with exit code 3, and its
+  queue drained completely.
 
 The local `.github` checkout was clean before this report was created. All seven completed callable
 implementation worktrees and their local topic branches were removed. The only remote topic branch
@@ -50,21 +51,30 @@ effect path. Its `prepared-not-authorized` result is not `.4b` acceptance.
 
 ## External authority still required
 
-The final read-only audit returned 404 for both:
+The final read-only audit found no existing callable or isolated-operation authority issue and
+returned 404 for both:
 
 - the `FS-GG/.github` environment named `callable-isolated-operation`; and
 - `FS-GG/FS.GG.Coordination.CallableSandbox`.
 
-The existing `fs-gg-cross-repo-dispatch` App inventory was previously read back successfully by
-[permission-coherence run 35352143132](https://github.com/FS-GG/.github/actions/runs/35352143132).
-It still does not establish the required `checks:read`, `workflows:write`, or organization
-`members:read` capabilities. Environment creation and protection, App permission changes or App
-selection, installation scope, reviewer membership visibility, and credential custody are external
+The final audit dispatched the existing read-only permission-coherence workflow from the audited
+`.github` main. [Run 35369841455](https://github.com/FS-GG/.github/actions/runs/35369841455)
+completed successfully: `fixture`, `installation-grants-current`, and `permissions-coherent` all
+passed. This confirms that the live `fs-gg-cross-repo-dispatch` App grants match the pinned inventory,
+which contains `administration:write`, `contents:write`, `issues:write`, `metadata:read`, organization
+`administration:read`, organization `projects:write`, `packages:read`, and `pull_requests:write`. It
+does not establish the required `checks:read`, `workflows:write`, or organization `members:read`
+capabilities. Environment creation and protection, App permission changes or App selection,
+installation scope, reviewer membership visibility, and credential custody are external
 administrative actions. Broad roadmap authorization does not substitute for those protected actions.
 
-The typed cross-repository intake was also attempted and refused because production-v1 admission and
-its durable operation journal are unavailable. That refusal is recorded as telemetry complication
-`intake-production-v1-admission-refusal`. Do not bypass it with a direct issue write.
+The typed cross-repository intake draft `v2-call-01-4b-protected-authority` validated without writes,
+then apply refused because production-v1 admission, durable operation scope and journal, and provider
+reconciliation are unavailable. No issue was created, and the refusal was not bypassed with a direct
+issue write. The final telemetry attempt
+`v2-call-01-4b-authority-followup-20260918-a1` recorded complication
+`protected-authority-still-unavailable`, finished `blocked`, and drained its queue. Telemetry health
+therefore confirms delivery of the audit outcome; it does not clear the authority boundary.
 
 ## Resume sequence
 
@@ -101,5 +111,6 @@ FSGG_TELEMETRY_REPOSITORY=FS-GG/.github \
   fdev-telemetry exec python3 tools/roadmap-telemetry.py status
 ```
 
-Expected at this handoff: a clean tree, `.github` main at the SHA above, two 404 responses, and
-telemetry status `ready`. A changed result is new evidence and must be reconciled before resuming.
+Expected at this handoff: a clean tree, `.github` main containing handoff PR #3550 and its final
+documentation-only follow-up, two 404 responses, and telemetry status `ready`. A changed result is
+new evidence and must be reconciled before resuming.
