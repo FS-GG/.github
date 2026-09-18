@@ -1,147 +1,117 @@
-# V2-CALL-01 session handoff
+# V2-CALL-01 protected execution handoff
 
-Status: source preparation complete; protected execution not authorized  
-Recorded: 2026-09-18  
+Status: source and protected authorization ready; provider execution not started
+
+Recorded: 2026-09-19
+
 Resume item: `V2-CALL-01.4b`
 
-## Stable handoff state
+## Resume from this state
 
-The callable-v2 package and receiver remain pinned at `FS.GG.Coordination.Cli` 0.1.0. This session
-completed the guarded operator, protected grant producer, source-only executor, artifact-envelope
-contract, and telemetry recovery needed to reach the external-authority boundary. No workflow was
-dispatched, no credential was minted, and no GitHub environment, App grant, target repository,
-provider resource, epoch, journal, package, or acceptance state was changed.
+The callable-v2 package and receiver remain pinned at `FS.GG.Coordination.Cli` 0.1.0. The source,
+environment, dedicated GitHub App, immutable creation plan, and protected authorization path are
+qualified. No executor run has occurred, the disposable target repository remains absent, and no
+provider, journal, epoch, cleanup, or acceptance effect is claimed.
 
-The authoritative default-branch readbacks used by the final authority audit are:
+Authoritative default-branch revisions:
 
-- `FS-GG/.github`: `e041ea3f85b4dcf1a0ceb1376eda0464f144912a` (the documentation-only
-  landing of this final update follows that audit baseline);
+- `FS-GG/.github`: `552ac96c56f8d2dbb7ae6480847039c2ed26b87a`;
 - `FS-GG/FS.GG.Coordination`: `d46aa238d0f169c85a5822e62e49ab9df1ebf37d`;
-- telemetry host: `ready`; the final follow-up attempt ended `blocked` with exit code 3, and its
-  queue drained completely.
+- telemetry host: `ready`.
 
-The local `.github` checkout was clean before this report was created. All seven completed callable
-implementation worktrees and their local topic branches were removed. The only remote topic branch
-left by the session was also deleted after its PR merged. Unrelated worktrees were not touched.
+The local `.github` checkout has an unrelated untracked `_apalache-out/` directory. Preserve it.
 
-## Landed evidence
+## Landed source and authority
 
 | Result | Evidence |
 | --- | --- |
-| Guarded isolated-operation source preparation | Coordination [PR #435](https://github.com/FS-GG/FS.GG.Coordination/pull/435) |
-| Protected grant producer | `.github` [PR #3546](https://github.com/FS-GG/.github/pull/3546) |
-| Operator authority, recovery, and replay hardening | Coordination [PR #436](https://github.com/FS-GG/FS.GG.Coordination/pull/436), 44 hosted successes and 5 expected skips |
-| Source-only protected executor | `.github` [PR #3547](https://github.com/FS-GG/.github/pull/3547), 56 hosted successes and 3 expected skips |
-| Non-circular artifact-envelope contract v4 | Coordination [PR #437](https://github.com/FS-GG/FS.GG.Coordination/pull/437), 44 hosted successes and 5 expected skips |
-| Grant/executor v4 repin | `.github` [PR #3548](https://github.com/FS-GG/.github/pull/3548), 58 hosted successes and 3 expected skips |
-| Rejected telemetry-publication recovery | `.github` [PR #3549](https://github.com/FS-GG/.github/pull/3549); the actual stale complication was released, corrected, recorded, and drained |
+| Guarded isolated-operation source | Coordination [PR #435](https://github.com/FS-GG/FS.GG.Coordination/pull/435) |
+| Operator authority and recovery hardening | Coordination [PR #436](https://github.com/FS-GG/FS.GG.Coordination/pull/436) |
+| Artifact-envelope contract v4 | Coordination [PR #437](https://github.com/FS-GG/FS.GG.Coordination/pull/437) |
+| Protected plan, grant, and live executor source | `.github` [PR #3552](https://github.com/FS-GG/.github/pull/3552), merge `cea1f3d50e72649cfe0b31f2a6d4641f05825c46` |
+| Client-ID token migration | `.github` [PR #3553](https://github.com/FS-GG/.github/pull/3553), merge `552ac96c56f8d2dbb7ae6480847039c2ed26b87a` |
+| Current immutable creation plan | [run 35406307859](https://github.com/FS-GG/.github/actions/runs/35406307859), artifact `10572254613` |
+| Current protected authorization | [run 35406365841](https://github.com/FS-GG/.github/actions/runs/35406365841), artifact `10571744877` |
 
 Contract v4 uses logical contract digest
 `3ebf436e7e2efdf221b9b08f96b6d5216bbeb22053af26bd7cdd2d0d11ef561d` and operator digest
-`b5a20b2c511bf37833dac99c35eb1fa420f410f5b324fd26883e5af928cb145c`. The canonical grant payload
-contains no server-assigned artifact coordinates. A separate
-`fsgg.coordination.callable-isolated-operation-grant-artifact-envelope/1` binds the repository,
-artifact ID and run/attempt-qualified name, archive and payload digests, workflow run and attempt, and
-expiry. The operator independently rereads and validates that envelope and the single canonical file
-inside the downloaded ZIP.
+`b5a20b2c511bf37833dac99c35eb1fa420f410f5b324fd26883e5af928cb145c`.
 
-The current executor workflow is intentionally readiness-only. It has constant concurrency,
-evidence-only inputs, immutable Coordination/source pins, and no reachable credential-mint or provider-
-effect path. Its `prepared-not-authorized` result is not `.4b` acceptance.
+The environment `callable-isolated-operation` has id `22246772831`, sole required reviewer
+`EHotwagner`, self-review permitted for that accountable operator, and one custom `main` deployment
+policy. App `4995487`, installation `162873149`, is installed for all FS-GG repositories with the exact
+reviewed permissions. The environment contains these secrets:
 
-## External authority still required
+- `CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID` for installation-token minting;
+- `CALLABLE_ISOLATED_OPERATION_APP_ID` for App JWT and installation identity validation;
+- `CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY` for protected token minting.
 
-The final read-only audit found no existing callable or isolated-operation authority issue and
-returned 404 for both:
+Do not print, copy, rotate, or replace their values during ordinary resume work.
 
-- the `FS-GG/.github` environment named `callable-isolated-operation`; and
-- `FS-GG/FS.GG.Coordination.CallableSandbox`.
+## Current plan and grant identities
 
-The final audit dispatched the existing read-only permission-coherence workflow from the audited
-`.github` main. [Run 35369841455](https://github.com/FS-GG/.github/actions/runs/35369841455)
-completed successfully: `fixture`, `installation-grants-current`, and `permissions-coherent` all
-passed. This confirms that the live `fs-gg-cross-repo-dispatch` App grants match the pinned inventory,
-which contains `administration:write`, `contents:write`, `issues:write`, `metadata:read`, organization
-`administration:read`, organization `projects:write`, `packages:read`, and `pull_requests:write`. It
-does not establish the required `checks:read`, `workflows:write`, or organization `members:read`
-capabilities. Environment creation and protection, App permission changes or App selection,
-installation scope, reviewer membership visibility, and credential custody are external
-administrative actions. Broad roadmap authorization does not substitute for those protected actions.
+The current creation plan is source-bound to `.github` merge `552ac96c…`:
 
-The typed cross-repository intake draft `v2-call-01-4b-protected-authority` validated without writes,
-then apply refused because production-v1 admission, durable operation scope and journal, and provider
-reconciliation are unavailable. No issue was created, and the refusal was not bypassed with a direct
-issue write. The final telemetry attempt
-`v2-call-01-4b-authority-followup-20260918-a1` recorded complication
-`protected-authority-still-unavailable`, finished `blocked`, and drained its queue. Telemetry health
-therefore confirms delivery of the audit outcome; it does not clear the authority boundary.
+| Field | Value |
+| --- | --- |
+| Plan run / attempt | `35406307859` / `1` |
+| Plan artifact | `10572254613` |
+| Plan artifact name | `callable-isolated-operation-plan-creation-35406307859-1` |
+| Plan archive SHA-256 | `311094e89ecefb94a8775a01ebc810fb530cfd7b7dc588033796f60af0755325` |
+| Plan payload SHA-256 | `0e7b32ed9af86b1cd4a969cb0bcddc2736c33b528dd0ef49ecb3adf8bbb15f9f` |
+| Plan seal | `a4d504874b09a63b2cc3ce3de61da4f7e4714716d79ce7d52b5bb62cdd9909e0` |
+| Artifact expiry | `2026-10-18T23:36:00Z` |
 
-## Resume sequence
+The latest authorization proved Client-ID token minting without the former `app-id` deprecation
+warning:
 
-1. Re-read the environment, target repository, App installation/grants, reviewer membership, and
-   permission-coherence inventory. Treat absence or unreadability as a refusal, not approval.
-2. Obtain the external administrative changes through the protected owner route: create and protect
-   `callable-isolated-operation`, establish the required reviewer/source policy, and make the exact
-   credential roles and permissions observable.
-3. Update and requalify the readiness-only executor before dispatch so it can mint the separately
-   scoped creation, setup, execution, and cleanup credentials. Do not hide unavailable permissions in
-   a helper or mark them present in the inventory before live readback.
-4. Prepare immutable plan evidence and obtain a completed protected grant for the creation phase.
-   Execute only that phase, retaining its intent and authoritative creation receipt.
-5. Derive the identity-bound plan from the verified receipt, obtain a separate grant, mint an exact
-   singleton-target execution credential, and run the installed 0.1.0 CLI with native readback and
-   restart-safe cleanup.
-6. Record `.4b` only after the installed isolated-provider operation settles. Perform `.4c` external
-   acceptance separately; then continue `.5`, Q4, OpenV2, and the remaining GS2-09 rehearsal work.
+| Field | Value |
+| --- | --- |
+| Authorization run / attempt | `35406365841` / `1` |
+| Grant artifact | `10571744877` |
+| Grant artifact name | `callable-isolated-operation-grant-35406365841-1` |
+| Grant archive SHA-256 | `8118ef550bcae05c9f9336d7433666f6e268defcb4174144e41cb681950720be` |
+| Grant payload SHA-256 | `066f129fa5025f5ad396b81e63f44b159494d66ced12cfd86a717858aba9b8ef` |
+| Grant payload expiry | `2026-09-19T00:07:00Z` |
+| Artifact expiry | `2026-09-19T23:37:01Z` |
 
-## Follow-up source window
+The grant payload is deliberately short-lived. Treat it as expired unless current UTC is strictly
+before its payload expiry. Artifact availability does not extend grant authority.
 
-The next routine source window replaces the deliberately unreachable executor with a fail-closed live path:
-an immutable source-only plan workflow, a grant producer that accepts only exact environment, reviewer-membership
-and dedicated-App installation observations, strict single-file artifact extraction, distinct expiring role
-tokens, fresh Coordination operator admission, exact public 0.1.0 installation, restart-safe checkpoints, and
-separate creation/settled receipts. It names only the dedicated environment-secret contract
-`CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID` / `CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY` for installation-token
-minting, while the numeric `CALLABLE_ISOLATED_OPERATION_APP_ID` remains separately available only for App JWT
-generation and exact live App/installation identity validation. It does not reuse the local PAT or silently widen
-the existing dispatch App.
+## Safe resume sequence
 
-This source capability does not itself dispatch the operation. The environment exists as id `22246772831` with
-sole required reviewer `EHotwagner`, self-review permitted for the initiating required reviewer, and a custom
-`main` deployment policy. Its dedicated App ID, client ID, and private key are held as environment secrets. Plan
-run `35387708003` and authorization run `35405327367` proved the exact plan/environment/member/App-installation
-binding and produced grant artifact `10571953149`; the authorization log retained GitHub's `app-id` deprecation
-warning, which this client-ID migration removes. The target remains absent and the executor has zero runs. This is
-the explicitly selected single-operator authorization path: the
-same accountable operator may initiate and approve the protected job, but the environment review remains a
-real GitHub approval boundary and the grant still requires exact live reviewer membership, environment,
-dedicated-App installation, plan, artifact, and capability observations. The
-available PAT remains outside Actions custody and cannot substitute for any App role. Repository creation remains
-pending until a fresh source-bound plan and authorization grant are produced for the current merged workflow and
-the separately protected executor is explicitly dispatched.
+1. Read `.github` `main`, Coordination `main`, the environment, both artifacts, target repository,
+   protected workflow runs, and telemetry status. A changed source head invalidates the plan and grant.
+2. If the recorded grant payload has expired, dispatch
+   `.github/workflows/callable-isolated-operation-authorize.yml` again for phase `creation`, using the
+   current plan identities above, environment `22246772831`, both contract digests, Coordination revision
+   `d46aa238…`, current `.github` revision, and a 30-minute grant lifetime. Approve the environment as
+   `EHotwagner`, then bind the new run, artifact, archive digest, payload digest, and expiries.
+3. Dispatch `.github/workflows/callable-isolated-operation-execute.yml` for phase `creation` only with
+   the exact plan and unexpired grant envelope. Leave every creation-receipt and checkpoint input empty
+   on the first attempt. Observe the run and retain its authoritative creation receipt.
+4. If creation returns unknown, pending, or interrupted, do not issue a fresh logical operation. Use the
+   retained checkpoint and receipt identities to resume the same operation, following executor readback.
+5. Generate the `identity-bound-operation` plan from the verified creation receipt. Obtain a separate
+   protected authorization grant for that phase.
+6. Dispatch the identity-bound executor. Require installed 0.1.0 CLI execution, PR and sharded-journal
+   readback, fresh-process replay without duplicate effect, durable cleanup intent, and confirmed target
+   deletion.
+7. Record `.4b` only after provider settlement and cleanup are authoritative. Do not start `.4c` in the
+   same acceptance claim; `.4c` independently qualifies installed native execution.
 
-Pipeline preflight remains static and focused: the existing authorization/executor tests, permission-coherence
-fixture, workflow shell census, and repository-native exact-head checks cover this one-field environment/source
-interaction cheaply. No new model is justified because there is no retry, fan-out, cancellation, or shared-state
-ordering defect beyond the existing immutable plan/grant/checkpoint contracts.
+Never reuse an expired grant, infer completion from a successful workflow shell, manually create or delete
+the target, substitute the local PAT for an App role, or treat an absent/unknown provider result as settled.
 
-Do not dispatch either protected workflow while the environment or credential roles are absent. Do
-not interpret the source-only executor, a 404 target, a pending/unknown provider result, or telemetry
-health as installed-provider acceptance.
+## Expected restart readback
 
-## Read-only restart checks
+At this handoff:
 
-From `/home/developer/projects/.github`, a new session can confirm the handoff without mutation:
+- `.github` `main` is `552ac96c56f8d2dbb7ae6480847039c2ed26b87a`;
+- all three environment secret names are present;
+- the plan and authorization runs above completed successfully;
+- executor workflow run count is zero;
+- `FS-GG/FS.GG.Coordination.CallableSandbox` returns HTTP 404;
+- telemetry status is `ready`.
 
-```bash
-git status --short
-git rev-parse HEAD
-gh api repos/FS-GG/.github/environments/callable-isolated-operation --include
-gh api repos/FS-GG/FS.GG.Coordination.CallableSandbox --include
-FSGG_TELEMETRY_REPOSITORY=FS-GG/.github \
-  fdev-telemetry exec python3 tools/roadmap-telemetry.py status
-```
-
-Expected at this handoff: a clean tree, `.github` main containing handoff PR #3550 and its final
-documentation-only follow-up, two 404 responses, and telemetry status `ready`. A changed result is
-new evidence and must be reconciled before resuming.
+Any difference is new evidence. Reconcile it before dispatch rather than restoring this snapshot blindly.
