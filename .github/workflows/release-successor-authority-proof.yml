@@ -34,7 +34,10 @@ jobs:
           test "$APP_ID" = 4882140
           [[ "$EXPECTED_INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]
           app_jwt="$(printf %s "$APP_KEY" | bash tools/callable-isolated-operation-app-jwt.sh "$APP_ID")"
-          installation="$(GH_TOKEN="$app_jwt" gh api "app/installations/$EXPECTED_INSTALLATION_ID")"
+          installation="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $app_jwt" \
+            --header 'Accept: application/vnd.github+json' \
+            "https://api.github.com/app/installations/$EXPECTED_INSTALLATION_ID")"
           jq -e --argjson app_id "$APP_ID" --argjson installation_id "$EXPECTED_INSTALLATION_ID" \
             '.id == $installation_id and .app_id == $app_id and
              .account.login == "FS-GG" and .permissions.contents == "write" and
