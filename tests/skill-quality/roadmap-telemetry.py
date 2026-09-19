@@ -296,6 +296,52 @@ class RoadmapTelemetryTests(unittest.TestCase):
             self.assertEqual([fact["turnId"] for fact in usage_facts], turns)
             self.assertNotEqual(usage_facts[0]["invocationId"], usage_facts[1]["invocationId"])
 
+    def test_rejected_native_usage_does_not_become_a_published_ledger_entry(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            config = self.config(pathlib.Path(scratch))
+            rejected = False
+            revisions = []
+            def fake_run(command, **kwargs):
+                nonlocal rejected
+                if "publish" in command:
+                    batch = json.loads(pathlib.Path(command[command.index("--input") + 1]).read_text())
+                    for fact in batch["events"]:
+                        if fact["kind"] == "runtime-turn-usage":
+                            revisions.append(fact["revision"])
+                            if not rejected:
+                                rejected = True
+                                return subprocess.CompletedProcess(command, 1, "", "invalid-request: fixture")
+                return subprocess.CompletedProcess(command, 0, "{}", "")
+            def begin(attempt, *extra):
+                return MODULE.begin(config, MODULE.parser().parse_args([
+                    "begin", "--feature", "F", "--item", "F.1", "--attempt", attempt,
+                    "--model", "gpt-6-astra", "--effort", "high", *extra]))["token"]
+            def start(token, native):
+                MODULE.started(config, MODULE.parser().parse_args(["started", "--token", token, "--native-id", native]))
+            native = {"threadId": "01a0b8ba-7f55-7b21-b22f-e7cf4e501e8e", "complete": True,
+                      "model": "gpt-6-astra", "effort": "high", "turns": [{
+                          "turnId": "01a0b8ba-7f70-7c00-89f9-fd1aa8b6effc", "turnSequence": 1,
+                          "usage": {"input_tokens": 10, "cached_input_tokens": 5,
+                                    "output_tokens": 2, "reasoning_output_tokens": 1,
+                                    "total_tokens": 12}}]}
+            with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": "01a0b8b8-2d95-79d1-9be2-69585aa50cfa"}), \
+                 mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
+                 mock.patch.object(MODULE, "collect_native_usage", return_value=native):
+                root = begin("root")
+                start(root, "root")
+                child = begin("child", "--parent-token", root, "--relation", "child")
+                start(child, "worker")
+                first = MODULE.finish(config, MODULE.parser().parse_args([
+                    "finish", "--token", child, "--outcome", "completed"]))
+                self.assertEqual(first["coverage"], "native-collaboration-usage-unknown")
+                state = MODULE.read_state(config, child)
+                self.assertNotIn("usageIntent", state)
+                self.assertEqual(state["usageLedger"], {})
+                second = MODULE.usage_reconcile(config, MODULE.parser().parse_args([
+                    "usage-reconcile", "--token", child]))
+                self.assertEqual(second["coverage"], "native-collaboration-usage-complete")
+                self.assertEqual(revisions, [0, 0])
+
     def test_private_host_config_is_discovered_without_embedding_an_instance_in_source(self):
         with tempfile.TemporaryDirectory() as scratch:
             root = pathlib.Path(scratch)

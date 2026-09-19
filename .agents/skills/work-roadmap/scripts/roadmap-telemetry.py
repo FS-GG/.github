@@ -120,6 +120,8 @@ def publish_pending(config: HostConfig, state: dict[str, object]) -> None:
             # their exact durable batch and continue to use normal replay.
             state["sequence"] = sequence - 1
             del state["pendingPublication"]
+            if str(pending["operation"]).startswith("native-usage:"):
+                state.pop("usageIntent", None)
             save_state(config, state)
         raise ConfigurationError(message)
     state["phase"] = pending["nextPhase"]
@@ -394,7 +396,7 @@ def reconcile_usage(config: HostConfig, state: dict[str, object]) -> str:
                 publish_pending(config, state)
             except ConfigurationError:
                 if not state.get("pendingPublication"):
-                    del state["usageIntent"]
+                    state.pop("usageIntent", None)
                     save_state(config, state)
                 raise
         ledger = state.setdefault("usageLedger", {})
