@@ -42,9 +42,8 @@ def verify_metadata(artifact: dict, run: dict, archive: pathlib.Path, source_sha
         and run.get("head_branch") == "main"
         and run.get("event") == "workflow_dispatch"
         and run.get("conclusion") == "success"
-        and isinstance(run.get("run_attempt"), int)
-        and run["run_attempt"] > 0,
-        "candidate run is not a successful exact-main workflow dispatch",
+        and run.get("run_attempt") == 1,
+        "candidate run is not a successful first-attempt exact-main workflow dispatch",
     )
     expected_name = f"release-successor-candidate-{source_sha}-{run_id}"
     binding = artifact.get("workflow_run") or {}

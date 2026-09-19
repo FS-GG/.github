@@ -112,7 +112,7 @@ class CandidateArtifactTests(unittest.TestCase):
             self.verify()
         self.artifact["digest"] = "sha256:" + hashlib.sha256(self.archive.read_bytes()).hexdigest()
         self.run["path"] = ".github/workflows/retired-release.yml"
-        with self.assertRaisesRegex(ValueError, "successful exact-main"):
+        with self.assertRaisesRegex(ValueError, "successful first-attempt exact-main"):
             self.verify()
         self.assertFalse(self.output.exists())
 
@@ -124,6 +124,12 @@ class CandidateArtifactTests(unittest.TestCase):
         self.artifact["workflow_run"]["repository_id"] = 1
         with self.assertRaises(ValueError):
             self.verify()
+
+    def test_rerun_artifact_without_attempt_binding_refuses(self):
+        self.run["run_attempt"] = 2
+        with self.assertRaisesRegex(ValueError, "first-attempt"):
+            self.verify()
+        self.assertFalse(self.output.exists())
 
     def test_changed_qualification_refuses_after_verified_outer_digest(self):
         (self.candidate / "standalone-telemetry-runtime-evidence.json").write_text("{}")
