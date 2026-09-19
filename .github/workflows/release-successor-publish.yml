@@ -1,6 +1,6 @@
 name: release-successor-publish
 
-# UTEL-REL-01: single-operator, exact-candidate publication. This is distinct
+# UTEL-REL-02: single-operator, exact-candidate publication for 0.91.1. This is distinct
 # from the five GS2-08.9 sealed workflows and cannot select a historical ref.
 on:
   workflow_dispatch:
