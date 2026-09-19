@@ -124,6 +124,9 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
         self.assertIn('cp "$RUNNER_TEMP/checkpoint.json" "$RUNNER_TEMP/callable-isolated-operation-creation-receipt.json"', source)
         self.assertIn("Materialize restart-safe checkpoint after every provider attempt", source)
         self.assertIn('if [ -f "$RUNNER_TEMP/checkpoint.json" ]; then', source)
+        self.assertIn("35411661144:1:10574618280:68d7bf46c5ea0ffe901717a304f552246dd4497684e32e0b7fb7bf991018c6b7", source)
+        self.assertIn("checkpoint_revision=a1a5abcda7d2fb6d49949e1e6f3afdc3c7f9f2b1", source)
+        self.assertIn("Diagnose a structured installed-plan refusal without mutation", source)
         self.assertNotIn("jq -c '.creationReceipt'", source)
 
     def test_workflow_is_manual_main_exact_source_and_environment_protected(self):

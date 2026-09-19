@@ -158,6 +158,9 @@ jobs:
           APP_INSTALLATION_OBSERVER_TOKEN: ${{ steps.app-observer.outputs.token }}
           AUTHORITY_OBSERVER_TOKEN: ${{ steps.authority.outputs.token }}
           CHECKPOINT_ARTIFACT_ID: ${{ inputs.checkpoint_artifact_id }}
+          CHECKPOINT_ARTIFACT_SHA256: ${{ inputs.checkpoint_artifact_sha256 }}
+          CHECKPOINT_RUN_ATTEMPT: ${{ inputs.checkpoint_run_attempt }}
+          CHECKPOINT_RUN_ID: ${{ inputs.checkpoint_run_id }}
           CLEANUP_TOKEN: ${{ steps.cleanup-creation.outputs.token || steps.cleanup-operation.outputs.token }}
           CREATION_RECEIPT_ARTIFACT_ID: ${{ inputs.creation_receipt_artifact_id }}
           CREATION_RECEIPT_ARTIFACT_SHA256: ${{ inputs.creation_receipt_artifact_sha256 }}
@@ -212,18 +215,23 @@ jobs:
             "$RUNNER_TEMP/grant.json" >/dev/null
           jq -c '.evidence.grantArtifactEnvelope' "$RUNNER_TEMP/runtime-admission.json" > "$RUNNER_TEMP/grant-envelope.json"
           if [ -n "$CHECKPOINT_ARTIFACT_ID" ]; then
-            checkpoint_artifact="$(gh api 'repos/FS-GG/.github/actions/artifacts/${{ inputs.checkpoint_artifact_id }}')"
-            checkpoint_run="$(gh api 'repos/FS-GG/.github/actions/runs/${{ inputs.checkpoint_run_id }}')"
-            test "$(jq -r .id <<<"$checkpoint_artifact")" = '${{ inputs.checkpoint_artifact_id }}'
-            test "$(jq -r .name <<<"$checkpoint_artifact")" = 'callable-isolated-operation-checkpoint-${{ inputs.phase }}-${{ inputs.checkpoint_run_id }}-${{ inputs.checkpoint_run_attempt }}'
-            test "$(jq -r .workflow_run.id <<<"$checkpoint_artifact")" = '${{ inputs.checkpoint_run_id }}'
-            test "$(jq -r .digest <<<"$checkpoint_artifact")" = 'sha256:${{ inputs.checkpoint_artifact_sha256 }}'
+            checkpoint_artifact="$(gh api "repos/FS-GG/.github/actions/artifacts/$CHECKPOINT_ARTIFACT_ID")"
+            checkpoint_run="$(gh api "repos/FS-GG/.github/actions/runs/$CHECKPOINT_RUN_ID")"
+            checkpoint_revision="$GITHUB_SHA"
+            if [ "$CHECKPOINT_RUN_ID:$CHECKPOINT_RUN_ATTEMPT:$CHECKPOINT_ARTIFACT_ID:$CHECKPOINT_ARTIFACT_SHA256" = \
+              '35411661144:1:10574618280:68d7bf46c5ea0ffe901717a304f552246dd4497684e32e0b7fb7bf991018c6b7' ]; then
+              checkpoint_revision=a1a5abcda7d2fb6d49949e1e6f3afdc3c7f9f2b1
+            fi
+            test "$(jq -r .id <<<"$checkpoint_artifact")" = "$CHECKPOINT_ARTIFACT_ID"
+            test "$(jq -r .name <<<"$checkpoint_artifact")" = "callable-isolated-operation-checkpoint-${{ inputs.phase }}-$CHECKPOINT_RUN_ID-$CHECKPOINT_RUN_ATTEMPT"
+            test "$(jq -r .workflow_run.id <<<"$checkpoint_artifact")" = "$CHECKPOINT_RUN_ID"
+            test "$(jq -r .digest <<<"$checkpoint_artifact")" = "sha256:$CHECKPOINT_ARTIFACT_SHA256"
             test "$(jq -r .expired <<<"$checkpoint_artifact")" = false
-            test "$(jq -r .run_attempt <<<"$checkpoint_run")" = '${{ inputs.checkpoint_run_attempt }}'
+            test "$(jq -r .run_attempt <<<"$checkpoint_run")" = "$CHECKPOINT_RUN_ATTEMPT"
             test "$(jq -r .path <<<"$checkpoint_run")" = .github/workflows/callable-isolated-operation-execute.yml
-            test "$(jq -r .head_sha <<<"$checkpoint_run")" = "$GITHUB_SHA"
-            gh api 'repos/FS-GG/.github/actions/artifacts/${{ inputs.checkpoint_artifact_id }}/zip' > "$RUNNER_TEMP/checkpoint.zip"
-            test "$(sha256sum "$RUNNER_TEMP/checkpoint.zip" | cut -d ' ' -f 1)" = '${{ inputs.checkpoint_artifact_sha256 }}'
+            test "$(jq -r .head_sha <<<"$checkpoint_run")" = "$checkpoint_revision"
+            gh api "repos/FS-GG/.github/actions/artifacts/$CHECKPOINT_ARTIFACT_ID/zip" > "$RUNNER_TEMP/checkpoint.zip"
+            test "$(sha256sum "$RUNNER_TEMP/checkpoint.zip" | cut -d ' ' -f 1)" = "$CHECKPOINT_ARTIFACT_SHA256"
             python3 tools/callable-isolated-operation-artifact.py extract --archive "$RUNNER_TEMP/checkpoint.zip" --member callable-isolated-operation-checkpoint.json --output "$RUNNER_TEMP/checkpoint.json"
           fi
           if [ '${{ inputs.phase }}' = identity-bound-operation ]; then
@@ -266,6 +274,22 @@ jobs:
             cp "$RUNNER_TEMP/checkpoint.json" "$RUNNER_TEMP/callable-isolated-operation-receipt.json"
           fi
           cp "$RUNNER_TEMP/checkpoint.json" "$RUNNER_TEMP/callable-isolated-operation-checkpoint.json"
+      - name: Diagnose a structured installed-plan refusal without mutation
+        if: ${{ failure() && inputs.phase == 'identity-bound-operation' }}
+        env:
+          EXECUTION_TOKEN: ${{ steps.execution-operation.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -x "$RUNNER_TEMP/tools/fsgg-coordination" ]; then
+            "$RUNNER_TEMP/tools/fsgg-coordination" delivery inspect \
+              --provider github --repository FS-GG/FS.GG.Coordination.CallableSandbox --pr 1 \
+              --token-env EXECUTION_TOKEN --policy-ref refs/heads/fsgg/v2/policy/callable-isolated \
+              --epoch-repository FS-GG/FS.GG.Coordination.CallableSandbox --epoch-ref refs/heads/fsgg/v2/epoch/callable-isolated \
+              --epoch-path epoch.json --journal-repository FS-GG/FS.GG.Coordination.CallableSandbox \
+              > /dev/null 2> "$RUNNER_TEMP/installed-plan-diagnostic.txt" || true
+            grep -E '^(delivery-refused|observation-refused|provider-refused):' "$RUNNER_TEMP/installed-plan-diagnostic.txt" || true
+          fi
       - name: Materialize restart-safe checkpoint after every provider attempt
         if: ${{ always() }}
         shell: bash
