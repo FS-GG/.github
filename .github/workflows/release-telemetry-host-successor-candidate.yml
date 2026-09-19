@@ -41,7 +41,8 @@ jobs:
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
           version="$(dotnet msbuild src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj -getProperty:Version | tr -d '[:space:]')"
           test "$version" = 0.1.2
-          test -z "$(git ls-remote --tags origin refs/tags/telemetry-host/v0.1.2)"
+          existing_tag="$(git ls-remote --tags origin refs/tags/telemetry-host/v0.1.2)"
+          test -z "$existing_tag"
           response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
             'https://api.nuget.org/v3-flatcontainer/fs.gg.telemetry.host/0.1.2/fs.gg.telemetry.host.0.1.2.nupkg')"
           test "$response" = 404
