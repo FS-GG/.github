@@ -26,9 +26,16 @@ token counters through Codex App Server metadata plus the child’s private `tok
 prospective roadmap adapter now joins these to a dispatch and reconciles revised counters. This is narrower than
 intercepting every native collaboration call: it requires an instrumented dispatch, a parent `CODEX_THREAD_ID`,
 one unambiguous child path, and final host records. Other native calls and missing turns remain unknown.
-This is source-level evidence; packaged release and installed-host activation remain unverified while the coherent
-release workflows are administratively disabled. [UTEL-REL-01](utel-release-successor.md) owns the new
-effect-admitted coherent release route and proposed 0.91.0 cut; the accepted 0.90.0 seal stays in force.
+The collector was published in [coherent set 0.91.0](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.91.0)
+and selected in both development containers. A user-authorized documentation-review test item exercised one
+prospective, instrumented native child: its producer usage ledger contains one verified turn, all eight root
+and child batches have retained `applied` outcomes, and the private Host item usage total matched the exact
+public aggregate increase of 98,306
+([readback](https://github.com/FS-GG/.github/commit/038edba5782fef9dace67f5b96b563fd2988738f)). The direct
+root has unsupported native usage, so item-level coverage remains incomplete as expected. The installed
+five-minute drain has run on empty queues; no nonempty batch has yet been observed settling through it.
+[UTEL-REL-01](utel-release-successor.md) records the release route; the five retired release workflows remain
+disabled under that contract.
 
 ## Coverage contract
 
@@ -126,9 +133,9 @@ lineage, no-op, launch failure, cancellation, process loss, late replay and conc
 ordinary Coordination delivery above supplied exact-head CI admission, all run attempts, jobs, steps, external
 checks and merge readback; earlier admitted superseded attempts remained distinct. Public export contained only
 the allowlisted aggregate. The retained operational store reports schema 7, WAL mode, `ready` and zero pending
-batches. These observations qualify repository-owned `codex-exec` and routine-delivery boundaries. Built-in
-platform-native `collaboration.spawn_agent` remains an explicit incomplete population because it exposes no
-interceptable adapter; it is not counted as absent, successful or covered.
+batches. These observations qualify repository-owned `codex-exec` and routine-delivery boundaries. They predate
+the prospective, instrumented `collaboration.spawn_agent` adapter described above and do not establish its live
+Host or public usage coverage.
 
 ## Cross-repository order and execution
 
