@@ -200,6 +200,42 @@ class HostReleaseTests(unittest.TestCase):
             api.tag = "e" * 40
             self.assertEqual(provider.observe(tag).state, "mismatched")
 
+    def test_publication_journal_requires_both_exact_feed_readbacks(self):
+        class API:
+            def __init__(self, raw):
+                self.raw = raw
+            def get(self, path):
+                if path.endswith("/releases/tags/telemetry-host/v0.1.2"):
+                    raise NotFound(path)
+                if path.endswith("/releases?per_page=100&page=1"):
+                    return [{"id": 1, "tag_name": "telemetry-host/v0.1.2", "draft": True}]
+                if path.endswith("/releases/1/assets?per_page=100"):
+                    return [{"id": 1, "name": "publication-journal.json"}]
+                raise AssertionError(path)
+            def download_asset(self, asset_id):
+                return self.raw
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            row = manifest()
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n")
+            raw_package = root / "readback.nupkg"
+            raw_package.write_bytes(b"feed package")
+            sha = hashlib.sha256(raw_package.read_bytes()).hexdigest()
+            content_id, ordered = effects(row)
+            journal = {"schema": "fsgg.telemetry-host-release-journal/v1", "manifestSha256": content_id,
+                       "observations": {feed: {"archiveSha256": sha,
+                                               "payloadSha256": row["producerPayloadSha256"],
+                                               "producerPayloadEqual": True} for feed in ("github", "nuget")}}
+            api = API(json.dumps(journal).encode())
+            provider = HostProvider(api, manifest_path, "github-token", "nuget-key")
+            with patch.object(provider, "_download_package", return_value=raw_package):
+                self.assertEqual(provider.observe(ordered[6]).state, "matched")
+                journal["observations"]["nuget"]["archiveSha256"] = "0" * 64
+                api.raw = json.dumps(journal).encode()
+                with self.assertRaisesRegex(Exception, "journal and public feed differ"):
+                    provider.observe(ordered[6])
+
     def test_live_admission_revokes_on_changed_main_or_actor(self):
         class API:
             main = "d" * 40
