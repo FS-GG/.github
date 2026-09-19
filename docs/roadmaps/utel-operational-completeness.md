@@ -15,11 +15,17 @@ named S.I.R receiver have adopted it, and the supported repository-owned scope i
 ## Capability boundary
 
 Instrument real repository-owned launch, dispatch, provider, check and delivery boundaries once. Guidance alone
-is not collection. Built-in `collaboration.spawn_agent` remains unsupported because no interceptable
-admission/final-usage hook exists; keep that platform population explicitly incomplete, never zero or equivalent.
+is not collection. At the original 0.87.0 baseline, built-in `collaboration.spawn_agent` was unsupported because
+there was no interceptable admission/final-usage hook; that platform population remained incomplete, never zero.
 There is no historical session discovery, transcript scan, backfill or upload. Activation is prospective only.
 One host-local SQLite writer/inbox and read-only snapshots remain the storage boundary; this plan adds no
 permanent service, network database or scheduler, and telemetry never becomes delivery authority.
+
+September 2026 extension: a read-only host proof found a native child thread, completed turn identity and final
+token counters through Codex App Server metadata plus the child’s private `token_usage_record` entries. The
+prospective roadmap adapter now joins these to a dispatch and reconciles revised counters. This is narrower than
+intercepting every native collaboration call: it requires an instrumented dispatch, a parent `CODEX_THREAD_ID`,
+one unambiguous child path, and final host records. Other native calls and missing turns remain unknown.
 
 ## Coverage contract
 

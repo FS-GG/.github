@@ -50,9 +50,10 @@ Repository-owned dispatch telemetry is on by default. Start the driver's root ob
 worker/critic spawn or `followup_task`, create a child/follow-up observation carrying stable feature, item,
 attempt, parent, model and effort identities. Call `finish` with the real terminal outcome before accepting each
 handoff and before the driver returns. Pass the identities to routine delivery for automatic private CI assignment
-discovery. Missing configuration/publication is advisory but fail-visible. Since native collaboration supplies no
-usage hook, preserve `native-collaboration-usage-unsupported`; never promote orchestrator attribution to complete
-token coverage.
+discovery. Missing configuration/publication is advisory but fail-visible. When Codex exposes the parent thread,
+the adapter joins completed child turns to private native counters. Reconcile late usage with `usage-reconcile`;
+keep unmatched or incomplete turns unknown. Hosts without a joinable parent retain
+`native-collaboration-usage-unsupported`; dispatch attribution alone never establishes token coverage.
 
 Use the same adapter to record typed activity spans and evidence-linked complications. Attribute tokens only to
 exact native usage, never elapsed time; preserve mixed/unclassified and unsupported coverage. After each attempt

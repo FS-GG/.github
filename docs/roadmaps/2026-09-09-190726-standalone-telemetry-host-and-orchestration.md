@@ -374,8 +374,9 @@ The accepted bounded installed-work horizon keeps replacement, migration and liv
     and natively merged [`.github` #3515](https://github.com/FS-GG/.github/pull/3515).
 
 These are O2 substeps, not top-level milestones. Each unchecked step needs exact authority and fresh
-baselines. Telemetry remains advisory; `native-collaboration-usage-unsupported` and `not-configured`
-remain coverage gaps rather than inferred usage.
+baselines. Telemetry remains advisory; at this checkpoint, `native-collaboration-usage-unsupported` and
+`not-configured` were coverage gaps rather than inferred usage. The later Codex child usage adapter is described
+in [the local telemetry contract](../reference/local-telemetry-store.md#native-collaboration-observations).
 
 **September 15:** SystemAdmin [PR #100](https://github.com/EHotwagner/SystemAdmin/pull/100)
 delivered a distinct local store, authenticated paused restart and cold backup. Services remain stopped
