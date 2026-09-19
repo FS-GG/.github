@@ -266,6 +266,14 @@ jobs:
             cp "$RUNNER_TEMP/checkpoint.json" "$RUNNER_TEMP/callable-isolated-operation-receipt.json"
           fi
           cp "$RUNNER_TEMP/checkpoint.json" "$RUNNER_TEMP/callable-isolated-operation-checkpoint.json"
+      - name: Materialize restart-safe checkpoint after every provider attempt
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f "$RUNNER_TEMP/checkpoint.json" ]; then
+            cp "$RUNNER_TEMP/checkpoint.json" "$RUNNER_TEMP/callable-isolated-operation-checkpoint.json"
+          fi
       - name: Retain restart-safe checkpoint
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
