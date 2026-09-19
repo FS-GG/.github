@@ -1,0 +1,70 @@
+name: release-successor-authority-proof
+
+# Read-only installation proof for UTEL-REL-01. This workflow has no release,
+# tag, package, authority-journal, or promotion effect.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authority-proof:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release-successor
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify the App and installation without exposing credentials
+        env:
+          APP_ID: ${{ vars.FSGG_ORDINARY_LEDGER_APP_ID }}
+          APP_KEY: ${{ secrets.FSGG_ORDINARY_LEDGER_APP_PRIVATE_KEY }}
+          EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = FS-GG/.github
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$APP_ID" = 4882140
+          [[ "$EXPECTED_INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]
+          app_jwt="$(printf %s "$APP_KEY" | bash tools/callable-isolated-operation-app-jwt.sh "$APP_ID")"
+          installation="$(GH_TOKEN="$app_jwt" gh api "app/installations/$EXPECTED_INSTALLATION_ID")"
+          jq -e --argjson app_id "$APP_ID" --argjson installation_id "$EXPECTED_INSTALLATION_ID" \
+            '.id == $installation_id and .app_id == $app_id and
+             .account.login == "FS-GG" and .permissions.contents == "write" and
+             .suspended_at == null' <<< "$installation" > /dev/null
+          echo 'Ordinary ledger App key, App ID, installation, owner and contents permission verified.'
+
+      - name: Mint a read-only token for the protected authority repository
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.FSGG_ORDINARY_LEDGER_APP_ID }}
+          private-key: ${{ secrets.FSGG_ORDINARY_LEDGER_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination.Authority
+          permission-contents: read
+
+      - name: Verify the scoped token can read the authority repository
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
+          ACTUAL_INSTALLATION_ID: ${{ steps.app-token.outputs.installation-id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$ACTUAL_INSTALLATION_ID" = "$EXPECTED_INSTALLATION_ID"
+          repositories="$(gh api 'installation/repositories?per_page=100')"
+          jq -e '.total_count == 1 and
+            [.repositories[].full_name] == ["FS-GG/FS.GG.Coordination.Authority"]' \
+            <<< "$repositories" > /dev/null
+          repository="$(gh api repos/FS-GG/FS.GG.Coordination.Authority)"
+          jq -e '.full_name == "FS-GG/FS.GG.Coordination.Authority"' \
+            <<< "$repository" > /dev/null
+          echo 'Installation token read the protected authority repository with one-repository scope.'
