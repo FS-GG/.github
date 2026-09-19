@@ -56,7 +56,21 @@ jobs:
           global-json-file: global.json
       - name: Exercise forced mid-publish recovery
         run: bash tests/release-saga/run.sh
-      - name: Exercise GS2-08.7 bridge release binding
-        run: python3 tests/bridge-release/run.py
-      - name: Qualify GS2-08.8 receiver adoption
-        run: bash tests/bridge-receivers/run.sh
+      - name: Exercise immutable GS2-08.7 bridge and GS2-08.8 receiver
+        run: |
+          set -euo pipefail
+          bridge=3adada5a9738464291088830c47a30a3a8fc9561
+          receiver=85a70e9a30e5e6a471d61afddb06f7f597d020ce
+          historical="$(mktemp -d)"
+          cleanup() {
+            if [ -d "$historical/source" ]; then
+              git worktree remove --force "$historical/source"
+            fi
+            rmdir "$historical"
+          }
+          trap cleanup EXIT
+          git worktree add --detach "$historical/source" "$bridge"
+          python3 "$historical/source/tests/bridge-release/run.py"
+          git worktree remove --force "$historical/source"
+          git worktree add --detach "$historical/source" "$receiver"
+          bash "$historical/source/tests/bridge-receivers/run.sh"
