@@ -105,6 +105,16 @@ def extract_verified(
         names = verify_members(archive, version)
         require(manifest["descriptor"].get("sourceSha") == source_sha, "manifest source differs from run")
         require(manifest["descriptor"].get("policyVersion") == "release-successor/1", "wrong policy")
+        descriptor = manifest["descriptor"]
+        require(
+            all(
+                row.get("artifact", {}).get("path") == f"{row.get('id')}.{version}.nupkg"
+                for row in descriptor.get("packages", [])
+            )
+            and descriptor.get("standaloneTelemetry", {}).get("qualificationPath")
+            == "standalone-telemetry-runtime-evidence.json",
+            "candidate manifest references files outside the retained archive",
+        )
         with tempfile.TemporaryDirectory(prefix="release-successor-", dir=output.parent) as temporary:
             work = pathlib.Path(temporary)
             for name in names:
@@ -119,7 +129,6 @@ def extract_verified(
                 text=True,
             )
             predecessor = json.loads((work / "previous-stable-channel.json").read_text())
-            descriptor = manifest["descriptor"]
             require(
                 predecessor.get("contentId") == descriptor.get("previousStableContentId")
                 and predecessor.get("version") == descriptor.get("previousStableVersion"),

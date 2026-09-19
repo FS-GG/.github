@@ -139,6 +139,17 @@ class CandidateArtifactTests(unittest.TestCase):
             self.verify()
         self.assertFalse(self.output.exists())
 
+    def test_manifest_path_cannot_escape_retained_archive(self):
+        path = self.candidate / "release-manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["descriptor"]["packages"][0]["artifact"]["path"] = "../outside.nupkg"
+        path.write_text(json.dumps(manifest))
+        self.repack()
+        self.artifact["digest"] = "sha256:" + hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(ValueError, "outside the retained archive"):
+            self.verify()
+        self.assertFalse(self.output.exists())
+
     def test_extra_or_traversal_member_refuses(self):
         with zipfile.ZipFile(self.archive, "a") as archive:
             archive.writestr("../outside", "bad")
