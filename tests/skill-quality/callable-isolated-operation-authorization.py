@@ -306,6 +306,8 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
             ".digest <<<\"$checkpoint_artifact\"",
             ".digest <<<\"$receipt_artifact\"",
             ".creationReceiptSha256",
+            "repository-permissions",
+            ".permissions // {} | {admin,maintain,push,triage,pull}",
         ):
             self.assertIn(required, source)
         self.assertEqual(
