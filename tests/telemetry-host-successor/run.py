@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from release_successor_execution import Dispatch, JournalState, Observation, Refused, advance_effects
 from telemetry_host_successor_admission import HostAdmission
 from telemetry_host_successor_execution import effects
+from telemetry_host_successor_provider import HostProvider, NotFound
 
 
 def manifest():
@@ -140,6 +141,64 @@ class HostReleaseTests(unittest.TestCase):
             row = manifest(); row[key] = value
             with self.assertRaises(Refused):
                 effects(row)
+
+    def test_live_tag_draft_and_original_asset_readback(self):
+        class API:
+            tag = None
+            release = None
+            assets = None
+            def __init__(self):
+                self.assets = {}
+                self.writes = []
+            def get(self, path):
+                if path.endswith("/git/ref/tags/telemetry-host/v0.1.2") and self.tag:
+                    return {"object": {"sha": self.tag}}
+                if path.endswith("/releases/tags/telemetry-host/v0.1.2") and self.release and not self.release["draft"]:
+                    return self.release
+                if path.endswith("/releases?per_page=100&page=1"):
+                    return [self.release] if self.release else []
+                if path.endswith("/releases/1/assets?per_page=100"):
+                    return [{"id": i, "name": name} for i, name in enumerate(self.assets, 1)]
+                raise NotFound(path)
+            def post(self, path, body):
+                self.writes.append((path, body))
+                if path.endswith("/git/refs"):
+                    self.tag = body["sha"]; return {"object": {"sha": self.tag}}
+                if path.endswith("/releases"):
+                    self.release = {"id": 1, "tag_name": body["tag_name"],
+                                    "body": body["body"], "draft": body["draft"]}
+                    return self.release
+                raise AssertionError(path)
+            def upload_asset(self, release_id, name, path):
+                self.assets[name] = path.read_bytes()
+                return {"id": len(self.assets), "name": name}
+            def download_asset(self, asset_id):
+                return list(self.assets.values())[asset_id - 1]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            row = manifest()
+            package = root / "FS.GG.Telemetry.Host.0.1.2.nupkg"
+            package.write_bytes(b"exact original Host archive")
+            row["archiveSha256"] = hashlib.sha256(package.read_bytes()).hexdigest()
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n")
+            api = API()
+            provider = HostProvider(api, manifest_path, "github-token", "nuget-key")
+            _, ordered = effects(row)
+            tag, draft, archive = ordered[0], ordered[1], ordered[4]
+            self.assertEqual(provider.observe(tag).state, "absent")
+            self.assertEqual(provider.dispatch(tag).state, "applied")
+            self.assertEqual(provider.observe(tag).state, "matched")
+            self.assertEqual(provider.dispatch(draft).state, "applied")
+            self.assertEqual(provider.observe(draft).state, "matched")
+            self.assertEqual(provider.dispatch(archive).state, "applied")
+            self.assertEqual(provider.observe(archive).state, "matched")
+            self.assertEqual(provider.dispatch(ordered[5]).state, "applied")
+            self.assertEqual(provider.observe(ordered[5]).state, "matched")
+            api.assets[package.name] = b"different archive"
+            self.assertEqual(provider.observe(archive).state, "mismatched")
+            api.tag = "e" * 40
+            self.assertEqual(provider.observe(tag).state, "mismatched")
 
     def test_live_admission_revokes_on_changed_main_or_actor(self):
         class API:
