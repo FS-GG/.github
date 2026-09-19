@@ -76,9 +76,12 @@ identities as `--telemetry-feature`, `--telemetry-item` and `--telemetry-attempt
 discovers the private host configuration and creates its CI assignment automatically.
 
 Observation is asynchronous and never adds delivery ceremony. Missing configuration, publication, start or
-terminal evidence is reported once as a coverage gap. Native `collaboration.spawn_agent` has no usage hook, so
-retain `native-collaboration-usage-unsupported`; expected population, lineage, requested model/effort and terminal
-outcome do not establish intercepted usage or complete coverage.
+terminal evidence is reported once as a coverage gap. With a Codex parent thread identity, the adapter joins
+native child thread and turn records to the dispatch and verifies their final usage from private host records.
+After late usage or a follow-up, call `usage-reconcile --token <private-token>` for the affected terminal attempt.
+Until all turns are verified, report native usage as unknown; hosts without a joinable parent retain
+`native-collaboration-usage-unsupported`. Expected population, lineage, requested model/effort and terminal
+outcome alone do not establish complete usage.
 
 The adapter associates an ordinary local invocation with `FSGG_TELEMETRY_REPOSITORY` first,
 `GITHUB_REPOSITORY` second, then one credential-free canonical GitHub `origin` from the current checkout.

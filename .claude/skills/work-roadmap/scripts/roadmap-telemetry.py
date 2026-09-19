@@ -27,6 +27,7 @@ from fsgg_telemetry_defaults import (
     workspace_mutation_command,
     write_private_json,
 )
+from native_collaboration_usage import HostUnavailable, collect as collect_native_usage
 
 
 BATCH_SCHEMA = "fsgg.telemetry.ingest/1"
@@ -156,7 +157,7 @@ def drain_command(config: HostConfig) -> list[str]:
 def read_state(config: HostConfig, token: str) -> dict[str, object]:
     path = state_path(config, token)
     try:
-        if path.is_symlink() or not path.is_file() or path.stat().st_size > 8192:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 262144:
             raise ConfigurationError("dispatch state is unavailable")
         if os.name != "nt" and (path.stat().st_mode & 0o777) != 0o600:
             raise ConfigurationError("dispatch state permissions must be 0600")
@@ -216,6 +217,11 @@ def refresh_dashboard(config: HostConfig) -> dict[str, object]:
         return {"status": "advisory-failure", "reason": "publisher-event-subprocess-failed"}
 
 
+def prospective_coverage(state: dict[str, object]) -> str:
+    return ("native-collaboration-usage-unknown" if state.get("hostParentThreadId")
+            else "native-collaboration-usage-unsupported")
+
+
 def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
     feature = validate_identity("feature", args.feature)
     item = validate_identity("item", args.item)
@@ -237,6 +243,8 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         parent_dispatch = str(parent["dispatchId"])
         parent_invocation = str(parent["invocationId"])
         relation = args.relation
+        if relation == "follow-up" and not isinstance(parent.get("usageLedger", {}), dict):
+            raise ConfigurationError("follow-up usage baseline is malformed")
     elif args.relation != "root":
         raise ConfigurationError("child and follow-up dispatches require --parent-token")
     expected = {
@@ -245,6 +253,9 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         "parentDispatchId": parent_dispatch, "parentInvocationId": parent_invocation,
         "lateAfterSeconds": args.late_after_seconds,
     }
+    host_parent = os.environ.get("CODEX_THREAD_ID") if relation != "root" else None
+    if host_parent and not re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", host_parent):
+        host_parent = None
     existing = matching_dispatch(config, expected)
     if existing is not None:
         if existing.get("phase") == "begin-pending":
@@ -252,10 +263,19 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         elif existing.get("phase") != "expected":
             raise ConfigurationError("dispatch attempt already progressed beyond expectation")
         return {"schema": "fsgg.telemetry.roadmap-dispatch/1", "status": "expected",
-                "token": existing["token"], "coverage": "native-collaboration-usage-unsupported"}
+                "token": existing["token"], "coverage": prospective_coverage(existing)}
     if (args.parent_token and parent.get("phase") != "started" and
             not (relation == "follow-up" and parent.get("phase") == "terminal")):
         raise ConfigurationError("parent dispatch must be started before a child is expected")
+    baseline_ids: list[str] = []
+    baseline_known = relation != "follow-up"
+    if relation == "follow-up" and host_parent and parent.get("hostParentThreadId") == host_parent:
+        try:
+            prior = collect_native_usage(host_parent, str(parent["nativeId"]))
+            baseline_ids = list(prior["allTurnIds"])
+            baseline_known = True
+        except (HostUnavailable, OSError, subprocess.SubprocessError):
+            pass
     token, activation, dispatch, invocation = (uuid.uuid4().hex for _ in range(4))
     root_invocation = invocation
     if args.parent_token:
@@ -283,6 +303,9 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         "relation": relation,
         "lateAfterSeconds": args.late_after_seconds,
         "nativeId": None,
+        "hostParentThreadId": host_parent,
+        "baselineTurnIds": baseline_ids,
+        "usageBaselineKnown": baseline_known,
         "associationProducer": config.producer,
         "associationDigest": config.binding_digest,
     }
@@ -304,7 +327,7 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
                         expectedAt=timestamp, clockProvenance="host-wall"))
     publish(config, state, events, operation="begin", next_phase="expected")
     return {"schema": "fsgg.telemetry.roadmap-dispatch/1", "status": "expected", "token": token,
-            "coverage": "native-collaboration-usage-unsupported"}
+            "coverage": prospective_coverage(state)}
 
 
 def started(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
@@ -314,13 +337,13 @@ def started(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         if state.get("nativeId") != native_id:
             raise ConfigurationError("started dispatch belongs to a different native identity")
         return {"schema": "fsgg.telemetry.roadmap-dispatch/1", "status": "started", "token": args.token,
-                "coverage": "native-collaboration-usage-unsupported"}
+                "coverage": prospective_coverage(state)}
     if state.get("phase") == "start-pending":
         if state.get("nativeId") != native_id:
             raise ConfigurationError("pending start belongs to a different native identity")
         publish_pending(config, state)
         return {"schema": "fsgg.telemetry.roadmap-dispatch/1", "status": "started", "token": args.token,
-                "coverage": "native-collaboration-usage-unsupported"}
+                "coverage": prospective_coverage(state)}
     if state.get("phase") != "expected":
         raise ConfigurationError("dispatch must be expected before start")
     item, invocation = str(state["itemId"]), str(state["invocationId"])
@@ -341,15 +364,89 @@ def started(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         event("event-time", f"event-time-{invocation}-start", item, invocationId=invocation,
               event="start", occurredAt=timestamp, occurredClockProvenance="host-wall",
               observedAt=timestamp, observedClockProvenance="host-wall"),
-        event("runtime-gap", f"runtime-gap-{invocation}-native-usage", item, invocationId=invocation,
-              code="native-collaboration-usage-unsupported"),
         event("runtime-gap", f"runtime-gap-{invocation}-native-process", item, invocationId=invocation,
               code="native-process-id-unavailable"),
     ]
+    if not state.get("hostParentThreadId"):
+        events.append(event("runtime-gap", f"runtime-gap-{invocation}-native-usage", item,
+                            invocationId=invocation, code="native-collaboration-usage-unsupported"))
     state["phase"], state["nativeId"] = "start-pending", native_id
     publish(config, state, events, operation="started", next_phase="started")
     return {"schema": "fsgg.telemetry.roadmap-dispatch/1", "status": "started", "token": args.token,
-            "coverage": "native-collaboration-usage-unsupported"}
+            "coverage": prospective_coverage(state)}
+
+
+def reconcile_usage(config: HostConfig, state: dict[str, object]) -> str:
+    """Publish only verified native turns; retain missing coverage as unknown."""
+    if state.get("phase") != "terminal" or not state.get("hostParentThreadId"):
+        return "native-collaboration-usage-unsupported"
+    if not state.get("usageBaselineKnown", state.get("relation") != "follow-up"):
+        return "native-collaboration-usage-unknown"
+    pending = state.get("pendingPublication")
+    if isinstance(pending, dict) and pending.get("operation") == "native-thread":
+        publish_pending(config, state)
+        state["nativeThreadPublished"] = True
+        save_state(config, state)
+    intent = state.get("usageIntent")
+    if isinstance(intent, dict):
+        if state.get("pendingPublication"):
+            try:
+                publish_pending(config, state)
+            except ConfigurationError:
+                if not state.get("pendingPublication"):
+                    del state["usageIntent"]
+                    save_state(config, state)
+                raise
+        ledger = state.setdefault("usageLedger", {})
+        ledger[intent["turnId"]] = {"revision": intent["revision"], "hash": intent["hash"]}
+        del state["usageIntent"]
+        save_state(config, state)
+    try:
+        native = collect_native_usage(str(state["hostParentThreadId"]), str(state["nativeId"]))
+    except (HostUnavailable, OSError, subprocess.SubprocessError):
+        return "native-collaboration-usage-unknown"
+    ledger = state.setdefault("usageLedger", {})
+    if not isinstance(ledger, dict):
+        raise ConfigurationError("native usage ledger is malformed")
+    if state.get("nativeThreadId") and state["nativeThreadId"] != native["threadId"]:
+        raise ConfigurationError("native child thread changed for a dispatch")
+    if not state.get("nativeThreadPublished"):
+        if not state.get("nativeThreadId"):
+            state["nativeThreadId"] = native["threadId"]
+            save_state(config, state)
+        publish(config, state, [event("runtime-start", f"runtime-thread-{state['invocationId']}",
+                                      str(state["itemId"]), invocationId=state["invocationId"],
+                                      threadId=native["threadId"], turnId=None, turnSequence=None,
+                                      processId=0, phase="thread")], operation="native-thread")
+        state["nativeThreadPublished"] = True
+        save_state(config, state)
+    eligible = [turn for turn in native["turns"] if turn["turnId"] not in state.get("baselineTurnIds", [])]
+    for turn in eligible:
+        usage = turn["usage"]
+        turn_id = str(turn["turnId"])
+        fingerprint = hashlib.sha256(json.dumps([turn["turnSequence"], usage], sort_keys=True).encode()).hexdigest()
+        previous = ledger.get(turn_id)
+        if previous and previous.get("hash") == fingerprint:
+            continue
+        revision = 0 if previous is None else int(previous["revision"]) + 1
+        observation = event("runtime-turn-usage", digest("runtime-turn-usage-", str(state["invocationId"]), turn_id),
+                            str(state["itemId"]), invocationId=state["invocationId"],
+                            threadId=native["threadId"], turnId=turn_id, turnSequence=turn["turnSequence"],
+                            provider="openai", requestedModel=state["model"], observedModel=native.get("model"),
+                            requestedEffort=state["effort"], observedEffort=native.get("effort"),
+                            backend="codex-collaboration", scope="turn", provenance="codex-native-token-usage-record",
+                            input=usage["input_tokens"], cachedInput=usage["cached_input_tokens"],
+                            output=usage["output_tokens"], reasoning=usage["reasoning_output_tokens"],
+                            total=usage["total_tokens"])
+        observation["revision"] = revision
+        state["usageIntent"] = {"turnId": turn_id, "revision": revision, "hash": fingerprint}
+        save_state(config, state)
+        publish(config, state, [observation], operation=f"native-usage:{turn_id}:{revision}")
+        ledger[turn_id] = {"revision": revision, "hash": fingerprint}
+        del state["usageIntent"]
+        save_state(config, state)
+    return ("native-collaboration-usage-complete" if native["complete"] and eligible
+            else "native-collaboration-usage-unknown")
 
 
 def finish(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
@@ -381,16 +478,28 @@ def finish(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         publish(config, state, events, operation="finish", next_phase="terminal")
     else:
         raise ConfigurationError("dispatch must be started before terminal")
+    try:
+        coverage = reconcile_usage(config, state)
+    except ConfigurationError:
+        coverage = "native-collaboration-usage-unknown"
     drain = subprocess.run(
         drain_command(config),
         text=True, capture_output=True, timeout=30, check=False,
     )
     result={"schema": "fsgg.telemetry.roadmap-dispatch/1", "status": "terminal", "token": args.token,
-            "outcome": args.outcome, "coverage": "native-collaboration-usage-unsupported",
+            "outcome": args.outcome, "coverage": coverage,
             "drain": "complete" if drain.returncode == 0 else "pending"}
     if drain.returncode==0 and args.outcome=="completed" and state.get("relation")=="root":
         result["dashboardPublication"]=refresh_dashboard(config)
     return result
+
+
+def usage_reconcile(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
+    state = read_state(config, args.token)
+    coverage = reconcile_usage(config, state)
+    drain = subprocess.run(drain_command(config), text=True, capture_output=True, timeout=30, check=False)
+    return {"schema": "fsgg.telemetry.roadmap-usage/1", "status": "reconciled", "token": args.token,
+            "coverage": coverage, "drain": "complete" if drain.returncode == 0 else "pending"}
 
 
 def read_contract(path: str, schema: str, fields: set[str]) -> dict[str, object]:
@@ -501,6 +610,8 @@ def parser() -> argparse.ArgumentParser:
     finish_parser.add_argument("--token", required=True)
     finish_parser.add_argument("--outcome", choices=("completed", "failed", "cancelled", "blocked"), required=True)
     finish_parser.add_argument("--exit-code", type=int)
+    usage_parser = commands.add_parser("usage-reconcile")
+    usage_parser.add_argument("--token", required=True)
     ci_parser = commands.add_parser("ci-assignment")
     for name in ("feature", "item", "attempt"):
         ci_parser.add_argument(f"--{name}", required=True)
@@ -534,7 +645,8 @@ def main(argv: list[str]) -> int:
             print(json.dumps({"schema": "fsgg.telemetry.host-status/1",
                               "status": "ready" if completed.returncode == 0 else "unavailable"}, separators=(",", ":")))
             return 0 if completed.returncode == 0 else 1
-        handlers = {"begin": begin, "started": started, "finish": finish, "ci-assignment": create_ci,
+        handlers = {"begin": begin, "started": started, "finish": finish, "usage-reconcile": usage_reconcile,
+                    "ci-assignment": create_ci,
                     "review": review, "activity": activity, "usage-attribution": attribution, "complication": complication}
         value = handlers[args.command](config, args)
         print(json.dumps(value, separators=(",", ":")))

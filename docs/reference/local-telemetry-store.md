@@ -258,16 +258,28 @@ python3 tools/roadmap-telemetry.py begin \
 python3 tools/roadmap-telemetry.py started --token <private-token> --native-id <agent-id>
 # after the child becomes terminal
 python3 tools/roadmap-telemetry.py finish --token <private-token> --outcome completed
+# repeat after a late native usage update or a partial first observation
+python3 tools/roadmap-telemetry.py usage-reconcile --token <private-token>
 ```
 
 For a child or follow-up, pass its parent's token with `--parent-token`, select `--relation child` or
 `--relation follow-up`, and retain both attempt identities. `begin` atomically publishes expected population;
 `started` records invocation lineage, requested model/effort and the returned native identity; `finish` records
 the terminal result and opportunistically drains. A crash between phases stays visible as missing start or
-terminal. Every such invocation also records `native-collaboration-usage-unsupported` and
-`native-process-id-unavailable`: these observations establish dispatch attribution, not token interception,
-native timing, or complete usage coverage. Missing configuration or publication is reported once and remains
-advisory to native delivery.
+terminal. When `CODEX_THREAD_ID` identifies the parent at `begin`, the adapter uses read-only Codex App Server
+thread and turn metadata to resolve one exact child path and its native thread UUID. It then reads only
+`token_usage_record` entries in that child’s private rollout, verifies per-response counters against each final
+turn total, and publishes one revisioned `runtime-turn-usage` fact per verified turn. Cached input and reasoning
+remain subsets of input and output; `total` is input plus output. A duplicate reconciliation is idempotent and a
+late corrected turn advances its revision. `usage-reconcile` also recovers turns that were missing when `finish`
+ran. The collector never publishes rollout messages or raw JSON.
+
+An unmatched child, absent counters, incomplete turn, unavailable host, or missing parent thread identity never
+becomes zero usage. Supported children report `native-collaboration-usage-unknown` until every observed turn is
+verified, then `native-collaboration-usage-complete`. Roots and hosts without this Codex identity source retain
+`native-collaboration-usage-unsupported`. `native-process-id-unavailable` remains explicit. These observations
+establish usage for the joined native turns, not native timing or billing. Missing configuration or publication
+remains advisory to native delivery.
 
 ## Process reviews, activity, and complications
 

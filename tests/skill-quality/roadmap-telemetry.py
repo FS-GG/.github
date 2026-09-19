@@ -201,6 +201,101 @@ class RoadmapTelemetryTests(unittest.TestCase):
             self.assertEqual((terminal["status"], terminal["coverage"], terminal["drain"]),
                              ("terminal", "native-collaboration-usage-unsupported", "complete"))
 
+    def test_native_child_usage_is_joined_once_and_late_correction_revises_it(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            config = self.config(pathlib.Path(scratch))
+            batches = []
+            def fake_run(command, **kwargs):
+                if "publish" in command:
+                    batches.append(json.loads(pathlib.Path(command[command.index("--input") + 1]).read_text()))
+                return subprocess.CompletedProcess(command, 0, "{}", "")
+            def begin(attempt, *extra):
+                return MODULE.begin(config, MODULE.parser().parse_args([
+                    "begin", "--feature", "F", "--item", "F.1", "--attempt", attempt,
+                    "--model", "gpt-6-astra", "--effort", "high", *extra]))["token"]
+            def start(token, native):
+                MODULE.started(config, MODULE.parser().parse_args(["started", "--token", token, "--native-id", native]))
+            def finish(token):
+                return MODULE.finish(config, MODULE.parser().parse_args([
+                    "finish", "--token", token, "--outcome", "completed"]))
+            parent_thread = "01a0b8b8-2d95-79d1-9be2-69585aa50cfa"
+            native_thread = "01a0b8ba-7f55-7b21-b22f-e7cf4e501e8e"
+            turn = "01a0b8ba-7f70-7c00-89f9-fd1aa8b6effc"
+            usage = {"input_tokens": 100, "cached_input_tokens": 60, "output_tokens": 20,
+                     "reasoning_output_tokens": 5, "total_tokens": 120}
+            def observation():
+                return {"threadId": native_thread, "model": "gpt-6-astra", "effort": "high",
+                        "complete": True, "turns": [{"turnId": turn, "turnSequence": 1, "usage": dict(usage)}]}
+            with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": parent_thread}), \
+                 mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
+                 mock.patch.object(MODULE, "collect_native_usage", side_effect=lambda *args: observation()) as collector:
+                root = begin("root")
+                start(root, "root")
+                child = begin("child", "--parent-token", root, "--relation", "child")
+                start(child, "child_1")
+                self.assertEqual(finish(child)["coverage"], "native-collaboration-usage-complete")
+                MODULE.usage_reconcile(config, MODULE.parser().parse_args(["usage-reconcile", "--token", child]))
+                usage["input_tokens"] = 105
+                usage["total_tokens"] = 125
+                MODULE.usage_reconcile(config, MODULE.parser().parse_args(["usage-reconcile", "--token", child]))
+                self.assertEqual(collector.call_args.args, (parent_thread, "child_1"))
+            facts = [fact for batch in batches for fact in batch["events"] if fact["kind"] == "runtime-turn-usage"]
+            self.assertEqual(len(facts), 2)
+            self.assertEqual([fact["revision"] for fact in facts], [0, 1])
+            self.assertEqual([fact["total"] for fact in facts], [120, 125])
+            self.assertEqual([fact["input"] for fact in facts], [100, 105])
+            self.assertEqual(facts[0]["identity"], facts[1]["identity"])
+            self.assertEqual(facts[0]["invocationId"], MODULE.read_state(config, child)["invocationId"])
+            self.assertEqual(len([fact for batch in batches for fact in batch["events"]
+                                  if fact["kind"] == "runtime-start" and fact["phase"] == "thread"]), 1)
+            self.assertNotIn("native-collaboration-usage-unsupported", [fact["code"] for batch in batches
+                              for fact in batch["events"] if fact["kind"] == "runtime-gap"
+                              and fact["invocationId"] == MODULE.read_state(config, child)["invocationId"]])
+
+    def test_followup_excludes_all_prior_native_turns(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            config = self.config(pathlib.Path(scratch))
+            facts = []
+            def fake_run(command, **kwargs):
+                if "publish" in command:
+                    facts.extend(json.loads(pathlib.Path(command[command.index("--input") + 1]).read_text())["events"])
+                return subprocess.CompletedProcess(command, 0, "{}", "")
+            parent_thread = "01a0b8b8-2d95-79d1-9be2-69585aa50cfa"
+            turns = ["01a0b8ba-7f70-7c00-89f9-fd1aa8b6effc", "01a0b8ba-7f70-7c00-89f9-fd1aa8b6effd"]
+            def usage(*_):
+                return {"threadId": "01a0b8ba-7f55-7b21-b22f-e7cf4e501e8e", "allTurnIds": turns[:],
+                        "model": "gpt-6-astra", "effort": "high", "complete": True,
+                        "turns": [{"turnId": turn, "turnSequence": index + 1,
+                                   "usage": {"input_tokens": 10, "cached_input_tokens": 5,
+                                             "output_tokens": 2, "reasoning_output_tokens": 1,
+                                             "total_tokens": 12}}
+                                  for index, turn in enumerate(turns)]}
+            def begin(attempt, *extra):
+                return MODULE.begin(config, MODULE.parser().parse_args([
+                    "begin", "--feature", "F", "--item", "F.1", "--attempt", attempt,
+                    "--model", "gpt-6-astra", "--effort", "high", *extra]))["token"]
+            def start(token, native):
+                MODULE.started(config, MODULE.parser().parse_args(["started", "--token", token, "--native-id", native]))
+            def finish(token):
+                MODULE.finish(config, MODULE.parser().parse_args(["finish", "--token", token, "--outcome", "completed"]))
+            with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": parent_thread}), \
+                 mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
+                 mock.patch.object(MODULE, "collect_native_usage", side_effect=usage):
+                root = begin("root")
+                start(root, "root")
+                child = begin("child", "--parent-token", root, "--relation", "child")
+                start(child, "worker")
+                turns.pop()
+                finish(child)
+                followup = begin("followup", "--parent-token", child, "--relation", "follow-up")
+                self.assertEqual(MODULE.read_state(config, followup)["baselineTurnIds"], turns)
+                start(followup, "worker")
+                turns.append("01a0b8ba-7f70-7c00-89f9-fd1aa8b6effd")
+                finish(followup)
+            usage_facts = [fact for fact in facts if fact["kind"] == "runtime-turn-usage"]
+            self.assertEqual([fact["turnId"] for fact in usage_facts], turns)
+            self.assertNotEqual(usage_facts[0]["invocationId"], usage_facts[1]["invocationId"])
+
     def test_private_host_config_is_discovered_without_embedding_an_instance_in_source(self):
         with tempfile.TemporaryDirectory() as scratch:
             root = pathlib.Path(scratch)

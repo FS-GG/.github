@@ -137,9 +137,11 @@ root observation before the driver itself returns. Pass feature/item/attempt ide
 configuration or publication remains advisory to delivery but must be reported once as an attributed coverage
 gap, never silently omitted.
 
-The native collaboration tool exposes no usage hook. These orchestrator observations establish expected
-population, parent-child lineage, requested model/effort, start and terminal outcome only. Preserve the emitted
-`native-collaboration-usage-unsupported` gap and never claim intercepted token usage or complete coverage.
+The native collaboration tool exposes no usage hook. The adapter records expected population, lineage,
+requested model/effort and outcome, then joins completed child turns through read-only Codex host metadata when
+`CODEX_THREAD_ID` is available. After late usage or a follow-up, run `usage-reconcile` for the affected terminal
+attempt. Treat unmatched or incomplete native usage as unknown; hosts without a joinable parent retain
+`native-collaboration-usage-unsupported`. Never infer counters from dispatch metadata.
 
 Use the existing runtime/provider usage and CI/operation collection. Preserve original item/attempt,
 feature, effective policy, model/effort, triggers, start/queue/end times, useful work/tests, administration,
