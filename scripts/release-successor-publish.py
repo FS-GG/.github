@@ -77,6 +77,7 @@ def main() -> int:
         manifest = json.loads(manifest_path.read_text())
         require(manifest["descriptor"]["version"] == "0.91.0", "publisher version differs")
         admission = SingleOperatorAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main")
+        provider = LiveProvider(api, manifest_path, github_token, nuget_key)
         intent = {
             "contentId": manifest["contentId"],
             "sourceSha": candidate_source,
@@ -92,16 +93,13 @@ def main() -> int:
             require(candidate_source == publisher_sha, "fresh publication requires candidate and publisher source to match")
             require(admission.authorize(manifest["contentId"], "journal", "intent", manifest["contentId"]),
                     "release journal initialization admission denied")
-            for path in (
-                "repos/FS-GG/.github/git/ref/tags/coherent-set/v0.91.0",
-                "repos/FS-GG/.github/releases/tags/coherent-set/v0.91.0",
-            ):
-                try:
-                    api.get(path)
-                except NotFound:
-                    pass
-                else:
-                    raise Refused(f"release effect already exists outside the protected journal: {path}")
+            try:
+                api.get("repos/FS-GG/.github/git/ref/tags/coherent-set/v0.91.0")
+            except NotFound:
+                pass
+            else:
+                raise Refused("successor tag already exists outside the protected journal")
+            require(provider._release() is None, "successor release already exists outside the protected journal")
             subprocess.run(
                 [sys.executable, str(pathlib.Path(__file__).with_name("check-release-candidate-uniqueness.py")),
                  "--version", "0.91.0", "--predecessor", "0.90.0"],
@@ -118,7 +116,6 @@ def main() -> int:
                 comparison = api.get(f"repos/{REPOSITORY}/compare/{candidate_source}...{publisher_sha}")
                 require(comparison.get("status") == "ahead", "recovery publisher does not descend from candidate source")
         journal.validate_intent(intent)
-        provider = LiveProvider(api, manifest_path, github_token, nuget_key)
         deadline = time.monotonic() + 45 * 60
         max_steps = len(ordered_effects(manifest)) * 2 + 120
         for _ in range(max_steps):

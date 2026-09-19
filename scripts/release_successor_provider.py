@@ -108,7 +108,19 @@ class LiveProvider:
         try:
             return self.api.get(f"repos/{REPOSITORY}/releases/tags/{self.tag}")
         except NotFound:
-            return None
+            # GitHub's by-tag endpoint hides draft releases even from a token
+            # that can list them. A draft's immutable tag/body binding is
+            # therefore recovered through the authenticated releases list.
+            for page in range(1, 11):
+                releases = self.api.get(f"repos/{REPOSITORY}/releases?per_page=100&page={page}")
+                matches = [item for item in releases if item.get("tag_name") == self.tag]
+                if len(matches) > 1:
+                    raise Refused("duplicate releases share the successor tag")
+                if matches:
+                    return matches[0]
+                if len(releases) < 100:
+                    return None
+            raise Refused("release list exceeds bounded draft lookup")
 
     def _asset(self, name: str) -> bytes | None:
         release = self._release()
