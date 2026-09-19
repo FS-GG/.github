@@ -19,6 +19,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-19** — — UTEL-REL-01 0.91.0 publication (github; .github#3568): advance coord-engine.package-version to 0.91.0 after the immutable coherent-set release and both-feed readback. Source 85c356b2c44cfea4b83659b14b6946d64bbd9a22, content sha256:c8b03938aa6357f696ff9ca257315e02f79e0a23ef8b6d87d37430139f2e600c; publisher run 35457078213 and clean public CLI install verified. Main owns separate installed-host adoption.
+
 - **2026-09-18** — FsQuint stable publication (fsquint; ADR-0085; FS-GG/FsQuint#9): advance `fsquint-replay` to 0.1.0 only after [release verification](https://github.com/FS-GG/FsQuint/actions/runs/35330871321) passed for FsQuint and FsQuint.Tooling on both feeds, including source/payload identity and anonymous external use. Consumer adoption remains governed by SDD and Coordination qualification; the independent repository remains outside the operational fabric. No installed runtime or validator identity changes.
 
 - **2026-09-18** — **FSQUINT-01 single-owner extraction** (fsquint/sdd/coordination; ADR-0085): register the publicly published FsQuint coherent package set and consumer dependency edges, with a justified outside-fabric declaration for its independent owner. Registry closure admits explicit justified declarations while retaining stale/missing/contradictory controls. SDD retains its CLR facade; Coordination retains domain semantics and qualification. Package/tool pins are separate, with no generic source forks or installed activation. Reconcile `coord-engine.package-version` to 0.90.0 already served by both feeds (read-only feed gate 35322874337); this does not promote a stable channel or change installed adoption.
