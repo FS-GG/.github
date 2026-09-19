@@ -278,17 +278,23 @@ jobs:
         if: ${{ failure() && inputs.phase == 'identity-bound-operation' }}
         env:
           EXECUTION_TOKEN: ${{ steps.execution-operation.outputs.token }}
+          SETUP_TOKEN: ${{ steps.setup-operation.outputs.token }}
         shell: bash
         run: |
           set -euo pipefail
           if [ -x "$RUNNER_TEMP/tools/fsgg-coordination" ]; then
-            "$RUNNER_TEMP/tools/fsgg-coordination" delivery inspect \
-              --provider github --repository FS-GG/FS.GG.Coordination.CallableSandbox --pr 1 \
-              --token-env EXECUTION_TOKEN --policy-ref refs/heads/fsgg/v2/policy/callable-isolated \
-              --epoch-repository FS-GG/FS.GG.Coordination.CallableSandbox --epoch-ref refs/heads/fsgg/v2/epoch/callable-isolated \
-              --epoch-path epoch.json --journal-repository FS-GG/FS.GG.Coordination.CallableSandbox \
-              > /dev/null 2> "$RUNNER_TEMP/installed-plan-diagnostic.txt" || true
-            grep -E '^(delivery-refused|observation-refused|provider-refused):' "$RUNNER_TEMP/installed-plan-diagnostic.txt" || true
+            for role in setup execution; do
+              token_environment=SETUP_TOKEN
+              [ "$role" = execution ] && token_environment=EXECUTION_TOKEN
+              "$RUNNER_TEMP/tools/fsgg-coordination" delivery inspect \
+                --provider github --repository FS-GG/FS.GG.Coordination.CallableSandbox --pr 1 \
+                --token-env "$token_environment" --policy-ref refs/heads/fsgg/v2/policy/callable-isolated \
+                --epoch-repository FS-GG/FS.GG.Coordination.CallableSandbox --epoch-ref refs/heads/fsgg/v2/epoch/callable-isolated \
+                --epoch-path epoch.json --journal-repository FS-GG/FS.GG.Coordination.CallableSandbox \
+                > /dev/null 2> "$RUNNER_TEMP/installed-plan-$role-diagnostic.txt" || true
+              diagnostic="$(grep -E '^(delivery-refused|observation-refused|provider-refused):' "$RUNNER_TEMP/installed-plan-$role-diagnostic.txt" | head -1 || true)"
+              printf '%s-diagnostic:%s\n' "$role" "${diagnostic:-none}"
+            done
           fi
       - name: Materialize restart-safe checkpoint after every provider attempt
         if: ${{ always() }}
