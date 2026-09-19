@@ -49,7 +49,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: FS-GG/FS.GG.Coordination
-          ref: d46aa238d0f169c85a5822e62e49ab9df1ebf37d
+          ref: 8e5ce4cc9aa3e1d2e200d0dc6b1812ec12ae2bce
           fetch-depth: 1
           persist-credentials: false
           path: coordination
@@ -67,8 +67,8 @@ jobs:
           test "$GITHUB_REPOSITORY" = 'FS-GG/.github'
           test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
           test "$GITHUB_REF" = 'refs/heads/main'
-          test "$(git -C coordination rev-parse HEAD)" = 'd46aa238d0f169c85a5822e62e49ab9df1ebf37d'
-          test "$(sha256sum coordination/eng/callable-cli-isolated-operation-contract.json | cut -d ' ' -f 1)" = 'cc51765dd011672f0af4b4a1c7fb6c26f5d436b53e1e9d12104831bfe7914815'
+          test "$(git -C coordination rev-parse HEAD)" = '8e5ce4cc9aa3e1d2e200d0dc6b1812ec12ae2bce'
+          test "$(sha256sum coordination/eng/callable-cli-isolated-operation-contract.json | cut -d ' ' -f 1)" = '39a2a28a5b084881ff6d2e6cfccc24bc4f02128b9b4ed16b49edf12ce926ef9f'
           if [ "$PHASE" = creation ]; then
             test -z "$CREATION_RECEIPT_RUN_ID$CREATION_RECEIPT_RUN_ATTEMPT$CREATION_RECEIPT_ARTIFACT_ID$CREATION_RECEIPT_ARTIFACT_SHA256"
             python3 coordination/eng/callable-cli-isolated-operation.py prepare-create \
