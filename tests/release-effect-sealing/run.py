@@ -50,8 +50,10 @@ for relative, expected in BOUND.items():
     actual = digest(ROOT / relative)
     assert actual == expected, f"0.90-bound workflow drifted: {relative}: {actual}"
 
-props = (ROOT / "Directory.Build.props").read_text()
-assert "<FsggCoherentSetVersion>0.90.0</FsggCoherentSetVersion>" in props
+# The accepted workflows remain byte-bound to the immutable 0.90 release, while a
+# successor source candidate may advance the coherent scalar. The retained
+# kit-auto-publish workflow itself still refuses any version other than 0.90.0;
+# this test protects its exact bytes and the reachable effect refusals below.
 
 for relative in QUALIFICATION_ONLY:
     text = executable_text(ROOT / relative)
@@ -95,14 +97,15 @@ with tempfile.TemporaryDirectory(prefix="gs2-08-9-release-seal.") as temporary:
         stub.write_text(f'#!/usr/bin/env bash\n{credential_check}echo {command} "$@" >> "$FSGG_FAKE_CALLS"\nexit 99\n')
         stub.chmod(0o755)
     adapter = ROOT / "scripts/release-saga-ci.sh"
-    for command in ("github", "nuget-probe", "nuget-record"):
-        result = subprocess.run(
-            ["bash", str(adapter), command, "FS.GG.Kit", "0.90.0", "a" * 40],
-            cwd=ROOT, env=env, text=True, capture_output=True, check=False,
-        )
-        assert result.returncode == 78, (command, result.returncode, result.stderr)
-        assert "sealed legacy release effect" in result.stderr
-        assert not calls.exists() or not calls.read_text().strip(), f"{command} reached an external command"
+    for version in ("0.90.0", "0.91.0"):
+        for command in ("github", "nuget-probe", "nuget-record"):
+            result = subprocess.run(
+                ["bash", str(adapter), command, "FS.GG.Kit", version, "a" * 40],
+                cwd=ROOT, env=env, text=True, capture_output=True, check=False,
+            )
+            assert result.returncode == 78, (version, command, result.returncode, result.stderr)
+            assert "sealed legacy release effect" in result.stderr
+            assert not calls.exists() or not calls.read_text().strip(), f"{version} {command} reached an external command"
 
     gh = fake_bin / "gh"
     gh.write_text(
@@ -118,11 +121,14 @@ with tempfile.TemporaryDirectory(prefix="gs2-08-9-release-seal.") as temporary:
     channel = work / "channel.json"
     manifest.write_text("{}")
     channel.write_text("{}")
-    result = subprocess.run(
-        ["bash", str(ROOT / "scripts/release-saga-promote-release.sh"), "FS-GG/.github", "coherent-set/v0.90.0", str(manifest), str(channel)],
-        cwd=ROOT, env=env, text=True, capture_output=True, check=False,
-    )
-    assert result.returncode == 78, (result.returncode, result.stderr)
-    assert calls.read_text().splitlines() == ["gh release view coherent-set/v0.90.0 --repo FS-GG/.github --json isDraft,isImmutable"]
+    for version in ("0.90.0", "0.91.0"):
+        calls.unlink(missing_ok=True)
+        tag = f"coherent-set/v{version}"
+        result = subprocess.run(
+            ["bash", str(ROOT / "scripts/release-saga-promote-release.sh"), "FS-GG/.github", tag, str(manifest), str(channel)],
+            cwd=ROOT, env=env, text=True, capture_output=True, check=False,
+        )
+        assert result.returncode == 78, (version, result.returncode, result.stderr)
+        assert calls.read_text().splitlines() == [f"gh release view {tag} --repo FS-GG/.github --json isDraft,isImmutable"]
 
 print("GS2-08.9 release/publication sealing: offline qualification passed")
