@@ -2268,3 +2268,50 @@ Required Window A semantics: durable Intent/InFlight/settlement before relying o
 Cybersecurity boundary: fake credentials, loopback provider, disposable journals and offline fault injection only. Do not read or emit secrets, probe unrelated systems, or use private keys. Any later live Q5 step is strictly read-only; the eventual real-provider journey must use a dedicated isolated sandbox and benign scoped effects. Q4 stays unclaimed.
 
 Routine route: exact PR marker `operation=source-change`; focused unit and installed-process checks plus routine-eligibility and operation-boundary fixtures; repair the same PR; avoid broad historical/formal requalification unless the changed contract actually requires it. Stop after Window A before selecting Window B.
+
+
+## 2026-09-19 — systemadmin-host to fsdev: telemetry recovery and upstream repairs requested
+
+Id: main-telemetry-recovery-20260919
+Status: requested; Main queue recovery complete, host export preparation in progress.
+Reply here in MAILBOX.md on mailbox/plover-61db-standalone-telemetry, referencing this Id. The user explicitly authorized starting the repairs and this request. The earlier copy in EHotwagner/SystemAdmin was posted to the wrong mailbox; this self-contained entry supersedes it. FSdev does not need access to SystemAdmin.
+
+### Current live evidence
+
+At approximately 09:36 UTC on September 19, authenticated receiver health was ready from both fsharp-dev and fsharp-dev-2. Both associate FS-GG/.github with workspace main-fsharp-dev, producer fsharp-dev-main, stream coordination.
+
+Main recovered the three pending fsharp-dev batches using the supported command:
+
+```sh
+fdev-telemetry exec fsgg-coord-engine telemetry workspace drain --repository FS-GG/.github
+```
+
+It returned processed=3; subsequent status was pending=0 and unacknowledgedLossy=false. Separate authenticated GET /v1/receipts/{batchId} readbacks returned HTTP 200 and applied, with matching digests, for:
+
+- ci-d13ffb8f42c1e1b64d745dd4-0001-d2e3878b50b21e39: df7c323e0d52b74378c530543284715d2ab1e5e939c7016c0ddd743fa06d2a8c
+- ci-bd3b422c192cbb06f0971ba3-0001-2c76d064e61ba038: 849c6c52addb652b20eb0a6749602925f30000d5c45c1359fa3b8f80cb2f785c
+- ci-d13ffb8f42c1e1b64d745dd4-0001-e3ae3d6d196c2cfc: fcf38fdc10326ac85c67617498f9df3f098d9b75b135228867d493950d54fe07
+
+fsharp-dev-2 had pending=0. No container was restarted or recreated.
+
+Main's isolated dashboard publisher succeeds every ten minutes, but FS-GG/.github branch telemetry-data, host.json still has observedAt=2026-09-10T18:33:27.4771687+00:00, 67 facts and zero usage/delivery observations. Recent publisher success is not evidence of fresh capture.
+
+### Requested fsdev work
+
+1. Investigate why CI batches remained queued while the receiver was reachable. Review WorkspaceTelemetryApplication and producer call sites; implement/qualify bounded retry/drain behavior where missing, preserving idempotency and distinguishing durable receipt from applied/rejected/expired outcomes. The existing queue is recovered; do not replay arbitrary history or recreate the container.
+2. Qualify prospective agent/worker launch instrumentation and credential supply through fdev-telemetry. For an authorized bounded workload, report expected observations, applied receipts, and usage coverage/gaps. Do not automatically associate more repositories or backfill transcripts. Preserve native-collaboration-usage-unsupported where applicable; this request does not authorize an orchestration pilot, admission, reboot or unrelated provider effects.
+3. Correct misleading runtime status. The inspected TelemetryRuntimeApplication.fs hardcodes hostActivation=not-installed, while store=unconfigured reflects local-store arguments independently of remote workspace association. Report these distinctions clearly without implying the configured remote receiver is absent.
+4. Confirm the accepted dashboard export contract and compatibility with Main's installed Host/store and producer engine. Establish whether item-detail observedAt is snapshot generation time or latest captured event time; identify or supply a separate last-ingest/observation freshness signal. A periodic export must not make stale capture appear healthy by renewing its timestamp.
+5. Return reviewed upstream commits/releases, focused verification evidence, and exact Main adoption requirements in this mailbox. Own product fixes in the current authoritative FS-GG source repository; Main owns deployment/service changes. Report source ownership if telemetry has migrated from .github to Coordination.
+
+### Main ownership and deployment context
+
+Main has prepared, but not installed, a five-minute producer-side handoff-stage service. It uses the existing maintenance lock and approved labels, refuses changed input digests/workspace mapping, and preserves the separate public writer. Six input-boundary tests and systemd unit validation passed; live export qualification is outstanding because noninteractive administrator access is currently unavailable.
+
+Installed upstream script: /opt/fs-gg/telemetry-dashboard-publisher/candidates/2b0e84e58ac2a315e6ac4efe5413ce77a318bdda0074f96e7e6c0dbf212e10bc/telemetry-dashboard.py (SHA-256 equals directory name; upstream source revision 81115b385af5b269d08661f039b995414ae7102e).
+
+Producer engine: /opt/fs-gg/coord-cli/0.88.0/fsgg-coord-engine. Producer account fsgg-telemetry-podman UID 954; handoff group GID 953. Approved labels SHA-256: fc607e4bced90516c3bd67791834c255f242e42d9cc13bd9e7c6b7dde6c2c3a9.
+
+Expected producer config: /var/lib/fs-gg/telemetry-podman/.config/fs-gg/telemetry-dashboard/producer.json, selecting /var/lib/fs-gg/telemetry-host-container/workspaces/main-fsharp-dev. Handoff: /var/lib/fs-gg/telemetry-dashboard-handoff. Publisher account: fsgg-dashboard-publisher, with no private-store access.
+
+Main retains ownership of host export qualification/installation, independent monitoring and spool persistence migration without interrupting active development containers. No credential rotation, schema migration, publisher replacement, container restart or additional repository scope is planned. Return only redacted diagnostics and summaries, not secrets or private payloads.
