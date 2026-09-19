@@ -130,6 +130,8 @@ module WorkspaceTelemetryApplicationTests =
 
                 Assert.Equal(0, code)
                 Assert.Contains("\"pending\":1", status)
+                Assert.Contains("\"pendingDurablyReceived\":0", status)
+                Assert.Contains("\"pendingUnacknowledged\":1", status)
                 Assert.Contains("\"unacknowledgedLossy\":true", status)
             finally
                 Environment.SetEnvironmentVariable("FSGG_TELEMETRY_CREDENTIAL_MAIN", null)

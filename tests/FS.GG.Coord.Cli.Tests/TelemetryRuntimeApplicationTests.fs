@@ -420,6 +420,12 @@ module TelemetryRuntimeApplicationTests =
         Assert.Equal(
             Some(Ok()),
             TelemetryApplication.validateInvocation
+                [ "telemetry"; "runtime"; "status"; "--config"; "/private/telemetry.json"; "--repository"; "FS-GG/.github" ]
+        )
+
+        Assert.Equal(
+            Some(Ok()),
+            TelemetryApplication.validateInvocation
                 [
                     "telemetry"
                     "runtime"
@@ -453,6 +459,34 @@ module TelemetryRuntimeApplicationTests =
             2,
             TelemetryRuntimeApplication.runCodexExecWith "unused" (assignment "worker-1") [ "--json" ] (fun _ -> Ok "")
         )
+
+    [<Fact>]
+    let ``runtime status distinguishes remote association from explicit local store and host activation`` () =
+        let cleanup, root = temp ()
+        use cleanup = cleanup
+        let config = Path.Combine(root, "telemetry.json")
+
+        File.WriteAllText(
+            config,
+            """{"schema":"fsgg.telemetry.workspace-config/1","engine":"fsgg-coord-engine","associations":[{"workspaceId":"main-fsharp-dev","producerId":"fsharp-dev-main","streamId":"coordination","repositories":["FS-GG/.github"],"destination":{"kind":"remote","endpoint":"https://localhost:12345/","credentialReference":"main","spoolRoot":"/private/spool"}}],"retiredAssociations":[]}"""
+        )
+        File.SetUnixFileMode(config, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+        let previous = Console.Out
+        use output = new StringWriter()
+
+        try
+            Console.SetOut output
+            Assert.Equal(0, TelemetryRuntimeApplication.capabilityStatus [ "--config"; config; "--repository"; "FS-GG/.github" ])
+        finally
+            Console.SetOut previous
+
+        use status = JsonDocument.Parse(output.ToString())
+        let value = status.RootElement
+        Assert.Equal("configured-remote", value.GetProperty("workspaceAssociation").GetString())
+        Assert.Equal("unconfigured", value.GetProperty("store").GetString())
+        Assert.Equal("explicit-local-store-selection", value.GetProperty("storeMeaning").GetString())
+        Assert.Equal("not-assessed", value.GetProperty("hostActivation").GetString())
+        Assert.Equal("not-checked", value.GetProperty("receiverReachability").GetString())
 
     [<Fact>]
     let ``UTEL-06_2 packaged launcher machine observes inherited root child grandchild follow-up and retries`` () =

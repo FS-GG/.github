@@ -751,6 +751,20 @@ module TelemetryRuntimeApplication =
 
         let configured = root args |> Option.isSome
 
+        let workspaceAssociation =
+            let config = option "--config" args
+            let repository = option "--repository" args
+
+            match WorkspaceTelemetryApplication.resolveBinding config repository with
+            | Ok binding ->
+                match WorkspaceTelemetryApplication.tryLocalStoreRootBound binding with
+                | Ok(Some _) -> "configured-local"
+                | Ok None -> "configured-remote"
+                | Error _ -> "unavailable"
+            | Error [ "unconfigured" ] -> "unconfigured"
+            | Error [ "workspace-unassociated" ] -> "unassociated"
+            | Error _ -> "unavailable"
+
         Console.Out.WriteLine(
             JsonSerializer.Serialize
                 {|
@@ -758,9 +772,12 @@ module TelemetryRuntimeApplication =
                     codexVersion = version
                     codexExecAdapter = true
                     packagedWorkerLauncher = true
-                    hostActivation = "not-installed"
+                    hostActivation = "not-assessed"
                     collaborationSpawnAgent = "unsupported"
                     store = if configured then "configured" else "unconfigured"
+                    storeMeaning = "explicit-local-store-selection"
+                    workspaceAssociation = workspaceAssociation
+                    receiverReachability = "not-checked"
                 |}
         )
 
