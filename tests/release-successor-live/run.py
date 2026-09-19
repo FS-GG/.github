@@ -23,8 +23,10 @@ class FakeAPI:
     def get(self, path):
         if path.endswith("/git/ref/tags/coherent-set/v0.91.0") and self.tag:
             return {"object": {"sha": self.tag}}
-        if path.endswith("/releases/tags/coherent-set/v0.91.0") and self.release:
+        if path.endswith("/releases/tags/coherent-set/v0.91.0") and self.release and not self.release["draft"]:
             return self.release
+        if path.endswith("/releases?per_page=100&page=1"):
+            return [self.release] if self.release else []
         if path.endswith("/releases/1/assets?per_page=100"):
             return [{"id": index, "name": name} for index, name in enumerate(self.assets, 1)]
         raise NotFound(path)
