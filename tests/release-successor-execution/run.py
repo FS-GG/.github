@@ -16,6 +16,8 @@ assert spec and spec.loader
 engine = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = engine
 spec.loader.exec_module(engine)
+sys.path.insert(0, str(MODULE.parent))
+from release_successor_admission import SingleOperatorAdmission
 
 
 def manifest() -> dict:
@@ -105,10 +107,45 @@ class ExecutionTests(unittest.TestCase):
             self.assertEqual(self.provider.calls[-1], effect.identity)
             self.assertEqual(self.advance(), "verified")
         self.assertEqual(self.advance(), "complete")
-        self.assertEqual(len(self.provider.calls), 9)
-        self.assertEqual(len(self.journal.writes), 18)
+        self.assertEqual(len(self.provider.calls), 11)
+        self.assertEqual(len(self.journal.writes), 22)
         self.assertEqual([effect.identity for effect in effects], self.provider.calls)
-        self.assertEqual(len(self.admission.calls), 27)
+        self.assertEqual(len(self.admission.calls), 33)
+
+    def test_live_admission_rechecks_native_run_and_main_for_every_effect(self):
+        source = self.manifest["descriptor"]["sourceSha"]
+        class FakeGit:
+            def __init__(self):
+                self.calls = []
+                self.main = source
+                self.actor = "EHotwagner"
+
+            def get(self, path):
+                self.calls.append(path)
+                if path == "repos/FS-GG/.github":
+                    return {"id": 1269292704, "full_name": "FS-GG/.github"}
+                if path == "repos/FS-GG/.github/actions/runs/123":
+                    return {
+                        "repository": {"id": 1269292704},
+                        "path": ".github/workflows/release-successor-publish.yml",
+                        "event": "workflow_dispatch", "head_branch": "main", "head_sha": source,
+                        "run_attempt": 1, "actor": {"login": self.actor}, "status": "in_progress",
+                    }
+                if path == "repos/FS-GG/.github/git/ref/heads/main":
+                    return {"object": {"sha": self.main}}
+                raise AssertionError(path)
+
+        api = FakeGit()
+        admission = SingleOperatorAdmission(api, self.manifest, source, 123, "EHotwagner", "refs/heads/main")
+        effect = engine.ordered_effects(self.manifest)[0]
+        self.assertTrue(admission.authorize(self.manifest["contentId"], effect.identity, "intent", effect.request_digest))
+        self.assertEqual(len(api.calls), 3)
+        api.main = "d" * 40
+        self.assertFalse(admission.authorize(self.manifest["contentId"], effect.identity, "dispatch", effect.request_digest))
+        api.main = source
+        api.actor = "another-operator"
+        self.assertFalse(admission.authorize(self.manifest["contentId"], effect.identity, "settle", effect.request_digest))
+        self.assertFalse(admission.authorize(self.manifest["contentId"], effect.identity, "intent", "wrong-digest"))
 
     def test_denied_intent_or_dispatch_has_zero_provider_mutations(self):
         for action, expected_writes in (("intent", 0), ("dispatch", 1)):
@@ -205,7 +242,7 @@ class ExecutionTests(unittest.TestCase):
                 self.assertEqual(self.provider.calls, [])
 
     def test_promotion_retry_reads_back_without_duplicate_dispatch(self):
-        for _ in range(16):  # eight predecessors, each with dispatch and settlement
+        for _ in range(20):  # ten predecessors, each with dispatch and settlement
             self.advance()
         self.provider.indeterminate.add("promote")
         self.assertEqual(self.advance(), "waiting")
