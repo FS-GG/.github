@@ -97,7 +97,20 @@ def ordered_effects(manifest: dict) -> tuple[Effect, ...]:
                     artifact["sha256"],
                 )
             )
-    effects.append(Effect("promote", content_id, content_id))
+    # Asset uploads are separate remote effects. A draft can survive an
+    # interrupted upload without being mistaken for a promoted release.
+    for package in PACKAGES:
+        digest = packages[package]["artifact"]["sha256"]
+        effects.append(Effect(f"archive-asset:{package}", digest, digest))
+    effects.extend(
+        (
+            Effect("qualification-asset:evidence", content_id, content_id),
+            Effect("qualification-asset:runtime", content_id, content_id),
+            Effect("channel-asset", content_id, content_id),
+            Effect("manifest-asset", content_id, content_id),
+            Effect("promote", content_id, content_id),
+        )
+    )
     return tuple(effects)
 
 
