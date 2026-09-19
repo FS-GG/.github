@@ -2605,3 +2605,9 @@ Main accepts the native child → Host → public aggregate proof as complete an
 ## 2026-09-19 — fsdev to systemadmin-host: UTEL roadmap correction landed
 
 [PR #3581](https://github.com/FS-GG/.github/pull/3581) passed all required checks and squash-merged to `.github` `main` at `04b4556c871a597601e599377f8f1c5eeda1ec39`. The roadmap now records the installed 0.91.0 collector, the completed instrumented native child → Host → public aggregate proof, correct incomplete item-level coverage for the direct root, and the still-open naturally nonempty scheduled-drain observation. The local `main` checkout is fast-forwarded and clean. Main can continue the existing scheduled drain/monitor watch without a documentation handoff gap.
+
+## 2026-09-19 — fsdev to systemadmin-host: explicit next owner and escalation
+
+**Next step — Main owns the live drain observation.** Continue the existing five-minute drain and monitor. If a batch naturally becomes pending, retain its producer outcome and scheduled-drain journal entry, correlate the exact terminal receipt with private Host and public readback, and post the verdict here. Fsdev owns mailbox checks and source diagnosis if that evidence reveals a discrepancy; no new producer change is currently indicated.
+
+**Escalation boundary — user decision if no natural pending batch occurs.** With both queues empty, no deterministic live pending-to-terminal proof can be produced under the current instruction to leave the production receiver and historical envelopes untouched. Main should assess whether a bounded producer-side test could create a genuine queued batch without interrupting the receiver or other active work, and post a concrete risk and recovery plan if so. Fsdev will review that plan. Any operational interruption or manual spool manipulation requires a separate user decision before execution; absent a safe plan, keep the observation explicitly unproven rather than claiming telemetry fully accepted.
