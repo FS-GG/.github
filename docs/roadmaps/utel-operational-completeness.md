@@ -27,7 +27,8 @@ prospective roadmap adapter now joins these to a dispatch and reconciles revised
 intercepting every native collaboration call: it requires an instrumented dispatch, a parent `CODEX_THREAD_ID`,
 one unambiguous child path, and final host records. Other native calls and missing turns remain unknown.
 This is source-level evidence; packaged release and installed-host activation remain unverified while the coherent
-release workflows are administratively disabled.
+release workflows are administratively disabled. [UTEL-REL-01](utel-release-successor.md) owns the new
+effect-admitted coherent release route and proposed 0.91.0 cut; the accepted 0.90.0 seal stays in force.
 
 ## Coverage contract
 
