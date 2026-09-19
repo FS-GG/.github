@@ -70,7 +70,7 @@ jobs:
           }
           trap cleanup EXIT
           git worktree add --detach "$historical/source" "$bridge"
-          python3 "$historical/source/tests/bridge-release/run.py"
+          (cd "$historical/source" && python3 tests/bridge-release/run.py)
           git worktree remove --force "$historical/source"
           git worktree add --detach "$historical/source" "$receiver"
-          bash "$historical/source/tests/bridge-receivers/run.sh"
+          (cd "$historical/source" && bash tests/bridge-receivers/run.sh)
