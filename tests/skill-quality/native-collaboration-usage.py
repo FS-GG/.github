@@ -16,10 +16,10 @@ import native_collaboration_usage as native
 
 class NativeUsageTests(unittest.TestCase):
     def test_completed_child_deduplicates_responses_and_keeps_subsets_inside_total(self):
-        parent = "01a0b8b8-2d95-79d1-9be2-69585aa50cfa"
-        child = "01a0b8ba-7f55-7b21-b22f-e7cf4e501e8e"
-        turn = "01a0b8ba-7f70-7c00-89f9-fd1aa8b6effc"
-        turn2 = "01a0b8ba-7f70-7c00-89f9-fd1aa8b6effd"
+        parent = "11111111-1111-4111-8111-111111111111"
+        child = "22222222-2222-4222-8222-222222222222"
+        turn = "33333333-3333-4333-8333-333333333333"
+        turn2 = "44444444-4444-4444-8444-444444444444"
         one = {"input_tokens": 30, "cached_input_tokens": 20, "output_tokens": 7,
                "reasoning_output_tokens": 2, "total_tokens": 37}
         two = {"input_tokens": 10, "cached_input_tokens": 4, "output_tokens": 3,
