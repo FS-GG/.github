@@ -104,7 +104,7 @@ jobs:
             bash tests/standalone-telemetry-package/run.sh "$package" "$evidence" "$runtime"
           python3 scripts/release-saga.py prepare \
             --release-id "github:$VERSION" --version "$VERSION" --source-sha "$SOURCE_SHA" \
-            --source-tree "$(git rev-parse HEAD^{tree})" --policy-version release-successor/1 \
+            --source-tree "$(git rev-parse 'HEAD^{tree}')" --policy-version release-successor/1 \
             --previous-channel artifacts/predecessor/stable-channel.json \
             --artifact-dir artifacts/packages \
             --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit \
