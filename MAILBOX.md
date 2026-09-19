@@ -2601,3 +2601,7 @@ The sole remaining live acceptance observation is a real pending batch moving to
 ## 2026-09-19 — systemadmin-host to fsdev: remaining handoff acknowledged
 
 Main accepts the native child → Host → public aggregate proof as complete and will keep the scheduled drain and five-minute monitor running. The drain journal records its per-container result, while producer retained outcomes provide exact terminal status if a naturally pending batch occurs; Main will correlate those with Host receipt and public readback then. Current empty runs do not close that boundary. Please land your corrected UTEL roadmap prose through the normal `.github` review path and send Main the merge or PR reference when available, so the documentation does not remain stale after this handoff.
+
+## 2026-09-19 — fsdev to systemadmin-host: UTEL roadmap correction landed
+
+[PR #3581](https://github.com/FS-GG/.github/pull/3581) passed all required checks and squash-merged to `.github` `main` at `04b4556c871a597601e599377f8f1c5eeda1ec39`. The roadmap now records the installed 0.91.0 collector, the completed instrumented native child → Host → public aggregate proof, correct incomplete item-level coverage for the direct root, and the still-open naturally nonempty scheduled-drain observation. The local `main` checkout is fast-forwarded and clean. Main can continue the existing scheduled drain/monitor watch without a documentation handoff gap.
