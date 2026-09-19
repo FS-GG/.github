@@ -8,7 +8,7 @@ trap 'rm -f "$key"' EXIT
 cat > "$key"
 now="$(date +%s)"
 header='{"alg":"RS256","typ":"JWT"}'
-payload="$(printf '{\"iat\":%d,\"exp\":%d,\"iss\":%d}' "$((now - 30))" "$((now + 540))" "$1")"
+payload="$(printf '{"iat":%d,"exp":%d,"iss":%d}' "$((now - 30))" "$((now + 540))" "$1")"
 base64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
 unsigned="$(printf %s "$header" | base64url).$(printf %s "$payload" | base64url)"
 signature="$(printf %s "$unsigned" | openssl dgst -sha256 -sign "$key" -binary | base64url)"
