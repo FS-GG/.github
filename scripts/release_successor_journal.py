@@ -61,7 +61,10 @@ class Observed:
 
 
 class ProtectedReleaseJournal:
-    def __init__(self, api: GitAPI):
+    def __init__(self, api: GitAPI, ref: str = REF):
+        if not ref.startswith("refs/heads/fsgg/v2/journal/release/"):
+            raise Refused("journal ref is outside the protected release namespace")
+        self.ref = ref
         self.api = api
         repository = api.get(f"repos/{REPOSITORY}")
         if repository.get("id") != REPOSITORY_ID or repository.get("full_name") != REPOSITORY:
@@ -90,7 +93,7 @@ class ProtectedReleaseJournal:
         return value, parent
 
     def read(self) -> JournalState:
-        path = f"repos/{REPOSITORY}/git/ref/{REF.removeprefix('refs/')}"
+        path = f"repos/{REPOSITORY}/git/ref/{self.ref.removeprefix('refs/')}"
         first = self.api.get(path)
         head = first.get("object", {}).get("sha")
         if not isinstance(head, str) or len(head) != 40:
@@ -129,7 +132,7 @@ class ProtectedReleaseJournal:
         root = {"schema": SCHEMA, **intent, "generation": 1, "effects": {}}
         commit = self._create_commit(root, [])
         try:
-            self.api.post(f"repos/{REPOSITORY}/git/refs", {"ref": REF, "sha": commit})
+            self.api.post(f"repos/{REPOSITORY}/git/refs", {"ref": self.ref, "sha": commit})
         except Exception as error:
             raise Refused(f"journal creation was not confirmed; reconcile before retry: {error}") from error
         observed = self.read()
@@ -170,7 +173,7 @@ class ProtectedReleaseJournal:
         commit = self._create_commit(next_state, [observed.head])
         try:
             self.api.patch(
-                f"repos/{REPOSITORY}/git/refs/{REF.removeprefix('refs/')}",
+                f"repos/{REPOSITORY}/git/refs/{self.ref.removeprefix('refs/')}",
                 {"sha": commit, "force": False},
             )
         except Exception as error:

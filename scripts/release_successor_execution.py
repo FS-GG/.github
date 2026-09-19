@@ -134,9 +134,13 @@ def advance(manifest: dict, journal: Journal, admission: Admission, provider: Pr
     A live caller first verifies the manifest and archives through release-saga.py.
     The protected operation journal must already exist and bind the content id.
     """
-    effects = ordered_effects(manifest)
+    return advance_effects(manifest["contentId"], ordered_effects(manifest), journal, admission, provider)
+
+
+def advance_effects(content_id: str, effects: tuple[Effect, ...], journal: Journal, admission: Admission, provider: Provider) -> str:
+    """Apply the same admitted, readback-first policy to an exact ordered effect set."""
     current = journal.read()
-    if current.content_id != manifest["contentId"] or current.generation < 1:
+    if current.content_id != content_id or current.generation < 1:
         raise Refused("protected journal does not bind the release candidate")
     known = {effect.identity for effect in effects}
     if set(current.effects) - known or any(value not in {"intent", "verified"} for value in current.effects.values()):
@@ -161,19 +165,19 @@ def advance(manifest: dict, journal: Journal, admission: Admission, provider: Pr
             if observation.state == "absent":
                 # A 404 after a send is not proof of no effect on an eventually indexed feed.
                 return "waiting"
-            if not admission.authorize(manifest["contentId"], effect.identity, "settle", effect.request_digest):
+            if not admission.authorize(content_id, effect.identity, "settle", effect.request_digest):
                 raise Refused(f"{effect.identity}: settlement admission denied")
             if not journal.compare_and_swap(current, effect.identity, "verified"):
                 raise Refused(f"{effect.identity}: journal settlement CAS conflict")
             return "verified"
         if observation.state != "absent":
             raise Refused(f"{effect.identity}: preexisting effect outside the admitted operation")
-        if not admission.authorize(manifest["contentId"], effect.identity, "intent", effect.request_digest):
+        if not admission.authorize(content_id, effect.identity, "intent", effect.request_digest):
             raise Refused(f"{effect.identity}: intent admission denied")
         if not journal.compare_and_swap(current, effect.identity, "intent"):
             raise Refused(f"{effect.identity}: journal intent CAS conflict")
         # Re-read authority at the remote boundary; preparation-time admission is insufficient.
-        if not admission.authorize(manifest["contentId"], effect.identity, "dispatch", effect.request_digest):
+        if not admission.authorize(content_id, effect.identity, "dispatch", effect.request_digest):
             raise Refused(f"{effect.identity}: dispatch admission denied")
         outcome = provider.dispatch(effect)
         if outcome.state not in {"applied", "unknown", "refused"}:
