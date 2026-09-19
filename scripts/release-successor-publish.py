@@ -35,7 +35,7 @@ def main() -> int:
     mode.add_argument("--publish", action="store_true")
     args = parser.parse_args()
     try:
-        source = os.environ["GITHUB_SHA"]
+        publisher_sha = os.environ["GITHUB_SHA"]
         operator = os.environ["GITHUB_ACTOR"]
         run_id = int(os.environ["GITHUB_RUN_ID"])
         require(os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch", "publisher event differs")
@@ -53,6 +53,8 @@ def main() -> int:
         api = GitHubAPI(github_token)
         artifact = api.get(f"repos/{REPOSITORY}/actions/artifacts/{args.candidate_artifact_id}")
         run = api.get(f"repos/{REPOSITORY}/actions/runs/{args.candidate_run_id}")
+        candidate_source = run.get("head_sha")
+        require(isinstance(candidate_source, str) and len(candidate_source) == 40, "candidate source is malformed")
         require(artifact.get("digest") == "sha256:" + args.candidate_archive_sha256, "candidate artifact digest differs")
         artifact_json = args.workdir / "artifact.json"
         run_json = args.workdir / "run.json"
@@ -68,16 +70,16 @@ def main() -> int:
         verifier = pathlib.Path(__file__).with_name("release-successor-artifact.py")
         subprocess.run(
             [sys.executable, str(verifier), "--artifact-json", str(artifact_json), "--run-json", str(run_json),
-             "--archive", str(archive), "--source-sha", source, "--output", str(candidate)],
+             "--archive", str(archive), "--source-sha", candidate_source, "--output", str(candidate)],
             check=True,
         )
         manifest_path = candidate / "release-manifest.json"
         manifest = json.loads(manifest_path.read_text())
         require(manifest["descriptor"]["version"] == "0.91.0", "publisher version differs")
-        admission = SingleOperatorAdmission(api, manifest, source, run_id, operator, "refs/heads/main")
+        admission = SingleOperatorAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main")
         intent = {
             "contentId": manifest["contentId"],
-            "sourceSha": source,
+            "sourceSha": candidate_source,
             "version": "0.91.0",
             "candidateArchiveSha256": args.candidate_archive_sha256,
             "operator": operator,
@@ -87,6 +89,7 @@ def main() -> int:
         try:
             ledger_api.get(f"repos/{JOURNAL_REPOSITORY}/git/ref/{REF.removeprefix('refs/')}")
         except NotFound:
+            require(candidate_source == publisher_sha, "fresh publication requires candidate and publisher source to match")
             require(admission.authorize(manifest["contentId"], "journal", "intent", manifest["contentId"]),
                     "release journal initialization admission denied")
             for path in (
@@ -111,6 +114,9 @@ def main() -> int:
         else:
             journal.read()
             require(not args.preflight_only, "preflight requires an unused release journal and version")
+            if candidate_source != publisher_sha:
+                comparison = api.get(f"repos/{REPOSITORY}/compare/{candidate_source}...{publisher_sha}")
+                require(comparison.get("status") == "ahead", "recovery publisher does not descend from candidate source")
         journal.validate_intent(intent)
         provider = LiveProvider(api, manifest_path, github_token, nuget_key)
         deadline = time.monotonic() + 45 * 60

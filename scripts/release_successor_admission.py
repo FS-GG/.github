@@ -26,14 +26,14 @@ class GitAPI(Protocol):
 
 
 class SingleOperatorAdmission:
-    def __init__(self, api: GitAPI, manifest: dict, source_sha: str, run_id: int, actor: str, ref: str):
+    def __init__(self, api: GitAPI, manifest: dict, publisher_sha: str, run_id: int, actor: str, ref: str):
         self.api = api
-        self.source_sha = source_sha
+        self.publisher_sha = publisher_sha
         self.run_id = run_id
         self.content_id = manifest.get("contentId")
         self.requests: dict[str, str] = {effect.identity: effect.request_digest for effect in ordered_effects(manifest)}
         self.requests["journal"] = self.content_id
-        if actor != OPERATOR or ref != "refs/heads/main" or manifest["descriptor"].get("sourceSha") != source_sha:
+        if actor != OPERATOR or ref != "refs/heads/main" or not isinstance(manifest["descriptor"].get("sourceSha"), str):
             raise Refused("publisher caller, branch or source differs from the approved release intent")
 
     def authorize(self, content_id: str, effect: str, action: str, request_digest: str) -> bool:
@@ -52,11 +52,11 @@ class SingleOperatorAdmission:
             or run.get("path") != WORKFLOW
             or run.get("event") != "workflow_dispatch"
             or run.get("head_branch") != "main"
-            or run.get("head_sha") != self.source_sha
+            or run.get("head_sha") != self.publisher_sha
             or run.get("run_attempt") != 1
             or run.get("actor", {}).get("login") != OPERATOR
             or run.get("status") != "in_progress"
         ):
             return False
         head = self.api.get(f"repos/{REPOSITORY}/git/ref/heads/main")
-        return head.get("object", {}).get("sha") == self.source_sha
+        return head.get("object", {}).get("sha") == self.publisher_sha
