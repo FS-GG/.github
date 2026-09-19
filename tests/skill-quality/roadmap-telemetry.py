@@ -218,9 +218,9 @@ class RoadmapTelemetryTests(unittest.TestCase):
             def finish(token):
                 return MODULE.finish(config, MODULE.parser().parse_args([
                     "finish", "--token", token, "--outcome", "completed"]))
-            parent_thread = "01a0b8b8-2d95-79d1-9be2-69585aa50cfa"
-            native_thread = "01a0b8ba-7f55-7b21-b22f-e7cf4e501e8e"
-            turn = "01a0b8ba-7f70-7c00-89f9-fd1aa8b6effc"
+            parent_thread = "11111111-1111-4111-8111-111111111111"
+            native_thread = "22222222-2222-4222-8222-222222222222"
+            turn = "33333333-3333-4333-8333-333333333333"
             usage = {"input_tokens": 100, "cached_input_tokens": 60, "output_tokens": 20,
                      "reasoning_output_tokens": 5, "total_tokens": 120}
             def observation():
@@ -260,10 +260,10 @@ class RoadmapTelemetryTests(unittest.TestCase):
                 if "publish" in command:
                     facts.extend(json.loads(pathlib.Path(command[command.index("--input") + 1]).read_text())["events"])
                 return subprocess.CompletedProcess(command, 0, "{}", "")
-            parent_thread = "01a0b8b8-2d95-79d1-9be2-69585aa50cfa"
-            turns = ["01a0b8ba-7f70-7c00-89f9-fd1aa8b6effc", "01a0b8ba-7f70-7c00-89f9-fd1aa8b6effd"]
+            parent_thread = "11111111-1111-4111-8111-111111111111"
+            turns = ["33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"]
             def usage(*_):
-                return {"threadId": "01a0b8ba-7f55-7b21-b22f-e7cf4e501e8e", "allTurnIds": turns[:],
+                return {"threadId": "22222222-2222-4222-8222-222222222222", "allTurnIds": turns[:],
                         "model": "gpt-6-astra", "effort": "high", "complete": True,
                         "turns": [{"turnId": turn, "turnSequence": index + 1,
                                    "usage": {"input_tokens": 10, "cached_input_tokens": 5,
@@ -290,7 +290,7 @@ class RoadmapTelemetryTests(unittest.TestCase):
                 followup = begin("followup", "--parent-token", child, "--relation", "follow-up")
                 self.assertEqual(MODULE.read_state(config, followup)["baselineTurnIds"], turns)
                 start(followup, "worker")
-                turns.append("01a0b8ba-7f70-7c00-89f9-fd1aa8b6effd")
+                turns.append("44444444-4444-4444-8444-444444444444")
                 finish(followup)
             usage_facts = [fact for fact in facts if fact["kind"] == "runtime-turn-usage"]
             self.assertEqual([fact["turnId"] for fact in usage_facts], turns)
@@ -318,13 +318,13 @@ class RoadmapTelemetryTests(unittest.TestCase):
                     "--model", "gpt-6-astra", "--effort", "high", *extra]))["token"]
             def start(token, native):
                 MODULE.started(config, MODULE.parser().parse_args(["started", "--token", token, "--native-id", native]))
-            native = {"threadId": "01a0b8ba-7f55-7b21-b22f-e7cf4e501e8e", "complete": True,
+            native = {"threadId": "22222222-2222-4222-8222-222222222222", "complete": True,
                       "model": "gpt-6-astra", "effort": "high", "turns": [{
-                          "turnId": "01a0b8ba-7f70-7c00-89f9-fd1aa8b6effc", "turnSequence": 1,
+                          "turnId": "33333333-3333-4333-8333-333333333333", "turnSequence": 1,
                           "usage": {"input_tokens": 10, "cached_input_tokens": 5,
                                     "output_tokens": 2, "reasoning_output_tokens": 1,
                                     "total_tokens": 12}}]}
-            with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": "01a0b8b8-2d95-79d1-9be2-69585aa50cfa"}), \
+            with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": "11111111-1111-4111-8111-111111111111"}), \
                  mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
                  mock.patch.object(MODULE, "collect_native_usage", return_value=native):
                 root = begin("root")
