@@ -492,6 +492,7 @@ ledger_case() {
   draft="$(mktemp "$WORK/ledger-draft.XXXXXX")"
   (
     export FSGG_GITHUB_API_BASE="http://127.0.0.1:$port"
+    export FSGG_COORD_TEST_ALLOW_UNFENCED_LOOPBACK_MUTATIONS=1
     export GITHUB_TOKEN="fixture-token"
     export FSGG_COORD_OWNER="FS-GG"
 
@@ -736,7 +737,7 @@ PY
   # that nothing inverts is the same false green as an unwired fixture, so this deletes that copy in the
   # scratch tree and requires section 1's BLANK legs to stop refusing. They are re-run from the SAME
   # snapshot files section 1 built, so a flip cannot be explained by a different input.
-  WIRE_ANCHOR='        if String.IsNullOrWhiteSpace parsed then invalidArg name "must not be empty"'
+  WIRE_ANCHOR=$'        if String.IsNullOrWhiteSpace parsed then\n            invalidArg name "must not be empty"'
   cp "$MUT/src/FS.GG.Coord.Cli.Lifecycle/ReviewApplication.fs" "$WORK/ReviewApplication.fs.pristine"
   if ! ANCHOR="$WIRE_ANCHOR" python3 - "$MUT/src/FS.GG.Coord.Cli.Lifecycle/ReviewApplication.fs" <<'PY'
 import os, sys
