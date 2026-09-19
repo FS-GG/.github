@@ -219,6 +219,27 @@ class LiveProvider:
             except (Refused, subprocess.CalledProcessError):
                 return Observation("mismatched")
             return Observation("matched", effect.target_digest) if found else Observation("absent")
+        if identity.startswith("archive-asset:"):
+            package = identity.split(":", 1)[1]
+            if package not in PACKAGES:
+                raise Refused("unknown archive asset package")
+            raw = self._asset(f"{package}.{self.version}.nupkg")
+            if raw is None:
+                return Observation("absent")
+            digest = hashlib.sha256(raw).hexdigest()
+            return Observation("matched" if digest == effect.target_digest else "mismatched", digest)
+        if identity.startswith("qualification-asset:"):
+            name = {
+                "qualification-asset:evidence": "standalone-telemetry-evidence.json",
+                "qualification-asset:runtime": "standalone-telemetry-runtime-evidence.json",
+            }.get(identity)
+            if name is None:
+                raise Refused("unknown qualification asset")
+            raw = self._asset(name)
+            if raw is None:
+                return Observation("absent")
+            candidate = (self.root / name).read_bytes()
+            return Observation("matched" if raw == candidate else "mismatched", self.content_id if raw == candidate else None)
         if identity == "channel-asset":
             return Observation("matched", self.content_id) if self._channel() else Observation("absent")
         if identity == "manifest-asset":
@@ -279,6 +300,23 @@ class LiveProvider:
                      "--source", source, "--api-key", key],
                     check=True, capture_output=True, text=True,
                 )
+            elif identity.startswith(("archive-asset:", "qualification-asset:")):
+                if identity.startswith("archive-asset:"):
+                    package = identity.split(":", 1)[1]
+                    if package not in PACKAGES:
+                        raise Refused("unknown archive asset package")
+                    name = f"{package}.{self.version}.nupkg"
+                else:
+                    name = {
+                        "qualification-asset:evidence": "standalone-telemetry-evidence.json",
+                        "qualification-asset:runtime": "standalone-telemetry-runtime-evidence.json",
+                    }.get(identity)
+                    if name is None:
+                        raise Refused("unknown qualification asset")
+                release = self._release()
+                if release is None or not release.get("draft"):
+                    raise Refused("draft release is unavailable")
+                self.api.upload_asset(release["id"], name, self.root / name)
             elif identity == "channel-asset":
                 previous = json.loads((self.root / "previous-stable-channel.json").read_text())
                 if (

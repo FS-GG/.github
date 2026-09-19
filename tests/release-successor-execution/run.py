@@ -107,10 +107,10 @@ class ExecutionTests(unittest.TestCase):
             self.assertEqual(self.provider.calls[-1], effect.identity)
             self.assertEqual(self.advance(), "verified")
         self.assertEqual(self.advance(), "complete")
-        self.assertEqual(len(self.provider.calls), 11)
-        self.assertEqual(len(self.journal.writes), 22)
+        self.assertEqual(len(self.provider.calls), 16)
+        self.assertEqual(len(self.journal.writes), 32)
         self.assertEqual([effect.identity for effect in effects], self.provider.calls)
-        self.assertEqual(len(self.admission.calls), 33)
+        self.assertEqual(len(self.admission.calls), 48)
 
     def test_live_admission_rechecks_native_run_and_main_for_every_effect(self):
         source = self.manifest["descriptor"]["sourceSha"]
@@ -242,7 +242,7 @@ class ExecutionTests(unittest.TestCase):
                 self.assertEqual(self.provider.calls, [])
 
     def test_promotion_retry_reads_back_without_duplicate_dispatch(self):
-        for _ in range(20):  # ten predecessors, each with dispatch and settlement
+        for _ in range(30):  # fifteen predecessors, each with dispatch and settlement
             self.advance()
         self.provider.indeterminate.add("promote")
         self.assertEqual(self.advance(), "waiting")
