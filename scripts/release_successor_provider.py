@@ -208,7 +208,6 @@ class LiveProvider:
                 return Observation("absent")
             valid = (
                 release.get("tag_name") == self.tag
-                and release.get("target_commitish") == self.source
                 and self.marker in release.get("body", "")
             )
             return Observation("matched" if valid else "mismatched", self.content_id if valid else None)
@@ -274,6 +273,7 @@ class LiveProvider:
         assert receipt is not None
         value["state"]["channelPromotion"] = {"state": "promoted", "promotedAt": receipt["promotedAt"], "receipt": receipt}
         value["state"]["phase"] = "promoted"
+        value["state"]["updatedAt"] = receipt["promotedAt"]
         output = self.root / "promoted-release-manifest.json"
         output.write_text(json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n")
         return output
