@@ -122,7 +122,7 @@ class HostReleaseTests(unittest.TestCase):
             run = {"id": 123, "path": verifier.WORKFLOW, "head_sha": source,
                    "head_branch": "main", "event": "workflow_dispatch", "conclusion": "success",
                    "run_attempt": 1, "repository": {"id": verifier.REPOSITORY_ID}}
-            artifact = {"name": f"telemetry-host-successor-candidate-{source}-123",
+            artifact = {"id": 456, "name": f"telemetry-host-successor-candidate-{source}-123",
                         "expired": False, "digest": "sha256:" + digest,
                         "workflow_run": {"id": 123, "head_sha": source, "head_branch": "main",
                                          "repository_id": verifier.REPOSITORY_ID,

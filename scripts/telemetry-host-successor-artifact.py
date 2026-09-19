@@ -43,7 +43,9 @@ def verify(artifact: dict, run: dict, archive_path: pathlib.Path, output: pathli
     )
     binding = artifact.get("workflow_run") or {}
     require(
-        artifact.get("name") == f"telemetry-host-successor-candidate-{source_sha}-{run_id}"
+        isinstance(artifact.get("id"), int)
+        and artifact["id"] > 0
+        and artifact.get("name") == f"telemetry-host-successor-candidate-{source_sha}-{run_id}"
         and artifact.get("expired") is False
         and binding.get("id") == run_id
         and binding.get("head_sha") == source_sha

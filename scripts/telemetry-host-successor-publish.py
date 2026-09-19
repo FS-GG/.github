@@ -56,6 +56,8 @@ def main() -> int:
         api = GitHubAPI(github_token)
         artifact = api.get(f"repos/{REPOSITORY}/actions/artifacts/{args.candidate_artifact_id}")
         run = api.get(f"repos/{REPOSITORY}/actions/runs/{args.candidate_run_id}")
+        require(run.get("id") == args.candidate_run_id, "candidate run API identity differs")
+        require(artifact.get("id") == args.candidate_artifact_id, "candidate artifact API identity differs")
         candidate_source = run.get("head_sha")
         require(isinstance(candidate_source, str) and len(candidate_source) == 40, "candidate source malformed")
         require(artifact.get("digest") == "sha256:" + args.candidate_archive_sha256, "artifact digest differs")
