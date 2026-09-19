@@ -2366,6 +2366,148 @@ module TelemetryStoreApplicationTests =
         Assert.Equal(1L, Convert.ToInt64(count.ExecuteScalar()))
 
     [<Fact>]
+    let ``native collaboration delivery closes only after every expected child settles`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let item = "UTEL-native-completion"
+        let runtime = "collaboration-spawn-agent"
+
+        TelemetryStoreApplication.ingest
+            path
+            approved
+            (operationalBatch
+                "native-completion-open"
+                item
+                [
+                    activation item runtime 60L
+                    dispatch item "dispatch-root" "root" None runtime "00"
+                    lineage item "lineage-native-root" "dispatch-root" "invoke-root" "root" None "invoke-root" runtime
+                    runtimeTerminal item "terminal-native-root" "invoke-root" "completed" 0
+                    dispatch item "dispatch-child" "child" (Some "dispatch-root") runtime "01"
+                    lineage
+                        item
+                        "lineage-native-child"
+                        "dispatch-child"
+                        "invoke-child"
+                        "child"
+                        (Some "invoke-root")
+                        "invoke-root"
+                        runtime
+                    nativeOutcome item 1L "delivered" "delivered" "2026-09-08T10:04:01Z"
+                ])
+        |> unwrap
+        |> ignore
+
+        Assert.Contains("\"population\":\"open\"", TelemetryStoreApplication.budgetHealth path approved item |> unwrap)
+
+        TelemetryStoreApplication.ingest
+            path
+            approved
+            (operationalBatch
+                "native-completion-terminal"
+                item
+                [ runtimeTerminal item "terminal-native-child" "invoke-child" "completed" 0 ])
+        |> unwrap
+        |> ignore
+
+        Assert.Contains("\"population\":\"completed\"", TelemetryStoreApplication.budgetHealth path approved item |> unwrap)
+
+        TelemetryStoreApplication.ingest
+            path
+            approved
+            (operationalBatch
+                "native-completion-unsupported-followup"
+                item
+                [ dispatch item "dispatch-unknown" "follow-up" (Some "dispatch-root") "unknown-runtime" "05" ])
+        |> unwrap
+        |> ignore
+
+        Assert.Contains("\"population\":\"open\"", TelemetryStoreApplication.budgetHealth path approved item |> unwrap)
+
+    [<Fact>]
+    let ``native completion rule reprojects retained outcomes after an engine upgrade`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let item = "UTEL-native-upgrade"
+        let runtime = "collaboration-spawn-agent"
+
+        TelemetryStoreApplication.ingest
+            path
+            approved
+            (operationalBatch
+                "native-upgrade-facts"
+                item
+                [
+                    activation item runtime 60L
+                    dispatch item "dispatch-root" "root" None runtime "00"
+                    lineage item "lineage-upgrade" "dispatch-root" "invoke-root" "root" None "invoke-root" runtime
+                    runtimeTerminal item "terminal-upgrade" "invoke-root" "completed" 0
+                    nativeOutcome item 1L "delivered" "delivered" "2026-09-08T10:04:01Z"
+                ])
+        |> unwrap
+        |> ignore
+
+        use connection =
+            new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+
+        connection.Open()
+        use prior = connection.CreateCommand()
+        prior.CommandText <- "UPDATE budget_population_facts SET state='open' WHERE item_id=$item AND source_ref LIKE 'derived:%'; DELETE FROM store_metadata WHERE key='completedPopulationDerivation';"
+        prior.Parameters.AddWithValue("$item", item) |> ignore
+        prior.ExecuteNonQuery() |> ignore
+        connection.Close()
+
+        Assert.Contains("\"remaining\":0", TelemetryStoreApplication.drain path approved |> unwrap)
+        Assert.Contains("\"population\":\"completed\"", TelemetryStoreApplication.budgetHealth path approved item |> unwrap)
+
+    [<Fact>]
+    let ``mixed codex and native dispatches require matching runtime activations`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let item = "UTEL-mixed-runtime-completion"
+
+        let nativeActivation =
+            (activation item "collaboration-spawn-agent" 60L)
+                .Replace("activation-" + item, "activation-native-" + item)
+
+        let nativeChild =
+            (dispatch item "dispatch-child" "child" (Some "dispatch-root") "collaboration-spawn-agent" "01")
+                .Replace("\"activationId\":\"activation-" + item + "\"", "\"activationId\":\"activation-native-" + item + "\"")
+
+        TelemetryStoreApplication.ingest
+            path
+            approved
+            (operationalBatch
+                "mixed-runtime-completion"
+                item
+                [
+                    activation item "codex-exec" 60L
+                    nativeActivation
+                    dispatch item "dispatch-root" "root" None "codex-exec" "00"
+                    lineage item "lineage-mixed-root" "dispatch-root" "invoke-root" "root" None "invoke-root" "codex-exec"
+                    runtimeTerminal item "terminal-mixed-root" "invoke-root" "completed" 0
+                    nativeChild
+                    lineage
+                        item
+                        "lineage-mixed-child"
+                        "dispatch-child"
+                        "invoke-child"
+                        "child"
+                        (Some "invoke-root")
+                        "invoke-root"
+                        "collaboration-spawn-agent"
+                    runtimeTerminal item "terminal-mixed-child" "invoke-child" "completed" 0
+                    nativeOutcome item 1L "delivered" "delivered" "2026-09-08T10:04:01Z"
+                ])
+        |> unwrap
+        |> ignore
+
+        Assert.Contains("\"population\":\"completed\"", TelemetryStoreApplication.budgetHealth path approved item |> unwrap)
+
+    [<Fact>]
     let ``UTEL-06D refused delivered-without-runtime and observed no-op use distinct closure rules`` () =
         let cleanup, path = root ()
         use cleanup = cleanup
