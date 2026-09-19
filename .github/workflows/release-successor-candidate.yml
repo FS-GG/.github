@@ -49,6 +49,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.identity.outputs.version }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/predecessor artifacts/packages
@@ -61,7 +62,7 @@ jobs:
             > artifacts/predecessor/identity.json
           test "$(jq -r .version artifacts/predecessor/identity.json)" = 0.90.0
           python3 scripts/check-release-candidate-uniqueness.py \
-            --version '${{ steps.identity.outputs.version }}' --predecessor 0.90.0
+            --version "$VERSION" --predecessor 0.90.0
           release_status="$(curl --silent --show-error --location -o /dev/null -w '%{http_code}' \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H 'Accept: application/vnd.github+json' \
@@ -120,11 +121,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ github.sha }}
+          VERSION: ${{ steps.identity.outputs.version }}
         run: |
           set -euo pipefail
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
           python3 scripts/check-release-candidate-uniqueness.py \
-            --version '${{ steps.identity.outputs.version }}' --predecessor 0.90.0
+            --version "$VERSION" --predecessor 0.90.0
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
         with:
           name: release-successor-candidate-${{ github.sha }}-${{ github.run_id }}
