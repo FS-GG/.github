@@ -9,7 +9,7 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/release-saga.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/artifacts" "$WORK/github" "$WORK/nuget"
 
-# make_package TARGET ID VERSION [CORE_PROPERTIES_GUID] [BODY] [MANIFEST_RELATIONSHIP_ID]
+# make_package TARGET ID VERSION [CORE_PROPERTIES_GUID] [BODY] [MANIFEST_RELATIONSHIP_ID] [SOURCE_COMMIT]
 #
 # The OPC shape is copied from real `dotnet pack` output, because two of its parts are the whole
 # subject of .github#2664. Measured on `src/FS.GG.Kit/FS.GG.Kit.csproj` at 2cd9518e, two consecutive
@@ -20,11 +20,13 @@ mkdir -p "$WORK/artifacts" "$WORK/github" "$WORK/nuget"
 # need: GUID reproduces an honest re-pack, BODY a genuine content divergence, and
 # MANIFEST_RELATIONSHIP_ID a change inside `_rels/.rels` that the normalization must NOT absorb.
 make_package() {
-  python3 - "$1" "$2" "$3" "${4:-9c6d21a2a7774fb2bbc48858e7e6d136}" "${5:-fixture}" "${6:-R411317ADCBB7CC3C}" <<'PY'
+  python3 - "$1" "$2" "$3" "${4:-9c6d21a2a7774fb2bbc48858e7e6d136}" "${5:-fixture}" "${6:-R411317ADCBB7CC3C}" "${7:-}" <<'PY'
 import pathlib, sys, zipfile
 target, package_id, version = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 guid, body, manifest_relationship_id = sys.argv[4], sys.argv[5], sys.argv[6]
-nuspec = f'''<?xml version="1.0"?><package><metadata><id>{package_id}</id><version>{version}</version><authors>FS-GG</authors><description>fixture</description><releaseNotes>{version} release</releaseNotes><dependencies><group targetFramework="net10.0"><dependency id="FSharp.Core" version="[10.0.100, )" /></group></dependencies></metadata></package>'''
+source_commit = sys.argv[7]
+repository = f'<repository type="git" commit="{source_commit}" />' if source_commit else ''
+nuspec = f'''<?xml version="1.0"?><package><metadata><id>{package_id}</id><version>{version}</version><authors>FS-GG</authors><description>fixture</description><releaseNotes>{version} release</releaseNotes>{repository}<dependencies><group targetFramework="net10.0"><dependency id="FSharp.Core" version="[10.0.100, )" /></group></dependencies></metadata></package>'''
 core_properties = f'''<?xml version="1.0" encoding="utf-8"?>
 <coreProperties xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns="http://schemas.openxmlformats.org/package/2006/metadata/core-properties">
   <dc:identifier>{package_id}</dc:identifier>
@@ -109,6 +111,55 @@ python3 "$TOOL" prepare \
   --dashboard-assets "$WORK/dashboard-assets" --standalone-qualification "$WORK/standalone-qualification.json" \
   --output "$WORK/telemetry-manifest.json"
 jq -e '.descriptor.standaloneTelemetry.dashboardAssets[0].path == "index.html" and .descriptor.standaloneTelemetry.qualificationPath == "standalone-qualification.json" and (.descriptor.standaloneTelemetry.dashboardAssetsSha256 | test("^[0-9a-f]{64}$")) and (.descriptor.standaloneTelemetry.qualificationSha256 | test("^[0-9a-f]{64}$"))' "$WORK/telemetry-manifest.json" >/dev/null
+python3 "$TOOL" assert-artifacts --manifest "$WORK/telemetry-manifest.json"
+cp "$WORK/standalone-qualification.json" "$WORK/standalone-qualification.saved.json"
+jq '.qualified = false' "$WORK/standalone-qualification.saved.json" > "$WORK/standalone-qualification.json"
+if python3 "$TOOL" assert-artifacts --manifest "$WORK/telemetry-manifest.json" >/dev/null 2>&1; then
+  echo "expected changed standalone qualification to fail archive assertion" >&2; exit 1
+fi
+mv "$WORK/standalone-qualification.saved.json" "$WORK/standalone-qualification.json"
+mv "$WORK/standalone-qualification.json" "$WORK/standalone-qualification.missing.json"
+if python3 "$TOOL" assert-artifacts --manifest "$WORK/telemetry-manifest.json" >/dev/null 2>&1; then
+  echo "expected missing standalone qualification to fail archive assertion" >&2; exit 1
+fi
+mv "$WORK/standalone-qualification.missing.json" "$WORK/standalone-qualification.json"
+
+mkdir -p "$WORK/successor"
+for package in FS.GG.Coord.Cli FS.GG.Kit FS.GG.Drivers; do
+  make_package "$WORK/successor/$package.9.8.7.nupkg" "$package" 9.8.7 \
+    9c6d21a2a7774fb2bbc48858e7e6d136 fixture R411317ADCBB7CC3C \
+    0123456789012345678901234567890123456789
+done
+successor_coord_sha="$(sha256sum "$WORK/successor/FS.GG.Coord.Cli.9.8.7.nupkg" | cut -d' ' -f1)"
+jq --arg package "$successor_coord_sha" '.binding.packageSha256 = $package' \
+  "$WORK/standalone-qualification.json" > "$WORK/successor/standalone-qualification.json"
+python3 "$TOOL" prepare --release-id github:9.8.7 --version 9.8.7 \
+  --source-sha 0123456789012345678901234567890123456789 \
+  --source-tree aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  --policy-version release-successor/1 --previous-channel "$WORK/previous-stable.json" \
+  --artifact-dir "$WORK/successor" \
+  --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit --expected-package FS.GG.Drivers \
+  --dashboard-assets "$WORK/dashboard-assets" \
+  --standalone-qualification "$WORK/successor/standalone-qualification.json" \
+  --output "$WORK/successor/release-manifest.json" >/dev/null
+python3 "$TOOL" assert-artifacts --manifest "$WORK/successor/release-manifest.json"
+make_package "$WORK/successor/FS.GG.Kit.9.8.7.nupkg" FS.GG.Kit 9.8.7 \
+  9c6d21a2a7774fb2bbc48858e7e6d136 fixture R411317ADCBB7CC3C \
+  ffffffffffffffffffffffffffffffffffffffff
+if python3 "$TOOL" prepare --release-id github:9.8.7 --version 9.8.7 \
+  --source-sha 0123456789012345678901234567890123456789 \
+  --source-tree aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  --policy-version release-successor/1 --previous-channel "$WORK/previous-stable.json" \
+  --artifact-dir "$WORK/successor" \
+  --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit --expected-package FS.GG.Drivers \
+  --dashboard-assets "$WORK/dashboard-assets" \
+  --standalone-qualification "$WORK/successor/standalone-qualification.json" \
+  --output "$WORK/successor/unbound-manifest.json" >/dev/null 2>&1; then
+  echo "expected wrong-source successor package to fail preparation" >&2; exit 1
+fi
+if python3 "$TOOL" assert-artifacts --manifest "$WORK/successor/release-manifest.json" >/dev/null 2>&1; then
+  echo "expected changed successor package to fail manifest assertion" >&2; exit 1
+fi
 if jq '.binding.sourceSha = "ffffffffffffffffffffffffffffffffffffffff"' "$WORK/standalone-qualification.json" > "$WORK/unbound-qualification.json" \
   && python3 "$TOOL" prepare --release-id unbound-telemetry --version 9.8.7 \
     --source-sha 0123456789012345678901234567890123456789 --policy-version release-saga/1 \

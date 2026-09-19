@@ -1,0 +1,135 @@
+name: release-successor-candidate
+
+# UTEL-REL-01 source/byte qualification only. This route has no tag, release,
+# journal, package-feed, OIDC or promotion write. Its retained Actions artifact
+# is an unpromoted candidate, not a published release or an admission receipt.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: release-successor-candidate
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/setup-policy-python
+      - name: Refuse malformed candidate gate behavior before costly qualification
+        run: python3 tests/release-successor-candidate/run.py
+      - name: Bind the current main source and stable version
+        id: identity
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = FS-GG/.github
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
+          version="$(dotnet msbuild src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -getProperty:Version | tr -d '[:space:]')"
+          test "$version" = 0.91.0
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Verify the stable predecessor and unused package version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/predecessor artifacts/packages
+          gh release download coherent-set/v0.90.0 --repo "$GITHUB_REPOSITORY" \
+            --pattern stable-channel.json --dir artifacts/predecessor
+          python3 scripts/release-saga.py predecessor \
+            --channel artifacts/predecessor/stable-channel.json \
+            --release-tag coherent-set/v0.90.0 \
+            --tag-source 3adada5a9738464291088830c47a30a3a8fc9561 \
+            > artifacts/predecessor/identity.json
+          test "$(jq -r .version artifacts/predecessor/identity.json)" = 0.90.0
+          python3 scripts/check-release-candidate-uniqueness.py \
+            --version "$VERSION" --predecessor 0.90.0
+          release_status="$(curl --silent --show-error --location -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/coherent-set/v0.91.0")"
+          test "$release_status" = 404
+          test -z "$(git ls-remote --tags origin \
+            'refs/tags/coherent-set/v0.91.0' 'refs/tags/kit/v0.91.0' \
+            'refs/tags/drivers/v0.91.0' 'refs/tags/coord-engine/v0.91.0')"
+      - name: Test the telemetry producer and prepare the browser fixture
+        run: |
+          set -euo pipefail
+          dotnet restore tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj --locked-mode
+          dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --no-restore
+          dotnet test tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj -c Release --no-restore
+          (cd tests/FS.GG.Telemetry.LocalDashboard.Tests && npm ci --ignore-scripts && npx playwright install --with-deps chromium)
+      - name: Pack the three exact source-bound archives once
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          dotnet pack src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release --no-restore \
+            -p:RepositoryCommit="$SOURCE_SHA" -o artifacts/packages
+          dotnet pack src/FS.GG.Kit/FS.GG.Kit.csproj -c Release \
+            -p:RepositoryCommit="$SOURCE_SHA" -o artifacts/packages
+          dotnet pack src/FS.GG.Drivers/FS.GG.Drivers.csproj -c Release \
+            -p:RepositoryCommit="$SOURCE_SHA" -o artifacts/packages
+          test "$(find artifacts/packages -maxdepth 1 -name '*.nupkg' | wc -l)" -eq 3
+      - name: Qualify the retained CLI bytes and bind the manifest
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          set -euo pipefail
+          package="$PWD/artifacts/packages/FS.GG.Coord.Cli.$VERSION.nupkg"
+          evidence="$PWD/artifacts/packages/standalone-telemetry-evidence.json"
+          runtime="$PWD/artifacts/packages/standalone-telemetry-runtime-evidence.json"
+          FSGG_PACKAGE_SOURCE_SHA="$SOURCE_SHA" \
+            bash tests/standalone-telemetry-package/run.sh "$package" "$evidence" "$runtime"
+          python3 scripts/release-saga.py prepare \
+            --release-id "github:$VERSION" --version "$VERSION" --source-sha "$SOURCE_SHA" \
+            --source-tree "$(git rev-parse 'HEAD^{tree}')" --policy-version release-successor/1 \
+            --previous-channel artifacts/predecessor/stable-channel.json \
+            --artifact-dir artifacts/packages \
+            --expected-package FS.GG.Coord.Cli --expected-package FS.GG.Kit \
+            --expected-package FS.GG.Drivers \
+            --dashboard-assets src/FS.GG.Telemetry.Dashboard/Assets \
+            --standalone-qualification "$runtime" \
+            --output artifacts/packages/release-manifest.json
+          python3 scripts/release-saga.py preflight \
+            --manifest artifacts/packages/release-manifest.json --feed both
+          python3 scripts/release-saga.py assert-artifacts \
+            --manifest artifacts/packages/release-manifest.json
+          cp artifacts/predecessor/stable-channel.json artifacts/packages/previous-stable-channel.json
+      - name: Refuse a changed main or newly occupied version before retention
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+          VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
+          python3 scripts/check-release-candidate-uniqueness.py \
+            --version "$VERSION" --predecessor 0.90.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: release-successor-candidate-${{ github.sha }}-${{ github.run_id }}
+          path: artifacts/packages/
+          if-no-files-found: error
+          retention-days: 90

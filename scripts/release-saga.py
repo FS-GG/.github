@@ -120,6 +120,19 @@ def nuspec(path: pathlib.Path) -> tuple[str, str, str, list[dict[str, str]]]:
     return scalar.get("id", ""), scalar.get("version", ""), scalar.get("releaseNotes", ""), dependencies
 
 
+def nuspec_source_commit(path: pathlib.Path) -> str | None:
+    with zipfile.ZipFile(path) as archive:
+        names = [name for name in archive.namelist() if name.lower().endswith(".nuspec")]
+        if len(names) != 1:
+            raise ValueError(f"{path}: expected exactly one nuspec")
+        root = ET.fromstring(archive.read(names[0]))
+    metadata = next((node for node in root.iter() if node.tag.rsplit("}", 1)[-1] == "metadata"), None)
+    if metadata is None:
+        raise ValueError(f"{path}: nuspec has no metadata")
+    repositories = [node for node in metadata if node.tag.rsplit("}", 1)[-1] == "repository"]
+    return repositories[0].get("commit") if len(repositories) == 1 else None
+
+
 def is_core_properties(name: str) -> bool:
     return name.lower().endswith(".psmdcp")
 
@@ -225,6 +238,17 @@ def assert_bound(manifest_path: pathlib.Path, data: dict, selected: set[str] | N
     expected_content = "sha256:" + hashlib.sha256(canonical(descriptor)).hexdigest()
     if data.get("contentId") != expected_content:
         raise ValueError("manifest descriptor drift: contentId does not match immutable descriptor")
+    if descriptor.get("policyVersion") == "release-successor/1":
+        if (
+            not SOURCE_SHA.fullmatch(descriptor.get("sourceSha", ""))
+            or not STABLE_VERSION.fullmatch(descriptor.get("version", ""))
+            or descriptor.get("releaseId") != f"github:{descriptor['version']}"
+            or {row["id"] for row in descriptor["packages"]} != BRIDGE_PACKAGES
+            or len(descriptor["packages"]) != len(BRIDGE_PACKAGES)
+            or descriptor.get("standaloneTelemetry") is None
+            or descriptor.get("bridgeQualification") is not None
+        ):
+            raise ValueError("release-successor/1 manifest lacks its exact source/package qualification")
     bridge = descriptor.get("bridgeQualification")
     if bridge is not None:
         qualification = manifest_path.parent / bridge.get("qualificationPath", "")
@@ -242,6 +266,23 @@ def assert_bound(manifest_path: pathlib.Path, data: dict, selected: set[str] | N
         observed = sha256(path)
         if observed != package["artifact"]["sha256"]:
             raise ValueError(f"byte drift for {package['id']}: expected {package['artifact']['sha256']}, got {observed}")
+        if descriptor.get("policyVersion") == "release-successor/1" and nuspec_source_commit(path) != descriptor["sourceSha"]:
+            raise ValueError(f"{path}: package repository commit does not match manifest source")
+    standalone = descriptor.get("standaloneTelemetry")
+    if standalone is not None:
+        qualification = manifest_path.parent / standalone.get("qualificationPath", "")
+        if (
+            not qualification.is_file()
+            or qualification.is_symlink()
+            or sha256(qualification) != standalone.get("qualificationSha256")
+        ):
+            raise ValueError("manifest-bound standalone qualification is missing or digest-mismatched")
+        coord = package_map(data).get("FS.GG.Coord.Cli")
+        if coord is None:
+            raise ValueError("standalone qualification has no CLI package binding")
+        validate_standalone_qualification(
+            qualification, descriptor["sourceSha"], coord["artifact"]["sha256"]
+        )
 
 
 def package_map(data: dict) -> dict[str, dict]:
@@ -395,6 +436,20 @@ def command_prepare(args: argparse.Namespace) -> None:
     root = pathlib.Path(args.artifact_dir).resolve()
     predecessor = stable_channel_identity(pathlib.Path(args.previous_channel).resolve())
     expected = set(args.expected_package)
+    if args.policy_version == "release-successor/1":
+        if (
+            expected != BRIDGE_PACKAGES
+            or len(args.expected_package) != len(BRIDGE_PACKAGES)
+            or not SOURCE_SHA.fullmatch(args.source_sha)
+            or not SOURCE_SHA.fullmatch(args.source_tree or "")
+            or not STABLE_VERSION.fullmatch(args.version)
+            or args.release_id != f"github:{args.version}"
+            or not args.dashboard_assets
+            or not args.standalone_qualification
+            or args.bridge_binding
+            or args.bridge_qualification
+        ):
+            raise ValueError("release-successor/1 requires the exact source-bound three-package telemetry candidate")
     rows = []
     for path in sorted(root.glob("*.nupkg")):
         package_id, version, release_notes, dependencies = nuspec(path)
@@ -402,6 +457,8 @@ def command_prepare(args: argparse.Namespace) -> None:
             continue
         if version != args.version:
             raise ValueError(f"{path}: package version {version} != release version {args.version}")
+        if args.policy_version == "release-successor/1" and nuspec_source_commit(path) != args.source_sha:
+            raise ValueError(f"{path}: package repository commit does not match release source")
         rows.append({
             "id": package_id,
             "version": version,
