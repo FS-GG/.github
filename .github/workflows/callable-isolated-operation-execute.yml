@@ -159,6 +159,10 @@ jobs:
           AUTHORITY_OBSERVER_TOKEN: ${{ steps.authority.outputs.token }}
           CHECKPOINT_ARTIFACT_ID: ${{ inputs.checkpoint_artifact_id }}
           CLEANUP_TOKEN: ${{ steps.cleanup-creation.outputs.token || steps.cleanup-operation.outputs.token }}
+          CREATION_RECEIPT_ARTIFACT_ID: ${{ inputs.creation_receipt_artifact_id }}
+          CREATION_RECEIPT_ARTIFACT_SHA256: ${{ inputs.creation_receipt_artifact_sha256 }}
+          CREATION_RECEIPT_RUN_ATTEMPT: ${{ inputs.creation_receipt_run_attempt }}
+          CREATION_RECEIPT_RUN_ID: ${{ inputs.creation_receipt_run_id }}
           CREATION_TOKEN: ${{ steps.creation.outputs.token }}
           EXECUTION_TOKEN: ${{ steps.execution-creation.outputs.token || steps.execution-operation.outputs.token }}
           GH_TOKEN: ${{ steps.authority.outputs.token }}
@@ -223,28 +227,28 @@ jobs:
             python3 tools/callable-isolated-operation-artifact.py extract --archive "$RUNNER_TEMP/checkpoint.zip" --member callable-isolated-operation-checkpoint.json --output "$RUNNER_TEMP/checkpoint.json"
           fi
           if [ '${{ inputs.phase }}' = identity-bound-operation ]; then
-            receipt_artifact="$(gh api 'repos/FS-GG/.github/actions/artifacts/${{ inputs.creation_receipt_artifact_id }}')"
-            receipt_run="$(gh api 'repos/FS-GG/.github/actions/runs/${{ inputs.creation_receipt_run_id }}')"
-            receipt_name='callable-isolated-operation-creation-receipt-${{ inputs.creation_receipt_run_id }}-${{ inputs.creation_receipt_run_attempt }}'
+            receipt_artifact="$(gh api "repos/FS-GG/.github/actions/artifacts/$CREATION_RECEIPT_ARTIFACT_ID")"
+            receipt_run="$(gh api "repos/FS-GG/.github/actions/runs/$CREATION_RECEIPT_RUN_ID")"
+            receipt_name="callable-isolated-operation-creation-receipt-$CREATION_RECEIPT_RUN_ID-$CREATION_RECEIPT_RUN_ATTEMPT"
             receipt_member=callable-isolated-operation-creation-receipt.json
             receipt_revision="$GITHUB_SHA"
-            if [ '${{ inputs.creation_receipt_run_id }}:${{ inputs.creation_receipt_run_attempt }}:${{ inputs.creation_receipt_artifact_id }}:${{ inputs.creation_receipt_artifact_sha256 }}' = \
+            if [ "$CREATION_RECEIPT_RUN_ID:$CREATION_RECEIPT_RUN_ATTEMPT:$CREATION_RECEIPT_ARTIFACT_ID:$CREATION_RECEIPT_ARTIFACT_SHA256" = \
               '35410522020:1:10573846475:f9702e73fa619e63b4c0e6ee8c5efebfbefe744a6e1397cb6a88640e022fd762' ]; then
               receipt_name=callable-isolated-operation-checkpoint-creation-35410522020-1
               receipt_member=callable-isolated-operation-checkpoint.json
               receipt_revision=5abd2daeaf6edadc218673fd041eeae5ec3424c8
             fi
-            test "$(jq -r .id <<<"$receipt_artifact")" = '${{ inputs.creation_receipt_artifact_id }}'
+            test "$(jq -r .id <<<"$receipt_artifact")" = "$CREATION_RECEIPT_ARTIFACT_ID"
             test "$(jq -r .name <<<"$receipt_artifact")" = "$receipt_name"
-            test "$(jq -r .workflow_run.id <<<"$receipt_artifact")" = '${{ inputs.creation_receipt_run_id }}'
-            test "$(jq -r .digest <<<"$receipt_artifact")" = 'sha256:${{ inputs.creation_receipt_artifact_sha256 }}'
+            test "$(jq -r .workflow_run.id <<<"$receipt_artifact")" = "$CREATION_RECEIPT_RUN_ID"
+            test "$(jq -r .digest <<<"$receipt_artifact")" = "sha256:$CREATION_RECEIPT_ARTIFACT_SHA256"
             test "$(jq -r .expired <<<"$receipt_artifact")" = false
-            test "$(jq -r .run_attempt <<<"$receipt_run")" = '${{ inputs.creation_receipt_run_attempt }}'
+            test "$(jq -r .run_attempt <<<"$receipt_run")" = "$CREATION_RECEIPT_RUN_ATTEMPT"
             test "$(jq -r .conclusion <<<"$receipt_run")" = success
             test "$(jq -r .path <<<"$receipt_run")" = .github/workflows/callable-isolated-operation-execute.yml
             test "$(jq -r .head_sha <<<"$receipt_run")" = "$receipt_revision"
-            gh api 'repos/FS-GG/.github/actions/artifacts/${{ inputs.creation_receipt_artifact_id }}/zip' > "$RUNNER_TEMP/creation-receipt.zip"
-            test "$(sha256sum "$RUNNER_TEMP/creation-receipt.zip" | cut -d ' ' -f 1)" = '${{ inputs.creation_receipt_artifact_sha256 }}'
+            gh api "repos/FS-GG/.github/actions/artifacts/$CREATION_RECEIPT_ARTIFACT_ID/zip" > "$RUNNER_TEMP/creation-receipt.zip"
+            test "$(sha256sum "$RUNNER_TEMP/creation-receipt.zip" | cut -d ' ' -f 1)" = "$CREATION_RECEIPT_ARTIFACT_SHA256"
             python3 tools/callable-isolated-operation-artifact.py extract --archive "$RUNNER_TEMP/creation-receipt.zip" --member "$receipt_member" --output "$RUNNER_TEMP/creation-receipt.json"
             test "$(jq -r .receiptSha256 "$RUNNER_TEMP/creation-receipt.json")" = "$(jq -r .creationReceiptSha256 "$RUNNER_TEMP/plan.json")"
           fi
