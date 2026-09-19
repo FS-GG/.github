@@ -4,8 +4,12 @@ on:
   pull_request:
     paths:
       - "scripts/release-saga.py"
+      - "scripts/release_successor_execution.py"
+      - "scripts/release-successor-artifact.py"
       - "scripts/release-saga-ci.sh"
       - "tests/release-saga/**"
+      - "tests/release-successor-execution/**"
+      - "tests/release-successor-artifact/**"
       - "tests/bridge-release/**"
       - "tests/bridge-package/**"
       - "tests/bridge-receivers/**"
@@ -23,8 +27,12 @@ on:
     branches: [main]
     paths:
       - "scripts/release-saga.py"
+      - "scripts/release_successor_execution.py"
+      - "scripts/release-successor-artifact.py"
       - "scripts/release-saga-ci.sh"
       - "tests/release-saga/**"
+      - "tests/release-successor-execution/**"
+      - "tests/release-successor-artifact/**"
       - "tests/bridge-release/**"
       - "tests/bridge-package/**"
       - "tests/bridge-receivers/**"
@@ -56,6 +64,10 @@ jobs:
           global-json-file: global.json
       - name: Exercise forced mid-publish recovery
         run: bash tests/release-saga/run.sh
+      - name: Prove successor admission and fake-provider recovery
+        run: python3 tests/release-successor-execution/run.py
+      - name: Prove retained candidate identity and extraction
+        run: python3 tests/release-successor-artifact/run.py
       - name: Exercise immutable GS2-08.7 bridge and GS2-08.8 receiver
         run: |
           set -euo pipefail
