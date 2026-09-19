@@ -14,9 +14,9 @@ import sys
 
 SCHEMA = "fsgg.coordination.callable-isolated-operation-grant/1"
 OPERATION_IDENTITY = "v2-call-01-4b-isolated-native-v1"
-CONTRACT_SHA256 = "b0c311aca5481ee21652d428f40c33330d3a03a07636f763b306775387b7d069"
-SOURCE_SHA256 = "b1ccf5bb1a68d577ccab833f3752484c9fb74239d2bfd2e5d592791c85a3c070"
-COORDINATION_REVISION = "bb6c3ea87b58e3d9519dc4ec68e12f170a76053e"
+CONTRACT_SHA256 = "ccd57e74293b2fb1443614fea6add54525f9f11c8d1126908180479ab5bc18a6"
+SOURCE_SHA256 = "2dca8907815c720086c761eff9283aaf682d5786b1c97668351679d452f5591d"
+COORDINATION_REVISION = "a1051b6f4a198970f4faed6608e6b414659881c6"
 AUTHORITY_REPOSITORY = "FS-GG/.github"
 WORKFLOW_PATH = ".github/workflows/callable-isolated-operation-authorize.yml"
 ENVIRONMENT = "callable-isolated-operation"
@@ -33,7 +33,8 @@ ROLE_PERMISSIONS = {
     "creation": {"administration": "write", "metadata": "read"},
     "setup": {"actions": "write", "administration": "write", "checks": "read", "contents": "write",
               "metadata": "read", "pull_requests": "write", "workflows": "write"},
-    "execution": {"checks": "read", "contents": "write", "metadata": "read", "pull_requests": "write"},
+    "execution": {"administration": "read", "checks": "read", "contents": "write", "metadata": "read",
+                  "pull_requests": "write"},
     "cleanup": {"administration": "write", "metadata": "read"},
 }
 

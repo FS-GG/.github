@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: FS-GG/FS.GG.Coordination
-          ref: bb6c3ea87b58e3d9519dc4ec68e12f170a76053e
+          ref: a1051b6f4a198970f4faed6608e6b414659881c6
           fetch-depth: 1
           persist-credentials: false
           path: coordination
@@ -109,6 +109,7 @@ jobs:
           client-id: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_CLIENT_ID }}
           private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
           owner: FS-GG
+          permission-administration: read
           permission-checks: read
           permission-contents: write
           permission-pull-requests: write
@@ -121,6 +122,7 @@ jobs:
           private-key: ${{ secrets.CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY }}
           owner: FS-GG
           repositories: FS.GG.Coordination.CallableSandbox
+          permission-administration: read
           permission-checks: read
           permission-contents: write
           permission-pull-requests: write
@@ -177,7 +179,7 @@ jobs:
           test "$GITHUB_REPOSITORY" = 'FS-GG/.github'
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
           test "$GITHUB_REF" = refs/heads/main
-          test "$(git -C coordination rev-parse HEAD)" = bb6c3ea87b58e3d9519dc4ec68e12f170a76053e
+          test "$(git -C coordination rev-parse HEAD)" = a1051b6f4a198970f4faed6608e6b414659881c6
           workflow_sha256="$(sha256sum .github/workflows/callable-isolated-operation-execute.yml | cut -d ' ' -f 1)"
           python3 tools/callable-isolated-operation-executor.py \
             --phase '${{ inputs.phase }}' --plan-seal '${{ inputs.plan_seal }}' \
