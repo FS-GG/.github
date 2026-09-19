@@ -87,6 +87,9 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
         self.assertIn("prepare-operation", source)
         self.assertIn("callable-isolated-operation-artifact.py extract", source)
         self.assertIn("callable-isolated-operation-creation-receipt-$CREATION_RECEIPT_RUN_ID-$CREATION_RECEIPT_RUN_ATTEMPT", source)
+        self.assertIn("35410522020:1:10573846475:f9702e73fa619e63b4c0e6ee8c5efebfbefe744a6e1397cb6a88640e022fd762", source)
+        self.assertIn("callable-isolated-operation-checkpoint-creation-35410522020-1", source)
+        self.assertIn("receipt_revision=5abd2daeaf6edadc218673fd041eeae5ec3424c8", source)
         self.assertIn(".digest <<<\"$receipt_artifact\"", source)
         self.assertIn(".head_sha <<<\"$receipt_run\"", source)
         for forbidden in ("secrets.", "create-github-app-token", "git push", "contents: write"):
@@ -112,6 +115,14 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
                                       "--member", "expected.json", "--output", str(root / "extra.json")],
                                      capture_output=True, text=True, timeout=5, check=False)
             self.assertEqual(3, refused.returncode)
+
+    def test_executor_recovers_exact_creation_checkpoint_and_retains_future_receipts(self):
+        source = EXECUTOR_WORKFLOW.read_text()
+        self.assertIn("35410522020:1:10573846475:f9702e73fa619e63b4c0e6ee8c5efebfbefe744a6e1397cb6a88640e022fd762", source)
+        self.assertIn("callable-isolated-operation-checkpoint-creation-35410522020-1", source)
+        self.assertIn("receipt_revision=5abd2daeaf6edadc218673fd041eeae5ec3424c8", source)
+        self.assertIn('cp "$RUNNER_TEMP/checkpoint.json" "$RUNNER_TEMP/callable-isolated-operation-creation-receipt.json"', source)
+        self.assertNotIn("jq -c '.creationReceipt'", source)
 
     def test_workflow_is_manual_main_exact_source_and_environment_protected(self):
         source = WORKFLOW.read_text()
