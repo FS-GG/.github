@@ -34,10 +34,28 @@ jobs:
           test "$APP_ID" = 4882140
           [[ "$EXPECTED_INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]
           app_jwt="$(printf %s "$APP_KEY" | bash tools/callable-isolated-operation-app-jwt.sh "$APP_ID")"
-          installation="$(curl --fail --silent --show-error \
+          app="$(curl --fail --silent --show-error \
             --header "Authorization: Bearer $app_jwt" \
             --header 'Accept: application/vnd.github+json' \
-            "https://api.github.com/app/installations/$EXPECTED_INSTALLATION_ID")"
+            https://api.github.com/app)"
+          jq -e --argjson app_id "$APP_ID" '.id == $app_id' \
+            <<< "$app" > /dev/null
+          installations="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $app_jwt" \
+            --header 'Accept: application/vnd.github+json' \
+            'https://api.github.com/app/installations?per_page=100')"
+          installation="$(jq -c '[.[] | select(.account.login == "FS-GG" and
+            .suspended_at == null)] | if length == 1 then .[0] else empty end' \
+            <<< "$installations")"
+          if test -z "$installation"; then
+            echo '::error::The App key has no unique active FS-GG installation in the first 100 installations.'
+            exit 1
+          fi
+          actual_installation_id="$(jq -r .id <<< "$installation")"
+          if test "$actual_installation_id" != "$EXPECTED_INSTALLATION_ID"; then
+            echo "::error::Installation ID secret differs from the FS-GG App installation: $actual_installation_id"
+            exit 1
+          fi
           jq -e --argjson app_id "$APP_ID" --argjson installation_id "$EXPECTED_INSTALLATION_ID" \
             '.id == $installation_id and .app_id == $app_id and
              .account.login == "FS-GG" and .permissions.contents == "write" and
