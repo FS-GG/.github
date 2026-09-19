@@ -26,6 +26,8 @@ token counters through Codex App Server metadata plus the child’s private `tok
 prospective roadmap adapter now joins these to a dispatch and reconciles revised counters. This is narrower than
 intercepting every native collaboration call: it requires an instrumented dispatch, a parent `CODEX_THREAD_ID`,
 one unambiguous child path, and final host records. Other native calls and missing turns remain unknown.
+This is source-level evidence; packaged release and installed-host activation remain unverified while the coherent
+release workflows are administratively disabled.
 
 ## Coverage contract
 
