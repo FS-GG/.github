@@ -112,6 +112,32 @@ PY
     bad "remote submit persists a matching applied outcome and clears its spool entry"
   fi
 
+  printf '%s\n' durable > "$mode"
+  make_batch package-durable "$fixture_dir/durable.json"
+  if submit "$fixture_dir/durable.json" >"$fixture_dir/durable.out" 2>"$fixture_dir/durable.err" \
+     && [ "$(ready_count)" -eq 1 ] \
+     && [ "$(find "$spool/outcomes" -maxdepth 1 -name '*.durable' | wc -l)" -eq 1 ] \
+     && "$ENGINE" telemetry workspace status --config "$config" --repository FS-GG/package-remote \
+          >"$fixture_dir/durable-status.out" \
+     && grep -q '"pendingDurablyReceived":1' "$fixture_dir/durable-status.out" \
+     && grep -q '"unacknowledgedLossy":false' "$fixture_dir/durable-status.out" \
+     && drain >"$fixture_dir/durable-drain.out" 2>"$fixture_dir/durable-drain.err" \
+     && grep -q '"processed":0,"awaitingApplication":1' "$fixture_dir/durable-drain.out"; then
+    ok "durable receipt retains the retry envelope and stays distinct from applied"
+  else
+    bad "durable receipt retains the retry envelope and stays distinct from applied"
+  fi
+  printf '%s\n' normal > "$mode"
+  if drain >"$fixture_dir/durable-applied.out" 2>"$fixture_dir/durable-applied.err" \
+     && [ "$(ready_count)" -eq 0 ] \
+     && [ "$(find "$spool/outcomes" -maxdepth 1 -name '*.durable' | wc -l)" -eq 0 ] \
+     && grep -q '"processed":1,"awaitingApplication":0' "$fixture_dir/durable-applied.out" \
+     && [ "$(grep -c '"kind":"accepted","batch":"package-durable"' "$log")" -eq 1 ]; then
+    ok "later applied receipt finalizes the same durable batch once"
+  else
+    bad "later applied receipt finalizes the same durable batch once"
+  fi
+
   printf '%s\n' drop-exit > "$mode"
   make_batch package-lost-response "$fixture_dir/lost.json"
   submit "$fixture_dir/lost.json" >"$fixture_dir/lost.out" 2>"$fixture_dir/lost.err"; local lost_rc=$?
@@ -125,7 +151,7 @@ PY
   start_receiver normal || return
   if drain >"$fixture_dir/lost-drain.out" 2>"$fixture_dir/lost-drain.err" \
      && [ "$(ready_count)" -eq 0 ] \
-     && [ "$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' "$state")" -eq 2 ] \
+     && [ "$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' "$state")" -eq 3 ] \
      && grep -q '"kind":"lookup-hit","batch":"package-lost-response"' "$log"; then
     ok "restart lookup recovers the lost response with one simulated receiver record"
   else
@@ -139,10 +165,15 @@ PY
     && ok "receiver outage retains a pending envelope across CLI process exit" \
     || bad "receiver outage retains a pending envelope across CLI process exit" "rc=$interrupted_rc ready=$(ready_count)"
   start_receiver normal || return
-  drain >"$fixture_dir/interrupted-drain.out" 2>"$fixture_dir/interrupted-drain.err"
-  [ $? -eq 0 ] && [ "$(ready_count)" -eq 0 ] \
-    && ok "a fresh CLI drain recovers the interrupted pending envelope" \
-    || bad "a fresh CLI drain recovers the interrupted pending envelope"
+  make_batch package-next "$fixture_dir/next.json"
+  if submit "$fixture_dir/next.json" >"$fixture_dir/next.out" 2>"$fixture_dir/next.err" \
+     && [ "$(ready_count)" -eq 0 ] \
+     && grep -q '"kind":"accepted","batch":"package-interrupted"' "$log" \
+     && [ "$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' "$state")" -eq 5 ]; then
+    ok "a later submission opportunistically drains one older pending envelope"
+  else
+    bad "a later submission opportunistically drains one older pending envelope" "ready=$(ready_count) $(tail -4 "$fixture_dir/next.err" | tr '\n' ' ')"
+  fi
 
   printf '%s\n' mismatch > "$mode"
   make_batch package-mismatch "$fixture_dir/mismatch.json"

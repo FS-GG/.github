@@ -44,9 +44,10 @@ class Receiver(http.server.BaseHTTPRequestHandler):
 
     def receipt(self, batch, digest):
         workspace, producer, stream = self.server.scope
+        status = "durably-received" if self.server.mode.read_text(encoding="utf-8").strip() == "durable" else "applied"
         return compact({"schema": "fsgg.telemetry.receipt/1", "workspaceId": workspace,
                         "producerId": producer, "streamId": stream, "batchId": batch,
-                        "digest": digest, "status": "applied", "code": None})
+                        "digest": digest, "status": status, "code": None})
 
     def load(self):
         if not self.server.state.exists():

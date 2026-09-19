@@ -606,8 +606,7 @@ module WorkspaceTelemetryApplication =
                 receipt.Status = "durably-received"
                 || receipt.Status = "applied"
                 || receipt.Status = "rejected"
-                || receipt.Status = "expired"
-                ->
+                || receipt.Status = "expired" ->
                 let outcomeDirectory = Path.Combine(Path.GetDirectoryName(file), "outcomes")
 
                 match ensurePrivateDirectory outcomeDirectory with
@@ -627,24 +626,37 @@ module WorkspaceTelemetryApplication =
                         )
 
                     let outcomeName = Path.GetFileNameWithoutExtension(file) + ".json"
+                    let durableName = Path.GetFileNameWithoutExtension(file) + ".durable"
+                    let durablePath = Path.Combine(directory, durableName)
 
-                    if not (File.Exists(Path.Combine(directory, outcomeName))) then
-                        let retained =
-                            Directory.EnumerateFiles(directory, "*.json")
-                            |> Seq.truncate 129
-                            |> Seq.map FileInfo
-                            |> Seq.toArray
+                    if receipt.Status = "durably-received" then
+                        if not (File.Exists durablePath) then
+                            atomicWrite directory durableName outcome |> ignore
 
-                        if retained.Length >= 128 then
-                            let oldest = retained |> Array.minBy _.LastWriteTimeUtc
-                            File.Delete oldest.FullName
+                        Ok receipt.Status
+                    else
+                        if not (File.Exists(Path.Combine(directory, outcomeName))) then
+                            let retained =
+                                Directory.EnumerateFiles(directory, "*.json")
+                                |> Seq.truncate 129
+                                |> Seq.map FileInfo
+                                |> Seq.toArray
+
+                            if retained.Length >= 128 then
+                                let oldest = retained |> Array.minBy _.LastWriteTimeUtc
+                                File.Delete oldest.FullName
+                                flushDirectory directory
+
+                            atomicWrite directory outcomeName outcome |> ignore
+
+                        File.Delete file
+                        flushDirectory (Path.GetDirectoryName file)
+
+                        if File.Exists durablePath then
+                            File.Delete durablePath
                             flushDirectory directory
 
-                        atomicWrite directory outcomeName outcome |> ignore
-
-                    File.Delete file
-                    flushDirectory (Path.GetDirectoryName file)
-                    Ok receipt.Status
+                        Ok receipt.Status
             | RemoteClient.Unacknowledged code when
                 List.contains
                     code
@@ -780,6 +792,18 @@ module WorkspaceTelemetryApplication =
                                     match ensurePrivateDirectory spool with
                                     | Error errors -> Error errors
                                     | Ok directory ->
+                                        // A later publication gives one older ready batch a bounded
+                                        // recovery opportunity without requiring a new service.
+                                        use recoveryDeadline = new CancellationTokenSource(TimeSpan.FromSeconds 3.)
+
+                                        Directory.EnumerateFiles(directory, "*.ready")
+                                        |> Seq.truncate 1
+                                        |> Seq.iter (fun prior ->
+                                            try
+                                                remoteOne association endpoint reference recoveryDeadline.Token prior
+                                                |> ignore
+                                            with _ -> ())
+
                                         let name = TelemetryReceipt.key association.Producer parsed.BatchId + ".ready"
                                         let file = Path.Combine(directory, name)
 
@@ -895,8 +919,24 @@ module WorkspaceTelemetryApplication =
                                     with
                                     | Some errors -> Error errors
                                     | None ->
+                                        let settled =
+                                            results
+                                            |> List.filter (function
+                                                | Ok "applied"
+                                                | Ok "rejected"
+                                                | Ok "expired" -> true
+                                                | _ -> false)
+                                            |> List.length
+
+                                        let awaiting =
+                                            results
+                                            |> List.filter (function
+                                                | Ok "durably-received" -> true
+                                                | _ -> false)
+                                            |> List.length
+
                                         Ok
-                                            $"{{\"schema\":\"fsgg.telemetry.workspace-drain/1\",\"processed\":{files.Length}}}\n")
+                                            $"{{\"schema\":\"fsgg.telemetry.workspace-drain/1\",\"processed\":{settled},\"awaitingApplication\":{awaiting}}}\n")
             with _ ->
                 Error [ "drain-advisory-failure" ]
 
@@ -1193,7 +1233,7 @@ module WorkspaceTelemetryApplication =
             match select (option "--repository" args) config with
             | Error errors -> Error errors
             | Ok a ->
-                let kind, pending, lossy, census =
+                let kind, pending, durable, lossy, census =
                     match a.Destination with
                     | Local root ->
                         match
@@ -1201,16 +1241,45 @@ module WorkspaceTelemetryApplication =
                                 root
                                 (TelemetryStoreApplication.assessProductionRoot root)
                         with
-                        | Ok(_, count, _) -> "local", int count, false, "indexed-only-recovery-not-performed"
-                        | Error _ -> "local", -1, false, "unavailable"
+                        | Ok(_, count, _) -> "local", int count, 0, false, "indexed-only-recovery-not-performed"
+                        | Error _ -> "local", -1, 0, false, "unavailable"
                     | Remote(_, _, spool) ->
-                        "remote",
-                        (if Directory.Exists spool then
-                             Directory.EnumerateFiles(spool, "*.ready") |> Seq.truncate 129 |> Seq.length
-                         else
-                             0),
-                        true,
-                        "bounded-ready-files"
+                        let ready =
+                            if Directory.Exists spool then
+                                Directory.EnumerateFiles(spool, "*.ready") |> Seq.truncate 129 |> Seq.toArray
+                            else
+                                [||]
+
+                        let acknowledged (file: string) =
+                            try
+                                let marker =
+                                    Path.Combine(spool, "outcomes", Path.GetFileNameWithoutExtension(file) + ".durable")
+
+                                let info = FileInfo marker
+
+                                if
+                                    not info.Exists
+                                    || not (isNull info.LinkTarget)
+                                    || info.Length > 4096L
+                                    || (not (OperatingSystem.IsWindows())
+                                        && File.GetUnixFileMode(marker)
+                                           <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite))
+                                then
+                                    false
+                                else
+                                    match TelemetryReceipt.parse (File.ReadAllBytes file) with
+                                    | Error _ -> false
+                                    | Ok envelope ->
+                                        use document = JsonDocument.Parse(File.ReadAllBytes marker)
+
+                                        document.RootElement.GetProperty("digest").GetString() = envelope.Digest
+                                        && document.RootElement.GetProperty("status").GetString()
+                                           = "durably-received"
+                            with _ ->
+                                false
+
+                        let durable = ready |> Array.filter acknowledged |> Array.length
+                        "remote", ready.Length, durable, ready.Length > durable, "bounded-ready-files"
 
                 Ok(
                     JsonSerializer.Serialize
@@ -1222,8 +1291,10 @@ module WorkspaceTelemetryApplication =
                             streamId = a.Stream
                             destination = kind
                             pending = pending
+                            pendingDurablyReceived = durable
+                            pendingUnacknowledged = max 0 (pending - durable)
                             pendingCensus = census
-                            unacknowledgedLossy = lossy && pending > 0
+                            unacknowledgedLossy = lossy
                         |}
                     + "\n"
                 )

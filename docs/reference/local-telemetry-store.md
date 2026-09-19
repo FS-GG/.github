@@ -74,6 +74,14 @@ assets make no external requests, and installed operation needs no Python, Node,
 Host service, Akka, or ASP.NET runtime. Node and Chromium appear only in the
 development and release qualification harness.
 
+The engine's `item-detail/2.observedAt` is the time it generated that snapshot, not the latest source event or
+receipt. Its `revision` hashes the canonical snapshot and stays stable across unchanged reads. The public
+dashboard publisher preserves the previous `host.json.observedAt` when the projected content is unchanged, so a
+successful periodic publisher run proves neither new capture nor a new public commit. Track the private snapshot
+revision and the time it last changed separately from publisher-run health; for remote ingestion, use the Host's
+applied-receipt timestamp as a distinct receipt-freshness signal. An absent receipt or unchanged revision is
+unknown capture freshness, not zero activity.
+
 The closed mode-`0600` workspace configuration is discovered through the same explicit/environment/XDG order. A
 repository name must select exactly one active association; clones and renamed repositories require
 `associate-repository`. Legacy host configuration remains an explicit incumbent publisher input and is never
@@ -82,10 +90,15 @@ directory, lock, or database.
 
 Workspace capture submits immutable receipt envelopes and opportunistically drains after native work. Remote
 `durably-received` means the receiver owns transport recovery; it does not mean the observation has been applied.
-Acknowledged outcomes remain inspectable in a bounded diagnostic cache, while the receiver's lifetime receipt is
-authoritative. Unresolved `.ready` inputs never expire. Status labels local counts as indexed-only because it does
-not recover a durable inbox; cutover does recover under the store lock before deciding that the old destination is
-settled.
+The producer retains the exact `.ready` envelope and a private durable-receipt marker until an authenticated
+`applied`, `rejected`, or `expired` receipt arrives. Only then does it retain a terminal outcome and remove the
+ready file. A new submission gives one older ready envelope a bounded recovery attempt; explicit `workspace drain`
+checks up to 16 ready files and reports how many settled versus still await application. Neither call is a
+background scheduler: an idle producer needs an operator-owned periodic drain. `workspace status` reports
+`pendingDurablyReceived` and `pendingUnacknowledged` separately; a durable receipt is never described as applied.
+The receiver's lifetime receipt remains authoritative, and unresolved `.ready` inputs never expire. Status labels
+local counts as indexed-only because it does not recover a durable inbox; cutover does recover under the store
+lock before deciding that the old destination is settled.
 
 Destination changes are prospective. `telemetry workspace cutover` refuses any pending old input and requires a
 producer identity that has never appeared in active or retired association history, unless a future explicit
@@ -240,10 +253,13 @@ can launch a descendant after its parent process has exited.
 Its bounded projector retains only thread identity, completed-turn token counters and typed outcomes. It discards
 prompts, messages, reasoning, commands, tool I/O, diffs, paths and raw JSON. Publication, framing, queue loss, a full
 inbox and writer-lock contention are fail-visible telemetry diagnostics, never delivery failures; a bounded
-opportunistic drain after the native process exits does not change that exit. `telemetry runtime status` reports the
-packaged entrypoint but deliberately reports host activation as `not-installed`. Source merge and package presence do
-not claim receiver installation or default activation. `collaboration.spawn_agent` remains explicitly unsupported;
-coverage is limited to future repository-owned launches that use this entrypoint.
+opportunistic drain after the native process exits does not change that exit. `telemetry runtime status
+--repository FS-GG/.github` reports the packaged entrypoint, the separately selected local store, and the
+configured workspace association. `hostActivation=not-assessed` and `receiverReachability=not-checked` avoid
+inferring service installation or live health from configuration. Run `telemetry workspace status --repository
+FS-GG/.github` for the local spool census; check authenticated receiver health through the Host separately. Source merge and package
+presence do not claim receiver installation or default activation. The process launcher still does not intercept
+`collaboration.spawn_agent`; the separate roadmap adapter below can join native child usage where host records exist.
 
 ## Native collaboration observations
 

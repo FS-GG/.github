@@ -164,7 +164,8 @@ module TelemetryApplication =
                 args
         | "telemetry" :: "dashboard" :: "status" :: args -> shape [ "--config"; "--repository" ] [] args
         | "telemetry" :: "dashboard" :: "serve" :: args -> shape [ "--config"; "--repository" ] [ "--no-open" ] args
-        | "telemetry" :: "runtime" :: "status" :: args -> shape [ "--store-root" ] [] args
+        | "telemetry" :: "runtime" :: "status" :: args ->
+            shape [ "--store-root"; "--config"; "--repository" ] [] args
         | "telemetry" :: "runtime" :: "codex-exec" :: args ->
             match List.tryFindIndex ((=) "--") args with
             | None -> Some(Error "telemetry runtime codex-exec requires -- before Codex arguments")
@@ -1095,7 +1096,7 @@ module TelemetryApplication =
             Some(
                 validated
                     "telemetry runtime status"
-                    [ "--store-root" ]
+                    [ "--store-root"; "--config"; "--repository" ]
                     []
                     args
                     TelemetryRuntimeApplication.capabilityStatus
