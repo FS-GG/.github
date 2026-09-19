@@ -32,8 +32,13 @@ prospective, instrumented native child: its producer usage ledger contains one v
 and child batches have retained `applied` outcomes, and the private Host item usage total matched the exact
 public aggregate increase of 98,306
 ([readback](https://github.com/FS-GG/.github/commit/038edba5782fef9dace67f5b96b563fd2988738f)). The direct
-root has unsupported native usage, so item-level coverage remains incomplete as expected. The installed
-five-minute drain has run on empty queues; no nonempty batch has yet been observed settling through it.
+root has unsupported native usage, so item-level coverage remains incomplete as expected. A separate,
+user-authorized controlled producer test queued one process-review envelope in `fsharp-dev-2` without changing
+the receiver or container network. Two installed five-minute drain runs moved it through durable receipt to
+terminal `applied`; retrying the same adapter input cleared its retained intent without a duplicate fact or
+receipt. Private Host and public projections matched the review fact
+([readback](https://github.com/FS-GG/.github/commit/81a4d7442129f036e5144f58c4d1abef802bfdbd)). This qualifies
+the installed recovery path under the controlled-test standard; a naturally pending batch has not been observed.
 [UTEL-REL-01](utel-release-successor.md) records the release route; the five retired release workflows remain
 disabled under that contract.
 
