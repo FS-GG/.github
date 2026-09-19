@@ -130,15 +130,12 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.91.0 — add prospective native subagent token usage reconciliation and durable remote telemetry receipt settlement.
+    <PackageReleaseNotes>0.91.1 — close delivered native telemetry items after exact terminal settlement.
 
-Native child usage joins one completed child turn to an instrumented dispatch, accepts corrected counters,
-and keeps missing or ambiguous usage unknown. Remote receipt retries survive rejected batches and late
-settlement; status exposes pending and terminal state for the host drain. These source capabilities require
-coherent publication and installed-host qualification before Main selects them.
-
-The 0.90.0 release-effect seal remains in force. Publication requires the separately qualified UTEL-REL-01
-successor route, exact-archive provenance and a promoted three-package coherent manifest.
+The completion reducer recognizes native collaboration dispatches and requires a matching activation,
+root, lineage and terminal for every expected invocation. A retained native outcome is re-projected once
+on upgrade. Missing and ambiguous populations stay open. The 0.91.0 release remains immutable; this
+patch requires a separately qualified exact-archive successor release and installed-host verification.
 
 $(FsggStandingAdvisories)
 

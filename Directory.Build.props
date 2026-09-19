@@ -580,12 +580,11 @@
        FS.GG.Drivers adds the closed routine policy/helper/native-check workspace payload required by
        installed work-roadmap receivers. FS.GG.Kit and FS.GG.Coord.Cli advance unchanged because the
        three package identities share one coherent version and release transaction. -->
-  <!-- 0.90.0 -> 0.91.0 (UTEL-REL-01): MINOR source candidate. Coord.Cli adds prospective
-       native child usage reconciliation and durable remote receipt settlement. Kit and Drivers
-       advance with the coherent scalar. This source change does not authorize publication:
-       the GS2-08.9 legacy writer seal stays in force until a qualified successor is activated. -->
+  <!-- 0.91.0 -> 0.91.1 (UTEL-REL-02): PATCH release for exact native completed-item
+       closure and retained-outcome re-projection. All three package identities move as
+       one coherent set; the 0.91.0 published archives and protected journal remain immutable. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.91.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.91.1</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
