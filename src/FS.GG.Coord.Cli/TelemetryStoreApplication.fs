@@ -1634,33 +1634,47 @@ PRAGMA user_version=9;
         match latestOutcome with
         | None -> ()
         | Some(outcome, codeDelivery, outcomeAt, observedAt) ->
-            let expected =
-                scalarInt64 "SELECT count(*) FROM expected_dispatches WHERE item_id=$item AND runtime='codex-exec';"
+            let expected = scalarInt64 "SELECT count(*) FROM expected_dispatches WHERE item_id=$item;"
+
+            let supported =
+                scalarInt64
+                    "SELECT count(*) FROM expected_dispatches WHERE item_id=$item AND runtime IN ('codex-exec','collaboration-spawn-agent');"
 
             let settled =
                 scalarInt64
-                    """SELECT count(*) FROM expected_dispatches d WHERE d.item_id=$item AND d.runtime='codex-exec'
+                    """SELECT count(*) FROM expected_dispatches d
+WHERE d.item_id=$item AND d.runtime IN ('codex-exec','collaboration-spawn-agent')
+AND EXISTS(SELECT 1 FROM operational_activations a WHERE a.item_id=d.item_id AND a.activation_id=d.activation_id AND a.runtime=d.runtime)
 AND (SELECT count(*) FROM invocation_lineage l WHERE l.item_id=d.item_id AND l.dispatch_id=d.dispatch_id)=1
-AND EXISTS(SELECT 1 FROM invocation_lineage l JOIN runtime_terminals t ON t.item_id=l.item_id AND t.invocation_id=l.invocation_id WHERE l.item_id=d.item_id AND l.dispatch_id=d.dispatch_id);"""
-
-            let activation =
-                scalarInt64 "SELECT count(*) FROM operational_activations WHERE item_id=$item AND runtime='codex-exec';" >
-                    0L
+AND EXISTS(
+  SELECT 1 FROM invocation_lineage l
+  JOIN runtime_terminals t ON t.item_id=l.item_id AND t.invocation_id=l.invocation_id
+  WHERE l.item_id=d.item_id AND l.dispatch_id=d.dispatch_id AND l.relation=d.relation AND l.runtime=d.runtime
+  AND (SELECT count(*) FROM invocation_lineage other WHERE other.item_id=l.item_id AND other.invocation_id=l.invocation_id)=1
+  AND (d.relation='root' OR EXISTS(
+    SELECT 1 FROM expected_dispatches parent
+    JOIN invocation_lineage parent_lineage ON parent_lineage.item_id=parent.item_id AND parent_lineage.dispatch_id=parent.dispatch_id
+    WHERE parent.item_id=d.item_id AND parent.dispatch_id=d.parent_dispatch_id
+      AND parent_lineage.invocation_id=l.parent_invocation_id AND parent_lineage.root_invocation_id=l.root_invocation_id
+      AND (SELECT count(*) FROM invocation_lineage parent_rows WHERE parent_rows.item_id=parent.item_id AND parent_rows.dispatch_id=parent.dispatch_id)=1
+  )));"""
 
             let rootExpected =
                 scalarInt64
-                    "SELECT count(*) FROM expected_dispatches WHERE item_id=$item AND runtime='codex-exec' AND relation='root';"
+                    "SELECT count(*) FROM expected_dispatches WHERE item_id=$item AND relation='root';"
                     =
                     1L
 
             let deliveredComplete =
                 codeDelivery = "delivered"
-                && activation
                 && rootExpected
                 && expected > 0L
+                && supported = expected
                 && settled = expected
 
-            let refusedComplete = outcome = "refused" && settled = expected
+            // A final delivery refusal does not wait for unrelated, unsupported
+            // expected populations (for example a queued CI inventory).
+            let refusedComplete = outcome = "refused" && settled = supported
 
             let state =
                 if deliveredComplete || refusedComplete then
@@ -1931,6 +1945,20 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
 
         let currentEpoch () =
             scalarText connection "SELECT epoch_id FROM budget_epochs WHERE state='open';"
+
+        // Re-project retained native outcomes once after the runtime closure rule changes.
+        // The marker and dirty census commit with the same budget transaction.
+        if
+            scalarOptionalText
+                "SELECT value FROM store_metadata WHERE key='completedPopulationDerivation';"
+                []
+            <> Some "native-runtime-v2"
+        then
+            execute
+                connection
+                """INSERT OR IGNORE INTO budget_dirty_items(item_id) SELECT DISTINCT item_id FROM native_item_outcomes;
+INSERT INTO store_metadata(key,value) VALUES('completedPopulationDerivation','native-runtime-v2')
+ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
 
         let dirtyItems =
             use command = connection.CreateCommand()
