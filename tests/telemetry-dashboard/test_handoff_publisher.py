@@ -47,7 +47,7 @@ def replacement_cutover(config_digest,candidate_digest,labels_digest="5"*64,base
     value={"schema":D.HANDOFF_REPLACEMENT_CUTOVER_SCHEMA,"configDigest":config_digest,"candidateDigest":candidate_digest,
         "labelsDigest":labels_digest,"coordinatorDigest":"6"*64,"publisherUnitDigest":"7"*64,
         "remoteBaseline":baseline or {"commit":"8"*40,"snapshotDigest":"9"*64,"publicRevision":"a"*64},
-        "incumbent":{"accountUid":1001,"managerIdentity":"user@1001.service","candidateDigest":"b"*64,"activationDigest":"c"*64,"stateDirectoryDigest":"d"*64,
+        "incumbent":{"accountUid":1001,"managerIdentity":"system","candidateDigest":"b"*64,"activationDigest":"c"*64,"stateDirectoryDigest":"d"*64,
             "timerUnit":"fsgg-telemetry-dashboard-publisher.timer","timerEnabledState":"disabled","timerActiveState":"inactive",
             "serviceUnit":"fsgg-telemetry-dashboard-publisher.service","serviceActiveState":"inactive",
             "pendingIntentState":"reconciled","statePreservation":"byte-identical"},
@@ -232,7 +232,7 @@ class HandoffPublisherTests(unittest.TestCase):
     def test_current_publisher_replacement_proof_is_closed_and_refuses_overlap(self):
         config="1"*64; candidate="2"*64; proof=replacement_cutover(config,candidate)
         self.assertEqual(D._validate_cutover_proof(proof,config,candidate),proof)
-        for path,value in (("managerIdentity","user@1002.service"),("timerActiveState","active"),("timerEnabledState","enabled"),("serviceActiveState","active"),
+        for path,value in (("managerIdentity","user@1001.service"),("timerActiveState","active"),("timerEnabledState","enabled"),("serviceActiveState","active"),
             ("pendingIntentState","unresolved"),("statePreservation","changed"),("candidateDigest",candidate)):
             changed=json.loads(json.dumps(proof)); changed["incumbent"][path]=value
             changed["evidenceDigest"]=hashlib.sha256(D.dump({key:item for key,item in changed.items() if key!="evidenceDigest"})).hexdigest()

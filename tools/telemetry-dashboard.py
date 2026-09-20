@@ -1188,7 +1188,7 @@ def _validate_cutover_proof(value: Any, config_digest: str, candidate_digest: st
             or not all(re.fullmatch(r"[0-9a-f]{64}",str(incumbent.get(key))) for key in ("candidateDigest","activationDigest","stateDirectoryDigest"))
             or incumbent["candidateDigest"]==candidate_digest
             or not isinstance(incumbent.get("accountUid"),int) or isinstance(incumbent.get("accountUid"),bool) or incumbent["accountUid"]<0
-            or incumbent.get("managerIdentity")!="user@"+str(incumbent["accountUid"])+".service"
+            or incumbent.get("managerIdentity")!="system"
             or not re.fullmatch(r"[A-Za-z0-9_.@-]{1,160}\.timer",str(incumbent.get("timerUnit")))
             or not re.fullmatch(r"[A-Za-z0-9_.@-]{1,160}\.service",str(incumbent.get("serviceUnit")))
             or incumbent.get("timerEnabledState")!="disabled" or incumbent.get("timerActiveState")!="inactive"

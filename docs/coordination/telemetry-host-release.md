@@ -91,7 +91,9 @@ directory and a root-owned `fsgg.telemetry.publisher-cutover-proof/3`. The proof
 binds the new config, script, labels, coordinator and unit digests; the current
 remote commit, canonical snapshot digest and public revision; and the stopped
 incumbent's script, activation and preserved-state digests. Its incumbent timer
-must be disabled and inactive, its service inactive, and any pending intent
+and service are checked by the system manager (`managerIdentity=system`) while
+`accountUid` names their configured service account. The timer must be disabled
+and inactive, the service inactive, and any pending intent
 reconciled or absent. `evidenceDigest` is SHA-256 of canonical JSON without that
 field. The operator records activation within five minutes of `observedAt`; the
 new script rereads the root-owned proof and verifies the exact remote baseline
