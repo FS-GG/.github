@@ -13,6 +13,56 @@ open FS.GG.Coord
 
 module TelemetryRuntimeApplication =
     let private maxAssignmentBytes = 8L * 1024L
+    // A Codex tool-output item can exceed the telemetry event limit without carrying usage.
+    // Inspect only a bounded complete frame; unknown or usage-bearing oversized frames remain gaps.
+    let private maxDiscardableFrameBytes = 256 * 1024
+
+    let private knownIrrelevantOversizedFrame (bytes: byte array) =
+        try
+            use document = JsonDocument.Parse(ReadOnlyMemory<byte>(bytes))
+            let root = document.RootElement
+
+            let properties (named: string) (node: JsonElement) =
+                node.EnumerateObject()
+                |> Seq.filter (fun property -> property.NameEquals named)
+                |> Seq.toArray
+
+            let rec containsUsage (node: JsonElement) =
+                match node.ValueKind with
+                | JsonValueKind.Object ->
+                    node.EnumerateObject()
+                    |> Seq.exists (fun property ->
+                        property.NameEquals "usage"
+                        || property.NameEquals "token_usage"
+                        || property.NameEquals "tokenUsage"
+                        || containsUsage property.Value)
+                | JsonValueKind.Array -> node.EnumerateArray() |> Seq.exists containsUsage
+                | _ -> false
+
+            if root.ValueKind <> JsonValueKind.Object then
+                false
+            else
+                let eventTypes = properties "type" root
+                let items = properties "item" root
+
+                if
+                    eventTypes.Length <> 1
+                    || eventTypes[0].Value.ValueKind <> JsonValueKind.String
+                    || eventTypes[0].Value.GetString() <> "item.completed"
+                    || items.Length <> 1
+                    || items[0].Value.ValueKind <> JsonValueKind.Object
+                    || containsUsage root
+                then
+                    false
+                else
+                    let item = items[0].Value
+                    let itemTypes = properties "type" item
+
+                    itemTypes.Length = 1
+                    && itemTypes[0].Value.ValueKind = JsonValueKind.String
+                    && itemTypes[0].Value.GetString() = "command_execution"
+        with :? JsonException ->
+            false
 
     let private option name args =
         args
@@ -369,6 +419,19 @@ module TelemetryRuntimeApplication =
                 let mutable reading = true
                 let mutable oversized = false
 
+                let acceptFrame (bytes: byte array) =
+                    let trimmed =
+                        if bytes.Length > 0 && bytes[bytes.Length - 1] = byte '\r' then
+                            bytes[.. bytes.Length - 2]
+                        else
+                            bytes
+
+                    if trimmed.Length > TelemetryStore.MaxEventBytes then
+                        if not (knownIrrelevantOversizedFrame trimmed) then
+                            framingGap <- true
+                    elif not (channel.Writer.TryWrite trimmed) then
+                        queueGap <- true
+
                 while reading do
                     let count = input.Read(buffer, 0, buffer.Length)
 
@@ -385,21 +448,12 @@ module TelemetryRuntimeApplication =
                                 if oversized then
                                     framingGap <- true
                                 else
-                                    let bytes = frame.ToArray()
-
-                                    let trimmed =
-                                        if bytes.Length > 0 && bytes[bytes.Length - 1] = byte '\r' then
-                                            bytes[.. bytes.Length - 2]
-                                        else
-                                            bytes
-
-                                    if not (channel.Writer.TryWrite trimmed) then
-                                        queueGap <- true
+                                    acceptFrame (frame.ToArray())
 
                                 frame.SetLength 0L
                                 oversized <- false
                             elif not oversized then
-                                if frame.Length < int64 TelemetryStore.MaxEventBytes then
+                                if frame.Length < int64 maxDiscardableFrameBytes then
                                     frame.WriteByte value
                                 else
                                     oversized <- true
@@ -407,8 +461,8 @@ module TelemetryRuntimeApplication =
                 if frame.Length > 0L || oversized then
                     if oversized then
                         framingGap <- true
-                    elif not (channel.Writer.TryWrite(frame.ToArray())) then
-                        queueGap <- true
+                    else
+                        acceptFrame (frame.ToArray())
 
                 channel.Writer.Complete()
                 consumer.GetAwaiter().GetResult()

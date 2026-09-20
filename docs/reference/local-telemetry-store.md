@@ -266,8 +266,11 @@ for delayed stdout frames before terminal publication. Because the context is in
 can launch a descendant after its parent process has exited.
 
 Its bounded projector retains only thread identity, completed-turn token counters and typed outcomes. It discards
-prompts, messages, reasoning, commands, tool I/O, diffs, paths and raw JSON. Publication, framing, queue loss, a full
-inbox and writer-lock contention are fail-visible telemetry diagnostics, never delivery failures; a bounded
+prompts, messages, reasoning, commands, tool I/O, diffs, paths and raw JSON. A complete `item.completed`
+`command_execution` frame between the 64 KiB event limit and 256 KiB inspection limit is discarded only after
+its type is verified; malformed, ambiguous, unknown and larger frames still create a coverage gap. Publication,
+framing, queue loss, a full inbox and writer-lock contention are fail-visible telemetry diagnostics, never delivery
+failures; a bounded
 opportunistic drain after the native process exits does not change that exit. `telemetry runtime status
 --repository FS-GG/.github` reports the packaged entrypoint, the separately selected local store, and the
 configured workspace association. `hostActivation=not-assessed` and `receiverReachability=not-checked` avoid

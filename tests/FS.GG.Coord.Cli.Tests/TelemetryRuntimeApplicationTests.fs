@@ -152,6 +152,72 @@ module TelemetryRuntimeApplicationTests =
         )
 
     [<Fact>]
+    let ``oversized known tool output is discarded without hiding unknown or usage frames`` () =
+        if not (OperatingSystem.IsWindows()) then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+
+            let run name frame =
+                let outputPath = Path.Combine(root, name + ".jsonl")
+                let complete =
+                    """{"type":"turn.completed","turn_id":"turn-1","usage":{"input_tokens":10,"cached_input_tokens":2,"output_tokens":5}}"""
+
+                File.WriteAllLines(
+                    outputPath,
+                    [| """{"type":"thread.started","thread_id":"thread-1"}"""; frame; complete |]
+                )
+
+                let executable = Path.Combine(root, name)
+                File.WriteAllText(executable, $"#!/bin/sh\ncat '{outputPath}'\n")
+
+                File.SetUnixFileMode(
+                    executable,
+                    UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+                )
+
+                observed executable None TelemetryRuntime.Root 0
+
+            let large = String('x', TelemetryStore.MaxEventBytes + 40960)
+            let beyondDiscardBound = String('x', 300000)
+
+            let ignored =
+                run
+                    "large-command-output"
+                    ($"""{{"type":"item.completed","item":{{"type":"command_execution","aggregated_output":"{large}"}}}}""")
+
+            Assert.DoesNotContain(
+                ignored,
+                function
+                | { Payload = TelemetryStore.RuntimeGap(_, "oversized-frame") } -> true
+                | _ -> false
+            )
+
+            Assert.Contains(
+                ignored,
+                function
+                | { Payload = TelemetryStore.RuntimeTurnUsage _ } -> true
+                | _ -> false
+            )
+
+            for name, frame in
+                [
+                    "unknown-item", $"""{{"type":"item.completed","item":{{"type":"agent_message","text":"{large}"}}}}"""
+                    "duplicate-type", $"""{{"type":"item.completed","item":{{"type":"command_execution","aggregated_output":"{large}"}},"type":"turn.completed"}}"""
+                    "nested-usage", $"""{{"type":"item.completed","item":{{"type":"command_execution","aggregated_output":"{large}","details":{{"usage":{{"input_tokens":1}}}}}}}}"""
+                    "malformed-command", $"""{{"type":"item.completed","item":{{"type":"command_execution","aggregated_output":"{large}"}}"""
+                    "usage-frame", $"""{{"type":"turn.completed","usage":{{"input_tokens":1,"output_tokens":1}},"padding":"{large}"}}"""
+                    "beyond-bound", $"""{{"type":"item.completed","item":{{"type":"command_execution","aggregated_output":"{beyondDiscardBound}"}}}}"""
+                ] do
+                let facts = run name frame
+
+                Assert.Contains(
+                    facts,
+                    function
+                    | { Payload = TelemetryStore.RuntimeGap(_, "oversized-frame") } -> true
+                    | _ -> false
+                )
+
+    [<Fact>]
     let ``UTEL-03A three admitted workers preserve population and do not invent counts`` () =
         if not (OperatingSystem.IsWindows()) then
             let cleanup, root = temp ()
