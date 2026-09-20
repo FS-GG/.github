@@ -46,6 +46,7 @@ HANDOFF_SCHEMA = "fsgg.telemetry.publication-handoff/1"
 HANDOFF_ACTIVATION_SCHEMA = "fsgg.telemetry.handoff-activation/1"
 HANDOFF_CUTOVER_SCHEMA = "fsgg.telemetry.publisher-cutover-proof/1"
 HANDOFF_RETRY_CUTOVER_SCHEMA = "fsgg.telemetry.publisher-cutover-proof/2"
+HANDOFF_REPLACEMENT_CUTOVER_SCHEMA = "fsgg.telemetry.publisher-cutover-proof/3"
 HANDOFF_INTENT_SCHEMA = "fsgg.telemetry.publisher-intent/1"
 HANDOFF_SUCCESS_SCHEMA = "fsgg.telemetry.publisher-success/1"
 HANDOFF_CURRENT_NAME = "current.json"
@@ -1173,6 +1174,31 @@ def _validate_cutover_proof(value: Any, config_digest: str, candidate_digest: st
     if not isinstance(value,dict): raise HostSourceError("HANDOFF_CUTOVER_PROOF_INVALID")
     if value.get("schema")==HANDOFF_CUTOVER_SCHEMA:
         return _validate_initial_cutover_proof(value,config_digest,candidate_digest)
+    if value.get("schema")==HANDOFF_REPLACEMENT_CUTOVER_SCHEMA:
+        proof=exact(value,{"schema","configDigest","candidateDigest","labelsDigest","coordinatorDigest","publisherUnitDigest",
+            "remoteBaseline","incumbent","observedAt","evidenceDigest"},"replacement cutover proof")
+        baseline=exact(proof.get("remoteBaseline"),{"commit","snapshotDigest","publicRevision"},"replacement remote baseline")
+        incumbent=exact(proof.get("incumbent"),{"accountUid","managerIdentity","candidateDigest","activationDigest","stateDirectoryDigest","timerUnit",
+            "timerEnabledState","timerActiveState","serviceUnit","serviceActiveState","pendingIntentState","statePreservation"},"replacement incumbent")
+        unsigned={key:item for key,item in proof.items() if key!="evidenceDigest"}
+        if (proof.get("configDigest")!=config_digest or proof.get("candidateDigest")!=candidate_digest
+            or not all(re.fullmatch(r"[0-9a-f]{64}",str(proof.get(key))) for key in ("labelsDigest","coordinatorDigest","publisherUnitDigest"))
+            or not re.fullmatch(r"[0-9a-f]{40}",str(baseline.get("commit")))
+            or not all(re.fullmatch(r"[0-9a-f]{64}",str(baseline.get(key))) for key in ("snapshotDigest","publicRevision"))
+            or not all(re.fullmatch(r"[0-9a-f]{64}",str(incumbent.get(key))) for key in ("candidateDigest","activationDigest","stateDirectoryDigest"))
+            or incumbent["candidateDigest"]==candidate_digest
+            or not isinstance(incumbent.get("accountUid"),int) or isinstance(incumbent.get("accountUid"),bool) or incumbent["accountUid"]<0
+            or incumbent.get("managerIdentity")!="user@"+str(incumbent["accountUid"])+".service"
+            or not re.fullmatch(r"[A-Za-z0-9_.@-]{1,160}\.timer",str(incumbent.get("timerUnit")))
+            or not re.fullmatch(r"[A-Za-z0-9_.@-]{1,160}\.service",str(incumbent.get("serviceUnit")))
+            or incumbent.get("timerEnabledState")!="disabled" or incumbent.get("timerActiveState")!="inactive"
+            or incumbent.get("serviceActiveState")!="inactive"
+            or incumbent.get("pendingIntentState") not in {"absent","reconciled"}
+            or incumbent.get("statePreservation")!="byte-identical"
+            or parse_time(proof.get("observedAt")) is None
+            or proof.get("evidenceDigest")!=hashlib.sha256(dump(unsigned)).hexdigest()):
+            raise HostSourceError("HANDOFF_CUTOVER_PROOF_INVALID")
+        return proof
     proof=exact(value,{"schema","generation","configDigest","candidateDigest","labelsDigest","coordinatorDigest","publisherUnitDigest",
         "remoteBaseline","priorAttempt","incumbentAccountUid","managerIdentity","timerUnit","timerEnabledState","timerActiveState",
         "serviceUnit","serviceActiveState","eventActivationPathDigest","eventActivationPriorState","eventActivationReceiptDigest",
@@ -1246,6 +1272,17 @@ def _load_cutover_proof(directory: pathlib.Path, operator_uid: int, cutover_gid:
     return proof
 
 
+def _verify_replacement_baseline(proof: dict[str,Any], destination: dict[str,str]) -> None:
+    try:
+        current,commit=current_publication(destination["repository"],destination["branch"],destination["path"],publication_token("environment-only"))
+    except (HostSourceError,RuntimeError,OSError) as error:
+        raise HostSourceError("HANDOFF_REMOTE_BASELINE_UNAVAILABLE") from error
+    baseline=proof["remoteBaseline"]
+    if (current is None or commit!=baseline["commit"] or hashlib.sha256(dump(current)).hexdigest()!=baseline["snapshotDigest"]
+        or current.get("revision")!=baseline["publicRevision"]):
+        raise HostSourceError("HANDOFF_REMOTE_BASELINE_CHANGED")
+
+
 def handoff_setup(args: argparse.Namespace) -> dict[str,Any]:
     outgoing=args.outgoing.resolve(strict=True); state=args.state_dir.resolve(strict=True)
     _validate_owned_directory(state,0o700,os.getuid(),os.getgid(),"HANDOFF_STATE_UNSAFE")
@@ -1264,8 +1301,13 @@ def handoff_setup(args: argparse.Namespace) -> dict[str,Any]:
         if args.cutover_proof_dir is None or args.operator_uid is None or args.cutover_gid is None: raise HostSourceError("HANDOFF_CUTOVER_PROOF_REQUIRED")
         proof_dir=args.cutover_proof_dir.resolve(strict=True)
         proof=_load_cutover_proof(proof_dir,args.operator_uid,args.cutover_gid,args.producer_uid,config_digest,actual_candidate)
-        if proof.get("schema")==HANDOFF_RETRY_CUTOVER_SCHEMA and proof.get("labelsDigest")!=manifest["labelsDigest"]:
+        if proof.get("schema") in {HANDOFF_RETRY_CUTOVER_SCHEMA,HANDOFF_REPLACEMENT_CUTOVER_SCHEMA} and proof.get("labelsDigest")!=manifest["labelsDigest"]:
             raise HostSourceError("HANDOFF_CUTOVER_PROOF_INVALID")
+        if proof.get("schema")==HANDOFF_REPLACEMENT_CUTOVER_SCHEMA:
+            observed=parse_time(proof["observedAt"])
+            age=(dt.datetime.now(dt.timezone.utc)-observed).total_seconds()
+            if age < 0 or age > 300: raise HostSourceError("HANDOFF_CUTOVER_PROOF_STALE")
+            _verify_replacement_baseline(proof,destination)
         authority={"directory":str(proof_dir),"operatorUid":args.operator_uid,"cutoverGid":args.cutover_gid,"proofDigest":proof["evidenceDigest"]}
         receipt={"schema":HANDOFF_ACTIVATION_SCHEMA,"config":config,"configDigest":config_digest,"candidateDigest":actual_candidate,"cutoverAuthority":authority,"cutoverProof":proof}
         target=state/HANDOFF_ACTIVATION_NAME
@@ -1273,7 +1315,10 @@ def handoff_setup(args: argparse.Namespace) -> dict[str,Any]:
             try: existing=json.loads(read_private_bytes(target,16384,"HANDOFF_ACTIVATION_INVALID"))
             except (UnicodeError,json.JSONDecodeError) as error: raise HostSourceError("HANDOFF_ACTIVATION_INVALID") from error
             if existing!=receipt: raise HostSourceError("HANDOFF_ACTIVATION_CHANGE_REFUSED")
-        else: atomic_private(target,receipt)
+        else:
+            if proof.get("schema")==HANDOFF_REPLACEMENT_CUTOVER_SCHEMA and any((state/name).exists() or (state/name).is_symlink() for name in (HANDOFF_INTENT_NAME,HANDOFF_SUCCESS_NAME)):
+                raise HostSourceError("HANDOFF_REPLACEMENT_STATE_NOT_FRESH")
+            atomic_private(target,receipt)
         report["mode"]="record-activation"; report["cutoverProofDigest"]=proof["evidenceDigest"]; report["effects"].append("record-digest-bound-cutover-activation")
     return report
 
@@ -1299,9 +1344,12 @@ def _load_handoff_activation(state: pathlib.Path) -> dict[str,Any]:
     try:
         proof=_validate_cutover_proof(value.get("cutoverProof"),value["configDigest"],value["candidateDigest"])
         if authority.get("proofDigest")!=proof["evidenceDigest"]: raise HostSourceError("HANDOFF_ACTIVATION_INVALID")
-        if proof.get("schema")==HANDOFF_RETRY_CUTOVER_SCHEMA and proof.get("labelsDigest")!=config["labelsDigest"]:
+        if proof.get("schema") in {HANDOFF_RETRY_CUTOVER_SCHEMA,HANDOFF_REPLACEMENT_CUTOVER_SCHEMA} and proof.get("labelsDigest")!=config["labelsDigest"]:
             raise HostSourceError("HANDOFF_ACTIVATION_INVALID")
         _verify_prior_cutover_proof(proof,authority["operatorUid"],authority["cutoverGid"])
+        if proof.get("schema")==HANDOFF_REPLACEMENT_CUTOVER_SCHEMA:
+            current=_load_cutover_proof(pathlib.Path(authority["directory"]),authority["operatorUid"],authority["cutoverGid"],config["producerUid"],value["configDigest"],value["candidateDigest"])
+            if current!=proof: raise HostSourceError("HANDOFF_ACTIVATION_INVALID")
     except (ValueError,HostSourceError) as error: raise HostSourceError("HANDOFF_ACTIVATION_INVALID") from error
     return value
 
@@ -1375,6 +1423,9 @@ def handoff_publish(args: argparse.Namespace) -> dict[str,Any]:
         activation=_load_handoff_activation(state); config=activation["config"]
         destination=config["destination"]
         pending=_load_publisher_intent(state)
+        if (activation["cutoverProof"].get("schema")==HANDOFF_REPLACEMENT_CUTOVER_SCHEMA
+            and pending is None and not (state/HANDOFF_SUCCESS_NAME).exists()):
+            _verify_replacement_baseline(activation["cutoverProof"],destination)
         if pending is not None:
             old_intent,old_snapshot,old_raw=pending
             try:
