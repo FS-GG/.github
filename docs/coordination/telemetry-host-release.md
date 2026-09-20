@@ -25,7 +25,7 @@ the package.
 The release workflow packs once and emits
 `fsgg.telemetry.host-release/1`. It binds the exact source commit, package ID,
 version and tag; prepared archive SHA-256; producer payload SHA-256; framework
-and Linux x64 target; dependency lock and UI asset-tree digests; store schema 9;
+and Linux x64 target; dependency lock and UI asset-tree digests; store schema range;
 runtime prerequisites; and creation time.
 
 `producerPayloadSha256` is calculated by the established
@@ -48,7 +48,7 @@ Its current manual workflow qualifies source and package locally and has no
 credential, tag, feed, journal, artifact-upload or release effect. Do not use
 its old publication instructions for a new Host version.
 
-For Host 0.1.2, the independent
+For the next Host 0.1.3, the independent
 `release-telemetry-host-successor-candidate.yml` qualifies an exact current
 `main` commit, the package, installed tool, manifest, and Host/browser tests.
 It retains one unpromoted Actions artifact and has read-only repository and
@@ -61,12 +61,18 @@ preflight. A fresh publication requires the candidate source to equal current
 and protected intent. The new workflow needs its own nuget.org Trusted
 Publishing registration before `publish=true` can obtain a feed credential.
 
-The publication release must contain exactly the original
-`FS.GG.Telemetry.Host.0.1.2.nupkg`, `manifest.json`, and
+The 0.1.3 publication release must contain exactly the original
+`FS.GG.Telemetry.Host.0.1.3.nupkg`, `manifest.json`, and
 `publication-journal.json` required by Main's protected updater. The journal
 records independently observed external archive and normalized payload
 hashes for both feeds. Main adopts only after the release is promoted and
 those three assets are verified.
+
+Host 0.1.3 changes the store schema from 9 to 10 so
+`orchestration-delivery` outcomes can be retained alongside existing routine
+outcomes. The installed updater refuses a schema-range change. Main must
+rehearse and perform a stopped backup and migration for both private Host
+scopes, then verify retained receipts and the new schema before activation.
 
 Host 0.1.2 was published from source `88ab88c3240a5e3075129b087a95b691088eaf5d` by [run 35479412309](https://github.com/FS-GG/.github/actions/runs/35479412309) as the immutable [`telemetry-host/v0.1.2`](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.1.2) release. The original package archive SHA-256 is `52cf4c895a90bc84918f95bce8fd0c1585bc289cf815c4e7645d96bada26d2d0`, its manifest content ID is `sha256:99f63a1bb24835b53e99d6baa6c26d3bf64cda94923190eb3cce4f617f0781b5`, and both feeds expose normalized producer payload `sha256:4cef79134fd0a074f14a591c02ccf6589e604464ade9cfdd651895f38656f263`. All eight protected journal effects, including promotion, are verified. Protected Host installation and receipt-triggered completion re-projection are runtime steps owned by Main.
 

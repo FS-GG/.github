@@ -94,8 +94,8 @@ def build_manifest(args: argparse.Namespace) -> dict:
         "sourceSha": args.source_sha,
         "framework": "net10.0",
         "target": "linux-x64",
-        "supportedStoreSchemaMin": 9,
-        "supportedStoreSchemaMax": 9,
+        "supportedStoreSchemaMin": 10,
+        "supportedStoreSchemaMax": 10,
         "runtimePrerequisites": ["Microsoft.AspNetCore.App 10.0", "Microsoft.NETCore.App 10.0"],
         "archiveSha256": sha256(package),
         "producerPayloadSha256": saga.payload_id(package),
@@ -124,7 +124,7 @@ def load_manifest(path: pathlib.Path) -> dict:
         raise ValueError("release manifest producer payload digest is invalid")
     if data["framework"] != "net10.0" or data["target"] != "linux-x64":
         raise ValueError("release manifest runtime profile is invalid")
-    if data["supportedStoreSchemaMin"] != 9 or data["supportedStoreSchemaMax"] != 9:
+    if data["supportedStoreSchemaMin"] != 10 or data["supportedStoreSchemaMax"] != 10:
         raise ValueError("release manifest store schema range is invalid")
     if data["runtimePrerequisites"] != ["Microsoft.AspNetCore.App 10.0", "Microsoft.NETCore.App 10.0"]:
         raise ValueError("release manifest runtime prerequisites are invalid")
