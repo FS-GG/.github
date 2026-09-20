@@ -1,4 +1,11 @@
 {
+  "agent-handoff": {
+    "positive": "Use $agent-handoff to coordinate these agents through the mailbox and state who acts next.",
+    "indirect": "Read the latest handoff, verify the reported result, and send each agent a clear next action.",
+    "incomplete": "Help the agents keep each other informed",
+    "negative": "Write a standalone changelog entry for this release.",
+    "boundary": "Draft a status message with evidence and an owner, but do not send it yet."
+  },
   "work-unified-roadmap": {
     "positive": "Use $work-unified-roadmap to advance the FS-GG Unified Development Roadmap after simplification.",
     "indirect": "Resume our current unified programme; plan only the next major feature with Astra high and have Sol medium execute its small roadmap.",

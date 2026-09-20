@@ -1,0 +1,6 @@
+interface:
+  display_name: "Agent Handoff"
+  short_description: "Coordinate agent messages with evidence and clear owners"
+  default_prompt: "Use $agent-handoff to coordinate this work across agents with verified status and explicit next steps."
+policy:
+  allow_implicit_invocation: true
