@@ -503,7 +503,7 @@ module DashboardProjection =
                                            |> Option.exists (fun v -> v.ValueKind = JsonValueKind.True)
                                         ->
                                         match number "schemaVersion" store, text "journalMode" store with
-                                        | Some version, Some "wal" when version = 8L || version = 9L ->
+                                        | Some version, Some "wal" when version = 8L || version = 9L || version = 10L ->
                                             let arrayNames =
                                                 [
                                                     "items"

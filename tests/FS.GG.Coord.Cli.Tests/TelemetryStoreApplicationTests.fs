@@ -55,7 +55,7 @@ module TelemetryStoreApplicationTests =
         "DROP TABLE ci_population_coverage; DROP TABLE ci_check_runs; DROP TABLE ci_population_admissions; DELETE FROM schema_migrations WHERE version=6;"
 
     let private dropReviewSchema =
-        "DROP INDEX transport_pending; DROP TABLE transport_receipts; DROP TABLE receipt_producers; DELETE FROM schema_migrations WHERE version=9; DROP INDEX process_review_attempt_subject; DROP INDEX process_review_item_subject; DROP INDEX activity_spans_item_attempt; DROP INDEX activity_usage_item; DROP INDEX complication_events_item; DROP TABLE complication_events; DROP TABLE activity_usage_attributions; DROP TABLE activity_spans; DROP TABLE process_reviews; DELETE FROM schema_migrations WHERE version=8;"
+        "DELETE FROM schema_migrations WHERE version=10; DROP INDEX transport_pending; DROP TABLE transport_receipts; DROP TABLE receipt_producers; DELETE FROM schema_migrations WHERE version=9; DROP INDEX process_review_attempt_subject; DROP INDEX process_review_item_subject; DROP INDEX activity_spans_item_attempt; DROP INDEX activity_usage_item; DROP INDEX complication_events_item; DROP TABLE complication_events; DROP TABLE activity_usage_attributions; DROP TABLE activity_spans; DROP TABLE process_reviews; DELETE FROM schema_migrations WHERE version=8;"
 
     let private dropNativeOutcomeSchema =
         dropReviewSchema
@@ -137,6 +137,66 @@ module TelemetryStoreApplicationTests =
                 "null"
 
         $"""{{"kind":"native-item-outcome","identity":"native-outcome-{item}","itemId":"{item}","revision":{revision},"repository":"o/r","prNumber":7,"baseRef":"main","baseSha":"dddddddddddddddddddddddddddddddddddddddd","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","outcome":"{outcome}","codeDelivery":"{code}","mergeCommit":{merge},"occurredAt":{occurred},"observedAt":"{observedAt}","sourceKind":"routine-delivery","sourceRef":"routine-delivery:{item}"}}"""
+
+    [<Fact>]
+    let ``orchestration delivery outcome is stored with its own source kind`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let item = "work-item-v1-orchestration-fixture"
+        let fact =
+            (nativeOutcome item 1L "delivered" "delivered" "2026-09-08T10:04:01Z")
+                .Replace("routine-delivery", "orchestration-delivery", StringComparison.Ordinal)
+
+        TelemetryStoreApplication.ingest path approved (operationalBatch "orchestration-outcome" item [ fact ])
+        |> unwrap
+        |> ignore
+
+        use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use command = connection.CreateCommand()
+        command.CommandText <- "SELECT source_kind FROM native_item_outcomes WHERE item_id=$item;"
+        command.Parameters.AddWithValue("$item", item) |> ignore
+        Assert.Equal("orchestration-delivery", string (command.ExecuteScalar()))
+
+    [<Fact>]
+    let ``v9 native outcomes survive v10 source-kind migration`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let item = "routine-outcome-before-v10"
+        TelemetryStoreApplication.ingest
+            path
+            approved
+            (operationalBatch "routine-before-v10" item [ nativeOutcome item 1L "delivered" "delivered" "2026-09-08T10:04:01Z" ])
+        |> unwrap
+        |> ignore
+
+        use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use downgrade = connection.CreateCommand()
+        downgrade.CommandText <-
+            """
+BEGIN IMMEDIATE;
+CREATE TABLE native_item_outcomes_v9(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, repository TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number > 0), base_ref TEXT NOT NULL, base_sha TEXT NOT NULL, head TEXT NOT NULL, outcome TEXT NOT NULL, code_delivery TEXT NOT NULL, merge_commit TEXT, occurred_at TEXT, observed_at TEXT NOT NULL, source_kind TEXT NOT NULL CHECK(source_kind='routine-delivery'), source_ref TEXT NOT NULL UNIQUE, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+INSERT INTO native_item_outcomes_v9 SELECT * FROM native_item_outcomes;
+DROP TABLE native_item_outcomes;
+ALTER TABLE native_item_outcomes_v9 RENAME TO native_item_outcomes;
+CREATE INDEX native_item_outcomes_item_observed ON native_item_outcomes(item_id,observed_at);
+DELETE FROM schema_migrations WHERE version=10;
+PRAGMA user_version=9;
+COMMIT;
+"""
+        downgrade.ExecuteNonQuery() |> ignore
+        connection.Close()
+
+        Assert.Contains("\"schemaVersion\":10", TelemetryStoreApplication.initialize path approved |> unwrap)
+        use reopened = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        reopened.Open()
+        use command = reopened.CreateCommand()
+        command.CommandText <- "SELECT source_kind FROM native_item_outcomes WHERE item_id=$item;"
+        command.Parameters.AddWithValue("$item", item) |> ignore
+        Assert.Equal("routine-delivery", string (command.ExecuteScalar()))
 
     let private runtimeTerminal item identity invocation outcome exitCode =
         $"""{{"kind":"runtime-terminal","identity":"{identity}","itemId":"{item}","revision":0,"invocationId":"{invocation}","threadId":"thread-{invocation}","outcome":"{outcome}","exitCode":{exitCode}}}"""
@@ -627,13 +687,13 @@ module TelemetryStoreApplicationTests =
         TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
         let payload = batch "batch-1" "usage-1" 0L "c1" 10L
         TelemetryStoreApplication.publish path approved payload |> unwrap |> ignore
-        pragma path 10
+        pragma path 11
         Assert.Contains("newer than supported", sprintf "%A" (TelemetryStoreApplication.drain path approved))
 
         Assert.Single(Directory.GetFiles(Path.Combine(path, "inbox", "worker-a"), "*.ready"))
         |> ignore
 
-        pragma path 9
+        pragma path 10
         TelemetryStoreApplication.drain path approved |> unwrap |> ignore
 
         let output =
@@ -765,14 +825,14 @@ module TelemetryStoreApplicationTests =
         command.ExecuteNonQuery() |> ignore
         connection.Close()
         let initialized = TelemetryStoreApplication.initialize path approved |> unwrap
-        Assert.Contains("\"schemaVersion\":9", initialized)
+        Assert.Contains("\"schemaVersion\":10", initialized)
         Assert.Contains("\"status\":\"ready\"", TelemetryStoreApplication.status path approved |> unwrap)
 
     [<Fact>]
     let ``UTEL-04A CI observations migrate ingest and summarize without private fields`` () =
         let cleanup, path = root ()
         use cleanup = cleanup
-        Assert.Contains("\"schemaVersion\":9", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":10", TelemetryStoreApplication.initialize path approved |> unwrap)
 
         let ci =
             Encoding.UTF8.GetBytes
@@ -913,7 +973,7 @@ module TelemetryStoreApplicationTests =
 
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":9", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":10", TelemetryStoreApplication.initialize path approved |> unwrap)
         let summary = TelemetryStoreApplication.summary path approved "UTEL-04A" |> unwrap
         Assert.Contains("\"admitted\":1", summary)
 
@@ -1329,7 +1389,7 @@ module TelemetryStoreApplicationTests =
 
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":9", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":10", TelemetryStoreApplication.initialize path approved |> unwrap)
 
         use verify =
             new SqliteConnection(
@@ -1967,7 +2027,7 @@ module TelemetryStoreApplicationTests =
 
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":9", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":10", TelemetryStoreApplication.initialize path approved |> unwrap)
 
         use verify =
             new SqliteConnection(
@@ -2065,7 +2125,7 @@ module TelemetryStoreApplicationTests =
 
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":9", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":10", TelemetryStoreApplication.initialize path approved |> unwrap)
 
         Assert.False(
             TelemetryStoreApplication.ciPopulationAdmissionExists
@@ -2747,7 +2807,7 @@ module TelemetryStoreApplicationTests =
         downgrade.CommandText <- dropNativeOutcomeSchema + " PRAGMA user_version=6;"
         downgrade.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":9", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":10", TelemetryStoreApplication.initialize path approved |> unwrap)
 
         use verify =
             new SqliteConnection(
@@ -2765,7 +2825,7 @@ module TelemetryStoreApplicationTests =
     let ``UTEL-08 terminal reviews activities exact attribution and complications produce private item detail`` () =
         let cleanup, path = root ()
         use cleanup = cleanup
-        Assert.Contains("\"schemaVersion\":9", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":10", TelemetryStoreApplication.initialize path approved |> unwrap)
         let item = "UTEL-08-detail"
         let digest = String.replicate 64 "a"
 
@@ -2854,7 +2914,7 @@ module TelemetryStoreApplicationTests =
         decompressor.CopyTo canonicalStream
         let canonical = canonicalStream.ToArray()
         use canonicalDocument = JsonDocument.Parse canonical
-        Assert.Equal(9, canonicalDocument.RootElement.GetProperty("store").GetProperty("schemaVersion").GetInt32())
+        Assert.Equal(10, canonicalDocument.RootElement.GetProperty("store").GetProperty("schemaVersion").GetInt32())
         Assert.Equal(snapshotDocument1.RootElement.GetProperty("revision").GetString(), CanonicalJson.sha256 canonical)
 
         Assert.Equal(
@@ -2988,7 +3048,7 @@ module TelemetryStoreApplicationTests =
         downgrade.CommandText <- dropReviewSchema + " PRAGMA user_version=7;"
         downgrade.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":9", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":10", TelemetryStoreApplication.initialize path approved |> unwrap)
 
         use verify =
             new SqliteConnection(

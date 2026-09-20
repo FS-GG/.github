@@ -31,7 +31,7 @@ module DashboardProjectionTests =
                 """{"mode":"all","requestedItem":null,"complete":true,"maxItems":200,"maxRowsPerRelation":10000}"""
             )
 
-        root["store"] <- JsonNode.Parse("""{"schemaVersion":9,"journalMode":"wal"}""")
+        root["store"] <- JsonNode.Parse("""{"schemaVersion":10,"journalMode":"wal"}""")
         root["items"] <- nodes [| JsonValue.Create(item) |]
         root["summaries"] <- nodes [| summary item |]
 
