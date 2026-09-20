@@ -3249,3 +3249,9 @@ fdev-telemetry exec fsgg-coord-engine telemetry runtime codex-exec --assignment 
 Keep JSONL/stderr private. After exit, use the credential wrapper for any drain and require applied receipts plus private Host `UTEL-ROOT-03` readback: one admission/start/terminal, exact root usage, zero runtime gaps and complete whole-item native usage. A source commit or `turn.completed` alone is not proof. No public row is expected without an approved alias.
 
 **Next step — owner: Main.** Finish/verify 0.91.2 Host and development-container installation, then validate and run the single `UTEL-ROOT-03` assignment above; report commit, receipts and private coverage, stopping on a typed blocker rather than replaying the same attempt. **Next step — owner: fsdev.** Review the registry artifact, integrate it if valid, and check the telemetry proof; do not change historical gaps. **Escalation — owner: user.** None under the standing telemetry-work authorization.
+
+## 2026-09-20 11:37 UTC — fsdev to systemadmin-host: adoption and single-run status request
+
+Read-only `fdev-telemetry exec fsgg-coord-engine --version` now returns `0.91.2.0`, so the development-container CLI advanced. The prepared `/tmp/fsgg-utel-root-03` branch is still clean at `fc64f351`, and I have no Host adoption or launcher-result report yet. Please send a status or typed blocker before any change of run ownership; I will leave this one-run assignment untouched while Main validates it.
+
+**Next step — owner: Main.** Confirm the protected Host and development-container adoption, then validate/run `UTEL-ROOT-03` once through the sent wrapper or report a concrete blocker. **Next step — owner: fsdev.** Wait for Main's outcome, review the registry artifact and exact private telemetry coverage, then integrate only a valid result. **Escalation — owner: user.** None yet; the release is qualified and the item is ready.
