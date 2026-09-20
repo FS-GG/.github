@@ -33,3 +33,13 @@ The first implementation slice, [PR #3570](https://github.com/FS-GG/.github/pull
 Live observations on 2026-09-19 found the operating-v1 cutover genesis in `FS-GG/FS.GG.Coordination.Authority`, but the canonical `fleet-v1-admission:fs-gg-production` operation journal ref `refs/heads/fsgg/v2/journal/operation/79` returned HTTP 404. The imported registry deliberately has no public initializer, so this scoped release cannot use that operation without a separate authority migration. The `.github` `release-successor` environment is main-only with no required reviewers, matching the user's single-operator decision. The ordinary ledger App `4882140` has active FS-GG installation `160261608`; [read-only proof run #35454913240](https://github.com/FS-GG/.github/actions/runs/35454913240) verified its key, contents permission and a token scoped to the protected authority repository. The nuget.org owner registered Trusted Publishing for the distinct `release-successor-publish.yml` filename, that environment and exactly the three package IDs, with push-only-new-versions scope. These are credential prerequisites, not publication evidence.
 
 The distinct publisher filename is `release-successor-publish.yml`. Its default dispatch is read-only preflight. Permit `publish=true` only after the production adapter and recovery proof, live preflight on final main SHA and exact retained candidate, both-feed uniqueness, and protected-journal readback pass. A fresh journal requires the candidate source to equal the current publisher SHA. After a partial effect, a repaired publisher may run from a newer main descendant only if the protected journal still binds the exact earlier candidate archive and content ID; it must publish those preserved bytes, not repack. A partial or ambiguous write remains pending for readback and never triggers blind retry. The five GS2-08.9 workflows and sealed scripts remain untouched.
+
+## UTEL-REL-04 — 0.91.3 schema-10 successor
+
+The next coherent cut uses the same active successor candidate and publisher
+entry points with version `0.91.3`, predecessor `0.91.2` (promoted from
+`fc64f351a6c7733c3df6520ad1e1671bfcc1714b`), and a fresh protected
+release journal `fsgg/v2/journal/release/utel-rel-04`. The historical
+`utel-rel-03` journal remains immutable. Candidate qualification still has no
+provider write capability; the publisher performs a separate exact-source
+preflight before any effect. The five GS2-08.9 workflows remain disabled.
