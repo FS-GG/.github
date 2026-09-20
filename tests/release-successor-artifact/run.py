@@ -26,8 +26,8 @@ PACKAGES = ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers")
 
 def package(path: pathlib.Path, package_id: str) -> None:
     nuspec = (
-        f'<package><metadata><id>{package_id}</id><version>0.91.2</version>'
-        f'<releaseNotes>0.91.2 fixture</releaseNotes><repository type="git" commit="{SOURCE}" />'
+        f'<package><metadata><id>{package_id}</id><version>0.91.3</version>'
+        f'<releaseNotes>0.91.3 fixture</releaseNotes><repository type="git" commit="{SOURCE}" />'
         "</metadata></package>"
     )
     with zipfile.ZipFile(path, "w") as archive:
@@ -43,15 +43,15 @@ class CandidateArtifactTests(unittest.TestCase):
         self.candidate = self.root / "candidate"
         self.candidate.mkdir()
         for package_id in PACKAGES:
-            package(self.candidate / f"{package_id}.0.91.2.nupkg", package_id)
+            package(self.candidate / f"{package_id}.0.91.3.nupkg", package_id)
         predecessor = {
             "contentId": "sha256:" + "c" * 64,
-            "version": "0.91.1",
+            "version": "0.91.2",
             "sourceSha": PREDECESSOR,
             "promotedAt": "2026-09-19T00:00:00Z",
         }
         (self.candidate / "previous-stable-channel.json").write_text(json.dumps(predecessor))
-        package_sha = hashlib.sha256((self.candidate / "FS.GG.Coord.Cli.0.91.2.nupkg").read_bytes()).hexdigest()
+        package_sha = hashlib.sha256((self.candidate / "FS.GG.Coord.Cli.0.91.3.nupkg").read_bytes()).hexdigest()
         qualification = {
             "schema": "fsgg.telemetry.standalone-qualification/2",
             "qualified": True,
@@ -70,7 +70,7 @@ class CandidateArtifactTests(unittest.TestCase):
         (assets / "index.html").write_text("<!doctype html>")
         subprocess.run([
             sys.executable, str(ROOT / "scripts" / "release-saga.py"), "prepare",
-            "--release-id", "github:0.91.2", "--version", "0.91.2", "--source-sha", SOURCE,
+            "--release-id", "github:0.91.3", "--version", "0.91.3", "--source-sha", SOURCE,
             "--source-tree", "d" * 40, "--policy-version", "release-successor/1",
             "--previous-channel", str(self.candidate / "previous-stable-channel.json"),
             "--artifact-dir", str(self.candidate),

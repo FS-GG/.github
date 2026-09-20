@@ -61,7 +61,7 @@ class FakeGit:
 intent = {
     "contentId": "sha256:" + "a" * 64,
     "sourceSha": "b" * 40,
-    "version": "0.91.2",
+    "version": "0.91.3",
     "candidateArchiveSha256": "c" * 64,
     "operator": "EHotwagner",
 }
