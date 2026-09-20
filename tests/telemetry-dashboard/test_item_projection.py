@@ -19,6 +19,53 @@ def snapshot():
     return value
 
 class ItemProjectionTests(unittest.TestCase):
+    def test_real_schema10_two_store_envelopes_coalesce_only_identical_global_epoch(self):
+        def source(item, original):
+            value=json.loads(json.dumps(snapshot()))
+            for rows in value.values():
+                if isinstance(rows,list):
+                    for row in rows:
+                        if isinstance(row,dict):
+                            if row.get("item_id")=="child": row["item_id"]=item
+                            if row.get("original_item_id")=="ORIGINAL": row["original_item_id"]=original
+            value.update({"selection":{"mode":"all","complete":True},"store":{"schemaVersion":10,"journalMode":"wal"},"items":[],
+                "summaries":[{"schema":"fsgg.telemetry.public-summary/1","item":item,"factCount":1,"usageObservations":1,"deliveryObservations":1,
+                    "usage":{"input":100,"cachedInput":20,"cacheWriteInput":0,"output":40,"reasoning":10,"total":140},
+                    "launcherPopulation":{"admitted":1,"started":1,"terminal":1,"usage":1,"missingAdmission":0,"missingStart":0,"missingTerminal":0,"missingUsage":0},
+                    "recordValidity":"valid","joinIntegrity":"matched","populationCoverage":"complete","qualification":"not-evaluated"}]})
+            value["budgetEpochs"]=[{"epoch_id":"shared-global-epoch","ordinal":1,"state":"open","identity":"budget-global-1"}]
+            return value
+
+        def envelope(value):
+            raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
+            return {"schema":"fsgg.telemetry.item-detail/2","observedAt":"2026-09-20T19:00:00Z","revision":D.hashlib.sha256(raw).hexdigest(),
+                "canonicalSnapshotGzip":D.base64.b64encode(D.gzip.compress(raw)).decode(),
+                "operational":{"pendingBatches":0,"consistency":"observed-outside-database-transaction"}}
+
+        left=source("child","ORIGINAL"); right=source("orch-child","ORCH")
+        approved=labels()
+        approved["items"]["ORCH"]={"key":"orchestration-item","label":"Orchestration item","url":"https://github.com/FS-GG/.github/issues/2","repositories":["FS-GG/.github"],"notes":[]}
+        cfg={"storeRoots":["/private/fsharp-dev","/private/orchestration"],"engine":"engine"}
+        with mock.patch.object(D,"engine_json",return_value=envelope(left)),mock.patch.object(D,"load_labels",return_value=approved):
+            incumbent=D.build_host(resolved_config={"storeRoot":"/private/fsharp-dev","engine":"engine"})
+        with mock.patch.object(D,"engine_json",side_effect=[envelope(left),envelope(right)]),mock.patch.object(D,"load_labels",return_value=approved):
+            projected=D.build_host(resolved_config=cfg)
+        D.validate_host(projected)
+        self.assertEqual(projected["source"]["kind"],"configured-local-stores")
+        self.assertEqual(next(row for row in projected["completedItems"]["items"] if row["key"]=="public-item"),incumbent["completedItems"]["items"][0])
+        joined,_=D._join_host_snapshots([(left,envelope(left)),(right,envelope(right))])
+        self.assertEqual(joined["budgetEpochs"],left["budgetEpochs"])
+
+        conflict=json.loads(json.dumps(right)); conflict["budgetEpochs"][0]["ordinal"]=2
+        with self.assertRaisesRegex(D.HostSourceError,"HOST_ENGINE_SCOPE_OVERLAP"):
+            D._join_host_snapshots([(left,envelope(left)),(conflict,envelope(conflict))])
+        distinct=json.loads(json.dumps(right)); distinct["budgetEpochs"][0]["epoch_id"]="another-open-epoch"
+        with self.assertRaisesRegex(D.HostSourceError,"HOST_ENGINE_SCOPE_OVERLAP"):
+            D._join_host_snapshots([(left,envelope(left)),(distinct,envelope(distinct))])
+        duplicate=json.loads(json.dumps(right)); duplicate["budgetEpochs"].append(dict(duplicate["budgetEpochs"][0]))
+        with self.assertRaisesRegex(D.HostSourceError,"HOST_ENGINE_SCOPE_OVERLAP"):
+            D._join_host_snapshots([(left,envelope(left)),(duplicate,envelope(duplicate))])
+
     def test_two_schema10_scopes_preserve_existing_item_and_require_new_alias(self):
         def source(item, original, pending):
             private=json.loads(json.dumps(snapshot()))
