@@ -64,6 +64,39 @@ For source work associated with a protected operation, use the routine steps for
 operation pending until its independent authority and safeguards permit it. Invalid or unknown technical or
 operation authorization fails the affected effect; it does not reclassify delivery as heavyweight.
 
+## Opt in one item to observed normal-root execution
+
+Native collaboration remains the default roadmap route. For one assigned item selected prospectively, the
+driver may instead launch its normal root through the packaged `fsgg-coord-engine telemetry runtime codex-exec`
+entrypoint. This changes observation only: ordinary delivery authority and all existing safety, permission and
+operation controls still apply. Do not activate a workspace, change generated defaults or Host data, or use this
+route to claim historical usage.
+
+Create one absolute, regular, non-symlink private root assignment with mode `0600`:
+
+```json
+{"schema":"fsgg.telemetry.codex-assignment/1","featureId":"<feature>","itemId":"<item>","attemptId":"<root-attempt>","parentAttemptId":null,"producerStream":"<producer>"}
+```
+
+Select the existing private host configuration and repository explicitly, and preserve Codex's machine-readable,
+non-persistent launch flags:
+
+```console
+fsgg-coord-engine telemetry runtime codex-exec \
+  --assignment /private/root-assignment.json \
+  --config /private/telemetry.json --repository OWNER/REPO -- \
+  --json --ephemeral -m MODEL -c model_reasoning_effort=EFFORT "assigned item"
+```
+
+Any descendant must call the same launcher from the inherited invocation context, without copying the assignment;
+use the default child relation or explicit `--relation follow-up` as applicable. The inherited context preserves
+the selected store, repository association and lineage. If any root or descendant invokes unobserved native
+collaboration, the whole-item token total remains unknown.
+
+Call the item total proven only after every expected invocation is present, every invocation has a terminal
+outcome and final completed-turn counters, and every submitted batch has an applied Host receipt. Missing,
+pending or conflicting evidence remains an explicit coverage gap; never infer a total from partial counters.
+
 ## Record repository-owned dispatches by default
 
 At driver entry, start one root observation with this skill's `scripts/roadmap-telemetry.py begin` adapter
