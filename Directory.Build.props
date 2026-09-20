@@ -583,8 +583,11 @@
   <!-- 0.91.1 -> 0.91.2 (UTEL-ROOT): PATCH release for the opt-in exact native root
        telemetry launcher and bounded JSONL frame classification. All three package identities
        move as one coherent set; earlier published archives remain immutable. -->
+  <!-- 0.91.2 -> 0.91.3 (UTEL-OUTCOME): PATCH release for schema-10 native orchestration
+       outcome ingestion and dashboard projection. The CLI, Drivers and Kit move together so
+       the installed public stage can read both migrated private Host workspaces. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.91.2</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.91.3</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
