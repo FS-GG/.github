@@ -57,7 +57,18 @@ class GitHubAPI:
         except urllib.error.HTTPError as error:
             if error.code == 404:
                 raise NotFound(url) from error
-            raise Refused(f"GitHub {method} {url} returned HTTP {error.code}") from error
+            limits = ", ".join(
+                f"{name}={value}"
+                for name, header in (
+                    ("remaining", "X-RateLimit-Remaining"),
+                    ("reset", "X-RateLimit-Reset"),
+                    ("resource", "X-RateLimit-Resource"),
+                    ("retry-after", "Retry-After"),
+                )
+                if (value := error.headers.get(header)) is not None
+            )
+            detail = f" ({limits})" if limits else ""
+            raise Refused(f"GitHub {method} {url} returned HTTP {error.code}{detail}") from error
 
     def get(self, path: str) -> dict:
         return json.loads(self._request(f"https://api.github.com/{path}"))
