@@ -70,6 +70,7 @@ class ProtectedReleaseJournal:
         if repository.get("id") != REPOSITORY_ID or repository.get("full_name") != REPOSITORY:
             raise Refused("authority repository identity differs")
         self._observed: Observed | None = None
+        self._lineage_length = 0
 
     def _read_commit(self, oid: str) -> tuple[dict, str | None]:
         commit = self.api.get(f"repos/{REPOSITORY}/git/commits/{oid}")
@@ -100,29 +101,51 @@ class ProtectedReleaseJournal:
             raise Refused("journal ref has no commit head")
         lineage: list[dict] = []
         oid: str | None = head
-        while oid is not None:
-            if len(lineage) >= 128:
+        previous = self._observed
+        while oid is not None and (previous is None or oid != previous.head):
+            if self._lineage_length + len(lineage) >= 128:
                 raise Refused("journal exceeds bounded lineage")
             state, oid = self._read_commit(oid)
             lineage.append(state)
-        lineage.reverse()
-        root = lineage[0]
-        if (
-            root.get("generation") != 1
-            or root.get("effects") != {}
-            or not all(
-                isinstance(root.get(key), str) and root[key]
-                for key in ("contentId", "sourceSha", "version", "candidateArchiveSha256", "operator")
-            )
-        ):
-            raise Refused("journal root is not an empty generation-one release intent")
-        if any(not valid_transition(previous, current) for previous, current in zip(lineage, lineage[1:])):
-            raise Refused("journal lineage contains an invalid transition")
+        if previous is not None and oid is None:
+            raise Refused("journal head does not descend from the validated head")
+        if previous is not None and not lineage:
+            # Recheck the current object, including its canonical blob. Git objects
+            # already validated below this head are immutable by identity.
+            state, parent = self._read_commit(head)
+            if state != previous.state:
+                raise Refused("journal head changed without a ref change")
+            current = state
+            length = self._lineage_length
+        else:
+            length = self._lineage_length + len(lineage)
+            lineage.reverse()
+            if previous is None:
+                if oid is not None:
+                    raise Refused("journal root traversal did not terminate")
+                root = lineage[0]
+                if (
+                    root.get("generation") != 1
+                    or root.get("effects") != {}
+                    or not all(
+                        isinstance(root.get(key), str) and root[key]
+                        for key in ("contentId", "sourceSha", "version", "candidateArchiveSha256", "operator")
+                    )
+                ):
+                    raise Refused("journal root is not an empty generation-one release intent")
+                preceding = root
+            else:
+                preceding = previous.state
+            for state in lineage if previous is not None else lineage[1:]:
+                if not valid_transition(preceding, state):
+                    raise Refused("journal lineage contains an invalid transition")
+                preceding = state
+            current = lineage[-1]
         second = self.api.get(path)
         if second.get("object", {}).get("sha") != head:
             raise Refused("journal head moved during read")
-        current = lineage[-1]
         self._observed = Observed(head, current)
+        self._lineage_length = length
         return JournalState(current["generation"], current["contentId"], current["effects"])
 
     def initialize(self, intent: dict) -> JournalState:

@@ -15,6 +15,7 @@ class FakeGit:
         self.objects = {}
         self.ref = None
         self.ref_reads = 0
+        self.commit_reads = 0
         self.conflict = False
 
     def _sha(self, kind, value):
@@ -31,6 +32,8 @@ class FakeGit:
                 raise KeyError("404")
             return {"object": {"sha": self.ref}}
         kind, sha = path.rsplit("/", 2)[-2:]
+        if kind == "commits":
+            self.commit_reads += 1
         value = self.objects[kind, sha]
         if kind == "commits":
             return {**value, "tree": {"sha": value["tree"]}, "parents": [{"sha": parent} for parent in value["parents"]]}
@@ -74,6 +77,23 @@ intent_state = journal.read()
 assert (intent_state.generation, intent_state.effects) == (2, {"tag": "intent"})
 assert journal.compare_and_swap(intent_state, "tag", "verified")
 assert journal.read().effects == {"tag": "verified"}
+before = api.commit_reads
+assert journal.read().effects == {"tag": "verified"}
+assert api.commit_reads - before == 1, "same-head read traversed validated ancestry"
+
+# A changed head validates only its new suffix and must link to the cached head.
+prior = journal.read()
+fork = journal._create_commit(
+    {"schema": "fsgg.release-successor-journal/1", **intent, "generation": 1, "effects": {}}, []
+)
+api.ref = fork
+try:
+    journal.read()
+    raise AssertionError("non-descendant journal head accepted")
+except Refused:
+    pass
+api.ref = journal._observed.head
+assert journal.read() == prior
 
 try:
     journal.compare_and_swap(start, "draft", "intent")
