@@ -68,9 +68,9 @@ operation authorization fails the affected effect; it does not reclassify delive
 
 Native collaboration remains the default roadmap route. For one assigned item selected prospectively, the
 driver may instead launch its normal root through the packaged `fsgg-coord-engine telemetry runtime codex-exec`
-entrypoint. This changes observation only: ordinary delivery authority and all existing safety, permission and
-operation controls still apply. Do not activate a workspace, change generated defaults or Host data, or use this
-route to claim historical usage.
+entrypoint. This changes the execution route for that item; ordinary delivery authority and all existing safety,
+permission and operation controls still apply. Do not activate a workspace, change generated defaults or Host data,
+or use this route to claim historical usage.
 
 Create one absolute, regular, non-symlink private root assignment with mode `0600`:
 
@@ -88,6 +88,10 @@ fsgg-coord-engine telemetry runtime codex-exec \
   --json --ephemeral -m MODEL -c model_reasoning_effort=EFFORT "assigned item"
 ```
 
+For a remote workspace, invoke the launcher through that host's approved credential-loading wrapper. An explicit
+`--config` selects the association but does not supply the receiver credential. On Main's development container,
+use `fdev-telemetry exec` before `fsgg-coord-engine`; keep the credential out of prompts, logs and arguments.
+
 Any descendant must call the same launcher from the inherited invocation context, without copying the assignment;
 use the default child relation or explicit `--relation follow-up` as applicable. The inherited context preserves
 the selected store, repository association and lineage. If any root or descendant invokes unobserved native
@@ -98,6 +102,10 @@ outcome and final completed-turn counters, and every submitted batch has an appl
 pending or conflicting evidence remains an explicit coverage gap; never infer a total from partial counters.
 
 ## Record repository-owned dispatches by default
+
+This native collaboration route applies when the opt-in `codex-exec` route above was not selected. The launcher
+owns expected dispatches for its root and descendants; do not also call this section's `begin`, `started` or
+`finish` commands for those invocations.
 
 At driver entry, start one root observation with this skill's `scripts/roadmap-telemetry.py begin` adapter
 (also exposed as `tools/roadmap-telemetry.py` in `.github`), supplying the roadmap
