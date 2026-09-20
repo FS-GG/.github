@@ -73,6 +73,8 @@ Host 0.1.3 changes the store schema from 9 to 10 so
 outcomes. The installed updater refuses a schema-range change. Main must
 rehearse and perform a stopped backup and migration for both private Host
 scopes, then verify retained receipts and the new schema before activation.
+Its protected release journal is `fsgg/v2/journal/release/utel-host-rel-02`;
+the 0.1.2 journal remains immutable.
 
 Host 0.1.2 was published from source `88ab88c3240a5e3075129b087a95b691088eaf5d` by [run 35479412309](https://github.com/FS-GG/.github/actions/runs/35479412309) as the immutable [`telemetry-host/v0.1.2`](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.1.2) release. The original package archive SHA-256 is `52cf4c895a90bc84918f95bce8fd0c1585bc289cf815c4e7645d96bada26d2d0`, its manifest content ID is `sha256:99f63a1bb24835b53e99d6baa6c26d3bf64cda94923190eb3cce4f617f0781b5`, and both feeds expose normalized producer payload `sha256:4cef79134fd0a074f14a591c02ccf6589e604464ade9cfdd651895f38656f263`. All eight protected journal effects, including promotion, are verified. Protected Host installation and receipt-triggered completion re-projection are runtime steps owned by Main.
 
