@@ -1,0 +1,97 @@
+name: release-telemetry-host-successor-candidate
+
+# Independent Host 0.1.2 source and byte qualification only. This workflow has
+# no package-feed, tag, release, journal, OIDC or promotion write capability.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: release-telemetry-host-successor-candidate
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    name: telemetry-host-012-candidate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Bind exact current main and unused Host version
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = FS-GG/.github
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
+          version="$(dotnet msbuild src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj -getProperty:Version | tr -d '[:space:]')"
+          test "$version" = 0.1.2
+          existing_tag="$(git ls-remote --tags origin refs/tags/telemetry-host/v0.1.2)"
+          test -z "$existing_tag"
+          response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
+            'https://api.nuget.org/v3-flatcontainer/fs.gg.telemetry.host/0.1.2/fs.gg.telemetry.host.0.1.2.nupkg')"
+          test "$response" = 404
+          response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
+            -u "$GITHUB_ACTOR:$GITHUB_TOKEN" \
+            'https://nuget.pkg.github.com/FS-GG/download/fs.gg.telemetry.host/0.1.2/fs.gg.telemetry.host.0.1.2.nupkg')"
+          test "$response" = 404
+      - name: Qualify Host, dashboard and browser
+        env:
+          FSGG_RUN_REAL_BROWSER: '1'
+        run: |
+          set -euo pipefail
+          dotnet restore src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Telemetry.Browser.Tests/FS.GG.Telemetry.Browser.Tests.fsproj --locked-mode
+          (cd tests/FS.GG.Telemetry.Browser.Tests && npm ci --ignore-scripts && npx playwright install --with-deps chromium)
+          dotnet test tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj -c Release --no-restore
+          dotnet test tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj -c Release --no-restore
+          dotnet test tests/FS.GG.Telemetry.Browser.Tests/FS.GG.Telemetry.Browser.Tests.fsproj -c Release --no-restore
+      - name: Pack and bind one exact Host archive
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/telemetry-host
+          dotnet pack src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj -c Release --no-restore \
+            -p:RepositoryCommit="$SOURCE_SHA" -o artifacts/telemetry-host
+          package=artifacts/telemetry-host/FS.GG.Telemetry.Host.0.1.2.nupkg
+          manifest=artifacts/telemetry-host/manifest.json
+          test -f "$package"
+          python3 scripts/telemetry-host-release.py prepare --package "$package" \
+            --lock src/FS.GG.Telemetry.Host/packages.lock.json \
+            --assets src/FS.GG.Telemetry.Dashboard/Assets \
+            --source-sha "$SOURCE_SHA" --version 0.1.2 --tag telemetry-host/v0.1.2 \
+            --output "$manifest"
+          python3 scripts/telemetry-host-release.py verify --manifest "$manifest" --package "$package"
+          bash tests/standalone-telemetry-host-package/run.sh "$package" artifacts/telemetry-host/package-evidence.json
+          bash tests/telemetry-host-release/run.sh
+      - name: Refuse changed main before retaining candidate
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: telemetry-host-successor-candidate-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            artifacts/telemetry-host/FS.GG.Telemetry.Host.0.1.2.nupkg
+            artifacts/telemetry-host/manifest.json
+            artifacts/telemetry-host/package-evidence.json
+          if-no-files-found: error
+          retention-days: 90
