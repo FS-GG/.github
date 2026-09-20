@@ -46,10 +46,13 @@ class ItemProjectionTests(unittest.TestCase):
         approved=labels()
         approved["items"]["ORCH"]={"key":"orchestration-item","label":"Orchestration item","url":"https://github.com/FS-GG/.github/issues/2","repositories":["FS-GG/.github"],"notes":[]}
         cfg={"storeRoots":["/private/fsharp-dev","/private/orchestration"],"engine":"engine"}
+        with mock.patch.object(D,"engine_json",return_value=envelope(left)),mock.patch.object(D,"load_labels",return_value=approved):
+            incumbent=D.build_host(resolved_config={"storeRoot":"/private/fsharp-dev","engine":"engine"})
         with mock.patch.object(D,"engine_json",side_effect=[envelope(left),envelope(right)]),mock.patch.object(D,"load_labels",return_value=approved):
             projected=D.build_host(resolved_config=cfg)
         D.validate_host(projected)
         self.assertEqual(projected["source"]["kind"],"configured-local-stores")
+        self.assertEqual(next(row for row in projected["completedItems"]["items"] if row["key"]=="public-item"),incumbent["completedItems"]["items"][0])
         joined,_=D._join_host_snapshots([(left,envelope(left)),(right,envelope(right))])
         self.assertEqual(joined["budgetEpochs"],left["budgetEpochs"])
 
@@ -59,6 +62,9 @@ class ItemProjectionTests(unittest.TestCase):
         distinct=json.loads(json.dumps(right)); distinct["budgetEpochs"][0]["epoch_id"]="another-open-epoch"
         with self.assertRaisesRegex(D.HostSourceError,"HOST_ENGINE_SCOPE_OVERLAP"):
             D._join_host_snapshots([(left,envelope(left)),(distinct,envelope(distinct))])
+        duplicate=json.loads(json.dumps(right)); duplicate["budgetEpochs"].append(dict(duplicate["budgetEpochs"][0]))
+        with self.assertRaisesRegex(D.HostSourceError,"HOST_ENGINE_SCOPE_OVERLAP"):
+            D._join_host_snapshots([(left,envelope(left)),(duplicate,envelope(duplicate))])
 
     def test_two_schema10_scopes_preserve_existing_item_and_require_new_alias(self):
         def source(item, original, pending):
