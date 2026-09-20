@@ -1,7 +1,7 @@
 # Telemetry host package and release boundary
 
 `FS.GG.Telemetry.Host` is an optional, independently versioned .NET tool. Its
-current released version is `0.1.1`, its command is `fsgg-telemetry-host`, and
+current released version is `0.1.2`, its command is `fsgg-telemetry-host`, and
 its tag namespace is `telemetry-host/v*`. It is not a fourth member of the
 `FS.GG.Kit`/`FS.GG.Drivers`/`FS.GG.Coord.Cli` coherent release set.
 
@@ -67,6 +67,8 @@ The publication release must contain exactly the original
 records independently observed external archive and normalized payload
 hashes for both feeds. Main adopts only after the release is promoted and
 those three assets are verified.
+
+Host 0.1.2 was published from source `88ab88c3240a5e3075129b087a95b691088eaf5d` by [run 35479412309](https://github.com/FS-GG/.github/actions/runs/35479412309) as the immutable [`telemetry-host/v0.1.2`](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.1.2) release. The original package archive SHA-256 is `52cf4c895a90bc84918f95bce8fd0c1585bc289cf815c4e7645d96bada26d2d0`, its manifest content ID is `sha256:99f63a1bb24835b53e99d6baa6c26d3bf64cda94923190eb3cce4f617f0781b5`, and both feeds expose normalized producer payload `sha256:4cef79134fd0a074f14a591c02ccf6589e604464ade9cfdd651895f38656f263`. All eight protected journal effects, including promotion, are verified. Protected Host installation and receipt-triggered completion re-projection are runtime steps owned by Main.
 
 Host 0.1.1 was published from source
 `431d69d38d71da3b2c293bee8cc05448795ea38f` by

@@ -65,6 +65,8 @@ CONTRACT_PACKAGES: dict[str, list[str]] = {
     # and never looks at source. See the coord-engine row in registry/dependencies.yml, and .github#1075
     # for the detector that measures commits since the release tag instead of comparing two scalars.
     "coord-engine": ["FS.GG.Coord.Cli"],
+    # Independent optional Host tool; released outside the three-package coherent set.
+    "telemetry-host": ["FS.GG.Telemetry.Host"],
     # `.github`'s second producer package (ADR-0016's single org scaffolder). Registered with
     # `consumers: []` under schemaVersion 2 (.github#1067 → SDD#508 → .github#1114): nothing restores
     # it (a `dotnet new` tool humans install), but it IS published and must be checked against the feed

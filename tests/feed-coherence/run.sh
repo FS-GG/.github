@@ -53,6 +53,8 @@ contracts:
   # CONTRACT_PACKAGES entry with no contract in the registry under test is an error, so every real
   # mapping must appear in this synthetic registry too.
   - { id: coord-engine,                  version: "0.3.0",           package-version: "0.3.0" }
+  # Independent optional .github Host package; mapped so its feed identity is checked.
+  - { id: telemetry-host,                version: "0.1.2",           package-version: "0.1.2" }
   # .github's second producer (.github#1067 → SDD#508 → .github#1114). Carried here for the same
   # ORPHAN-check reason as coord-engine above: a CONTRACT_PACKAGES mapping with no contract in the
   # registry under test is an error, so every real mapping appears in this synthetic registry too.
@@ -86,6 +88,7 @@ cat > "$FEED" <<'JSON'
   "FS.GG.Audio.Elmish":                ["0.1.0-preview.1"],
   "FS.GG.Audio.WebBrowser":            ["0.1.0-preview.1"],
   "FS.GG.Coord.Cli":                   ["0.3.0", "0.2.0", "0.1.1", "0.1.0"],
+  "FS.GG.Telemetry.Host":              ["0.1.2", "0.1.1"],
   "FS.GG.NewSddWorkspace":             ["0.3.0", "0.3.0-preview.1"],
   "FS.GG.Net.Core":                    ["0.1.0"],
   "FS.GG.Net.WebSocket":               ["0.1.0"],

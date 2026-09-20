@@ -19,6 +19,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-20** — UTEL-REL-01 producer and Host publications (.github): record coherent-set/v0.91.1 from source 05e3feadcce3d546a05b2a4e0b1780e8a642a228 (content sha256:3a87727ed7178b79e00f904457f19abcff1e7b00b0a93cc593568735eb28aefc) and independent telemetry-host/v0.1.2 from source 88ab88c3240a5e3075129b087a95b691088eaf5d. Host publisher run 35479412309 verified both feeds, the three release assets, and all eight protected journal effects. Protected Host adoption and completion re-projection remain Main-owned runtime steps.
+
 - **2026-09-19** — — UTEL-REL-01 0.91.0 publication (github; .github#3568): advance coord-engine.package-version to 0.91.0 after the immutable coherent-set release and both-feed readback. Source 85c356b2c44cfea4b83659b14b6946d64bbd9a22, content sha256:c8b03938aa6357f696ff9ca257315e02f79e0a23ef8b6d87d37430139f2e600c; publisher run 35457078213 and clean public CLI install verified. Main owns separate installed-host adoption.
 
 - **2026-09-18** — FsQuint stable publication (fsquint; ADR-0085; FS-GG/FsQuint#9): advance `fsquint-replay` to 0.1.0 only after [release verification](https://github.com/FS-GG/FsQuint/actions/runs/35330871321) passed for FsQuint and FsQuint.Tooling on both feeds, including source/payload identity and anonymous external use. Consumer adoption remains governed by SDD and Coordination qualification; the independent repository remains outside the operational fabric. No installed runtime or validator identity changes.
