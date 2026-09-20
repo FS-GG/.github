@@ -39,6 +39,14 @@ The setup command records no token and performs no publication or systemd mutati
 
 The publisher credential is inherited only by the publisher process as `GITHUB_TOKEN`. The handoff path requires `environment-only`, so it cannot fall back to another account's `gh auth` session. The credential remains limited to contents write on the fixed destination. Ingestion and aggregate production run without it.
 
+## Approved label rotation after cutover
+
+The active publisher's `activation.json` is immutable under `handoff-setup`. A changed label file therefore needs a new reviewed activation. Do not edit or delete the active receipt or start a second publisher. The separate `tools/telemetry-handoff-label-rotation.py` helper rotates the receipt in the **same publisher state directory** while holding the existing publisher lock; it never stages, publishes, or changes a timer.
+
+After an operator approves the exact public alias and label-file digest, the producer stages a snapshot with that digest through `handoff-stage`. The publisher account prepares a new private `0700` candidate state directory and uses the **same installed `telemetry-dashboard.py` bytes** and `handoff-setup --record-activation` to create a candidate receipt. The operator supplies a fresh, owner-checked cutover proof bound to the new config digest; its observations of the retired incumbent must still be true. The candidate must preserve the same outgoing path, producer UID, handoff GID, destination, credential source and installed script digest. It changes only `labelsDigest`.
+
+Run the helper as the existing publisher UID with its normal environment-only publication credential, passing `--publisher-script`, `--state-dir`, `--candidate-state-dir`, `--from-labels`, `--to-labels`, `--expected-remote-commit`, and `--authorize-label-rotation`. It refuses a pending publication intent, a mismatched staged digest, a changed remote commit or snapshot, and any config drift. It archives the prior activation before an atomic replacement and immediately reads back the new one. The same publisher timer then uses the new digest; its single-writer lock also serializes a concurrent timer invocation. Reversing a rotation requires another approved label file, staged snapshot, candidate activation and exact-baseline rotation. No direct edit of the active receipt is a supported recovery path.
+
 ## Restart and unknown-effect behavior
 
 Before a push, the publisher copies the selected blob into its own state, fsyncs it, and atomically records a digest-bound intent. A later producer pointer coalesces only after the publisher has established the prior intent's remote outcome. If remote readback is unavailable, the old intent remains byte-for-byte unchanged and no push occurs.
