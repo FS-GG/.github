@@ -46,6 +46,7 @@ HANDOFF_SCHEMA = "fsgg.telemetry.publication-handoff/1"
 HANDOFF_ACTIVATION_SCHEMA = "fsgg.telemetry.handoff-activation/1"
 HANDOFF_CUTOVER_SCHEMA = "fsgg.telemetry.publisher-cutover-proof/1"
 HANDOFF_RETRY_CUTOVER_SCHEMA = "fsgg.telemetry.publisher-cutover-proof/2"
+HANDOFF_REPLACEMENT_CUTOVER_SCHEMA = "fsgg.telemetry.publisher-cutover-proof/3"
 HANDOFF_INTENT_SCHEMA = "fsgg.telemetry.publisher-intent/1"
 HANDOFF_SUCCESS_SCHEMA = "fsgg.telemetry.publisher-success/1"
 HANDOFF_CURRENT_NAME = "current.json"
@@ -547,7 +548,7 @@ def project_one_item(snapshot: dict[str,Any], original: str, members: list[str],
         "process":process}
 
 
-def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: list[dict[str, Any]], status: dict[str, Any], observed: str, reconciliations: list[dict[str,Any]] | None = None, budget_health: list[dict[str,Any]] | None = None, store_status: dict[str,Any] | None = None, completed_items: dict[str,Any] | None = None) -> dict[str, Any]:
+def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: list[dict[str, Any]], status: dict[str, Any], observed: str, reconciliations: list[dict[str,Any]] | None = None, budget_health: list[dict[str,Any]] | None = None, store_status: dict[str,Any] | None = None, completed_items: dict[str,Any] | None = None, source_kind: str = "configured-local-store") -> dict[str, Any]:
     if not isinstance(public, dict) or public.get("schema") != "fsgg.telemetry.public-export/1" or not isinstance(public.get("items"), list): raise ValueError("invalid public export")
     totals = {k:0 for k in ("factCount","usageObservations","deliveryObservations")}
     usage = {k:0 for k in ("input","cachedInput","cacheWriteInput","output","total")}; reasoning: int | None = 0
@@ -602,7 +603,7 @@ def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: li
             if denominator is not None: checked_int(denominator,"denominator")
             assessments.append({"dimension":name,"verdict":verdict,"numerator":numerator,"denominator":denominator,"severe":dimension.get("severe") is True})
         severe_items += int(item_severe)
-    result={"schema":HOST_SCHEMA,"observedAt":observed,"source":{"kind":"configured-local-store","publicExportSchema":"fsgg.telemetry.public-export/1"},
+    result={"schema":HOST_SCHEMA,"observedAt":observed,"source":{"kind":source_kind,"publicExportSchema":"fsgg.telemetry.public-export/1"},
         "scope":{"items":len(public["items"]),"identities":"aggregated-or-explicitly-aliased","freeText":"removed-except-approved-notes"},"totals":totals,"usage":usage,"launcherPopulation":launcher,
         "quality":quality,"operational":operational,"store":{"status":enum((store_status or {}).get("status"),{"ready"},"store status"),"schemaVersion":checked_int((store_status or {}).get("schemaVersion"),"schemaVersion"),"journalMode":enum((store_status or {}).get("journalMode"),{"wal"},"journalMode"),"pendingBatches":checked_int((store_status or {}).get("pendingBatches"),"pendingBatches")},
         "localCi":{"counts":ci_totals,"seconds":seconds,"coverage":ci_coverage,"attribution":"repository-owned item attribution only; time values are summed per-item projections"},
@@ -622,7 +623,7 @@ def enum(value: Any, values: set[str], name: str) -> str:
     return value
 
 
-def _explicit_producer_config(path: pathlib.Path) -> tuple[pathlib.Path, dict[str,str]]:
+def _explicit_producer_config(path: pathlib.Path) -> tuple[pathlib.Path, dict[str,Any]]:
     if not path.is_absolute(): raise HostSourceError("HANDOFF_CONFIG_UNSAFE")
     raw=read_private_bytes(path,65536,"HANDOFF_CONFIG_UNSAFE")
     def reject_duplicates(pairs: list[tuple[str,Any]]) -> dict[str,Any]:
@@ -630,18 +631,23 @@ def _explicit_producer_config(path: pathlib.Path) -> tuple[pathlib.Path, dict[st
         return dict(pairs)
     try: value=json.loads(raw,object_pairs_hook=reject_duplicates)
     except (UnicodeError,json.JSONDecodeError) as error: raise HostSourceError("HANDOFF_CONFIG_INVALID") from error
-    if (not isinstance(value,dict) or list(value)!=["schema","storeRoot","engine"]
-        or value.get("schema")!="fsgg.telemetry.host-config/1"):
-        raise HostSourceError("HANDOFF_CONFIG_INVALID")
-    store=pathlib.Path(value["storeRoot"]) if isinstance(value.get("storeRoot"),str) else pathlib.Path()
+    if not isinstance(value,dict): raise HostSourceError("HANDOFF_CONFIG_INVALID")
     engine=value.get("engine")
-    if not store.is_absolute() or not isinstance(engine,str) or not engine or os.path.sep in engine:
+    if not isinstance(engine,str) or not engine or os.path.sep in engine:
         raise HostSourceError("HANDOFF_CONFIG_INVALID")
-    return path.resolve(strict=True),{"storeRoot":str(store),"engine":engine}
+    if list(value)==["schema","storeRoot","engine"] and value.get("schema")=="fsgg.telemetry.host-config/1":
+        store=pathlib.Path(value["storeRoot"]) if isinstance(value.get("storeRoot"),str) else pathlib.Path()
+        if not store.is_absolute(): raise HostSourceError("HANDOFF_CONFIG_INVALID")
+        return path.resolve(strict=True),{"storeRoot":str(store),"engine":engine}
+    if list(value)==["schema","storeRoots","engine"] and value.get("schema")=="fsgg.telemetry.host-config/2":
+        roots=value["storeRoots"]
+        if (not isinstance(roots,list) or len(roots)!=2 or any(not isinstance(root,str) or not pathlib.Path(root).is_absolute() for root in roots)
+            or len({os.path.realpath(root) for root in roots})!=2): raise HostSourceError("HANDOFF_CONFIG_INVALID")
+        return path.resolve(strict=True),{"storeRoots":roots,"engine":engine}
+    raise HostSourceError("HANDOFF_CONFIG_INVALID")
 
 
-def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Path | None = None, engine_path: str | None = None, resolved_config: dict[str,str] | None = None) -> dict[str, Any]:
-    cfg=resolved_config or config(config_path)[1]; store, engine = cfg["storeRoot"], engine_path or cfg["engine"]
+def _read_host_snapshot(store: str, engine: str) -> tuple[dict[str,Any],dict[str,Any]]:
     envelope=engine_json(engine,["telemetry","item-detail","--format-version","2","--all","--store-root",store])
     if not isinstance(envelope,dict) or set(envelope)!={"schema","observedAt","revision","canonicalSnapshotGzip","operational"} or envelope.get("schema")!="fsgg.telemetry.item-detail/2" or not re.fullmatch(r"[0-9a-f]{64}",str(envelope.get("revision"))): raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPATIBLE")
     compressed=bounded_base64(envelope["canonicalSnapshotGzip"],MAX_JSON,"HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH")
@@ -654,7 +660,45 @@ def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Pat
     if hashlib.sha256(selected).hexdigest()!=envelope["revision"]: raise HostSourceError("HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH")
     if not isinstance(snapshot,dict) or not isinstance(snapshot.get("selection"),dict) or snapshot["selection"].get("mode")!="all" or snapshot["selection"].get("complete") is not True: raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPLETE")
     store_projection=snapshot.get("store")
-    if not isinstance(store_projection,dict) or store_projection.get("schemaVersion") not in (8,9) or store_projection.get("journalMode")!="wal": raise HostSourceError("HOST_STORE_INCOMPATIBLE")
+    if not isinstance(store_projection,dict) or store_projection.get("schemaVersion") not in (8,9,10) or store_projection.get("journalMode")!="wal": raise HostSourceError("HOST_STORE_INCOMPATIBLE")
+    operational=envelope.get("operational")
+    if not isinstance(operational,dict) or operational.get("consistency")!="observed-outside-database-transaction": raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
+    checked_int(operational.get("pendingBatches"),"pending batches")
+    if parse_time(envelope.get("observedAt")) is None: raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
+    return snapshot,envelope
+
+
+def _join_host_snapshots(sources: list[tuple[dict[str,Any],dict[str,Any]]]) -> tuple[dict[str,Any],dict[str,Any]]:
+    if len(sources)!=2 or any(source[0]["store"]["schemaVersion"]!=10 for source in sources): raise HostSourceError("HOST_STORE_INCOMPATIBLE")
+    left,right=(source[0] for source in sources)
+    if set(left)!=set(right): raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPATIBLE")
+    combined={}
+    for key,value in left.items():
+        other=right[key]
+        if isinstance(value,list) and isinstance(other,list): combined[key]=value+other
+        elif key=="store": combined[key]=value
+        elif key=="selection": combined[key]=value
+        elif value==other: combined[key]=value
+        else: raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPATIBLE")
+    ids=[item.get("item") for item in combined.get("summaries",[]) if isinstance(item,dict)]
+    if len(ids)!=len(set(ids)) or any(not isinstance(item,str) for item in ids): raise HostSourceError("HOST_ENGINE_SCOPE_OVERLAP")
+    selected=combined.get("items")
+    if not isinstance(selected,list) or len(selected)!=len(set(selected)) or any(not isinstance(item,str) for item in selected): raise HostSourceError("HOST_ENGINE_SCOPE_OVERLAP")
+    epochs=[row.get("epoch_id") for row in snapshot_rows(combined,"budgetEpochs") if row.get("state")=="open"]
+    if len(epochs)>1: raise HostSourceError("HOST_ENGINE_SCOPE_OVERLAP")
+    observed=min((source[1]["observedAt"] for source in sources),key=parse_time)
+    pending=sum(source[1]["operational"]["pendingBatches"] for source in sources)
+    return combined,{"observedAt":observed,"operational":{"pendingBatches":pending,"consistency":"observed-outside-database-transaction"}}
+
+
+def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Path | None = None, engine_path: str | None = None, resolved_config: dict[str,Any] | None = None) -> dict[str, Any]:
+    cfg=resolved_config or config(config_path)[1]
+    engine=engine_path or cfg["engine"]
+    stores=cfg.get("storeRoots") or [cfg["storeRoot"]]
+    if len(stores) not in (1,2): raise HostSourceError("HOST_CONFIG_INVALID")
+    sources=[_read_host_snapshot(store,engine) for store in stores]
+    snapshot,envelope=sources[0] if len(sources)==1 else _join_host_snapshots(sources)
+    store_projection=snapshot["store"]
     public={"schema":"fsgg.telemetry.public-export/1","items":snapshot.get("summaries")}
     if not isinstance(public["items"],list): raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
     ids=[item.get("item") for item in public["items"] if isinstance(item,dict) and isinstance(item.get("item"),str)]
@@ -675,7 +719,8 @@ def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Pat
     store_status={"status":"ready","schemaVersion":store_projection["schemaVersion"],"journalMode":"wal","pendingBatches":checked_int(operational.get("pendingBatches"),"pending batches")}
     labels=load_labels(labels_path)
     completed=project_completed_items(snapshot,status,labels,ci_by_item,budgets_by_item)
-    return aggregate_host(public,ci,budgets,status,envelope["observedAt"],[],health,store_status,completed)
+    kind="configured-local-stores" if len(sources)==2 else "configured-local-store"
+    return aggregate_host(public,ci,budgets,status,envelope["observedAt"],[],health,store_status,completed,kind)
 
 
 def publish(repo: str, branch: str, path: str, token: str, snapshot: dict[str, Any]) -> str:
@@ -1068,6 +1113,7 @@ def handoff_stage(args: argparse.Namespace) -> dict[str,Any]:
         if args.approve_labels!=label_digest: raise HostSourceError("HANDOFF_LABEL_APPROVAL_MISMATCH")
         _,producer_config=_explicit_producer_config(args.config)
         snapshot=build_host(labels,args.config,args.producer_executable,producer_config); validate_host(snapshot); raw=dump(snapshot)
+        if len(raw)>MAX_JSON: raise HostSourceError("HANDOFF_BLOB_TOO_LARGE")
         if read_private_bytes(labels,65536,"EVENT_PRIVATE_INPUT_CHANGED")!=label_bytes: raise HostSourceError("EVENT_PRIVATE_INPUT_CHANGED")
         digest=hashlib.sha256(raw).hexdigest(); blob="snapshot-"+digest+".json"; blob_path=outgoing/blob
         if blob_path.exists() or blob_path.is_symlink():
@@ -1128,6 +1174,31 @@ def _validate_cutover_proof(value: Any, config_digest: str, candidate_digest: st
     if not isinstance(value,dict): raise HostSourceError("HANDOFF_CUTOVER_PROOF_INVALID")
     if value.get("schema")==HANDOFF_CUTOVER_SCHEMA:
         return _validate_initial_cutover_proof(value,config_digest,candidate_digest)
+    if value.get("schema")==HANDOFF_REPLACEMENT_CUTOVER_SCHEMA:
+        proof=exact(value,{"schema","configDigest","candidateDigest","labelsDigest","coordinatorDigest","publisherUnitDigest",
+            "remoteBaseline","incumbent","observedAt","evidenceDigest"},"replacement cutover proof")
+        baseline=exact(proof.get("remoteBaseline"),{"commit","snapshotDigest","publicRevision"},"replacement remote baseline")
+        incumbent=exact(proof.get("incumbent"),{"accountUid","managerIdentity","candidateDigest","activationDigest","stateDirectoryDigest","timerUnit",
+            "timerEnabledState","timerActiveState","serviceUnit","serviceActiveState","pendingIntentState","statePreservation"},"replacement incumbent")
+        unsigned={key:item for key,item in proof.items() if key!="evidenceDigest"}
+        if (proof.get("configDigest")!=config_digest or proof.get("candidateDigest")!=candidate_digest
+            or not all(re.fullmatch(r"[0-9a-f]{64}",str(proof.get(key))) for key in ("labelsDigest","coordinatorDigest","publisherUnitDigest"))
+            or not re.fullmatch(r"[0-9a-f]{40}",str(baseline.get("commit")))
+            or not all(re.fullmatch(r"[0-9a-f]{64}",str(baseline.get(key))) for key in ("snapshotDigest","publicRevision"))
+            or not all(re.fullmatch(r"[0-9a-f]{64}",str(incumbent.get(key))) for key in ("candidateDigest","activationDigest","stateDirectoryDigest"))
+            or incumbent["candidateDigest"]==candidate_digest
+            or not isinstance(incumbent.get("accountUid"),int) or isinstance(incumbent.get("accountUid"),bool) or incumbent["accountUid"]<0
+            or incumbent.get("managerIdentity")!="system"
+            or not re.fullmatch(r"[A-Za-z0-9_.@-]{1,160}\.timer",str(incumbent.get("timerUnit")))
+            or not re.fullmatch(r"[A-Za-z0-9_.@-]{1,160}\.service",str(incumbent.get("serviceUnit")))
+            or incumbent.get("timerEnabledState")!="disabled" or incumbent.get("timerActiveState")!="inactive"
+            or incumbent.get("serviceActiveState")!="inactive"
+            or incumbent.get("pendingIntentState") not in {"absent","reconciled"}
+            or incumbent.get("statePreservation")!="byte-identical"
+            or parse_time(proof.get("observedAt")) is None
+            or proof.get("evidenceDigest")!=hashlib.sha256(dump(unsigned)).hexdigest()):
+            raise HostSourceError("HANDOFF_CUTOVER_PROOF_INVALID")
+        return proof
     proof=exact(value,{"schema","generation","configDigest","candidateDigest","labelsDigest","coordinatorDigest","publisherUnitDigest",
         "remoteBaseline","priorAttempt","incumbentAccountUid","managerIdentity","timerUnit","timerEnabledState","timerActiveState",
         "serviceUnit","serviceActiveState","eventActivationPathDigest","eventActivationPriorState","eventActivationReceiptDigest",
@@ -1201,6 +1272,17 @@ def _load_cutover_proof(directory: pathlib.Path, operator_uid: int, cutover_gid:
     return proof
 
 
+def _verify_replacement_baseline(proof: dict[str,Any], destination: dict[str,str]) -> None:
+    try:
+        current,commit=current_publication(destination["repository"],destination["branch"],destination["path"],publication_token("environment-only"))
+    except (HostSourceError,RuntimeError,OSError) as error:
+        raise HostSourceError("HANDOFF_REMOTE_BASELINE_UNAVAILABLE") from error
+    baseline=proof["remoteBaseline"]
+    if (current is None or commit!=baseline["commit"] or hashlib.sha256(dump(current)).hexdigest()!=baseline["snapshotDigest"]
+        or current.get("revision")!=baseline["publicRevision"]):
+        raise HostSourceError("HANDOFF_REMOTE_BASELINE_CHANGED")
+
+
 def handoff_setup(args: argparse.Namespace) -> dict[str,Any]:
     outgoing=args.outgoing.resolve(strict=True); state=args.state_dir.resolve(strict=True)
     _validate_owned_directory(state,0o700,os.getuid(),os.getgid(),"HANDOFF_STATE_UNSAFE")
@@ -1219,8 +1301,13 @@ def handoff_setup(args: argparse.Namespace) -> dict[str,Any]:
         if args.cutover_proof_dir is None or args.operator_uid is None or args.cutover_gid is None: raise HostSourceError("HANDOFF_CUTOVER_PROOF_REQUIRED")
         proof_dir=args.cutover_proof_dir.resolve(strict=True)
         proof=_load_cutover_proof(proof_dir,args.operator_uid,args.cutover_gid,args.producer_uid,config_digest,actual_candidate)
-        if proof.get("schema")==HANDOFF_RETRY_CUTOVER_SCHEMA and proof.get("labelsDigest")!=manifest["labelsDigest"]:
+        if proof.get("schema") in {HANDOFF_RETRY_CUTOVER_SCHEMA,HANDOFF_REPLACEMENT_CUTOVER_SCHEMA} and proof.get("labelsDigest")!=manifest["labelsDigest"]:
             raise HostSourceError("HANDOFF_CUTOVER_PROOF_INVALID")
+        if proof.get("schema")==HANDOFF_REPLACEMENT_CUTOVER_SCHEMA:
+            observed=parse_time(proof["observedAt"])
+            age=(dt.datetime.now(dt.timezone.utc)-observed).total_seconds()
+            if age < 0 or age > 300: raise HostSourceError("HANDOFF_CUTOVER_PROOF_STALE")
+            _verify_replacement_baseline(proof,destination)
         authority={"directory":str(proof_dir),"operatorUid":args.operator_uid,"cutoverGid":args.cutover_gid,"proofDigest":proof["evidenceDigest"]}
         receipt={"schema":HANDOFF_ACTIVATION_SCHEMA,"config":config,"configDigest":config_digest,"candidateDigest":actual_candidate,"cutoverAuthority":authority,"cutoverProof":proof}
         target=state/HANDOFF_ACTIVATION_NAME
@@ -1228,7 +1315,10 @@ def handoff_setup(args: argparse.Namespace) -> dict[str,Any]:
             try: existing=json.loads(read_private_bytes(target,16384,"HANDOFF_ACTIVATION_INVALID"))
             except (UnicodeError,json.JSONDecodeError) as error: raise HostSourceError("HANDOFF_ACTIVATION_INVALID") from error
             if existing!=receipt: raise HostSourceError("HANDOFF_ACTIVATION_CHANGE_REFUSED")
-        else: atomic_private(target,receipt)
+        else:
+            if proof.get("schema")==HANDOFF_REPLACEMENT_CUTOVER_SCHEMA and any((state/name).exists() or (state/name).is_symlink() for name in (HANDOFF_INTENT_NAME,HANDOFF_SUCCESS_NAME)):
+                raise HostSourceError("HANDOFF_REPLACEMENT_STATE_NOT_FRESH")
+            atomic_private(target,receipt)
         report["mode"]="record-activation"; report["cutoverProofDigest"]=proof["evidenceDigest"]; report["effects"].append("record-digest-bound-cutover-activation")
     return report
 
@@ -1254,9 +1344,12 @@ def _load_handoff_activation(state: pathlib.Path) -> dict[str,Any]:
     try:
         proof=_validate_cutover_proof(value.get("cutoverProof"),value["configDigest"],value["candidateDigest"])
         if authority.get("proofDigest")!=proof["evidenceDigest"]: raise HostSourceError("HANDOFF_ACTIVATION_INVALID")
-        if proof.get("schema")==HANDOFF_RETRY_CUTOVER_SCHEMA and proof.get("labelsDigest")!=config["labelsDigest"]:
+        if proof.get("schema") in {HANDOFF_RETRY_CUTOVER_SCHEMA,HANDOFF_REPLACEMENT_CUTOVER_SCHEMA} and proof.get("labelsDigest")!=config["labelsDigest"]:
             raise HostSourceError("HANDOFF_ACTIVATION_INVALID")
         _verify_prior_cutover_proof(proof,authority["operatorUid"],authority["cutoverGid"])
+        if proof.get("schema")==HANDOFF_REPLACEMENT_CUTOVER_SCHEMA:
+            current=_load_cutover_proof(pathlib.Path(authority["directory"]),authority["operatorUid"],authority["cutoverGid"],config["producerUid"],value["configDigest"],value["candidateDigest"])
+            if current!=proof: raise HostSourceError("HANDOFF_ACTIVATION_INVALID")
     except (ValueError,HostSourceError) as error: raise HostSourceError("HANDOFF_ACTIVATION_INVALID") from error
     return value
 
@@ -1330,6 +1423,9 @@ def handoff_publish(args: argparse.Namespace) -> dict[str,Any]:
         activation=_load_handoff_activation(state); config=activation["config"]
         destination=config["destination"]
         pending=_load_publisher_intent(state)
+        if (activation["cutoverProof"].get("schema")==HANDOFF_REPLACEMENT_CUTOVER_SCHEMA
+            and pending is None and not (state/HANDOFF_SUCCESS_NAME).exists()):
+            _verify_replacement_baseline(activation["cutoverProof"],destination)
         if pending is not None:
             old_intent,old_snapshot,old_raw=pending
             try:
@@ -1456,7 +1552,7 @@ def validate_host(value: Any) -> None:
         if hashlib.sha256(json.dumps(projected,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest()!=revision: raise ValueError("public payload revision mismatch")
     exact(value["source"],{"kind","publicExportSchema"},"host source"); exact(value["scope"],{"items","identities","freeText"},"host scope")
     identity="aggregated-and-removed" if aggregate_only else "aggregated-or-explicitly-aliased"; free="removed" if aggregate_only else "removed-except-approved-notes"
-    if value["source"]!={"kind":"configured-local-store","publicExportSchema":"fsgg.telemetry.public-export/1"} or value["scope"]["identities"]!=identity or value["scope"]["freeText"]!=free: raise ValueError("invalid host safety declaration")
+    if value["source"].get("kind") not in {"configured-local-store","configured-local-stores"} or value["source"].get("publicExportSchema")!="fsgg.telemetry.public-export/1" or value["scope"]["identities"]!=identity or value["scope"]["freeText"]!=free: raise ValueError("invalid host safety declaration")
     checked_int(value["scope"]["items"],"items"); validate_count_map(value["totals"],{"factCount","usageObservations","deliveryObservations"},"totals")
     exact(value["usage"],{"input","cachedInput","cacheWriteInput","output","total","reasoning"},"usage")
     for key,count in value["usage"].items():

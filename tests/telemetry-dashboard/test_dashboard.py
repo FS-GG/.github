@@ -137,7 +137,7 @@ class DashboardTests(unittest.TestCase):
             envelope["revision"]=hashlib.sha256(canonical).hexdigest()
             envelope["canonicalSnapshotGzip"]=D.base64.b64encode(D.gzip.compress(canonical)).decode()
             with mock.patch.object(D,"config",return_value=(pathlib.Path("/config"),{"storeRoot":"/store","engine":"engine"})),mock.patch.object(D,"engine_json",return_value=envelope):
-                if version==9: self.assertEqual(D.build_host()["store"]["schemaVersion"],9)
+                if version in (9,10): self.assertEqual(D.build_host()["store"]["schemaVersion"],version)
                 else:
                     with self.assertRaisesRegex(D.HostSourceError,"HOST_STORE_INCOMPATIBLE"): D.build_host()
 

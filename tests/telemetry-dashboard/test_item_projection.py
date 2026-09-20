@@ -3,6 +3,7 @@ import json
 import pathlib
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 SPEC=importlib.util.spec_from_file_location("dashboard_items",ROOT/"tools/telemetry-dashboard.py")
@@ -18,6 +19,47 @@ def snapshot():
     return value
 
 class ItemProjectionTests(unittest.TestCase):
+    def test_two_schema10_scopes_preserve_existing_item_and_require_new_alias(self):
+        def source(item, original, pending):
+            private=json.loads(json.dumps(snapshot()))
+            for rows in private.values():
+                if isinstance(rows,list):
+                    for row in rows:
+                        if isinstance(row,dict):
+                            if row.get("item_id")=="child": row["item_id"]=item
+                            if row.get("original_item_id")=="ORIGINAL": row["original_item_id"]=original
+            private.update({"selection":{"mode":"all","complete":True},"store":{"schemaVersion":10,"journalMode":"wal"},"items":[],
+                "summaries":[{"schema":"fsgg.telemetry.public-summary/1","item":item,"factCount":1,"usageObservations":1,"deliveryObservations":1,
+                    "usage":{"input":100,"cachedInput":20,"cacheWriteInput":0,"output":40,"reasoning":10,"total":140},
+                    "launcherPopulation":{"admitted":1,"started":1,"terminal":1,"usage":1,"missingAdmission":0,"missingStart":0,"missingTerminal":0,"missingUsage":0},
+                    "recordValidity":"valid","joinIntegrity":"matched","populationCoverage":"complete","qualification":"not-evaluated"}]})
+            return private,{"observedAt":"2026-09-09T08:01:00Z","operational":{"pendingBatches":pending,"consistency":"observed-outside-database-transaction"}}
+
+        first=source("child","ORIGINAL",0)
+        second=source("orch-child","ORCH",0)
+        approved=labels()
+        approved["items"]["ORCH"]={"key":"orchestration-item","label":"Orchestration item","url":"https://github.com/FS-GG/.github/issues/2","repositories":["FS-GG/.github"],"notes":[]}
+        cfg={"storeRoots":["/private/fsharp-dev","/private/orchestration"],"engine":"engine"}
+        with mock.patch.object(D,"_read_host_snapshot",side_effect=[first]),mock.patch.object(D,"load_labels",return_value=approved):
+            previous=D.build_host(resolved_config={"storeRoot":"/private/fsharp-dev","engine":"engine"})
+        with mock.patch.object(D,"_read_host_snapshot",side_effect=[first,second]),mock.patch.object(D,"load_labels",return_value=approved):
+            combined=D.build_host(resolved_config=cfg)
+        D.validate_host(combined)
+        self.assertEqual(combined["source"]["kind"],"configured-local-stores")
+        self.assertEqual(combined["scope"]["items"],2)
+        self.assertEqual(combined["store"]["schemaVersion"],10)
+        self.assertEqual([row["key"] for row in combined["completedItems"]["items"]],["orchestration-item","public-item"])
+        self.assertEqual(next(row for row in combined["completedItems"]["items"] if row["key"]=="public-item"),previous["completedItems"]["items"][0])
+        self.assertEqual(combined["totals"]["factCount"],previous["totals"]["factCount"]*2)
+        approved["items"].pop("ORCH")
+        with mock.patch.object(D,"_read_host_snapshot",side_effect=[first,second]),mock.patch.object(D,"load_labels",return_value=approved):
+            unmapped=D.build_host(resolved_config=cfg)
+        self.assertEqual([row["key"] for row in unmapped["completedItems"]["items"]],["public-item"])
+        self.assertEqual(unmapped["completedItems"]["coverage"]["unmapped"],1)
+        overlapping=source("child","ORCH",0)
+        with mock.patch.object(D,"_read_host_snapshot",side_effect=[first,overlapping]),mock.patch.object(D,"load_labels",return_value=approved):
+            with self.assertRaisesRegex(D.HostSourceError,"HOST_ENGINE_SCOPE_OVERLAP"): D.build_host(resolved_config=cfg)
+
     def test_grouped_item_keeps_separate_time_token_ci_budget_and_delivery_evidence(self):
         source=snapshot(); ci={"child":D.snapshot_ci(source,"child")}; budgets={"child":D.snapshot_budget(source,"child")}
         value=D.project_completed_items(source,{"epoch":"current"},labels(),ci,budgets); D.validate_completed_items(value)

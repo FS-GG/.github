@@ -43,6 +43,19 @@ def retry_cutover(config_digest,candidate_digest,labels_digest="5"*64,proof_dire
     return value,initial
 
 
+def replacement_cutover(config_digest,candidate_digest,labels_digest="5"*64,baseline=None):
+    value={"schema":D.HANDOFF_REPLACEMENT_CUTOVER_SCHEMA,"configDigest":config_digest,"candidateDigest":candidate_digest,
+        "labelsDigest":labels_digest,"coordinatorDigest":"6"*64,"publisherUnitDigest":"7"*64,
+        "remoteBaseline":baseline or {"commit":"8"*40,"snapshotDigest":"9"*64,"publicRevision":"a"*64},
+        "incumbent":{"accountUid":1001,"managerIdentity":"system","candidateDigest":"b"*64,"activationDigest":"c"*64,"stateDirectoryDigest":"d"*64,
+            "timerUnit":"fsgg-telemetry-dashboard-publisher.timer","timerEnabledState":"disabled","timerActiveState":"inactive",
+            "serviceUnit":"fsgg-telemetry-dashboard-publisher.service","serviceActiveState":"inactive",
+            "pendingIntentState":"reconciled","statePreservation":"byte-identical"},
+        "observedAt":D.now()}
+    value["evidenceDigest"]=hashlib.sha256(D.dump(value)).hexdigest()
+    return value
+
+
 class HandoffPublisherTests(unittest.TestCase):
     def fixture(self):
         temporary=tempfile.TemporaryDirectory(); root=pathlib.Path(temporary.name)
@@ -71,6 +84,19 @@ class HandoffPublisherTests(unittest.TestCase):
             self.assertEqual(path,config)
             self.assertEqual(value,{"storeRoot":str(root/"store"),"engine":"fsgg-coord-engine"})
             self.assertFalse((root/".claude").exists())
+
+    def test_two_scope_producer_config_is_closed_and_private(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary); config=root/"telemetry.json"
+            roots=[str(root/"fsharp-dev"),str(root/"orchestration")]
+            config.write_text(json.dumps({"schema":"fsgg.telemetry.host-config/2","storeRoots":roots,"engine":"fsgg-coord-engine"})+"\n")
+            config.chmod(0o600)
+            _,value=D._explicit_producer_config(config)
+            self.assertEqual(value,{"storeRoots":roots,"engine":"fsgg-coord-engine"})
+            for invalid in (roots[:1],[roots[0],roots[0]],[roots[0],roots[0]+"/"],[roots[0],"relative"]):
+                config.write_text(json.dumps({"schema":"fsgg.telemetry.host-config/2","storeRoots":invalid,"engine":"fsgg-coord-engine"})+"\n")
+                with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_CONFIG_INVALID"):
+                    D._explicit_producer_config(config)
 
     def test_explicit_producer_config_rejects_workspace_and_unsafe_shapes(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -202,6 +228,54 @@ class HandoffPublisherTests(unittest.TestCase):
             with mock.patch.object(D,"_load_cutover_proof",return_value=proof):
                 with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_CUTOVER_PROOF_INVALID"):
                     D.handoff_setup(setup)
+
+    def test_current_publisher_replacement_proof_is_closed_and_refuses_overlap(self):
+        config="1"*64; candidate="2"*64; proof=replacement_cutover(config,candidate)
+        self.assertEqual(D._validate_cutover_proof(proof,config,candidate),proof)
+        for path,value in (("managerIdentity","user@1001.service"),("timerActiveState","active"),("timerEnabledState","enabled"),("serviceActiveState","active"),
+            ("pendingIntentState","unresolved"),("statePreservation","changed"),("candidateDigest",candidate)):
+            changed=json.loads(json.dumps(proof)); changed["incumbent"][path]=value
+            changed["evidenceDigest"]=hashlib.sha256(D.dump({key:item for key,item in changed.items() if key!="evidenceDigest"})).hexdigest()
+            with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_CUTOVER_PROOF_INVALID"):
+                D._validate_cutover_proof(changed,config,candidate)
+
+    def test_current_publisher_replacement_requires_exact_remote_baseline_and_fresh_state(self):
+        temporary,_,outgoing,state,_,digest,args=self.fixture()
+        with temporary:
+            self.stage(args); current=F.host(); D.validate_host(current)
+            baseline={"commit":"8"*40,"snapshotDigest":hashlib.sha256(D.dump(current)).hexdigest(),"publicRevision":current["revision"]}
+            setup=argparse.Namespace(outgoing=outgoing,state_dir=state,producer_uid=os.getuid(),handoff_gid=os.getgid(),approve_labels=digest,
+                repo="FS-GG/.github",branch="telemetry-data",path="host.json",candidate_digest=D._candidate_digest(),cutover_proof_dir=state,
+                operator_uid=os.getuid()+10000,cutover_gid=os.getgid(),record_activation=True,authorize_single_publisher_cutover=True)
+            proof=replacement_cutover("1"*64,D._candidate_digest(),digest,baseline)
+            def provider(directory,uid,gid,producer_uid,config_digest,candidate_digest):
+                proof["configDigest"]=config_digest
+                proof["evidenceDigest"]=hashlib.sha256(D.dump({key:item for key,item in proof.items() if key!="evidenceDigest"})).hexdigest()
+                return proof
+            with mock.patch.object(D,"_load_cutover_proof",side_effect=provider),mock.patch.object(D,"publication_token",return_value="private-token"),mock.patch.object(D,"current_publication",return_value=(current,baseline["commit"])):
+                self.assertEqual(D.handoff_setup(setup)["mode"],"record-activation")
+                self.assertEqual(D._load_handoff_activation(state)["cutoverProof"],proof)
+            self.assertEqual((state/D.HANDOFF_ACTIVATION_NAME).stat().st_mode&0o777,0o600)
+            altered=json.loads(json.dumps(proof)); altered["incumbent"]["stateDirectoryDigest"]="e"*64
+            altered["evidenceDigest"]=hashlib.sha256(D.dump({key:item for key,item in altered.items() if key!="evidenceDigest"})).hexdigest()
+            with mock.patch.object(D,"_load_cutover_proof",return_value=altered):
+                with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_ACTIVATION_INVALID"):
+                    D._load_handoff_activation(state)
+            with mock.patch.object(D,"_load_cutover_proof",side_effect=provider),mock.patch.object(D,"publication_token",return_value="private-token"),mock.patch.object(D,"current_publication",return_value=(current,"f"*40)),mock.patch.object(D,"publish") as publish:
+                with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_REMOTE_BASELINE_CHANGED"):
+                    D.handoff_publish(argparse.Namespace(state_dir=state))
+                publish.assert_not_called()
+            self.assertFalse((state/D.HANDOFF_INTENT_NAME).exists())
+            stale=json.loads(json.dumps(proof)); stale["observedAt"]="2026-09-10T12:00:00Z"
+            with mock.patch.object(D,"_load_cutover_proof",return_value=stale):
+                with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_CUTOVER_PROOF_STALE"): D.handoff_setup(setup)
+            fresh=state.parent/"fresh"; fresh.mkdir(); fresh.chmod(0o700)
+            setup.state_dir=fresh
+            with mock.patch.object(D,"_load_cutover_proof",side_effect=provider),mock.patch.object(D,"publication_token",return_value="private-token"),mock.patch.object(D,"current_publication",return_value=(current,"f"*40)):
+                with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_REMOTE_BASELINE_CHANGED"): D.handoff_setup(setup)
+            (fresh/D.HANDOFF_INTENT_NAME).write_text("{}")
+            with mock.patch.object(D,"_load_cutover_proof",side_effect=provider),mock.patch.object(D,"publication_token",return_value="private-token"),mock.patch.object(D,"current_publication",return_value=(current,baseline["commit"])):
+                with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_REPLACEMENT_STATE_NOT_FRESH"): D.handoff_setup(setup)
 
     def test_shared_stage_lock_contention_is_bounded_and_never_changes_mode(self):
         import fcntl
