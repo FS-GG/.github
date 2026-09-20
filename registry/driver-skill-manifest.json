@@ -4,12 +4,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "6a01b860f4ee4fa3833d377041b093b5accd7406eabe3a79233d42c36b3ff0f1",
-      "tree-sha256": "5331b785684e6c2d1a846d4aecf6ea6ad93b9fc3e3aca58c2b2c7de48d9f7264",
+      "sha256": "5a3910c436ecc64b1d4b2ab8db5efc034319da98ae459254a53138c877bcba70",
+      "tree-sha256": "a33c1eb4df6aaa12c4f2b153232c8dd9c924bb727a275301da51277533ec8285",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "6a01b860f4ee4fa3833d377041b093b5accd7406eabe3a79233d42c36b3ff0f1",
+          "sha256": "5a3910c436ecc64b1d4b2ab8db5efc034319da98ae459254a53138c877bcba70",
           "executable": false
         },
         {

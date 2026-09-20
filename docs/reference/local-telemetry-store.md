@@ -100,6 +100,12 @@ The receiver's lifetime receipt remains authoritative, and unresolved `.ready` i
 local counts as indexed-only because it does not recover a durable inbox; cutover does recover under the store
 lock before deciding that the old destination is settled.
 
+For a remote association, `--config` selects the association and its credential reference; the configuration does
+not contain or supply the referenced credential. On Main's development container, run mutating remote commands
+through the approved `fdev-telemetry exec` wrapper. It loads the credential into the command environment, where the
+runtime launcher and its subsequent bounded drain can resolve the same reference. Keep the credential out of
+arguments, prompts, logs, and configuration files.
+
 Destination changes are prospective. `telemetry workspace cutover` refuses any pending old input and requires a
 producer identity that has never appeared in active or retired association history, unless a future explicit
 identity-state import contract is implemented. Retired association history stays in the bounded configuration;
@@ -235,6 +241,15 @@ fsgg-coord-engine telemetry runtime codex-exec --relation follow-up -- \
 fsgg-coord-engine telemetry runtime status
 ```
 
+Main's existing private remote configuration uses the credential-loading wrapper:
+
+```console
+fdev-telemetry exec fsgg-coord-engine telemetry runtime codex-exec \
+  --assignment /private/root-assignment.json \
+  --config "$HOME/.config/fs-gg/telemetry.json" --repository FS-GG/.github -- \
+  --json --ephemeral -m MODEL -c model_reasoning_effort=EFFORT "assigned item"
+```
+
 The dotnet tool package contains this launcher entrypoint; no sibling script or receiver manifest is required.
 The root caller supplies the closed private assignment once. The launcher then creates the prospective activation,
 expected dispatch, invocation lineage, admission/start/terminal observations and host-wall event times. It passes a
@@ -260,6 +275,12 @@ inferring service installation or live health from configuration. Run `telemetry
 FS-GG/.github` for the local spool census; check authenticated receiver health through the Host separately. Source merge and package
 presence do not claim receiver installation or default activation. The process launcher still does not intercept
 `collaboration.spawn_agent`; the separate roadmap adapter below can join native child usage where host records exist.
+
+If remote submission fails after an envelope is queued, the private spool retains its exact `.ready` bytes for a
+later authenticated drain. Recovery can apply those retained observations, but it does not erase a
+`publication-failure` runtime gap that the launcher successfully published after detecting an earlier publication
+failure. That gap remains visible after recovery and prevents claiming complete item usage; retained turn counters
+remain partial evidence rather than a complete total.
 
 ## Native collaboration observations
 
