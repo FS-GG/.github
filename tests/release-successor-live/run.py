@@ -21,9 +21,9 @@ class FakeAPI:
         self.writes = []
 
     def get(self, path):
-        if path.endswith("/git/ref/tags/coherent-set/v0.91.1") and self.tag:
+        if path.endswith("/git/ref/tags/coherent-set/v0.91.2") and self.tag:
             return {"object": {"sha": self.tag}}
-        if path.endswith("/releases/tags/coherent-set/v0.91.1") and self.release and not self.release["draft"]:
+        if path.endswith("/releases/tags/coherent-set/v0.91.2") and self.release and not self.release["draft"]:
             return self.release
         if path.endswith("/releases?per_page=100&page=1"):
             return [self.release] if self.release else []
@@ -57,7 +57,7 @@ with tempfile.TemporaryDirectory() as temporary:
     source = "b" * 40
     content_id = "sha256:" + "a" * 64
     manifest = root / "release-manifest.json"
-    manifest.write_text(json.dumps({"contentId": content_id, "descriptor": {"sourceSha": source, "version": "0.91.1"}}))
+    manifest.write_text(json.dumps({"contentId": content_id, "descriptor": {"sourceSha": source, "version": "0.91.2"}}))
     api = FakeAPI()
     provider = LiveProvider(api, manifest, "github-token", "nuget-key")
     tag = Effect("tag", source, content_id)
@@ -68,9 +68,9 @@ with tempfile.TemporaryDirectory() as temporary:
     assert provider.observe(draft).state == "absent"
     assert provider.dispatch(draft).state == "applied"
     assert provider.observe(draft).state == "matched"
-    assert api.writes[0][1] == {"ref": "refs/tags/coherent-set/v0.91.1", "sha": source}
+    assert api.writes[0][1] == {"ref": "refs/tags/coherent-set/v0.91.2", "sha": source}
     assert len(api.writes) == 2
-    package_name = "FS.GG.Kit.0.91.1.nupkg"
+    package_name = "FS.GG.Kit.0.91.2.nupkg"
     (root / package_name).write_bytes(b"candidate package bytes")
     digest = hashlib.sha256((root / package_name).read_bytes()).hexdigest()
     archive = Effect("archive-asset:FS.GG.Kit", digest, digest)

@@ -75,13 +75,13 @@ def main() -> int:
         )
         manifest_path = candidate / "release-manifest.json"
         manifest = json.loads(manifest_path.read_text())
-        require(manifest["descriptor"]["version"] == "0.91.1", "publisher version differs")
+        require(manifest["descriptor"]["version"] == "0.91.2", "publisher version differs")
         admission = SingleOperatorAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main")
         provider = LiveProvider(api, manifest_path, github_token, nuget_key)
         intent = {
             "contentId": manifest["contentId"],
             "sourceSha": candidate_source,
-            "version": "0.91.1",
+            "version": "0.91.2",
             "candidateArchiveSha256": args.candidate_archive_sha256,
             "operator": operator,
         }
@@ -94,7 +94,7 @@ def main() -> int:
             require(admission.authorize(manifest["contentId"], "journal", "intent", manifest["contentId"]),
                     "release journal initialization admission denied")
             try:
-                api.get("repos/FS-GG/.github/git/ref/tags/coherent-set/v0.91.1")
+                api.get("repos/FS-GG/.github/git/ref/tags/coherent-set/v0.91.2")
             except NotFound:
                 pass
             else:
@@ -102,7 +102,7 @@ def main() -> int:
             require(provider._release() is None, "successor release already exists outside the protected journal")
             subprocess.run(
                 [sys.executable, str(pathlib.Path(__file__).with_name("check-release-candidate-uniqueness.py")),
-                 "--version", "0.91.1", "--predecessor", "0.91.0"],
+                 "--version", "0.91.2", "--predecessor", "0.91.1"],
                 check=True, env={**os.environ, "GITHUB_TOKEN": github_token},
             )
             if args.preflight_only:
