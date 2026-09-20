@@ -160,6 +160,36 @@ module TelemetryStoreApplicationTests =
         Assert.Equal("orchestration-delivery", string (command.ExecuteScalar()))
 
     [<Fact>]
+    let ``Main two-event delivery batch applies once as outcome and completed population`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let item = "work-item-v1-main-delivery"
+        let source = "orchestration-delivery:30000000-0000-0000-0000-000000000007"
+        let outcome =
+            $"""{{"kind":"native-item-outcome","identity":"native-item-outcome-main","itemId":"{item}","revision":638937000000000000,"repository":"FS-GG/.github","prNumber":453,"baseRef":"main","baseSha":"dddddddddddddddddddddddddddddddddddddddd","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","outcome":"delivered","codeDelivery":"delivered","mergeCommit":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","occurredAt":"2026-09-20T10:04:00Z","observedAt":"2026-09-20T10:04:01Z","sourceKind":"orchestration-delivery","sourceRef":"{source}"}}"""
+
+        let population =
+            $"""{{"kind":"budget-population","identity":"budget-population-main","itemId":"{item}","revision":638937000000000000,"originalItemId":"{item}","state":"completed","sourceKind":"native-item","sourceRef":"{source}"}}"""
+
+        let batch =
+            Encoding.UTF8.GetBytes
+                $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"batch-main-delivery","sourceIdentity":"coordination","generation":"host-outcome-40000000-0000-0000-0000-000000000001","cursor":"main-delivery","eventCount":2,"events":[{outcome},{population}]}}"""
+
+        TelemetryStoreApplication.ingest path approved batch |> unwrap |> ignore
+        TelemetryStoreApplication.ingest path approved batch |> unwrap |> ignore
+        use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use command = connection.CreateCommand()
+        command.CommandText <-
+            "SELECT (SELECT count(*) FROM native_item_outcomes WHERE item_id=$item AND source_kind='orchestration-delivery'),(SELECT count(*) FROM budget_population_facts WHERE item_id=$item AND state='completed');"
+        command.Parameters.AddWithValue("$item", item) |> ignore
+        use reader = command.ExecuteReader()
+        Assert.True(reader.Read())
+        Assert.Equal(1L, reader.GetInt64 0)
+        Assert.Equal(1L, reader.GetInt64 1)
+
+    [<Fact>]
     let ``v9 native outcomes survive v10 source-kind migration`` () =
         let cleanup, path = root ()
         use cleanup = cleanup
