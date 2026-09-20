@@ -641,7 +641,7 @@ def _explicit_producer_config(path: pathlib.Path) -> tuple[pathlib.Path, dict[st
     if list(value)==["schema","storeRoots","engine"] and value.get("schema")=="fsgg.telemetry.host-config/2":
         roots=value["storeRoots"]
         if (not isinstance(roots,list) or len(roots)!=2 or any(not isinstance(root,str) or not pathlib.Path(root).is_absolute() for root in roots)
-            or len(set(roots))!=2): raise HostSourceError("HANDOFF_CONFIG_INVALID")
+            or len({os.path.realpath(root) for root in roots})!=2): raise HostSourceError("HANDOFF_CONFIG_INVALID")
         return path.resolve(strict=True),{"storeRoots":roots,"engine":engine}
     raise HostSourceError("HANDOFF_CONFIG_INVALID")
 
