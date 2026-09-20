@@ -680,11 +680,29 @@ def _join_host_snapshots(sources: list[tuple[dict[str,Any],dict[str,Any]]]) -> t
         elif key=="selection": combined[key]=value
         elif value==other: combined[key]=value
         else: raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPATIBLE")
+    # Budget epochs are global to the Host, so two scoped stores can report
+    # the same canonical row. Keep one only when the full row is identical.
+    # A shared ID with differing evidence, or a duplicate within one store,
+    # remains an overlap refusal.
+    budget_epochs=[]; epoch_rows={}
+    for snapshot in (left,right):
+        local_ids=set()
+        for row in snapshot_rows(snapshot,"budgetEpochs"):
+            epoch_id=row.get("epoch_id")
+            if not isinstance(epoch_id,str) or not epoch_id or epoch_id in local_ids: raise HostSourceError("HOST_ENGINE_SCOPE_OVERLAP")
+            local_ids.add(epoch_id)
+            canonical=json.dumps(row,sort_keys=True,separators=(",",":"),ensure_ascii=False)
+            previous=epoch_rows.get(epoch_id)
+            if previous is not None:
+                if previous!=canonical: raise HostSourceError("HOST_ENGINE_SCOPE_OVERLAP")
+            else:
+                epoch_rows[epoch_id]=canonical; budget_epochs.append(row)
+    combined["budgetEpochs"]=budget_epochs
     ids=[item.get("item") for item in combined.get("summaries",[]) if isinstance(item,dict)]
     if len(ids)!=len(set(ids)) or any(not isinstance(item,str) for item in ids): raise HostSourceError("HOST_ENGINE_SCOPE_OVERLAP")
     selected=combined.get("items")
     if not isinstance(selected,list) or len(selected)!=len(set(selected)) or any(not isinstance(item,str) for item in selected): raise HostSourceError("HOST_ENGINE_SCOPE_OVERLAP")
-    epochs=[row.get("epoch_id") for row in snapshot_rows(combined,"budgetEpochs") if row.get("state")=="open"]
+    epochs=[row.get("epoch_id") for row in budget_epochs if row.get("state")=="open"]
     if len(epochs)>1: raise HostSourceError("HOST_ENGINE_SCOPE_OVERLAP")
     observed=min((source[1]["observedAt"] for source in sources),key=parse_time)
     pending=sum(source[1]["operational"]["pendingBatches"] for source in sources)
