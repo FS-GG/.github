@@ -130,12 +130,12 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.91.1 — close delivered native telemetry items after exact terminal settlement.
+    <PackageReleaseNotes>0.91.2 — capture exact native root telemetry through the opt-in launcher.
 
-The completion reducer recognizes native collaboration dispatches and requires a matching activation,
-root, lineage and terminal for every expected invocation. A retained native outcome is re-projected once
-on upgrade. Missing and ambiguous populations stay open. The 0.91.0 release remains immutable; this
-patch requires a separately qualified exact-archive successor release and installed-host verification.
+The credential-wrapped codex-exec route records exact root turn usage and durable remote receipts.
+Bounded JSONL inspection ignores complete, unambiguous command execution events without usage even
+when their output exceeds the normal event size. Unknown or usage-bearing frames remain visible gaps.
+Earlier incomplete items stay incomplete; a new item must prove this release after Host adoption.
 
 $(FsggStandingAdvisories)
 

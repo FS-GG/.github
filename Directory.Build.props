@@ -580,11 +580,11 @@
        FS.GG.Drivers adds the closed routine policy/helper/native-check workspace payload required by
        installed work-roadmap receivers. FS.GG.Kit and FS.GG.Coord.Cli advance unchanged because the
        three package identities share one coherent version and release transaction. -->
-  <!-- 0.91.0 -> 0.91.1 (UTEL-REL-02): PATCH release for exact native completed-item
-       closure and retained-outcome re-projection. All three package identities move as
-       one coherent set; the 0.91.0 published archives and protected journal remain immutable. -->
+  <!-- 0.91.1 -> 0.91.2 (UTEL-ROOT): PATCH release for the opt-in exact native root
+       telemetry launcher and bounded JSONL frame classification. All three package identities
+       move as one coherent set; earlier published archives remain immutable. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.91.1</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.91.2</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
