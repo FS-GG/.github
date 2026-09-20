@@ -17,7 +17,7 @@ import zipfile
 
 REPOSITORY_ID = 1269292704
 WORKFLOW = ".github/workflows/release-telemetry-host-successor-candidate.yml"
-VERSION = "0.1.2"
+VERSION = "0.1.3"
 PACKAGE = f"FS.GG.Telemetry.Host.{VERSION}.nupkg"
 MEMBERS = {PACKAGE, "manifest.json", "package-evidence.json"}
 

@@ -375,8 +375,8 @@ module Operations =
                                 status = "ready"
                                 stores = config.Stores.Length
                                 dashboardAuthentication = "ready"
-                                supportedStoreSchemaMin = 9
-                                supportedStoreSchemaMax = 9
+                                supportedStoreSchemaMin = 10
+                                supportedStoreSchemaMax = 10
                             |}
                         + "\n"
                     )
@@ -435,8 +435,8 @@ module Operations =
                     ``process`` = processState
                     recovery = "unknown"
                     dashboardAuthentication = dashboardState
-                    supportedStoreSchemaMin = 9
-                    supportedStoreSchemaMax = 9
+                    supportedStoreSchemaMin = 10
+                    supportedStoreSchemaMax = 10
                     stores = stores
                 |}
             + "\n"
@@ -590,9 +590,9 @@ module Operations =
                                         JsonSerializer.Serialize
                                             {|
                                                 schema = "fsgg.telemetry.host-backup-set/1"
-                                                hostVersion = "0.1.1"
-                                                supportedStoreSchemaMin = 9
-                                                supportedStoreSchemaMax = 9
+                                                hostVersion = "0.1.3"
+                                                supportedStoreSchemaMin = 10
+                                                supportedStoreSchemaMax = 10
                                                 configMetadataSha256 = configMetadataDigest config
                                                 createdAt = DateTimeOffset.UtcNow.ToString("O")
                                                 workspaces = workspaces
@@ -740,7 +740,7 @@ module Operations =
 
                                     if invalidManifest then
                                         resultExit "backup-integrity-failed" (Error [ "backup manifest invalid" ])
-                                    elif schemaMin > 9 || schemaMax < 9 then
+                                    elif not ((schemaMin = 9 && schemaMax = 9) || (schemaMin = 10 && schemaMax = 10)) then
                                         resultExit "restore-incompatible" (Error [ "backup schema is incompatible" ])
                                     else
                                         Directory.CreateDirectory temporary |> ignore

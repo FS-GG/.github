@@ -36,7 +36,7 @@ concurrency:
 
 jobs:
   publish:
-    name: telemetry-host-012-publisher
+    name: telemetry-host-013-publisher
     if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
     runs-on: ubuntu-latest
     environment: release-successor

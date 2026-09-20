@@ -11,7 +11,7 @@
     <!-- Independent one-package release line. This literal deliberately does not resolve from
          FsggCoherentSetVersion, which belongs only to Kit, Drivers and Coord.Cli. -->
     <FsggCoherentSetVersion />
-    <Version>0.1.2</Version>
+    <Version>0.1.3</Version>
     <PackageId>FS.GG.Telemetry.Host</PackageId>
     <AssemblyName>FS.GG.Telemetry.Host</AssemblyName>
     <IsPackable>true</IsPackable>
@@ -26,7 +26,7 @@
     <RepositoryUrl>https://github.com/FS-GG/.github</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/FS-GG/.github/tree/main/src/FS.GG.Telemetry.Host</PackageProjectUrl>
-    <PackageReleaseNotes>0.1.2 — Recalculate completed telemetry items after native collaboration dispatches settle. The Host embeds the corrected store reducer and reprojects retained native outcomes once on upgrade. Public release and Main activation remain separate protected operations.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.1.3 — Accept authoritative orchestration delivery outcomes and migrate private telemetry stores from schema 9 to 10 while preserving routine outcomes. Main activation requires a stopped two-scope migration.</PackageReleaseNotes>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="BrowserSecurity.fsi" />

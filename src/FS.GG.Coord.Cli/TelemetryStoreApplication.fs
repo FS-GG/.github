@@ -32,7 +32,7 @@ module TelemetryStoreApplication =
     let private maxDrainBatches = 128
     let private maxDrainBytes = 8L * 1024L * 1024L
     let private maxPendingPerProducer = 128
-    let private currentSchemaVersion = 9
+    let private currentSchemaVersion = 10
 
     let private gzip (bytes: byte array) =
         use output = new MemoryStream()
@@ -203,6 +203,19 @@ PRAGMA user_version=9;
 
     let private migration9Digest =
         CanonicalJson.sha256 (Encoding.UTF8.GetBytes migration9Sql)
+
+    let private migration10Sql =
+        """
+CREATE TABLE native_item_outcomes_v10(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, repository TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number > 0), base_ref TEXT NOT NULL, base_sha TEXT NOT NULL, head TEXT NOT NULL, outcome TEXT NOT NULL, code_delivery TEXT NOT NULL, merge_commit TEXT, occurred_at TEXT, observed_at TEXT NOT NULL, source_kind TEXT NOT NULL CHECK(source_kind IN ('routine-delivery','orchestration-delivery')), source_ref TEXT NOT NULL UNIQUE, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+INSERT INTO native_item_outcomes_v10 SELECT * FROM native_item_outcomes;
+DROP TABLE native_item_outcomes;
+ALTER TABLE native_item_outcomes_v10 RENAME TO native_item_outcomes;
+CREATE INDEX native_item_outcomes_item_observed ON native_item_outcomes(item_id,observed_at);
+PRAGMA user_version=10;
+"""
+
+    let private migration10Digest =
+        CanonicalJson.sha256 (Encoding.UTF8.GetBytes migration10Sql)
 
     let private scalarText (connection: SqliteConnection) sql =
         use command = connection.CreateCommand()
@@ -740,29 +753,55 @@ PRAGMA user_version=9;
                                                                 then
                                                                     Error [ "migration checksum mismatch" ]
                                                                 else
-                                                                    fsyncDirectory root
-                                                                    fsyncDirectory (Path.GetDirectoryName root)
+                                                                    if
+                                                                        Int32.Parse(
+                                                                            scalarText connection "PRAGMA user_version;"
+                                                                        ) = 9
+                                                                    then
+                                                                        beginImmediate connection
 
-                                                                    Ok(
-                                                                        JsonSerializer.Serialize
-                                                                            {|
-                                                                                schema = "fsgg.telemetry.store-status/1"
-                                                                                status = "ready"
-                                                                                root = root
-                                                                                database = databaseFileName
-                                                                                schemaVersion = currentSchemaVersion
-                                                                                nativeEngine = engine
-                                                                                journalMode =
-                                                                                    scalarText
-                                                                                        connection
-                                                                                        "PRAGMA journal_mode;"
-                                                                                synchronous =
-                                                                                    scalarText
-                                                                                        connection
-                                                                                        "PRAGMA synchronous;"
-                                                                            |}
-                                                                        + "\n"
-                                                                    )
+                                                                        try
+                                                                            execute connection migration10Sql
+                                                                            use migration = connection.CreateCommand()
+                                                                            migration.CommandText <-
+                                                                                "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(10,$digest,$utc);"
+                                                                            parameter migration "$digest" migration10Digest
+                                                                            parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
+                                                                            migration.ExecuteNonQuery() |> ignore
+                                                                            execute connection "COMMIT;"
+                                                                        with error ->
+                                                                            rollback connection
+                                                                            raise error
+
+                                                                    if
+                                                                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=10;"
+                                                                        <> migration10Digest
+                                                                    then
+                                                                        Error [ "migration checksum mismatch" ]
+                                                                    else
+                                                                        fsyncDirectory root
+                                                                        fsyncDirectory (Path.GetDirectoryName root)
+
+                                                                        Ok(
+                                                                            JsonSerializer.Serialize
+                                                                                {|
+                                                                                    schema = "fsgg.telemetry.store-status/1"
+                                                                                    status = "ready"
+                                                                                    root = root
+                                                                                    database = databaseFileName
+                                                                                    schemaVersion = currentSchemaVersion
+                                                                                    nativeEngine = engine
+                                                                                    journalMode =
+                                                                                        scalarText
+                                                                                            connection
+                                                                                            "PRAGMA journal_mode;"
+                                                                                    synchronous =
+                                                                                        scalarText
+                                                                                            connection
+                                                                                            "PRAGMA synchronous;"
+                                                                                |}
+                                                                            + "\n"
+                                                                        )
                         with :? SqliteException as error ->
                             Error(failBusy error)
             with error ->
@@ -838,8 +877,8 @@ PRAGMA user_version=9;
                     then
                         Error [ "migration checksum mismatch" ]
                     elif
-                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=9;"
-                        <> migration9Digest
+                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=10;"
+                        <> migration10Digest
                     then
                         Error [ "migration checksum mismatch" ]
                     else
@@ -3058,8 +3097,8 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                             Error [ "unsupported-version" ]
                         elif
                             scalarText connection "PRAGMA journal_mode;" <> "wal"
-                            || scalarText connection "SELECT digest FROM schema_migrations WHERE version=9;"
-                               <> migration9Digest
+                            || scalarText connection "SELECT digest FROM schema_migrations WHERE version=10;"
+                               <> migration10Digest
                         then
                             Error [ "storage-unavailable" ]
                         else
@@ -3484,8 +3523,8 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                         if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then
                             Error [ "unsupported-version" ]
                         elif
-                            scalarText connection "SELECT digest FROM schema_migrations WHERE version=9;"
-                            <> migration9Digest
+                            scalarText connection "SELECT digest FROM schema_migrations WHERE version=10;"
+                            <> migration10Digest
                         then
                             Error [ "storage-unavailable" ]
                         elif not (receiptAuthorized connection scope) then
@@ -3510,8 +3549,8 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                     if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then
                         Error [ "unsupported-version" ]
                     elif
-                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=9;"
-                        <> migration9Digest
+                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=10;"
+                        <> migration10Digest
                     then
                         Error [ "storage-unavailable" ]
                     else

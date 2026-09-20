@@ -1318,7 +1318,7 @@ module TelemetryStore =
                         |> Option.forall (fun value ->
                             DateTimeOffset.Parse(value, CultureInfo.InvariantCulture)
                             <= DateTimeOffset.Parse(observedAt, CultureInfo.InvariantCulture)))
-                    && sourceKind = "routine-delivery"
+                    && Set.contains sourceKind (Set [ "routine-delivery"; "orchestration-delivery" ])
                     ->
                     make
                         [

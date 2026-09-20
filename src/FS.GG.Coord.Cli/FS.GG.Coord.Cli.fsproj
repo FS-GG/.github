@@ -130,12 +130,12 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.91.2 — capture exact native root telemetry through the opt-in launcher.
+    <PackageReleaseNotes>0.91.3 — accept authoritative orchestration delivery outcomes in schema-10 telemetry stores.
 
-The credential-wrapped codex-exec route records exact root turn usage and durable remote receipts.
-Bounded JSONL inspection ignores complete, unambiguous command execution events without usage even
-when their output exceeds the normal event size. Unknown or usage-bearing frames remain visible gaps.
-Earlier incomplete items stay incomplete; a new item must prove this release after Host adoption.
+The telemetry store migrates existing routine delivery outcomes and accepts a separate
+orchestration-delivery source after native Main readback. The private dashboard projection reads
+schema 10. The public stage must install this version before the stopped Host schema-10 migration;
+a completed row still requires a genuine delivered item and an approved public alias.
 
 $(FsggStandingAdvisories)
 
