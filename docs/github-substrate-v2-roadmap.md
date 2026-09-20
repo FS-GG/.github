@@ -46,7 +46,7 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, all GS2-06 units, and GS2-07.1–GS2-07.5 accepted; GS2-01.9 not applicable |
+| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, all GS2-06 units, and GS2-07.1–GS2-07.8 and GS2-08.1–GS2-08.9 accepted; GS2-01.9 not applicable |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
@@ -1315,11 +1315,17 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   The strict terminal/reconciled lifecycle completed at revision 34 with digest
   `f3d391bef2793bcbd37ed8c8202166ba06b0c89f39ca584a8a8a44129a3622c8`; exact-main Bootstrap run
   `34071019843` and CodeQL run `34071019547` succeeded, and #315 read back closed/Done.
-- [ ] **GS2-07.6 — Queue sandbox/pilot.** Exercise queue admission, base movement, check growth, expiry,
+- [x] **GS2-07.6 — Queue sandbox/pilot.** Exercise queue admission, base movement, check growth, expiry,
   failure recovery, and rollback in a low-volume isolated or representative repository before fleet enablement.
-- [ ] **GS2-07.7 — Measure event benefit.** Record latency, dropped-event repair, API cost, schedule count,
+
+  [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-07.6.json).
+
+- [x] **GS2-07.7 — Measure event benefit.** Record latency, dropped-event repair, API cost, schedule count,
   and false/unknown outcomes; reduce polling only from evidence.
-- [ ] **GS2-07.8 — Qualify runtime operations.** Qualify the runtime boundary actually included in this
+
+  [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-07.7.json).
+
+- [x] **GS2-07.8 — Qualify runtime operations.** Qualify the runtime boundary actually included in this
   candidate. Under the accepted GS2-00.9 decision, no App/webhook host, event listener, or continuously
   running writer enters this cutover: scheduled complete audits remain the authority, and accepted narrow
   reconciliation and audit-repair paths provide recovery at their implemented boundary. Prove host exclusion
@@ -1341,6 +1347,8 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   recovery. GS2-07.8 completion qualifies this cutover candidate only; it does not claim production v2, an
   installed audit execution, GS2-08, reduced polling, or authority to deploy or enable a host or writer.
 
+  [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-07.8.json).
+
 ### GS2-08 — Ship the universal v1 bridge and protected epoch ledger
 
 **Parent:** `.github#2964`
@@ -1348,7 +1356,7 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 **Depends on:** GS2-00; GS2-02 epoch/manifest vocabulary before publication
 **Exit:** every released v1 writer is fenced fleet-wide
 
-- [ ] **GS2-08.1 — Freeze the epoch wire contract.** Define the complete
+- [x] **GS2-08.1 — Freeze the epoch wire contract.** Define the complete
   `OperatingV1 -> Preparing -> FreezeRequested -> Frozen -> SwitchedV2 -> VerifiedV2 -> OpenV2 -> ObservingV2 -> ContractingV1 -> OperatingV2`
   sequence, legal pre-open rollback transitions, manifest binding, canonical fleet identity, exact
   ledger/ref/tag/genesis layout, ancestry proof, explicit partial/refused/indeterminate failure semantics,
@@ -1356,11 +1364,17 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   issue projection. `Preparing` preserves only already-admitted eligible incumbent operations under the current
   manifest and exact generations; `FreezeRequested` and every later state refuse new ordinary v1 effects.
   `RollingBack` never independently reopens writing, and no transition restores v1 after `OpenV2`.
-- [ ] **GS2-08.2 — Complete ledger protections.** Preserve and continuously audit the authority
+
+  [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.1.json).
+
+- [x] **GS2-08.2 — Complete ledger protections.** Preserve and continuously audit the authority
   repository's split branch rulesets; add immutable tag rules, the protected `fleet-cutover` environment,
   a contents-only selected-repository journal App (or explicit security acceptance of the shared App),
   control issue, effective-rule readback, and tamper/rewind monitoring.
-- [ ] **GS2-08.3 — Map every v1 writer.** Turn the GS2-00 mutation census into an executable coverage list;
+
+  [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.2.json).
+
+- [x] **GS2-08.3 — Map every v1 writer.** Turn the GS2-00 mutation census into an executable coverage list;
   unknown or dynamically discovered write entry points fail the bridge build. The producer census derives the
   coordination roots from candidate-built typed command metadata and separately binds tracked direct REST/GraphQL,
   routine merge, release/repair/dispatch/registry automation, protected-admin, build/declaration, and local-only
@@ -1370,20 +1384,40 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   distinguishes installed legacy tool sources, mutable workflow observations, delegated writer callees, and
   read-only/local-only paths without executing receiver code. This is source coverage only: receiver fencing begins at GS2-08.4 and acceptance remains
   with the native Coordination qualification rather than this roadmap checkbox.
-- [ ] **GS2-08.4 — Add one common precondition.** Every normal v1 mutation entry reads and verifies the
+
+  [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.3.json).
+
+- [x] **GS2-08.4 — Add one common precondition.** Every normal v1 mutation entry reads and verifies the
   fresh ledger epoch before its first effect. Unreadable, contradictory, frozen, switched, or v2-open state
   refuses before write.
-- [ ] **GS2-08.5 — Preserve OperatingV1 behavior.** Current regression/corpus behavior remains unchanged
+
+  [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.4.json).
+
+- [x] **GS2-08.5 — Preserve OperatingV1 behavior.** Current regression/corpus behavior remains unchanged
   when the verified epoch is `OperatingV1`; the bridge adds no second semantic authority.
-- [ ] **GS2-08.6 — Independently attack the fence.** From outside the v1 test generator, attempt every
+
+  [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.5.json).
+
+- [x] **GS2-08.6 — Independently attack the fence.** From outside the v1 test generator, attempt every
   write class under all epochs, stale cache, lost response, ledger rewind, missing tag, wrong manifest,
   permission loss, and older client versions.
-- [ ] **GS2-08.7 — Publish the bridge.** Build once, sign/attest, publish to required feeds, verify public
+
+  [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.6.json).
+
+- [x] **GS2-08.7 — Publish the bridge.** Build once, sign/attest, publish to required feeds, verify public
   installation, and record exact tool/kit/workflow identities.
-- [ ] **GS2-08.8 — Adopt all receivers.** Update `.github`, SDD, Rendering, Governance, Templates, Game,
+
+  [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.7.json).
+
+- [x] **GS2-08.8 — Adopt all receivers.** Update `.github`, SDD, Rendering, Governance, Templates, Game,
   Audio, and Net; resolve superseded dependency-update PRs; prove each live route uses the exact bridge.
-- [ ] **GS2-08.9 — Seal unfenceable clients.** If an old writer cannot read the epoch, disable/revoke its
+
+  [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.8.json).
+
+- [x] **GS2-08.9 — Seal unfenceable clients.** If an old writer cannot read the epoch, disable/revoke its
   dispatch, credential, schedule, or installation before freeze and record that as its fence proof.
+
+  [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.9.json).
 
 ### GS2-09 — Build migration, archive, and rollback tooling
 
