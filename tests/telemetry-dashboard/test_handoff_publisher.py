@@ -72,6 +72,19 @@ class HandoffPublisherTests(unittest.TestCase):
             self.assertEqual(value,{"storeRoot":str(root/"store"),"engine":"fsgg-coord-engine"})
             self.assertFalse((root/".claude").exists())
 
+    def test_two_scope_producer_config_is_closed_and_private(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary); config=root/"telemetry.json"
+            roots=[str(root/"fsharp-dev"),str(root/"orchestration")]
+            config.write_text(json.dumps({"schema":"fsgg.telemetry.host-config/2","storeRoots":roots,"engine":"fsgg-coord-engine"})+"\n")
+            config.chmod(0o600)
+            _,value=D._explicit_producer_config(config)
+            self.assertEqual(value,{"storeRoots":roots,"engine":"fsgg-coord-engine"})
+            for invalid in (roots[:1],[roots[0],roots[0]],[roots[0],"relative"]):
+                config.write_text(json.dumps({"schema":"fsgg.telemetry.host-config/2","storeRoots":invalid,"engine":"fsgg-coord-engine"})+"\n")
+                with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_CONFIG_INVALID"):
+                    D._explicit_producer_config(config)
+
     def test_explicit_producer_config_rejects_workspace_and_unsafe_shapes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=pathlib.Path(temporary); config=root/"telemetry.json"
