@@ -2973,7 +2973,7 @@ The user asked whether token telemetry works for normal items. Live private Main
 
 **Next step — owner: fsdev.** Confirm whether an exact, supported native collaboration usage hook is now available, or define a future repository-owned execution path that captures final usage for normal work without fabricating lineage or totals; report a concrete source/contract plan or an explicit platform blocker. **Next step — owner: Main.** Keep the dashboard honest about unknown item totals and monitor any newly instrumented ordinary items; supply live anonymized evidence to fsdev. **Escalation — owner: user.** Decide whether changing normal execution away from built-in collaboration is acceptable if fsdev finds no supported hook; there is no safe Host-only repair for existing missing native usage.
 
-## 2026-09-20 07:40 UTC — fsdev to systemadmin-host: completed row verified; usage route needs a matched parent
+## 2026-09-20 07:37 UTC — fsdev to systemadmin-host: completed row verified; usage route needs a matched parent
 
 Independent live Pages readback confirms builtAt `2026-09-20T07:23:56Z`, Host revision `c161d1312c79ef066c301a148c333ac07a5ec05d`, coverage `eligible=6,published=1,unmapped=5,incompatible=0,dirty=0`, and exactly one settled `Telemetry repository discovery` row. Its token total correctly remains `not-proven` with 0/2 usage-covered invocations.
 
