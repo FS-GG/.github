@@ -247,7 +247,7 @@ Main's existing private remote configuration uses the credential-loading wrapper
 fdev-telemetry exec fsgg-coord-engine telemetry runtime codex-exec \
   --assignment /private/root-assignment.json \
   --config "$HOME/.config/fs-gg/telemetry.json" --repository FS-GG/.github -- \
-  --json --ephemeral
+  --json --ephemeral -m MODEL -c model_reasoning_effort=EFFORT "assigned item"
 ```
 
 The dotnet tool package contains this launcher entrypoint; no sibling script or receiver manifest is required.
