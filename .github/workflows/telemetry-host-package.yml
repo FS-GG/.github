@@ -25,6 +25,12 @@ on:
       - "tests/standalone-telemetry-host-package/**"
       - "tests/telemetry-host-release/**"
       - "scripts/telemetry-host-release.py"
+      - "scripts/telemetry-host-successor-*.py"
+      - "scripts/telemetry_host_successor_*.py"
+      - "scripts/release_successor_execution.py"
+      - "scripts/release_successor_journal.py"
+      - "tests/telemetry-host-successor/**"
+      - ".github/workflows/release-telemetry-host-successor-*.yml"
       - ".github/workflows/telemetry-host-package.yml"
       - ".github/workflows/release-telemetry-host.yml"
   push:
@@ -52,6 +58,12 @@ on:
       - "tests/standalone-telemetry-host-package/**"
       - "tests/telemetry-host-release/**"
       - "scripts/telemetry-host-release.py"
+      - "scripts/telemetry-host-successor-*.py"
+      - "scripts/telemetry_host_successor_*.py"
+      - "scripts/release_successor_execution.py"
+      - "scripts/release_successor_journal.py"
+      - "tests/telemetry-host-successor/**"
+      - ".github/workflows/release-telemetry-host-successor-*.yml"
       - ".github/workflows/telemetry-host-package.yml"
       - ".github/workflows/release-telemetry-host.yml"
 
@@ -71,6 +83,12 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+      - name: Refuse malformed Host release effect policy before costly qualification
+        run: |
+          set -euo pipefail
+          python3 tests/release-successor-execution/run.py
+          python3 tests/release-successor-journal/run.py
+          python3 tests/telemetry-host-successor/run.py
       - name: Restore the locked host closure
         run: |
           dotnet restore src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj --locked-mode

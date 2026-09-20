@@ -1,0 +1,97 @@
+name: release-telemetry-host-successor-publish
+
+# UTEL-HREL-01: exact retained Host candidate and fresh protected effect admission.
+# The default dispatch is read-only; publish=true may run only after a passing
+# preflight on the same main SHA/candidate and registered Trusted Publishing.
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Successful first-attempt Host candidate run ID
+        required: true
+        type: string
+      candidate_artifact_id:
+        description: Exact retained Host candidate artifact ID
+        required: true
+        type: string
+      candidate_archive_sha256:
+        description: SHA-256 of the raw Actions candidate artifact archive
+        required: true
+        type: string
+      publish:
+        description: Publish only after passing exact-source preflight and authority setup
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  actions: read
+  contents: write
+  packages: write
+  id-token: write
+
+concurrency:
+  group: release-telemetry-host-successor-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: telemetry-host-012-publisher
+    if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
+    runs-on: ubuntu-latest
+    environment: release-successor
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Qualify admitted Host effect ordering and protected journal
+        run: |
+          set -euo pipefail
+          python3 tests/release-successor-execution/run.py
+          python3 tests/release-successor-journal/run.py
+          python3 tests/telemetry-host-successor/run.py
+      - name: Mint the ordinary protected-journal writer token
+        id: ledger
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.FSGG_ORDINARY_LEDGER_APP_ID }}
+          private-key: ${{ secrets.FSGG_ORDINARY_LEDGER_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination.Authority
+          permission-contents: write
+      - name: Bind the proved installation
+        env:
+          ACTUAL_INSTALLATION_ID: ${{ steps.ledger.outputs.installation-id }}
+          EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
+        run: test "$ACTUAL_INSTALLATION_ID" = "$EXPECTED_INSTALLATION_ID"
+      - name: Exchange nuget.org trusted publishing identity
+        if: inputs.publish
+        id: nuget
+        uses: NuGet/login@v1
+        with:
+          user: Paradigma11
+      - name: Preflight or publish exact retained Host candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ORDINARY_LEDGER_TOKEN: ${{ steps.ledger.outputs.token }}
+          NUGET_API_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARCHIVE_SHA256: ${{ inputs.candidate_archive_sha256 }}
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          mode=--preflight-only
+          if test "$PUBLISH" = true; then mode=--publish; fi
+          python3 scripts/telemetry-host-successor-publish.py \
+            "$mode" \
+            --candidate-run-id "$CANDIDATE_RUN_ID" \
+            --candidate-artifact-id "$CANDIDATE_ARTIFACT_ID" \
+            --candidate-archive-sha256 "$CANDIDATE_ARCHIVE_SHA256" \
+            --workdir "$RUNNER_TEMP/telemetry-host-successor"

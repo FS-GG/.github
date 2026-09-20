@@ -43,20 +43,30 @@ bytes are equal when signing changes them.
 
 ## Protected release
 
-Source acceptance does not publish the package. An operator runs the dedicated
-`release-telemetry-host.yml` workflow with an exact commit already contained by
-`main`, the source's exact independent Host version, and the explicit
-confirmation phrase. The workflow
-restores locked dependencies, runs the host, projection, browser, package, and
-release fixtures, and prepares one package and manifest.
+The historical `release-telemetry-host.yml` publisher is sealed under GS2-08.9.
+Its current manual workflow qualifies source and package locally and has no
+credential, tag, feed, journal, artifact-upload or release effect. Do not use
+its old publication instructions for a new Host version.
 
-The nuget.org OIDC login happens before either feed push. If the new package ID
-and workflow are not admitted by Trusted Publishing, the run stops without a
-feed effect. After authority succeeds, the same prepared package is published
-to GitHub Packages first and nuget.org second. Existing versions are accepted
-only after their producer payload verifies against the prepared manifest. The
-immutable tag and GitHub release are created only after both feeds are observed
-and their external hashes are journaled.
+For Host 0.1.2, the independent
+`release-telemetry-host-successor-candidate.yml` qualifies an exact current
+`main` commit, the package, installed tool, manifest, and Host/browser tests.
+It retains one unpromoted Actions artifact and has read-only repository and
+package permissions. `release-telemetry-host-successor-publish.yml` separately
+authenticates that candidate's first-attempt run and archive digest, then
+uses a protected release journal to admit and read back each tag, feed,
+release-asset and promotion effect. Its default dispatch is read-only
+preflight. A fresh publication requires the candidate source to equal current
+`main`; recovery from a newer publisher must reuse the same retained archive
+and protected intent. The new workflow needs its own nuget.org Trusted
+Publishing registration before `publish=true` can obtain a feed credential.
+
+The publication release must contain exactly the original
+`FS.GG.Telemetry.Host.0.1.2.nupkg`, `manifest.json`, and
+`publication-journal.json` required by Main's protected updater. The journal
+records independently observed external archive and normalized payload
+hashes for both feeds. Main adopts only after the release is promoted and
+those three assets are verified.
 
 Host 0.1.1 was published from source
 `431d69d38d71da3b2c293bee8cc05448795ea38f` by

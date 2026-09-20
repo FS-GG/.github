@@ -14,7 +14,7 @@ The retired `release-telemetry-host.yml` remains source qualification only. A di
 
 The effect order is tag, draft release, GitHub Packages, nuget.org, original package asset, manifest asset, publication-journal asset and promotion. Each intent is committed before dispatch. A response is never settlement: a fresh provider readback must match the prepared payload or asset digest before journal verification. A delayed 404 after a dispatch leaves intent pending for readback; it does not authorize blind replay or repacking. Publisher preflight is read-only and must pass on the same exact main SHA and candidate before publication.
 
-The new publisher workflow filename, environment, owner and package ID require a matching nuget.org Trusted Publishing registration before it can exchange an OIDC identity. That owner action is an explicit prerequisite to feed effects. Publication must fail before the GitHub Packages write if it is missing. Do not change the retired workflow to reuse its prior registration.
+The new publisher registration is: owner `Paradigma11`, package `FS.GG.Telemetry.Host`, repository `FS-GG/.github`, workflow filename `release-telemetry-host-successor-publish.yml`, environment `release-successor`, push-only-new-versions. It must exist on nuget.org before the workflow can exchange an OIDC identity. That owner action is an explicit prerequisite to feed effects. Publication must fail before the GitHub Packages write if it is missing. Do not change the retired workflow to reuse its prior registration.
 
 ## Completion
 
