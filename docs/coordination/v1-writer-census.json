@@ -57,7 +57,7 @@
     {"path":"dist/dotnet/Directory.Build.props","disposition":"build-only","sinkKinds":[],"sha256":"f29e3b29afed4f93258003519c5af5676b0a9bfea7623350491f2d60ee082d0c"},
     {"path":"dist/skill-union-assert.sh","disposition":"build-only","sinkKinds":[],"sha256":"e94e25406eda585a770fd29498798067dc1c0bc78c924f581a2b6db23141ce50"},
     {"path":"global.json","disposition":"build-only","sinkKinds":[],"sha256":"abb754e4de3e434515ec3362db26346bb65de9d1eaf47850b75aceb298af6a8f"},
-    {"path":"registry/dependencies.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"dc9fe2a61fedb1cd122899ecd237f899e28be575c6185037510075f4fd7e91ae"},
+    {"path":"registry/dependencies.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"d507fe8b0a4cab15c881032aa0d128e7361d9a9d13e5686d228278e1497f1828"},
     {"path":"registry/repos.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"03ab14d6d414a6ef2555e06068341f97f8d256fd58ce18b02a1a62c929711ac3"},
     {"path":"registry/skills.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"cf6f1b0666d30a6ae2f4b34c914716832a390545eba1fea4a501915d5ffb1328"},
     {"path":"scripts/NewSddWorkspace/Program.fs","disposition":"read-only","sinkKinds":["graphql-mutation"],"sha256":"b3e3ebe3b88f67b56ea7d85be4865c6f401ae4e94d9cf451c8bae957c15cea3f","nonWriterJustification":"Only explicit GraphQL query operations reach gh; repository and Project administration return pending before mutation."},
