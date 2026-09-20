@@ -855,11 +855,18 @@ Exit: every positive journey passes and every named wrong-path control refuses o
 
 ### F9 — retire v1 and normalize operations
 
+The contraction gate is based on observed production work. After the immediate `ObservingV2` baseline,
+complete and read back 15 distinct eligible v2 work items under the fixed GS2-14.2 definition. Record
+operational and incident evidence after each completion; elapsed time alone cannot qualify Q10. Failed or
+unfinished attempts remain visible, and a serious unresolved failure extends observation. This replaces
+the earlier fixed 30-day contraction delay without changing the irreversible `OpenV2` fence or the
+separate R5 efficiency cohort and repair follow-up.
+
 - Delete v1 readers/writers, text blocker field, Class/Kind/body sentinels, old Project fields, legacy
   schedules, moving-ref exception, and temporary migration adapters.
 - Archive the v1 verifier and evidence manifest outside production dependency closure.
 - Remove temporary update restrictions and enable the accepted normal merge-queue/ruleset profiles.
-- Publish the deletion ledger and 0/7/14/30-day operational readings.
+- Publish the deletion ledger, immediate baseline, and operational readings after 15 distinct completed v2 work items. The governing roadmap defines the eligible population and Q10 acceptance.
 - Commit and anchor `OperatingV2(report)` after deletion and immediate verification; later readings amend the report,
   not the epoch.
 

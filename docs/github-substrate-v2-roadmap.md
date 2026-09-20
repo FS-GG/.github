@@ -12,7 +12,7 @@ This is the living execution roadmap for replacing the current FS-GG coordinatio
 a new `FS.GG.Coordination` repository, consumes the published FS.GG.SDD specification kernel, and is
 qualified independently of the v1 lifecycle it replaces. The fleet is prepared additively, frozen once,
 switched and verified while normal writes remain closed, opened at one explicit point of no return, and
-then observed for a fixed 30 days before destructive v1 contraction. V1 authoring is fenced immediately at
+then observed through 15 distinct completed v2 work items before destructive v1 contraction. V1 authoring is fenced immediately at
 open; retained assets are inert forensic/recovery evidence and cannot restart v1. This document owns
 cross-repository sequence and exit gates; the
 [governing design](coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md) owns the architecture
@@ -276,7 +276,7 @@ These gates replace the existing coordination validation/verification process fo
 | Q7 Supply chain | The exact candidate can be trusted and installed | Reproducible build, package hashes, SBOM, attestations, both-feed/public-read verification |
 | Q8 Closed fleet | The switched fleet works before normal writes open | Schema/settings/receiver proof, isolated canary journeys, injected wrong paths, rollback readiness |
 | Q9 Retirement | V1 can no longer author production state | Static/runtime writer census, deletion ledger, old-client refusal, sealed-history verification |
-| Q10 Operations | V2 is stable after opening | 0/7/14/30-day SLOs, incidents, repair lag, API cost, queue/CI/release measurements |
+| Q10 Operations | V2 is stable after opening | Immediate baseline and source-bound readings after each of 15 distinct completed v2 work items; SLOs, incidents, repair lag, API cost, queue/CI/release measurements |
 
 No single test generator may satisfy both sides of a safety claim. For example, the protocol compiler may
 generate all legal epoch transitions, but an independent black-box suite must still attempt an old-client
@@ -1554,16 +1554,16 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   generation after `OpenV2`; each refuses before external effect for independently observed epoch,
   credential, route, or installation reasons.
 - [ ] **GS2-13.7 — Seal observation assets.** Publish the content-addressed v1 archive, verifier, manifest,
-  lookup guide, retained inert recovery inputs, and 30-day retention/contraction plan outside the v2
+  lookup guide, retained inert recovery inputs, and 15-item observation/contraction plan outside the v2
   production dependency closure.
 - [ ] **GS2-13.8 — Normalize safe repository policies.** Remove only temporary freeze restrictions needed
   to operate v2, enable approved merge queues/settings, retain contraction safeguards, and re-inspect every
   repository profile.
 - [ ] **GS2-13.9 — Commit `ObservingV2`.** Bind the open receipt, permanent v1 authoring-fence proof,
-  first real journey, operational dashboard, sealed assets, and fixed 0/7/14/30-day reading definitions.
+  first real journey, operational dashboard, sealed assets, and the fixed 15-item reading definition below.
 - [ ] **GS2-13.10 — Hand off the observation.** Assign owners and SLOs for incidents, indeterminate
   operations, action items, old-client attempts, and the later contraction; no destructive v1 deletion is
-  allowed before the 30-day gate.
+  allowed before the 15-item Q10 gate.
 
 ### GS2-14 — Observe, improve, and close the renovation
 
@@ -1572,16 +1572,24 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 **Depends on:** ObservingV2
 **Exit gate:** Q10, authoritative `OperatingV2`, and closed Epic
 
-- [ ] **GS2-14.1 — Record the immediate reading.** At 0 days capture journey success, incident count,
+- [ ] **GS2-14.1 — Record the immediate reading.** At entry to `ObservingV2`, capture journey success, incident count,
   partial/indeterminate operations, old-client attempts, API cost, event repair, queue/CI/release latency,
   and remaining deletion debt.
-- [ ] **GS2-14.2 — Record 7-, 14-, and 30-day readings.** Use identical definitions and source-bound
-  evidence; do not hide failures by changing denominators or suppressing findings.
+- [ ] **GS2-14.2 — Record 15 completed-work readings.** Count 15 distinct, real production work items first
+  admitted after `ObservingV2`, each completed through the enabled v2 path with native delivery and required
+  post-delivery verification accepted. The GS2-13.3 first journey, migration rehearsals, canaries, synthetic
+  items, duplicate completions, and work completed under v1 do not count. Fix the eligible population,
+  completion definition, SLOs, and observation fields before the first counted item. Record a source-bound
+  reading after each completion, including incidents, unresolved effects, repair lag, old-client attempts,
+  API cost, and queue/CI/release behavior. Keep failed, abandoned, and pending attempts in the denominator
+  and incident record; they cannot be counted as completions or silently replaced. Preserve identical
+  definitions across all 15 readings and the immediate baseline. No elapsed-day minimum substitutes for
+  completed work.
 - [ ] **GS2-14.3 — Complete remaining roll-forward repairs.** Each incident receives a typed cause,
   bounded fix, regression oracle, and evidence; recurring missing concepts return to the specification.
-- [ ] **GS2-14.4 — Approve contraction.** After the unchanged 30-day definition passes, independently
+- [ ] **GS2-14.4 — Approve contraction.** After the unchanged 15-item definition passes, independently
   review incidents, open action items, old-client attempts, sealed assets, and exact deletion plans; commit
-  `ContractingV1(plan)` or extend observation without changing the metric denominator.
+  `ContractingV1(plan)` or extend observation without changing the eligible population or denominator.
 - [ ] **GS2-14.5 — Delete v1 runtime code.** Remove v1 readers/writers, public generic mutation routes,
   compatibility adapters, old event/schema decoders, and source packages/workflows after exact static and
   runtime inventory checks.
@@ -1704,7 +1712,7 @@ V1 is **retired** only when:
 4. temporary cutover bypasses and restrictions are removed;
 5. historical state is sealed with independently runnable verification;
 6. old clients fail closed against the v2 epoch; and
-7. Q9 and the 30-day Q10 reading report no unowned legacy authority.
+7. Q9 and the 15-item Q10 reading report no unowned legacy authority.
 
 Closing an issue, merging the last implementation PR, or setting a Project card to Done is not by itself
 evidence that either definition holds.
@@ -1724,7 +1732,7 @@ evidence that either definition holds.
   acceptance text.
 - A newly discovered requirement is recorded even if the vocabulary is missing. It blocks the affected
   transition until the specification is extended; discovery itself is never suppressed.
-- The “Ongoing renovations” website notice remains until `GS2-14.5` and the 30-day Q10 gate are accepted.
+- The “Ongoing renovations” website notice remains until `GS2-14.5` and the 15-item Q10 gate are accepted.
 
 ## 12. Accepted amendment: routine-development simplification and ordinary v2 carryover
 
@@ -1783,7 +1791,7 @@ is not retroactively attributed to an old receipt.
 | GS2-12.7 closed-fleet canaries | Add a routine-profile example beside the comprehensive protocol journey, in the isolated cutover environment | Same-PR repair, absent usage and delayed views preserve correct delivery facts; no ordinary production writes are opened early |
 | GS2-12.8 failure matrix | Cover self-edited eligibility, omitted or stale required checks, wrong policy pins, lost/duplicated hints and unavailable observers | Missing technical/authority evidence refuses its action; missing telemetry cannot certify efficiency and does not become a merge authorizer |
 | GS2-13.3 real journey | Exercise an actual low-risk ordinary change under the enabled profile as well as the required protocol capabilities | One owner/PR and selected checks where adopted; native code delivery distinct from publication pending; required protocol cases remain covered separately or in the same valid journey |
-| GS2-14.1/14.2 operational readings | Add whole-unit model overhead, absolute cost per delivered unit, delivered fraction, unknown coverage and attributed repairs | Common definitions across immediate and 7/14/30-day readings; ordinary v2 measured independently of migration-driver history |
+| GS2-14.1/14.2 operational readings | Add whole-unit model overhead, absolute cost per delivered unit, delivered fraction, unknown coverage and attributed repairs | Common definitions across the immediate baseline and 15 completed-work readings; ordinary v2 measured independently of migration-driver history |
 | GS2-14.5–14.9 deletion and documentation | Include obsolete routine caller instructions, required contexts and receipt/projection-only work in the adopted profile's retirement inventory | Inspect published clean/upgrade receiver behavior; retain forensic history and still-required automatic protocol evidence |
 | GS2-14.10 deferred programmes | Carry pending profile/default work with an explicit owner and target receiver population | Resume under the authorized current epoch; do not claim a pre-cutover pilot establishes post-adoption defaults |
 
