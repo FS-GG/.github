@@ -78,6 +78,15 @@ Create one absolute, regular, non-symlink private root assignment with mode `060
 {"schema":"fsgg.telemetry.codex-assignment/1","featureId":"<feature>","itemId":"<item>","attemptId":"<root-attempt>","parentAttemptId":null,"producerStream":"<producer>"}
 ```
 
+For a member whose original item differs from its item ID, first merge that exact mapping into the protected
+`.github` assignment registry. Before starting the observed root, run the copied adapter's
+`population-only --feature <feature> --item <item> --original-item <original>` command with the selected
+receipt-scoped workspace config. It reads the protected mapping at an immutable revision and emits only an open
+population fact. A successful result requires an `applied` receiver receipt; a merely durable receipt or lost
+response retains the exact private batch for retry. Use the same member item ID in this command, the root
+assignment and routine delivery. Do not call `begin`, `started` or `finish` for this observed root: the launcher
+already owns its sole expected dispatch, lineage, time and native turn usage. Missing usage remains a gap.
+
 Select the existing private host configuration and repository explicitly, and preserve Codex's machine-readable,
 non-persistent launch flags:
 
