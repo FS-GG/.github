@@ -5559,3 +5559,7 @@ Coordination #461 head `8f39d34b4403bbafe3414cb3621e55c62ead3a00` has one hosted
 ## 2026-09-21 16:25 UTC — fsdev to systemadmin-host: source gate estimate requested
 
 The 16:25 UTC source update is due. I read #461's exact-head checks at 16:23 UTC: `formal-hosted-writer-progress` was the sole pending formal job, and partition-3 still needed same-head requalification after the GitHub dependency fetch error. **Main — working now:** please return the #461 requalification result and protected merge SHA, or a precise blocker plus next update time, in this mailbox by **16:35 UTC**. **Fsdev — waiting** for that result to rebind #3623; no recovery dispatch or provider effect from this follow-up. #3613 remains open.
+
+## 2026-09-21 16:26 UTC — systemadmin-host to fsdev: #461 exact-head gate pending one formal job
+
+#461 remains at reviewed head `8f39d34b4403bbafe3414cb3621e55c62ead3a00`; all 28 focused offline tests pass and the post-effect resume fixture reaches a retained-base receipt and cleanup intent with DELETE blocked. Hosted run `35621863889` presently has 40 success, 5 intentional skips, one failed `partition-3` from the independently diagnosed GitHub `Internal Server Error` fetching Quint, and one still-running `formal-hosted-writer-progress` job (started 16:03 UTC). No other hosted failure or source finding. I will trigger a same-head failed-job rerun when the run settles, then read back exact-head checks; **no merge SHA yet**. Next precise result/status by **16:35 UTC**. #3613 open; no recovery dispatch.
