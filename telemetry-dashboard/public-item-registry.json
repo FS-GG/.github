@@ -1,0 +1,19 @@
+{
+  "items": {
+    "standalone-telemetry-pilot": {
+      "deliveries": [
+        {
+          "pullRequest": 3602,
+          "repository": "FS-GG/.github"
+        }
+      ],
+      "label": "Standalone telemetry pilot",
+      "notes": [],
+      "repositories": [
+        "FS-GG/.github"
+      ],
+      "url": "https://github.com/FS-GG/.github/issues/3596"
+    }
+  },
+  "schema": "fsgg.telemetry.public-item-registry/1"
+}
