@@ -201,6 +201,68 @@ class RoadmapTelemetryTests(unittest.TestCase):
             self.assertEqual((terminal["status"], terminal["coverage"], terminal["drain"]),
                              ("terminal", "native-collaboration-usage-unsupported", "complete"))
 
+    def test_distinct_members_publish_one_original_and_children_inherit_it(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            config = self.config(pathlib.Path(scratch))
+            events = []
+
+            def fake_run(command, **kwargs):
+                if "publish" in command:
+                    events.extend(json.loads(pathlib.Path(command[command.index("--input") + 1]).read_text())["events"])
+                return subprocess.CompletedProcess(command, 0, "{}", "")
+
+            def begin(item, attempt, *extra):
+                return MODULE.begin(config, MODULE.parser().parse_args([
+                    "begin", "--feature", "UTEL", "--item", item, "--attempt", attempt,
+                    "--model", "gpt-5.6-sol", "--effort", "medium", *extra,
+                ]))["token"]
+
+            with mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
+                 mock.patch.object(MODULE, "authorized_original", return_value="assignment-digest") as authorized:
+                first = begin("UTEL.1", "root-a", "--original-item", "UTEL")
+                second = begin("UTEL.2", "root-b", "--original-item", "UTEL")
+                self.assertEqual(authorized.call_count, 2)
+                MODULE.started(config, MODULE.parser().parse_args([
+                    "started", "--token", first, "--native-id", "root-a",
+                ]))
+                child = begin("UTEL.1", "child-a", "--parent-token", first, "--relation", "child")
+                self.assertEqual(MODULE.read_state(config, child)["originalItemId"], "UTEL")
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "original item identity"):
+                    begin("UTEL.1", "child-b", "--parent-token", first, "--relation", "child",
+                          "--original-item", "OTHER")
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "durable identity"):
+                    begin("UTEL.2", "root-b", "--original-item", "OTHER")
+
+            populations = [event for event in events if event["kind"] == "budget-population"]
+            self.assertEqual({event["itemId"] for event in populations}, {"UTEL.1", "UTEL.2"})
+            self.assertEqual({event["originalItemId"] for event in populations}, {"UTEL"})
+            self.assertEqual({event["state"] for event in populations}, {"open"})
+
+    def test_nonself_original_requires_one_protected_assignment(self):
+        source = json.dumps({"schema": MODULE.ORIGINAL_ASSIGNMENTS_SCHEMA,
+                             "assignments": [{"featureId": "F", "itemId": "F.1", "originalItemId": "F"}]})
+        revision = "a" * 40
+        ref = subprocess.CompletedProcess([], 0, json.dumps({"ref": "refs/heads/main",
+                             "object": {"type": "commit", "sha": revision}}), "")
+        def content(value):
+            return subprocess.CompletedProcess([], 0, json.dumps({"type": "file",
+                "path": MODULE.ORIGINAL_ASSIGNMENTS, "encoding": "base64",
+                "content": MODULE.base64.b64encode(value.encode()).decode()}), "")
+        with mock.patch.object(MODULE.subprocess, "run", side_effect=[ref, content(source), ref, content(source)]) as read_protected:
+            self.assertEqual(MODULE.authorized_original("F", "F.1", "F"),
+                             revision + ":" + MODULE.hashlib.sha256(source.encode()).hexdigest())
+            self.assertEqual(read_protected.call_args_list[0].args[0],
+                             ["gh", "api", "repos/FS-GG/.github/git/ref/heads/main"])
+            self.assertEqual(read_protected.call_args_list[1].args[0],
+                             ["gh", "api", f"repos/FS-GG/.github/contents/{MODULE.ORIGINAL_ASSIGNMENTS}?ref={revision}"])
+            with self.assertRaisesRegex(MODULE.ConfigurationError, "not authorized"):
+                MODULE.authorized_original("F", "F.2", "F")
+        duplicate = json.dumps({"schema": MODULE.ORIGINAL_ASSIGNMENTS_SCHEMA,
+                                "assignments": [{"featureId": "F", "itemId": "F.1", "originalItemId": "F"}] * 2})
+        with mock.patch.object(MODULE.subprocess, "run", side_effect=[ref, content(duplicate)]), \
+             self.assertRaisesRegex(MODULE.ConfigurationError, "not authorized"):
+            MODULE.authorized_original("F", "F.1", "F")
+
     def test_native_child_usage_is_joined_once_and_late_correction_revises_it(self):
         with tempfile.TemporaryDirectory() as scratch:
             config = self.config(pathlib.Path(scratch))

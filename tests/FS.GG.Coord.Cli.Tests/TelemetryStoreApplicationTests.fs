@@ -4,6 +4,7 @@ open System
 open System.Diagnostics
 open System.IO
 open System.IO.Compression
+open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open Xunit
@@ -67,6 +68,14 @@ module TelemetryStoreApplicationTests =
 
     let private population item revision state source =
         $"""{{"kind":"budget-population","identity":"population-{item}","itemId":"{item}","revision":{revision},"originalItemId":"{item}","state":"{state}","sourceKind":"native-item","sourceRef":"{source}"}}"""
+
+    let private roadmapPopulation item original =
+        let key =
+            SHA256.HashData(Encoding.UTF8.GetBytes(item + "\u001f" + original))
+            |> Convert.ToHexString
+            |> fun value -> value.ToLowerInvariant().Substring(0, 32)
+
+        $"""{{"kind":"budget-population","identity":"budget-population-{key}","itemId":"{item}","revision":0,"originalItemId":"{original}","state":"open","sourceKind":"native-item","sourceRef":"roadmap-dispatch:{key}"}}"""
 
     let private attribution item revision numerator denominator coverage attribution sourceKind source =
         let number value =
@@ -2345,6 +2354,106 @@ COMMIT;
 
         intervals.Parameters.AddWithValue("$item", item) |> ignore
         Assert.Equal(1L, Convert.ToInt64(intervals.ExecuteScalar()))
+
+    [<Fact>]
+    let ``derived completion keeps the prospective original across two delivered members`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let original = "UTEL-group"
+
+        for memberItem in [ "UTEL-group-a"; "UTEL-group-b" ] do
+            let observed =
+                [
+                    roadmapPopulation memberItem original
+                    activation memberItem "codex-exec" 60L
+                    dispatch memberItem ("dispatch-" + memberItem) "root" None "codex-exec" "00"
+                    lineage memberItem ("lineage-" + memberItem) ("dispatch-" + memberItem) ("invoke-" + memberItem) "root" None ("invoke-" + memberItem) "codex-exec"
+                    runtimeTerminal memberItem ("terminal-" + memberItem) ("invoke-" + memberItem) "completed" 0
+                    nativeOutcome memberItem 1L "delivered" "delivered" "2026-09-08T10:04:01Z"
+                ]
+
+            TelemetryStoreApplication.ingest path approved (operationalBatch ("member-" + memberItem) memberItem observed)
+            |> unwrap
+            |> ignore
+
+        use connection =
+            new SqliteConnection(
+                $"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False"
+            )
+
+        connection.Open()
+        use members = connection.CreateCommand()
+        members.CommandText <-
+            "SELECT count(*) FROM budget_population_facts WHERE original_item_id=$original AND state='completed' AND source_ref LIKE 'derived:%';"
+        members.Parameters.AddWithValue("$original", original) |> ignore
+        Assert.Equal(2L, Convert.ToInt64(members.ExecuteScalar()))
+
+        let untrusted = "UTEL-group-d"
+
+        TelemetryStoreApplication.ingest
+            path
+            approved
+            (operationalBatch
+                "untrusted-original"
+                untrusted
+                [
+                    $"""{{"kind":"budget-population","identity":"foreign-population","itemId":"{untrusted}","revision":0,"originalItemId":"{original}","state":"completed","sourceKind":"native-item","sourceRef":"foreign-source"}}"""
+                    activation untrusted "codex-exec" 60L
+                    dispatch untrusted "dispatch-untrusted" "root" None "codex-exec" "00"
+                    lineage untrusted "lineage-untrusted" "dispatch-untrusted" "invoke-untrusted" "root" None "invoke-untrusted" "codex-exec"
+                    runtimeTerminal untrusted "terminal-untrusted" "invoke-untrusted" "completed" 0
+                    nativeOutcome untrusted 1L "delivered" "delivered" "2026-09-08T10:04:01Z"
+                ])
+        |> unwrap
+        |> ignore
+
+        Assert.Contains(
+            "\"population\":\"open\"",
+            TelemetryStoreApplication.budgetHealth path approved untrusted |> unwrap
+        )
+        Assert.Equal(2L, Convert.ToInt64(members.ExecuteScalar()))
+
+        let unfinished = "UTEL-group-c"
+
+        TelemetryStoreApplication.ingest
+            path
+            approved
+            (operationalBatch
+                "unfinished-member"
+                unfinished
+                [
+                    roadmapPopulation unfinished original
+                    activation unfinished "codex-exec" 60L
+                    dispatch unfinished "dispatch-unfinished" "root" None "codex-exec" "00"
+                    nativeOutcome unfinished 1L "delivered" "delivered" "2026-09-08T10:04:01Z"
+                ])
+        |> unwrap
+        |> ignore
+
+        Assert.Contains(
+            "\"population\":\"open\"",
+            TelemetryStoreApplication.budgetHealth path approved unfinished |> unwrap
+        )
+        Assert.Equal(2L, Convert.ToInt64(members.ExecuteScalar()))
+
+        TelemetryStoreApplication.ingest
+            path
+            approved
+            (operationalBatch
+                "conflicting-original"
+                "UTEL-group-a"
+                [
+                    roadmapPopulation "UTEL-group-a" "OTHER"
+                ])
+        |> unwrap
+        |> ignore
+
+        Assert.Contains(
+            "\"population\":\"open\"",
+            TelemetryStoreApplication.budgetHealth path approved "UTEL-group-a" |> unwrap
+        )
+        Assert.Equal(1L, Convert.ToInt64(members.ExecuteScalar()))
 
     [<Fact>]
     let ``UTEL-06D merge cannot close live child and late follow-up revises stable population`` () =

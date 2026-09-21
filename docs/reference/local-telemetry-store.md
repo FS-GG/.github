@@ -299,7 +299,7 @@ It therefore records the population and attribution it does know around each nat
 ```console
 python3 tools/roadmap-telemetry.py begin \
   --feature GS2-08 --item GS2-08.3 --attempt gs2-08-3-worker-1 \
-  --model gpt-5.6-sol --effort medium
+  --model gpt-5.6-sol --effort medium --original-item GS2-08
 # invoke collaboration.spawn_agent; bind the returned native id immediately
 python3 tools/roadmap-telemetry.py started --token <private-token> --native-id <agent-id>
 # after the child becomes terminal
@@ -310,6 +310,18 @@ python3 tools/roadmap-telemetry.py usage-reconcile --token <private-token>
 
 For a child or follow-up, pass its parent's token with `--parent-token`, select `--relation child` or
 `--relation follow-up`, and retain both attempt identities. `begin` atomically publishes expected population;
+distinct member items share one explicit `--original-item` on their root dispatches, while child and follow-up
+dispatches inherit it and refuse a mismatch. The producer publishes an open source population at root begin;
+for a non-self original, root begin requires exactly one matching assignment in the protected
+`docs/coordination/telemetry-original-item-assignments.json` registry. Add that mapping for genuinely planned
+work through protected review before dispatch; the adapter reads GitHub's `.github/main` ref and then fetches
+the assignment at that immutable commit through authenticated `gh api` calls. Missing API access refuses
+non-self grouping. The source commit and document digest are retained in private dispatch state and retry
+identity, independently of the installed skill's filesystem path.
+The store derives its completed state from a native outcome and settled expected dispatches, retaining the
+single source original only when the population's identity, open state, source kind and source reference match
+the roadmap adapter's deterministic item/original pair. Foreign non-self claims, conflicting valid originals
+and unfinished dispatches leave completion open rather than assigning a group.
 `started` records invocation lineage, requested model/effort and the returned native identity; `finish` records
 the terminal result and opportunistically drains. A crash between phases stays visible as missing start or
 terminal. When `CODEX_THREAD_ID` identifies the parent at `begin`, the adapter uses read-only Codex App Server
