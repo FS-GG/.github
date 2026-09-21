@@ -278,7 +278,7 @@
       root.append(gap); return root;
     }
     const note=document.createElement("p"); note.className="item-method";
-    note.textContent=`${pipeline.coverage.published}/${pipeline.coverage.eligible} canonical member items have approved public nodes; ${pipeline.coverage.unmapped} remain unmapped. Nodes are in observed order. Connectors show parentage, not elapsed sequence or dependencies. Time spans can overlap; token totals require exact native usage and compatible scope.`;
+    note.textContent=`${pipeline.coverage.published}/${pipeline.coverage.eligible} canonical member items have approved public nodes; ${pipeline.coverage.unmapped} remain unmapped. Nodes are in observed order; order does not establish parentage or dependencies. Time spans can overlap; token totals require exact native usage and compatible scope.`;
     root.append(note);
     const knownTime=Math.max(1,...pipeline.nodes.map((node)=>node.time.seconds??0));
     const knownTokens=Math.max(1,...pipeline.nodes.map((node)=>node.tokens.total??0));
@@ -289,7 +289,7 @@
       const heading=document.createElement("div"); heading.className="pipeline-node-heading";
       const link=document.createElement("a"); link.href=node.url; link.target="_blank"; link.rel="noopener"; link.textContent=node.label;
       const classText=document.createElement("span"); classText.className="pipeline-classes";
-      classText.textContent=`${friendly(node.status)} · ${friendly(node.stage)} stage · ${friendly(node.workClass)} work`;
+      classText.textContent=`${friendly(node.status)} · ${friendly(node.stage)} stage · ${friendly(node.workClass)} work${node.parentKey?` · parent ${node.parentKey}`:""}`;
       heading.append(link,classText); entry.append(heading);
       const metrics=document.createElement("div"); metrics.className="pipeline-metrics";
       for (const [name,value,status,basis,max] of [["Observed time",node.time.seconds,node.time.status,"summed invocation span",knownTime],["Native tokens",node.tokens.total,node.tokens.status,node.tokens.attribution,knownTokens]]) {
@@ -598,7 +598,7 @@
         if (!object(pipeline) || pipeline.schema!=="fsgg.telemetry.item-pipeline/1" || !object(pipeline.coverage) || !Array.isArray(pipeline.nodes) || pipeline.nodes.length>128 || !["eligible","published","unmapped"].every((field)=>Number.isSafeInteger(pipeline.coverage[field]) && pipeline.coverage[field]>=0) || pipeline.coverage.published!==pipeline.nodes.length || pipeline.coverage.eligible!==pipeline.coverage.published+pipeline.coverage.unmapped) malformed();
         const keys=new Set();
         pipeline.nodes.forEach((node)=>{
-          if (!object(node) || typeof node.key!=="string" || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(node.key) || keys.has(node.key) || typeof node.label!=="string" || node.label.length<1 || node.label.length>120 || !safeUrl(node.url,"https://github.com/FS-GG/") || (node.parentKey!=null && !keys.has(node.parentKey)) || node.status!=="settled" || !["planning","implementation","review","validation","delivery","repair","operations","other","unclassified","unknown"].includes(node.stage) || !["useful-validation","administrative","necessary-setup","mixed","unclassified","unknown"].includes(node.workClass) || !object(node.time) || !["known","partial","unknown"].includes(node.time.status) || (node.time.seconds!=null && (!finite(node.time.seconds)||node.time.seconds<0)) || (node.time.status==="unknown" && node.time.seconds!=null) || (node.time.status==="known" && node.time.seconds==null) || !object(node.tokens) || !["complete","partial","unknown"].includes(node.tokens.status) || (node.tokens.total!=null && (!finite(node.tokens.total)||node.tokens.total<0)) || (node.tokens.status==="unknown" && node.tokens.total!=null) || (node.tokens.status==="complete" && node.tokens.total==null) || !["direct","mixed","unclassified","unknown"].includes(node.tokens.attribution)) malformed();
+        if (!object(node) || typeof node.key!=="string" || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(node.key) || keys.has(node.key) || typeof node.label!=="string" || node.label.length<1 || node.label.length>120 || !/^https:\/\/github\.com\/FS-GG\/[A-Za-z0-9_.-]+\/(?:issues|pull)\/[1-9][0-9]*$/.test(node.url) || (node.parentKey!=null && !keys.has(node.parentKey)) || node.status!=="settled" || !["planning","implementation","review","validation","delivery","repair","operations","other","unclassified","unknown"].includes(node.stage) || !["useful-validation","administrative","necessary-setup","mixed","unclassified","unknown"].includes(node.workClass) || !object(node.time) || !["known","partial","unknown"].includes(node.time.status) || (node.time.seconds!=null && (!Number.isSafeInteger(node.time.seconds)||node.time.seconds<0)) || (node.time.status==="unknown" && node.time.seconds!=null) || (node.time.status==="known" && node.time.seconds==null) || !object(node.tokens) || !["complete","partial","unknown"].includes(node.tokens.status) || (node.tokens.total!=null && (!Number.isSafeInteger(node.tokens.total)||node.tokens.total<0)) || (node.tokens.status==="unknown" && node.tokens.total!=null) || (node.tokens.status==="complete" && node.tokens.total==null) || !["direct","mixed","unclassified","unknown"].includes(node.tokens.attribution)) malformed();
           keys.add(node.key);
         });
       }
