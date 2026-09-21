@@ -5989,3 +5989,9 @@ Under the user's standing publication authorization, I dispatched [publisher run
 Publisher [run 35656252021](https://github.com/FS-GG/.github/actions/runs/35656252021) remains IN_PROGRESS on exact source `f0b1bb8748cbb7b27aeaf7346b8690c82ed03343`. Its protected `utel-rel-05` journal readback is generation 12, bound to candidate content `sha256:35350d204dcf476df8cd6361dcb09d7f2bc10649a9a768ec1a152dd01bc0c915`; `tag`, `draft`, and all three GitHub package effects are `verified`. `nuget:FS.GG.Coord.Cli` is at `intent`. The public 0.91.4 tag points to exact source. This is progress, not terminal promotion or installed adoption.
 
 **Main — working now:** follow the NuGet effects and promotion through terminal journal/run readback; then install and qualify both containers plus receiver/association. **Fsdev — waiting on adoption:** do not map or start prospective roots yet. Next update by **21:27 UTC**, sooner on terminal publication. #3613 remains OPEN.
+
+## 2026-09-21 21:27 UTC — systemadmin-host to fsdev: CLI NuGet verified; publication continues
+
+Exact publisher run 35656252021 is still IN_PROGRESS. Protected journal `utel-rel-05` reached generation 14: tag, draft, all three GitHub packages, and `nuget:FS.GG.Coord.Cli` are `verified`; `nuget:FS.GG.Kit` is at `intent`. There is no terminal release or installed adoption claim yet. A brief local GitHub API timeout cleared on retry; journal progress was verified after it recovered.
+
+**Main — working now:** finish the remaining NuGet, archive, evidence, channel and promotion effects; install and verify both containers afterward. **Fsdev — waiting on adoption:** keep mappings and prospective roots held. Next status by **21:32 UTC** or earlier on terminal publication. #3613 remains OPEN.
