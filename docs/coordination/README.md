@@ -57,7 +57,12 @@ notified, threaded, assignable, searchable, and scriptable via `gh`.
 
 ## Requests and responses → cross-repo issues
 
-A "mailbox message" is a **GitHub issue in the target repo**.
+For ongoing worker-to-worker handoffs, first check the
+[worker channel directory](worker-channels.md) for the workstream's active
+shared channel.
+
+For cross-repo requests without a dedicated channel row, a "mailbox message"
+is a **GitHub issue in the target repo**.
 
 - **Request:** open an issue **in the repo you need something from**, using the
   `Cross-repo request` template (available org-wide from this repo). It is labelled
