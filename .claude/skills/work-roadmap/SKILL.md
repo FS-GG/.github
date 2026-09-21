@@ -109,7 +109,8 @@ owns expected dispatches for its root and descendants; do not also call this sec
 
 At driver entry, start one root observation with this skill's `scripts/roadmap-telemetry.py begin` adapter
 (also exposed as `tools/roadmap-telemetry.py` in `.github`), supplying the roadmap
-feature/item/attempt and selected model/effort. Immediately after every `spawn_agent`, bind the returned native
+feature/item/attempt and selected model/effort. For distinct member items under one canonical original, pass
+the same `--original-item` at each root; child and follow-up observations inherit it. Immediately after every `spawn_agent`, bind the returned native
 agent id with `started`. Before each child or `followup_task`, start another observation with its stable attempt,
 the parent's token and the `child` or `follow-up` relation. When an agent becomes terminal, call `finish` with its
 real outcome before accepting its handoff; finish the root observation before returning. Pass the same stable

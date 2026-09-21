@@ -201,6 +201,41 @@ class RoadmapTelemetryTests(unittest.TestCase):
             self.assertEqual((terminal["status"], terminal["coverage"], terminal["drain"]),
                              ("terminal", "native-collaboration-usage-unsupported", "complete"))
 
+    def test_distinct_members_publish_one_original_and_children_inherit_it(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            config = self.config(pathlib.Path(scratch))
+            events = []
+
+            def fake_run(command, **kwargs):
+                if "publish" in command:
+                    events.extend(json.loads(pathlib.Path(command[command.index("--input") + 1]).read_text())["events"])
+                return subprocess.CompletedProcess(command, 0, "{}", "")
+
+            def begin(item, attempt, *extra):
+                return MODULE.begin(config, MODULE.parser().parse_args([
+                    "begin", "--feature", "UTEL", "--item", item, "--attempt", attempt,
+                    "--model", "gpt-5.6-sol", "--effort", "medium", *extra,
+                ]))["token"]
+
+            with mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run):
+                first = begin("UTEL.1", "root-a", "--original-item", "UTEL")
+                second = begin("UTEL.2", "root-b", "--original-item", "UTEL")
+                MODULE.started(config, MODULE.parser().parse_args([
+                    "started", "--token", first, "--native-id", "root-a",
+                ]))
+                child = begin("UTEL.1", "child-a", "--parent-token", first, "--relation", "child")
+                self.assertEqual(MODULE.read_state(config, child)["originalItemId"], "UTEL")
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "original item identity"):
+                    begin("UTEL.1", "child-b", "--parent-token", first, "--relation", "child",
+                          "--original-item", "OTHER")
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "durable identity"):
+                    begin("UTEL.2", "root-b", "--original-item", "OTHER")
+
+            populations = [event for event in events if event["kind"] == "budget-population"]
+            self.assertEqual({event["itemId"] for event in populations}, {"UTEL.1", "UTEL.2"})
+            self.assertEqual({event["originalItemId"] for event in populations}, {"UTEL"})
+            self.assertEqual({event["state"] for event in populations}, {"open"})
+
     def test_native_child_usage_is_joined_once_and_late_correction_revises_it(self):
         with tempfile.TemporaryDirectory() as scratch:
             config = self.config(pathlib.Path(scratch))

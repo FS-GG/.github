@@ -196,7 +196,8 @@ def matching_dispatch(config: HostConfig, expected: dict[str, object]) -> dict[s
         raise ConfigurationError("dispatch identity is ambiguous in private state")
     if not matches:
         return None
-    if not all(matches[0].get(name) == value for name, value in expected.items()):
+    if not all((matches[0].get(name, matches[0].get("itemId")) if name == "originalItemId"
+                else matches[0].get(name)) == value for name, value in expected.items()):
         raise ConfigurationError("dispatch attempt retry differs from its durable identity")
     return matches[0]
 
@@ -227,6 +228,7 @@ def prospective_coverage(state: dict[str, object]) -> str:
 def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
     feature = validate_identity("feature", args.feature)
     item = validate_identity("item", args.item)
+    original_item = validate_identity("original item", args.original_item or item)
     attempt = validate_identity("attempt", args.attempt)
     parent_attempt = validate_identity("parent attempt", args.parent_attempt, optional=True)
     producer = validate_identity("producer", args.producer)
@@ -238,10 +240,14 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
     relation = "root"
     if args.parent_token:
         parent = read_state(config, args.parent_token)
+        if args.original_item is None:
+            original_item = str(parent.get("originalItemId", item))
         if parent.get("phase") not in {"started", "terminal"}:
             raise ConfigurationError("parent dispatch must be started before a child is expected")
         if parent.get("itemId") != item:
             raise ConfigurationError("parent and child dispatches must share the item identity")
+        if parent.get("originalItemId", item) != original_item:
+            raise ConfigurationError("parent and child dispatches must share the original item identity")
         parent_dispatch = str(parent["dispatchId"])
         parent_invocation = str(parent["invocationId"])
         relation = args.relation
@@ -250,7 +256,8 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
     elif args.relation != "root":
         raise ConfigurationError("child and follow-up dispatches require --parent-token")
     expected = {
-        "featureId": feature, "itemId": item, "attemptId": attempt, "parentAttemptId": parent_attempt,
+        "featureId": feature, "itemId": item, "originalItemId": original_item,
+        "attemptId": attempt, "parentAttemptId": parent_attempt,
         "producerStream": producer, "model": model, "effort": effort, "relation": relation,
         "parentDispatchId": parent_dispatch, "parentInvocationId": parent_invocation,
         "lateAfterSeconds": args.late_after_seconds,
@@ -291,6 +298,7 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         "sequence": 0,
         "featureId": feature,
         "itemId": item,
+        "originalItemId": original_item,
         "attemptId": attempt,
         "parentAttemptId": parent_attempt,
         "producerStream": producer,
@@ -316,6 +324,9 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         events.extend([
             event("feature", feature, None, name=feature),
             event("item", item, item, featureId=feature),
+            event("budget-population", digest("budget-population-", item, original_item), item,
+                  originalItemId=original_item, state="open", sourceKind="native-item",
+                  sourceRef=digest("roadmap-dispatch:", item, original_item)),
             event("operational-activation", f"operational-activation-{activation}", item,
                   activationId=activation, scope="explicit-future-dispatches", runtime=RUNTIME,
                   activatedAt=timestamp, clockProvenance="host-wall", lateAfterSeconds=args.late_after_seconds),
@@ -601,6 +612,7 @@ def parser() -> argparse.ArgumentParser:
     for name in ("feature", "item", "attempt", "model", "effort"):
         begin_parser.add_argument(f"--{name}", required=True)
     begin_parser.add_argument("--parent-attempt")
+    begin_parser.add_argument("--original-item", help="stable original item shared by distinct member items")
     begin_parser.add_argument("--parent-token")
     begin_parser.add_argument("--relation", choices=("root", "child", "follow-up"), default="root")
     begin_parser.add_argument("--producer", default="roadmap-orchestrator")

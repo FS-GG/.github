@@ -2347,6 +2347,58 @@ COMMIT;
         Assert.Equal(1L, Convert.ToInt64(intervals.ExecuteScalar()))
 
     [<Fact>]
+    let ``derived completion keeps the prospective original across two delivered members`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let original = "UTEL-group"
+
+        for memberItem in [ "UTEL-group-a"; "UTEL-group-b" ] do
+            let observed =
+                [
+                    $"""{{"kind":"budget-population","identity":"population-{memberItem}","itemId":"{memberItem}","revision":0,"originalItemId":"{original}","state":"open","sourceKind":"native-item","sourceRef":"roadmap-dispatch:{memberItem}"}}"""
+                    activation memberItem "codex-exec" 60L
+                    dispatch memberItem ("dispatch-" + memberItem) "root" None "codex-exec" "00"
+                    lineage memberItem ("lineage-" + memberItem) ("dispatch-" + memberItem) ("invoke-" + memberItem) "root" None ("invoke-" + memberItem) "codex-exec"
+                    runtimeTerminal memberItem ("terminal-" + memberItem) ("invoke-" + memberItem) "completed" 0
+                    nativeOutcome memberItem 1L "delivered" "delivered" "2026-09-08T10:04:01Z"
+                ]
+
+            TelemetryStoreApplication.ingest path approved (operationalBatch ("member-" + memberItem) memberItem observed)
+            |> unwrap
+            |> ignore
+
+        use connection =
+            new SqliteConnection(
+                $"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False"
+            )
+
+        connection.Open()
+        use members = connection.CreateCommand()
+        members.CommandText <-
+            "SELECT count(*) FROM budget_population_facts WHERE original_item_id=$original AND state='completed' AND source_ref LIKE 'derived:%';"
+        members.Parameters.AddWithValue("$original", original) |> ignore
+        Assert.Equal(2L, Convert.ToInt64(members.ExecuteScalar()))
+
+        TelemetryStoreApplication.ingest
+            path
+            approved
+            (operationalBatch
+                "conflicting-original"
+                "UTEL-group-a"
+                [
+                    """{"kind":"budget-population","identity":"conflicting-population","itemId":"UTEL-group-a","revision":0,"originalItemId":"OTHER","state":"open","sourceKind":"native-item","sourceRef":"roadmap-dispatch:conflict"}"""
+                ])
+        |> unwrap
+        |> ignore
+
+        Assert.Contains(
+            "\"population\":\"open\"",
+            TelemetryStoreApplication.budgetHealth path approved "UTEL-group-a" |> unwrap
+        )
+        Assert.Equal(1L, Convert.ToInt64(members.ExecuteScalar()))
+
+    [<Fact>]
     let ``UTEL-06D merge cannot close live child and late follow-up revises stable population`` () =
         let cleanup, path = root ()
         use cleanup = cleanup

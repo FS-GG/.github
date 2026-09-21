@@ -1673,6 +1673,21 @@ PRAGMA user_version=10;
         match latestOutcome with
         | None -> ()
         | Some(outcome, codeDelivery, outcomeAt, observedAt) ->
+            let explicitOriginals =
+                use command =
+                    parameterized
+                        "SELECT DISTINCT original_item_id FROM budget_population_facts WHERE item_id=$item AND source_ref NOT LIKE 'derived:%' ORDER BY original_item_id LIMIT 2;"
+
+                use reader = command.ExecuteReader()
+
+                [ while reader.Read() do
+                      yield reader.GetString 0 ]
+
+            let originalItem =
+                match explicitOriginals with
+                | [ original ] -> original
+                | _ -> item
+
             let expected = scalarInt64 "SELECT count(*) FROM expected_dispatches WHERE item_id=$item;"
 
             let supported =
@@ -1716,7 +1731,7 @@ AND EXISTS(
             let refusedComplete = outcome = "refused" && settled = supported
 
             let state =
-                if deliveredComplete || refusedComplete then
+                if (deliveredComplete || refusedComplete) && List.length explicitOriginals <= 1 then
                     "completed"
                 else
                     "open"
@@ -1734,9 +1749,10 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
 
             use population =
                 parameterized
-                    "INSERT INTO budget_population_facts VALUES($identity,$item,$item,$state,'native-item',$source,$revision);"
+                    "INSERT INTO budget_population_facts VALUES($identity,$item,$original,$state,'native-item',$source,$revision);"
 
             parameter population "$identity" ("derived-population-" + stable "population")
+            parameter population "$original" originalItem
             parameter population "$state" state
             parameter population "$source" (prefix + ":population")
             parameter population "$revision" revision
