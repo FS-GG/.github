@@ -86,6 +86,19 @@ orchestration item to a unique public key; without that alias, the item remains
 unpublished. Main pins both the new CLI and the dashboard script digest before
 enabling the two-scope stage.
 
+The optional `fsgg.telemetry.dashboard-labels/2` file adds a private `members`
+map to the existing `items`, `models`, `efforts`, and `scopes` maps. Each member
+selector is a canonical private item ID; its value contains only an approved
+public `key`, `label`, and FS-GG issue or PR `url`. Version 1 labels remain
+valid and produce no subitem pipeline. A version 2 file projects only approved
+canonical members from the same engine-owned item-detail snapshot, reporting
+unmapped members as coverage rather than exposing their IDs. Stage, CI class,
+same-clock invocation time, native tokens, and attribution remain unknown when
+their respective evidence is incomplete. Display order follows observed starts;
+it does not establish a dependency or parent edge. A changed dashboard script
+or labels file requires a new digest-bound publisher activation and Main's
+protected cutover before any live subitem claim.
+
 Replacing an already active handoff publisher requires a fresh publisher state
 directory and a root-owned `fsgg.telemetry.publisher-cutover-proof/3`. The proof
 binds the new config, script, labels, coordinator and unit digests; the current

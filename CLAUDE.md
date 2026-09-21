@@ -3,3 +3,6 @@
 This file is an SDD lifecycle guidance target. Generated agent guidance is a
 projection over `.fsgg/agents.yml` and readiness data; it is not a second source
 of truth.
+
+For worker-to-worker handoffs, look up the active channel in
+[`docs/coordination/worker-channels.md`](docs/coordination/worker-channels.md).

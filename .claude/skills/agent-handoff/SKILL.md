@@ -5,7 +5,7 @@ description: "Use for agent handoffs and ongoing mailbox coordination: verify st
 
 # Agent handoff
 
-Keep a shared task moving across agents without losing the current truth or the next owner. Use the communication channel already chosen by the user or project. If another skill defines the channel's mechanics, follow it; this skill governs message content and follow-up.
+Keep a shared task moving across agents without losing the current truth or the next owner. For FS-GG worker handoffs, read the [worker channel directory](https://github.com/FS-GG/.github/blob/main/docs/coordination/worker-channels.md) on protected `.github/main` to find the active channel. Use a channel explicitly chosen by the user when one is named. If another skill defines the channel's mechanics, follow it; this skill governs message content and follow-up.
 
 ## Read before acting
 
@@ -19,9 +19,16 @@ For each substantive progress report or handoff, include:
 
 1. What changed or was learned, and the evidence needed to check it.
 2. What remains uncertain or blocked, including the exact missing input if any.
-3. The next concrete action, its named owner, and the completion signal the receiver should return.
+3. A current, short roadmap from the verified state to acceptance: the next milestone, later gates, and the condition that unlocks each gate. Name the canonical roadmap or issue and its revision when one exists. Update the roadmap when evidence changes it; mark superseded steps instead of leaving contradictory directions in the thread.
+4. For every involved owner, state whether they are **working now**, **waiting**, or have **no action**. Give each working owner a concrete next action and completion signal. For a waiting owner, name the exact dependency and who owns it. State explicitly when owners can work in parallel.
 
-Keep one request per owner when possible. Say explicitly when there is no action for a recipient. Do not use “please advise,” “continue,” or “done” as a substitute for an action or acceptance condition. Link to the canonical issue, PR, run, artifact, or revision rather than copying large logs. Preserve identifiers exactly.
+Keep one request per owner when possible. Do not make one owner's answer a prerequisite for another owner's independent work; check the real dependency before declaring anyone blocked. Do not use “please advise,” “continue,” or “done” as a substitute for an action or acceptance condition. Link to the canonical issue, PR, run, artifact, or revision rather than copying large logs. Preserve identifiers exactly.
+
+## Set the reply contract
+
+For each request that needs a response, state **what answer is expected, where it must appear, and when to expect it**. Name the exact thread, branch/file, or other mailbox; give a marker or source revision when it helps match replies. Ask for the smallest useful answer: a receipt for a delivery test, a decision with its chosen option, a result with evidence, or a precise blocker with its owner. Distinguish a quick receipt from the later work result; a receipt does not prove the work is complete. Give an explicit UTC deadline or a realistic elapsed-time estimate for each expected answer. If the receiver must first investigate, ask them to return an estimate and next update time promptly, then use that time for the substantive result. Keep the response on the named channel unless both owners agree to move it.
+
+Check that the request landed before waiting for a reply. After a push or comment, read the remote artifact and record its revision or URL. A scheduled watcher is one way to detect mail, not the only way to verify a time-sensitive reply. If the promised answer is due in seconds, check near that deadline rather than waiting for a multi-minute watcher. If the work is expected to take 10–20 minutes, do useful independent work and check around the agreed update time rather than polling every few seconds. Use the channel's actual delivery latency and the owner's stated estimate to set the next check; do not treat silence before that time as a blocker. At the deadline, check once, then send one concise follow-up or escalate only when the missed response blocks progress. Avoid duplicate requests and busy polling.
 
 ## Protect the boundary
 
@@ -32,9 +39,9 @@ Keep one request per owner when possible. Say explicitly when there is no action
 
 ## Maintain the loop
 
-- When asked to monitor a mailbox, record the requested interval and check at that cadence while the session is active. Do not imply that checks continue after the session ends unless a real scheduled mechanism is installed.
+- When asked to monitor a mailbox, record the requested interval or derive the next check from the reply contract above; adjust it when the expected answer changes. Check at that cadence while the session is active. Do not imply that checks continue after the session ends unless a real scheduled mechanism is installed.
 - On new mail, acknowledge the request by taking the owned action or replying with a precise blocker and a new owner. Avoid acknowledgment-only traffic.
 - If an owner cannot act, route the smallest missing decision or access request to the person who can resolve it. Escalate to the user when there is no viable agent path, with the decision needed and the consequence of waiting.
-- In user updates, report the last check time, new information, current owner, next step, and verification status. Say “no new mail” when that is the result; do not suggest progress from silence.
+- In user updates, report the last check time, new information, each owner's working/waiting status, the next roadmap gate, and verification status. Say “no new mail” when that is the result; do not suggest progress from silence.
 
-Stop the coordination loop when the acceptance condition is verified, the task is explicitly canceled, or the necessary decision is waiting on the user. Leave a final handoff that names any remaining work and its owner.
+Stop the coordination loop when the acceptance condition is verified, the task is explicitly canceled, or the necessary decision is waiting on the user. Leave a final handoff with the current roadmap, each owner's status, and the next action and completion signal.
