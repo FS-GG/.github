@@ -130,12 +130,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.91.3 — accept authoritative orchestration delivery outcomes in schema-10 telemetry stores.
+    <PackageReleaseNotes>0.91.4 — preserve reviewed prospective roadmap member originals in completed telemetry groups.
 
-The telemetry store migrates existing routine delivery outcomes and accepts a separate
-orchestration-delivery source after native Main readback. The private dashboard projection reads
-schema 10. The public stage must install this version before the stopped Host schema-10 migration;
-a completed row still requires a genuine delivered item and an approved public alias.
+The roadmap adapter requires an exact protected assignment before a non-self member begins, and
+children inherit its original. The telemetry store retains that original when actual native delivery
+and every expected dispatch settle; conflicting or unfinished members stay open. The assignment
+registry begins empty. Live grouping still requires new authorized work, installed Host adoption,
+complete time and token receipts, and separately approved public aliases.
 
 $(FsggStandingAdvisories)
 

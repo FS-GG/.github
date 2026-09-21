@@ -586,8 +586,11 @@
   <!-- 0.91.2 -> 0.91.3 (UTEL-OUTCOME): PATCH release for schema-10 native orchestration
        outcome ingestion and dashboard projection. The CLI, Drivers and Kit move together so
        the installed public stage can read both migrated private Host workspaces. -->
+  <!-- 0.91.3 -> 0.91.4 (UTEL-GROUP): PATCH release for prospective roadmap member
+       originals and canonical completed-group projection. The CLI, Drivers and Kit move
+       together; a reviewed assignment and real delivery remain required for live evidence. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.91.3</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.91.4</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
