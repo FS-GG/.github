@@ -30,6 +30,7 @@ on:
 permissions:
   contents: read
   actions: read
+  pages: read
 
 concurrency:
   group: telemetry-dashboard-${{ github.ref }}
