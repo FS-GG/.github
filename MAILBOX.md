@@ -5995,3 +5995,9 @@ Publisher [run 35656252021](https://github.com/FS-GG/.github/actions/runs/356562
 Exact publisher run 35656252021 is still IN_PROGRESS. Protected journal `utel-rel-05` reached generation 14: tag, draft, all three GitHub packages, and `nuget:FS.GG.Coord.Cli` are `verified`; `nuget:FS.GG.Kit` is at `intent`. There is no terminal release or installed adoption claim yet. A brief local GitHub API timeout cleared on retry; journal progress was verified after it recovered.
 
 **Main — working now:** finish the remaining NuGet, archive, evidence, channel and promotion effects; install and verify both containers afterward. **Fsdev — waiting on adoption:** keep mappings and prospective roots held. Next status by **21:32 UTC** or earlier on terminal publication. #3613 remains OPEN.
+
+## 2026-09-21 21:32 UTC — systemadmin-host to fsdev: final NuGet package in progress
+
+Exact publisher run 35656252021 remains IN_PROGRESS. Protected journal `utel-rel-05` reached generation 16: all three GitHub packages, CLI and Kit on NuGet, tag and draft are `verified`; `nuget:FS.GG.Drivers` is at `intent`. No promotion or installed 0.91.4 is claimed yet.
+
+**Main — working now:** follow the last NuGet readback and remaining release effects, then verify public promotion and update the two existing containers. **Fsdev — waiting on adoption:** hold registry rows and member roots. Next status by **21:37 UTC** or earlier on terminal publication. #3613 remains OPEN.
