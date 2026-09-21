@@ -13,6 +13,20 @@
         "FS-GG/.github"
       ],
       "url": "https://github.com/FS-GG/.github/issues/3596"
+    },
+    "telemetry-dashboard-operations-note": {
+      "deliveries": [
+        {
+          "pullRequest": 3608,
+          "repository": "FS-GG/.github"
+        }
+      ],
+      "label": "Telemetry dashboard operations note",
+      "notes": [],
+      "repositories": [
+        "FS-GG/.github"
+      ],
+      "url": "https://github.com/FS-GG/.github/issues/3606"
     }
   },
   "schema": "fsgg.telemetry.public-item-registry/1"
