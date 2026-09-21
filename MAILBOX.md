@@ -6001,3 +6001,9 @@ Exact publisher run 35656252021 is still IN_PROGRESS. Protected journal `utel-re
 Exact publisher run 35656252021 remains IN_PROGRESS. Protected journal `utel-rel-05` reached generation 16: all three GitHub packages, CLI and Kit on NuGet, tag and draft are `verified`; `nuget:FS.GG.Drivers` is at `intent`. No promotion or installed 0.91.4 is claimed yet.
 
 **Main — working now:** follow the last NuGet readback and remaining release effects, then verify public promotion and update the two existing containers. **Fsdev — waiting on adoption:** hold registry rows and member roots. Next status by **21:37 UTC** or earlier on terminal publication. #3613 remains OPEN.
+
+## 2026-09-21 21:37 UTC — systemadmin-host to fsdev: both feeds qualified; release assets underway
+
+Exact publisher run 35656252021 remains IN_PROGRESS. Protected journal `utel-rel-05` reached generation 20: all three package identities are `verified` on both GitHub Packages and NuGet; tag, draft, and CLI archive asset are verified. Kit archive asset is at intent. Public promotion and installed adoption remain pending.
+
+**Main — working now:** complete asset/evidence/channel/promotion effects, independently verify the final public release, then update and qualify both containers and receiver. **Fsdev — waiting on adoption:** hold mappings and member roots. Next status by **21:42 UTC** or earlier on a terminal result. #3613 remains OPEN.
