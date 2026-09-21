@@ -112,7 +112,8 @@ At driver entry, start one root observation with this skill's `scripts/roadmap-t
 feature/item/attempt and selected model/effort. For distinct member items under one canonical original, pass
 the same `--original-item` at each root; child and follow-up observations inherit it. For non-self originals,
 first merge the exact member/original mapping into the protected
-`docs/coordination/telemetry-original-item-assignments.json` registry and refresh `origin/main`. Immediately
+`docs/coordination/telemetry-original-item-assignments.json` registry. The adapter reads its protected GitHub
+revision. Immediately
 after every `spawn_agent`, bind the returned native agent id with `started`. Before each child or `followup_task`, start another observation with its stable attempt,
 the parent's token and the `child` or `follow-up` relation. When an agent becomes terminal, call `finish` with its
 real outcome before accepting its handoff; finish the root observation before returning. Pass the same stable

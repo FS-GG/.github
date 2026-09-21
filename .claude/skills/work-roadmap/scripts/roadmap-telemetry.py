@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -56,20 +57,41 @@ def digest(prefix: str, *values: str) -> str:
 
 
 def authorized_original(feature: str, item: str, original: str) -> str:
-    """Bind a non-self original to a reviewed assignment on protected main."""
-    repository = pathlib.Path(__file__).resolve().parents[4]
+    """Bind a non-self original to an immutable read of protected .github/main."""
+    def github(endpoint: str) -> dict[str, object]:
+        try:
+            result = subprocess.run(
+                ["gh", "api", endpoint], capture_output=True, text=True, timeout=10, check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            raise ConfigurationError("protected original-item assignment is unavailable") from error
+        if result.returncode != 0 or len(result.stdout.encode("utf-8")) > 131072:
+            raise ConfigurationError("protected original-item assignment is unavailable")
+        try:
+            value = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            raise ConfigurationError("protected original-item assignment is malformed") from error
+        if not isinstance(value, dict):
+            raise ConfigurationError("protected original-item assignment is malformed")
+        return value
+
+    ref = github("repos/FS-GG/.github/git/ref/heads/main")
+    commit = ref.get("object")
+    if (ref.get("ref") != "refs/heads/main" or not isinstance(commit, dict) or
+            commit.get("type") != "commit" or not isinstance(commit.get("sha"), str) or
+            not re.fullmatch(r"[0-9a-f]{40}", commit["sha"])):
+        raise ConfigurationError("protected original-item revision is malformed")
+    revision = commit["sha"]
+    content = github(f"repos/FS-GG/.github/contents/{ORIGINAL_ASSIGNMENTS}?ref={revision}")
+    if (content.get("type") != "file" or content.get("path") != ORIGINAL_ASSIGNMENTS or
+            content.get("encoding") != "base64" or not isinstance(content.get("content"), str)):
+        raise ConfigurationError("protected original-item assignment is malformed")
     try:
-        result = subprocess.run(
-            ["git", "show", f"refs/remotes/origin/main:{ORIGINAL_ASSIGNMENTS}"],
-            cwd=repository, capture_output=True, text=True, timeout=5, check=False,
-        )
-    except (OSError, subprocess.SubprocessError) as error:
-        raise ConfigurationError("protected original-item assignment is unavailable") from error
-    if result.returncode != 0 or len(result.stdout.encode("utf-8")) > 65536:
-        raise ConfigurationError("protected original-item assignment is unavailable")
-    try:
-        document = json.loads(result.stdout)
-    except json.JSONDecodeError as error:
+        raw = base64.b64decode(content["content"].replace("\n", ""), validate=True)
+        if len(raw) > 65536:
+            raise ValueError("oversize")
+        document = json.loads(raw)
+    except (ValueError, json.JSONDecodeError) as error:
         raise ConfigurationError("protected original-item assignment is malformed") from error
     if (not isinstance(document, dict) or set(document) != {"schema", "assignments"} or
             document["schema"] != ORIGINAL_ASSIGNMENTS_SCHEMA or
@@ -84,7 +106,7 @@ def authorized_original(feature: str, item: str, original: str) -> str:
             matches.append(row["originalItemId"])
     if matches != [original]:
         raise ConfigurationError("original item is not authorized by the protected assignment")
-    return hashlib.sha256(result.stdout.encode("utf-8")).hexdigest()
+    return revision + ":" + hashlib.sha256(raw).hexdigest()
 
 
 def prepare_publication(

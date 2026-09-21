@@ -131,7 +131,7 @@ Telemetry is prospectively on by default for repository-owned dispatches. At dri
 with the feature, item, attempt, selected model and effort. Pass a stable `--original-item` for a root member
 when distinct roadmap items belong to one canonical original; otherwise the item is its own original. Bind the
 non-self root mapping through the protected `docs/coordination/telemetry-original-item-assignments.json`
-registry before dispatch and refresh `origin/main` so the adapter can verify it. Bind the
+registry before dispatch; the adapter verifies the protected GitHub revision. Bind the
 returned native agent id with `started` immediately after every `spawn_agent`. Before every child or `followup_task`, run
 another `begin` with the parent's token/attempt and the correct `child` or `follow-up` relation, then bind and
 close it the same way. After each child becomes terminal, run `finish` with its real outcome; close the driver's

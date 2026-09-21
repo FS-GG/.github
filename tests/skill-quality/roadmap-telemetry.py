@@ -241,18 +241,25 @@ class RoadmapTelemetryTests(unittest.TestCase):
     def test_nonself_original_requires_one_protected_assignment(self):
         source = json.dumps({"schema": MODULE.ORIGINAL_ASSIGNMENTS_SCHEMA,
                              "assignments": [{"featureId": "F", "itemId": "F.1", "originalItemId": "F"}]})
-        returned = subprocess.CompletedProcess([], 0, source, "")
-        with mock.patch.object(MODULE.subprocess, "run", return_value=returned) as read_protected:
+        revision = "a" * 40
+        ref = subprocess.CompletedProcess([], 0, json.dumps({"ref": "refs/heads/main",
+                             "object": {"type": "commit", "sha": revision}}), "")
+        def content(value):
+            return subprocess.CompletedProcess([], 0, json.dumps({"type": "file",
+                "path": MODULE.ORIGINAL_ASSIGNMENTS, "encoding": "base64",
+                "content": MODULE.base64.b64encode(value.encode()).decode()}), "")
+        with mock.patch.object(MODULE.subprocess, "run", side_effect=[ref, content(source), ref, content(source)]) as read_protected:
             self.assertEqual(MODULE.authorized_original("F", "F.1", "F"),
-                             MODULE.hashlib.sha256(source.encode()).hexdigest())
-            self.assertEqual(read_protected.call_args.args[0], [
-                "git", "show", f"refs/remotes/origin/main:{MODULE.ORIGINAL_ASSIGNMENTS}",
-            ])
+                             revision + ":" + MODULE.hashlib.sha256(source.encode()).hexdigest())
+            self.assertEqual(read_protected.call_args_list[0].args[0],
+                             ["gh", "api", "repos/FS-GG/.github/git/ref/heads/main"])
+            self.assertEqual(read_protected.call_args_list[1].args[0],
+                             ["gh", "api", f"repos/FS-GG/.github/contents/{MODULE.ORIGINAL_ASSIGNMENTS}?ref={revision}"])
             with self.assertRaisesRegex(MODULE.ConfigurationError, "not authorized"):
                 MODULE.authorized_original("F", "F.2", "F")
         duplicate = json.dumps({"schema": MODULE.ORIGINAL_ASSIGNMENTS_SCHEMA,
                                 "assignments": [{"featureId": "F", "itemId": "F.1", "originalItemId": "F"}] * 2})
-        with mock.patch.object(MODULE.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, duplicate, "")), \
+        with mock.patch.object(MODULE.subprocess, "run", side_effect=[ref, content(duplicate)]), \
              self.assertRaisesRegex(MODULE.ConfigurationError, "not authorized"):
             MODULE.authorized_original("F", "F.1", "F")
 

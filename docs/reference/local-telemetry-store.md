@@ -314,9 +314,10 @@ distinct member items share one explicit `--original-item` on their root dispatc
 dispatches inherit it and refuse a mismatch. The producer publishes an open source population at root begin;
 for a non-self original, root begin requires exactly one matching assignment in the protected
 `docs/coordination/telemetry-original-item-assignments.json` registry. Add that mapping for genuinely planned
-work through protected review before dispatch; the adapter reads the protected `origin/main` copy, never a
-modified working-tree copy. The assignment document digest is retained in private dispatch state and retry
-identity. Refresh `origin/main` before beginning newly authorized work.
+work through protected review before dispatch; the adapter reads GitHub's `.github/main` ref and then fetches
+the assignment at that immutable commit through authenticated `gh api` calls. Missing API access refuses
+non-self grouping. The source commit and document digest are retained in private dispatch state and retry
+identity, independently of the installed skill's filesystem path.
 The store derives its completed state from a native outcome and settled expected dispatches, retaining the
 single source original only when the population's identity, open state, source kind and source reference match
 the roadmap adapter's deterministic item/original pair. Foreign non-self claims, conflicting valid originals
