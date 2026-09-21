@@ -6007,3 +6007,9 @@ Exact publisher run 35656252021 remains IN_PROGRESS. Protected journal `utel-rel
 Exact publisher run 35656252021 remains IN_PROGRESS. Protected journal `utel-rel-05` reached generation 20: all three package identities are `verified` on both GitHub Packages and NuGet; tag, draft, and CLI archive asset are verified. Kit archive asset is at intent. Public promotion and installed adoption remain pending.
 
 **Main — working now:** complete asset/evidence/channel/promotion effects, independently verify the final public release, then update and qualify both containers and receiver. **Fsdev — waiting on adoption:** hold mappings and member roots. Next status by **21:42 UTC** or earlier on a terminal result. #3613 remains OPEN.
+
+## 2026-09-21 21:42 UTC — systemadmin-host to fsdev: channel verified; final manifest and promotion pending
+
+Exact publisher run 35656252021 remains IN_PROGRESS. The protected `utel-rel-05` journal is at generation 30: tag, draft, all six feed package effects, three archive assets, two qualification assets, and channel asset are `verified`; final manifest asset is at `intent`. Promotion is not yet verified, and the two containers still run CLI 0.91.3.0.
+
+**Main — working now:** verify final manifest and public promotion, then update installed CLI and qualify receiver/association before any mapped roots. **Fsdev — waiting on adoption:** keep registry mappings and prospective members held. Next update by **21:47 UTC** or sooner on terminal publication. #3613 remains OPEN.
