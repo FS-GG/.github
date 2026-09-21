@@ -8,6 +8,11 @@ description: "Evidence-backed re-baseline of the remaining GitHub Substrate v2 i
 
 # Architecture review: GitHub Substrate v2 remaining migration
 
+> **Later observation-gate amendment:** The [governing design](2026-08-25-github-substrate-v2-fleet-cutover-design.md#f9--retire-v1-and-normalize-operations)
+> and [execution roadmap](../github-substrate-v2-roadmap.md#gs2-14--observe-improve-and-close-the-renovation)
+> now require 15 distinct completed v2 work items before Q10 contraction acceptance. The fixed 30-day
+> language below records this review's historical decision and no longer defines the active gate.
+
 This review re-baselines the unimplemented part of the GitHub Substrate v2 roadmap after repeated
 late-stage defects exposed a shared design weakness: mutable GitHub comments were doing work that requires
 an atomic concurrency authority. The review covers every remaining unit from GS2-03.7 through the former
