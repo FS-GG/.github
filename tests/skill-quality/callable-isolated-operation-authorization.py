@@ -82,7 +82,7 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
     def test_plan_workflow_is_source_only_and_exact_revision_bound(self):
         source = PLAN_WORKFLOW.read_text()
         self.assertIn("workflow_dispatch:", source)
-        self.assertIn("ref: 700c5cd74d24abb7c27bea4829475a2ae935628e", source)
+        self.assertIn("ref: 23c981e70db3b0ef5703418658a09d76d9688f0b", source)
         self.assertIn("prepare-create", source)
         self.assertIn("prepare-operation", source)
         self.assertIn("callable-isolated-operation-artifact.py extract", source)
@@ -294,7 +294,7 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
             "group: callable-isolated-operation-execute",
             "cancel-in-progress: false",
             "environment: callable-isolated-operation",
-            "ref: 700c5cd74d24abb7c27bea4829475a2ae935628e",
+            "ref: 23c981e70db3b0ef5703418658a09d76d9688f0b",
             "--grant-payload-sha256 '${{ inputs.grant_payload_sha256 }}'",
             "--grant-artifact-expires-at '${{ inputs.grant_artifact_expires_at }}'",
             "coordination/eng/callable-cli-isolated-operation.py execute",

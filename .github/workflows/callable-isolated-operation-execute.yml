@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: FS-GG/FS.GG.Coordination
-          ref: 700c5cd74d24abb7c27bea4829475a2ae935628e
+          ref: 23c981e70db3b0ef5703418658a09d76d9688f0b
           fetch-depth: 1
           persist-credentials: false
           path: coordination
@@ -179,7 +179,7 @@ jobs:
           test "$GITHUB_REPOSITORY" = 'FS-GG/.github'
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
           test "$GITHUB_REF" = refs/heads/main
-          test "$(git -C coordination rev-parse HEAD)" = 700c5cd74d24abb7c27bea4829475a2ae935628e
+          test "$(git -C coordination rev-parse HEAD)" = 23c981e70db3b0ef5703418658a09d76d9688f0b
           workflow_sha256="$(sha256sum .github/workflows/callable-isolated-operation-execute.yml | cut -d ' ' -f 1)"
           python3 tools/callable-isolated-operation-executor.py \
             --phase '${{ inputs.phase }}' --plan-seal '${{ inputs.plan_seal }}' \
