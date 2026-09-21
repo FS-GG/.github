@@ -263,6 +263,85 @@ class RoadmapTelemetryTests(unittest.TestCase):
              self.assertRaisesRegex(MODULE.ConfigurationError, "not authorized"):
             MODULE.authorized_original("F", "F.1", "F")
 
+    def test_observed_root_population_only_emits_no_second_dispatch(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            local = self.config(pathlib.Path(scratch))
+            config = MODULE.HostConfig(local.path, local.store_root, local.engine,
+                                       "FS-GG/FS.GG.Coordination", True, "producer", "binding")
+            batches = []
+            args = MODULE.parser().parse_args([
+                "population-only", "--feature", "F", "--item", "F.1",
+                "--original-item", "F",
+            ])
+
+            def fake_run(command, **kwargs):
+                if "submit" in command:
+                    batches.append(json.loads(pathlib.Path(command[command.index("--input") + 1]).read_text()))
+                    return subprocess.CompletedProcess(command, 0,
+                                                       "durably-received" if len(batches) == 1 else "applied", "")
+                return subprocess.CompletedProcess(command, 0, "{}", "")
+
+            with mock.patch.object(MODULE, "authorized_original", return_value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"), \
+                 mock.patch.object(MODULE, "validate_workspace"), \
+                 mock.patch.object(MODULE, "workspace_mutation_command", side_effect=lambda _config, command: command), \
+                 mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run):
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "not applied"):
+                    MODULE.population_only(config, args)
+                self.assertEqual(MODULE.population_only(config, args)["status"], "applied")
+                self.assertEqual(MODULE.population_only(config, args)["status"], "applied")
+                self.assertEqual(len(batches), 2)
+                self.assertEqual(batches[0], batches[1])
+                key = MODULE.digest("", "F.1", "F")
+                self.assertEqual(batches[0]["events"], [
+                    MODULE.event("feature", "F", None, name="F"),
+                    MODULE.event("item", "F.1", "F.1", featureId="F"),
+                    MODULE.event("budget-population", "budget-population-" + key, "F.1",
+                                 originalItemId="F", state="open", sourceKind="native-item",
+                                 sourceRef="roadmap-dispatch:" + key),
+                ])
+                other = MODULE.parser().parse_args([
+                    "population-only", "--feature", "F", "--item", "F.2",
+                    "--original-item", "F",
+                ])
+                self.assertEqual(MODULE.population_only(config, other)["status"], "applied")
+                self.assertEqual(batches[-1]["events"][-1]["originalItemId"], "F")
+                self.assertEqual(batches[-1]["events"][-1]["itemId"], "F.2")
+            conflicting = MODULE.parser().parse_args([
+                "population-only", "--feature", "F", "--item", "F.1",
+                "--original-item", "OTHER",
+            ])
+            with mock.patch.object(MODULE, "authorized_original", side_effect=AssertionError("unexpected recheck")), \
+                 self.assertRaisesRegex(MODULE.ConfigurationError, "protected identity"):
+                MODULE.population_only(config, conflicting)
+
+    def test_population_only_replays_exact_bytes_after_lost_response(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            local = self.config(pathlib.Path(scratch))
+            config = MODULE.HostConfig(local.path, local.store_root, local.engine,
+                                       "FS-GG/FS.GG.Coordination", True, "producer", "binding")
+            args = MODULE.parser().parse_args([
+                "population-only", "--feature", "F", "--item", "F.1", "--original-item", "F",
+            ])
+            batches = []
+
+            def fake_run(command, **kwargs):
+                if "submit" in command:
+                    batches.append(pathlib.Path(command[command.index("--input") + 1]).read_bytes())
+                    return subprocess.CompletedProcess(command, 1 if len(batches) == 1 else 0,
+                                                       "" if len(batches) == 1 else "applied",
+                                                       "unacknowledged-lossy" if len(batches) == 1 else "")
+                return subprocess.CompletedProcess(command, 0, "{}", "")
+
+            with mock.patch.object(MODULE, "authorized_original", return_value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") as authorized, \
+                 mock.patch.object(MODULE, "validate_workspace"), \
+                 mock.patch.object(MODULE, "workspace_mutation_command", side_effect=lambda _config, command: command), \
+                 mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run):
+                with self.assertRaisesRegex(MODULE.ConfigurationError, "unacknowledged-lossy"):
+                    MODULE.population_only(config, args)
+                self.assertEqual(MODULE.population_only(config, args)["status"], "applied")
+                self.assertEqual(batches[0], batches[1])
+                authorized.assert_called_once()
+
     def test_native_child_usage_is_joined_once_and_late_correction_revises_it(self):
         with tempfile.TemporaryDirectory() as scratch:
             config = self.config(pathlib.Path(scratch))

@@ -41,6 +41,7 @@ COMPLICATION_SCHEMA = "fsgg.telemetry.complication-input/1"
 DASHBOARD_HEALTH_SCHEMA = "fsgg.telemetry.dashboard-event-health/1"
 ORIGINAL_ASSIGNMENTS = "docs/coordination/telemetry-original-item-assignments.json"
 ORIGINAL_ASSIGNMENTS_SCHEMA = "fsgg.telemetry.original-item-assignments/1"
+ORIGINAL_BINDING_STATE_SCHEMA = "fsgg.telemetry.original-binding-state/1"
 
 
 def now() -> str:
@@ -139,7 +140,7 @@ def prepare_publication(
     save_state(config, state)
 
 
-def publish_pending(config: HostConfig, state: dict[str, object]) -> None:
+def publish_pending(config: HostConfig, state: dict[str, object]) -> bool:
     validate_workspace(config)
     pending = state.get("pendingPublication")
     if not isinstance(pending, dict) or set(pending) != {"operation", "nextPhase", "batch"}:
@@ -180,9 +181,27 @@ def publish_pending(config: HostConfig, state: dict[str, object]) -> None:
                 state.pop("usageIntent", None)
             save_state(config, state)
         raise ConfigurationError(message)
+    if pending["operation"] == "population-only":
+        if not config.workspace:
+            raise ConfigurationError("original binding requires a receipt-scoped workspace")
+        response = completed.stdout.strip()
+        if response.startswith("{"):
+            try:
+                receipt = json.loads(response)
+            except json.JSONDecodeError as error:
+                raise ConfigurationError("original binding receipt is malformed") from error
+            if (not isinstance(receipt, dict) or receipt.get("schema") != "fsgg.telemetry.receipt/1" or
+                    receipt.get("batchId") != batch.get("ingestId")):
+                raise ConfigurationError("original binding receipt is malformed")
+            response = receipt.get("status")
+        if response != "applied":
+            if response == "durably-received":
+                raise ConfigurationError("original binding receipt is not applied; retry the exact binding")
+            raise ConfigurationError("original binding receipt did not apply")
     state["phase"] = pending["nextPhase"]
     del state["pendingPublication"]
     save_state(config, state)
+    return True
 
 
 def publish(
@@ -192,9 +211,9 @@ def publish(
     *,
     operation: str = "observation",
     next_phase: str | None = None,
-) -> None:
+) -> bool:
     prepare_publication(config, state, operation, next_phase or str(state["phase"]), events)
-    publish_pending(config, state)
+    return publish_pending(config, state)
 
 
 def state_path(config: HostConfig, token: str) -> pathlib.Path:
@@ -230,7 +249,70 @@ def read_state(config: HostConfig, token: str) -> dict[str, object]:
 
 
 def save_state(config: HostConfig, state: dict[str, object]) -> None:
-    write_private_json(config.store_root / "orchestrator-dispatches", str(state["token"]), state)
+    directory = ("orchestrator-original-bindings" if state.get("schema") == ORIGINAL_BINDING_STATE_SCHEMA
+                 else "orchestrator-dispatches")
+    write_private_json(config.store_root / directory, str(state["token"]), state)
+
+
+def population_only(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
+    """Bind an observed codex-exec member without creating a second expected root."""
+    feature = validate_identity("feature", args.feature)
+    item = validate_identity("item", args.item)
+    original = validate_identity("original item", args.original_item)
+    producer = validate_identity("producer", args.producer)
+    if not config.workspace:
+        raise ConfigurationError("population-only requires a receipt-scoped workspace")
+    if item == original:
+        raise ConfigurationError("population-only requires a distinct protected original item")
+    token = hashlib.sha256(f"population-only\x1f{feature}\x1f{item}".encode()).hexdigest()[:32]
+    path = config.store_root / "orchestrator-original-bindings" / f"{token}.json"
+    expected = {
+        "schema": ORIGINAL_BINDING_STATE_SCHEMA,
+        "token": token,
+        "featureId": feature,
+        "itemId": item,
+        "originalItemId": original,
+        "producerStream": producer,
+        "associationProducer": config.producer,
+        "associationDigest": config.binding_digest,
+    }
+    if path.exists() or path.is_symlink():
+        try:
+            if path.is_symlink() or not path.is_file() or path.stat().st_size > 262144:
+                raise ConfigurationError("original binding state is unavailable")
+            if os.name != "nt" and (path.stat().st_mode & 0o777) != 0o600:
+                raise ConfigurationError("original binding state permissions must be 0600")
+            state = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise ConfigurationError("original binding state is unreadable") from error
+        if not isinstance(state, dict) or any(state.get(key) != value for key, value in expected.items()):
+            raise ConfigurationError("original binding retry differs from its protected identity")
+        if (state.get("invocationId") != "original-binding-" + token or
+                not isinstance(state.get("originalAssignmentDigest"), str) or
+                not re.fullmatch(r"[0-9a-f]{40}:[0-9a-f]{64}", state["originalAssignmentDigest"]) or
+                state.get("sequence") != 1):
+            raise ConfigurationError("original binding state is malformed")
+        if state.get("phase") == "applied" and state.get("pendingPublication") is None:
+            authorized_original(feature, item, original)
+            return {"schema": "fsgg.telemetry.original-binding-result/1", "status": "applied"}
+        if state.get("phase") != "pending":
+            raise ConfigurationError("original binding state is malformed")
+        publish_pending(config, state)
+    else:
+        assignment_digest = authorized_original(feature, item, original)
+        state = {**expected, "originalAssignmentDigest": assignment_digest,
+                 "phase": "pending", "sequence": 0,
+                 "invocationId": "original-binding-" + token}
+        key = digest("", item, original)
+        events = [
+            event("feature", feature, None, name=feature),
+            event("item", item, item, featureId=feature),
+            event("budget-population", "budget-population-" + key, item,
+                  originalItemId=original, state="open", sourceKind="native-item",
+                  sourceRef="roadmap-dispatch:" + key),
+        ]
+        publish(config, state, events, operation="population-only", next_phase="applied")
+    return {"schema": "fsgg.telemetry.original-binding-result/1", "status": "applied"}
 
 
 def matching_dispatch(config: HostConfig, expected: dict[str, object]) -> dict[str, object] | None:
@@ -679,6 +761,10 @@ def parser() -> argparse.ArgumentParser:
     begin_parser.add_argument("--relation", choices=("root", "child", "follow-up"), default="root")
     begin_parser.add_argument("--producer", default="roadmap-orchestrator")
     begin_parser.add_argument("--late-after-seconds", type=int, default=60)
+    population_parser = commands.add_parser("population-only")
+    for name in ("feature", "item", "original-item"):
+        population_parser.add_argument(f"--{name}", required=True)
+    population_parser.add_argument("--producer", default="roadmap-orchestrator")
     started_parser = commands.add_parser("started")
     started_parser.add_argument("--token", required=True)
     started_parser.add_argument("--native-id", required=True)
@@ -721,7 +807,8 @@ def main(argv: list[str]) -> int:
             print(json.dumps({"schema": "fsgg.telemetry.host-status/1",
                               "status": "ready" if completed.returncode == 0 else "unavailable"}, separators=(",", ":")))
             return 0 if completed.returncode == 0 else 1
-        handlers = {"begin": begin, "started": started, "finish": finish, "usage-reconcile": usage_reconcile,
+        handlers = {"begin": begin, "population-only": population_only,
+                    "started": started, "finish": finish, "usage-reconcile": usage_reconcile,
                     "ci-assignment": create_ci,
                     "review": review, "activity": activity, "usage-attribution": attribution, "complication": complication}
         value = handlers[args.command](config, args)
