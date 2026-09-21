@@ -37,6 +37,8 @@ DELIVERIES_SCHEMA = "fsgg.telemetry.public-deliveries/1"
 ITEMS_SCHEMA = "fsgg.telemetry.completed-items/2"
 PROCESS_SCHEMA = "fsgg.telemetry.item-process-detail/1"
 LABELS_SCHEMA = "fsgg.telemetry.dashboard-labels/1"
+MEMBER_LABELS_SCHEMA = "fsgg.telemetry.dashboard-labels/2"
+PIPELINE_SCHEMA = "fsgg.telemetry.item-pipeline/1"
 EVENT_RECEIPT_SCHEMA = "fsgg.telemetry.dashboard-event-activation/1"
 EVENT_HEALTH_SCHEMA = "fsgg.telemetry.dashboard-event-health/1"
 EVENT_RECEIPT_NAME = "telemetry-dashboard-event-activation.json"
@@ -271,8 +273,8 @@ def load_labels(path: pathlib.Path | None) -> dict[str, Any]:
     if path.is_symlink() or not path.is_file() or stat.S_IMODE(path.stat().st_mode) != 0o600:
         raise HostSourceError("HOST_LABELS_UNSAFE")
     value = load(path, 65536)
-    exact(value,{"schema","items","models","efforts","scopes"},"label approval")
-    if value["schema"] != LABELS_SCHEMA: raise ValueError("invalid label approval schema")
+    if not isinstance(value,dict) or not isinstance(value.get("schema"),str) or value["schema"] not in {LABELS_SCHEMA,MEMBER_LABELS_SCHEMA}: raise ValueError("invalid label approval schema")
+    exact(value,{"schema","items","models","efforts","scopes"} | ({"members"} if value["schema"]==MEMBER_LABELS_SCHEMA else set()),"label approval")
     for category in ("models","efforts","scopes"):
         if not isinstance(value[category],dict) or len(value[category])>64: raise ValueError("invalid approved category map")
         for private,public in value[category].items():
@@ -294,6 +296,18 @@ def load_labels(path: pathlib.Path | None) -> dict[str, Any]:
             enum(note["kind"],{"repair","complication"},"note kind")
             if not isinstance(note["text"],str) or not 1<=len(note["text"])<=240: raise ValueError("invalid approved note")
             if not isinstance(note["evidenceUrl"],str) or not re.fullmatch(r"https://github\.com/FS-GG/[A-Za-z0-9_.-]+/(?:issues|pull|actions/runs)/[1-9][0-9]*",note["evidenceUrl"]): raise ValueError("invalid note evidence")
+    if value["schema"]==MEMBER_LABELS_SCHEMA:
+        members=value["members"]
+        if not isinstance(members,dict) or len(members)>200: raise ValueError("invalid approved member map")
+        member_keys=set()
+        for private,member in members.items():
+            if not isinstance(private,str) or not 1<=len(private)<=128: raise ValueError("invalid private member selector")
+            exact(member,{"key","label","url"},"approved member")
+            key=member["key"]
+            if not isinstance(key,str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}",key) or key in member_keys: raise ValueError("invalid public member key")
+            member_keys.add(key)
+            if not isinstance(member["label"],str) or not 1<=len(member["label"])<=120: raise ValueError("invalid public member label")
+            if not isinstance(member["url"],str) or not re.fullmatch(r"https://github\.com/FS-GG/[A-Za-z0-9_.-]+/(?:issues|pull)/[1-9][0-9]*",member["url"]): raise ValueError("invalid public member URL")
     return value
 
 
@@ -373,6 +387,85 @@ def project_process_detail(snapshot: dict[str,Any], members: set[str], labels: d
         review_rows.append({"scope":enum(row.get("scope"),{"attempt","item"},"review scope"),"revision":checked_int(row.get("fact_revision"),"review revision"),"evidenceCoverage":enum(row.get("evidence_coverage"),REVIEW_COVERAGE,"review evidence"),"populationCoverage":enum(row.get("population_coverage"),REVIEW_COVERAGE,"review population"),"confidence":enum(row.get("confidence"),{"low","medium","high"},"review confidence"),"reviewerModel":labels["models"].get(row.get("reviewer_model"),"unknown"),"reviewerEffort":labels["efforts"].get(row.get("reviewer_effort"),"unknown"),"reviewedAt":row.get("reviewed_at"),"durationSeconds":checked_int(row.get("duration_seconds"),"review duration"),"counts":counts})
     missing=len([row for row in snapshot_rows(snapshot,"usage",members) if row.get("identity") not in usage_identities])
     return {"schema":PROCESS_SCHEMA,"availability":"available","members":{"requested":len(members),"available":len(members)},"truncated":{"activities":False,"attributions":False,"complications":False,"reviews":False},"activities":{"rows":sorted(activity_rows,key=lambda r:r["startedAt"]),"summary":sorted(summary.values(),key=lambda r:r["category"]),"semantics":"activity spans may overlap; summed activity time is not owner effort or an elapsed-time partition"},"attribution":{"rows":sorted(attribution_rows,key=lambda r:(r["classification"],r["activityCategory"] or "")),"accounting":{"nativeTotal":native_total,**accounted,"missingAttribution":missing},"crossRead":"matched","semantics":"native and attributed totals are related, not additive; missing attribution counts usage rows; totals can span incompatible private accounting scopes"},"complications":{"rows":sorted(complication_rows,key=lambda r:r["occurredAt"])},"reviews":{"rows":sorted(review_rows,key=lambda r:(r["scope"],-r["revision"])),"semantics":"review counts omit private findings text; confidence and duration do not establish item, effort, or token completeness"},"observation":"all process and item projections share one engine-owned database snapshot"}
+
+
+def project_item_pipeline(snapshot: dict[str,Any], members: list[str], labels: dict[str,Any]) -> dict[str,Any]:
+    """Project approved canonical members from one engine-owned snapshot."""
+    if len(members)>128 or len(members)!=len(set(members)): raise ValueError("invalid member population")
+    approved=labels.get("members",{})
+    nodes=[]
+    for member in members:
+        alias=approved.get(member)
+        if alias is None: continue
+        selected={member}
+        expected=snapshot_rows(snapshot,"expectedDispatches",selected)
+        lineage=snapshot_rows(snapshot,"lineage",selected)
+        admissions=snapshot_rows(snapshot,"admissions",selected)
+        starts=snapshot_rows(snapshot,"starts",selected)
+        terminals=snapshot_rows(snapshot,"terminals",selected)
+        gaps=snapshot_rows(snapshot,"runtimeGaps",selected)
+        times=snapshot_rows(snapshot,"times",selected)
+        usage=snapshot_rows(snapshot,"usage",selected)
+        activities=snapshot_rows(snapshot,"activities",selected)
+        attributions=snapshot_rows(snapshot,"activityUsageAttributions",selected)
+        ci_steps=snapshot_rows(snapshot,"ciSteps",selected)
+        if any(len(rows)>8192 for rows in (expected,lineage,admissions,starts,terminals,gaps,times,usage,activities,attributions,ci_steps)):
+            raise ValueError("member projection exceeds bound")
+        expected_by_dispatch={row.get("dispatch_id"):row for row in expected}
+        dispatches=set(expected_by_dispatch)
+        lineage_by_dispatch={}
+        for row in lineage: lineage_by_dispatch.setdefault(row.get("dispatch_id"),[]).append(row)
+        linked={rows[0].get("invocation_id") for dispatch,rows in lineage_by_dispatch.items() if dispatch in dispatches and len(rows)==1}
+        exact_lineage=(bool(dispatches) and len(dispatches)==len(expected) and set(lineage_by_dispatch)==dispatches
+            and len(linked)==len(dispatches) and all(len(rows)==1
+                and rows[0].get("relation")==expected_by_dispatch[dispatch].get("relation")
+                and rows[0].get("runtime")==expected_by_dispatch[dispatch].get("runtime")
+                for dispatch,rows in lineage_by_dispatch.items()))
+        admitted={row.get("invocation_id") for row in admissions}
+        started={row.get("invocation_id") for row in starts}
+        terminal={row.get("invocation_id") for row in terminals}
+        terminal_usage=[row for row in usage if row.get("invocation_id") in terminal & linked]
+        scopes={(row.get("provider"),row.get("accounting_scope")) for row in terminal_usage}
+        compatible=len(scopes)==1
+        usage_invocations={row.get("invocation_id") for row in terminal_usage}
+        all_usage_invocations={row.get("invocation_id") for row in usage}
+        complete=(exact_lineage and linked==admitted==started==terminal==usage_invocations==all_usage_invocations and not gaps and compatible)
+        token_status="complete" if complete else "partial" if terminal_usage and compatible else "unknown"
+        token_total=sum(checked_int(row.get("total"),"member native tokens") for row in terminal_usage) if token_status!="unknown" else None
+        identities=[row.get("identity") for row in terminal_usage]
+        attributed={}
+        for row in attributions: attributed.setdefault(row.get("usage_identity"),[]).append(row)
+        if identities and len(identities)==len(set(identities)) and all(len(attributed.get(identity,[]))==1
+            and all(attributed[identity][0].get(field)==row.get(field) for field in ("input_count","cached_input","output_count","reasoning","total"))
+            for identity,row in zip(identities,terminal_usage)):
+            classes={enum(attributed[identity][0].get("classification"),ATTRIBUTION_CLASSES,"member attribution") for identity in identities}
+            attribution=next(iter(classes)) if len(classes)==1 else "mixed"
+        else: attribution="unknown"
+        event_rows={}
+        for row in times: event_rows.setdefault((row.get("invocation_id"),row.get("event")),row)
+        spans=[]; start_times=[]
+        for invocation in linked:
+            first,last=event_rows.get((invocation,"start")),event_rows.get((invocation,"terminal"))
+            if first is not None:
+                observed=parse_time(first.get("occurred_at"))
+                if observed is not None: start_times.append(observed)
+            if first is None or last is None or first.get("occurred_clock_provenance") not in {"host-wall","provider-native","github-native"} or first.get("occurred_clock_provenance")!=last.get("occurred_clock_provenance"): continue
+            a,b=parse_time(first.get("occurred_at")),parse_time(last.get("occurred_at"))
+            if a is not None and b is not None and b>=a: spans.append(int((b-a).total_seconds()))
+        time_status="known" if exact_lineage and linked==terminal and len(spans)==len(linked) else "partial" if spans else "unknown"
+        categories={enum(row.get("category"),ACTIVITY_CATEGORIES,"member activity") for row in activities}
+        stage=next(iter(categories)) if len(categories)==1 else "unknown"
+        ci_coverage=snapshot_ci(snapshot,member)
+        classes={row.get("classification") for row in ci_steps}
+        class_map={"useful-validation":"useful-validation","admin":"administrative","necessary-setup":"necessary-setup","mixed":"mixed","unclassified":"unclassified"}
+        work_class=(class_map[next(iter(classes))] if ci_coverage["classificationCoverage"]=="complete" and len(classes)==1 and next(iter(classes)) in class_map else "unknown")
+        node={"key":alias["key"],"label":alias["label"],"url":alias["url"],"parentKey":None,"status":"settled","stage":stage,"workClass":work_class,
+            "time":{"status":time_status,"seconds":sum(spans) if spans else None},
+            "tokens":{"status":token_status,"total":token_total,"attribution":attribution}}
+        order=min(start_times) if start_times else dt.datetime.max.replace(tzinfo=dt.timezone.utc)
+        nodes.append((order,member,node))
+    ordered=[node for _,_,node in sorted(nodes,key=lambda row:(row[0],row[1]))]
+    return {"schema":PIPELINE_SCHEMA,"coverage":{"eligible":len(members),"published":len(ordered),"unmapped":len(members)-len(ordered)},"nodes":ordered}
 
 
 def project_completed_items(snapshot: dict[str,Any], status: dict[str,Any], labels: dict[str,Any], ci_by_item: dict[str,dict[str,Any]], budgets_by_item: dict[str,dict[str,Any]]) -> dict[str, Any]:
@@ -540,12 +633,15 @@ def project_one_item(snapshot: dict[str,Any], original: str, members: list[str],
     invocations_with_usage=len(usage_invocations)
     runtime_gaps=len(gaps)
     process=project_process_detail(snapshot,member_set,labels,sum(row["total"] for row in token_rows))
-    return {"key":approval["key"],"label":approval["label"],"url":approval["url"],"state":"settled","deliveredAt":delivered.isoformat().replace("+00:00","Z") if delivered else None,"deliveries":deliveries,
+    item={"key":approval["key"],"label":approval["label"],"url":approval["url"],"state":"settled","deliveredAt":delivered.isoformat().replace("+00:00","Z") if delivered else None,"deliveries":deliveries,
         "runtime":{"invocations":len(complete_invocations),"terminalOutcomes":terminal_counts,"duration":{"rows":duration_rows,"semantics":"same-clock non-reversed invocation spans summed by role; roles and invocations may overlap in wall time"},"tokens":{"scope":"exact native turns grouped by compatible accounting basis; input includes cached input","rows":token_rows,"compatibleTotals":compatible_totals,"total":token_total,"unmappedRows":unmapped_rows,"coverage":{"boundary":"canonical completed member items and all expected runtime dispatches","status":coverage_status,"expectedDispatches":len(expected_by_dispatch),"linkedInvocations":len(expected_invocations),"admittedInvocations":len(admitted_invocations),"startedInvocations":len(started_invocations),"terminalInvocations":len(terminal_invocations),"invocationsWithUsage":invocations_with_usage,"invocationsWithoutUsage":max(0,len(expected_by_dispatch)-invocations_with_usage),"runtimeGaps":runtime_gaps,"accountingCompatibility":"single" if len(compatible_totals)==1 else "none" if not compatible_totals else "multiple"}}},
         "ci":{"counts":ci_counts,"seconds":ci_seconds,"semantics":"runner seconds sum jobs; wall, queue, and category values are per-item unions and may overlap"},
         "budget":{"scope":"canonical reducer assessments; epoch identities removed","assessments":budget},
         "complications":{"observed":{"runtimeNonSuccess":sum(v for k,v in terminal_counts.items() if k!="completed"),"failedOrCancelledCiRuns":ci_fail,"repeatedCiRuns":repeated,"followUpInvocations":sum(1 for v in lineage.values() if v=="follow-up")},"notes":approval["notes"],"semantics":"observed runtime and CI signals plus separately approved public notes; no inferred cause or repair cost"},
         "process":process}
+    if labels.get("schema")==MEMBER_LABELS_SCHEMA:
+        item["pipeline"]=project_item_pipeline(snapshot,members,labels)
+    return item
 
 
 def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: list[dict[str, Any]], status: dict[str, Any], observed: str, reconciliations: list[dict[str,Any]] | None = None, budget_health: list[dict[str,Any]] | None = None, store_status: dict[str,Any] | None = None, completed_items: dict[str,Any] | None = None, source_kind: str = "configured-local-store") -> dict[str, Any]:
@@ -1624,6 +1720,7 @@ def validate_completed_items(value: Any) -> None:
     for item in value["items"]:
         fields={"key","label","url","state","deliveredAt","deliveries","runtime","ci","budget","complications"}
         if not legacy: fields.add("process")
+        if not legacy and isinstance(item,dict) and "pipeline" in item: fields.add("pipeline")
         exact(item,fields,"completed item")
         key=public_text(item["key"],64,"item key")
         if key in seen or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}",key): raise ValueError("invalid item key")
@@ -1698,7 +1795,42 @@ def validate_completed_items(value: Any) -> None:
         for note in complications["notes"]:
             exact(note,{"kind","text","evidenceUrl"},"note"); enum(note["kind"],{"repair","complication"},"note kind"); public_text(note["text"],240,"note")
             if not re.fullmatch(r"https://github\.com/FS-GG/[A-Za-z0-9_.-]+/(?:issues|pull|actions/runs)/[1-9][0-9]*",note["evidenceUrl"]): raise ValueError("invalid note evidence")
-        if not legacy: validate_process_detail(item["process"])
+        if not legacy:
+            validate_process_detail(item["process"])
+            if "pipeline" in item: validate_item_pipeline(item["pipeline"])
+
+
+def validate_item_pipeline(value: Any) -> None:
+    def pipeline_enum(candidate: Any, allowed: set[str], name: str) -> str:
+        if not isinstance(candidate,str) or candidate not in allowed: raise ValueError(f"invalid {name}")
+        return candidate
+
+    exact(value,{"schema","coverage","nodes"},"item pipeline")
+    if value["schema"]!=PIPELINE_SCHEMA or not isinstance(value["nodes"],list) or len(value["nodes"])>128: raise ValueError("invalid item pipeline")
+    coverage=exact(value["coverage"],{"eligible","published","unmapped"},"pipeline coverage")
+    for count in coverage.values(): checked_int(count,"pipeline coverage")
+    if coverage["eligible"]!=coverage["published"]+coverage["unmapped"] or coverage["published"]!=len(value["nodes"]): raise ValueError("invalid pipeline coverage")
+    seen=set()
+    for node in value["nodes"]:
+        exact(node,{"key","label","url","parentKey","status","stage","workClass","time","tokens"},"pipeline node")
+        key=public_text(node["key"],64,"pipeline key")
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}",key) or key in seen: raise ValueError("invalid pipeline key")
+        if node["parentKey"] is not None and (not isinstance(node["parentKey"],str) or node["parentKey"] not in seen): raise ValueError("invalid pipeline parent")
+        seen.add(key)
+        public_text(node["label"],120,"pipeline label")
+        if not isinstance(node["url"],str) or not re.fullmatch(r"https://github\.com/FS-GG/[A-Za-z0-9_.-]+/(?:issues|pull)/[1-9][0-9]*",node["url"]): raise ValueError("invalid pipeline URL")
+        pipeline_enum(node["status"],{"settled"},"pipeline status")
+        pipeline_enum(node["stage"],ACTIVITY_CATEGORIES|{"unknown"},"pipeline stage")
+        pipeline_enum(node["workClass"],{"useful-validation","administrative","necessary-setup","mixed","unclassified","unknown"},"pipeline work class")
+        observed=exact(node["time"],{"status","seconds"},"pipeline time")
+        pipeline_enum(observed["status"],{"known","partial","unknown"},"pipeline time status")
+        if observed["seconds"] is not None: checked_int(observed["seconds"],"pipeline time")
+        if (observed["seconds"] is None)!=(observed["status"]=="unknown"): raise ValueError("invalid pipeline time")
+        tokens=exact(node["tokens"],{"status","total","attribution"},"pipeline tokens")
+        pipeline_enum(tokens["status"],{"complete","partial","unknown"},"pipeline token status")
+        if tokens["total"] is not None: checked_int(tokens["total"],"pipeline tokens")
+        if (tokens["total"] is None)!=(tokens["status"]=="unknown"): raise ValueError("invalid pipeline token total")
+        pipeline_enum(tokens["attribution"],ATTRIBUTION_CLASSES|{"unknown"},"pipeline attribution")
 
 
 def validate_process_detail(value: Any) -> None:
