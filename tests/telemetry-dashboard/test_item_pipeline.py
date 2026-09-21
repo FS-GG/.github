@@ -82,6 +82,13 @@ class ItemPipelineTests(unittest.TestCase):
         unknown = D.project_item_pipeline(private, ["child"], approved())["nodes"][0]
         self.assertEqual((unknown["tokens"]["status"], unknown["tokens"]["total"]), ("unknown", None))
 
+    def test_classified_ci_steps_do_not_classify_entire_member(self):
+        private = two_members()
+        private["ciCoverage"] = [{"item_id": "child", "classification": "complete"}]
+        private["ciSteps"] = [{"item_id": "child", "classification": "admin"}]
+        node = D.project_item_pipeline(private, ["child"], approved())["nodes"][0]
+        self.assertEqual(node["workClass"], "unknown")
+
     def test_v1_labels_keep_pipeline_absent_and_v2_aliases_are_closed(self):
         old = D.project_completed_items(two_members(), {"epoch": None}, labels(), {}, {})
         self.assertNotIn("pipeline", old["items"][0])

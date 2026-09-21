@@ -408,8 +408,7 @@ def project_item_pipeline(snapshot: dict[str,Any], members: list[str], labels: d
         usage=snapshot_rows(snapshot,"usage",selected)
         activities=snapshot_rows(snapshot,"activities",selected)
         attributions=snapshot_rows(snapshot,"activityUsageAttributions",selected)
-        ci_steps=snapshot_rows(snapshot,"ciSteps",selected)
-        if any(len(rows)>8192 for rows in (expected,lineage,admissions,starts,terminals,gaps,times,usage,activities,attributions,ci_steps)):
+        if any(len(rows)>8192 for rows in (expected,lineage,admissions,starts,terminals,gaps,times,usage,activities,attributions)):
             raise ValueError("member projection exceeds bound")
         expected_by_dispatch={row.get("dispatch_id"):row for row in expected}
         dispatches=set(expected_by_dispatch)
@@ -455,10 +454,9 @@ def project_item_pipeline(snapshot: dict[str,Any], members: list[str], labels: d
         time_status="known" if exact_lineage and linked==terminal and len(spans)==len(linked) else "partial" if spans else "unknown"
         categories={enum(row.get("category"),ACTIVITY_CATEGORIES,"member activity") for row in activities}
         stage=next(iter(categories)) if len(categories)==1 else "unknown"
-        ci_coverage=snapshot_ci(snapshot,member)
-        classes={row.get("classification") for row in ci_steps}
-        class_map={"useful-validation":"useful-validation","admin":"administrative","necessary-setup":"necessary-setup","mixed":"mixed","unclassified":"unclassified"}
-        work_class=(class_map[next(iter(classes))] if ci_coverage["classificationCoverage"]=="complete" and len(classes)==1 and next(iter(classes)) in class_map else "unknown")
+        # CI-step coverage says nothing about the classification of all work on a member.
+        # The engine has no authoritative member-wide work classification yet.
+        work_class="unknown"
         node={"key":alias["key"],"label":alias["label"],"url":alias["url"],"parentKey":None,"status":"settled","stage":stage,"workClass":work_class,
             "time":{"status":time_status,"seconds":sum(spans) if spans else None},
             "tokens":{"status":token_status,"total":token_total,"attribution":attribution}}
