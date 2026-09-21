@@ -121,6 +121,22 @@ test("malformed and unobserved data fail visibly", async ({ page }) => {
   await expect(page.locator("#error")).toBeVisible();
   await expect(page.locator("#health-label")).toHaveText("Data unavailable");
 });
+test("subitem pipeline shows approved nodes, partial values and unknowns without inferred allocation", async ({page}) => {
+  const host=completedHost(["one"]);
+  host.completedItems.items[0].pipeline={schema:"fsgg.telemetry.item-pipeline/1",nodes:[
+    {key:"root",label:"Approved planning item",url:"https://github.com/FS-GG/.github/issues/1",parentKey:null,stage:"planning",workClass:"unknown",time:{status:"known",seconds:60},tokens:{status:"complete",total:120,attribution:"direct"}},
+    {key:"child",label:"Approved implementation item",url:"https://github.com/FS-GG/.github/issues/2",parentKey:"root",stage:"implementation",workClass:"unclassified",time:{status:"partial",seconds:30},tokens:{status:"unknown",total:null,attribution:"unknown"}},
+  ]};
+  await page.route("**/data/dashboard.json",route=>route.fulfill({json:payload(host)}));
+  await page.goto("/#item-one");
+  const pipeline=page.getByRole("list",{name:"Approved subitems and observed measurements"});
+  await expect(pipeline.getByRole("listitem")).toHaveCount(2);
+  await expect(pipeline.getByRole("link",{name:"Approved implementation item"})).toHaveAttribute("href","https://github.com/FS-GG/.github/issues/2");
+  await expect(pipeline.getByText("Observed time: 30s known portion",{exact:false})).toBeVisible();
+  await expect(pipeline.getByText("Native tokens: Unknown",{exact:false})).toBeVisible();
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBeTruthy();
+});
 test("completed item drilldown preserves unknowns, evidence links and mobile access", async ({page}) => {
   const unavailable={schema:"fsgg.telemetry.dashboard-host-unavailable/1",status:"unconfigured",reason:"missing"};
   const data=payload(unavailable);

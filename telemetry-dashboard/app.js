@@ -270,6 +270,39 @@
     return root;
   }
   const friendly = (value) => String(value).replaceAll("-", " ").replace(/\b\w/g,(letter)=>letter.toUpperCase());
+  function pipelineDetail(pipeline) {
+    const root=document.createElement("div"); root.className="subitem-pipeline";
+    if (!pipeline) {
+      const gap=document.createElement("p"); gap.className="gap-note";
+      gap.textContent="Subitem classification, time and tokens are unavailable in this snapshot. Parent and role totals are not apportioned to subitems.";
+      root.append(gap); return root;
+    }
+    const note=document.createElement("p"); note.className="item-method";
+    note.textContent="Nodes are approved canonical member items in observed order. Connectors show parentage, not elapsed sequence or dependencies. Time spans can overlap; token totals require exact native usage and compatible scope.";
+    root.append(note);
+    const knownTime=Math.max(1,...pipeline.nodes.map((node)=>node.time.seconds??0));
+    const knownTokens=Math.max(1,...pipeline.nodes.map((node)=>node.tokens.total??0));
+    const list=document.createElement("ol"); list.className="pipeline-nodes"; list.setAttribute("aria-label","Approved subitems and observed measurements");
+    pipeline.nodes.forEach((node)=>{
+      const entry=document.createElement("li"); entry.className="pipeline-node";
+      if (node.parentKey) entry.classList.add("pipeline-child");
+      const heading=document.createElement("div"); heading.className="pipeline-node-heading";
+      const link=document.createElement("a"); link.href=node.url; link.target="_blank"; link.rel="noopener"; link.textContent=node.label;
+      const classText=document.createElement("span"); classText.className="pipeline-classes";
+      classText.textContent=`${friendly(node.stage)} stage · ${friendly(node.workClass)} work`;
+      heading.append(link,classText); entry.append(heading);
+      const metrics=document.createElement("div"); metrics.className="pipeline-metrics";
+      for (const [name,value,status,basis,max] of [["Observed time",node.time.seconds,node.time.status,"summed invocation span",knownTime],["Native tokens",node.tokens.total,node.tokens.status,node.tokens.attribution,knownTokens]]) {
+        const row=document.createElement("div"), label=document.createElement("span"),track=document.createElement("i"),fill=document.createElement("b");
+        label.textContent=`${name}: ${value==null?"Unknown":`${name==="Observed time"?duration(value):fmt.format(value)}${status==="partial"?" known portion":""}`} · ${basis}`;
+        if (value!=null) fill.style.width=`${Math.max(0,Math.min(100,value/max*100))}%`;
+        track.append(fill); row.append(label,track); metrics.append(row);
+      }
+      entry.append(metrics); list.append(entry);
+    });
+    if (!pipeline.nodes.length) { const gap=document.createElement("p"); gap.className="gap-note"; gap.textContent="No approved subitem nodes are available."; root.append(gap); }
+    root.append(list); return root;
+  }
   function processDetail(process, usageCoverage) {
     const root=document.createElement("div"); root.className="process-detail";
     if (!process || process.availability!=="available") {
@@ -330,6 +363,7 @@
       const permalink=document.createElement("a");permalink.href=`#item-${item.key}`;permalink.textContent="Permalink #";permalink.dataset.focusKey=`${item.key}:permalink`;links.append(permalink);details.append(links);
       const grid=document.createElement("div"); grid.className="item-detail-grid";
       const section=(heading,node)=>{const box=document.createElement("section");const h=document.createElement("h4");h.textContent=heading;box.append(h,node);grid.append(box);};
+      section("Subitem pipeline",pipelineDetail(item.pipeline)); grid.lastElementChild.classList.add("process-span");
       const timeBox=document.createElement("div"), peak=Math.max(1,...item.runtime.duration.rows.map((r)=>r.summedSeconds)), bars=document.createElement("div"); bars.className="time-bars";
       item.runtime.duration.rows.forEach((r)=>{const row=document.createElement("div"),name=document.createElement("span"),track=document.createElement("i"),fill=document.createElement("b");name.textContent=`${r.role} · ${r.known?r.unknown?`${duration(r.summedSeconds)} known portion`:duration(r.summedSeconds):"Unknown"}`;fill.style.width=`${r.known?(r.summedSeconds/peak)*100:0}%`;track.append(fill);row.append(name,track);bars.append(row);});
       timeBox.append(bars,metricTable(["Role","Observed","Unknown","Summed invocation spans"],item.runtime.duration.rows.map((r)=>[r.role,String(r.known),String(r.unknown),r.known?(r.unknown?`${duration(r.summedSeconds)} known portion`:duration(r.summedSeconds)):"Unknown"]),"Invocation time by role")); section("Observed invocation time",timeBox);
@@ -559,6 +593,15 @@
       Object.values(item.ci.seconds).forEach((value) => { if (!object(value) || !finite(value.knownItems) || !finite(value.unknownItems) || !finite(value.totalItemSeconds)) malformed(); });
       item.budget.assessments.forEach((value) => { if (!object(value) || typeof value.dimension !== "string" || typeof value.verdict !== "string" || (value.numerator != null && !finite(value.numerator)) || (value.denominator != null && !finite(value.denominator))) malformed(); });
       item.complications.notes.forEach((note) => { if (!object(note) || typeof note.kind !== "string" || typeof note.text !== "string" || !safeUrl(note.evidenceUrl,"https://github.com/FS-GG/")) malformed(); });
+      if (item.pipeline != null) {
+        const pipeline=item.pipeline;
+        if (!object(pipeline) || pipeline.schema!=="fsgg.telemetry.item-pipeline/1" || !Array.isArray(pipeline.nodes) || pipeline.nodes.length>128) malformed();
+        const keys=new Set();
+        pipeline.nodes.forEach((node)=>{
+          if (!object(node) || typeof node.key!=="string" || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(node.key) || keys.has(node.key) || typeof node.label!=="string" || node.label.length<1 || node.label.length>120 || !safeUrl(node.url,"https://github.com/FS-GG/") || (node.parentKey!=null && !keys.has(node.parentKey)) || !["planning","implementation","review","validation","delivery","repair","operations","other","unclassified","unknown"].includes(node.stage) || !["useful-validation","administrative","necessary-setup","mixed","unclassified","unknown"].includes(node.workClass) || !object(node.time) || !["known","partial","unknown"].includes(node.time.status) || (node.time.seconds!=null && (!finite(node.time.seconds)||node.time.seconds<0)) || (node.time.status==="unknown" && node.time.seconds!=null) || (node.time.status==="known" && node.time.seconds==null) || !object(node.tokens) || !["complete","partial","unknown"].includes(node.tokens.status) || (node.tokens.total!=null && (!finite(node.tokens.total)||node.tokens.total<0)) || (node.tokens.status==="unknown" && node.tokens.total!=null) || (node.tokens.status==="complete" && node.tokens.total==null) || !["direct","mixed","unclassified","unknown"].includes(node.tokens.attribution)) malformed();
+          keys.add(node.key);
+        });
+      }
       if (item.process?.availability === "available") {
         const process=item.process;
         if (!object(process.activities) || !Array.isArray(process.activities.summary) || !Array.isArray(process.activities.rows) || !object(process.attribution) || !Array.isArray(process.attribution.rows) || !object(process.attribution.accounting) || !object(process.complications) || !Array.isArray(process.complications.rows) || !object(process.reviews) || !Array.isArray(process.reviews.rows) || !object(process.truncated) || !object(process.members)) malformed();
