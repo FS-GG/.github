@@ -10,6 +10,12 @@ Roadmap position: **Simplified baseline and v2 policy binding / V0**
 
 Publish a useful, privacy-bounded GitHub Pages dashboard for FS-GG delivery telemetry. Public GitHub Actions and merged-delivery data remain useful on their own. An approved private host may add closed aggregates and bounded item detail only through explicit public aliases, category mappings, links and notes; missing or stale host evidence stays visible and never becomes zero or compliant.
 
+## Current operation — 2026-09-21
+
+Private completed-item proof combines native delivery with schema-10 terminal, usage, and lineage readback and requires zero unexplained gaps. The protected public-selector registry is default-deny: only explicitly approved selectors that resolve to a completed delivered canonical item can authorize a public row. An approved public row aggregates token usage across all genuine attempts for that item, including retries and follow-ups; missing usage remains an explicit coverage gap. See the [publication handoff](../reference/telemetry-publication-handoff.md#approved-label-rotation-after-cutover).
+
+The milestones below retain their historical statements as evidence recorded through 2026-09-09, including schema-7/schema-8 references and the then-observed zero eligible published completed items. They do not describe the current schema or public population.
+
 ## Milestones
 
 - [x] **UTEL-DASH-01 — Safe aggregate feed.** The one-shot host adapter discovers only the canonical approved configuration, calls the engine's read-only public export, reconciliation, CI, budget, health and store projections, and removes item, invocation, provider, model, scope, epoch and free-text identities. It publishes a closed sub-1-MiB snapshot to the dedicated `telemetry-data` branch with an optimistic non-force ref update; conflict or collection failure retains the last good commit. Dry-run output is inspectable.
