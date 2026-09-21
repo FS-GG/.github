@@ -126,6 +126,43 @@ only for this WorkItem, and verify that no duplicate owner or unresolved
 recovery obligation remains. The recovery slot is for reconciliation and
 compensation; it is not a second ordinary execution slot.
 
+## First-attempt standalone telemetry evidence
+
+Capture the first attempt prospectively using the
+[standalone runtime evidence contract](../reference/local-telemetry-store.md).
+Retain the following evidence privately; this procedure records requirements,
+not a passed pilot.
+
+1. Before launch, bind the admitted repository and issue identity to the exact
+   selected WorkItem, attempt and invocation. Record the prospective root
+   activation, expected dispatch and lineage before execution starts; do not
+   reconstruct them from a later successful attempt.
+2. Record observed process, native thread and turn starts with their identities
+   and timestamps. Keep prospective intent distinct from observed starts, and
+   identify any missing start explicitly.
+3. Retain every native completed-turn token count, its invocation-local turn
+   sequence, native turn identity when available, accounting scope and
+   provenance. Preserve unknown values and coverage gaps instead of inferring
+   zero or substituting a session total. Correlate each submitted observation
+   batch with its applied Host receipt; queued or accepted status alone does
+   not prove application. Record missing receipts explicitly.
+4. Retain the terminal outcome and exit observation, or an explicit gap when
+   either is unavailable. A successful exit without completed-turn usage still
+   requires a usage gap. Preserve the first attempt's failures and gaps through
+   reconciliation or any separately authorized recovery.
+5. Read back the selected item through the authenticated private `item-detail`
+   view. Retain its revision and observation time, and verify the joined
+   admission, root lineage, starts, every completed turn, and terminal or gaps
+   against the applied Host receipts. Report unmatched facts or pending
+   application as incomplete evidence.
+
+Authoritative native delivery outcome and public dashboard visibility are
+separate gates. Prove delivery through the native readbacks below; verify public
+visibility independently through the privacy-filtered dashboard. Neither a
+private telemetry readback nor public visibility substitutes for native
+delivery evidence. Keep secrets, raw prompts, private JSONL and private
+item-detail payloads out of this document and public evidence.
+
 ## Pilot completion evidence
 
 O2 is complete only after one representative item reaches all seven operations
