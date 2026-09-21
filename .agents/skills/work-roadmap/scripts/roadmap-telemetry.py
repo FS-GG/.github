@@ -38,6 +38,8 @@ ACTIVITY_SCHEMA = "fsgg.telemetry.activity-span-input/1"
 ATTRIBUTION_SCHEMA = "fsgg.telemetry.activity-usage-attribution-input/1"
 COMPLICATION_SCHEMA = "fsgg.telemetry.complication-input/1"
 DASHBOARD_HEALTH_SCHEMA = "fsgg.telemetry.dashboard-event-health/1"
+ORIGINAL_ASSIGNMENTS = "docs/coordination/telemetry-original-item-assignments.json"
+ORIGINAL_ASSIGNMENTS_SCHEMA = "fsgg.telemetry.original-item-assignments/1"
 
 
 def now() -> str:
@@ -51,6 +53,38 @@ def event(kind: str, identity: str, item: str | None, **values: object) -> dict[
 def digest(prefix: str, *values: str) -> str:
     value = "\x1f".join(values).encode()
     return prefix + hashlib.sha256(value).hexdigest()[:32]
+
+
+def authorized_original(feature: str, item: str, original: str) -> str:
+    """Bind a non-self original to a reviewed assignment on protected main."""
+    repository = pathlib.Path(__file__).resolve().parents[4]
+    try:
+        result = subprocess.run(
+            ["git", "show", f"refs/remotes/origin/main:{ORIGINAL_ASSIGNMENTS}"],
+            cwd=repository, capture_output=True, text=True, timeout=5, check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ConfigurationError("protected original-item assignment is unavailable") from error
+    if result.returncode != 0 or len(result.stdout.encode("utf-8")) > 65536:
+        raise ConfigurationError("protected original-item assignment is unavailable")
+    try:
+        document = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise ConfigurationError("protected original-item assignment is malformed") from error
+    if (not isinstance(document, dict) or set(document) != {"schema", "assignments"} or
+            document["schema"] != ORIGINAL_ASSIGNMENTS_SCHEMA or
+            not isinstance(document["assignments"], list) or len(document["assignments"]) > 200):
+        raise ConfigurationError("protected original-item assignment is malformed")
+    matches = []
+    for row in document["assignments"]:
+        if (not isinstance(row, dict) or set(row) != {"featureId", "itemId", "originalItemId"} or
+                any(not isinstance(row[key], str) for key in row)):
+            raise ConfigurationError("protected original-item assignment is malformed")
+        if row["featureId"] == feature and row["itemId"] == item:
+            matches.append(row["originalItemId"])
+    if matches != [original]:
+        raise ConfigurationError("original item is not authorized by the protected assignment")
+    return hashlib.sha256(result.stdout.encode("utf-8")).hexdigest()
 
 
 def prepare_publication(
@@ -196,7 +230,8 @@ def matching_dispatch(config: HostConfig, expected: dict[str, object]) -> dict[s
         raise ConfigurationError("dispatch identity is ambiguous in private state")
     if not matches:
         return None
-    if not all(matches[0].get(name) == value for name, value in expected.items()):
+    if not all((matches[0].get(name, matches[0].get("itemId")) if name == "originalItemId"
+                else matches[0].get(name)) == value for name, value in expected.items()):
         raise ConfigurationError("dispatch attempt retry differs from its durable identity")
     return matches[0]
 
@@ -227,6 +262,7 @@ def prospective_coverage(state: dict[str, object]) -> str:
 def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
     feature = validate_identity("feature", args.feature)
     item = validate_identity("item", args.item)
+    original_item = validate_identity("original item", args.original_item or item)
     attempt = validate_identity("attempt", args.attempt)
     parent_attempt = validate_identity("parent attempt", args.parent_attempt, optional=True)
     producer = validate_identity("producer", args.producer)
@@ -236,21 +272,31 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         raise ConfigurationError("late-after-seconds must be non-negative")
     parent_dispatch = parent_invocation = None
     relation = "root"
+    assignment_digest = None
     if args.parent_token:
         parent = read_state(config, args.parent_token)
+        if args.original_item is None:
+            original_item = str(parent.get("originalItemId", item))
         if parent.get("phase") not in {"started", "terminal"}:
             raise ConfigurationError("parent dispatch must be started before a child is expected")
         if parent.get("itemId") != item:
             raise ConfigurationError("parent and child dispatches must share the item identity")
+        if parent.get("originalItemId", item) != original_item:
+            raise ConfigurationError("parent and child dispatches must share the original item identity")
         parent_dispatch = str(parent["dispatchId"])
         parent_invocation = str(parent["invocationId"])
+        assignment_digest = parent.get("originalAssignmentDigest")
         relation = args.relation
         if relation == "follow-up" and not isinstance(parent.get("usageLedger", {}), dict):
             raise ConfigurationError("follow-up usage baseline is malformed")
     elif args.relation != "root":
         raise ConfigurationError("child and follow-up dispatches require --parent-token")
+    elif original_item != item:
+        assignment_digest = authorized_original(feature, item, original_item)
     expected = {
-        "featureId": feature, "itemId": item, "attemptId": attempt, "parentAttemptId": parent_attempt,
+        "featureId": feature, "itemId": item, "originalItemId": original_item,
+        "originalAssignmentDigest": assignment_digest,
+        "attemptId": attempt, "parentAttemptId": parent_attempt,
         "producerStream": producer, "model": model, "effort": effort, "relation": relation,
         "parentDispatchId": parent_dispatch, "parentInvocationId": parent_invocation,
         "lateAfterSeconds": args.late_after_seconds,
@@ -291,6 +337,8 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         "sequence": 0,
         "featureId": feature,
         "itemId": item,
+        "originalItemId": original_item,
+        "originalAssignmentDigest": assignment_digest,
         "attemptId": attempt,
         "parentAttemptId": parent_attempt,
         "producerStream": producer,
@@ -316,6 +364,9 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         events.extend([
             event("feature", feature, None, name=feature),
             event("item", item, item, featureId=feature),
+            event("budget-population", digest("budget-population-", item, original_item), item,
+                  originalItemId=original_item, state="open", sourceKind="native-item",
+                  sourceRef=digest("roadmap-dispatch:", item, original_item)),
             event("operational-activation", f"operational-activation-{activation}", item,
                   activationId=activation, scope="explicit-future-dispatches", runtime=RUNTIME,
                   activatedAt=timestamp, clockProvenance="host-wall", lateAfterSeconds=args.late_after_seconds),
@@ -601,6 +652,7 @@ def parser() -> argparse.ArgumentParser:
     for name in ("feature", "item", "attempt", "model", "effort"):
         begin_parser.add_argument(f"--{name}", required=True)
     begin_parser.add_argument("--parent-attempt")
+    begin_parser.add_argument("--original-item", help="stable original item shared by distinct member items")
     begin_parser.add_argument("--parent-token")
     begin_parser.add_argument("--relation", choices=("root", "child", "follow-up"), default="root")
     begin_parser.add_argument("--producer", default="roadmap-orchestrator")

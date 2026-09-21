@@ -1673,15 +1673,48 @@ PRAGMA user_version=10;
         match latestOutcome with
         | None -> ()
         | Some(outcome, codeDelivery, outcomeAt, observedAt) ->
-            let explicitOriginals =
+            let sourceClaims =
                 use command =
                     parameterized
-                        "SELECT DISTINCT original_item_id FROM budget_population_facts WHERE item_id=$item AND source_ref NOT LIKE 'derived:%' ORDER BY original_item_id LIMIT 2;"
+                        "SELECT identity,original_item_id,state,source_kind,source_ref FROM budget_population_facts WHERE item_id=$item AND source_ref NOT LIKE 'derived:%' ORDER BY original_item_id LIMIT 4097;"
 
                 use reader = command.ExecuteReader()
 
-                [ while reader.Read() do
-                      yield reader.GetString 0 ]
+                [
+                    while reader.Read() do
+                        yield
+                            reader.GetString 0,
+                            reader.GetString 1,
+                            reader.GetString 2,
+                            reader.GetString 3,
+                            reader.GetString 4
+                ]
+
+            let trustedOriginal (identity, original, state, sourceKind, sourceRef) =
+                let key =
+                    System.Security.Cryptography.SHA256.HashData(
+                        Encoding.UTF8.GetBytes(item + "\u001f" + original)
+                    )
+                    |> Convert.ToHexString
+                    |> fun value -> value.ToLowerInvariant().Substring(0, 32)
+
+                identity = "budget-population-" + key
+                && state = "open"
+                && sourceKind = "native-item"
+                && sourceRef = "roadmap-dispatch:" + key
+
+            let explicitOriginals =
+                sourceClaims
+                |> List.filter trustedOriginal
+                |> List.map (fun (_, original, _, _, _) -> original)
+                |> List.distinct
+
+            let conflictingClaim =
+                List.length sourceClaims > 4096
+                || (sourceClaims
+                    |> List.exists (fun claim ->
+                        let (_, original, _, _, _) = claim
+                        original <> item && not (trustedOriginal claim)))
 
             let originalItem =
                 match explicitOriginals with
@@ -1731,7 +1764,11 @@ AND EXISTS(
             let refusedComplete = outcome = "refused" && settled = supported
 
             let state =
-                if (deliveredComplete || refusedComplete) && List.length explicitOriginals <= 1 then
+                if
+                    (deliveredComplete || refusedComplete)
+                    && List.length explicitOriginals <= 1
+                    && not conflictingClaim
+                then
                     "completed"
                 else
                     "open"

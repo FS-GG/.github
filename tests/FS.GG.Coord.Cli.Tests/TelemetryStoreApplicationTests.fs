@@ -4,6 +4,7 @@ open System
 open System.Diagnostics
 open System.IO
 open System.IO.Compression
+open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open Xunit
@@ -67,6 +68,14 @@ module TelemetryStoreApplicationTests =
 
     let private population item revision state source =
         $"""{{"kind":"budget-population","identity":"population-{item}","itemId":"{item}","revision":{revision},"originalItemId":"{item}","state":"{state}","sourceKind":"native-item","sourceRef":"{source}"}}"""
+
+    let private roadmapPopulation item original =
+        let key =
+            SHA256.HashData(Encoding.UTF8.GetBytes(item + "\u001f" + original))
+            |> Convert.ToHexString
+            |> fun value -> value.ToLowerInvariant().Substring(0, 32)
+
+        $"""{{"kind":"budget-population","identity":"budget-population-{key}","itemId":"{item}","revision":0,"originalItemId":"{original}","state":"open","sourceKind":"native-item","sourceRef":"roadmap-dispatch:{key}"}}"""
 
     let private attribution item revision numerator denominator coverage attribution sourceKind source =
         let number value =
@@ -2356,7 +2365,7 @@ COMMIT;
         for memberItem in [ "UTEL-group-a"; "UTEL-group-b" ] do
             let observed =
                 [
-                    $"""{{"kind":"budget-population","identity":"population-{memberItem}","itemId":"{memberItem}","revision":0,"originalItemId":"{original}","state":"open","sourceKind":"native-item","sourceRef":"roadmap-dispatch:{memberItem}"}}"""
+                    roadmapPopulation memberItem original
                     activation memberItem "codex-exec" 60L
                     dispatch memberItem ("dispatch-" + memberItem) "root" None "codex-exec" "00"
                     lineage memberItem ("lineage-" + memberItem) ("dispatch-" + memberItem) ("invoke-" + memberItem) "root" None ("invoke-" + memberItem) "codex-exec"
@@ -2380,6 +2389,31 @@ COMMIT;
         members.Parameters.AddWithValue("$original", original) |> ignore
         Assert.Equal(2L, Convert.ToInt64(members.ExecuteScalar()))
 
+        let untrusted = "UTEL-group-d"
+
+        TelemetryStoreApplication.ingest
+            path
+            approved
+            (operationalBatch
+                "untrusted-original"
+                untrusted
+                [
+                    $"""{{"kind":"budget-population","identity":"foreign-population","itemId":"{untrusted}","revision":0,"originalItemId":"{original}","state":"completed","sourceKind":"native-item","sourceRef":"foreign-source"}}"""
+                    activation untrusted "codex-exec" 60L
+                    dispatch untrusted "dispatch-untrusted" "root" None "codex-exec" "00"
+                    lineage untrusted "lineage-untrusted" "dispatch-untrusted" "invoke-untrusted" "root" None "invoke-untrusted" "codex-exec"
+                    runtimeTerminal untrusted "terminal-untrusted" "invoke-untrusted" "completed" 0
+                    nativeOutcome untrusted 1L "delivered" "delivered" "2026-09-08T10:04:01Z"
+                ])
+        |> unwrap
+        |> ignore
+
+        Assert.Contains(
+            "\"population\":\"open\"",
+            TelemetryStoreApplication.budgetHealth path approved untrusted |> unwrap
+        )
+        Assert.Equal(2L, Convert.ToInt64(members.ExecuteScalar()))
+
         let unfinished = "UTEL-group-c"
 
         TelemetryStoreApplication.ingest
@@ -2389,7 +2423,7 @@ COMMIT;
                 "unfinished-member"
                 unfinished
                 [
-                    $"""{{"kind":"budget-population","identity":"population-{unfinished}","itemId":"{unfinished}","revision":0,"originalItemId":"{original}","state":"open","sourceKind":"native-item","sourceRef":"roadmap-dispatch:{unfinished}"}}"""
+                    roadmapPopulation unfinished original
                     activation unfinished "codex-exec" 60L
                     dispatch unfinished "dispatch-unfinished" "root" None "codex-exec" "00"
                     nativeOutcome unfinished 1L "delivered" "delivered" "2026-09-08T10:04:01Z"
@@ -2410,7 +2444,7 @@ COMMIT;
                 "conflicting-original"
                 "UTEL-group-a"
                 [
-                    """{"kind":"budget-population","identity":"conflicting-population","itemId":"UTEL-group-a","revision":0,"originalItemId":"OTHER","state":"open","sourceKind":"native-item","sourceRef":"roadmap-dispatch:conflict"}"""
+                    roadmapPopulation "UTEL-group-a" "OTHER"
                 ])
         |> unwrap
         |> ignore

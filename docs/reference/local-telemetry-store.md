@@ -318,7 +318,9 @@ work through protected review before dispatch; the adapter reads the protected `
 modified working-tree copy. The assignment document digest is retained in private dispatch state and retry
 identity. Refresh `origin/main` before beginning newly authorized work.
 The store derives its completed state from a native outcome and settled expected dispatches, retaining the
-single source original. Conflicting source originals leave completion open rather than assigning a group.
+single source original only when the population's identity, open state, source kind and source reference match
+the roadmap adapter's deterministic item/original pair. Foreign non-self claims, conflicting valid originals
+and unfinished dispatches leave completion open rather than assigning a group.
 `started` records invocation lineage, requested model/effort and the returned native identity; `finish` records
 the terminal result and opportunistically drains. A crash between phases stays visible as missing start or
 terminal. When `CODEX_THREAD_ID` identifies the parent at `begin`, the adapter uses read-only Codex App Server
