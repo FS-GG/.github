@@ -5,7 +5,7 @@ description: "Use for agent handoffs and ongoing mailbox coordination: verify st
 
 # Agent handoff
 
-Keep a shared task moving across agents without losing the current truth or the next owner. Use the communication channel already chosen by the user or project. If another skill defines the channel's mechanics, follow it; this skill governs message content and follow-up.
+Keep a shared task moving across agents without losing the current truth or the next owner. For FS-GG worker handoffs, read the [worker channel directory](https://github.com/FS-GG/.github/blob/main/docs/coordination/worker-channels.md) on protected `.github/main` to find the active channel. Use a channel explicitly chosen by the user when one is named. If another skill defines the channel's mechanics, follow it; this skill governs message content and follow-up.
 
 ## Read before acting
 
