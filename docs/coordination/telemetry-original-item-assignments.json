@@ -1,4 +1,15 @@
 {
   "schema": "fsgg.telemetry.original-item-assignments/1",
-  "assignments": []
+  "assignments": [
+    {
+      "featureId": "V2-CALL-01",
+      "itemId": "V2-CALL-01.5a",
+      "originalItemId": "V2-CALL-01.5"
+    },
+    {
+      "featureId": "V2-CALL-01",
+      "itemId": "V2-CALL-01.5b",
+      "originalItemId": "V2-CALL-01.5"
+    }
+  ]
 }
