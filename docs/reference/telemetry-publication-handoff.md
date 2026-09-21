@@ -43,6 +43,21 @@ The publisher credential is inherited only by the publisher process as `GITHUB_T
 
 The active publisher's `activation.json` is immutable under `handoff-setup`. A changed label file therefore needs a new reviewed activation. Do not edit or delete the active receipt or start a second publisher. The separate `tools/telemetry-handoff-label-rotation.py` helper rotates the receipt in the **same publisher state directory** while holding the existing publisher lock; it never stages, publishes, or changes a timer.
 
+Public item approval may be authored without disclosing the private canonical item identity. The closed
+`fsgg.telemetry.public-item-registry/1` file maps a stable neutral public key to one or more explicit public
+FS-GG pull-request deliveries, a bounded repository allowlist, a public evidence URL, and reviewed display
+text. `tools/telemetry-public-item-registry.py` consumes that public registry beside a complete private
+schema-10 item-detail snapshot. Every selector must resolve to exactly one completed delivered canonical
+item, and all selectors for an entry must resolve to the same item. It then materializes the existing private
+`dashboard-labels/1` input. The registry and its report contain no private item ID.
+
+Coord-board and product-workspace producers cannot activate their own public data. They may propose a
+protected registry change for a public delivery; the Host privately resolves it and the existing operator
+approval plus same-publisher rotation remains the publication authority. Missing, ambiguous, incomplete,
+non-delivered, cross-item, or unapproved work remains unmapped. This preserves default-deny publication
+while allowing protected registry changes to drive later public workspaces without copying raw titles,
+prompts, or private identities into GitHub.
+
 After an operator approves the exact public alias and label-file digest, the producer stages a snapshot with that digest through `handoff-stage`. The publisher account prepares a new private `0700` candidate state directory and uses the **same installed `telemetry-dashboard.py` bytes** and `handoff-setup --record-activation` to create a candidate receipt. The operator supplies a fresh, owner-checked cutover proof bound to the new config digest; its observations of the retired incumbent must still be true. The candidate must preserve the same outgoing path, producer UID, handoff GID, destination, credential source and installed script digest. It changes only `labelsDigest`.
 
 Run the helper as the existing publisher UID with its normal environment-only publication credential, passing `--publisher-script`, `--state-dir`, `--candidate-state-dir`, `--from-labels`, `--to-labels`, `--expected-remote-commit`, and `--authorize-label-rotation`. It refuses a pending publication intent, a mismatched staged digest, a changed remote commit or snapshot, and any config drift. It archives the prior activation before an atomic replacement and immediately reads back the new one. The same publisher timer then uses the new digest; its single-writer lock also serializes a concurrent timer invocation. Reversing a rotation requires another approved label file, staged snapshot, candidate activation and exact-baseline rotation. No direct edit of the active receipt is a supported recovery path.
