@@ -23,7 +23,8 @@ class RefreshDecisionTests(unittest.TestCase):
     def test_failed_deployment_can_retry_same_revision(self):
         revision = "a" * 40
         self.assertEqual(D.refresh_decision(revision, revision, None)["build"], "true")
-        self.assertEqual(D.refresh_decision(revision, revision, "invalid Pages JSON")["build"], "true")
+        with self.assertRaisesRegex(ValueError, "invalid deployed host revision"):
+            D.refresh_decision(revision, revision, "invalid Pages JSON")
 
     def test_stale_dispatch_cannot_build_newer_public_commit(self):
         self.assertEqual(D.refresh_decision("b" * 40, "a" * 40, None),

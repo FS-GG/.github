@@ -10,7 +10,9 @@ def refresh_decision(current: str | None, requested: str | None, deployed: str |
     for name, value in (("current", current), ("requested", requested), ("deployed", deployed)):
         if value and not re.fullmatch(r"[0-9a-f]{40}", value):
             if name == "deployed":
-                deployed = None  # Unreadable Pages data cannot suppress a rebuild.
+                if requested:
+                    raise ValueError("invalid deployed host revision")
+                deployed = None
             else:
                 raise ValueError(f"invalid {name} host revision")
     if requested and requested != current:

@@ -79,9 +79,26 @@ jobs:
             fi
           fi
           deployed=""
-          pages_url="$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq .html_url 2>/dev/null || true)"
+          pages_rc=0
+          pages_url="$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq .html_url 2>/dev/null)" || pages_rc=$?
+          if [ "$pages_rc" -ne 0 ] && [ -n "$REQUESTED_HOST_REVISION" ]; then
+            echo "Pages metadata unavailable for revision-bound dispatch" >&2
+            exit "$pages_rc"
+          fi
           if [ -n "$pages_url" ]; then
-            deployed="$(curl --fail --silent --show-error --max-time 10 --max-filesize 1048576 "${pages_url%/}/data/dashboard.json?revision=$current" 2>/dev/null | jq -r '.hostRevision // empty' 2>/dev/null || true)"
+            data_rc=0
+            deployed_data="$(curl --fail --silent --show-error --max-time 10 --max-filesize 1048576 "${pages_url%/}/data/dashboard.json?revision=$current" 2>/dev/null)" || data_rc=$?
+            if [ "$data_rc" -eq 0 ]; then
+              deployed="$(jq -er 'select(.schema == "fsgg.telemetry.dashboard/2") | .hostRevision // empty' <<< "$deployed_data" 2>/dev/null)" || data_rc=$?
+              if [ "$data_rc" -eq 4 ] && jq -e '.schema == "fsgg.telemetry.dashboard/2" and .hostRevision == null' <<< "$deployed_data" >/dev/null 2>&1; then
+                data_rc=0
+                deployed=""
+              fi
+            fi
+            if [ "$data_rc" -ne 0 ] && [ -n "$REQUESTED_HOST_REVISION" ]; then
+              echo "Deployed Pages revision unavailable for revision-bound dispatch" >&2
+              exit "$data_rc"
+            fi
           fi
           decision="$(python3 scripts/telemetry-dashboard-refresh.py --current "$current" --requested "$REQUESTED_HOST_REVISION" --deployed "$deployed")"
           echo "build=$(jq -r .build <<< "$decision")" >> "$GITHUB_OUTPUT"
