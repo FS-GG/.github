@@ -19,9 +19,10 @@ For each substantive progress report or handoff, include:
 
 1. What changed or was learned, and the evidence needed to check it.
 2. What remains uncertain or blocked, including the exact missing input if any.
-3. The next concrete action, its named owner, and the completion signal the receiver should return.
+3. A current, short roadmap from the verified state to acceptance: the next milestone, later gates, and the condition that unlocks each gate. Name the canonical roadmap or issue and its revision when one exists. Update the roadmap when evidence changes it; mark superseded steps instead of leaving contradictory directions in the thread.
+4. For every involved owner, state whether they are **working now**, **waiting**, or have **no action**. Give each working owner a concrete next action and completion signal. For a waiting owner, name the exact dependency and who owns it. State explicitly when owners can work in parallel.
 
-Keep one request per owner when possible. Say explicitly when there is no action for a recipient. Do not use “please advise,” “continue,” or “done” as a substitute for an action or acceptance condition. Link to the canonical issue, PR, run, artifact, or revision rather than copying large logs. Preserve identifiers exactly.
+Keep one request per owner when possible. Do not make one owner's answer a prerequisite for another owner's independent work; check the real dependency before declaring anyone blocked. Do not use “please advise,” “continue,” or “done” as a substitute for an action or acceptance condition. Link to the canonical issue, PR, run, artifact, or revision rather than copying large logs. Preserve identifiers exactly.
 
 ## Protect the boundary
 
@@ -35,6 +36,6 @@ Keep one request per owner when possible. Say explicitly when there is no action
 - When asked to monitor a mailbox, record the requested interval and check at that cadence while the session is active. Do not imply that checks continue after the session ends unless a real scheduled mechanism is installed.
 - On new mail, acknowledge the request by taking the owned action or replying with a precise blocker and a new owner. Avoid acknowledgment-only traffic.
 - If an owner cannot act, route the smallest missing decision or access request to the person who can resolve it. Escalate to the user when there is no viable agent path, with the decision needed and the consequence of waiting.
-- In user updates, report the last check time, new information, current owner, next step, and verification status. Say “no new mail” when that is the result; do not suggest progress from silence.
+- In user updates, report the last check time, new information, each owner's working/waiting status, the next roadmap gate, and verification status. Say “no new mail” when that is the result; do not suggest progress from silence.
 
-Stop the coordination loop when the acceptance condition is verified, the task is explicitly canceled, or the necessary decision is waiting on the user. Leave a final handoff that names any remaining work and its owner.
+Stop the coordination loop when the acceptance condition is verified, the task is explicitly canceled, or the necessary decision is waiting on the user. Leave a final handoff with the current roadmap, each owner's status, and the next action and completion signal.
