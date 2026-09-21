@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: FS-GG/FS.GG.Coordination
-          ref: 4ab485b2045d727809c2d35976f84d5a54bb99e5
+          ref: 700c5cd74d24abb7c27bea4829475a2ae935628e
           fetch-depth: 1
           persist-credentials: false
           path: coordination
@@ -179,7 +179,7 @@ jobs:
           test "$GITHUB_REPOSITORY" = 'FS-GG/.github'
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
           test "$GITHUB_REF" = refs/heads/main
-          test "$(git -C coordination rev-parse HEAD)" = 4ab485b2045d727809c2d35976f84d5a54bb99e5
+          test "$(git -C coordination rev-parse HEAD)" = 700c5cd74d24abb7c27bea4829475a2ae935628e
           workflow_sha256="$(sha256sum .github/workflows/callable-isolated-operation-execute.yml | cut -d ' ' -f 1)"
           python3 tools/callable-isolated-operation-executor.py \
             --phase '${{ inputs.phase }}' --plan-seal '${{ inputs.plan_seal }}' \
@@ -229,6 +229,9 @@ jobs:
             elif [ "$CHECKPOINT_RUN_ID:$CHECKPOINT_RUN_ATTEMPT:$CHECKPOINT_ARTIFACT_ID:$CHECKPOINT_ARTIFACT_SHA256" = \
               '35611476251:1:10644976229:819cc1661bfdbd88fa50f8f462d56af45726a46d3acb7a26db72f1fc2d757aa7' ]; then
               checkpoint_revision=2a61d2f2cad204bb77c5a490d840bbc3e5af2479
+            elif [ "$CHECKPOINT_RUN_ID:$CHECKPOINT_RUN_ATTEMPT:$CHECKPOINT_ARTIFACT_ID:$CHECKPOINT_ARTIFACT_SHA256" = \
+              '35619835923:1:10647264981:f98b32505b081a4c051d253f36e3a7d51e2fd1271a26596c18a7902b345a4318' ]; then
+              checkpoint_revision=6fbd670a9b7755a394f6ebc6ec76abd1eb5b0d6f
             fi
             test "$(jq -r .id <<<"$checkpoint_artifact")" = "$CHECKPOINT_ARTIFACT_ID"
             test "$(jq -r .name <<<"$checkpoint_artifact")" = "callable-isolated-operation-checkpoint-${{ inputs.phase }}-$CHECKPOINT_RUN_ID-$CHECKPOINT_RUN_ATTEMPT"

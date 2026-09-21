@@ -82,7 +82,7 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
     def test_plan_workflow_is_source_only_and_exact_revision_bound(self):
         source = PLAN_WORKFLOW.read_text()
         self.assertIn("workflow_dispatch:", source)
-        self.assertIn("ref: 4ab485b2045d727809c2d35976f84d5a54bb99e5", source)
+        self.assertIn("ref: 700c5cd74d24abb7c27bea4829475a2ae935628e", source)
         self.assertIn("prepare-create", source)
         self.assertIn("prepare-operation", source)
         self.assertIn("callable-isolated-operation-artifact.py extract", source)
@@ -294,7 +294,7 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
             "group: callable-isolated-operation-execute",
             "cancel-in-progress: false",
             "environment: callable-isolated-operation",
-            "ref: 4ab485b2045d727809c2d35976f84d5a54bb99e5",
+            "ref: 700c5cd74d24abb7c27bea4829475a2ae935628e",
             "--grant-payload-sha256 '${{ inputs.grant_payload_sha256 }}'",
             "--grant-artifact-expires-at '${{ inputs.grant_artifact_expires_at }}'",
             "coordination/eng/callable-cli-isolated-operation.py execute",
@@ -305,6 +305,7 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
             ".digest <<<\"$plan_artifact\"",
             ".digest <<<\"$checkpoint_artifact\"",
             "35611476251:1:10644976229:819cc1661bfdbd88fa50f8f462d56af45726a46d3acb7a26db72f1fc2d757aa7",
+            "35619835923:1:10647264981:f98b32505b081a4c051d253f36e3a7d51e2fd1271a26596c18a7902b345a4318",
             "dotnet tool install FS.GG.Coordination.Cli --version 0.1.1",
             ".digest <<<\"$receipt_artifact\"",
             ".creationReceiptSha256",

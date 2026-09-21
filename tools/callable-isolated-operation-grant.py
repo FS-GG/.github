@@ -14,9 +14,9 @@ import sys
 
 SCHEMA = "fsgg.coordination.callable-isolated-operation-grant/1"
 OPERATION_IDENTITY = "v2-call-01-4b-isolated-native-v1"
-CONTRACT_SHA256 = "971ed9a9db9ff01b0abb982163ed311fabebc827fabc79472602f3c08b7d3854"
-SOURCE_SHA256 = "c82cf8e0e1f0d794a1d13a4b9ed6612c76cc86c0c230d81fac5248ec2bbbe5c5"
-COORDINATION_REVISION = "4ab485b2045d727809c2d35976f84d5a54bb99e5"
+CONTRACT_SHA256 = "748a09ea8fd07ff8e2f278c8bf70f8500048d68d0a8db91aa801a793dbb65e37"
+SOURCE_SHA256 = "4469424b6ec21465ed42f1c8548e33d75603e4027f2e9aff6b7bd158d008fc7b"
+COORDINATION_REVISION = "700c5cd74d24abb7c27bea4829475a2ae935628e"
 AUTHORITY_REPOSITORY = "FS-GG/.github"
 WORKFLOW_PATH = ".github/workflows/callable-isolated-operation-authorize.yml"
 ENVIRONMENT = "callable-isolated-operation"
