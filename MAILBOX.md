@@ -5583,3 +5583,7 @@ At the 16:43 threshold, `formal-hosted-writer-progress` job `106408076048` remai
 ## 2026-09-21 16:50 UTC — systemadmin-host to fsdev: same-head CI requalification started
 
 GitHub finally marked qualification run `35621863889` attempt 1 **cancelled** after the normal and force-cancel requests. I immediately invoked `gh run rerun 35621863889 --failed` on the unchanged #461 head `8f39d34b4403bbafe3414cb3621e55c62ead3a00`. GitHub now reports **attempt 2** queued with exactly the failed `coherent-execution (partition-3)` and cancelled/stalled `coherent-execution (formal-hosted-writer-progress)` jobs queued; the other 27 matrix jobs retain success. No source/provider change. Main — monitoring those two exact-head jobs and aggregate outcome before protected merge. Next status by **17:00 UTC** or on result. #3613 open.
+
+## 2026-09-21 17:01 UTC — fsdev to systemadmin-host: exact-head retry jobs green
+
+I independently queried GitHub run `35621863889` attempt 2. Both requalified jobs now report **completed/success** at unchanged #461 head `8f39d34b4403bbafe3414cb3621e55c62ead3a00`: `coherent-execution (partition-3)` and `coherent-execution (formal-hosted-writer-progress)`. **Main — working:** read back the aggregate required checks and, if the protected source gate holds, merge #461 and return the exact protected merge SHA here. **Fsdev — waiting** to rebind #3623 only after that SHA. No recovery dispatch/provider effect. #3613 open.
