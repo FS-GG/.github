@@ -5,6 +5,7 @@ on:
     paths:
       - "telemetry-dashboard/**"
       - "tools/telemetry-dashboard.py"
+      - "scripts/telemetry-dashboard-refresh.py"
       - "tests/telemetry-dashboard/**"
       - ".github/workflows/telemetry-dashboard.yml"
       - "docs/roadmaps/utel-telemetry-dashboard.md"
@@ -13,12 +14,18 @@ on:
     paths:
       - "telemetry-dashboard/**"
       - "tools/telemetry-dashboard.py"
+      - "scripts/telemetry-dashboard-refresh.py"
       - "tests/telemetry-dashboard/**"
       - ".github/workflows/telemetry-dashboard.yml"
       - "docs/roadmaps/utel-telemetry-dashboard.md"
   schedule:
     - cron: "2-57/5 * * * *"
   workflow_dispatch:
+    inputs:
+      host_revision:
+        description: "Published telemetry-data commit SHA; leave empty for a manual full refresh"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -43,62 +50,111 @@ jobs:
         run: bash tests/telemetry-dashboard/run.sh
 
   build:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      should_deploy: ${{ steps.refresh.outputs.build }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
+      - name: Select exact public Host revision
+        id: refresh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_HOST_REVISION: ${{ inputs.host_revision }}
+        run: |
+          rc=0
+          current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/telemetry-data" --jq .object.sha 2>host-error.txt)" || rc=$?
+          if [ "$rc" -ne 0 ]; then
+            if grep -q 'HTTP 404' host-error.txt; then
+              current=""
+            else
+              sed 's/^/host revision read: /' host-error.txt >&2
+              exit "$rc"
+            fi
+          fi
+          deployed=""
+          pages_url="$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq .html_url 2>/dev/null || true)"
+          if [ -n "$pages_url" ]; then
+            deployed="$(curl --fail --silent --show-error --max-time 10 --max-filesize 1048576 "${pages_url%/}/data/dashboard.json?revision=$current" 2>/dev/null | jq -r '.hostRevision // empty' 2>/dev/null || true)"
+          fi
+          decision="$(python3 scripts/telemetry-dashboard-refresh.py --current "$current" --requested "$REQUESTED_HOST_REVISION" --deployed "$deployed")"
+          echo "build=$(jq -r .build <<< "$decision")" >> "$GITHUB_OUTPUT"
+          echo "revision=$(jq -r .revision <<< "$decision")" >> "$GITHUB_OUTPUT"
+          echo "reason=$(jq -r .reason <<< "$decision")" >> "$GITHUB_OUTPUT"
+          echo "$decision"
       - name: Collect bounded public Actions data
+        if: steps.refresh.outputs.build == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 tools/telemetry-dashboard.py collect-actions --repo "$GITHUB_REPOSITORY" --cap 1000 --output actions.json
       - name: Collect bounded public merged deliveries
+        if: steps.refresh.outputs.build == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 tools/telemetry-dashboard.py collect-deliveries --repo "$GITHUB_REPOSITORY" --cap 200 --output deliveries.json
       - name: Read optional safe host snapshot
+        if: steps.refresh.outputs.build == 'true'
         id: host
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          rc=0
-          revision="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/telemetry-data" --jq .object.sha 2>host-error.txt)" || rc=$?
-          if [ "$rc" -eq 0 ]; then
+          revision='${{ steps.refresh.outputs.revision }}'
+          if [ -n "$revision" ]; then
             gh api "repos/$GITHUB_REPOSITORY/contents/host.json?ref=$revision" --jq .content > host.base64
             base64 --decode host.base64 > host.json
             echo "revision=$revision" >> "$GITHUB_OUTPUT"
-          elif grep -q 'HTTP 404' host-error.txt; then
-            echo "revision=" >> "$GITHUB_OUTPUT"
           else
-            sed 's/^/host snapshot read: /' host-error.txt >&2
-            exit "$rc"
+            echo "revision=" >> "$GITHUB_OUTPUT"
           fi
       - name: Compose exact-revision site data
+        if: steps.refresh.outputs.build == 'true'
         run: |
           args=(--actions actions.json --deliveries deliveries.json --source-revision "$GITHUB_SHA" --output telemetry-dashboard/data/dashboard.json)
           [ ! -f host.json ] || args+=(--host host.json --host-revision '${{ steps.host.outputs.revision }}')
           python3 tools/telemetry-dashboard.py compose "${args[@]}"
       - uses: actions/configure-pages@v5
+        if: steps.refresh.outputs.build == 'true'
       - uses: actions/upload-pages-artifact@v4
+        if: steps.refresh.outputs.build == 'true'
         with:
           path: telemetry-dashboard
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.build.outputs.should_deploy == 'true'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Recheck dispatched public revision
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_HOST_REVISION: ${{ inputs.host_revision }}
+        run: |
+          if [ -z "$REQUESTED_HOST_REVISION" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/telemetry-data" --jq .object.sha)"
+          if [ "$current" = "$REQUESTED_HOST_REVISION" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping stale public revision $REQUESTED_HOST_REVISION"
+          fi
       - name: Deploy exact built artifact
+        if: steps.latest.outputs.deploy == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
