@@ -52,11 +52,20 @@ item, and all selectors for an entry must resolve to the same item. It then mate
 `dashboard-labels/1` input. The registry and its report contain no private item ID.
 
 Coord-board and product-workspace producers cannot activate their own public data. They may propose a
-protected registry change for a public delivery; the Host privately resolves it and the existing operator
+protected registry change for a public delivery; the Host privately resolves it and the protected registry
 approval plus same-publisher rotation remains the publication authority. Missing, ambiguous, incomplete,
 non-delivered, cross-item, or unapproved work remains unmapped. This preserves default-deny publication
 while allowing protected registry changes to drive later public workspaces without copying raw titles,
 prompts, or private identities into GitHub.
+
+On the enrolled Main Host, SystemAdmin's `fsgg-telemetry-public-registry-update.timer` checks protected
+`.github/main` every ten minutes. The root-owned service reads complete private snapshots only from its
+explicitly configured `main-fsharp-dev` and `main-orchestration` stores. It materializes the reviewed public
+selectors, requires complete gap-free token usage for every approved public row, and rotates the sole
+publisher against an exact remote baseline. A failed pre-activation attempt restores the prior labels and
+stage; an ambiguous post-activation publication leaves recurrence stopped for reconciliation. A separate
+product store requires protected Host enrollment with its own producer scope before any alias can resolve.
+The producer's registry proposal does not itself grant Host enrollment or publication authority.
 
 After an operator approves the exact public alias and label-file digest, the producer stages a snapshot with that digest through `handoff-stage`. The publisher account prepares a new private `0700` candidate state directory and uses the **same installed `telemetry-dashboard.py` bytes** and `handoff-setup --record-activation` to create a candidate receipt. The operator supplies a fresh, owner-checked cutover proof bound to the new config digest; its observations of the retired incumbent must still be true. The candidate must preserve the same outgoing path, producer UID, handoff GID, destination, credential source and installed script digest. It changes only `labelsDigest`.
 
@@ -70,8 +79,18 @@ When the current remote bytes already equal the intended bytes, restart records 
 
 `last-success.json` is written and fsynced before the intent is removed. It records the requested snapshot digest separately from the verified remote snapshot digest, retained remote snapshot filename and revision, commit, disposition, and completion time. This distinction keeps a semantic no-op honest when the newer requested bytes differ only by observation time: the retained last-good bytes and revision are the bytes actually served. The receipt is recovery information, not activation authority. The existing `publish`, `current_publication`, `verify_publication`, `validate_host`, label projection, optimistic non-force ref update, and fixed-destination rules remain the only GitHub writer and public schema implementation.
 
-## Source qualification and pending operation
+## Source qualification and Main adoption
 
 The focused fixtures cover approval drift, corrupt blobs, atomic pointer failure, exact candidate and cutover binding, semantic no-op, restart with unavailable remote state, ambiguous push recovery, current-ref drift, durable intent retention, and the producer's lack of credential access. They use a fake transport and do not publish or alter systemd. A disposable local proof with numeric producer and publisher UIDs plus a shared handoff GID confirms that the publisher can read and validate the handoff while it cannot write there or read the producer's private store/labels, and the producer cannot read publisher state or credentials.
 
-Operational completion remains pending until H3 supplies and checks the concrete Main account and group configuration, SystemAdmin emits the authoritative operator proof from the actual incumbent account manager and config, the operator records the exact inactive-incumbent and installed-candidate activation, enables one authorized replacement, and verifies an actual publication and remote readback. Source acceptance alone cannot satisfy those boundaries.
+The initial Main single-writer cutover and later same-writer label rotation have been completed. The
+public pilot at [issue #3596](https://github.com/FS-GG/.github/issues/3596) was delivered in
+[PR #3602](https://github.com/FS-GG/.github/pull/3602), approved by the protected registry in
+[PR #3603](https://github.com/FS-GG/.github/pull/3603), and relabeled in
+[PR #3604](https://github.com/FS-GG/.github/pull/3604). The installed Host updater adopted that protected
+revision through the sole publisher; the public `telemetry-data` commit `67422d56cfdeb154cb70efac97fe9d36b34feb63`
+serves two completed rows, including the pilot's three complete usage-covered invocations and cumulative
+387951 tokens with zero runtime gaps. These are the observed Main/public readbacks for that revision, not a
+claim that an arbitrary future product workspace is already enrolled. SystemAdmin
+[PR #120](https://github.com/EHotwagner/SystemAdmin/pull/120) and its
+[runtime correction #123](https://github.com/EHotwagner/SystemAdmin/pull/123) contain the updater source.
