@@ -53,6 +53,12 @@ fsgg-coord-engine telemetry workspace activate-remote --workspace workspace-a --
 fsgg-coord-engine telemetry workspace status --repository FS-GG/.github
 ```
 
+A product workspace with a separate store requires explicit Host enrollment and private producer credentials;
+product workspaces are not enrolled automatically. Its producer may propose public issue/PR selectors and a
+neutral label, but a proposal grants neither enrollment nor publication authority. Public completed-item
+visibility requires native delivery, complete gap-free usage, and protected registry approval through the
+[publication boundary](telemetry-publication-handoff.md#approved-label-rotation-after-cutover).
+
 The same coherent CLI package includes a private local dashboard. `status` is a
 read-only capability check and creates nothing when configuration is absent.
 `serve` requires one explicit local association and an assessor-qualified store,
