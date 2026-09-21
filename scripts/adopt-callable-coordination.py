@@ -12,10 +12,11 @@ import tempfile
 
 PACKAGE_KEY = "fs.gg.coordination.cli"
 PIN = {
-    "version": "0.1.0",
+    "version": "0.1.1",
     "commands": ["fsgg-coordination"],
     "rollForward": False,
 }
+PREVIOUS_PIN = {**PIN, "version": "0.1.0"}
 
 
 def read_manifest(path: Path) -> dict:
@@ -52,11 +53,11 @@ def install(path: Path) -> str:
     current = manifest["tools"].get(PACKAGE_KEY)
     if current == PIN:
         return "already-installed"
-    if current is not None:
+    if current is not None and current != PREVIOUS_PIN:
         raise ValueError(f"conflicting {PACKAGE_KEY} entry; no changes written")
     manifest["tools"][PACKAGE_KEY] = PIN
     write_atomic(path, manifest)
-    return "installed"
+    return "upgraded" if current == PREVIOUS_PIN else "installed"
 
 
 def uninstall(path: Path) -> str:

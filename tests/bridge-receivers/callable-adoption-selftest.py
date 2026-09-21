@@ -68,6 +68,17 @@ def main() -> None:
         if retained.read_bytes() != uninstalled_bytes:
             raise SystemExit("callable-adoption: idempotent uninstall rewrote manifest")
 
+        previous = work / "previous/.config/dotnet-tools.json"
+        previous.parent.mkdir(parents=True)
+        previous_value = load(FIXTURES / "callable-retained-input.json")
+        previous_value["tools"]["fs.gg.coordination.cli"] = {
+            "version": "0.1.0", "commands": ["fsgg-coordination"], "rollForward": False
+        }
+        previous.write_text(json.dumps(previous_value) + "\n", encoding="utf-8")
+        upgraded = run(["python3", str(adopter), "install", "--manifest", str(previous)])
+        if "upgraded" not in upgraded.stdout or load(previous) != load(FIXTURES / "callable-retained-expected.json"):
+            raise SystemExit("callable-adoption: exact previous pin did not upgrade without changing peers")
+
         conflict = work / "conflict/.config/dotnet-tools.json"
         conflict.parent.mkdir(parents=True)
         shutil.copyfile(FIXTURES / "callable-conflict.json", conflict)
@@ -93,7 +104,7 @@ def main() -> None:
         tool = work / "public-tool"
         run([
             "dotnet", "tool", "install", "--tool-path", str(tool), "--configfile", str(nuget),
-            "--version", "0.1.0", "FS.GG.Coordination.Cli"
+            "--version", "0.1.1", "FS.GG.Coordination.Cli"
         ], env=environment)
         executable = tool / "fsgg-coordination"
         invocation = run([str(executable), "delivery"], env=environment, expected=2)
@@ -131,10 +142,10 @@ def main() -> None:
     if canonical["tools"].get("fs.gg.coord.cli", {}).get("version") != "0.90.0":
         raise SystemExit("callable-adoption: legacy bridge was replaced")
     if canonical["tools"].get("fs.gg.coordination.cli") != {
-        "version": "0.1.0", "commands": ["fsgg-coordination"], "rollForward": False
+        "version": "0.1.1", "commands": ["fsgg-coordination"], "rollForward": False
     }:
         raise SystemExit("callable-adoption: canonical callable pin mismatch")
-    print("callable-adoption: PASS (clean, retained, idempotent, conflict, uninstall, public refusal)")
+    print("callable-adoption: PASS (clean, retained, exact upgrade, idempotent, conflict, uninstall, public refusal)")
 
 
 if __name__ == "__main__":

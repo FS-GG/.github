@@ -223,6 +223,9 @@ jobs:
             if [ "$CHECKPOINT_RUN_ID:$CHECKPOINT_RUN_ATTEMPT:$CHECKPOINT_ARTIFACT_ID:$CHECKPOINT_ARTIFACT_SHA256" = \
               '35411661144:1:10574618280:68d7bf46c5ea0ffe901717a304f552246dd4497684e32e0b7fb7bf991018c6b7' ]; then
               checkpoint_revision=a1a5abcda7d2fb6d49949e1e6f3afdc3c7f9f2b1
+            elif [ "$CHECKPOINT_RUN_ID:$CHECKPOINT_RUN_ATTEMPT:$CHECKPOINT_ARTIFACT_ID:$CHECKPOINT_ARTIFACT_SHA256" = \
+              '35418940289:1:10576229864:8f9aff49983d03d9aa98fa0afcc7f779ad0ce37286798f16fcaa7042570e31be' ]; then
+              checkpoint_revision=a8ab073e503c5c852c63c3271f74d46ffc9c299c
             fi
             test "$(jq -r .id <<<"$checkpoint_artifact")" = "$CHECKPOINT_ARTIFACT_ID"
             test "$(jq -r .name <<<"$checkpoint_artifact")" = "callable-isolated-operation-checkpoint-${{ inputs.phase }}-$CHECKPOINT_RUN_ID-$CHECKPOINT_RUN_ATTEMPT"
@@ -263,7 +266,7 @@ jobs:
             test "$(jq -r .receiptSha256 "$RUNNER_TEMP/creation-receipt.json")" = "$(jq -r .creationReceiptSha256 "$RUNNER_TEMP/plan.json")"
           fi
           printf '%s\n' '<?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3"/></packageSources></configuration>' > "$RUNNER_TEMP/NuGet.config"
-          dotnet tool install FS.GG.Coordination.Cli --version 0.1.0 --tool-path "$RUNNER_TEMP/tools" --configfile "$RUNNER_TEMP/NuGet.config"
+          dotnet tool install FS.GG.Coordination.Cli --version 0.1.1 --tool-path "$RUNNER_TEMP/tools" --configfile "$RUNNER_TEMP/NuGet.config"
           python3 coordination/eng/callable-cli-isolated-operation.py execute \
             --plan "$RUNNER_TEMP/plan.json" --grant "$RUNNER_TEMP/grant.json" --grant-artifact-envelope "$RUNNER_TEMP/grant-envelope.json" \
             --reviewer-membership-observer-token-env REVIEWER_MEMBERSHIP_OBSERVER_TOKEN --creation-token-env CREATION_TOKEN \
