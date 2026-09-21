@@ -1,5 +1,19 @@
 {
   "items": {
+    "callable-readiness-handoff": {
+      "deliveries": [
+        {
+          "pullRequest": 464,
+          "repository": "FS-GG/FS.GG.Coordination"
+        }
+      ],
+      "label": "Callable readiness handoff",
+      "notes": [],
+      "repositories": [
+        "FS-GG/FS.GG.Coordination"
+      ],
+      "url": "https://github.com/FS-GG/FS.GG.Coordination/pull/464"
+    },
     "standalone-telemetry-pilot": {
       "deliveries": [
         {
