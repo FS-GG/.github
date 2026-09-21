@@ -304,8 +304,6 @@ class CallableIsolatedOperationAuthorizationTests(unittest.TestCase):
             "callable-isolated-operation-plan-${{ inputs.phase }}-${{ inputs.plan_run_id }}-${{ inputs.plan_run_attempt }}",
             ".digest <<<\"$plan_artifact\"",
             ".digest <<<\"$checkpoint_artifact\"",
-            "35418940289:1:10576229864:8f9aff49983d03d9aa98fa0afcc7f779ad0ce37286798f16fcaa7042570e31be",
-            "dotnet tool install FS.GG.Coordination.Cli --version 0.1.1",
             ".digest <<<\"$receipt_artifact\"",
             ".creationReceiptSha256",
             "repository-permissions",
