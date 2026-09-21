@@ -312,7 +312,12 @@ For a child or follow-up, pass its parent's token with `--parent-token`, select 
 `--relation follow-up`, and retain both attempt identities. `begin` atomically publishes expected population;
 distinct member items share one explicit `--original-item` on their root dispatches, while child and follow-up
 dispatches inherit it and refuse a mismatch. The producer publishes an open source population at root begin;
-the store derives its completed state from a native outcome and settled expected dispatches, retaining the
+for a non-self original, root begin requires exactly one matching assignment in the protected
+`docs/coordination/telemetry-original-item-assignments.json` registry. Add that mapping for genuinely planned
+work through protected review before dispatch; the adapter reads the protected `origin/main` copy, never a
+modified working-tree copy. The assignment document digest is retained in private dispatch state and retry
+identity. Refresh `origin/main` before beginning newly authorized work.
+The store derives its completed state from a native outcome and settled expected dispatches, retaining the
 single source original. Conflicting source originals leave completion open rather than assigning a group.
 `started` records invocation lineage, requested model/effort and the returned native identity; `finish` records
 the terminal result and opportunistically drains. A crash between phases stays visible as missing start or

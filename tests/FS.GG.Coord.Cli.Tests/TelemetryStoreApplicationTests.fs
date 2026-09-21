@@ -2380,6 +2380,29 @@ COMMIT;
         members.Parameters.AddWithValue("$original", original) |> ignore
         Assert.Equal(2L, Convert.ToInt64(members.ExecuteScalar()))
 
+        let unfinished = "UTEL-group-c"
+
+        TelemetryStoreApplication.ingest
+            path
+            approved
+            (operationalBatch
+                "unfinished-member"
+                unfinished
+                [
+                    $"""{{"kind":"budget-population","identity":"population-{unfinished}","itemId":"{unfinished}","revision":0,"originalItemId":"{original}","state":"open","sourceKind":"native-item","sourceRef":"roadmap-dispatch:{unfinished}"}}"""
+                    activation unfinished "codex-exec" 60L
+                    dispatch unfinished "dispatch-unfinished" "root" None "codex-exec" "00"
+                    nativeOutcome unfinished 1L "delivered" "delivered" "2026-09-08T10:04:01Z"
+                ])
+        |> unwrap
+        |> ignore
+
+        Assert.Contains(
+            "\"population\":\"open\"",
+            TelemetryStoreApplication.budgetHealth path approved unfinished |> unwrap
+        )
+        Assert.Equal(2L, Convert.ToInt64(members.ExecuteScalar()))
+
         TelemetryStoreApplication.ingest
             path
             approved

@@ -217,9 +217,11 @@ class RoadmapTelemetryTests(unittest.TestCase):
                     "--model", "gpt-5.6-sol", "--effort", "medium", *extra,
                 ]))["token"]
 
-            with mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run):
+            with mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
+                 mock.patch.object(MODULE, "authorized_original", return_value="assignment-digest") as authorized:
                 first = begin("UTEL.1", "root-a", "--original-item", "UTEL")
                 second = begin("UTEL.2", "root-b", "--original-item", "UTEL")
+                self.assertEqual(authorized.call_count, 2)
                 MODULE.started(config, MODULE.parser().parse_args([
                     "started", "--token", first, "--native-id", "root-a",
                 ]))
@@ -235,6 +237,24 @@ class RoadmapTelemetryTests(unittest.TestCase):
             self.assertEqual({event["itemId"] for event in populations}, {"UTEL.1", "UTEL.2"})
             self.assertEqual({event["originalItemId"] for event in populations}, {"UTEL"})
             self.assertEqual({event["state"] for event in populations}, {"open"})
+
+    def test_nonself_original_requires_one_protected_assignment(self):
+        source = json.dumps({"schema": MODULE.ORIGINAL_ASSIGNMENTS_SCHEMA,
+                             "assignments": [{"featureId": "F", "itemId": "F.1", "originalItemId": "F"}]})
+        returned = subprocess.CompletedProcess([], 0, source, "")
+        with mock.patch.object(MODULE.subprocess, "run", return_value=returned) as read_protected:
+            self.assertEqual(MODULE.authorized_original("F", "F.1", "F"),
+                             MODULE.hashlib.sha256(source.encode()).hexdigest())
+            self.assertEqual(read_protected.call_args.args[0], [
+                "git", "show", f"refs/remotes/origin/main:{MODULE.ORIGINAL_ASSIGNMENTS}",
+            ])
+            with self.assertRaisesRegex(MODULE.ConfigurationError, "not authorized"):
+                MODULE.authorized_original("F", "F.2", "F")
+        duplicate = json.dumps({"schema": MODULE.ORIGINAL_ASSIGNMENTS_SCHEMA,
+                                "assignments": [{"featureId": "F", "itemId": "F.1", "originalItemId": "F"}] * 2})
+        with mock.patch.object(MODULE.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, duplicate, "")), \
+             self.assertRaisesRegex(MODULE.ConfigurationError, "not authorized"):
+            MODULE.authorized_original("F", "F.1", "F")
 
     def test_native_child_usage_is_joined_once_and_late_correction_revises_it(self):
         with tempfile.TemporaryDirectory() as scratch:
