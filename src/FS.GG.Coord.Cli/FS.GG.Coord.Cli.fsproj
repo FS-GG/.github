@@ -136,7 +136,8 @@ The roadmap adapter requires an exact protected assignment before a non-self mem
 children inherit its original. The telemetry store retains that original when actual native delivery
 and every expected dispatch settle; conflicting or unfinished members stay open. The assignment
 registry begins empty. Live grouping still requires new authorized work, installed Host adoption,
-complete time and token receipts, and separately approved public aliases.
+complete time and token receipts, and separately approved public aliases. Historical item
+identities and costs are not backfilled by this release.
 
 $(FsggStandingAdvisories)
 
