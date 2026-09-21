@@ -135,7 +135,7 @@ test("subitem pipeline shows approved nodes, partial values and unknowns without
   await expect(pipeline.getByRole("link",{name:"Approved implementation item"})).toHaveAttribute("href","https://github.com/FS-GG/.github/issues/2");
   await expect(pipeline.getByText("Observed time: 30s known portion",{exact:false})).toBeVisible();
   await expect(pipeline.getByText("Native tokens: Unknown",{exact:false})).toBeVisible();
-  await expect(page.getByText("order does not establish parentage or dependencies",{exact:false})).toBeVisible();
+  await expect(page.getByText("Order does not establish parentage or dependencies",{exact:false})).toBeVisible();
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBeTruthy();
 });

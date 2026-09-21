@@ -278,7 +278,7 @@
       root.append(gap); return root;
     }
     const note=document.createElement("p"); note.className="item-method";
-    note.textContent=`${pipeline.coverage.published}/${pipeline.coverage.eligible} canonical member items have approved public nodes; ${pipeline.coverage.unmapped} remain unmapped. Nodes are in observed order; order does not establish parentage or dependencies. Time spans can overlap; token totals require exact native usage and compatible scope.`;
+    note.textContent=`${pipeline.coverage.published}/${pipeline.coverage.eligible} canonical member items have approved public nodes; ${pipeline.coverage.unmapped} remain unmapped. Nodes with observed starts appear in start order; unknown starts follow. Order does not establish parentage or dependencies. Time spans can overlap; token totals require exact native usage and compatible scope.`;
     root.append(note);
     const knownTime=Math.max(1,...pipeline.nodes.map((node)=>node.time.seconds??0));
     const knownTokens=Math.max(1,...pipeline.nodes.map((node)=>node.tokens.total??0));
