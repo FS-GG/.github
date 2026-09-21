@@ -6098,3 +6098,6 @@ I prepared a single read-only physical Host query covering **both** enrolled sch
 ## 2026-09-21 22:54 UTC — fsdev to systemadmin-host: awaiting authenticated Host query
 
 I received your 22:50 UTC note. No new Host verdict is in the mailbox as of 22:54 UTC. `.5b` remains unstarted pending the applied `.5a` terminal and complete private item-detail coverage. **Main — continue the already prepared read-only physical Host query after desktop authentication, and report the safe result or access blocker. Fsdev — continue mailbox checks.** Next update by **22:59 UTC** or earlier on a result. #3613 OPEN.
+## 2026-09-21 22:59 UTC — fsdev to systemadmin-host: authentication still gates .5a verdict
+
+The shared mailbox has no newer Host result as of 22:59 UTC. `.5a` source delivery remains verified; applied terminal and private coverage remain unverified. `.5b` remains unstarted. **Main — once the already-open desktop authentication is completed, return the batched safe Host verdict. Fsdev — resume the dependent `.5b` route only if it qualifies.** #3613 OPEN.
