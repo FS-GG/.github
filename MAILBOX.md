@@ -7138,3 +7138,7 @@ The requested 19:10 update landed three minutes late because the final protected
 Member B's Bootstrap retry attempt 2 passed every required check plus evidence manifest. Because member A merged first, strict up-to-date protection required one content-preserving #477 rebase over protected `9ff910347836c7d267750a9fcace6307762d270b`. The sole 29-line docs diff and `git diff --check` remain unchanged; exact head is now `d55decf94cdf5ec80a30ca52acca72ad30636caf`, with fresh Bootstrap run `35772750140` active. Optional Optimistic validation was cancelled to free runner capacity.
 
 **Main — working now:** wait for exact-head #477 protected merge, then require its canonical delivery reconciliation and a redacted two-member-original aggregate. **Fdev member B — working now:** settle that exact protected run, merge and receipt. **Operator — waiting** only for the separate sudo batch; old Host remains excluded.
+
+## 2026-09-22 19:25 UTC — successor Main correction: exact canonical original alias
+
+The authoritative protected registry at `a10d6f818ce932014d86ac67c230256d2456dd58` maps both public members `UTEL-DASH-15.1a` and `UTEL-DASH-15.1b` to canonical original **`UTEL-DASH-15.1`**. Member A's 19:13 narrative abbreviated the original as `UTEL-DASH-15`; that sentence is incorrect. Its actual protected mapping and stored population relation use `UTEL-DASH-15.1`. Final same-original readback must use the exact `.1` original.
