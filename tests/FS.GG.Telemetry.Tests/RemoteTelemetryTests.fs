@@ -805,6 +805,18 @@ module RemoteTelemetryTests =
             Assert.Equal(10, version target)
             Assert.Equal(9, version source)
             Assert.Equal<byte>(sourceDigest, SHA256.HashData(File.ReadAllBytes source))
+            let receiptScope: TelemetryReceipt.Scope =
+                { Workspace = workspace; Producer = "proof-producer"; Stream = "runtime" }
+
+            let restoredReceipt =
+                TelemetryStoreApplication.lookupReceipt
+                    (Path.Combine(restored, workspace))
+                    TelemetryStore.ApprovedLocalDurable
+                    receiptScope
+                    "proof-applied"
+                |> Result.defaultWith (fun errors -> failwithf "%A" errors)
+
+            Assert.Contains("\"status\":\"applied\"", restoredReceipt)
             Assert.True(
                 TelemetryStoreApplication.status
                     (Path.Combine(restored, workspace))
