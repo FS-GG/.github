@@ -45,13 +45,15 @@ bytes are equal when signing changes them.
 
 ## Protected release
 
-The next successor Host candidate is `0.1.4`. Its candidate workflow, archive
+The next successor Host candidate is `0.1.5`. Its candidate workflow, archive
 verifier, publisher and effect identities bind that version and
-`telemetry-host/v0.1.4` together. Its release journal uses the unused
-`fsgg/v2/journal/release/utel-host-rel-03` ref. The default publisher dispatch
+`telemetry-host/v0.1.5` together. Its release journal uses the unused
+`fsgg/v2/journal/release/utel-host-rel-04` ref. The default publisher dispatch
 remains a no-effect preflight. A candidate run and protected publication must
-qualify the exact merged source before Main updates the local successor Host.
-The installed 0.1.3 Host and the historical old-Host migration remain separate.
+qualify the exact merged source before Main migrates the local successor Host.
+Published 0.1.4 remains immutable and cannot restore a 0.1.2 schema-9 backup;
+the installed successor Host remains 0.1.2 until a separate isolated-state
+migration and rollback qualify. The historical old-Host migration is separate.
 
 The historical `release-telemetry-host.yml` publisher is sealed under GS2-08.9.
 Its current manual workflow qualifies source and package locally and has no

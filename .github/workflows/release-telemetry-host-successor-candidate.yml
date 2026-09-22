@@ -1,6 +1,6 @@
 name: release-telemetry-host-successor-candidate
 
-# Independent Host 0.1.4 source and byte qualification only. This workflow has
+# Independent Host 0.1.5 source and byte qualification only. This workflow has
 # no package-feed, tag, release, journal, OIDC or promotion write capability.
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   candidate:
-    name: telemetry-host-014-candidate
+    name: telemetry-host-015-candidate
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -40,15 +40,15 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
           version="$(dotnet msbuild src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj -getProperty:Version | tr -d '[:space:]')"
-          test "$version" = 0.1.4
-          existing_tag="$(git ls-remote --tags origin refs/tags/telemetry-host/v0.1.4)"
+          test "$version" = 0.1.5
+          existing_tag="$(git ls-remote --tags origin refs/tags/telemetry-host/v0.1.5)"
           test -z "$existing_tag"
           response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
-            'https://api.nuget.org/v3-flatcontainer/fs.gg.telemetry.host/0.1.4/fs.gg.telemetry.host.0.1.4.nupkg')"
+            'https://api.nuget.org/v3-flatcontainer/fs.gg.telemetry.host/0.1.5/fs.gg.telemetry.host.0.1.5.nupkg')"
           test "$response" = 404
           response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
             -u "$GITHUB_ACTOR:$GITHUB_TOKEN" \
-            'https://nuget.pkg.github.com/FS-GG/download/fs.gg.telemetry.host/0.1.4/fs.gg.telemetry.host.0.1.4.nupkg')"
+            'https://nuget.pkg.github.com/FS-GG/download/fs.gg.telemetry.host/0.1.5/fs.gg.telemetry.host.0.1.5.nupkg')"
           test "$response" = 404
       - name: Qualify Host, dashboard and browser
         env:
@@ -71,13 +71,13 @@ jobs:
           mkdir -p artifacts/telemetry-host
           dotnet pack src/FS.GG.Telemetry.Host/FS.GG.Telemetry.Host.fsproj -c Release --no-restore \
             -p:RepositoryCommit="$SOURCE_SHA" -o artifacts/telemetry-host
-          package=artifacts/telemetry-host/FS.GG.Telemetry.Host.0.1.4.nupkg
+          package=artifacts/telemetry-host/FS.GG.Telemetry.Host.0.1.5.nupkg
           manifest=artifacts/telemetry-host/manifest.json
           test -f "$package"
           python3 scripts/telemetry-host-release.py prepare --package "$package" \
             --lock src/FS.GG.Telemetry.Host/packages.lock.json \
             --assets src/FS.GG.Telemetry.Dashboard/Assets \
-            --source-sha "$SOURCE_SHA" --version 0.1.4 --tag telemetry-host/v0.1.4 \
+            --source-sha "$SOURCE_SHA" --version 0.1.5 --tag telemetry-host/v0.1.5 \
             --output "$manifest"
           python3 scripts/telemetry-host-release.py verify --manifest "$manifest" --package "$package"
           bash tests/standalone-telemetry-host-package/run.sh "$package" artifacts/telemetry-host/package-evidence.json
@@ -90,7 +90,7 @@ jobs:
         with:
           name: telemetry-host-successor-candidate-${{ github.sha }}-${{ github.run_id }}
           path: |
-            artifacts/telemetry-host/FS.GG.Telemetry.Host.0.1.4.nupkg
+            artifacts/telemetry-host/FS.GG.Telemetry.Host.0.1.5.nupkg
             artifacts/telemetry-host/manifest.json
             artifacts/telemetry-host/package-evidence.json
           if-no-files-found: error
