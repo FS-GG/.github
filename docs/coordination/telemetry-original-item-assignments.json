@@ -10,6 +10,16 @@
       "featureId": "V2-CALL-01",
       "itemId": "V2-CALL-01.5b",
       "originalItemId": "V2-CALL-01.5"
+    },
+    {
+      "featureId": "UTEL-DASH-15",
+      "itemId": "UTEL-DASH-15.1a",
+      "originalItemId": "UTEL-DASH-15.1"
+    },
+    {
+      "featureId": "UTEL-DASH-15",
+      "itemId": "UTEL-DASH-15.1b",
+      "originalItemId": "UTEL-DASH-15.1"
     }
   ]
 }
