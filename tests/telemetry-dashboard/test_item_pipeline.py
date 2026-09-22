@@ -65,7 +65,8 @@ class ItemPipelineTests(unittest.TestCase):
         self.assertEqual([row["key"] for row in pipeline["nodes"]], ["root", "child"])
         self.assertEqual([row["stage"] for row in pipeline["nodes"]], ["planning", "implementation"])
         self.assertEqual([row["time"] for row in pipeline["nodes"]],
-                         [{"status": "known", "seconds": 60}, {"status": "known", "seconds": 160}])
+                         [{"status": "known", "seconds": 60, "basis": "same-clock-invocation-union", "open": 0, "missing": 0, "overlap": "no"},
+                          {"status": "known", "seconds": 100, "basis": "same-clock-invocation-union", "open": 0, "missing": 0, "overlap": "yes"}])
         self.assertEqual([row["tokens"]["total"] for row in pipeline["nodes"]], [100, 350])
         self.assertEqual([row["tokens"]["attribution"] for row in pipeline["nodes"]], ["direct", "direct"])
         self.assertNotIn("PRIVATE-SENTINEL", json.dumps(projected))
@@ -89,6 +90,21 @@ class ItemPipelineTests(unittest.TestCase):
         node = D.project_item_pipeline(private, ["child"], approved())["nodes"][0]
         self.assertEqual(node["workClass"], "unknown")
 
+    def test_open_missing_and_incompatible_clock_intervals_are_explicit(self):
+        private = two_members()
+        private["times"] = [row for row in private["times"] if not (row["item_id"] == "child" and row["event"] == "terminal" and row["invocation_id"] == "inv-child")]
+        observed = D.project_item_pipeline(private, ["child"], approved())["nodes"][0]["time"]
+        self.assertEqual(observed, {"status": "partial", "seconds": 100, "basis": "same-clock-invocation-union", "open": 1, "missing": 1, "overlap": "no"})
+        private = two_members()
+        private["times"] = [row for row in private["times"] if not (row["item_id"] == "child" and row["event"] == "start" and row["invocation_id"] == "inv-child")]
+        observed = D.project_item_pipeline(private, ["child"], approved())["nodes"][0]["time"]
+        self.assertEqual((observed["status"], observed["open"], observed["missing"]), ("partial", 0, 1))
+        private = two_members()
+        for row in private["times"]:
+            if row["item_id"] == "child" and row["invocation_id"] == "inv-child": row["occurred_clock_provenance"] = "provider-native"
+        observed = D.project_item_pipeline(private, ["child"], approved())["nodes"][0]["time"]
+        self.assertEqual((observed["status"], observed["seconds"], observed["overlap"]), ("unknown", None, "unknown"))
+
     def test_v1_labels_keep_pipeline_absent_and_v2_aliases_are_closed(self):
         old = D.project_completed_items(two_members(), {"epoch": None}, labels(), {}, {})
         self.assertNotIn("pipeline", old["items"][0])
@@ -106,6 +122,9 @@ class ItemPipelineTests(unittest.TestCase):
         with self.assertRaises(ValueError): D.validate_item_pipeline(pipeline)
         pipeline["nodes"][0].pop("privateItemId")
         pipeline["coverage"]["eligible"] = 3
+        with self.assertRaises(ValueError): D.validate_item_pipeline(pipeline)
+        pipeline["coverage"]["eligible"] = 2
+        pipeline["nodes"][0]["time"]["basis"] = "human-effort"
         with self.assertRaises(ValueError): D.validate_item_pipeline(pipeline)
 
 

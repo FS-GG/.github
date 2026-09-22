@@ -123,9 +123,9 @@ test("malformed and unobserved data fail visibly", async ({ page }) => {
 });
 test("subitem pipeline shows approved nodes, partial values and unknowns without inferred allocation", async ({page}) => {
   const host=completedHost(["one"]);
-  host.completedItems.items[0].pipeline={schema:"fsgg.telemetry.item-pipeline/1",coverage:{eligible:3,published:2,unmapped:1},nodes:[
-    {key:"root",label:"Approved planning item",url:"https://github.com/FS-GG/.github/issues/1",parentKey:null,status:"settled",stage:"planning",workClass:"unknown",time:{status:"known",seconds:60},tokens:{status:"complete",total:120,attribution:"direct"}},
-    {key:"child",label:"Approved implementation item",url:"https://github.com/FS-GG/.github/issues/2",parentKey:null,status:"settled",stage:"implementation",workClass:"unclassified",time:{status:"partial",seconds:30},tokens:{status:"unknown",total:null,attribution:"unknown"}},
+  host.completedItems.items[0].pipeline={schema:"fsgg.telemetry.item-pipeline/2",coverage:{eligible:3,published:2,unmapped:1},nodes:[
+    {key:"root",label:"Approved planning item",url:"https://github.com/FS-GG/.github/issues/1",parentKey:null,status:"settled",stage:"planning",workClass:"unknown",time:{status:"known",seconds:60,basis:"same-clock-invocation-union",open:0,missing:0,overlap:"no"},tokens:{status:"complete",total:120,attribution:"direct"}},
+    {key:"child",label:"Approved implementation item",url:"https://github.com/FS-GG/.github/issues/2",parentKey:null,status:"settled",stage:"implementation",workClass:"unclassified",time:{status:"partial",seconds:30,basis:"same-clock-invocation-union",open:1,missing:1,overlap:"yes"},tokens:{status:"unknown",total:null,attribution:"unknown"}},
   ]};
   await page.route("**/data/dashboard.json",route=>route.fulfill({json:payload(host)}));
   await page.goto("/#item-one");
@@ -134,6 +134,7 @@ test("subitem pipeline shows approved nodes, partial values and unknowns without
   await expect(page.getByText("2/3 canonical member items have approved public nodes; 1 remain unmapped",{exact:false})).toBeVisible();
   await expect(pipeline.getByRole("link",{name:"Approved implementation item"})).toHaveAttribute("href","https://github.com/FS-GG/.github/issues/2");
   await expect(pipeline.getByText("Observed time: 30s known portion",{exact:false})).toBeVisible();
+  await expect(pipeline.getByText("overlap yes · 1 open · 1 missing",{exact:false})).toBeVisible();
   await expect(pipeline.getByText("Native tokens: Unknown",{exact:false})).toBeVisible();
   await expect(page.getByText("Order does not establish parentage or dependencies",{exact:false})).toBeVisible();
   await page.setViewportSize({width:390,height:844});
