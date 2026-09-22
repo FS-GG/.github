@@ -1458,9 +1458,11 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
   high-water marks, then require two complete quiescent reads with identical normalized digests.
 
   [Protected complete-discovery acceptance](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-09.1.json).
-- [ ] **GS2-09.2 — Implement the immutable manifest.** Bind old/new model and artifact fingerprints,
+- [x] **GS2-09.2 — Implement the immutable manifest.** Bind old/new model and artifact fingerprints,
   global IDs, old bytes/values, v2 results, live operations, receiver heads, settings plans, archive digests,
   dispositions, phase plans, reviewers, and rollback inputs.
+
+  [Protected immutable-manifest acceptance](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-09.2.json) ([receipt PR #483](https://github.com/FS-GG/FS.GG.Coordination/pull/483), merge `584df2e6deb2d5128e0a401c96c0bf3def8d721b`).
 - [ ] **GS2-09.3 — Implement typed transforms.** Map taxonomy, planning fields, repo scope, body metadata,
   blockers, hierarchy, scheduling holds, touch sets, lifecycle receipts, and desired settings as
   `Migrated`, `Ambiguous`, or `Unsupported`.
