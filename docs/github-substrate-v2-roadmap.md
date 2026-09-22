@@ -1419,6 +1419,25 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 
   [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.9.json).
 
+### Concurrent development before cutover
+
+Independent successor token-telemetry work may proceed alongside GS2-09 and
+the preparatory parts of GS2-10. Keep roadmap and telemetry changes on separate
+branches or worktrees, give each instrumented work item distinct assignment
+and item identities, and serialize changes to a shared telemetry Host,
+publisher, updater, or schema-migration transaction. A genuine roadmap item
+may supply telemetry qualification evidence only when it follows the normal
+instrumented runtime, delivery, CI-population, receipt, and private-readback
+paths; do not manufacture outcome, population, or token-attribution facts.
+
+Treat telemetry releases, Host migrations, receiver changes, and other work
+that could cross the cutover window as concurrent changes for GS2-10.6 and
+GS2-10.9. Before readiness approval, finish or explicitly park them and refresh
+the exact candidate and manifest when their source or plans changed. From
+GS2-11.3 through the switch and verification window, do not start or advance
+independent telemetry mutations: stop ingress, drain active work, and preserve
+the fleet freeze until the roadmap explicitly releases deferred programs.
+
 ### GS2-09 — Build migration, archive, and rollback tooling
 
 **Parents:** `.github#2954`, `.github#2963`, `.github#2965`
