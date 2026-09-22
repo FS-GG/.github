@@ -956,9 +956,9 @@ contracts:
     surface: "the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool"
     consumers: [sdd, rendering, governance, templates, game, audio, net]   # All SEVEN coordination-kit receivers (registry/repos.yml `receives: coordination-kit`). `scripts/fsgg-coord` resolves and execs this package, so every receiver is a real TOOL consumer edge. `.github` itself is not listed because it resolves the engine from source.
   - id: telemetry-host
-    version: "0.1.3"     # SOURCE patch accepts authoritative orchestration delivery outcomes and schema-10 private-store migration; released source b8033814c9c5be2380bcc620c9cabb561cb13019.
-    package-version: "0.1.3" # Both feeds observed in the 0.1.3 publication journal with normalized payload sha256:177dc2355347ff060e85d736f2e73489a68d64fed01dffcc05ecd8fab05f4e7b.
-    package-tag: "telemetry-host/v0.1.3" # Promoted three-asset independent release from source b8033814c9c5be2380bcc620c9cabb561cb13019.
+    version: "0.1.4"     # SOURCE patch qualifies the successor dashboard and independent Host candidate/publisher path; released source aef7933d8d759f15afab547e6bb14e4282974f46. Prior 0.1.3 accepted authoritative orchestration outcomes and schema-10 migration.
+    package-version: "0.1.4" # Both feeds observed in the 0.1.4 publication journal with normalized payload sha256:ab39adf04f86e532f65477505e03f85832ff013a18fcda3f013961a39dcb2cbe.
+    package-tag: "telemetry-host/v0.1.4" # Promoted three-asset independent release from source aef7933d8d759f15afab547e6bb14e4282974f46.
     owner: github
     surface: "optional Linux x64 FS.GG.Telemetry.Host dotnet tool — authenticated workspace-scoped ingestion and private dashboard, independently versioned from the github coordination coherent set"
     consumers: []        # DELIBERATELY EMPTY: operators install this optional service; no repository in the contract graph restores it.
