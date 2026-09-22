@@ -44,4 +44,6 @@ Check that the request landed before waiting for a reply. After a push or commen
 - If an owner cannot act, route the smallest missing decision or access request to the person who can resolve it. Escalate to the user when there is no viable agent path, with the decision needed and the consequence of waiting.
 - In user updates, report the last check time, new information, each owner's working/waiting status, the next roadmap gate, and verification status. Say “no new mail” when that is the result; do not suggest progress from silence.
 
-Stop the coordination loop when the acceptance condition is verified, the task is explicitly canceled, or the necessary decision is waiting on the user. Leave a final handoff with the current roadmap, each owner's status, and the next action and completion signal.
+An active handoff does not end merely because a local action finished, a request was sent, or another owner or the user must reply. Keep checking the manual mailbox through the agreed reply time, act on the response, and do independent work while waiting. Required user authentication pauses only the work that depends on it.
+
+Stop the coordination loop when acceptance is verified, the user explicitly cancels the task, or the user asks to pause. Leave a final handoff with the current roadmap, each owner's status, and the next action and completion signal.
