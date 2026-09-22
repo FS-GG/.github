@@ -46,10 +46,10 @@ jobs:
           response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
             'https://api.nuget.org/v3-flatcontainer/fs.gg.telemetry.host/0.1.5/fs.gg.telemetry.host.0.1.5.nupkg')"
           test "$response" = 404
-          response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
-            -u "$GITHUB_ACTOR:$GITHUB_TOKEN" \
-            'https://nuget.pkg.github.com/FS-GG/download/fs.gg.telemetry.host/0.1.5/fs.gg.telemetry.host.0.1.5.nupkg')"
-          test "$response" = 404
+          github_versions="$(gh api --paginate --slurp \
+            '/orgs/FS-GG/packages/nuget/FS.GG.Telemetry.Host/versions?per_page=100' \
+            | jq '[.[][] | select(.name == "0.1.5")] | length')"
+          test "$github_versions" = 0
       - name: Qualify Host, dashboard and browser
         env:
           FSGG_RUN_REAL_BROWSER: '1'
