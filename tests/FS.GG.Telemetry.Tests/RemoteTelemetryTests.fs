@@ -2,6 +2,7 @@ namespace FS.GG.Telemetry.Tests
 
 open System
 open System.IO
+open System.IO.Compression
 open System.Net
 open System.Net.Http
 open System.Net.Sockets
@@ -754,6 +755,77 @@ module RemoteTelemetryTests =
         Assert.False(Capacity.admitsNewIdentity 1000000L 0L 0L 1L)
         Assert.False(Capacity.admitsNewIdentity 0L 1024L 0L 1L)
         Assert.False(Capacity.admitsNewIdentity 0L 0L (64L * 1024L * 1024L) 1L)
+
+    [<Fact>]
+    let ``Host restores a 0.1.2 schema 9 backup into separate schema 10 state`` () =
+        let root = Path.Combine(Path.GetTempPath(), "host-schema-restore-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory root |> ignore
+
+        try
+            let backup = Path.Combine(root, "backup")
+            let restored = Path.Combine(root, "restored")
+            let workspace = "proof-workspace"
+            let source = Path.Combine(backup, workspace, "telemetry.sqlite3")
+            let target = Path.Combine(restored, workspace, "telemetry.sqlite3")
+
+            ZipFile.ExtractToDirectory(
+                Path.Combine(__SOURCE_DIRECTORY__, "fixtures", "host-0.1.2-schema9-backup.zip"),
+                backup
+            )
+
+            let version path =
+                use connection = new SqliteConnection($"Data Source={path};Mode=ReadOnly")
+                connection.Open()
+                use command = connection.CreateCommand()
+                command.CommandText <- "PRAGMA user_version;"
+                command.ExecuteScalar() :?> int64 |> int
+
+            let sourceDigest = SHA256.HashData(File.ReadAllBytes source)
+            let certificate = Path.Combine(root, "cert.pfx")
+            let password = Path.Combine(root, "cert.pass")
+            let config = Path.Combine(root, "host.json")
+            File.WriteAllText(certificate, "disposable certificate")
+            File.WriteAllText(password, "disposable password")
+
+            File.WriteAllText(
+                config,
+                $"""{{"Schema":"fsgg.telemetry.host-config/1","ListenUrl":"https://127.0.0.1:18445","CertificatePath":"{certificate}","CertificatePasswordFile":"{password}","ServiceLockPath":"{Path.Combine(root, "host.lock")}","Stores":[{{"WorkspaceId":"{workspace}","Root":"{Path.Combine(restored, workspace)}"}}],"Credentials":[],"BrowserPrincipals":[],"BrowserSession":{{"IdleSeconds":300,"AbsoluteSeconds":3600,"MaximumSessions":32,"LoginAttemptsPerMinute":16,"LoginAdmission":4,"QueryAdmission":4,"QueryTimeoutSeconds":10}}}}"""
+            )
+
+            for path in [ certificate; password; config ] do
+                File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+
+            Assert.Equal(
+                0,
+                Operations.runWithAssessment
+                    [| "restore"; "--config"; config; "--input"; backup; "--state-root"; restored |]
+                    (fun _ -> TelemetryStore.ApprovedLocalDurable)
+            )
+
+            Assert.Equal(10, version target)
+            Assert.Equal(9, version source)
+            Assert.Equal<byte>(sourceDigest, SHA256.HashData(File.ReadAllBytes source))
+            let receiptScope: TelemetryReceipt.Scope =
+                { Workspace = workspace; Producer = "proof-producer"; Stream = "runtime" }
+
+            let restoredReceipt =
+                TelemetryStoreApplication.lookupReceipt
+                    (Path.Combine(restored, workspace))
+                    TelemetryStore.ApprovedLocalDurable
+                    receiptScope
+                    "proof-applied"
+                |> Result.defaultWith (fun errors -> failwithf "%A" errors)
+
+            Assert.Contains("\"status\":\"applied\"", restoredReceipt)
+            Assert.True(
+                TelemetryStoreApplication.status
+                    (Path.Combine(restored, workspace))
+                    TelemetryStore.ApprovedLocalDurable
+                |> Result.isOk
+            )
+        finally
+            if Directory.Exists root then
+                Directory.Delete(root, true)
 
     [<Fact(Timeout = 30000)>]
     let ``real TLS receiver preserves scoped receipt across restart and duplicate submit`` () =

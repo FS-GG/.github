@@ -3919,7 +3919,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                       "workspaceId"
                                       "files"]
                             || top.GetProperty("schema").GetString() <> "fsgg.telemetry.host-backup/1"
-                            || top.GetProperty("storeSchemaVersion").GetInt32() <> currentSchemaVersion
+                            || not ((set [ 9; currentSchemaVersion ]).Contains(top.GetProperty("storeSchemaVersion").GetInt32()))
                             || top.GetProperty("workspaceId").GetString() <> workspace
                         then
                             Error [ "backup-incompatible" ]
@@ -4085,7 +4085,15 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
 
                                         fsyncDirectory temporary
 
-                                        match status temporary assessment with
+                                        let backupSchemaVersion = top.GetProperty("storeSchemaVersion").GetInt32()
+
+                                        let restoredStatus =
+                                            if backupSchemaVersion = 9 then
+                                                initialize temporary assessment
+                                            else
+                                                status temporary assessment
+
+                                        match restoredStatus with
                                         | Error errors ->
                                             Directory.Delete(temporary, true)
                                             Error errors
