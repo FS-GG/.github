@@ -1404,17 +1404,17 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 
   [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.6.json).
 
-- [x] **GS2-08.7 — Publish the bridge.** Build once, sign/attest, publish to required feeds, verify public
+- [x] **GS2-08.7 — Publish one immutable bridge.** Build once, sign/attest, publish to required feeds, verify public
   installation, and record exact tool/kit/workflow identities.
 
   [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.7.json).
 
-- [x] **GS2-08.8 — Adopt all receivers.** Update `.github`, SDD, Rendering, Governance, Templates, Game,
+- [x] **GS2-08.8 — Adopt the immutable bridge across every receiver.** Update `.github`, SDD, Rendering, Governance, Templates, Game,
   Audio, and Net; resolve superseded dependency-update PRs; prove each live route uses the exact bridge.
 
   [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.8.json).
 
-- [x] **GS2-08.9 — Seal unfenceable clients.** If an old writer cannot read the epoch, disable/revoke its
+- [x] **GS2-08.9 — Seal every residual github-v1 writer route.** If an old writer cannot read the epoch, disable/revoke its
   dispatch, credential, schedule, or installation before freeze and record that as its fence proof.
 
   [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.9.json).
@@ -1444,6 +1444,13 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
 **Owner:** `FS.GG.Coordination`
 **Depends on:** GS2-05–GS2-08
 **Exit gates:** Q5 and Q6 over full snapshots
+
+- [x] **GS2-09.9 — Qualify callable ordinary v2 execution.** The protected Coordination delivery supplies
+  the installed ordinary-delivery command, durable recovery behavior, one accepted isolated native operation,
+  and the exact callable-readiness handoff consumed by discovery. It performs no fleet migration, does not open
+  v2, and remains an additive prerequisite before representative rehearsal.
+
+  [Protected callable discovery handoff](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json).
 
 - [ ] **GS2-09.1 — Implement complete discovery.** Read every open and relevant closed issue, Project
   item, field, hierarchy/dependency edge, claim/event stream, review/delivery/release record, repository
