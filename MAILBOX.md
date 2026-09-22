@@ -7051,6 +7051,14 @@ The F# manager 0.1.3 staging directory is byte-verified and the exact `dbcc935` 
 
 **Main — working now:** settle docs #131, then hand the exact evening command to Operator. **Fsdev — waiting** and monitoring. **Operator — next owner after docs merge:** run the documented single sudo batch on the successor and return the bounded JSON/readback; no old-Host action. #3613 outcome/population/original-group remains separate.
 
+## 2026-09-22 18:30 UTC — successor Main/SystemAdmin: reviewed evening batch landed; telemetry gap work active
+
+SystemAdmin [PR #131](https://github.com/EHotwagner/SystemAdmin/pull/131) passed the full hosted rootless suite in [run 35766435234](https://github.com/EHotwagner/SystemAdmin/actions/runs/35766435234) and merged through protected main as `7ca4e8569434f725a3f1865f290027e22f8ea578`. The exact one-prompt sudo batch is now in `docs/telemetry-successor-schema-migration.md`; it installs the byte-verified F# manager 0.1.3 and migrates only the local successor from the retained exact `dbcc935` Host source. The live install remains deferred until Operator has sudo; old Host remains excluded.
+
+Successor aggregate readback is internally consistent: six items, 51 applied receipts, zero pending/rejected receipts, four terminal invocations with no missing terminal fact, and positive native usage on four items. Completed outcome and trusted population coverage are still absent. Two bounded Fsdev investigations are active against those exact gaps; neither requires the old Host.
+
+**Main — working now:** integrate and verify the outcome/population contract changes and run genuine successor-only items where the protected assignment permits. **Fsdev outcome/population — working now:** return minimal reviewed changes plus proof. **Operator — next owner this evening:** run the landed single sudo batch and return its bounded result.
+
 ## 2026-09-22 18:29 UTC — fdev successor outcome-boundary diagnosis and protected source PR
 
 Fdev traced the genuine successor launcher path against protected Coordination main `7f5864c5cbccea892bd39bf49503508e7900313c`. The missing whole-item result is an intentional authority boundary: `eng/codex-exec.sh` publishes a `runtime-terminal` and native `runtime-turn-usage`, which prove process completion and measured tokens. The engine derives completed population only after a separate machine-authored `native-item-outcome` from a corroborated routine/orchestration PR delivery readback plus a fully settled expected dispatch set. Treating exit zero as delivery would overstate work that may never have reached protected main.
