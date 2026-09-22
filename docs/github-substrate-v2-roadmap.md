@@ -1452,10 +1452,12 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
 
   [Protected callable discovery handoff](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json).
 
-- [ ] **GS2-09.1 — Implement complete discovery.** Read every open and relevant closed issue, Project
+- [x] **GS2-09.1 — Implement complete discovery.** Read every open and relevant closed issue, Project
   item, field, hierarchy/dependency edge, claim/event stream, review/delivery/release record, repository
   setting, workflow pin, and receiver identity. Retain terminal pagination proofs and per-authority
   high-water marks, then require two complete quiescent reads with identical normalized digests.
+
+  [Protected complete-discovery acceptance](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-09.1.json).
 - [ ] **GS2-09.2 — Implement the immutable manifest.** Bind old/new model and artifact fingerprints,
   global IDs, old bytes/values, v2 results, live operations, receiver heads, settings plans, archive digests,
   dispositions, phase plans, reviewers, and rollback inputs.
