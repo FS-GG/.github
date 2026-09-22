@@ -7,7 +7,7 @@
   const count = (value) => value == null ? "unknown" : new Intl.NumberFormat().format(value);
   const tokenSummary = (item) => {
     const status=item.usage.nativeUsage;
-    if(status==="missing")return "Native tokens unavailable";
+    if(status==="missing"||!(["observed","incomplete","unsupported"].includes(status)))return "Native tokens unavailable";
     if(status==="unsupported")return "Native token reporting unsupported";
     const observed=`${count(item.usage.total)} observed native tokens`;
     if(status==="observed"&&item.coverage.populationCoverage==="complete")return `${count(item.usage.total)} native tokens`;
