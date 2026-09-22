@@ -262,6 +262,45 @@ module DashboardProjectionTests =
             Assert.DoesNotContain(secret, json)
 
     [<Fact>]
+    let ``private projection identifies canonical members only from recorded original facts`` () =
+        let memberSnapshot = snapshot "member-a"
+
+        memberSnapshot["populations"] <-
+            nodes [| row """{"item_id":"member-a","original_item_id":"original-a","state":"completed"}""" |]
+
+        use memberDocument =
+            DashboardProjection.project "workspace-a" (envelope memberSnapshot)
+            |> unwrap
+            |> JsonDocument.Parse
+
+        let memberItem = memberDocument.RootElement.GetProperty("items").[0]
+        Assert.Equal("canonical-item", memberItem.GetProperty("unit").GetString())
+        Assert.Equal("member", memberItem.GetProperty("state").GetProperty("memberRelation").GetString())
+        Assert.Equal("original-a", memberItem.GetProperty("state").GetProperty("originalItemId").GetString())
+
+        let originalSnapshot = snapshot "original-a"
+
+        originalSnapshot["populations"] <-
+            nodes [| row """{"item_id":"original-a","original_item_id":"original-a","state":"completed"}""" |]
+
+        use originalDocument =
+            DashboardProjection.project "workspace-a" (envelope originalSnapshot)
+            |> unwrap
+            |> JsonDocument.Parse
+
+        let originalState = originalDocument.RootElement.GetProperty("items").[0].GetProperty("state")
+        Assert.Equal("original", originalState.GetProperty("memberRelation").GetString())
+
+        use unknownDocument =
+            DashboardProjection.project "workspace-a" (envelope (snapshot "member-a"))
+            |> unwrap
+            |> JsonDocument.Parse
+
+        let unknownState = unknownDocument.RootElement.GetProperty("items").[0].GetProperty("state")
+        Assert.Equal("unknown", unknownState.GetProperty("memberRelation").GetString())
+        Assert.Equal(JsonValueKind.Null, unknownState.GetProperty("originalItemId").ValueKind)
+
+    [<Fact>]
     let ``empty scoped snapshot remains explicitly empty`` () =
         let value = snapshot "placeholder"
         value["items"] <- JsonArray()

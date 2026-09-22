@@ -215,10 +215,17 @@ module DashboardProjection =
                 then
                     Error InvalidSnapshot
                 else
+                    let populationFact = latestByItem item populations
+
                     let population =
-                        latestByItem item populations
+                        populationFact
                         |> Option.bind (text "state")
                         |> safeToken "missing"
+
+                    let originalItemId =
+                        populationFact
+                        |> Option.bind (text "original_item_id")
+                        |> Option.filter validItem
 
                     let outcome = latestByItem item outcomes
                     let ci = latestByItem item ciCoverage
@@ -253,6 +260,7 @@ module DashboardProjection =
 
                     let node = JsonObject()
                     node["id"] <- item
+                    node["unit"] <- "canonical-item"
                     node["factCount"] <- number "factCount" summary |> Option.get
                     node["usageObservations"] <- number "usageObservations" summary |> Option.get
                     node["deliveryObservations"] <- number "deliveryObservations" summary |> Option.get
@@ -296,6 +304,16 @@ module DashboardProjection =
                     node["runtime"] <- runtime
                     let state = JsonObject()
                     state["population"] <- population
+                    state["originalItemId"] <-
+                        match originalItemId with
+                        | Some original -> JsonValue.Create original
+                        | None -> null
+
+                    state["memberRelation"] <-
+                        match originalItemId with
+                        | Some original when original = item -> "original"
+                        | Some _ -> "member"
+                        | None -> "unknown"
                     state["dirty"] <- dirty |> Array.exists (fun row -> text "item_id" row = Some item)
                     state["outcome"] <- safeToken "missing" (outcome |> Option.bind (text "outcome"))
                     state["codeDelivery"] <- safeToken "unknown" (outcome |> Option.bind (text "code_delivery"))
