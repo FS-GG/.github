@@ -10,7 +10,7 @@
     if(status==="missing"||!(["observed","incomplete","unsupported"].includes(status)))return "Native tokens unavailable";
     if(status==="unsupported")return "Native token reporting unsupported";
     const observed=`${count(item.usage.total)} observed native tokens`;
-    if(status==="observed"&&item.coverage.populationCoverage==="complete")return `${count(item.usage.total)} native tokens`;
+    if(status==="observed"&&item.coverage.populationCoverage==="complete"&&item.coverage.recordValidity==="complete"&&item.coverage.joinIntegrity==="complete")return `${count(item.usage.total)} native tokens`;
     if(status==="observed")return `${observed} · ${item.coverage.populationCoverage} population coverage`;
     return `${observed} · ${status} usage · ${item.coverage.populationCoverage} population coverage`;
   };
