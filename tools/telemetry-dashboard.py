@@ -38,7 +38,8 @@ ITEMS_SCHEMA = "fsgg.telemetry.completed-items/2"
 PROCESS_SCHEMA = "fsgg.telemetry.item-process-detail/1"
 LABELS_SCHEMA = "fsgg.telemetry.dashboard-labels/1"
 MEMBER_LABELS_SCHEMA = "fsgg.telemetry.dashboard-labels/2"
-PIPELINE_SCHEMA = "fsgg.telemetry.item-pipeline/1"
+PIPELINE_SCHEMA = "fsgg.telemetry.item-pipeline/2"
+LEGACY_PIPELINE_SCHEMA = "fsgg.telemetry.item-pipeline/1"
 EVENT_RECEIPT_SCHEMA = "fsgg.telemetry.dashboard-event-activation/1"
 EVENT_HEALTH_SCHEMA = "fsgg.telemetry.dashboard-event-health/1"
 EVENT_RECEIPT_NAME = "telemetry-dashboard-event-activation.json"
@@ -441,24 +442,43 @@ def project_item_pipeline(snapshot: dict[str,Any], members: list[str], labels: d
             attribution=next(iter(classes)) if len(classes)==1 else "mixed"
         else: attribution="unknown"
         event_rows={}
-        for row in times: event_rows.setdefault((row.get("invocation_id"),row.get("event")),row)
-        spans=[]; start_times=[]
+        for row in times: event_rows.setdefault((row.get("invocation_id"),row.get("event")),[]).append(row)
+        spans=[]; start_times=[]; open_intervals=0; missing_intervals=0
         for invocation in linked:
-            first,last=event_rows.get((invocation,"start")),event_rows.get((invocation,"terminal"))
+            first_rows=event_rows.get((invocation,"start"),[])
+            last_rows=event_rows.get((invocation,"terminal"),[])
+            first=first_rows[0] if len(first_rows)==1 else None
+            last=last_rows[0] if len(last_rows)==1 else None
             if first is not None:
                 observed=parse_time(first.get("occurred_at"))
                 if observed is not None: start_times.append(observed)
-            if first is None or last is None or first.get("occurred_clock_provenance") not in {"host-wall","provider-native","github-native"} or first.get("occurred_clock_provenance")!=last.get("occurred_clock_provenance"): continue
+            if first is not None and not last_rows: open_intervals+=1
+            if first is None or last is None or first.get("occurred_clock_provenance") not in {"host-wall","provider-native","github-native"} or first.get("occurred_clock_provenance")!=last.get("occurred_clock_provenance"):
+                missing_intervals+=1; continue
             a,b=parse_time(first.get("occurred_at")),parse_time(last.get("occurred_at"))
-            if a is not None and b is not None and b>=a: spans.append(int((b-a).total_seconds()))
-        time_status="known" if exact_lineage and linked==terminal and len(spans)==len(linked) else "partial" if spans else "unknown"
+            if a is not None and b is not None and b>=a: spans.append((first["occurred_clock_provenance"],a,b))
+            else: missing_intervals+=1
+        clocks={clock for clock,_,_ in spans}
+        if len(clocks)==1:
+            intervals=sorted((a,b) for _,a,b in spans)
+            merged=[]; overlapping=False
+            for a,b in intervals:
+                if merged and a < merged[-1][1]: overlapping=True
+                if merged and a <= merged[-1][1]: merged[-1]=(merged[-1][0],max(merged[-1][1],b))
+                else: merged.append((a,b))
+            seconds=int(sum((b-a).total_seconds() for a,b in merged))
+            overlap="yes" if overlapping else "no"
+        else:
+            seconds=None; overlap="unknown"
+        time_status="known" if seconds is not None and exact_lineage and linked==terminal and missing_intervals==0 else "partial" if seconds is not None else "unknown"
         categories={enum(row.get("category"),ACTIVITY_CATEGORIES,"member activity") for row in activities}
         stage=next(iter(categories)) if len(categories)==1 else "unknown"
         # CI-step coverage says nothing about the classification of all work on a member.
         # The engine has no authoritative member-wide work classification yet.
         work_class="unknown"
         node={"key":alias["key"],"label":alias["label"],"url":alias["url"],"parentKey":None,"status":"settled","stage":stage,"workClass":work_class,
-            "time":{"status":time_status,"seconds":sum(spans) if spans else None},
+            "time":{"status":time_status,"seconds":seconds,"basis":"same-clock-invocation-union",
+                    "open":open_intervals,"missing":missing_intervals,"overlap":overlap},
             "tokens":{"status":token_status,"total":token_total,"attribution":attribution}}
         order=min(start_times) if start_times else dt.datetime.max.replace(tzinfo=dt.timezone.utc)
         nodes.append((order,member,node))
@@ -1804,7 +1824,7 @@ def validate_item_pipeline(value: Any) -> None:
         return candidate
 
     exact(value,{"schema","coverage","nodes"},"item pipeline")
-    if value["schema"]!=PIPELINE_SCHEMA or not isinstance(value["nodes"],list) or len(value["nodes"])>128: raise ValueError("invalid item pipeline")
+    if value["schema"] not in {PIPELINE_SCHEMA,LEGACY_PIPELINE_SCHEMA} or not isinstance(value["nodes"],list) or len(value["nodes"])>128: raise ValueError("invalid item pipeline")
     coverage=exact(value["coverage"],{"eligible","published","unmapped"},"pipeline coverage")
     for count in coverage.values(): checked_int(count,"pipeline coverage")
     if coverage["eligible"]!=coverage["published"]+coverage["unmapped"] or coverage["published"]!=len(value["nodes"]): raise ValueError("invalid pipeline coverage")
@@ -1820,10 +1840,18 @@ def validate_item_pipeline(value: Any) -> None:
         pipeline_enum(node["status"],{"settled"},"pipeline status")
         pipeline_enum(node["stage"],ACTIVITY_CATEGORIES|{"unknown"},"pipeline stage")
         pipeline_enum(node["workClass"],{"useful-validation","administrative","necessary-setup","mixed","unclassified","unknown"},"pipeline work class")
-        observed=exact(node["time"],{"status","seconds"},"pipeline time")
+        current=value["schema"]==PIPELINE_SCHEMA
+        observed=exact(node["time"],{"status","seconds","basis","open","missing","overlap"} if current else {"status","seconds"},"pipeline time")
         pipeline_enum(observed["status"],{"known","partial","unknown"},"pipeline time status")
         if observed["seconds"] is not None: checked_int(observed["seconds"],"pipeline time")
         if (observed["seconds"] is None)!=(observed["status"]=="unknown"): raise ValueError("invalid pipeline time")
+        if current:
+            if observed["basis"]!="same-clock-invocation-union": raise ValueError("invalid pipeline time basis")
+            checked_int(observed["open"],"pipeline open intervals")
+            checked_int(observed["missing"],"pipeline missing intervals")
+            pipeline_enum(observed["overlap"],{"yes","no","unknown"},"pipeline overlap")
+            if (observed["overlap"]=="unknown")!=(observed["seconds"] is None): raise ValueError("invalid pipeline overlap")
+            if observed["status"]=="known" and (observed["open"] or observed["missing"]): raise ValueError("invalid complete pipeline time")
         tokens=exact(node["tokens"],{"status","total","attribution"},"pipeline tokens")
         pipeline_enum(tokens["status"],{"complete","partial","unknown"},"pipeline token status")
         if tokens["total"] is not None: checked_int(tokens["total"],"pipeline tokens")
