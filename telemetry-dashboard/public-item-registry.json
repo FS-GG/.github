@@ -5,6 +5,10 @@
         {
           "pullRequest": 464,
           "repository": "FS-GG/FS.GG.Coordination"
+        },
+        {
+          "pullRequest": 465,
+          "repository": "FS-GG/FS.GG.Coordination"
         }
       ],
       "label": "Callable readiness handoff",
