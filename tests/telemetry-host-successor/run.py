@@ -24,7 +24,7 @@ from telemetry_host_successor_provider import HostProvider, NotFound
 def manifest():
     return {
         "schema": "fsgg.telemetry.host-release/1", "packageId": "FS.GG.Telemetry.Host",
-        "version": "0.1.3", "tag": "telemetry-host/v0.1.3", "sourceSha": "a" * 40,
+        "version": "0.1.4", "tag": "telemetry-host/v0.1.4", "sourceSha": "a" * 40,
         "archiveSha256": "b" * 64, "producerPayloadSha256": "sha256:" + "c" * 64,
     }
 
@@ -117,7 +117,7 @@ class HostReleaseTests(unittest.TestCase):
             with zipfile.ZipFile(archive, "w") as zipped:
                 zipped.writestr("manifest.json", json.dumps(manifest()))
                 zipped.writestr("package-evidence.json", "{}")
-                zipped.writestr("FS.GG.Telemetry.Host.0.1.3.nupkg", "fixture")
+                zipped.writestr("FS.GG.Telemetry.Host.0.1.4.nupkg", "fixture")
             digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             run = {"id": 123, "path": verifier.WORKFLOW, "head_sha": source,
                    "head_branch": "main", "event": "workflow_dispatch", "conclusion": "success",
@@ -128,7 +128,7 @@ class HostReleaseTests(unittest.TestCase):
                                          "repository_id": verifier.REPOSITORY_ID,
                                          "head_repository_id": verifier.REPOSITORY_ID}}
             with patch.object(verifier.subprocess, "run"):
-                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.1.3")
+                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.1.4")
             altered = {**run, "run_attempt": 2}
             with self.assertRaisesRegex(ValueError, "first-attempt"):
                 verifier.verify(artifact, altered, archive, root / "rerun", source)
@@ -136,8 +136,9 @@ class HostReleaseTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "digest differs"):
                 verifier.verify(altered_artifact, run, archive, root / "tampered", source)
 
-    def test_wrong_version_and_payload_are_refused(self):
-        for key, value in (("version", "0.1.1"), ("producerPayloadSha256", "bad")):
+    def test_prior_release_identity_and_wrong_payload_are_refused(self):
+        for key, value in (("version", "0.1.3"), ("tag", "telemetry-host/v0.1.3"),
+                           ("producerPayloadSha256", "bad")):
             row = manifest(); row[key] = value
             with self.assertRaises(Refused):
                 effects(row)
@@ -151,9 +152,9 @@ class HostReleaseTests(unittest.TestCase):
                 self.assets = {}
                 self.writes = []
             def get(self, path):
-                if path.endswith("/git/ref/tags/telemetry-host/v0.1.3") and self.tag:
+                if path.endswith("/git/ref/tags/telemetry-host/v0.1.4") and self.tag:
                     return {"object": {"sha": self.tag}}
-                if path.endswith("/releases/tags/telemetry-host/v0.1.3") and self.release and not self.release["draft"]:
+                if path.endswith("/releases/tags/telemetry-host/v0.1.4") and self.release and not self.release["draft"]:
                     return self.release
                 if path.endswith("/releases?per_page=100&page=1"):
                     return [self.release] if self.release else []
@@ -177,7 +178,7 @@ class HostReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             row = manifest()
-            package = root / "FS.GG.Telemetry.Host.0.1.3.nupkg"
+            package = root / "FS.GG.Telemetry.Host.0.1.4.nupkg"
             package.write_bytes(b"exact original Host archive")
             row["archiveSha256"] = hashlib.sha256(package.read_bytes()).hexdigest()
             manifest_path = root / "manifest.json"
@@ -205,10 +206,10 @@ class HostReleaseTests(unittest.TestCase):
             def __init__(self, raw):
                 self.raw = raw
             def get(self, path):
-                if path.endswith("/releases/tags/telemetry-host/v0.1.3"):
+                if path.endswith("/releases/tags/telemetry-host/v0.1.4"):
                     raise NotFound(path)
                 if path.endswith("/releases?per_page=100&page=1"):
-                    return [{"id": 1, "tag_name": "telemetry-host/v0.1.3", "draft": True}]
+                    return [{"id": 1, "tag_name": "telemetry-host/v0.1.4", "draft": True}]
                 if path.endswith("/releases/1/assets?per_page=100"):
                     return [{"id": 1, "name": "publication-journal.json"}]
                 raise AssertionError(path)

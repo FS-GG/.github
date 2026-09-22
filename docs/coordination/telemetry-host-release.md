@@ -1,7 +1,9 @@
 # Telemetry host package and release boundary
 
-`FS.GG.Telemetry.Host` is an optional, independently versioned .NET tool. Its
-current released version is `0.1.2`, its command is `fsgg-telemetry-host`, and
+`FS.GG.Telemetry.Host` is an optional, independently versioned .NET tool. The
+protected registry currently records `0.1.2`; GitHub release `0.1.3` and its
+public NuGet archive have been observed, while registry and org-feed
+reconciliation is pending. Its command is `fsgg-telemetry-host`, and
 its tag namespace is `telemetry-host/v*`. It is not a fourth member of the
 `FS.GG.Kit`/`FS.GG.Drivers`/`FS.GG.Coord.Cli` coherent release set.
 
@@ -43,12 +45,20 @@ bytes are equal when signing changes them.
 
 ## Protected release
 
+The next successor Host candidate is `0.1.4`. Its candidate workflow, archive
+verifier, publisher and effect identities bind that version and
+`telemetry-host/v0.1.4` together. Its release journal uses the unused
+`fsgg/v2/journal/release/utel-host-rel-03` ref. The default publisher dispatch
+remains a no-effect preflight. A candidate run and protected publication must
+qualify the exact merged source before Main updates the local successor Host.
+The installed 0.1.3 Host and the historical old-Host migration remain separate.
+
 The historical `release-telemetry-host.yml` publisher is sealed under GS2-08.9.
 Its current manual workflow qualifies source and package locally and has no
 credential, tag, feed, journal, artifact-upload or release effect. Do not use
 its old publication instructions for a new Host version.
 
-For the next Host 0.1.3, the independent
+For Host 0.1.3, the independent
 `release-telemetry-host-successor-candidate.yml` qualifies an exact current
 `main` commit, the package, installed tool, manifest, and Host/browser tests.
 It retains one unpromoted Actions artifact and has read-only repository and
@@ -61,7 +71,7 @@ preflight. A fresh publication requires the candidate source to equal current
 and protected intent. The new workflow needs its own nuget.org Trusted
 Publishing registration before `publish=true` can obtain a feed credential.
 
-The 0.1.3 publication release must contain exactly the original
+The 0.1.3 publication release contains exactly the original
 `FS.GG.Telemetry.Host.0.1.3.nupkg`, `manifest.json`, and
 `publication-journal.json` required by Main's protected updater. The journal
 records independently observed external archive and normalized payload
