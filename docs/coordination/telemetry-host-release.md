@@ -1,7 +1,9 @@
 # Telemetry host package and release boundary
 
-`FS.GG.Telemetry.Host` is an optional, independently versioned .NET tool. Its
-current released version is `0.1.3`, its command is `fsgg-telemetry-host`, and
+`FS.GG.Telemetry.Host` is an optional, independently versioned .NET tool. The
+protected registry currently records `0.1.2`; GitHub release `0.1.3` and its
+public NuGet archive have been observed, while registry and org-feed
+reconciliation is pending. Its command is `fsgg-telemetry-host`, and
 its tag namespace is `telemetry-host/v*`. It is not a fourth member of the
 `FS.GG.Kit`/`FS.GG.Drivers`/`FS.GG.Coord.Cli` coherent release set.
 
