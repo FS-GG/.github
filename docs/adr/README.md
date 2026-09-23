@@ -111,6 +111,7 @@ registry like any other, and this org gates its registries.
 | [0085](0085-fsquint-single-owner-package-boundary.md) | FsQuint owns generic replay; SDD delegates and Coordination qualifies package updates. | Accepted |
 
 | [0086](0086-proportionate-pipeline-preflight.md) | Proportionate preflight for complex pipelines | Accepted |
+| [0087](0087-single-owner-v1-admission-genesis-approval.md) | Single-owner protected approval for one-time v1 admission genesis | Accepted |
 
 ## Supersession map
 
