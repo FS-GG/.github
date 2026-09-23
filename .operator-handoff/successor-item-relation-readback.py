@@ -55,8 +55,7 @@ rows = []
 for index, item in enumerate(items):
     counts = {name:sum(row.get('item_id') == item for row in snapshot[name]) for name in RELATIONS}
     scopes = sorted({row.get('accounting_scope') for row in snapshot['usage'] if row.get('item_id') == item and row.get('accounting_scope') is not None})
-    rows.append({'index':index + 1, 'itemHash':hashlib.sha256(item.encode()).hexdigest()[:12],
-                 'counts':counts, 'usageScopeCount':len(scopes)})
+    rows.append({'index':index + 1, 'counts':counts, 'usageScopeCount':len(scopes)})
 print(json.dumps({'schema':'fsgg.telemetry.successor-item-relation-readback/1',
-                  'revision':envelope['revision'], 'schemaVersion':snapshot['store']['schemaVersion'],
+                  'schemaVersion':snapshot['store']['schemaVersion'],
                   'itemCount':len(items), 'items':rows}, sort_keys=True, separators=(',',':')))
