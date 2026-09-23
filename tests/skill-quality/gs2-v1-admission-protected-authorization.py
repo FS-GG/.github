@@ -15,6 +15,8 @@ class V1AdmissionProtectedAuthorizationWorkflowTests(unittest.TestCase):
         self.assertIn("environment: fleet-cutover", source)
         self.assertIn("contents: read", source)
         self.assertIn("actions: read", source)
+        self.assertIn("test \"$GITHUB_REF\" = 'refs/heads/main'", source)
+        self.assertIn("test \"$GITHUB_RUN_ATTEMPT\" = 1", source)
         self.assertNotIn("contents: write", source)
         self.assertNotIn("pull-requests: write", source)
         self.assertNotIn("schedule:", source)
