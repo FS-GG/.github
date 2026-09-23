@@ -1463,9 +1463,11 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
   dispositions, phase plans, reviewers, and rollback inputs.
 
   [Protected immutable-manifest acceptance](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-09.2.json) ([receipt PR #483](https://github.com/FS-GG/FS.GG.Coordination/pull/483), merge `584df2e6deb2d5128e0a401c96c0bf3def8d721b`).
-- [ ] **GS2-09.3 — Implement typed transforms.** Map taxonomy, planning fields, repo scope, body metadata,
+- [x] **GS2-09.3 — Implement typed transforms.** Map taxonomy, planning fields, repo scope, body metadata,
   blockers, hierarchy, scheduling holds, touch sets, lifecycle receipts, and desired settings as
   `Migrated`, `Ambiguous`, or `Unsupported`.
+
+  [Protected typed-transform acceptance](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-09.3.json) ([receipt PR #486](https://github.com/FS-GG/FS.GG.Coordination/pull/486), merge `eb6bc92178f54adef04c7dcfa533c2271e095190`).
 - [ ] **GS2-09.4 — Implement live-operation handling.** For each claim, queued write, review, delivery,
   release, and cutover-adjacent operation, choose drain, migrate, park, or explicit invalid disposition.
 - [ ] **GS2-09.5 — Implement sealed history.** Preserve source schema/bytes/digests, verifier artifact,
