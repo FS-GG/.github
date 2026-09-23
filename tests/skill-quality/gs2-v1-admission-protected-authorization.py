@@ -12,7 +12,8 @@ class V1AdmissionProtectedAuthorizationWorkflowTests(unittest.TestCase):
     def test_separate_manual_read_only_environment_gate(self):
         source = WORKFLOW.read_text()
         self.assertIn("workflow_dispatch:", source)
-        self.assertIn("environment: fleet-cutover", source)
+        self.assertIn("environment: fleet-v1-admission-owner", source)
+        self.assertNotIn("environment: fleet-cutover", source)
         self.assertIn("contents: read", source)
         self.assertIn("actions: read", source)
         self.assertIn("test \"$GITHUB_REF\" = 'refs/heads/main'", source)
@@ -27,7 +28,7 @@ class V1AdmissionProtectedAuthorizationWorkflowTests(unittest.TestCase):
         for token in (
             "coordination_revision", "coordination_tree", "genesis_intent_sha256", "operation_id",
             "coordinationRevision", "coordinationTree", "genesisIntentSha256", "workflowRevision",
-            "runId", "approvedAt", "expiresAt", "fsgg.v1-admission-genesis-protected-authorization/1",
+            "runId", "approvedAt", "expiresAt", "fsgg.v1-admission-genesis-protected-authorization/2",
             "retention-days: 1", "if-no-files-found: error",
         ):
             self.assertIn(token, source)
