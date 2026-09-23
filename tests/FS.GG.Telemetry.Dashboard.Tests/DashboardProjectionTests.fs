@@ -138,6 +138,8 @@ module DashboardProjectionTests =
                 [|
                     row
                         """{"item_id":"item-a","name":"PRIVATE-CI-STEP-NAME","classification":"useful-validation","started_at":"2026-09-10T08:03:00Z","completed_at":"2026-09-10T08:04:00Z","rationale":"PRIVATE-RATIONALE"}"""
+                    row
+                        """{"item_id":"item-a","name":"PRIVATE-CI-OTHER-NAME","classification":"PRIVATE-CLASS","started_at":"2026-09-10T08:05:00Z","completed_at":"2026-09-10T08:06:00Z"}"""
                 |]
         value["admissions"] <-
             nodes [| row """{"item_id":"item-a","invocation_id":"PRIVATE-INVOCATION"}""" |]
@@ -157,7 +159,7 @@ module DashboardProjectionTests =
         use document = JsonDocument.Parse bytes
         let steps = document.RootElement.GetProperty("items").[0].GetProperty("steps")
         Assert.Equal(1, steps.GetProperty("activityCount").GetInt32())
-        Assert.Equal(1, steps.GetProperty("ciStepCount").GetInt32())
+        Assert.Equal(2, steps.GetProperty("ciStepCount").GetInt32())
         Assert.Equal(1, steps.GetProperty("runtimeCount").GetInt32())
         Assert.Equal(6L, steps.GetProperty("rows").[0].GetProperty("tokens").GetInt64())
         Assert.Equal("observed-native-partial", steps.GetProperty("rows").[0].GetProperty("tokenBasis").GetString())
@@ -166,6 +168,8 @@ module DashboardProjectionTests =
         Assert.Equal("direct-attribution-partial", steps.GetProperty("rows").[1].GetProperty("tokenBasis").GetString())
         Assert.Equal("CI step 1", steps.GetProperty("rows").[2].GetProperty("label").GetString())
         Assert.Equal(JsonValueKind.Null, steps.GetProperty("rows").[2].GetProperty("tokens").ValueKind)
+        Assert.Equal("CI step 2", steps.GetProperty("rows").[3].GetProperty("label").GetString())
+        Assert.Equal("unclassified", steps.GetProperty("rows").[3].GetProperty("classification").GetString())
 
     [<Fact>]
     let ``activity tokens refuse mixed native accounting scopes`` () =

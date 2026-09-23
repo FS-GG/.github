@@ -35,6 +35,9 @@ module DashboardProjection =
     let private tokenPattern =
         Regex(@"\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z", RegexOptions.CultureInvariant)
 
+    let private ciClassifications =
+        set [ "useful-validation"; "admin"; "necessary-setup"; "mixed"; "unclassified" ]
+
     let private validItem (value: string) =
         not (String.IsNullOrWhiteSpace value)
         && value.Length <= 256
@@ -206,7 +209,10 @@ module DashboardProjection =
             let node = JsonObject()
             node["kind"] <- "ci"
             node["label"] <- $"CI step {index + 1}"
-            node["classification"] <- safeToken "unclassified" (text "classification" row)
+            node["classification"] <-
+                match text "classification" row with
+                | Some value when ciClassifications.Contains value -> value
+                | _ -> "unclassified"
             node["clock"] <- "github-actions"
             node["startedAt"] <- text "started_at" row |> safeTime |> Option.map JsonValue.Create |> Option.toObj
             node["endedAt"] <- text "completed_at" row |> safeTime |> Option.map JsonValue.Create |> Option.toObj
