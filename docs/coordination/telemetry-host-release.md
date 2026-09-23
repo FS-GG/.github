@@ -1,8 +1,9 @@
 # Telemetry host package and release boundary
 
 `FS.GG.Telemetry.Host` is an optional, independently versioned .NET tool. The
-next candidate is `0.1.6`, carrying the private item timeline projection.
-Published `0.1.5` remains immutable; the successor host's failed 0.1.3→0.1.5
+next candidate is `0.1.7`, carrying observed item runtime and the classified
+private step pipeline. Published `0.1.6` remains immutable; the successor
+host's failed 0.1.3→0.1.5
 attempt remains held with its journal and backup. Its command is `fsgg-telemetry-host`, and
 its tag namespace is `telemetry-host/v*`. It is not a fourth member of the
 `FS.GG.Kit`/`FS.GG.Drivers`/`FS.GG.Coord.Cli` coherent release set.
@@ -45,13 +46,14 @@ bytes are equal when signing changes them.
 
 ## Protected release
 
-The next successor Host candidate is `0.1.6`. Its candidate workflow, archive
+The next successor Host candidate is `0.1.7`. Its candidate workflow, archive
 verifier, publisher and effect identities bind that version and
-`telemetry-host/v0.1.6` together. Its release journal uses the unused
-`fsgg/v2/journal/release/utel-host-rel-05` ref. The default publisher dispatch
+`telemetry-host/v0.1.7` together. Its release journal uses the unused
+`fsgg/v2/journal/release/utel-host-rel-06` ref. The 0.1.6 release journal
+remains at `fsgg/v2/journal/release/utel-host-rel-05`. The default publisher dispatch
 remains a no-effect preflight. A candidate run and protected publication must
 qualify the exact merged source before Main updates the local successor Host.
-The installed successor Host remains healthy at 0.1.3/schema 10 until a
+The installed successor Host remains healthy at 0.1.6/schema 10 until a
 separately qualified same-schema update. The historical old-Host migration is separate.
 
 The historical `release-telemetry-host.yml` publisher is sealed under GS2-08.9.

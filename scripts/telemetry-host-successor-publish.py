@@ -19,7 +19,7 @@ from telemetry_host_successor_execution import effects
 from telemetry_host_successor_provider import HostProvider
 
 REPOSITORY = "FS-GG/.github"
-REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-05"
+REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-06"
 
 
 def require(ok: bool, detail: str) -> None:
