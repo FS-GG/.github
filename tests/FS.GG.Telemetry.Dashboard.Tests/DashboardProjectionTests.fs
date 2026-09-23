@@ -139,6 +139,18 @@ module DashboardProjectionTests =
                     row
                         """{"item_id":"item-a","name":"Run tests","classification":"useful-validation","started_at":"2026-09-10T08:03:00Z","completed_at":"2026-09-10T08:04:00Z","rationale":"PRIVATE-RATIONALE"}"""
                 |]
+        value["admissions"] <-
+            nodes [| row """{"item_id":"item-a","invocation_id":"PRIVATE-INVOCATION"}""" |]
+        value["times"] <-
+            nodes
+                [|
+                    row """{"item_id":"item-a","invocation_id":"PRIVATE-INVOCATION","event":"start","occurred_at":"2026-09-10T08:00:00Z","occurred_clock_provenance":"host-wall"}"""
+                    row """{"item_id":"item-a","invocation_id":"PRIVATE-INVOCATION","event":"terminal","occurred_at":"2026-09-10T08:02:00Z","occurred_clock_provenance":"host-wall"}"""
+                |]
+        value["usage"] <-
+            nodes [| row """{"item_id":"item-a","invocation_id":"PRIVATE-INVOCATION","accounting_scope":"one","total":6}""" |]
+        value["lineage"] <-
+            nodes [| row """{"item_id":"item-a","invocation_id":"PRIVATE-INVOCATION","relation":"root"}""" |]
         let bytes = DashboardProjection.project "workspace-a" (envelope value) |> unwrap
         let output = Encoding.UTF8.GetString bytes
         Assert.DoesNotContain("PRIVATE-", output)
@@ -146,10 +158,14 @@ module DashboardProjectionTests =
         let steps = document.RootElement.GetProperty("items").[0].GetProperty("steps")
         Assert.Equal(1, steps.GetProperty("activityCount").GetInt32())
         Assert.Equal(1, steps.GetProperty("ciStepCount").GetInt32())
-        Assert.Equal(42L, steps.GetProperty("rows").[0].GetProperty("tokens").GetInt64())
-        Assert.Equal("direct-attribution-partial", steps.GetProperty("rows").[0].GetProperty("tokenBasis").GetString())
-        Assert.Equal("Run tests", steps.GetProperty("rows").[1].GetProperty("label").GetString())
-        Assert.Equal(JsonValueKind.Null, steps.GetProperty("rows").[1].GetProperty("tokens").ValueKind)
+        Assert.Equal(1, steps.GetProperty("runtimeCount").GetInt32())
+        Assert.Equal(6L, steps.GetProperty("rows").[0].GetProperty("tokens").GetInt64())
+        Assert.Equal("observed-native-partial", steps.GetProperty("rows").[0].GetProperty("tokenBasis").GetString())
+        Assert.Equal("root", steps.GetProperty("rows").[0].GetProperty("classification").GetString())
+        Assert.Equal(42L, steps.GetProperty("rows").[1].GetProperty("tokens").GetInt64())
+        Assert.Equal("direct-attribution-partial", steps.GetProperty("rows").[1].GetProperty("tokenBasis").GetString())
+        Assert.Equal("Run tests", steps.GetProperty("rows").[2].GetProperty("label").GetString())
+        Assert.Equal(JsonValueKind.Null, steps.GetProperty("rows").[2].GetProperty("tokens").ValueKind)
 
     [<Fact>]
     let ``real Store canonical snapshot projects without shape translation`` () =

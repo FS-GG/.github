@@ -397,7 +397,7 @@ module BrowserTests =
                         )
                     payload["items"].AsArray().[1]["steps"] <-
                         JsonNode.Parse(
-                            """{"schema":"fsgg.telemetry.private-item-steps/1","limitPerKind":64,"activityCount":1,"ciStepCount":0,"truncated":false,"rows":[{"kind":"activity","label":"validation","classification":"validation","clock":"host-wall","startedAt":"2026-09-10T08:00:00Z","endedAt":"2026-09-10T08:02:00Z","tokens":42,"tokenBasis":"direct-attribution-partial"}]}"""
+                            """{"schema":"fsgg.telemetry.private-item-steps/1","limitPerKind":64,"runtimeCount":0,"activityCount":1,"ciStepCount":0,"truncated":false,"rows":[{"kind":"activity","label":"validation","classification":"validation","clock":"host-wall","startedAt":"2026-09-10T08:00:00Z","endedAt":"2026-09-10T08:02:00Z","tokens":42,"tokenBasis":"direct-attribution-partial"}]}"""
                         )
                     Ok(
                         Encoding.UTF8.GetBytes(payload.ToJsonString())

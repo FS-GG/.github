@@ -36,7 +36,7 @@
       if(duration!==null&&first!==null){const bar=document.createElement("span");bar.className="step-bar";bar.style.left=`${Math.min(100,Math.max(0,100*(start-first)/span))}%`;bar.style.width=`${Math.max(1,Math.min(100,100*(end-start)/span))}%`;track.append(bar);}
       else track.append(element("span","Time unknown","step-no-time"));
       item.append(track);
-      const tokenText=row.tokenBasis==="not-applicable"?"tokens n/a":row.tokens===null?"tokens unknown":`${count(row.tokens)} directly attributed tokens (partial)`;
+      const tokenText=row.tokenBasis==="not-applicable"?"tokens n/a":row.tokens===null?"tokens unknown":row.tokenBasis==="observed-native-partial"?`${count(row.tokens)} observed native tokens (coverage unproven)`:`${count(row.tokens)} directly attributed tokens (partial)`;
       item.append(element("span",`${row.classification} · ${duration===null?"duration unknown":`${duration}s`} · ${tokenText}`,"step-meta"));
       section.append(item);
     });
@@ -44,15 +44,17 @@
   };
   const stepDetails = (item) => {
     const details=document.createElement("details");details.className="item-steps";
-    const steps=item.steps; const activity=steps.rows.filter((row)=>row.kind==="activity"),ci=steps.rows.filter((row)=>row.kind==="ci");
-    details.append(element("summary",`Observed steps · ${steps.activityCount} activities · ${steps.ciStepCount} CI steps`));
+    const steps=item.steps; const activity=steps.rows.filter((row)=>row.kind==="activity"),ci=steps.rows.filter((row)=>row.kind==="ci"),runtime=steps.rows.filter((row)=>row.kind==="runtime");
+    details.append(element("summary",`Observed steps · ${steps.runtimeCount} runtime invocations · ${steps.activityCount} activities · ${steps.ciStepCount} CI steps`));
     if(activity.length)details.append(element("p",`Observed activity classes: ${[...new Set(activity.map((row)=>row.classification))].join(", ")}. This list is partial if spans were not recorded.`,"step-note"));
+    const runtimeClocks=[...new Set(runtime.map((row)=>row.clock))];
+    runtimeClocks.forEach((clock)=>details.append(stepGroup(runtime.filter((row)=>row.clock===clock),`Runtime invocations · ${clock} clock`)));
     const activityClocks=[...new Set(activity.map((row)=>row.clock))];
     activityClocks.forEach((clock)=>details.append(stepGroup(activity.filter((row)=>row.clock===clock),`Activity spans · ${clock} clock`)));
     if(ci.length)details.append(stepGroup(ci,"CI steps"));
-    if(!steps.rows.length)details.append(element("p","No activity spans or CI steps were recorded for this item. Step timing, classification and token attribution are unknown.","step-note"));
-    if(steps.truncated)details.append(element("p",`Step display is limited to ${steps.limitPerKind} activity spans and ${steps.limitPerKind} CI steps per item. Counts include omitted rows.`,"step-note"));
-    details.append(element("p","Bars share a time scale within each section. Start order does not establish dependencies. Overlapping spans are not additive. Activity tokens include only direct attributions and may omit other usage.","step-note"));
+    if(!steps.rows.length)details.append(element("p","No runtime invocations, activity spans or CI steps were recorded for this item. Step timing, classification and token attribution are unknown.","step-note"));
+    if(steps.truncated)details.append(element("p",`Step display is limited to ${steps.limitPerKind} rows of each kind per item. Counts include omitted rows.`,"step-note"));
+    details.append(element("p","Bars share a time scale within each section. Start order does not establish dependencies. Overlapping spans are not additive. Runtime relation (root, child, follow-up) is not work classification. Activity tokens include only direct attributions; runtime native token coverage may be incomplete.","step-note"));
     return details;
   };
   const local = document.querySelector('meta[name="fsgg-dashboard-mode"]')?.content === "local";

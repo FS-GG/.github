@@ -105,15 +105,57 @@ module DashboardProjection =
             && v.Length <= 120
             && v |> Seq.forall (fun c -> not (Char.IsControl c)))
 
-    let private itemSteps (perKindLimit: int) item activities attributions ciSteps =
+    let private itemSteps (perKindLimit: int) item activities attributions ciSteps admissions times usage lineage =
         let activityRows = activities |> Array.filter (fun row -> text "item_id" row = Some item)
         let ciRows = ciSteps |> Array.filter (fun row -> text "item_id" row = Some item)
+        let runtimeRows = admissions |> Array.filter (fun row -> text "item_id" row = Some item)
         let result = JsonObject()
         result["schema"] <- "fsgg.telemetry.private-item-steps/1"
         result["limitPerKind"] <- JsonValue.Create perKindLimit
         result["activityCount"] <- activityRows.Length
         result["ciStepCount"] <- ciRows.Length
+        result["runtimeCount"] <- runtimeRows.Length
         let steps = JsonArray()
+
+        for index, row in runtimeRows |> Array.truncate perKindLimit |> Array.indexed do
+            let invocation = text "invocation_id" row
+            let events =
+                times
+                |> Array.filter (fun event ->
+                    text "item_id" event = Some item && text "invocation_id" event = invocation)
+            let latest eventName = events |> Array.tryFind (fun event -> text "event" event = Some eventName)
+            let start = latest "start" |> Option.bind (text "occurred_at") |> safeTime
+            let finish = latest "terminal" |> Option.bind (text "occurred_at") |> safeTime
+            let startClock = latest "start" |> Option.bind (text "occurred_clock_provenance")
+            let finishClock = latest "terminal" |> Option.bind (text "occurred_clock_provenance")
+            let sameClock = startClock.IsSome && startClock = finishClock
+            let invocationUsage =
+                usage
+                |> Array.filter (fun entry ->
+                    text "item_id" entry = Some item && text "invocation_id" entry = invocation)
+            let scopes = invocationUsage |> Array.choose (text "accounting_scope") |> Array.distinct
+            let totals = invocationUsage |> Array.choose (number "total")
+            let observedTokens =
+                if totals.Length = 0 || totals.Length <> invocationUsage.Length || scopes.Length <> 1 then None
+                else
+                    let total = totals |> Array.sumBy bigint
+                    if total > bigint Int64.MaxValue then None else Some(int64 total)
+            let relation =
+                lineage
+                |> Array.tryFind (fun entry ->
+                    text "item_id" entry = Some item && text "invocation_id" entry = invocation)
+                |> Option.bind (text "relation")
+                |> safeToken "unclassified"
+            let node = JsonObject()
+            node["kind"] <- "runtime"
+            node["label"] <- $"Runtime invocation {index + 1}"
+            node["classification"] <- relation
+            node["clock"] <- if sameClock then safeToken "unknown" startClock else "unknown"
+            node["startedAt"] <- if sameClock then start |> Option.map JsonValue.Create |> Option.toObj else null
+            node["endedAt"] <- if sameClock then finish |> Option.map JsonValue.Create |> Option.toObj else null
+            node["tokens"] <- observedTokens |> Option.map JsonValue.Create |> Option.toObj
+            node["tokenBasis"] <- if observedTokens.IsNone then "unknown" else "observed-native-partial"
+            steps.Add node
 
         for row in activityRows |> Array.truncate perKindLimit do
             let category = safeToken "unclassified" (text "category" row)
@@ -158,7 +200,10 @@ module DashboardProjection =
             steps.Add node
 
         result["rows"] <- steps
-        result["truncated"] <- activityRows.Length > perKindLimit || ciRows.Length > perKindLimit
+        result["truncated"] <-
+            activityRows.Length > perKindLimit
+            || ciRows.Length > perKindLimit
+            || runtimeRows.Length > perKindLimit
         result
 
     let private array name root =
@@ -206,6 +251,9 @@ module DashboardProjection =
         activities
         attributions
         ciSteps
+        admissions
+        usageRows
+        lineage
         perKindLimit
         item
         =
@@ -441,7 +489,7 @@ module DashboardProjection =
 
                     node["coverage"] <- coverage
                     node["clockProvenance"] <- JsonArray(clocks |> Array.map (fun v -> JsonValue.Create(v) :> JsonNode))
-                    node["steps"] <- itemSteps perKindLimit item activities attributions ciSteps
+                    node["steps"] <- itemSteps perKindLimit item activities attributions ciSteps admissions times usageRows lineage
                     Ok(node :> JsonNode)
             | _ -> Error InvalidSnapshot
 
@@ -685,7 +733,10 @@ module DashboardProjection =
                                                                     values[9]
                                                                     (array "activityUsageAttributions" snapshot |> Option.get)
                                                                     (array "ciSteps" snapshot |> Option.get)
-                                                                    (min 64 (max 1 (256 / max 1 items.Length)))
+                                                                    (array "admissions" snapshot |> Option.get)
+                                                                    (array "usage" snapshot |> Option.get)
+                                                                    (array "lineage" snapshot |> Option.get)
+                                                                    (min 64 (max 1 (128 / max 1 items.Length)))
                                                             )
 
                                                         match
