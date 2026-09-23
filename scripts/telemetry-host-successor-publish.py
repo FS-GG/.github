@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish the exact Host 0.1.6 candidate through fresh admitted effects."""
+"""Publish the exact Host 0.1.7 candidate through fresh admitted effects."""
 
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def main() -> int:
         content_id, ordered = effects(manifest)
         admission = HostAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main")
         provider = HostProvider(api, manifest_path, github_token, nuget_key)
-        intent = {"contentId": content_id, "sourceSha": candidate_source, "version": "0.1.6",
+        intent = {"contentId": content_id, "sourceSha": candidate_source, "version": "0.1.7",
                   "candidateArchiveSha256": args.candidate_archive_sha256, "operator": operator}
         ledger_api = GitHubAPI(ledger_token)
         journal = ProtectedReleaseJournal(ledger_api, REF)
