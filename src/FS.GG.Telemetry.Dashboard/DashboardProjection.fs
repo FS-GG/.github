@@ -98,6 +98,69 @@ module DashboardProjection =
             | _ -> None
         | None -> None
 
+    let private safeLabel (value: string option) =
+        value
+        |> Option.filter (fun v ->
+            not (String.IsNullOrWhiteSpace v)
+            && v.Length <= 120
+            && v |> Seq.forall (fun c -> not (Char.IsControl c)))
+
+    let private itemSteps (perKindLimit: int) item activities attributions ciSteps =
+        let activityRows = activities |> Array.filter (fun row -> text "item_id" row = Some item)
+        let ciRows = ciSteps |> Array.filter (fun row -> text "item_id" row = Some item)
+        let result = JsonObject()
+        result["schema"] <- "fsgg.telemetry.private-item-steps/1"
+        result["limitPerKind"] <- JsonValue.Create perKindLimit
+        result["activityCount"] <- activityRows.Length
+        result["ciStepCount"] <- ciRows.Length
+        let steps = JsonArray()
+
+        for row in activityRows |> Array.truncate perKindLimit do
+            let category = safeToken "unclassified" (text "category" row)
+            let start = text "started_at" row |> safeTime
+            let finish = text "ended_at" row |> safeTime
+            let matching =
+                match text "activity_id" row with
+                | None -> [||]
+                | Some activityId ->
+                    attributions
+                    |> Array.filter (fun attribution ->
+                        text "item_id" attribution = Some item
+                        && text "classification" attribution = Some "direct"
+                        && text "activity_id" attribution = Some activityId)
+            let attributedTotals = matching |> Array.choose (number "total")
+            let attributedTotal =
+                if matching.Length = 0 || attributedTotals.Length <> matching.Length then None
+                else
+                    let total = attributedTotals |> Array.sumBy bigint
+                    if total > bigint Int64.MaxValue then None else Some(int64 total)
+            let node = JsonObject()
+            node["kind"] <- "activity"
+            node["label"] <- category
+            node["classification"] <- category
+            node["clock"] <- safeToken "unknown" (text "clock_provenance" row)
+            node["startedAt"] <- start |> Option.map JsonValue.Create |> Option.toObj
+            node["endedAt"] <- finish |> Option.map JsonValue.Create |> Option.toObj
+            node["tokens"] <- attributedTotal |> Option.map JsonValue.Create |> Option.toObj
+            node["tokenBasis"] <- if attributedTotal.IsNone then "unknown" else "direct-attribution-partial"
+            steps.Add node
+
+        for row in ciRows |> Array.truncate perKindLimit do
+            let node = JsonObject()
+            node["kind"] <- "ci"
+            node["label"] <- safeLabel (text "name" row) |> Option.defaultValue "CI step"
+            node["classification"] <- safeToken "unclassified" (text "classification" row)
+            node["clock"] <- "github-actions"
+            node["startedAt"] <- text "started_at" row |> safeTime |> Option.map JsonValue.Create |> Option.toObj
+            node["endedAt"] <- text "completed_at" row |> safeTime |> Option.map JsonValue.Create |> Option.toObj
+            node["tokens"] <- null
+            node["tokenBasis"] <- "not-applicable"
+            steps.Add node
+
+        result["rows"] <- steps
+        result["truncated"] <- activityRows.Length > perKindLimit || ciRows.Length > perKindLimit
+        result
+
     let private array name root =
         match property name root with
         | Some value when value.ValueKind = JsonValueKind.Array -> Some(value.EnumerateArray() |> Seq.toArray)
@@ -141,6 +204,9 @@ module DashboardProjection =
         populationCoverage
         times
         activities
+        attributions
+        ciSteps
+        perKindLimit
         item
         =
         match summaries |> Array.tryFind (fun summary -> text "item" summary = Some item) with
@@ -375,6 +441,7 @@ module DashboardProjection =
 
                     node["coverage"] <- coverage
                     node["clockProvenance"] <- JsonArray(clocks |> Array.map (fun v -> JsonValue.Create(v) :> JsonNode))
+                    node["steps"] <- itemSteps perKindLimit item activities attributions ciSteps
                     Ok(node :> JsonNode)
             | _ -> Error InvalidSnapshot
 
@@ -616,6 +683,9 @@ module DashboardProjection =
                                                                     values[7]
                                                                     values[8]
                                                                     values[9]
+                                                                    (array "activityUsageAttributions" snapshot |> Option.get)
+                                                                    (array "ciSteps" snapshot |> Option.get)
+                                                                    (min 64 (max 1 (256 / max 1 items.Length)))
                                                             )
 
                                                         match

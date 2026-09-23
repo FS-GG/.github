@@ -119,6 +119,39 @@ module DashboardProjectionTests =
         | Error error -> failwithf "%A" error
 
     [<Fact>]
+    let ``private item steps expose bounded timing and direct tokens without evidence text`` () =
+        let value = snapshot "item-a"
+        value["activities"] <-
+            nodes
+                [|
+                    row
+                        """{"item_id":"item-a","activity_id":"activity-1","category":"implementation","started_at":"2026-09-10T08:00:00Z","ended_at":"2026-09-10T08:02:00Z","evidence":"PRIVATE-EVIDENCE","summary":"PRIVATE-SUMMARY"}"""
+                |]
+        value["activityUsageAttributions"] <-
+            nodes
+                [|
+                    row
+                        """{"item_id":"item-a","activity_id":"activity-1","classification":"direct","total":42,"usage_identity":"PRIVATE-USAGE"}"""
+                |]
+        value["ciSteps"] <-
+            nodes
+                [|
+                    row
+                        """{"item_id":"item-a","name":"Run tests","classification":"useful-validation","started_at":"2026-09-10T08:03:00Z","completed_at":"2026-09-10T08:04:00Z","rationale":"PRIVATE-RATIONALE"}"""
+                |]
+        let bytes = DashboardProjection.project "workspace-a" (envelope value) |> unwrap
+        let output = Encoding.UTF8.GetString bytes
+        Assert.DoesNotContain("PRIVATE-", output)
+        use document = JsonDocument.Parse bytes
+        let steps = document.RootElement.GetProperty("items").[0].GetProperty("steps")
+        Assert.Equal(1, steps.GetProperty("activityCount").GetInt32())
+        Assert.Equal(1, steps.GetProperty("ciStepCount").GetInt32())
+        Assert.Equal(42L, steps.GetProperty("rows").[0].GetProperty("tokens").GetInt64())
+        Assert.Equal("direct-attribution-partial", steps.GetProperty("rows").[0].GetProperty("tokenBasis").GetString())
+        Assert.Equal("Run tests", steps.GetProperty("rows").[1].GetProperty("label").GetString())
+        Assert.Equal(JsonValueKind.Null, steps.GetProperty("rows").[1].GetProperty("tokens").ValueKind)
+
+    [<Fact>]
     let ``real Store canonical snapshot projects without shape translation`` () =
         let root =
             Path.Combine(Path.GetTempPath(), "fsgg-dashboard-real-" + Guid.NewGuid().ToString("N"))
