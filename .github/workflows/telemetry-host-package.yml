@@ -105,6 +105,7 @@ jobs:
           cd ../.. || exit 2
           dotnet test tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj -c Release --no-restore
           dotnet test tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj -c Release --no-restore
+          (cd tests/FS.GG.Telemetry.Dashboard.Tests && npm ci --ignore-scripts && npm run test:browser -- --reporter=line)
           dotnet test tests/FS.GG.Telemetry.Browser.Tests/FS.GG.Telemetry.Browser.Tests.fsproj -c Release --no-restore
       - name: Pack twice from independent clean source roots
         run: |
