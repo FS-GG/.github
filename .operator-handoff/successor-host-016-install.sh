@@ -4,6 +4,8 @@
 set -euo pipefail
 
 [[ $EUID == 0 ]] || { echo 'refused: root authentication required' >&2; exit 1; }
+# The service account cannot traverse Main's private checkout directory.
+cd /
 service_user=fsgg-telemetry-podman
 service_home=/var/lib/fs-gg/telemetry-podman
 config=$service_home/.config/fs-gg/telemetry-host-podman/update.json
