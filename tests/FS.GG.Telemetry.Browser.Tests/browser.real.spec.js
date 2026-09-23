@@ -30,6 +30,9 @@ test("real Host browser journey uses scoped secure session",async({page,context}
     const zero=page.getByRole("listitem").filter({hasText:"zero-item"});
     await expect(unknown.locator(".metric")).toHaveText("Native tokens unavailable · unknown/unknown terminal");
     await expect(zero.locator(".metric")).toHaveText("0 native tokens · 0/0 terminal");
+    await zero.locator(".item-steps summary").click();
+    await expect(zero.locator(".step-bar")).toHaveCount(1);
+    await expect(zero.locator(".step-meta")).toContainText("120s · 42 directly attributed tokens (partial)");
   }
   const cookies=await context.cookies(baseURL);
   const session=cookies.find(cookie=>cookie.name==="__Host-fsgg_session");

@@ -9,6 +9,7 @@ open System.Diagnostics
 open System.Security.Cryptography
 open System.Security.Cryptography.X509Certificates
 open System.Text
+open System.Text.Json.Nodes
 open System.Threading
 open System.Threading.Tasks
 open FS.GG.Telemetry.Host
@@ -390,10 +391,16 @@ module BrowserTests =
                 elif item = Some "throw" then
                     failwith "sensitive /path exception"
                 else
-                    Ok(
-                        Encoding.UTF8.GetBytes(
+                    let payload =
+                        JsonNode.Parse(
                             $"{{\"schema\":\"fsgg.telemetry.private-dashboard/1\",\"workspaceId\":\"{workspace}\",\"observedAt\":\"2026-09-10T00:00:00Z\",\"revision\":\"r1\",\"operational\":{{\"pendingBatches\":0,\"appliedReceipts\":0,\"rejectedReceipts\":0,\"consistency\":\"current\"}},\"items\":[{{\"id\":\"unknown-item\",\"state\":{{\"outcome\":\"unknown\",\"population\":\"unknown\"}},\"usage\":{{\"total\":null,\"nativeUsage\":\"missing\"}},\"runtime\":{{\"terminal\":null,\"admitted\":null}},\"coverage\":{{\"populationCoverage\":\"unknown\",\"ciInventory\":\"unknown\"}}}},{{\"id\":\"zero-item\",\"state\":{{\"outcome\":\"ready\",\"population\":\"complete\"}},\"usage\":{{\"total\":0,\"nativeUsage\":\"observed\"}},\"runtime\":{{\"terminal\":0,\"admitted\":0}},\"coverage\":{{\"recordValidity\":\"complete\",\"joinIntegrity\":\"complete\",\"populationCoverage\":\"complete\",\"ciInventory\":\"complete\"}}}}]}}"
                         )
+                    payload["items"].AsArray().[1]["steps"] <-
+                        JsonNode.Parse(
+                            """{"schema":"fsgg.telemetry.private-item-steps/1","limitPerKind":64,"activityCount":1,"ciStepCount":0,"truncated":false,"rows":[{"kind":"activity","label":"validation","classification":"validation","clock":"host-wall","startedAt":"2026-09-10T08:00:00Z","endedAt":"2026-09-10T08:02:00Z","tokens":42,"tokenBasis":"direct-attribution-partial"}]}"""
+                        )
+                    Ok(
+                        Encoding.UTF8.GetBytes(payload.ToJsonString())
                     )
 
             BrowserEndpoints.map app (options origin 8 32 1) security provider
