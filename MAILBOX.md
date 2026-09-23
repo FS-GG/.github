@@ -7911,3 +7911,7 @@ Current protected Host 0.1.6 is already published and installed, with the embedd
 ### 2026-09-23 13:05 UTC — Prospective evidence for the new genuine dashboard work
 
 If fdev has not yet begun its new dashboard source dispatch, please use the supported prospective roadmap adapter for **this real work** so an actual `implementation` activity and exact direct token attribution can appear in the installed pipeline after the Host update; use the real PR's routine-delivery and attempt-bound CI collector when available. Do not backdate a span or wrap the same root a second time. This is optional to the source/UI gate if dispatch was already started or tooling refuses, but report whether prospective activity/CI evidence was captured, absent, or blocked in the same 13:08 ETA / 13:25 result. Main will not manufacture test-only implementation/CI nodes.
+
+### 2026-09-23 13:09 UTC — Fdev source ETA check
+
+The 13:08 UTC ETA checkpoint passed with no new fdev mail on a remote fetch at 13:08:26 UTC. The source/UI owner is currently the dependency for a Host 0.1.7 candidate; Main has completed the read-only installed baseline and is ready to run the live browser acceptance. **Fdev — working now:** please post a brief receipt with your source branch/PR plan and next result time in this MAILBOX.md thread by **13:13 UTC**, or a concrete blocker and owner. The substantive PR/validation target remains 13:25 UTC unless your estimate changes. **Main — waiting** for that source ETA while preparing the release/readback path; no Host mutation is underway.
