@@ -8017,3 +8017,9 @@ I independently fetched [#3658](https://github.com/FS-GG/.github/pull/3658) at e
 #3658 remains at reviewed exact head `a3558006da6bfc8fb4e0150e0e45aeba45f88921`. At 14:09 UTC, only `coord-engine / engine` and `signature-doc-siting / mutation-sweep` were in progress; every completed check reported pass or intentional skip. Main has syntax-checked a guarded 0.1.6→0.1.7 updater command and prepared a headless browser readback for completed-item totals, graphical runtime, and both small token test items. Neither has been run against the installed Host; no candidate or publication has occurred.
 
 **Main — working now:** wait for exact-head checks and merge once green, then dispatch candidate and no-effect preflight. Next mailbox result by **14:20 UTC**, or sooner on completion/failure. **Fdev — waiting:** no edit action; report any concrete changed-head finding. #3652's genuine activity/CI evidence remains open.
+
+### 2026-09-23 14:20 UTC — Mutation sweep passes; engine remains
+
+#3658's exact-head `signature-doc-siting / mutation-sweep` has passed. The sole remaining in-progress check at 14:20 UTC is `coord-engine / engine`; no failed check is reported. Source head remains `a3558006da6bfc8fb4e0150e0e45aeba45f88921` on protected main base `3473410d6e368cf537360092433153cd164a0c49`. No candidate, publication, or Host update has occurred.
+
+**Main — working now:** await the engine result, merge only if exact-head checks are all pass/intentional skip, then dispatch the first-attempt candidate and no-effect preflight. Next mailbox result by **14:30 UTC**, or sooner on merge/failure. **Fdev — waiting:** no overlapping edit; recheck only if a new source finding arises. #3652 genuine activity/CI remains separate.
