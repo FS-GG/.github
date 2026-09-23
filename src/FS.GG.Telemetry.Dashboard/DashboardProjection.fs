@@ -35,6 +35,9 @@ module DashboardProjection =
     let private tokenPattern =
         Regex(@"\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z", RegexOptions.CultureInvariant)
 
+    let private ciClassifications =
+        set [ "useful-validation"; "admin"; "necessary-setup"; "mixed"; "unclassified" ]
+
     let private validItem (value: string) =
         not (String.IsNullOrWhiteSpace value)
         && value.Length <= 256
@@ -98,6 +101,132 @@ module DashboardProjection =
             | _ -> None
         | None -> None
 
+    let private itemSteps (perKindLimit: int) item activities attributions ciSteps admissions times usage lineage =
+        let activityRows = activities |> Array.filter (fun row -> text "item_id" row = Some item)
+        let ciRows = ciSteps |> Array.filter (fun row -> text "item_id" row = Some item)
+        let runtimeRows = admissions |> Array.filter (fun row -> text "item_id" row = Some item)
+        let result = JsonObject()
+        result["schema"] <- "fsgg.telemetry.private-item-steps/1"
+        result["limitPerKind"] <- JsonValue.Create perKindLimit
+        result["activityCount"] <- activityRows.Length
+        result["ciStepCount"] <- ciRows.Length
+        result["runtimeCount"] <- runtimeRows.Length
+        let steps = JsonArray()
+
+        for index, row in runtimeRows |> Array.truncate perKindLimit |> Array.indexed do
+            let invocation = text "invocation_id" row
+            let events =
+                times
+                |> Array.filter (fun event ->
+                    text "item_id" event = Some item && text "invocation_id" event = invocation)
+            let latest eventName = events |> Array.tryFind (fun event -> text "event" event = Some eventName)
+            let start = latest "start" |> Option.bind (text "occurred_at") |> safeTime
+            let finish = latest "terminal" |> Option.bind (text "occurred_at") |> safeTime
+            let startClock = latest "start" |> Option.bind (text "occurred_clock_provenance")
+            let finishClock = latest "terminal" |> Option.bind (text "occurred_clock_provenance")
+            let sameClock = startClock.IsSome && startClock = finishClock
+            let invocationUsage =
+                usage
+                |> Array.filter (fun entry ->
+                    text "item_id" entry = Some item && text "invocation_id" entry = invocation)
+            let bases =
+                invocationUsage
+                |> Array.choose (fun entry ->
+                    text "accounting_scope" entry
+                    |> Option.map (fun scope -> text "provider" entry, scope))
+                |> Array.distinct
+            let totals = invocationUsage |> Array.choose (number "total")
+            let observedTokens =
+                if totals.Length = 0 || totals.Length <> invocationUsage.Length
+                   || bases.Length <> 1
+                   || (invocationUsage |> Array.choose (text "accounting_scope")).Length <> invocationUsage.Length then None
+                else
+                    let total = totals |> Array.sumBy bigint
+                    if total > bigint Int64.MaxValue then None else Some(int64 total)
+            let relation =
+                lineage
+                |> Array.tryFind (fun entry ->
+                    text "item_id" entry = Some item && text "invocation_id" entry = invocation)
+                |> Option.bind (text "relation")
+                |> safeToken "unclassified"
+            let node = JsonObject()
+            node["kind"] <- "runtime"
+            node["label"] <- $"Runtime invocation {index + 1}"
+            node["classification"] <- relation
+            node["clock"] <- if sameClock then safeToken "unknown" startClock else "unknown"
+            node["startedAt"] <- if sameClock then start |> Option.map JsonValue.Create |> Option.toObj else null
+            node["endedAt"] <- if sameClock then finish |> Option.map JsonValue.Create |> Option.toObj else null
+            node["tokens"] <- observedTokens |> Option.map JsonValue.Create |> Option.toObj
+            node["tokenBasis"] <- if observedTokens.IsNone then "unknown" else "observed-native-partial"
+            steps.Add node
+
+        for row in activityRows |> Array.truncate perKindLimit do
+            let category = safeToken "unclassified" (text "category" row)
+            let start = text "started_at" row |> safeTime
+            let finish = text "ended_at" row |> safeTime
+            let matching =
+                match text "activity_id" row with
+                | None -> [||]
+                | Some activityId ->
+                    attributions
+                    |> Array.filter (fun attribution ->
+                        text "item_id" attribution = Some item
+                        && text "classification" attribution = Some "direct"
+                        && text "activity_id" attribution = Some activityId)
+            let attributed =
+                matching
+                |> Array.choose (fun attribution ->
+                    match text "usage_identity" attribution with
+                    | None -> None
+                    | Some identity ->
+                        usage
+                        |> Array.tryFind (fun entry ->
+                            text "item_id" entry = Some item
+                            && text "identity" entry = Some identity)
+                        |> Option.bind (fun entry ->
+                            match number "total" attribution, number "total" entry, text "accounting_scope" entry with
+                            | Some attributedTotal, Some nativeTotal, Some scope when attributedTotal = nativeTotal ->
+                                Some(attributedTotal, text "provider" entry, scope)
+                            | _ -> None))
+            let attributedTotal =
+                if matching.Length = 0 || attributed.Length <> matching.Length
+                   || (attributed |> Array.map (fun (_, provider, scope) -> provider, scope) |> Array.distinct).Length <> 1 then None
+                else
+                    let total = attributed |> Array.sumBy (fun (value, _, _) -> bigint value)
+                    if total > bigint Int64.MaxValue then None else Some(int64 total)
+            let node = JsonObject()
+            node["kind"] <- "activity"
+            node["label"] <- category
+            node["classification"] <- category
+            node["clock"] <- safeToken "unknown" (text "clock_provenance" row)
+            node["startedAt"] <- start |> Option.map JsonValue.Create |> Option.toObj
+            node["endedAt"] <- finish |> Option.map JsonValue.Create |> Option.toObj
+            node["tokens"] <- attributedTotal |> Option.map JsonValue.Create |> Option.toObj
+            node["tokenBasis"] <- if attributedTotal.IsNone then "unknown" else "direct-attribution-partial"
+            steps.Add node
+
+        for index, row in ciRows |> Array.truncate perKindLimit |> Array.indexed do
+            let node = JsonObject()
+            node["kind"] <- "ci"
+            node["label"] <- $"CI step {index + 1}"
+            node["classification"] <-
+                match text "classification" row with
+                | Some value when ciClassifications.Contains value -> value
+                | _ -> "unclassified"
+            node["clock"] <- "github-actions"
+            node["startedAt"] <- text "started_at" row |> safeTime |> Option.map JsonValue.Create |> Option.toObj
+            node["endedAt"] <- text "completed_at" row |> safeTime |> Option.map JsonValue.Create |> Option.toObj
+            node["tokens"] <- null
+            node["tokenBasis"] <- "not-applicable"
+            steps.Add node
+
+        result["rows"] <- steps
+        result["truncated"] <-
+            activityRows.Length > perKindLimit
+            || ciRows.Length > perKindLimit
+            || runtimeRows.Length > perKindLimit
+        result
+
     let private array name root =
         match property name root with
         | Some value when value.ValueKind = JsonValueKind.Array -> Some(value.EnumerateArray() |> Seq.toArray)
@@ -141,6 +270,12 @@ module DashboardProjection =
         populationCoverage
         times
         activities
+        attributions
+        ciSteps
+        admissions
+        usageRows
+        lineage
+        perKindLimit
         item
         =
         match summaries |> Array.tryFind (fun summary -> text "item" summary = Some item) with
@@ -375,6 +510,7 @@ module DashboardProjection =
 
                     node["coverage"] <- coverage
                     node["clockProvenance"] <- JsonArray(clocks |> Array.map (fun v -> JsonValue.Create(v) :> JsonNode))
+                    node["steps"] <- itemSteps perKindLimit item activities attributions ciSteps admissions times usageRows lineage
                     Ok(node :> JsonNode)
             | _ -> Error InvalidSnapshot
 
@@ -616,6 +752,12 @@ module DashboardProjection =
                                                                     values[7]
                                                                     values[8]
                                                                     values[9]
+                                                                    (array "activityUsageAttributions" snapshot |> Option.get)
+                                                                    (array "ciSteps" snapshot |> Option.get)
+                                                                    (array "admissions" snapshot |> Option.get)
+                                                                    (array "usage" snapshot |> Option.get)
+                                                                    (array "lineage" snapshot |> Option.get)
+                                                                    (min 64 (max 1 (128 / max 1 items.Length)))
                                                             )
 
                                                         match

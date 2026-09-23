@@ -119,6 +119,82 @@ module DashboardProjectionTests =
         | Error error -> failwithf "%A" error
 
     [<Fact>]
+    let ``private item steps expose bounded timing and direct tokens without evidence text`` () =
+        let value = snapshot "item-a"
+        value["activities"] <-
+            nodes
+                [|
+                    row
+                        """{"item_id":"item-a","activity_id":"activity-1","category":"implementation","started_at":"2026-09-10T08:00:00Z","ended_at":"2026-09-10T08:02:00Z","evidence":"PRIVATE-EVIDENCE","summary":"PRIVATE-SUMMARY"}"""
+                |]
+        value["activityUsageAttributions"] <-
+            nodes
+                [|
+                    row
+                        """{"item_id":"item-a","activity_id":"activity-1","classification":"direct","total":6,"usage_identity":"PRIVATE-USAGE"}"""
+                |]
+        value["ciSteps"] <-
+            nodes
+                [|
+                    row
+                        """{"item_id":"item-a","name":"PRIVATE-CI-STEP-NAME","classification":"useful-validation","started_at":"2026-09-10T08:03:00Z","completed_at":"2026-09-10T08:04:00Z","rationale":"PRIVATE-RATIONALE"}"""
+                    row
+                        """{"item_id":"item-a","name":"PRIVATE-CI-OTHER-NAME","classification":"PRIVATE-CLASS","started_at":"2026-09-10T08:05:00Z","completed_at":"2026-09-10T08:06:00Z"}"""
+                |]
+        value["admissions"] <-
+            nodes [| row """{"item_id":"item-a","invocation_id":"PRIVATE-INVOCATION"}""" |]
+        value["times"] <-
+            nodes
+                [|
+                    row """{"item_id":"item-a","invocation_id":"PRIVATE-INVOCATION","event":"start","occurred_at":"2026-09-10T08:00:00Z","occurred_clock_provenance":"host-wall"}"""
+                    row """{"item_id":"item-a","invocation_id":"PRIVATE-INVOCATION","event":"terminal","occurred_at":"2026-09-10T08:02:00Z","occurred_clock_provenance":"host-wall"}"""
+                |]
+        value["usage"] <-
+            nodes [| row """{"identity":"PRIVATE-USAGE","item_id":"item-a","invocation_id":"PRIVATE-INVOCATION","accounting_scope":"one","total":6}""" |]
+        value["lineage"] <-
+            nodes [| row """{"item_id":"item-a","invocation_id":"PRIVATE-INVOCATION","relation":"root"}""" |]
+        let bytes = DashboardProjection.project "workspace-a" (envelope value) |> unwrap
+        let output = Encoding.UTF8.GetString bytes
+        Assert.DoesNotContain("PRIVATE-", output)
+        use document = JsonDocument.Parse bytes
+        let steps = document.RootElement.GetProperty("items").[0].GetProperty("steps")
+        Assert.Equal(1, steps.GetProperty("activityCount").GetInt32())
+        Assert.Equal(2, steps.GetProperty("ciStepCount").GetInt32())
+        Assert.Equal(1, steps.GetProperty("runtimeCount").GetInt32())
+        Assert.Equal(6L, steps.GetProperty("rows").[0].GetProperty("tokens").GetInt64())
+        Assert.Equal("observed-native-partial", steps.GetProperty("rows").[0].GetProperty("tokenBasis").GetString())
+        Assert.Equal("root", steps.GetProperty("rows").[0].GetProperty("classification").GetString())
+        Assert.Equal(6L, steps.GetProperty("rows").[1].GetProperty("tokens").GetInt64())
+        Assert.Equal("direct-attribution-partial", steps.GetProperty("rows").[1].GetProperty("tokenBasis").GetString())
+        Assert.Equal("CI step 1", steps.GetProperty("rows").[2].GetProperty("label").GetString())
+        Assert.Equal(JsonValueKind.Null, steps.GetProperty("rows").[2].GetProperty("tokens").ValueKind)
+        Assert.Equal("CI step 2", steps.GetProperty("rows").[3].GetProperty("label").GetString())
+        Assert.Equal("unclassified", steps.GetProperty("rows").[3].GetProperty("classification").GetString())
+
+    [<Fact>]
+    let ``activity tokens refuse mixed native accounting scopes`` () =
+        let value = snapshot "item-a"
+        value["activities"] <-
+            nodes [| row """{"item_id":"item-a","activity_id":"activity-1","category":"implementation","started_at":"2026-09-10T08:00:00Z","ended_at":"2026-09-10T08:02:00Z"}""" |]
+        value["activityUsageAttributions"] <-
+            nodes
+                [|
+                    row """{"item_id":"item-a","activity_id":"activity-1","classification":"direct","total":3,"usage_identity":"usage-one"}"""
+                    row """{"item_id":"item-a","activity_id":"activity-1","classification":"direct","total":4,"usage_identity":"usage-two"}"""
+                |]
+        value["usage"] <-
+            nodes
+                [|
+                    row """{"identity":"usage-one","item_id":"item-a","accounting_scope":"scope-one","total":3}"""
+                    row """{"identity":"usage-two","item_id":"item-a","accounting_scope":"scope-two","total":4}"""
+                |]
+        let bytes = DashboardProjection.project "workspace-a" (envelope value) |> unwrap
+        use document = JsonDocument.Parse bytes
+        let activity = document.RootElement.GetProperty("items").[0].GetProperty("steps").GetProperty("rows").[0]
+        Assert.Equal(JsonValueKind.Null, activity.GetProperty("tokens").ValueKind)
+        Assert.Equal("unknown", activity.GetProperty("tokenBasis").GetString())
+
+    [<Fact>]
     let ``real Store canonical snapshot projects without shape translation`` () =
         let root =
             Path.Combine(Path.GetTempPath(), "fsgg-dashboard-real-" + Guid.NewGuid().ToString("N"))
