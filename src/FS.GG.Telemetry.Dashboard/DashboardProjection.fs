@@ -133,10 +133,17 @@ module DashboardProjection =
                 usage
                 |> Array.filter (fun entry ->
                     text "item_id" entry = Some item && text "invocation_id" entry = invocation)
-            let scopes = invocationUsage |> Array.choose (text "accounting_scope") |> Array.distinct
+            let bases =
+                invocationUsage
+                |> Array.choose (fun entry ->
+                    text "accounting_scope" entry
+                    |> Option.map (fun scope -> text "provider" entry, scope))
+                |> Array.distinct
             let totals = invocationUsage |> Array.choose (number "total")
             let observedTokens =
-                if totals.Length = 0 || totals.Length <> invocationUsage.Length || scopes.Length <> 1 then None
+                if totals.Length = 0 || totals.Length <> invocationUsage.Length
+                   || bases.Length <> 1
+                   || (invocationUsage |> Array.choose (text "accounting_scope")).Length <> invocationUsage.Length then None
                 else
                     let total = totals |> Array.sumBy bigint
                     if total > bigint Int64.MaxValue then None else Some(int64 total)
@@ -183,13 +190,13 @@ module DashboardProjection =
                         |> Option.bind (fun entry ->
                             match number "total" attribution, number "total" entry, text "accounting_scope" entry with
                             | Some attributedTotal, Some nativeTotal, Some scope when attributedTotal = nativeTotal ->
-                                Some(attributedTotal, scope)
+                                Some(attributedTotal, text "provider" entry, scope)
                             | _ -> None))
             let attributedTotal =
                 if matching.Length = 0 || attributed.Length <> matching.Length
-                   || (attributed |> Array.map snd |> Array.distinct).Length <> 1 then None
+                   || (attributed |> Array.map (fun (_, provider, scope) -> provider, scope) |> Array.distinct).Length <> 1 then None
                 else
-                    let total = attributed |> Array.sumBy (fun (value, _) -> bigint value)
+                    let total = attributed |> Array.sumBy (fun (value, _, _) -> bigint value)
                     if total > bigint Int64.MaxValue then None else Some(int64 total)
             let node = JsonObject()
             node["kind"] <- "activity"
