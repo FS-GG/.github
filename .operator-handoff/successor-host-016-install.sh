@@ -62,11 +62,12 @@ if not (manifest.get('version') == '0.1.3'
 old_command = journal.get('operation', {}).get('command', {}).get('commandId')
 if not old_command or not pathlib.Path(config['releaseRoot'], 'update-state', 'commands', old_command + '.json').is_file():
     raise SystemExit('refused: prior failed command receipt missing')
-print(image, hashlib.sha256(journal_path.read_bytes()).hexdigest())
+print(image, hashlib.sha256(config_path.read_bytes()).hexdigest(),
+      hashlib.sha256(deployment_path.read_bytes()).hexdigest(),
+      hashlib.sha256(journal_path.read_bytes()).hexdigest())
 PY
 )
-expected_image=${precheck%% *}
-expected_journal_sha=${precheck#* }
+read -r expected_image expected_config_sha expected_deployment_sha expected_journal_sha <<< "$precheck"
 
 [[ $("${service_run[@]}" podman image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$expected_image") == 0.1.3 ]] || {
   echo 'refused: active image is not Host 0.1.3' >&2; exit 1;
@@ -98,10 +99,14 @@ for attempt in {1..60}; do
   sleep 1
 done
 "${service_run[@]}" "$operator" "$deployment" check >/dev/null
-"${service_run[@]}" python3 - "$config" "$deployment" "$expected_image" "$expected_journal_sha" <<'PY'
+"${service_run[@]}" python3 - "$config" "$deployment" "$expected_image" "$expected_config_sha" "$expected_deployment_sha" "$expected_journal_sha" <<'PY'
 import hashlib, json, os, pathlib, shlex, sys
 config_path, deployment_path = map(pathlib.Path, sys.argv[1:3])
-expected_image, expected_sha = sys.argv[3:]
+expected_image, expected_config_sha, expected_deployment_sha, expected_journal_sha = sys.argv[3:]
+if hashlib.sha256(config_path.read_bytes()).hexdigest() != expected_config_sha:
+    raise SystemExit('refused: complete update config changed after timer fence')
+if hashlib.sha256(deployment_path.read_bytes()).hexdigest() != expected_deployment_sha:
+    raise SystemExit('refused: complete deployment changed after timer fence')
 config = json.loads(config_path.read_text())
 if config.get('activeDeploymentEnv') != str(deployment_path) or config.get('retainedReceipt', {}).get('workspaceId') != 'successor-fsharp-dev':
     raise SystemExit('refused: selected successor config changed after timer fence')
@@ -117,7 +122,7 @@ root = pathlib.Path(config['releaseRoot'])
 source = root / 'update-state' / 'active.json'
 target = root / 'update-state' / 'prior-0.1.5-failed-rolled-back.json'
 raw = source.read_bytes()
-if hashlib.sha256(raw).hexdigest() != expected_sha:
+if hashlib.sha256(raw).hexdigest() != expected_journal_sha:
     raise SystemExit('refused: held journal changed after timer fence')
 # The updater replaces active.json. Preserve exact prior bytes and keep the
 # command receipt and cold backup; a repeat must match this snapshot.
@@ -130,6 +135,11 @@ else:
         output.write(raw)
         output.flush()
         os.fsync(output.fileno())
+directory = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY)
+try:
+    os.fsync(directory)
+finally:
+    os.close(directory)
 PY
 
 # A distinct command targets only 0.1.6; the failed 0.1.5 command is retained.
@@ -154,6 +164,24 @@ if not (new.get('phase') == 'settled' and new.get('toVersion') == '0.1.6'
 if not (manifest.get('supportedStoreSchemaMin') == 10 and manifest.get('supportedStoreSchemaMax') == 10):
     raise SystemExit('refused: new release schema differs')
 PY
+selected_image=$("${service_run[@]}" python3 - "$deployment" <<'PY'
+import pathlib, shlex, sys
+values = {}
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    parts = shlex.split(line, comments=True, posix=True)
+    if parts:
+        key, value = parts[0].split('=', 1)
+        values[key] = value
+image = values.get('TELEMETRY_IMAGE_ID', '')
+if not image.startswith('sha256:'):
+    raise SystemExit('refused: selected image identity is invalid')
+print(image)
+PY
+)
+[[ $("${service_run[@]}" podman image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$selected_image") == 0.1.6 ]] || {
+  echo 'refused: selected active deployment is not Host 0.1.6' >&2; exit 1;
+}
+"${service_run[@]}" "$operator" "$deployment" check >/dev/null
 "${service_run[@]}" systemctl --user enable --now fsgg-telemetry-host-update.timer
 [[ $("${service_run[@]}" systemctl --user is-active fsgg-telemetry-host-podman.service) == active ]]
 [[ $(curl --silent --show-error --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18444/private/dashboard/) == 200 ]]
