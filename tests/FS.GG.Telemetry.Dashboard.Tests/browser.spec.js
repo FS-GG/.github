@@ -38,7 +38,7 @@ test("item steps render real browser bars with honest token and missing-data lab
   observed.steps={runtimeCount:1,activityCount:1,ciStepCount:1,truncated:false,limitPerKind:20,rows:[
     {kind:"runtime",label:"Root invocation",classification:"root",clock:"host-wall",startedAt:"2026-09-10T08:00:00Z",endedAt:"2026-09-10T08:02:00Z",tokens:10,tokenBasis:"observed-native-partial"},
     {kind:"activity",label:"Implementation",classification:"implementation",clock:"host-wall",startedAt:"2026-09-10T08:00:30Z",endedAt:"2026-09-10T08:01:30Z",tokens:6,tokenBasis:"direct-attribution-partial"},
-    {kind:"ci",label:"CI step 1",classification:"useful-validation",clock:"github",startedAt:"2026-09-10T08:03:00Z",endedAt:"2026-09-10T08:04:00Z",tokens:null,tokenBasis:"not-applicable"}
+    {kind:"ci",label:"CI step 1",classification:"useful-validation",clock:"github-actions",startedAt:"2026-09-10T08:03:00Z",endedAt:"2026-09-10T08:04:00Z",tokens:null,tokenBasis:"not-applicable"}
   ]};
   const missing={...snapshot("workspace-a").items[0],id:"unobserved-item",steps:{runtimeCount:0,activityCount:0,ciStepCount:0,truncated:false,limitPerKind:20,rows:[]}};
   data.items.push(missing);
