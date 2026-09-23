@@ -25,7 +25,7 @@ test("mocked transport UI journey covers login, scoped refresh, expiry and logou
   await expect(page.locator("#login")).toBeVisible();
   await page.locator('[name="principalId"]').fill("reader-a");await page.locator('[name="accessKey"]').fill("secret-never-in-url");await page.getByRole("button",{name:"Sign in"}).click();
   await expect(page.locator("#dashboard")).toBeVisible();expect(loginBody).toEqual({principalId:"reader-a",accessKey:"secret-never-in-url"});expect(page.url()).not.toContain("secret-never-in-url");await expect(page.locator('[name="accessKey"]')).toHaveValue("");
-  await expect(page.locator("#workspace option")).toHaveCount(2);await expect(page.locator("article h3")).toHaveText(["<img src=x onerror=alert(1)>","partial-item","unjoined-item","complete-item"]);await expect(page.locator("article img")).toHaveCount(0);await expect(page.locator("article .metric")).toContainText(["Native tokens unavailable","14 observed native tokens · partial population coverage","9 observed native tokens · complete population coverage","21 native tokens"]);await expect(page.locator("#health")).toContainText("2 pending receipts · 3 applied receipts · 1 rejected receipts");expect(snapshots[0]).toEqual({workspaceId:"workspace-a"});
+  await expect(page.locator("#workspace option")).toHaveCount(2);await expect(page.locator("article h3")).toHaveText(["<img src=x onerror=alert(1)>","partial-item","unjoined-item","complete-item"]);await expect(page.locator("article img")).toHaveCount(0);await expect(page.locator("article .item-token")).toContainText(["Native tokens unavailable","14 observed native tokens · partial population coverage","9 observed native tokens · complete population coverage","21 native tokens"]);await expect(page.locator("#health")).toContainText("2 pending receipts · 3 applied receipts · 1 rejected receipts");expect(snapshots[0]).toEqual({workspaceId:"workspace-a"});
   await expect(page.locator("article .relation")).toContainText(["original relation unavailable","original relation unavailable","original relation unavailable","Canonical member of original-item"]);
   await page.locator("#workspace").selectOption("workspace-b");await expect(page.locator("#error")).toContainText("selected workspace is unavailable");
   expired=true;await page.locator("#workspace").selectOption("workspace-a");await expect(page.locator("#login")).toBeVisible();
@@ -35,13 +35,17 @@ test("mocked transport UI journey covers login, scoped refresh, expiry and logou
 test("item steps render real browser bars with honest token and missing-data labels",async({page})=>{
   const data=snapshot("workspace-a");
   const observed=data.items[0];observed.id="observed-item";
-  observed.steps={runtimeCount:1,activityCount:1,ciStepCount:1,truncated:false,limitPerKind:20,rows:[
+  observed.state={...observed.state,outcome:"delivered",population:"completed"};
+  observed.steps={runtimeCount:2,activityCount:1,ciStepCount:1,truncated:false,limitPerKind:20,rows:[
     {kind:"runtime",label:"Root invocation",classification:"root",clock:"host-wall",startedAt:"2026-09-10T08:00:00Z",endedAt:"2026-09-10T08:02:00Z",tokens:10,tokenBasis:"observed-native-partial"},
+    {kind:"runtime",label:"Child invocation",classification:"child",clock:"host-wall",startedAt:"2026-09-10T08:01:00Z",endedAt:"2026-09-10T08:01:30Z",tokens:5,tokenBasis:"observed-native-partial"},
     {kind:"activity",label:"Implementation",classification:"implementation",clock:"host-wall",startedAt:"2026-09-10T08:00:30Z",endedAt:"2026-09-10T08:01:30Z",tokens:6,tokenBasis:"direct-attribution-partial"},
     {kind:"ci",label:"CI step 1",classification:"useful-validation",clock:"github-actions",startedAt:"2026-09-10T08:03:00Z",endedAt:"2026-09-10T08:04:00Z",tokens:null,tokenBasis:"not-applicable"}
   ]};
   const missing={...snapshot("workspace-a").items[0],id:"unobserved-item",steps:{runtimeCount:0,activityCount:0,ciStepCount:0,truncated:false,limitPerKind:20,rows:[]}};
-  data.items.push(missing);
+  const partial={...missing,id:"truncated-item",steps:{...missing.steps,runtimeCount:2,truncated:true,rows:[observed.steps.rows[0]]}};
+  const mixed={...missing,id:"mixed-clock-item",steps:{...missing.steps,runtimeCount:2,rows:[observed.steps.rows[0],{...observed.steps.rows[1],clock:"provider-native"}]}};
+  data.items.push(missing,partial,mixed);
   await page.route("https://telemetry.test/private/dashboard/**",async route=>{
     const request=route.request(),url=new URL(request.url());
     if(request.method()==="GET"){
@@ -53,19 +57,24 @@ test("item steps render real browser bars with honest token and missing-data lab
     return route.fulfill({status:404});
   });
   await page.goto("https://telemetry.test/private/dashboard/");
-  await expect(page.locator("article")).toHaveCount(2);
+  await expect(page.locator("article")).toHaveCount(4);
   const card=page.locator("article").first();
-  await expect(card.locator(".item-steps summary")).toContainText("1 runtime invocations · 1 activities · 1 CI steps");
-  await card.locator(".item-steps summary").click();
-  await expect(card.locator(".step-group h5")).toHaveText(["Runtime invocations · host-wall clock","Activity spans · host-wall clock","CI steps"]);
-  await expect(card.locator(".step-bar")).toHaveCount(3);
+  await expect(card.locator(".item-time")).toHaveText("Observed item runtime: 2m 0s (host-wall clock)");
+  await expect(card.locator(".item-steps")).toHaveAttribute("open","");
+  await expect(card.locator(".item-steps summary")).toContainText("2 runtime · 1 activity · 1 CI steps");
+  await expect(card.locator(".step-group h5")).toHaveText(["host-wall clock","github-actions clock"]);
+  await expect(card.locator(".step-bar")).toHaveCount(4);
   const barWidths=await card.locator(".step-bar").evaluateAll(bars=>bars.map(bar=>bar.getBoundingClientRect().width));
   expect(barWidths.every(width=>width>0)).toBe(true);
-  await expect(card.locator(".step-row").nth(0)).toContainText("root · 120s · 10 observed native tokens (coverage unproven)");
-  await expect(card.locator(".step-row").nth(1)).toContainText("implementation · 60s · 6 directly attributed tokens (partial)");
-  await expect(card.locator(".step-row").nth(2)).toContainText("useful-validation · 60s · tokens n/a");
+  await expect(card.locator(".step-row").nth(0)).toContainText("root · 2m 0s · 10 observed native tokens (coverage unproven)");
+  await expect(card.locator(".step-row").nth(1)).toContainText("implementation · 1m 0s · 6 directly attributed tokens (partial)");
+  await expect(card.locator(".step-row").nth(2)).toContainText("child · 30s · 5 observed native tokens (coverage unproven)");
+  await expect(card.locator(".step-row").nth(3)).toContainText("useful-validation · 1m 0s · tokens n/a");
   const empty=page.locator("article").nth(1);
   await expect(empty).toContainText("Observed activity classes: unknown");
   await empty.locator(".item-steps summary").click();
   await expect(empty).toContainText("No runtime invocations, activity spans or CI steps were recorded");
+  await expect(empty.locator(".item-time")).toHaveText("Observed item runtime: unknown");
+  await expect(page.locator("article").nth(2).locator(".item-time")).toHaveText("Observed runtime from displayed steps: 2m 0s (host-wall clock · partial; 1/2 timed invocations)");
+  await expect(page.locator("article").nth(3).locator(".item-time")).toHaveText("Observed item runtime: unknown (multiple clock domains)");
 });

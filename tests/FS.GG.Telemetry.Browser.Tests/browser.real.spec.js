@@ -28,13 +28,15 @@ test("real Host browser journey uses scoped secure session",async({page,context}
   if(process.env.FSGG_BROWSER_ASSERT_UNKNOWN_COUNTS==="1"){
     const unknown=page.getByRole("listitem").filter({hasText:"unknown-item"});
     const zero=page.getByRole("listitem").filter({hasText:"zero-item"});
-    await expect(unknown.locator(".metric")).toHaveText("Native tokens unavailable · unknown/unknown terminal");
+    await expect(unknown.locator(".item-token")).toHaveText("Native tokens unavailable");
+    await expect(unknown.locator(".metric")).toHaveText("unknown/unknown terminal");
     await expect(unknown.locator(":scope > .step-note").last()).toHaveText("Observed activity classes: unknown");
-    await expect(zero.locator(".metric")).toHaveText("0 native tokens · 0/0 terminal");
+    await expect(zero.locator(".item-token")).toHaveText("0 native tokens");
+    await expect(zero.locator(".metric")).toHaveText("0/0 terminal");
     await expect(zero.locator(":scope > .step-note").last()).toHaveText("Observed activity classes: validation (recording coverage unknown)");
     await zero.locator(".item-steps summary").click();
     await expect(zero.locator(".step-bar")).toHaveCount(1);
-    await expect(zero.locator(".step-meta")).toContainText("120s · 42 directly attributed tokens (partial)");
+    await expect(zero.locator(".step-meta")).toContainText("2m 0s · 42 directly attributed tokens (partial)");
   }
   const cookies=await context.cookies(baseURL);
   const session=cookies.find(cookie=>cookie.name==="__Host-fsgg_session");
