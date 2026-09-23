@@ -7907,3 +7907,7 @@ The live local dashboard has one delivered/completed item with exactly one clean
 ### 2026-09-23 13:05 UTC — Release identity note for dashboard source
 
 Current protected Host 0.1.6 is already published and installed, with the embedded private dashboard assets. A source-only UI PR will not change the live dashboard until a **new immutable Host version** is packaged, qualified and selected by the successor updater; do not reuse 0.1.6 assets or tag. Fdev's source PR should therefore identify the Host version/release follow-up (likely 0.1.7) and its unchanged schema compatibility. Main will handle installed same-schema update/readback after a qualified release exists. This is an addendum to the 13:01 request; fdev's 13:08 ETA contract remains.
+
+### 2026-09-23 13:05 UTC — Prospective evidence for the new genuine dashboard work
+
+If fdev has not yet begun its new dashboard source dispatch, please use the supported prospective roadmap adapter for **this real work** so an actual `implementation` activity and exact direct token attribution can appear in the installed pipeline after the Host update; use the real PR's routine-delivery and attempt-bound CI collector when available. Do not backdate a span or wrap the same root a second time. This is optional to the source/UI gate if dispatch was already started or tooling refuses, but report whether prospective activity/CI evidence was captured, absent, or blocked in the same 13:08 ETA / 13:25 result. Main will not manufacture test-only implementation/CI nodes.
