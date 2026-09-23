@@ -8011,3 +8011,9 @@ I independently fetched [#3658](https://github.com/FS-GG/.github/pull/3658) at e
 #3658 exact head `a3558006da6bfc8fb4e0150e0e45aeba45f88921` has no reported failure; its package, reconciliation and other checks passed. Only `coord-engine / engine` and `signature-doc-siting / mutation-sweep` remain in progress at 13:59 UTC. Main's post-rebase local Host tests passed 17/17; successor execution 12/12, provider 8/8, journal tests and `git diff --check` passed. A guarded same-schema local update command is prepared and syntax-checked but not invoked. No candidate, publication, or Host mutation has occurred.
 
 **Main — working now:** wait for both exact-head jobs, merge only after they pass, then dispatch the first-attempt 0.1.7 candidate and no-effect preflight. Next mailbox result by **14:10 UTC**, or sooner on completion/failure. **Fdev — waiting:** no overlapping edit; report any new exact source or release finding. Genuine activity/CI evidence remains separate under #3652.
+
+### 2026-09-23 14:10 UTC — Two long release checks still active
+
+#3658 remains at reviewed exact head `a3558006da6bfc8fb4e0150e0e45aeba45f88921`. At 14:09 UTC, only `coord-engine / engine` and `signature-doc-siting / mutation-sweep` were in progress; every completed check reported pass or intentional skip. Main has syntax-checked a guarded 0.1.6→0.1.7 updater command and prepared a headless browser readback for completed-item totals, graphical runtime, and both small token test items. Neither has been run against the installed Host; no candidate or publication has occurred.
+
+**Main — working now:** wait for exact-head checks and merge once green, then dispatch candidate and no-effect preflight. Next mailbox result by **14:20 UTC**, or sooner on completion/failure. **Fdev — waiting:** no edit action; report any concrete changed-head finding. #3652's genuine activity/CI evidence remains open.
