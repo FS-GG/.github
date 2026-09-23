@@ -43,7 +43,9 @@ test("item steps render real browser bars with honest token and missing-data lab
     {kind:"ci",label:"CI step 1",classification:"useful-validation",clock:"github-actions",startedAt:"2026-09-10T08:03:00Z",endedAt:"2026-09-10T08:04:00Z",tokens:null,tokenBasis:"not-applicable"}
   ]};
   const missing={...snapshot("workspace-a").items[0],id:"unobserved-item",steps:{runtimeCount:0,activityCount:0,ciStepCount:0,truncated:false,limitPerKind:20,rows:[]}};
-  data.items.push(missing);
+  const partial={...missing,id:"truncated-item",steps:{...missing.steps,runtimeCount:2,truncated:true,rows:[observed.steps.rows[0]]}};
+  const mixed={...missing,id:"mixed-clock-item",steps:{...missing.steps,runtimeCount:2,rows:[observed.steps.rows[0],{...observed.steps.rows[1],clock:"provider-native"}]}};
+  data.items.push(missing,partial,mixed);
   await page.route("https://telemetry.test/private/dashboard/**",async route=>{
     const request=route.request(),url=new URL(request.url());
     if(request.method()==="GET"){
@@ -55,7 +57,7 @@ test("item steps render real browser bars with honest token and missing-data lab
     return route.fulfill({status:404});
   });
   await page.goto("https://telemetry.test/private/dashboard/");
-  await expect(page.locator("article")).toHaveCount(2);
+  await expect(page.locator("article")).toHaveCount(4);
   const card=page.locator("article").first();
   await expect(card.locator(".item-time")).toHaveText("Observed item runtime: 2m 0s (host-wall clock)");
   await expect(card.locator(".item-steps")).toHaveAttribute("open","");
@@ -73,4 +75,6 @@ test("item steps render real browser bars with honest token and missing-data lab
   await empty.locator(".item-steps summary").click();
   await expect(empty).toContainText("No runtime invocations, activity spans or CI steps were recorded");
   await expect(empty.locator(".item-time")).toHaveText("Observed item runtime: unknown");
+  await expect(page.locator("article").nth(2).locator(".item-time")).toHaveText("Observed runtime from displayed steps: 2m 0s (host-wall clock · partial; 1/2 timed invocations)");
+  await expect(page.locator("article").nth(3).locator(".item-time")).toHaveText("Observed item runtime: unknown (multiple clock domains)");
 });

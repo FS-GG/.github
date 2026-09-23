@@ -38,7 +38,9 @@
     }
     milliseconds+=end-start;
     const complete=rows.length===steps.runtimeCount && intervals.length===rows.length;
-    return `Observed item runtime: ${durationText(Math.round(milliseconds/1000))} (${clocks[0]} clock${complete?"":" · partial intervals"})`;
+    const measured=durationText(Math.round(milliseconds/1000));
+    return complete?`Observed item runtime: ${measured} (${clocks[0]} clock)`:
+      `Observed runtime from displayed steps: ${measured} (${clocks[0]} clock · partial; ${intervals.length}/${steps.runtimeCount} timed invocations)`;
   };
   const stepGroup = (rows, title) => {
     const section=document.createElement("section");section.className="step-group";
