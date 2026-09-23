@@ -20,8 +20,8 @@ service_run=(runuser -u "$service_user" -- env HOME="$service_home" XDG_RUNTIME_
 }
 
 # Read private state without printing private IDs, paths, credentials, or receipts.
-expected_image=$(python3 - "$config" "$deployment" <<'PY'
-import json, pathlib, re, shlex, sys
+precheck=$(python3 - "$config" "$deployment" <<'PY'
+import hashlib, json, pathlib, re, shlex, sys
 config_path, deployment_path = map(pathlib.Path, sys.argv[1:])
 config = json.loads(config_path.read_text())
 if config.get('schema') != 'fsgg.telemetry.host-update-config/1':
@@ -62,9 +62,11 @@ if not (manifest.get('version') == '0.1.3'
 old_command = journal.get('operation', {}).get('command', {}).get('commandId')
 if not old_command or not pathlib.Path(config['releaseRoot'], 'update-state', 'commands', old_command + '.json').is_file():
     raise SystemExit('refused: prior failed command receipt missing')
-print(image)
+print(image, hashlib.sha256(journal_path.read_bytes()).hexdigest())
 PY
 )
+expected_image=${precheck%% *}
+expected_journal_sha=${precheck#* }
 
 [[ $("${service_run[@]}" podman image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$expected_image") == 0.1.3 ]] || {
   echo 'refused: active image is not Host 0.1.3' >&2; exit 1;
@@ -79,15 +81,46 @@ PY
 [[ $(curl --silent --show-error --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18444/private/dashboard/) == 200 ]] || {
   echo 'refused: predecessor dashboard unavailable' >&2; exit 1;
 }
+[[ -f $diagnostic && $(sha256sum "$diagnostic" | cut -d ' ' -f 1) == 8a59df9a40a3002591109ad2a34412799a47c0ad26e50051573fbbbd34f4af4e ]] || {
+  echo 'refused: reviewed relation diagnostic missing or changed' >&2; exit 1;
+}
+updater_state=$("${service_run[@]}" systemctl --user is-active fsgg-telemetry-host-update.service || true)
+[[ $updater_state == inactive || $updater_state == failed ]] || {
+  echo 'refused: updater service already active' >&2; exit 1;
+}
 
-# The updater replaces active.json for a new transaction. Preserve exact prior
-# journal bytes separately; its command receipt and cold backup stay in place.
-"${service_run[@]}" python3 - "$config" <<'PY'
-import json, os, pathlib, sys
-root = pathlib.Path(json.loads(pathlib.Path(sys.argv[1]).read_text())['releaseRoot'])
+# Fence the timer before the final predecessor/journal comparison.
+"${service_run[@]}" systemctl --user disable --now fsgg-telemetry-host-update.timer
+for attempt in {1..60}; do
+  state=$("${service_run[@]}" systemctl --user is-active fsgg-telemetry-host-update.service || true)
+  [[ $state == inactive || $state == failed ]] && break
+  [[ $attempt -lt 60 ]] || { echo 'refused: updater service still active; timer remains disabled' >&2; exit 1; }
+  sleep 1
+done
+"${service_run[@]}" "$operator" "$deployment" check >/dev/null
+"${service_run[@]}" python3 - "$config" "$deployment" "$expected_image" "$expected_journal_sha" <<'PY'
+import hashlib, json, os, pathlib, shlex, sys
+config_path, deployment_path = map(pathlib.Path, sys.argv[1:3])
+expected_image, expected_sha = sys.argv[3:]
+config = json.loads(config_path.read_text())
+if config.get('activeDeploymentEnv') != str(deployment_path) or config.get('retainedReceipt', {}).get('workspaceId') != 'successor-fsharp-dev':
+    raise SystemExit('refused: selected successor config changed after timer fence')
+values = {}
+for line in deployment_path.read_text().splitlines():
+    parts = shlex.split(line, comments=True, posix=True)
+    if parts:
+        key, value = parts[0].split('=', 1)
+        values[key] = value
+if values.get('TELEMETRY_IMAGE_ID') != expected_image or values.get('TELEMETRY_WORKSPACE_ID') != 'successor-fsharp-dev':
+    raise SystemExit('refused: predecessor changed after timer fence')
+root = pathlib.Path(config['releaseRoot'])
 source = root / 'update-state' / 'active.json'
 target = root / 'update-state' / 'prior-0.1.5-failed-rolled-back.json'
 raw = source.read_bytes()
+if hashlib.sha256(raw).hexdigest() != expected_sha:
+    raise SystemExit('refused: held journal changed after timer fence')
+# The updater replaces active.json. Preserve exact prior bytes and keep the
+# command receipt and cold backup; a repeat must match this snapshot.
 if target.exists():
     if target.read_bytes() != raw:
         raise SystemExit('refused: prior failed journal snapshot differs')
@@ -99,14 +132,7 @@ else:
         os.fsync(output.fileno())
 PY
 
-# Keep the prior failed journal and backup. A distinct command targets only 0.1.6.
-"${service_run[@]}" systemctl --user disable --now fsgg-telemetry-host-update.timer
-for attempt in {1..60}; do
-  state=$("${service_run[@]}" systemctl --user is-active fsgg-telemetry-host-update.service || true)
-  [[ $state == inactive || $state == failed ]] && break
-  [[ $attempt -lt 60 ]] || { echo 'refused: updater service still active; timer remains disabled' >&2; exit 1; }
-  sleep 1
-done
+# A distinct command targets only 0.1.6; the failed 0.1.5 command is retained.
 
 "${service_run[@]}" "$updater" --config "$config" --command-id "$command_id" \
   --expected-current-image "$expected_image" --target-qualified-release telemetry-host/v0.1.6 >/dev/null
@@ -133,5 +159,8 @@ PY
 [[ $(curl --silent --show-error --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18444/private/dashboard/) == 200 ]]
 
 # This diagnostic emits only ordinals and relation counts; retain its output locally.
-[[ -f $diagnostic ]] && python3 "$diagnostic"
+if ! python3 "$diagnostic"; then
+  echo 'Host update settled at 0.1.6; relation diagnostic failed and needs separate readback' >&2
+  exit 1
+fi
 echo 'Host update settled at 0.1.6; inspect the private graphical dashboard and retained updater result.'
