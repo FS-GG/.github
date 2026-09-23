@@ -61,10 +61,6 @@ config_dir = pathlib.Path(values['TELEMETRY_CONFIG_DIR'])
 provision = config_dir / 'provision.env'
 if not provision.is_file() or provision.is_symlink() or provision.stat().st_size == 0:
     raise SystemExit('refused: repaired provisioning metadata is absent')
-backups = pathlib.Path(values['TELEMETRY_BACKUP_ROOT'])
-if not any((candidate / 'podman-backup-manifest.json').is_file()
-           for candidate in backups.glob('diag-016-backup-*') if candidate.is_dir()):
-    raise SystemExit('refused: complete diagnostic backup evidence is absent')
 print(image, hashlib.sha256(config_path.read_bytes()).hexdigest(),
       hashlib.sha256(deployment_path.read_bytes()).hexdigest(),
       hashlib.sha256(journal_path.read_bytes()).hexdigest())
@@ -73,6 +69,40 @@ PY
 read -r expected_image config_sha deployment_sha journal_sha <<< "$precheck"
 [[ $("${as_service[@]}" podman image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$expected_image") == 0.1.3 ]]
 "${as_service[@]}" "$operator" "$deployment" check >/dev/null
+"${as_service[@]}" python3 - "$deployment" "$operator" <<'PY'
+import hashlib, json, pathlib, shlex, subprocess, sys
+deployment, operator = map(pathlib.Path, sys.argv[1:])
+values = {}
+for line in deployment.read_text().splitlines():
+    parts = shlex.split(line, comments=True, posix=True)
+    if parts:
+        key, value = parts[0].split('=', 1)
+        values[key] = value
+backups = pathlib.Path(values['TELEMETRY_BACKUP_ROOT'])
+candidates = [path for path in backups.glob('diag-016-backup-*') if path.is_dir()]
+if len(candidates) != 1:
+    raise SystemExit('refused: exact diagnostic backup is absent or ambiguous')
+backup = candidates[0]
+try:
+    identity = json.loads(subprocess.check_output([str(operator), str(deployment), 'identity'], stderr=subprocess.DEVNULL))
+    podman_helper = operator.parent / 'telemetry_host_podman_backup.py'
+    config_helper = operator.parent.parent / 'telemetry-host' / 'telemetry_host_config_backup.py'
+    subprocess.run([str(podman_helper), 'verify', '--root', str(backup),
+                    '--deployment-id', identity['deploymentId'], '--image-id', identity['imageId']],
+                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run([str(config_helper), 'verify', '--input', str(backup / 'config')],
+                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    manifest = json.loads((backup / 'config' / 'config-backup-manifest.json').read_text())
+    live = pathlib.Path(values['TELEMETRY_CONFIG_DIR'])
+    for row in manifest['files']:
+        name = row['name']
+        if name in {'.', '..'} or '/' in name or '\\' in name:
+            raise ValueError('unsafe config backup file name')
+        if hashlib.sha256((live / name).read_bytes()).hexdigest() != row['sha256']:
+            raise ValueError('live config differs from qualified backup')
+except (KeyError, OSError, ValueError, subprocess.CalledProcessError):
+    raise SystemExit('refused: diagnostic backup is not verified against selected deployment and live config')
+PY
 [[ $("${as_service[@]}" systemctl --user is-active fsgg-telemetry-host-podman.service) == active ]]
 [[ $("${as_service[@]}" systemctl --user is-active fsgg-telemetry-host-update.timer || true) == inactive ]]
 state=$("${as_service[@]}" systemctl --user is-active fsgg-telemetry-host-update.service || true)
