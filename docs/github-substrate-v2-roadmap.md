@@ -1468,8 +1468,10 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
   `Migrated`, `Ambiguous`, or `Unsupported`.
 
   [Protected typed-transform acceptance](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-09.3.json) ([receipt PR #486](https://github.com/FS-GG/FS.GG.Coordination/pull/486), merge `eb6bc92178f54adef04c7dcfa533c2271e095190`).
-- [ ] **GS2-09.4 — Implement live-operation handling.** For each claim, queued write, review, delivery,
+- [x] **GS2-09.4 — Implement live-operation handling.** For each claim, queued write, review, delivery,
   release, and cutover-adjacent operation, choose drain, migrate, park, or explicit invalid disposition.
+
+  [Protected live-operation acceptance](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-09.4.json) ([receipt PR #489](https://github.com/FS-GG/FS.GG.Coordination/pull/489), merge `42afaacb1edb3f915e715040fd040c1087d97f39`).
 - [ ] **GS2-09.5 — Implement sealed history.** Preserve source schema/bytes/digests, verifier artifact,
   expected outcomes, and lookup index without putting permanent v1 upcasters in the v2 production closure.
 - [ ] **GS2-09.6 — Implement rollback plans.** Restore settings, receiver pins, v1 projections, schedules,
