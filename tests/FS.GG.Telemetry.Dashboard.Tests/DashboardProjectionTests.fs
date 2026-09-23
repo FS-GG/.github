@@ -131,7 +131,7 @@ module DashboardProjectionTests =
             nodes
                 [|
                     row
-                        """{"item_id":"item-a","activity_id":"activity-1","classification":"direct","total":42,"usage_identity":"PRIVATE-USAGE"}"""
+                        """{"item_id":"item-a","activity_id":"activity-1","classification":"direct","total":6,"usage_identity":"PRIVATE-USAGE"}"""
                 |]
         value["ciSteps"] <-
             nodes
@@ -148,7 +148,7 @@ module DashboardProjectionTests =
                     row """{"item_id":"item-a","invocation_id":"PRIVATE-INVOCATION","event":"terminal","occurred_at":"2026-09-10T08:02:00Z","occurred_clock_provenance":"host-wall"}"""
                 |]
         value["usage"] <-
-            nodes [| row """{"item_id":"item-a","invocation_id":"PRIVATE-INVOCATION","accounting_scope":"one","total":6}""" |]
+            nodes [| row """{"identity":"PRIVATE-USAGE","item_id":"item-a","invocation_id":"PRIVATE-INVOCATION","accounting_scope":"one","total":6}""" |]
         value["lineage"] <-
             nodes [| row """{"item_id":"item-a","invocation_id":"PRIVATE-INVOCATION","relation":"root"}""" |]
         let bytes = DashboardProjection.project "workspace-a" (envelope value) |> unwrap
@@ -162,10 +162,33 @@ module DashboardProjectionTests =
         Assert.Equal(6L, steps.GetProperty("rows").[0].GetProperty("tokens").GetInt64())
         Assert.Equal("observed-native-partial", steps.GetProperty("rows").[0].GetProperty("tokenBasis").GetString())
         Assert.Equal("root", steps.GetProperty("rows").[0].GetProperty("classification").GetString())
-        Assert.Equal(42L, steps.GetProperty("rows").[1].GetProperty("tokens").GetInt64())
+        Assert.Equal(6L, steps.GetProperty("rows").[1].GetProperty("tokens").GetInt64())
         Assert.Equal("direct-attribution-partial", steps.GetProperty("rows").[1].GetProperty("tokenBasis").GetString())
         Assert.Equal("Run tests", steps.GetProperty("rows").[2].GetProperty("label").GetString())
         Assert.Equal(JsonValueKind.Null, steps.GetProperty("rows").[2].GetProperty("tokens").ValueKind)
+
+    [<Fact>]
+    let ``activity tokens refuse mixed native accounting scopes`` () =
+        let value = snapshot "item-a"
+        value["activities"] <-
+            nodes [| row """{"item_id":"item-a","activity_id":"activity-1","category":"implementation","started_at":"2026-09-10T08:00:00Z","ended_at":"2026-09-10T08:02:00Z"}""" |]
+        value["activityUsageAttributions"] <-
+            nodes
+                [|
+                    row """{"item_id":"item-a","activity_id":"activity-1","classification":"direct","total":3,"usage_identity":"usage-one"}"""
+                    row """{"item_id":"item-a","activity_id":"activity-1","classification":"direct","total":4,"usage_identity":"usage-two"}"""
+                |]
+        value["usage"] <-
+            nodes
+                [|
+                    row """{"identity":"usage-one","item_id":"item-a","accounting_scope":"scope-one","total":3}"""
+                    row """{"identity":"usage-two","item_id":"item-a","accounting_scope":"scope-two","total":4}"""
+                |]
+        let bytes = DashboardProjection.project "workspace-a" (envelope value) |> unwrap
+        use document = JsonDocument.Parse bytes
+        let activity = document.RootElement.GetProperty("items").[0].GetProperty("steps").GetProperty("rows").[0]
+        Assert.Equal(JsonValueKind.Null, activity.GetProperty("tokens").ValueKind)
+        Assert.Equal("unknown", activity.GetProperty("tokenBasis").GetString())
 
     [<Fact>]
     let ``real Store canonical snapshot projects without shape translation`` () =

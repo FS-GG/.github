@@ -170,11 +170,26 @@ module DashboardProjection =
                         text "item_id" attribution = Some item
                         && text "classification" attribution = Some "direct"
                         && text "activity_id" attribution = Some activityId)
-            let attributedTotals = matching |> Array.choose (number "total")
+            let attributed =
+                matching
+                |> Array.choose (fun attribution ->
+                    match text "usage_identity" attribution with
+                    | None -> None
+                    | Some identity ->
+                        usage
+                        |> Array.tryFind (fun entry ->
+                            text "item_id" entry = Some item
+                            && text "identity" entry = Some identity)
+                        |> Option.bind (fun entry ->
+                            match number "total" attribution, number "total" entry, text "accounting_scope" entry with
+                            | Some attributedTotal, Some nativeTotal, Some scope when attributedTotal = nativeTotal ->
+                                Some(attributedTotal, scope)
+                            | _ -> None))
             let attributedTotal =
-                if matching.Length = 0 || attributedTotals.Length <> matching.Length then None
+                if matching.Length = 0 || attributed.Length <> matching.Length
+                   || (attributed |> Array.map snd |> Array.distinct).Length <> 1 then None
                 else
-                    let total = attributedTotals |> Array.sumBy bigint
+                    let total = attributed |> Array.sumBy (fun (value, _) -> bigint value)
                     if total > bigint Int64.MaxValue then None else Some(int64 total)
             let node = JsonObject()
             node["kind"] <- "activity"
