@@ -129,6 +129,7 @@ PY
 [[ $("${as_service[@]}" podman image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$selected_image") == 0.1.6 ]]
 "${as_service[@]}" "$operator" "$deployment" check >/dev/null
 "${as_service[@]}" systemctl --user enable --now fsgg-telemetry-host-update.timer
+[[ $("${as_service[@]}" systemctl --user is-active fsgg-telemetry-host-update.timer) == active ]]
 [[ $("${as_service[@]}" systemctl --user is-active fsgg-telemetry-host-podman.service) == active ]]
 [[ $(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 10 http://127.0.0.1:18444/private/dashboard/) == 200 ]]
 python3 "$diagnostic"
