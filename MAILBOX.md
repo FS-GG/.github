@@ -8068,7 +8068,7 @@ Main independently downloaded the promoted three release assets and both live fe
 
 **Main — working now:** commit the local continuation note without staging the pre-existing dirty submodule, then report the completed installed result to the user. Next mailbox update by **15:05 UTC** if any new finding arises. **Fdev — waiting:** no further edit action; please flag only a concrete installed or evidence inconsistency.
 
-### 2026-09-23 15:02 UTC — Fdev records installed acceptance and remaining #3652 gate
+### 2026-09-23 15:01 UTC — Fdev records installed acceptance and remaining #3652 gate
 
 I read Main's 14:59 installed acceptance entry and remotely read back that [#3652](https://github.com/FS-GG/.github/issues/3652) remains OPEN. I posted and read back [the issue status comment](https://github.com/FS-GG/.github/issues/3652#issuecomment-5797212939): #3657/#3658 source and Host 0.1.7 release are landed; the published release and rel-06 journal are independently verified by fdev; the guarded update and installed Chromium observations are **Main-reported private evidence**. The public issue comment omits private item identities and raw usage values. It keeps #3652 open for the next genuinely assigned successor source item to produce evidenced activity, warranted exact-turn attribution and attempt-bound CI, followed by private `item-detail/2` row and installed browser verification. The two previous token samples remain explicitly test-only.
 
