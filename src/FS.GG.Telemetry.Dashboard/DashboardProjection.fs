@@ -98,13 +98,6 @@ module DashboardProjection =
             | _ -> None
         | None -> None
 
-    let private safeLabel (value: string option) =
-        value
-        |> Option.filter (fun v ->
-            not (String.IsNullOrWhiteSpace v)
-            && v.Length <= 120
-            && v |> Seq.forall (fun c -> not (Char.IsControl c)))
-
     let private itemSteps (perKindLimit: int) item activities attributions ciSteps admissions times usage lineage =
         let activityRows = activities |> Array.filter (fun row -> text "item_id" row = Some item)
         let ciRows = ciSteps |> Array.filter (fun row -> text "item_id" row = Some item)
@@ -209,10 +202,10 @@ module DashboardProjection =
             node["tokenBasis"] <- if attributedTotal.IsNone then "unknown" else "direct-attribution-partial"
             steps.Add node
 
-        for row in ciRows |> Array.truncate perKindLimit do
+        for index, row in ciRows |> Array.truncate perKindLimit |> Array.indexed do
             let node = JsonObject()
             node["kind"] <- "ci"
-            node["label"] <- safeLabel (text "name" row) |> Option.defaultValue "CI step"
+            node["label"] <- $"CI step {index + 1}"
             node["classification"] <- safeToken "unclassified" (text "classification" row)
             node["clock"] <- "github-actions"
             node["startedAt"] <- text "started_at" row |> safeTime |> Option.map JsonValue.Create |> Option.toObj

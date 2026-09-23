@@ -137,7 +137,7 @@ module DashboardProjectionTests =
             nodes
                 [|
                     row
-                        """{"item_id":"item-a","name":"Run tests","classification":"useful-validation","started_at":"2026-09-10T08:03:00Z","completed_at":"2026-09-10T08:04:00Z","rationale":"PRIVATE-RATIONALE"}"""
+                        """{"item_id":"item-a","name":"PRIVATE-CI-STEP-NAME","classification":"useful-validation","started_at":"2026-09-10T08:03:00Z","completed_at":"2026-09-10T08:04:00Z","rationale":"PRIVATE-RATIONALE"}"""
                 |]
         value["admissions"] <-
             nodes [| row """{"item_id":"item-a","invocation_id":"PRIVATE-INVOCATION"}""" |]
@@ -164,7 +164,7 @@ module DashboardProjectionTests =
         Assert.Equal("root", steps.GetProperty("rows").[0].GetProperty("classification").GetString())
         Assert.Equal(6L, steps.GetProperty("rows").[1].GetProperty("tokens").GetInt64())
         Assert.Equal("direct-attribution-partial", steps.GetProperty("rows").[1].GetProperty("tokenBasis").GetString())
-        Assert.Equal("Run tests", steps.GetProperty("rows").[2].GetProperty("label").GetString())
+        Assert.Equal("CI step 1", steps.GetProperty("rows").[2].GetProperty("label").GetString())
         Assert.Equal(JsonValueKind.Null, steps.GetProperty("rows").[2].GetProperty("tokens").ValueKind)
 
     [<Fact>]
