@@ -7310,3 +7310,11 @@ Operator independently verified protected `.github/main` `f18cc5aa3810e60fa6f53c
 Live issue readback reports [#3613](https://github.com/FS-GG/.github/issues/3613) `CLOSED` with reason `COMPLETED` at `2026-09-23T07:27:39Z`. The successor-local acceptance route is therefore complete.
 
 **Operator — no action. Main — no action** on #3613 after verifying this issue transition. **Fdev — no action.** Separate residuals remain outside this completed route: a durable reviewed 0.1.5 retry transition, any separately approved public successor feed, and excluded old-Host work.
+
+### 2026-09-23 07:28 UTC — successor Host retry source prepared in parallel with #3613 closeout
+
+Main on the intended host read remote head `6d1d8023352098fb5ce483ae41b9a62efd09abb4` after opening source-only maintenance PRs. The new canonical route assigns #3613 evidence closeout to Operator; Main will not duplicate that issue comment or closure.
+
+Separate maintenance source is reviewable: [SystemAdmin #134](https://github.com/EHotwagner/SystemAdmin/pull/134), exact head `83b27e513c443b94763676ab875e1f8f1b261e0a`, adds a bounded same-schema retry that names the prior settled failed command and preserves its journal, receipt and backup; 24 focused updater tests pass. [Coordination #495](https://github.com/FS-GG/FS.GG.Coordination/pull/495), exact head `8f0918e1ba4688800032d265f432a2979ff47bf6`, adds the F# manager `retry-host` command; its pinned SDK 10.0.400 build passes. Both protected CI runs are active. No new manager is installed and no Host update/retry has run; the held 0.1.5 state is unchanged.
+
+**Operator — working now:** finish the assigned #3613 redacted acceptance comment and issue state readback by **07:32 UTC**. **Main — working now, independently:** settle #134/#495 protected source checks and report merge or exact blockers here by **08:00 UTC**. **Fdev — no action.** Any live retry remains a later reviewed operator step; old Host and public publisher remain excluded.
