@@ -53,9 +53,14 @@ callable-operation keys are outside the class.
   protected push, policy digest, workflow revision and run identity; the dependent environment job rederives
   the same receipt. Its credential effect stays gated inactive and refuses if enabled without the pinned
   Coordination provider. A native read against merged PR #3663 and its exact head succeeded; focused
-  good/stale/wrong-app/missing-population cases pass. This is source qualification, not the installed
-  two-job success required to check off 03.
-- [ ] **04 — Dedicated App, keys and immutable publication.** Through the browser manifest/protected setup path,
+  good/stale/wrong-app/missing-population cases pass. The first actual protected-main
+  [run 36019271890](https://github.com/FS-GG/.github/actions/runs/36019271890) succeeded on
+  merge `bbadbba529891af9a969a561936badb654563330`: the preflight emitted public
+  artifact `10815877698`
+  (`sha256:f5be586f8f0cc28a28d3445e8879f068895c4f76748170d9f3d9bbc3a3167f92`), and the
+  credential job was skipped because activation is false. This is hosted source qualification,
+  not the installed two-job success required to check off 03.
+- [ ] **04 — Dedicated App, keys and immutable publication.** Through the preconfigured browser registration and protected setup path,
   create the dedicated ordinary-v2 App and authorizer identities, accept the public anchor, provision only the
   named `ordinary-v2` environment secrets, publish byte-identical pinned installer artifacts and read back
   environment, installation, permission and artifact state. Do not reuse v1 or callable keys.
@@ -63,6 +68,11 @@ callable-operation keys are outside the class.
   wrong-key/anchor, stale evidence/authority, altered payload, wrong workflow/environment, duplicate attempt,
   crash-before-write, crash-after-write/unknown reply and stable replay reconciliation. Preserve one effect
   identity and a public receipt/readback; a real protected operation is not a fixture.
+  The isolated sandbox shell is now `FS-GG/FS.GG.Coordination.Authority.Sandbox` (repo ID
+  `1385801070`, seed `fe6292e9…`), with active writer/integrity rulesets `23947019`/`23947025` and
+  separate main-only `ordinary-v2-rehearsal` environment `22669445419`. Both rulesets currently have
+  zero App bypass and the environment has zero secrets. A distinct rehearsal App/key and compiled
+  profile are required so a synthetic run cannot mint a production Authority token.
 - [ ] **06 — Receiver and candidate disposition.** Measure before/after critical path, runner time and narrow
   administrative overhead; record coverage and sample limits. Adopt the exact receiver/profile before GS2-10
   freeze only if installed evidence is complete, otherwise explicitly defer it. Source merge alone cannot mark
@@ -90,6 +100,11 @@ The public-repository timing API reported zero billed duration, which does not m
 job timestamps instead. Queue, setup, useful checks, retry cost and critical path stay separate. These three
 runs do not establish duplicated compiler/formal work or a bureaucracy percentage. Milestone 06 needs a larger,
 attributed before/after cohort.
+
+The first `.github` ordinary-v2 preflight run `36019271890` adds one after-source observation: its job was
+created at 15:19:01Z, started at 15:20:15Z and completed at 15:20:25Z, yielding about 74 seconds of
+queue and 10 seconds of hosted execution. Its credential job was skipped and consumed no runner. This one
+inactive run is neither an installed-route timing nor a comparable after-cohort for the Coordination baseline.
 
 ## Workspace impact
 
