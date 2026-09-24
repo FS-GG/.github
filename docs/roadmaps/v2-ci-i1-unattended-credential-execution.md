@@ -53,8 +53,13 @@ callable-operation keys are outside the class.
   protected push, policy digest, workflow revision and run identity; the dependent environment job rederives
   the same receipt. Its credential effect stays gated inactive and refuses if enabled without the pinned
   Coordination provider. A native read against merged PR #3663 and its exact head succeeded; focused
-  good/stale/wrong-app/missing-population cases pass. This is source qualification, not the installed
-  two-job success required to check off 03.
+  good/stale/wrong-app/missing-population cases pass. The first actual protected-main
+  [run 36019271890](https://github.com/FS-GG/.github/actions/runs/36019271890) succeeded on
+  merge `bbadbba529891af9a969a561936badb654563330`: the preflight emitted public
+  artifact `10815877698`
+  (`sha256:f5be586f8f0cc28a28d3445e8879f068895c4f76748170d9f3d9bbc3a3167f92`), and the
+  credential job was skipped because activation is false. This is hosted source qualification,
+  not the installed two-job success required to check off 03.
 - [ ] **04 — Dedicated App, keys and immutable publication.** Through the browser manifest/protected setup path,
   create the dedicated ordinary-v2 App and authorizer identities, accept the public anchor, provision only the
   named `ordinary-v2` environment secrets, publish byte-identical pinned installer artifacts and read back
