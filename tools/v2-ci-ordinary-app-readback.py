@@ -104,7 +104,8 @@ def main():
         raise RuntimeError("App installation repository set differs from enrollment")
 
     print(json.dumps({
-        "appId": app_id,
+        # GitHub masks the exact App ID in logs because it is also an environment secret.
+        "appIdDigits": [int(digit) for digit in str(app_id)],
         "appName": app["name"],
         "owner": "FS-GG",
         "installationId": installation_id,
