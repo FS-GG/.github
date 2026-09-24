@@ -96,9 +96,9 @@ environment secret inventory remains separate and never records secret values.
 ## Activation, rotation and revocation
 
 Publication must pin one immutable Coordination artifact and its content digest in the protected workflow.
-First run the installed synthetic matrix with the new App on explicitly bounded non-production Authority
-refs and a synthetic `OpenV2` epoch. The actual production `OpenV2` state remains a separate gate.
-Only after this installed readback and the public anchor are accepted may a source PR set
+First run the installed synthetic matrix with the separate rehearsal App and authorizer in the sandbox
+Authority repository described below. The actual production `OpenV2` state remains a separate gate.
+Only after this isolated readback and the public anchor are accepted may a source PR set
 `credentialJob.installed` to `true`. The normal main-push route then has no per-run human reviewer or
 host credential session.
 
