@@ -7,7 +7,9 @@ description: "Bounded pre-freeze work to remove routine host-agent and human han
 
 # Unattended CI-owned v2 credential execution interlude
 
-Status: **prospective design, not an installed credential route or permission to mutate a journal**.
+Status: **implemented and qualified in the isolated installed sandbox on 2026-09-24**. The
+[qualification record](../operations/v2-ci-i1-installed-qualification.md) gives the exact evidence.
+Production credential execution stays inactive until the protected `OpenV2` and GS2-10 candidate gates.
 This is the `V2-CI-I1` planning part in the [v2 roadmap](../github-substrate-v2-roadmap.md#v2-ci-i1--unattended-credential-execution-interlude).
 [ADR-0088](../adr/0088-ci-owned-unattended-credential-execution.md) owns the cross-repository decision.
 

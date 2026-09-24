@@ -44,12 +44,10 @@ and rationale.
 > no current unit state, accepted evidence, dispatch state or operating authority; owning unit contracts,
 > candidate qualification and exact roadmap pinning remain explicit prerequisites.
 
-> **Next bounded interlude — 2026-09-24:** [V2-CI-I1](#v2-ci-i1--unattended-credential-execution-interlude)
-> designs an unattended trusted-CI credential path and removes routine agent-to-host handoffs
-> before the GS2-10 candidate freeze, without changing current v1 genesis or `OpenV2` approval.
-> Its [design](coordination/2026-09-24-v2-unattended-ci-credential-interlude.md) and
-> [ADR-0088](adr/0088-ci-owned-unattended-credential-execution.md) are prospective; source
-> delivery, installed qualification and credential provisioning remain separate work.
+> **Qualified interlude — 2026-09-24:** [V2-CI-I1](#v2-ci-i1--unattended-credential-execution-interlude)
+> installed and qualified an unattended trusted-CI credential path in the isolated sandbox.
+> Dedicated production custody is enrolled, but its credential job remains inactive until
+> the protected `OpenV2` and GS2-10 candidate gates. Current v1 genesis is unchanged.
 
 | Field | Value |
 |---|---|
@@ -1428,7 +1426,13 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
 
 ### V2-CI-I1 — Unattended credential execution interlude
 
-**Priority:** next bounded cross-repository implementation window, alongside unfinished GS2-09
+**2026-09-24 disposition:** The [six-milestone subroadmap](roadmaps/v2-ci-i1-unattended-credential-execution.md)
+and [isolated installed qualification](operations/v2-ci-i1-installed-qualification.md) are complete.
+The exact profile is selected for GS2-10 candidate preparation. Production remains inactive at
+`OperatingV1`; the protected `OpenV2` decision and exact candidate qualification still gate activation.
+The six hosted cases measure a bounded latency envelope, not a matched savings percentage.
+
+**Scope:** bounded cross-repository implementation alongside unfinished GS2-09
 source/rehearsal work; join before the selected GS2-10 candidate/receiver freeze. This is a
 planning part, **not a newly accepted GS2 unit or a second scheduler**. The
 [design](coordination/2026-09-24-v2-unattended-ci-credential-interlude.md) owns its slices,
@@ -1460,8 +1464,8 @@ does not wait for these parallel slices; candidate adoption of this path does.
 Use the [unified roadmap's 5% target/10% narrow bureaucracy ceiling](2026-09-07-154210-fs-gg-unified-development-roadmap.md#74-narrow-bureaucracy-budget-tests-excluded),
 not a new per-PR approval. Measure both administrative critical-path delay and useful CI
 duration; preserve all required technical gates while removing duplicate exact-subject work
-and balancing observed shard runtimes. Zero routine human interaction is a design target, not
-an assertion that a credential-bearing CI job or changed `OpenV2` authority is already live.
+and balancing observed shard runtimes. The selected installed job design requires no routine human
+interaction; production activation and any efficiency percentage remain separate evidence claims.
 
 ### Concurrent development before cutover
 

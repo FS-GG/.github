@@ -7,7 +7,7 @@ description: "Six bounded milestones for a trusted post-merge ordinary-v2 settle
 
 # V2-CI-I1 — unattended credential execution
 
-Status: **01–02 source merged; 03 secret-free predecessor observed on protected main; 04 installer published; dedicated custody and installed execution pending**.
+Status: **01–06 interlude qualification complete; production credential job inactive pending the protected `OpenV2` gate and GS2-10 exact candidate**. See the [installed qualification record](../operations/v2-ci-i1-installed-qualification.md).
 
 This is the executable subroadmap for the [V2-CI-I1 design](../coordination/2026-09-24-v2-unattended-ci-credential-interlude.md),
 [ADR-0088](../adr/0088-ci-owned-unattended-credential-execution.md) and the
@@ -50,7 +50,7 @@ callable-operation keys are outside the class.
   missing receipt or custody; a separate `rehearse` command pins sandbox policy, keys, rulesets and
   synthetic epoch. Both commands keep incomplete outcomes nonzero, and a later epoch cannot mint a
   second operation identity for the same source.
-- [ ] **03 — Trusted two-job workflow.** Add a push-to-main-only workflow whose secret-free predecessor invokes
+- [x] **03 — Trusted two-job workflow.** Add a push-to-main-only workflow whose secret-free predecessor invokes
   milestone 01 and whose dependent credential job invokes only the pinned milestone 02 artifact. Prove the
   actual job dependency and environment/permission boundary, including good, deliberately broken and
   unavailable-tool preflight cases. Implement and bind the required checks to their real exact identities, or
@@ -88,8 +88,8 @@ callable-operation keys are outside the class.
   qualified the public receipt (`sha256:9571ee7e657f91ac44fd52be5f882c209a3d635ea5cfcb8460c849ef364bfb64`)
   with two settlement checks and eight branch gates. The credential job was correctly skipped because
   production activation remains false. This verifies installation and secret-free gating, while the
-  installed two-job success remains pending dedicated custody and hosted qualification.
-- [ ] **04 — Dedicated App, keys and immutable publication.** Through the preconfigured browser registration and protected setup path,
+  isolated installed two-job success is recorded in the [qualification matrix](../operations/v2-ci-i1-installed-qualification.md#hosted-installed-matrix). Production remains inactive while its real epoch is `OperatingV1`.
+- [x] **04 — Dedicated App, keys and immutable publication.** Through the preconfigured browser registration and protected setup path,
   create the dedicated ordinary-v2 App and authorizer identities, accept the public anchor, provision only the
   named `ordinary-v2` environment secrets, publish the same prepared installer bytes to both feeds and read back
   environment, installation, permission and artifact state. Do not reuse v1 or callable keys.
@@ -108,27 +108,26 @@ callable-operation keys are outside the class.
   `57f1328345fd58915da3f398e5c442dbd40b891a`, and the
   [release](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.2). Nuget.org's signed
   served archive is `sha256:627d9f54d038d47ef59635f92bd4fd4af2da7bfc971a938b6de1292503b0307e`;
-  its package payload matches the retained archive. Dedicated App and authorizer enrollment, public
-  anchors and protected environment secrets remain absent, so this milestone stays unchecked.
-- [ ] **05 — Isolated hosted installed matrix.** With bounded non-production refs, exercise success,
+  its package payload matches the retained archive. Dedicated production and rehearsal App/authorizer identities, public anchors, environment secrets and ruleset bindings were enrolled and independently read back in [`.github` #3671](https://github.com/FS-GG/.github/pull/3671) and [#3673](https://github.com/FS-GG/.github/pull/3673); their exact public bindings are in the [qualification record](../operations/v2-ci-i1-installed-qualification.md#custody-and-source-binding).
+- [x] **05 — Isolated hosted installed matrix.** With bounded non-production refs, exercise success,
   wrong-key/anchor, stale evidence/authority, altered payload, wrong workflow/environment, duplicate attempt,
   crash-before-write, crash-after-write/unknown reply and stable replay reconciliation. Preserve one effect
   identity and a public receipt/readback; a real protected operation is not a fixture.
   The isolated sandbox shell is now `FS-GG/FS.GG.Coordination.Authority.Sandbox` (repo ID
   `1385801070`, seed `fe6292e9…`), with active writer/integrity rulesets `23947019`/`23947025` and
-  separate main-only `ordinary-v2-rehearsal` environment `22669445419`. Both rulesets currently have
-  zero App bypass and the environment has zero secrets. Its separate synthetic OpenV2 epoch ref
+  separate main-only `ordinary-v2-rehearsal` environment `22669445419`. At initial shell creation both rulesets had
+  zero App bypass and the environment had zero secrets; the writer now grants only rehearsal App `5065136`, the integrity ruleset still has zero bypass, and the environment has three named secrets. Its separate synthetic OpenV2 epoch ref
   `refs/heads/ordinary-v2-rehearsal-epoch` points at `4f02add98e091cd268979468f9c15ffe59435d43`;
   the readback binds aggregate `fleet-cutover:fs-gg-v2-rehearsal`, generation 1 and the event digest.
   A distinct rehearsal App/key and compiled profile are required so a synthetic run cannot mint a
   production Authority token.
   A manual [rehearsal run 36044184438](https://github.com/FS-GG/.github/actions/runs/36044184438)
   refused in its secret-free preflight on the absent public rehearsal anchor; the dependent sandbox
-  credential job was skipped. This is the expected missing-anchor negative case, not the installed matrix.
-- [ ] **06 — Receiver and candidate disposition.** Measure before/after critical path, runner time and narrow
+  credential job was skipped. The subsequent installed [matrix](../operations/v2-ci-i1-installed-qualification.md#hosted-installed-matrix) passed wrong App/authorizer, stale receipt, wrong workflow revision, ref conflict, unknown reply/replay and duplicate/no-fault cases with public readback. Exact-head Coordination and observer tests cover altered payload, stale authority, changed environment and crash cuts. Production source-only preflight remains green with its credential job skipped.
+- [x] **06 — Receiver and candidate disposition.** Measure before/after critical path, runner time and narrow
   administrative overhead; record coverage and sample limits. Adopt the exact receiver/profile before GS2-10
   freeze only if installed evidence is complete, otherwise explicitly defer it. Source merge alone cannot mark
-  the feature delivered or the writer open.
+  the feature delivered or the writer open. The [record](../operations/v2-ci-i1-installed-qualification.md#time-and-administrative-cost) reports six installed run/job timing observations and their limits, including the unmatched before baseline and uninstrumented one-time operator time. The exact profile is selected for GS2-10 candidate preparation; production activation and any efficiency percentage remain unclaimed until their own evidence exists.
 
 ## Pipeline preflight decision and bounded baseline
 
@@ -150,8 +149,8 @@ The baseline is an exact-source snapshot, not a savings or duplication claim. Fo
 
 The public-repository timing API reported zero billed duration, which does not mean zero compute; the table sums
 job timestamps instead. Queue, setup, useful checks, retry cost and critical path stay separate. These three
-runs do not establish duplicated compiler/formal work or a bureaucracy percentage. Milestone 06 needs a larger,
-attributed before/after cohort.
+runs do not establish duplicated compiler/formal work or a bureaucracy percentage. A savings or ceiling
+claim needs a larger, attributed before/after cohort.
 
 The first `.github` ordinary-v2 preflight run `36019271890` adds one after-source observation: its job was
 created at 15:19:01Z, started at 15:20:15Z and completed at 15:20:25Z, yielding about 74 seconds of
@@ -162,6 +161,10 @@ its credential job also remained skipped. Neither run demonstrates installed-pat
 The pinned-installer source run `36044032033` queued for about two seconds and executed preflight for
 23 seconds; its credential job was also skipped. The three inactive observations are too few and lack
 an installed credential stage to support an after-cohort or net efficiency claim.
+The later [installed qualification record](../operations/v2-ci-i1-installed-qualification.md#time-and-administrative-cost)
+adds six isolated two-job observations, with 53–133 seconds of wall time and separate job elapsed totals.
+Those controlled sandbox cases include fault injection and are not a matched production before/after cohort;
+they support the installed path's timing and cost envelope without a savings percentage.
 
 ## Workspace impact
 
@@ -173,5 +176,6 @@ receiver/candidate adoption. Fresh workspaces and existing workspaces keep curre
 interlude. Clean-creation and upgrade proof belong to receiver adoption, not to the source milestones.
 
 The rootless fdev development path consumes no host wallet, DBus/Secret Service, SSH agent, host Podman socket,
-private key, JWT or installation token. The observed `ordinary-v2` environment shell has a custom `main` branch
-policy, no required reviewers and no secrets; that observation is not activation.
+private key, JWT or installation token. The `ordinary-v2` environment has a custom `main` branch
+policy, no required reviewers and three dedicated secrets. Their presence is not production activation;
+policy still sets `credentialJob.installed=false`.
