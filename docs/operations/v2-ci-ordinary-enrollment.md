@@ -38,7 +38,17 @@ on 2026-09-24 with zero secrets; this is setup only.
 The App private key and authorizer private key must travel from their creation point straight to the
 environment secret input. They must not pass through fdev, an agent transcript, a PR, an artifact, a
 shell trace, or a local test fixture. The one-time custodian may generate the RSA key on a trusted
-machine and publish only the key ID and public SPKI digest. The installed job recomputes the digest
+machine, then compute the public digest:
+
+```console
+umask 077
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out ordinary-v2-authorizer.pem
+openssl pkey -in ordinary-v2-authorizer.pem -pubout -outform DER | openssl dgst -sha256
+```
+
+Only the chosen public key ID and resulting 64-hex digest belong in the anchor or a handoff. Load
+the PEM into the environment secret directly and securely remove the local copy according to the
+custodian's key policy. The installed job recomputes the digest
 from the private key's public component before signing and refuses a mismatch. It exposes neither a
 general-purpose signing API nor a token to an agent.
 
