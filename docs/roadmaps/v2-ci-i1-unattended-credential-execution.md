@@ -82,6 +82,13 @@ callable-operation keys are outside the class.
   (`sha256:1af1e223d90b7dba5ff1c74d6db7e627043317fbab9fb0e6603a8981cdbb36b1`).
   Its receipt binds the exact merged tree, both settlement checks, all eight live branch gates,
   and each selected native run/job/check identity. The dependent credential job was skipped.
+  The pinned CLI and isolated rehearsal source merged in
+  [`.github` #3667](https://github.com/FS-GG/.github/pull/3667) as `bc083c69f1071179c238d738f830e725953ce8fc`.
+  Its protected-main [run 36044032033](https://github.com/FS-GG/.github/actions/runs/36044032033)
+  qualified the public receipt (`sha256:9571ee7e657f91ac44fd52be5f882c209a3d635ea5cfcb8460c849ef364bfb64`)
+  with two settlement checks and eight branch gates. The credential job was correctly skipped because
+  production activation remains false. This verifies installation and secret-free gating, while the
+  installed two-job success remains pending dedicated custody and hosted qualification.
 - [ ] **04 — Dedicated App, keys and immutable publication.** Through the preconfigured browser registration and protected setup path,
   create the dedicated ordinary-v2 App and authorizer identities, accept the public anchor, provision only the
   named `ordinary-v2` environment secrets, publish the same prepared installer bytes to both feeds and read back
@@ -115,6 +122,9 @@ callable-operation keys are outside the class.
   the readback binds aggregate `fleet-cutover:fs-gg-v2-rehearsal`, generation 1 and the event digest.
   A distinct rehearsal App/key and compiled profile are required so a synthetic run cannot mint a
   production Authority token.
+  A manual [rehearsal run 36044184438](https://github.com/FS-GG/.github/actions/runs/36044184438)
+  refused in its secret-free preflight on the absent public rehearsal anchor; the dependent sandbox
+  credential job was skipped. This is the expected missing-anchor negative case, not the installed matrix.
 - [ ] **06 — Receiver and candidate disposition.** Measure before/after critical path, runner time and narrow
   administrative overhead; record coverage and sample limits. Adopt the exact receiver/profile before GS2-10
   freeze only if installed evidence is complete, otherwise explicitly defer it. Source merge alone cannot mark
@@ -149,6 +159,9 @@ queue and 10 seconds of hosted execution. Its credential job was skipped and con
 inactive run is neither an installed-route timing nor a comparable after-cohort for the Coordination baseline.
 The hardened run `36025187067` queued for about 40 seconds and executed its preflight for 16 seconds;
 its credential job also remained skipped. Neither run demonstrates installed-path latency.
+The pinned-installer source run `36044032033` queued for about two seconds and executed preflight for
+23 seconds; its credential job was also skipped. The three inactive observations are too few and lack
+an installed credential stage to support an after-cohort or net efficiency claim.
 
 ## Workspace impact
 
