@@ -15,6 +15,7 @@ import os
 import pathlib
 import subprocess
 import sys
+from datetime import datetime
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / "policy/v2-ci-ordinary-settlement.json"
@@ -82,7 +83,7 @@ def required_checks(repository: str, policy: dict) -> list[str]:
         names.append(check.get("context"))
     if (not all(isinstance(name, str) and name for name in names)
             or len(names) != len(set(names))
-            or set(names) != set(policy["qualification"]["requiredChecks"])):
+            or set(names) != set(policy["qualification"]["requiredGateChecks"])):
         raise QUALIFICATION.Refusal("live required-check population differs from policy")
     return names
 
@@ -155,21 +156,31 @@ def observe(environ: dict[str, str]) -> dict:
     checks = checks_response.get("check_runs")
     if not isinstance(checks, list) or len(checks) != checks_response["total_count"]:
         raise QUALIFICATION.Refusal("incomplete native check-run population")
-    required = policy["qualification"]["requiredChecks"]
-    selected = []
-    for name in required:
+    def select(name: str) -> dict:
         matches = [check for check in checks if check.get("name") == name]
         if not matches or any(
             check.get("app", {}).get("id") != policy["qualification"]["requiredCheckAppId"]
             or check.get("head_sha") != head
-            or check.get("conclusion") != "success"
             for check in matches
         ):
-            raise QUALIFICATION.Refusal(f"missing, failed, stale or wrong-app check: {name}")
-        check = matches[0]
-        selected.append({"name": name, "conclusion": check.get("conclusion"),
-                         "sourceSha": check.get("head_sha"),
-                         "appId": check.get("app", {}).get("id")})
+            raise QUALIFICATION.Refusal(f"missing, stale or wrong-app check: {name}")
+        try:
+            def rank(check: dict) -> tuple[datetime, int]:
+                started = datetime.fromisoformat(check["started_at"].replace("Z", "+00:00"))
+                identifier = check["id"]
+                if started.tzinfo is None or not isinstance(identifier, int) or identifier < 1:
+                    raise ValueError("invalid check identity")
+                return started, identifier
+            check = max(matches, key=rank)
+        except (KeyError, TypeError, ValueError) as error:
+            raise QUALIFICATION.Refusal(f"malformed native check identity: {name}") from error
+        if check.get("status") != "completed" or check.get("conclusion") != "success":
+            raise QUALIFICATION.Refusal(f"latest native check is not successful: {name}")
+        return {"name": name, "conclusion": check["conclusion"],
+                "sourceSha": check["head_sha"], "appId": check["app"]["id"]}
+
+    selected = [select(name) for name in policy["qualification"]["requiredChecks"]]
+    gate_selected = [select(name) for name in policy["qualification"]["requiredGateChecks"]]
 
     digest = hashlib.sha256(POLICY_PATH.read_bytes()).hexdigest()
     runtime = {
@@ -190,6 +201,7 @@ def observe(environ: dict[str, str]) -> dict:
             "operationClass": policy["operationClass"], "policySha256": digest,
         },
         "checks": selected,
+        "gateChecks": gate_selected,
     }
     receipt = QUALIFICATION.qualify(policy, digest, runtime, [current_pull], evidence)
     receipt["runId"] = int(run_id)

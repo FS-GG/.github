@@ -32,6 +32,10 @@
     "requiredCheckAppId": 15368,
     "requiredChecks": [
       "contract-coherence / coherence",
+      "routine-eligibility"
+    ],
+    "requiredGateChecks": [
+      "contract-coherence / coherence",
       "projection",
       "roster-closure",
       "drift",

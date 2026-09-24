@@ -64,6 +64,10 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
                 {"name": name, "conclusion": "success", "sourceSha": HEAD, "appId": 15368}
                 for name in self.policy["qualification"]["requiredChecks"]
             ],
+            "gateChecks": [
+                {"name": name, "conclusion": "success", "sourceSha": HEAD, "appId": 15368}
+                for name in self.policy["qualification"]["requiredGateChecks"]
+            ],
         }
 
     def qualify(self, runtime=None, associations=None, evidence=None):
@@ -80,6 +84,9 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         self.assertEqual(3662, receipt["pullRequest"])
         self.assertEqual(SOURCE, receipt["mergeCommitSha"])
         self.assertFalse(receipt["credentialAccess"])
+        self.assertEqual({"contract-coherence / coherence", "routine-eligibility"},
+                         {check["name"] for check in receipt["requiredChecks"]})
+        self.assertEqual(8, len(receipt["requiredGateChecks"]))
 
     def test_refuses_request_and_manual_events(self):
         for event in ("pull_request", "pull_request_target", "workflow_dispatch", "repository_dispatch"):
@@ -140,6 +147,9 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         self.refuses(evidence=evidence, contains="failed or stale")
         evidence = copy.deepcopy(self.evidence)
         evidence["checks"].pop()
+        self.refuses(evidence=evidence, contains="population")
+        evidence = copy.deepcopy(self.evidence)
+        evidence["gateChecks"].pop()
         self.refuses(evidence=evidence, contains="population")
 
     def test_policy_inventory_is_new_unprovisioned_and_keeps_current_gates(self):

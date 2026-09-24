@@ -103,20 +103,25 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
         "policySha256": digest,
     }
     require_equal(subject, expected_subject, "stale or mismatched qualification evidence")
-    checks = evidence.get("checks")
-    if not isinstance(checks, list):
-        raise Refusal("qualification checks are missing")
-    check_map: dict[str, dict[str, Any]] = {}
-    for check in checks:
-        if not isinstance(check, dict) or not isinstance(check.get("name"), str) or check["name"] in check_map:
-            raise Refusal("qualification checks are malformed or duplicated")
-        check_map[check["name"]] = check
-    if set(check_map) != set(qualification["requiredChecks"]):
-        raise Refusal("qualification check population is incomplete or unexpected")
-    for name, check in check_map.items():
-        if (check.get("conclusion") != "success" or check.get("sourceSha") != head_sha
-                or check.get("appId") != qualification["requiredCheckAppId"]):
-            raise Refusal(f"qualification check {name} is failed or stale")
+    def validate_checks(field: str, expected: str) -> list[dict[str, Any]]:
+        population = evidence.get(field)
+        if not isinstance(population, list):
+            raise Refusal(f"qualification {field} are missing")
+        check_map: dict[str, dict[str, Any]] = {}
+        for check in population:
+            if not isinstance(check, dict) or not isinstance(check.get("name"), str) or check["name"] in check_map:
+                raise Refusal(f"qualification {field} are malformed or duplicated")
+            check_map[check["name"]] = check
+        if set(check_map) != set(qualification[expected]):
+            raise Refusal(f"qualification {field} population is incomplete or unexpected")
+        for name, check in check_map.items():
+            if (check.get("conclusion") != "success" or check.get("sourceSha") != head_sha
+                    or check.get("appId") != qualification["requiredCheckAppId"]):
+                raise Refusal(f"qualification check {name} is failed or stale")
+        return population
+
+    checks = validate_checks("checks", "requiredChecks")
+    gate_checks = validate_checks("gateChecks", "requiredGateChecks")
 
     return {
         "schema": "fsgg.github.v2-ci-secret-free-predecessor-receipt/1",
@@ -130,6 +135,7 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
         "mergeCommitSha": source,
         "qualificationSha": head_sha,
         "requiredChecks": sorted(checks, key=lambda check: check["name"]),
+        "requiredGateChecks": sorted(gate_checks, key=lambda check: check["name"]),
         "workflowPath": workflow["path"],
         "workflowRevision": source,
         "environment": job["environment"],

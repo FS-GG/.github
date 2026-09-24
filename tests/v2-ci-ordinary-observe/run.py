@@ -34,17 +34,20 @@ class NativeObservationTests(unittest.TestCase):
             "merge_commit_sha": SOURCE, "head": {"sha": HEAD},
             "base": {"ref": "main", "sha": "af5a748d075d6578300822c8b64251c7c85b3f91", "repo": {"full_name": "FS-GG/.github"}},
         }
+        qualification = MODULE.QUALIFICATION.read_json(str(MODULE.POLICY_PATH))["qualification"]
+        names = sorted(set(qualification["requiredChecks"] + qualification["requiredGateChecks"]))
         self.checks = {
-            "total_count": 8,
+            "total_count": len(names),
             "check_runs": [
-                {"name": name, "conclusion": "success", "head_sha": HEAD, "app": {"id": 15368}}
-                for name in MODULE.QUALIFICATION.read_json(str(MODULE.POLICY_PATH))["qualification"]["requiredChecks"]
+                {"id": index + 1, "name": name, "status": "completed", "conclusion": "success",
+                 "started_at": "2026-09-24T15:00:00Z", "head_sha": HEAD, "app": {"id": 15368}}
+                for index, name in enumerate(names)
             ],
         }
         self.tree = "c" * 40
         self.current_policy = MODULE.POLICY_PATH.read_bytes()
-        self.live_checks = [{"context": check["name"], "app_id": 15368}
-                            for check in self.checks["check_runs"]]
+        self.live_checks = [{"context": name, "app_id": 15368}
+                            for name in qualification["requiredGateChecks"]]
 
     def run_observation(self):
         def fake_run(args, **_kwargs):
@@ -81,6 +84,8 @@ class NativeObservationTests(unittest.TestCase):
         self.assertEqual(123, receipt["runId"])
         self.assertFalse(receipt["activation"])
         self.assertEqual(self.tree, receipt["qualifiedTreeSha"])
+        self.assertEqual(2, len(receipt["requiredChecks"]))
+        self.assertEqual(8, len(receipt["requiredGateChecks"]))
 
     def test_no_request_event_or_stale_workflow_revision(self):
         self.env["GITHUB_EVENT_NAME"] = "pull_request"
@@ -97,7 +102,7 @@ class NativeObservationTests(unittest.TestCase):
             self.run_observation()
         self.pull["merge_commit_sha"] = SOURCE
         self.checks["check_runs"][0]["head_sha"] = "b" * 40
-        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "failed, stale"):
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "stale"):
             self.run_observation()
         self.checks["check_runs"][0]["head_sha"] = HEAD
         self.checks["check_runs"][0]["app"]["id"] = 99
@@ -105,17 +110,24 @@ class NativeObservationTests(unittest.TestCase):
             self.run_observation()
 
     def test_duplicate_successful_check_runs_are_valid_but_any_failure_refuses(self):
-        duplicate = copy.deepcopy(self.checks["check_runs"][0])
+        original = next(check for check in self.checks["check_runs"] if check["name"] == "routine-eligibility")
+        duplicate = copy.deepcopy(original)
+        duplicate["id"] = 100
+        duplicate["started_at"] = "2026-09-24T15:01:00Z"
         self.checks["check_runs"].append(duplicate)
         self.checks["total_count"] += 1
         self.assertEqual("qualified", self.run_observation()["status"])
         duplicate["conclusion"] = "failure"
         self.checks["check_runs"][-1] = duplicate
-        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "failed"):
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "not successful"):
             self.run_observation()
+        duplicate["conclusion"] = "success"
+        self.checks["check_runs"][-1] = duplicate
+        original["conclusion"] = "failure"
+        self.assertEqual("qualified", self.run_observation()["status"])
 
     def test_incomplete_check_population_refuses(self):
-        self.checks["total_count"] = 3
+        self.checks["total_count"] += 1
         with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "incomplete native check-run"):
             self.run_observation()
 

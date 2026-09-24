@@ -49,7 +49,8 @@ callable-operation keys are outside the class.
   unavailable-tool preflight cases. Implement and bind the required checks to their real exact identities, or
   revise the prospective policy names before installation. Install the synthetic test; do not add request or
   manual triggers. The prepared workflow now observes a unique merged PR and independently fetches its PR-head
-  check runs for the exact live main-protection population. It binds a receipt to the
+  check runs for the exact live main-protection population plus the two typed settlement checks. It binds a
+  receipt to the
   protected push, policy digest, workflow revision and run identity; the dependent environment job rederives
   the same receipt. Its credential effect stays gated inactive and refuses if enabled without the pinned
   Coordination provider. A native read against merged PR #3663 and its exact head succeeded under the initial
@@ -60,7 +61,8 @@ callable-operation keys are outside the class.
   (`sha256:f5be586f8f0cc28a28d3445e8879f068895c4f76748170d9f3d9bbc3a3167f92`), and the
   credential job was skipped because activation is false. This is hosted source qualification,
   not the installed two-job success required to check off 03. An activation review found that the provisional
-  two-check list omitted six live main-protection gates and that a PR-head result did not by itself prove the
+  initial two-check list omitted the other live main-protection gates and that a PR-head result did not by
+  itself prove the
   merged tree. The observer now requires the exact live eight-check population and App ID, equality of PR-head
   and merged Git trees, and current-main policy/workflow bytes plus installed-anchor bytes before revalidating a
   receipt. A changed activation policy thus revokes an older queued run or rerun. These are source-level fences;
