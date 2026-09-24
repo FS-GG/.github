@@ -491,7 +491,16 @@ jobs:
           require(descriptor["version"] == version, "release version differs from restored Kit")
           require(descriptor["sourceSha"] == sha, "release source differs from tag")
           require(manifest["contentId"] == content_id, "release content ID differs from descriptor")
-          receipt = manifest["state"]["channelPromotion"]["receipt"]
+          state = manifest["state"]
+          require(state["phase"] == "promoted", "release phase is not promoted")
+          promotion = state["channelPromotion"]
+          require(promotion["state"] == "promoted", "channel promotion is not promoted")
+          for feed in ("github", "nuget"):
+              feed_state = state["feeds"][feed]
+              require(feed_state["state"] == "verified", f"{feed} feed is not verified")
+              require(feed_state["packages"]["FS.GG.Kit"]["state"] == "verified",
+                      f"{feed} Kit package is not verified")
+          receipt = promotion["receipt"]
           require(receipt["version"] == version and receipt["sourceSha"] == sha,
                   "promoted receipt differs from release")
           require(receipt["contentId"] == content_id, "promoted receipt content ID differs")

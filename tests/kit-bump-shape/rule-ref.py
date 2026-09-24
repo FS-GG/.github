@@ -139,5 +139,17 @@ run_case("unreadable release manifest", curl_fails=True, good=False)
 run_case("wrong manifest source", mutate=wrong_source, good=False)
 run_case("wrong manifest version", mutate=wrong_version, good=False)
 run_case("missing Kit member", mutate=missing_member, good=False)
+run_case("pending release phase", mutate=lambda m: m["state"].update(phase="pending"),
+         good=False)
+run_case("pending channel promotion",
+         mutate=lambda m: m["state"]["channelPromotion"].update(state="pending"),
+         good=False)
+for feed in ("github", "nuget"):
+    run_case(f"pending {feed} feed",
+             mutate=lambda m, feed=feed: m["state"]["feeds"][feed].update(state="pending"),
+             good=False)
+    run_case(f"pending {feed} Kit package",
+             mutate=lambda m, feed=feed: m["state"]["feeds"][feed]["packages"]["FS.GG.Kit"].update(state="pending"),
+             good=False)
 run_case("wrong restored nuspec source", nuspec_sha="c" * 40, good=False)
 run_case("malformed version", version="0.91.4.1", good=False)
