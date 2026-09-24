@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       fault:
-        description: Bounded sandbox ref-response fault
+        description: Bounded sandbox fault or refusal control
         required: true
         type: choice
         default: none
-        options: [none, lost-ref-reply, ref-conflict]
+        options: [none, lost-ref-reply, ref-conflict, wrong-authorizer, wrong-app-id, stale-receipt, wrong-workflow]
 
 permissions:
   actions: read
@@ -133,10 +133,40 @@ jobs:
           V2_ORDINARY_REHEARSAL_APP_PRIVATE_KEY: ${{ secrets.V2_ORDINARY_REHEARSAL_APP_PRIVATE_KEY }}
           V2_ORDINARY_REHEARSAL_AUTHORIZER_PRIVATE_KEY: ${{ secrets.V2_ORDINARY_REHEARSAL_AUTHORIZER_PRIVATE_KEY }}
         run: |
-          set -uo pipefail
+          set -euo pipefail
           test -n "$V2_ORDINARY_REHEARSAL_APP_ID" || exit 1
           test -n "$V2_ORDINARY_REHEARSAL_APP_PRIVATE_KEY" || exit 1
           test -n "$V2_ORDINARY_REHEARSAL_AUTHORIZER_PRIVATE_KEY" || exit 1
+          selected_fault="$FSGG_V2_REHEARSAL_FAULT"
+          case "$selected_fault" in
+            wrong-authorizer)
+              synthetic_key="$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null)"
+              test -n "$synthetic_key"
+              export V2_ORDINARY_REHEARSAL_AUTHORIZER_PRIVATE_KEY="$synthetic_key"
+              unset synthetic_key
+              export FSGG_V2_REHEARSAL_FAULT=none
+              ;;
+            wrong-app-id)
+              export V2_ORDINARY_REHEARSAL_APP_ID=1
+              export FSGG_V2_REHEARSAL_FAULT=none
+              ;;
+            stale-receipt)
+              python3 - "$FSGG_V2_REHEARSAL_PREFLIGHT_RECEIPT" <<'PY'
+          import json
+          import pathlib
+          import sys
+          path = pathlib.Path(sys.argv[1])
+          receipt = json.loads(path.read_text(encoding="utf-8"))
+          receipt["sourceSha"] = "0" * 40
+          path.write_text(json.dumps(receipt), encoding="utf-8")
+          PY
+              export FSGG_V2_REHEARSAL_FAULT=none
+              ;;
+            wrong-workflow)
+              export EXPECTED_WORKFLOW_SHA=0000000000000000000000000000000000000000
+              export FSGG_V2_REHEARSAL_FAULT=none
+              ;;
+          esac
           set +e
           "$RUNNER_TEMP/ordinary-v2-cli/fsgg-coordination" ordinary-settlement rehearse \
             > "$RUNNER_TEMP/ordinary-v2-rehearsal-outcome.json" \
@@ -154,7 +184,7 @@ jobs:
           print("ordinary-v2-rehearsal-refusal-codes=" + ",".join(public_codes))
           PY
           fi
-          case "$FSGG_V2_REHEARSAL_FAULT" in
+          case "$selected_fault" in
             none)
               test "$status" -eq 0 || exit 1
               grep -Eq 'Settlement(Succeeded|AlreadyComplete)' "$RUNNER_TEMP/ordinary-v2-rehearsal-outcome.json" || exit 1
@@ -167,9 +197,21 @@ jobs:
               test "$status" -eq 3 || exit 1
               grep -Fq 'ordinary-settlement-refused:SettlementJournalConflict' "$RUNNER_TEMP/ordinary-v2-rehearsal-error.txt" || exit 1
               ;;
+            wrong-authorizer)
+              test "$status" -eq 3 || exit 1
+              grep -Fq 'ordinary-settlement-refused:authorizer-spki' "$RUNNER_TEMP/ordinary-v2-rehearsal-error.txt" || exit 1
+              ;;
+            wrong-app-id)
+              test "$status" -eq 3 || exit 1
+              grep -Fq 'ordinary-settlement-refused:app-id-anchor' "$RUNNER_TEMP/ordinary-v2-rehearsal-error.txt" || exit 1
+              ;;
+            stale-receipt|wrong-workflow)
+              test "$status" -eq 3 || exit 1
+              grep -Fq 'ordinary-settlement-refused:current-source-observer-refused' "$RUNNER_TEMP/ordinary-v2-rehearsal-error.txt" || exit 1
+              ;;
             *) exit 1 ;;
           esac
-          printf 'fault=%s expected-outcome-observed=true\n' "$FSGG_V2_REHEARSAL_FAULT"
+          printf 'fault=%s expected-outcome-observed=true\n' "$selected_fault"
       - name: Read back the sandbox after the first attempt without credentials
         shell: bash
         env:
@@ -180,7 +222,7 @@ jobs:
           case "$FAULT" in
             none) mode=complete ;;
             lost-ref-reply) mode=pending-effect ;;
-            ref-conflict) mode=absent ;;
+            ref-conflict|wrong-authorizer|wrong-app-id|stale-receipt|wrong-workflow) mode=absent ;;
             *) exit 1 ;;
           esac
           for attempt in 1 2 3 4 5 6; do
