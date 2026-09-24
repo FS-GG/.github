@@ -199,15 +199,15 @@ jobs:
               ;;
             wrong-authorizer)
               test "$status" -eq 3 || exit 1
-              grep -Fq 'ordinary-settlement-refused:authorizer-spki' "$RUNNER_TEMP/ordinary-v2-rehearsal-error.txt" || exit 1
+              grep -Fq 'SettlementProviderUnavailable "authorizer-spki"' "$RUNNER_TEMP/ordinary-v2-rehearsal-error.txt" || exit 1
               ;;
             wrong-app-id)
               test "$status" -eq 3 || exit 1
-              grep -Fq 'ordinary-settlement-refused:app-id-anchor' "$RUNNER_TEMP/ordinary-v2-rehearsal-error.txt" || exit 1
+              grep -Fq 'SettlementProviderUnavailable "app-id-anchor"' "$RUNNER_TEMP/ordinary-v2-rehearsal-error.txt" || exit 1
               ;;
             stale-receipt|wrong-workflow)
               test "$status" -eq 3 || exit 1
-              grep -Fq 'ordinary-settlement-refused:current-source-observer-refused' "$RUNNER_TEMP/ordinary-v2-rehearsal-error.txt" || exit 1
+              grep -Fq 'SettlementProviderUnavailable "current-source-observer-refused"' "$RUNNER_TEMP/ordinary-v2-rehearsal-error.txt" || exit 1
               ;;
             *) exit 1 ;;
           esac
