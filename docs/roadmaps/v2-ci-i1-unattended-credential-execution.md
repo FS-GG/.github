@@ -60,7 +60,7 @@ callable-operation keys are outside the class.
   (`sha256:f5be586f8f0cc28a28d3445e8879f068895c4f76748170d9f3d9bbc3a3167f92`), and the
   credential job was skipped because activation is false. This is hosted source qualification,
   not the installed two-job success required to check off 03.
-- [ ] **04 — Dedicated App, keys and immutable publication.** Through the browser manifest/protected setup path,
+- [ ] **04 — Dedicated App, keys and immutable publication.** Through the preconfigured browser registration and protected setup path,
   create the dedicated ordinary-v2 App and authorizer identities, accept the public anchor, provision only the
   named `ordinary-v2` environment secrets, publish byte-identical pinned installer artifacts and read back
   environment, installation, permission and artifact state. Do not reuse v1 or callable keys.

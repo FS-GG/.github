@@ -23,6 +23,16 @@ requests, Actions, Workflows, repository creation or organization grant. The jou
 endpoints require Contents write; token requests must explicitly narrow both repository ID and
 permission even though the App installation itself is already selected-repository.
 
+The Authority repository's live `v2-journal-writer` ruleset (`21872113`) protects
+`refs/heads/fsgg/v2/journal/**/*` with creation/update rules and currently lists only incumbent App
+`4882140` as an always-bypass actor. After the new App ID is known, add **that exact App ID** as one
+more bypass actor for this writer ruleset, then independently read back its scope and actors. Retain the
+incumbent until its separate governed retirement. The `v2-journal-integrity` ruleset (`21872115`)
+protects the same journal population against deletion/non-fast-forward and has **zero** bypass actors;
+do not grant the new App an integrity bypass or weaken either rule. The credential job must refuse when
+the live writer/integrity ruleset differs from the accepted public binding. This settings update is a
+one-time protected setup effect, not part of ordinary settlement permission.
+
 ## Dedicated private material and public anchor
 
 Provision these three **new** values directly into the `.github` Actions `ordinary-v2` environment.
