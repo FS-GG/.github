@@ -48,18 +48,25 @@ callable-operation keys are outside the class.
   actual job dependency and environment/permission boundary, including good, deliberately broken and
   unavailable-tool preflight cases. Implement and bind the required checks to their real exact identities, or
   revise the prospective policy names before installation. Install the synthetic test; do not add request or
-  manual triggers. The prepared workflow now observes a unique merged PR and independently fetches exact
-  PR-head `contract-coherence / coherence` and `routine-eligibility` check runs. It binds a receipt to the
+  manual triggers. The prepared workflow now observes a unique merged PR and independently fetches its PR-head
+  check runs for the exact live main-protection population plus the two typed settlement checks. It binds a
+  receipt to the
   protected push, policy digest, workflow revision and run identity; the dependent environment job rederives
   the same receipt. Its credential effect stays gated inactive and refuses if enabled without the pinned
-  Coordination provider. A native read against merged PR #3663 and its exact head succeeded; focused
-  good/stale/wrong-app/missing-population cases pass. The first actual protected-main
+  Coordination provider. A native read against merged PR #3663 and its exact head succeeded under the initial
+  source-only policy; focused good/stale/wrong-app/missing-population cases pass. The first actual protected-main
   [run 36019271890](https://github.com/FS-GG/.github/actions/runs/36019271890) succeeded on
   merge `bbadbba529891af9a969a561936badb654563330`: the preflight emitted public
   artifact `10815877698`
   (`sha256:f5be586f8f0cc28a28d3445e8879f068895c4f76748170d9f3d9bbc3a3167f92`), and the
   credential job was skipped because activation is false. This is hosted source qualification,
-  not the installed two-job success required to check off 03.
+  not the installed two-job success required to check off 03. An activation review found that the provisional
+  initial two-check list omitted the other live main-protection gates and that a PR-head result did not by
+  itself prove the merged tree. The observer now requires the exact live eight-check population and App ID,
+  equality of PR-head and merged Git trees, native workflow/run/job/attempt identity for each check, and
+  current-main policy/workflow bytes plus installed-anchor bytes before revalidating a receipt. A changed
+  activation policy thus revokes an older queued run or rerun. These are source-level fences;
+  the credential job stays inactive until its installed provider and hosted matrix qualify.
 - [ ] **04 — Dedicated App, keys and immutable publication.** Through the preconfigured browser registration and protected setup path,
   create the dedicated ordinary-v2 App and authorizer identities, accept the public anchor, provision only the
   named `ordinary-v2` environment secrets, publish byte-identical pinned installer artifacts and read back

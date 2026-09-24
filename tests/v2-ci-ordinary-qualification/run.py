@@ -48,6 +48,12 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
             "head": {"sha": HEAD},
             "base": {"ref": "main", "sha": "af5a748d075d6578300822c8b64251c7c85b3f91", "repo": {"full_name": "FS-GG/.github"}},
         }]
+        def check(name, index):
+            producer = self.policy["qualification"]["checkProducers"][name]
+            return {"name": name, "conclusion": "success", "sourceSha": HEAD, "appId": 15368,
+                    "checkRunId": index + 1, "workflowRunId": 1000 + index,
+                    "runAttempt": 1, "checkSuiteId": 2000 + index,
+                    "workflowId": producer["workflowId"], "workflowPath": producer["path"]}
         self.evidence = {
             "schema": "fsgg.github.v2-ci-qualification-evidence/1",
             "status": "passed",
@@ -61,8 +67,12 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
                 "policySha256": self.digest,
             },
             "checks": [
-                {"name": "contract-coherence / coherence", "conclusion": "success", "sourceSha": HEAD, "appId": 15368},
-                {"name": "routine-eligibility", "conclusion": "success", "sourceSha": HEAD, "appId": 15368},
+                check(name, index)
+                for index, name in enumerate(self.policy["qualification"]["requiredChecks"])
+            ],
+            "gateChecks": [
+                check(name, index)
+                for index, name in enumerate(self.policy["qualification"]["requiredGateChecks"])
             ],
         }
 
@@ -80,6 +90,9 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         self.assertEqual(3662, receipt["pullRequest"])
         self.assertEqual(SOURCE, receipt["mergeCommitSha"])
         self.assertFalse(receipt["credentialAccess"])
+        self.assertEqual({"contract-coherence / coherence", "routine-eligibility"},
+                         {check["name"] for check in receipt["requiredChecks"]})
+        self.assertEqual(8, len(receipt["requiredGateChecks"]))
 
     def test_refuses_request_and_manual_events(self):
         for event in ("pull_request", "pull_request_target", "workflow_dispatch", "repository_dispatch"):
@@ -141,6 +154,12 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         evidence = copy.deepcopy(self.evidence)
         evidence["checks"].pop()
         self.refuses(evidence=evidence, contains="population")
+        evidence = copy.deepcopy(self.evidence)
+        evidence["gateChecks"].pop()
+        self.refuses(evidence=evidence, contains="population")
+        evidence = copy.deepcopy(self.evidence)
+        evidence["checks"][0]["workflowId"] = 1
+        self.refuses(evidence=evidence, contains="native producer")
 
     def test_policy_inventory_is_new_unprovisioned_and_keeps_current_gates(self):
         self.assertEqual("source-qualified-not-installed", self.policy["status"])
@@ -165,6 +184,12 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         self.assertEqual(0, observation["requiredReviewerCount"])
         self.assertEqual(0, observation["secretCount"])
         self.assertEqual("inert-shell-not-activation", observation["disposition"])
+
+    def test_activation_requires_matching_status(self):
+        self.policy["credentialJob"]["installed"] = True
+        self.refuses(contains="activation status differs")
+        self.policy["status"] = "installed"
+        self.assertEqual("qualified", self.qualify()["status"])
 
 
 if __name__ == "__main__":
