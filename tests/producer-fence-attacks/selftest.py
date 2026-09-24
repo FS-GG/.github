@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import pathlib
 import shutil
@@ -43,6 +44,40 @@ def write_trx(path: pathlib.Path, names: list[str]) -> None:
 def main() -> None:
     oracle = json.loads(validator.ORACLE_PATH.read_text())
     exact = sorted(validator.expected_test_names(oracle))
+
+    historical = next(row for row in json.loads(validator.EXTERNAL_PATH.read_text())["routes"]
+                      if row["path"] == ".github/workflows/kit-materialize.yml")
+    successor = json.loads(validator.READ_ONLY_SUCCESSORS_PATH.read_text())["routes"][0]
+    source = (validator.ROOT / historical["path"]).read_bytes()
+    validator.validate_kit_read_only_successor(historical, successor, source)
+
+    def successor_for(candidate: bytes) -> dict:
+        return {**successor, "sha256": hashlib.sha256(candidate).hexdigest()}
+
+    must_fail(lambda: validator.validate_kit_read_only_successor(
+        historical, {**successor, "sha256": "0" * 64}, source), "a forged successor source hash")
+    must_fail(lambda: validator.validate_kit_read_only_successor(
+        historical, {**successor, "predecessorSha256": "0" * 64}, source),
+        "a forged historical predecessor")
+    must_fail(lambda: validator.validate_kit_read_only_successor(
+        historical, {**successor, "disposition": "remote-writer"}, source),
+        "a forged read-only disposition")
+    new_job = source.replace(b"  receiver-validate:\n", b"  new-writer:\n    runs-on: ubuntu-latest\n  receiver-validate:\n")
+    must_fail(lambda: validator.validate_kit_read_only_successor(
+        historical, successor_for(new_job), new_job), "an added writer job with a matching hash")
+    write_permission = source.replace(b"  contents: read\n", b"  contents: write\n", 1)
+    must_fail(lambda: validator.validate_kit_read_only_successor(
+        historical, successor_for(write_permission), write_permission),
+        "a write permission with a matching hash")
+    app_token = source.replace(b"        uses: actions/setup-dotnet@v6\n",
+                               b"        uses: actions/create-github-app-token@v2\n", 1)
+    must_fail(lambda: validator.validate_kit_read_only_successor(
+        historical, successor_for(app_token), app_token), "an App token with a matching hash")
+    write_command = source.replace(b"          dotnet restore \"$RECEIVER_PROJECT\" -v minimal\n",
+                                   b"          gh api -X POST repos/FS-GG/.github/dispatches\n", 1)
+    must_fail(lambda: validator.validate_kit_read_only_successor(
+        historical, successor_for(write_command), write_command),
+        "a provider write command with a matching hash")
 
     with tempfile.TemporaryDirectory() as temporary:
         temp = pathlib.Path(temporary)

@@ -1,0 +1,12 @@
+{
+  "schema": "fsgg.gs2-08.6-read-only-route-successors/1",
+  "routes": [
+    {
+      "path": ".github/workflows/kit-materialize.yml",
+      "predecessorSha256": "c665d20100ec37068c2eae8fbadb22ab22cd9f571a539174c1a85dc917b59575",
+      "sha256": "ebb1b200f69234949be67b9c46ed40abdbc5698b81bf1c0da3102ab1544903e4",
+      "disposition": "current-revision-read-only",
+      "proof": "contents-read-only; no job permission override, App token, secret read, provider write command, or materialize job"
+    }
+  ]
+}

@@ -1576,6 +1576,13 @@ fi
 #   4. A LEG THAT MUTATES THE FIXTURE SO THE HELPER IS PROVEN TO FIRE -> M1-M4 below, each of which
 #      applies a specific realistic regression and asserts the corresponding leg goes FAIL.
 # =================================================================================================
+echo "== pinned rule-ref resolution against the published successor and legacy contracts =="
+if python3 "$HERE/rule-ref.py"; then
+  ok "the actual reusable-workflow resolver accepts bound releases and refuses missing or contradictory evidence"
+else
+  bad "the reusable-workflow resolver failed a successor or legacy release control"
+fi
+
 if grep -q 'GS2-08.9 retirement boundary' "$WF"; then
   if grep -q '^  materialize:' "$WF"; then
     bad "GS2-08.9 retirement: the mutating materialize job still exists"
