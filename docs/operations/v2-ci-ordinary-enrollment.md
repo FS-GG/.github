@@ -32,6 +32,9 @@ protects the same journal population against deletion/non-fast-forward and has *
 do not grant the new App an integrity bypass or weaken either rule. The credential job must refuse when
 the live writer/integrity ruleset differs from the accepted public binding. This settings update is a
 one-time protected setup effect, not part of ordinary settlement permission.
+The writer ruleset currently excludes `refs/heads/fsgg/v2/journal/cutover/d5`; the accepted binding
+must preserve that exclusion and every other condition exactly. Read each ruleset with a credential
+that returns its complete `bypass_actors` array; an anonymous response that omits actors is insufficient.
 
 ## Dedicated private material and public anchor
 
@@ -82,14 +85,43 @@ independently read back. Its exact schema is `fsgg.github.v2-ci-ordinary-settlem
     "repositoryId": 1351660651,
     "permissions": {"contents": "write", "metadata": "read"}
   },
+  "rulesets": {
+    "writer": {
+      "id": 21872113, "name": "v2-journal-writer", "enforcement": "active",
+      "conditions": {"ref_name": {
+        "include": ["refs/heads/fsgg/v2/journal/**/*"],
+        "exclude": ["refs/heads/fsgg/v2/journal/cutover/d5"]
+      }},
+      "rules": [{"type": "creation"}, {"type": "update"}],
+      "bypassActors": [
+        {"actorId": 4882140, "actorType": "Integration", "bypassMode": "always"},
+        {"actorId": 0, "actorType": "Integration", "bypassMode": "always"}
+      ]
+    },
+    "integrity": {
+      "id": 21872115, "name": "v2-journal-integrity", "enforcement": "active",
+      "conditions": {"ref_name": {
+        "include": ["refs/heads/fsgg/v2/journal/**/*"], "exclude": []
+      }},
+      "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}],
+      "bypassActors": []
+    }
+  },
+  "effectiveRules": [
+    {"type": "creation", "rulesetId": 21872113, "rulesetSourceType": "Repository", "rulesetSource": "FS-GG/FS.GG.Coordination.Authority"},
+    {"type": "update", "rulesetId": 21872113, "rulesetSourceType": "Repository", "rulesetSource": "FS-GG/FS.GG.Coordination.Authority"},
+    {"type": "deletion", "rulesetId": 21872115, "rulesetSourceType": "Repository", "rulesetSource": "FS-GG/FS.GG.Coordination.Authority"},
+    {"type": "non_fast_forward", "rulesetId": 21872115, "rulesetSourceType": "Repository", "rulesetSource": "FS-GG/FS.GG.Coordination.Authority"}
+  ],
   "acceptedAt": "<UTC-time-after-readback>",
   "sourceCommit": "<exact-protected-policy-commit>"
 }
 ```
 
-The displayed zeros and angle-bracket values are explanatory placeholders, not accepted data. The
-installed validator must reject an absent anchor, nonpositive IDs, unsupported key, changed policy or
-wrong repository/permission. Capture the App ID and installation ID from GitHub's own settings/API
+The displayed zeros and angle-bracket values are explanatory placeholders, not accepted data. Replace
+the writer `bypassActors` zero with the new App ID after independently reading back the live rule. The
+installed validator must reject an absent anchor, nonpositive IDs, unsupported key, changed policy,
+wrong repository/permission, or changed ruleset and effective rules. Capture the App ID and installation ID from GitHub's own settings/API
 readback, not from a typed operator claim. Record only public identities in the repository. The
 environment secret inventory remains separate and never records secret values.
 
