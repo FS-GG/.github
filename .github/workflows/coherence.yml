@@ -84,6 +84,17 @@ jobs:
       - name: Assert compatibility.md projects the registry
         run: python scripts/check-projection.py registry/dependencies.yml docs/registry/compatibility.md
 
+  # V2-CI-I1 milestone 01 is a hermetic, secret-free source policy. Its fixture mutates every
+  # admitted binding and proves request/manual events, ambiguous merge associations, wrong
+  # workflow/environment/class and stale evidence cannot produce a predecessor receipt.
+  v2-ci-ordinary-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v7
+      - name: Qualify the ordinary-v2 post-merge policy boundary
+        run: bash tests/v2-ci-ordinary-qualification/run.sh
+
   # Engine-build siting gate (.github#2653). No harness a WORKER runs may build the coordination
   # engine into the worker's own checkout: `scripts/fsgg-coord`'s tier 2a prefers such an artifact
   # over the shared checkout's engine, and `stale_guard` then fail-closes EVERY board write from that
