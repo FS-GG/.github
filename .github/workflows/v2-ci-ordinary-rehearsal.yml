@@ -141,6 +141,17 @@ jobs:
             > "$RUNNER_TEMP/ordinary-v2-rehearsal-outcome.json" \
             2> "$RUNNER_TEMP/ordinary-v2-rehearsal-error.txt"
           status=$?
+          if test "$status" -ne 0; then
+            python3 - "$RUNNER_TEMP/ordinary-v2-rehearsal-error.txt" <<'PY'
+          import pathlib
+          import re
+          import sys
+          value = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+          words = re.findall(r"[A-Za-z][A-Za-z0-9-]*", value)
+          public_codes = [word for word in words[:6] if len(word) <= 48]
+          print("ordinary-v2-rehearsal-refusal-codes=" + ",".join(public_codes))
+          PY
+          fi
           case "$FSGG_V2_REHEARSAL_FAULT" in
             none)
               test "$status" -eq 0 || exit 1
