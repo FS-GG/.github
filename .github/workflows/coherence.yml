@@ -84,9 +84,8 @@ jobs:
       - name: Assert compatibility.md projects the registry
         run: python scripts/check-projection.py registry/dependencies.yml docs/registry/compatibility.md
 
-  # V2-CI-I1 milestone 01 is a hermetic, secret-free source policy. Its fixture mutates every
-  # admitted binding and proves request/manual events, ambiguous merge associations, wrong
-  # workflow/environment/class and stale evidence cannot produce a predecessor receipt.
+  # V2-CI-I1's secret-free source policy and native observer are hermetic here. The fixture
+  # also checks that the installed workflow keeps credential execution behind the predecessor.
   v2-ci-ordinary-policy:
     runs-on: ubuntu-latest
     timeout-minutes: 2

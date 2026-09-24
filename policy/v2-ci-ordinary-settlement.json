@@ -27,11 +27,12 @@
   "qualification": {
     "phase": "secret-free-predecessor",
     "credentialAccess": false,
-    "producerStatus": "pending-milestone-03",
-    "currentValidatorRole": "caller-supplied-evidence-contract-only",
+    "producerStatus": "trusted-main-push-predecessor",
+    "currentValidatorRole": "native-API-derived-evidence",
+    "requiredCheckAppId": 15368,
     "requiredChecks": [
-      "coherent-qualification",
-      "ordinary-settlement-contract"
+      "contract-coherence / coherence",
+      "routine-eligibility"
     ]
   },
   "credentialJob": {

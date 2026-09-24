@@ -17,6 +17,7 @@ MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 SOURCE = "53a0f6c8f03bb8c4a60d55c3ce8a38c78a26b1b5"
+HEAD = "353ff86a50808959770a73863385646efaf69969"
 
 
 class OrdinarySettlementQualificationTests(unittest.TestCase):
@@ -43,6 +44,7 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
             "state": "closed",
             "merged_at": "2026-09-24T13:09:45Z",
             "merge_commit_sha": SOURCE,
+            "head": {"sha": HEAD},
             "base": {"ref": "main", "repo": {"full_name": "FS-GG/.github"}},
         }]
         self.evidence = {
@@ -50,6 +52,7 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
             "status": "passed",
             "subject": {
                 "sourceSha": SOURCE,
+                "qualificationSha": HEAD,
                 "workflowPath": ".github/workflows/v2-ci-ordinary-settlement.yml",
                 "workflowRevision": SOURCE,
                 "environment": "ordinary-v2",
@@ -57,8 +60,8 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
                 "policySha256": self.digest,
             },
             "checks": [
-                {"name": "coherent-qualification", "conclusion": "success", "sourceSha": SOURCE},
-                {"name": "ordinary-settlement-contract", "conclusion": "success", "sourceSha": SOURCE},
+                {"name": "contract-coherence / coherence", "conclusion": "success", "sourceSha": HEAD, "appId": 15368},
+                {"name": "routine-eligibility", "conclusion": "success", "sourceSha": HEAD, "appId": 15368},
             ],
         }
 
@@ -122,6 +125,7 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
     def test_refuses_stale_or_failed_qualification_evidence(self):
         for field, value in (
             ("sourceSha", "d" * 40),
+            ("qualificationSha", "d" * 40),
             ("workflowRevision", "e" * 40),
             ("environment", "old-environment"),
             ("operationClass", "release"),
@@ -139,9 +143,10 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
 
     def test_policy_inventory_is_new_unprovisioned_and_keeps_current_gates(self):
         self.assertEqual("source-qualified-not-installed", self.policy["status"])
-        self.assertEqual("pending-milestone-03", self.policy["qualification"]["producerStatus"])
-        self.assertEqual("caller-supplied-evidence-contract-only",
+        self.assertEqual("trusted-main-push-predecessor", self.policy["qualification"]["producerStatus"])
+        self.assertEqual("native-API-derived-evidence",
                          self.policy["qualification"]["currentValidatorRole"])
+        self.assertEqual(15368, self.policy["qualification"]["requiredCheckAppId"])
         inventory = self.policy["credentialInventory"]
         self.assertTrue(inventory)
         self.assertTrue(all(item["generation"] == "new-v2-dedicated" for item in inventory))

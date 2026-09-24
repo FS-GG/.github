@@ -77,6 +77,9 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
     number = pull.get("number")
     if not isinstance(number, int) or isinstance(number, bool) or number < 1:
         raise Refusal("associated pull request number is invalid")
+    head_sha = (pull.get("head") or {}).get("sha")
+    if not isinstance(head_sha, str) or not SHA.fullmatch(head_sha):
+        raise Refusal("associated pull request head SHA is invalid")
 
     require_equal(evidence.get("schema"), "fsgg.github.v2-ci-qualification-evidence/1",
                   "unsupported qualification evidence schema")
@@ -84,6 +87,7 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
     subject = evidence.get("subject") or {}
     expected_subject = {
         "sourceSha": source,
+        "qualificationSha": head_sha,
         "workflowPath": workflow["path"],
         "workflowRevision": source,
         "environment": job["environment"],
@@ -102,7 +106,8 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
     if set(check_map) != set(qualification["requiredChecks"]):
         raise Refusal("qualification check population is incomplete or unexpected")
     for name, check in check_map.items():
-        if check.get("conclusion") != "success" or check.get("sourceSha") != source:
+        if (check.get("conclusion") != "success" or check.get("sourceSha") != head_sha
+                or check.get("appId") != qualification["requiredCheckAppId"]):
             raise Refusal(f"qualification check {name} is failed or stale")
 
     return {
@@ -113,6 +118,8 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
         "sourceSha": source,
         "pullRequest": number,
         "mergeCommitSha": source,
+        "qualificationSha": head_sha,
+        "requiredChecks": sorted(checks, key=lambda check: check["name"]),
         "workflowPath": workflow["path"],
         "workflowRevision": source,
         "environment": job["environment"],
