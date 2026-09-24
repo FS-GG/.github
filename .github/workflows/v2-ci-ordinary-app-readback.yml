@@ -1,0 +1,48 @@
+name: V2 ordinary App enrollment readback
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ordinary-v2
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify production App installation through GitHub
+        env:
+          FSGG_APP_ID: ${{ secrets.V2_ORDINARY_APP_ID }}
+          FSGG_APP_PRIVATE_KEY: ${{ secrets.V2_ORDINARY_APP_PRIVATE_KEY }}
+          FSGG_EXPECTED_APP_ID: "5064713"
+          FSGG_EXPECTED_NAME: FS-GG Ordinary V2 Settlement
+          FSGG_EXPECTED_REPOSITORY: FS-GG/FS.GG.Coordination.Authority
+          FSGG_EXPECTED_REPOSITORY_ID: "1351660651"
+        run: python3 tools/v2-ci-ordinary-app-readback.py
+
+  rehearsal:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ordinary-v2-rehearsal
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify rehearsal App installation through GitHub
+        env:
+          FSGG_APP_ID: ${{ secrets.V2_ORDINARY_REHEARSAL_APP_ID }}
+          FSGG_APP_PRIVATE_KEY: ${{ secrets.V2_ORDINARY_REHEARSAL_APP_PRIVATE_KEY }}
+          FSGG_EXPECTED_APP_ID: "0"
+          FSGG_EXPECTED_NAME: FS-GG Ordinary V2 Rehearsal
+          FSGG_EXPECTED_REPOSITORY: FS-GG/FS.GG.Coordination.Authority.Sandbox
+          FSGG_EXPECTED_REPOSITORY_ID: "1385801070"
+        run: python3 tools/v2-ci-ordinary-app-readback.py
