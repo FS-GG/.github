@@ -79,14 +79,14 @@
 #     Rendering deliberately widened it from `profile == governed` to all five profiles on
 #     2026-07-04 (Rendering#90, commit f4abd68c — a cross-repo request FROM this repo, accepted), and
 #     the row sat stale for six days while every digest stayed green. Reconciled to the manifest.
-#   * PROCESS skills (19) — RECONCILED from SDD's EMITTED process producer manifest
-#     `.agents/skills/skill-manifest.json` (schema `skill-manifest` v1, FS.GG.SDD#111 closing
+#   * PROCESS skills (21) — RECONCILED from SDD's EMITTED process producer manifest
+#     `.claude/skills/skill-manifest.json` (schema `skill-manifest` v2, FS.GG.SDD#111 closing
 #     cross-repo #109; regenerable/checkable via `fsgg-sdd registry skill-manifest --write|--check`,
 #     drift-guarded against `SeededSkills.skillNames` + the authored `SKILL.md` digests). Each
 #     `sha256` is the same `Fsgg.SkillMirror` canonical-body digest the registry declares
 #     (`sha256sum SKILL.md`-equivalent), so registry = manifest = bytes for the process set. The set
 #     grew 16→19 when SDD#924 published `fs-gg-sdd-typed-author`, `-typed-inspect`, and
-#     `-typed-migrate`; all rows are reconciled against the emitted manifest and all 19 are `always`
+#     `-typed-migrate`; SDD#987 added `-typed-correspond` and `-typed-reconcile`. All 21 are `always`
 #     (canonical grammar).
 #
 # BLOCKED-ON (final flip only): BOTH producer-side conditions are now CLEARED (.github#290) — the P2
@@ -107,7 +107,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-09-15"
+updated: "2026-09-24"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -162,9 +162,11 @@ skills:
   - { id: fs-gg-sdd-specify,             scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-specify/SKILL.md,             sha256: f4bd7db58110b6d842bd0f48ab317029e3e5c1911a6a2d2bcb846bb06f976496, materializes-when: always }
   - { id: fs-gg-sdd-tasks,               scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-tasks/SKILL.md,               sha256: 33c3410cab95503c5c0c6b91de785ad2682f21dc3088d8d46d3f1e1d8975d548, materializes-when: always }
   - { id: fs-gg-sdd-troubleshooting,     scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-troubleshooting/SKILL.md,     sha256: e1d92bc789903d8c7c3920a8d56cc5e15c242f211a7b549858137c9431aac1cf, materializes-when: always }
-  - { id: fs-gg-sdd-typed-author,        scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-typed-author/SKILL.md,        sha256: d90ea8872c6ae871b1acf007da42c98c70c95e548a47a5f368d4d5490f1beac1, materializes-when: always }
+  - { id: fs-gg-sdd-typed-author,        scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-typed-author/SKILL.md,        sha256: 75db6adf4e273cd75819569562841c6f11ab215f01737b770492e52d17627d7c, materializes-when: always }
+  - { id: fs-gg-sdd-typed-correspond,   scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-typed-correspond/SKILL.md,   sha256: 2788d51db70b048736e7a2b1081e0cac55a614dd09814c0c510de0e9b2ec720f, materializes-when: always }
   - { id: fs-gg-sdd-typed-inspect,       scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-typed-inspect/SKILL.md,       sha256: acf98b050f401ad583b2c4e651f8b090921c0df3b350f16a1ae4d9d0543bd266, materializes-when: always }
-  - { id: fs-gg-sdd-typed-migrate,       scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-typed-migrate/SKILL.md,       sha256: 94ecee820b476651a1eb5a1e6b9d6483a14568a6b257eb8e10ffba5b40f7d2d4, materializes-when: always }
+  - { id: fs-gg-sdd-typed-migrate,       scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-typed-migrate/SKILL.md,       sha256: 5e99051e9d179c256fcbe4d449f417183b6b9b05a2bc9107c421c9c867067584, materializes-when: always }
+  - { id: fs-gg-sdd-typed-reconcile,    scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-typed-reconcile/SKILL.md,    sha256: b237b94b6f50b3c658d20b14264df23ccbb4cc21a556ed5e262b8a559fb6f546, materializes-when: always }
   - { id: fs-gg-sdd-validate,            scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-validate/SKILL.md,            sha256: 87ed462650a26b7deafad23c46fa313928740ea9554385465fe74b5ecc23ec2a, materializes-when: always }
   - { id: fs-gg-sdd-verify,              scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-verify/SKILL.md,              sha256: ea8a770da57bd6c1c076bc115fa324e003e77e346b8aa52188f7c3a8c7548ee5, materializes-when: always }
 
@@ -343,11 +345,11 @@ skills:
   # it was built for. registry = manifest = bytes: sha256 is the canonical-body digest of the authored
   # SKILL.md, reconciled from the driver manifest (predicate flip + re-digest: .github#1247).
   # ------------------------------------------------------------------------------------------------
-  - { id: work-roadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/work-roadmap/SKILL.md, sha256: 0ef5eb6927f398dbfa3ea3aeaf03b10064ed2a944e35e25e19c773760b5a54d8, materializes-when: "always" }
+  - { id: work-roadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/work-roadmap/SKILL.md, sha256: 8d0c263863de26582e24287b83973b8f6bd75491746264c06e801ab4cb49c033, materializes-when: "always" }
   # work-board — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: work-board,              scope: driver,  owner: .github,         source: .github/.claude/skills/work-board/SKILL.md, sha256: 8d70494eb5a63600f1bc323119f279bb3c616b4e67ff0de634ae4dfb7fea4f48, materializes-when: always }
+  - { id: work-board,              scope: driver,  owner: .github,         source: .github/.claude/skills/work-board/SKILL.md, sha256: ff9f0ed5fde3ee86da7fd80ad3239180bbd7b20f0445814255d07e0108ca5f1c, materializes-when: always }
   # padd-item — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
@@ -385,7 +387,7 @@ skills:
   # publishing-and-deployment — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: ab9efce9d599a9f0e6df25a3b41f0e3330851ef350d13cf641f4be1114c8d5fb, materializes-when: "false" }
+  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: bd5fd8ed38e6237dc84e3261e175b2b7079928670278b7bffab111ecb1075812, materializes-when: "false" }
   # drive-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
