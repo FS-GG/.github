@@ -44,6 +44,13 @@ and rationale.
 > no current unit state, accepted evidence, dispatch state or operating authority; owning unit contracts,
 > candidate qualification and exact roadmap pinning remain explicit prerequisites.
 
+> **Next bounded interlude — 2026-09-24:** [V2-CI-I1](#v2-ci-i1--unattended-credential-execution-interlude)
+> designs an unattended trusted-CI credential path and removes routine agent-to-host handoffs
+> before the GS2-10 candidate freeze, without changing current v1 genesis or `OpenV2` approval.
+> Its [design](coordination/2026-09-24-v2-unattended-ci-credential-interlude.md) and
+> [ADR-0088](adr/0088-ci-owned-unattended-credential-execution.md) are prospective; source
+> delivery, installed qualification and credential provisioning remain separate work.
+
 | Field | Value |
 |---|---|
 | Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, all GS2-06 units, and GS2-07.1–GS2-07.8 and GS2-08.1–GS2-08.9 accepted; GS2-01.9 not applicable |
@@ -1418,6 +1425,43 @@ profile, compiled contract, or generic ITF machinery inside `FS.GG.Coordination`
   dispatch, credential, schedule, or installation before freeze and record that as its fence proof.
 
   [Accepted native receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.9.json).
+
+### V2-CI-I1 — Unattended credential execution interlude
+
+**Priority:** next bounded cross-repository implementation window, alongside unfinished GS2-09
+source/rehearsal work; join before the selected GS2-10 candidate/receiver freeze. This is a
+planning part, **not a newly accepted GS2 unit or a second scheduler**. The
+[design](coordination/2026-09-24-v2-unattended-ci-credential-interlude.md) owns its slices,
+refusal cases and performance acceptance; [ADR-0088](adr/0088-ci-owned-unattended-credential-execution.md)
+owns the prospective cross-repository decision.
+
+The normal future v2 credential-bearing operation should need no human prompt, interactive
+host dependency, host-agent credential conversation, token relay, status-restatement turn or
+receipt-only PR. Development and secret-free local CI stay inside rootless fdev Podman; the
+host wallet, DBus/Secret Service, SSH agent and Podman socket are not credential paths. A selected
+reviewer subagent checks credential-bearing source against a fixed checklist and can flag
+repair, but it neither holds raw credentials nor impersonates an independent approval. A
+remote ephemeral **post-merge** CI job, not ordinary PR CI or a host/self-hosted runner,
+binds exact source, public qualification, current Authority state, operation scope and
+one-attempt readback before using a scoped key.
+The explicit trusted-fdev/CI assumption does not claim protection from compromise of that
+writer. Current v1 genesis approval and GS2-13's irreversible human `OpenV2` gate remain in
+force until each is separately amended and qualified; this roadmap merge performs neither.
+
+`.github` owns policy, credential topology and trusted workflow; Coordination owns the typed
+plan/installer/reconciliation; receiver owners qualify their selected installed profile.
+Policy, installer/refusal tests, reviewer guidance and CI cost baseline can advance in
+parallel. They join at an isolated installed success plus wrong-key, stale-approval,
+duplicate-attempt and unknown-effect tests. Activation requires an exact source/secret scope,
+no PR-secret path, a public receipt and independent readback. If not ready at GS2-10, defer
+the profile explicitly rather than change a frozen candidate. GS2-09.7/09.8 source work
+does not wait for these parallel slices; candidate adoption of this path does.
+
+Use the [unified roadmap's 5% target/10% narrow bureaucracy ceiling](2026-09-07-154210-fs-gg-unified-development-roadmap.md#74-narrow-bureaucracy-budget-tests-excluded),
+not a new per-PR approval. Measure both administrative critical-path delay and useful CI
+duration; preserve all required technical gates while removing duplicate exact-subject work
+and balancing observed shard runtimes. Zero routine human interaction is a design target, not
+an assertion that a credential-bearing CI job or changed `OpenV2` authority is already live.
 
 ### Concurrent development before cutover
 
