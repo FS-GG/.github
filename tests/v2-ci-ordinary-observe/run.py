@@ -7,6 +7,7 @@ import base64
 import importlib.util
 import json
 import pathlib
+import re
 import subprocess
 import unittest
 from unittest.mock import patch
@@ -44,10 +45,19 @@ class NativeObservationTests(unittest.TestCase):
                 for index, name in enumerate(names)
             ],
         }
+        for check in self.checks["check_runs"]:
+            self.native_identity(check)
+        self.run_overrides = {}
         self.tree = "c" * 40
         self.current_policy = MODULE.POLICY_PATH.read_bytes()
         self.live_checks = [{"context": name, "app_id": 15368}
                             for name in qualification["requiredGateChecks"]]
+
+    @staticmethod
+    def native_identity(check):
+        check["check_suite"] = {"id": 2000 + check["id"]}
+        check["details_url"] = (
+            f"https://github.com/FS-GG/.github/actions/runs/{1000 + check['id']}/job/{check['id']}")
 
     def run_observation(self):
         def fake_run(args, **_kwargs):
@@ -68,6 +78,20 @@ class NativeObservationTests(unittest.TestCase):
                 body = {"encoding": "base64", "content": base64.b64encode((ROOT / ".github/workflows/v2-ci-ordinary-settlement.yml").read_bytes()).decode()}
             elif path.endswith("/branches/main"):
                 body = {"protected": True, "protection": {"required_status_checks": {"checks": self.live_checks}}}
+            elif match := re.search(r"/actions/runs/(\d+)$", path):
+                check = next(x for x in self.checks["check_runs"] if 1000 + x["id"] == int(match.group(1)))
+                producer = MODULE.QUALIFICATION.read_json(str(MODULE.POLICY_PATH))["qualification"]["checkProducers"][check["name"]]
+                body = {"id": 1000 + check["id"], "workflow_id": producer["workflowId"],
+                        "path": producer["path"], "event": producer["event"], "head_sha": HEAD,
+                        "check_suite_id": 2000 + check["id"], "repository": {"full_name": "FS-GG/.github"},
+                        "run_attempt": 1}
+                body.update(self.run_overrides.get(1000 + check["id"], {}))
+            elif match := re.search(r"/actions/jobs/(\d+)$", path):
+                check = next(x for x in self.checks["check_runs"] if x["id"] == int(match.group(1)))
+                body = {"id": check["id"], "run_id": 1000 + check["id"], "head_sha": HEAD,
+                        "name": check["name"], "run_attempt": 1, "status": check["status"],
+                        "conclusion": check["conclusion"],
+                        "check_run_url": f"https://api.github.com/repos/FS-GG/.github/check-runs/{check['id']}"}
             elif path.endswith("/git/commits/" + HEAD) or path.endswith("/git/commits/" + SOURCE):
                 body = {"tree": {"sha": self.tree if path.endswith(SOURCE) else getattr(self, "head_tree", self.tree)}}
             else:
@@ -114,6 +138,7 @@ class NativeObservationTests(unittest.TestCase):
         duplicate = copy.deepcopy(original)
         duplicate["id"] = 100
         duplicate["started_at"] = "2026-09-24T15:01:00Z"
+        self.native_identity(duplicate)
         self.checks["check_runs"].append(duplicate)
         self.checks["total_count"] += 1
         self.assertEqual("qualified", self.run_observation()["status"])
@@ -125,6 +150,20 @@ class NativeObservationTests(unittest.TestCase):
         self.checks["check_runs"][-1] = duplicate
         original["conclusion"] = "failure"
         self.assertEqual("qualified", self.run_observation()["status"])
+
+    def test_unrelated_workflow_cannot_supersede_a_failed_check(self):
+        original = next(check for check in self.checks["check_runs"] if check["name"] == "routine-eligibility")
+        original["conclusion"] = "failure"
+        replacement = copy.deepcopy(original)
+        replacement["id"] = 100
+        replacement["conclusion"] = "success"
+        replacement["started_at"] = "2026-09-24T15:01:00Z"
+        self.native_identity(replacement)
+        self.checks["check_runs"].append(replacement)
+        self.checks["total_count"] += 1
+        self.run_overrides[1100] = {"path": ".github/workflows/unrelated.yml"}
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "unexpected workflow"):
+            self.run_observation()
 
     def test_incomplete_check_population_refuses(self):
         self.checks["total_count"] += 1
@@ -160,7 +199,7 @@ class NativeObservationTests(unittest.TestCase):
         self.assertIn("if: needs.preflight.outputs.activation == 'true'", workflow)
         self.assertIn("environment: ordinary-v2", workflow)
         self.assertIn("  checks: read\n  pull-requests: read", workflow)
-        self.assertNotIn("  actions: read", workflow)
+        self.assertIn("  actions: read", workflow)
         self.assertIn("python3 tools/v2-ci-ordinary-observe.py verify", workflow)
         self.assertIn("exit 3", workflow)
 

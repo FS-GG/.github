@@ -62,10 +62,10 @@ callable-operation keys are outside the class.
   credential job was skipped because activation is false. This is hosted source qualification,
   not the installed two-job success required to check off 03. An activation review found that the provisional
   initial two-check list omitted the other live main-protection gates and that a PR-head result did not by
-  itself prove the
-  merged tree. The observer now requires the exact live eight-check population and App ID, equality of PR-head
-  and merged Git trees, and current-main policy/workflow bytes plus installed-anchor bytes before revalidating a
-  receipt. A changed activation policy thus revokes an older queued run or rerun. These are source-level fences;
+  itself prove the merged tree. The observer now requires the exact live eight-check population and App ID,
+  equality of PR-head and merged Git trees, native workflow/run/job/attempt identity for each check, and
+  current-main policy/workflow bytes plus installed-anchor bytes before revalidating a receipt. A changed
+  activation policy thus revokes an older queued run or rerun. These are source-level fences;
   the credential job stays inactive until its installed provider and hosted matrix qualify.
 - [ ] **04 — Dedicated App, keys and immutable publication.** Through the preconfigured browser registration and protected setup path,
   create the dedicated ordinary-v2 App and authorizer identities, accept the public anchor, provision only the

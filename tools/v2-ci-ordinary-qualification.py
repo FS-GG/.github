@@ -103,6 +103,9 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
         "policySha256": digest,
     }
     require_equal(subject, expected_subject, "stale or mismatched qualification evidence")
+    if set(qualification["checkProducers"]) != set(qualification["requiredChecks"] + qualification["requiredGateChecks"]):
+        raise Refusal("check-producer policy population is incomplete")
+
     def validate_checks(field: str, expected: str) -> list[dict[str, Any]]:
         population = evidence.get(field)
         if not isinstance(population, list):
@@ -118,6 +121,12 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
             if (check.get("conclusion") != "success" or check.get("sourceSha") != head_sha
                     or check.get("appId") != qualification["requiredCheckAppId"]):
                 raise Refusal(f"qualification check {name} is failed or stale")
+            producer = qualification["checkProducers"][name]
+            if (check.get("workflowId") != producer["workflowId"]
+                    or check.get("workflowPath") != producer["path"]
+                    or any(not isinstance(check.get(key), int) or isinstance(check.get(key), bool)
+                           or check[key] < 1 for key in ("checkRunId", "workflowRunId", "runAttempt", "checkSuiteId"))):
+                raise Refusal(f"qualification check {name} has no bound native producer")
         return population
 
     checks = validate_checks("checks", "requiredChecks")

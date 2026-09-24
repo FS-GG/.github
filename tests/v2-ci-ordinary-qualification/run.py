@@ -48,6 +48,12 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
             "head": {"sha": HEAD},
             "base": {"ref": "main", "sha": "af5a748d075d6578300822c8b64251c7c85b3f91", "repo": {"full_name": "FS-GG/.github"}},
         }]
+        def check(name, index):
+            producer = self.policy["qualification"]["checkProducers"][name]
+            return {"name": name, "conclusion": "success", "sourceSha": HEAD, "appId": 15368,
+                    "checkRunId": index + 1, "workflowRunId": 1000 + index,
+                    "runAttempt": 1, "checkSuiteId": 2000 + index,
+                    "workflowId": producer["workflowId"], "workflowPath": producer["path"]}
         self.evidence = {
             "schema": "fsgg.github.v2-ci-qualification-evidence/1",
             "status": "passed",
@@ -61,12 +67,12 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
                 "policySha256": self.digest,
             },
             "checks": [
-                {"name": name, "conclusion": "success", "sourceSha": HEAD, "appId": 15368}
-                for name in self.policy["qualification"]["requiredChecks"]
+                check(name, index)
+                for index, name in enumerate(self.policy["qualification"]["requiredChecks"])
             ],
             "gateChecks": [
-                {"name": name, "conclusion": "success", "sourceSha": HEAD, "appId": 15368}
-                for name in self.policy["qualification"]["requiredGateChecks"]
+                check(name, index)
+                for index, name in enumerate(self.policy["qualification"]["requiredGateChecks"])
             ],
         }
 
@@ -151,6 +157,9 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         evidence = copy.deepcopy(self.evidence)
         evidence["gateChecks"].pop()
         self.refuses(evidence=evidence, contains="population")
+        evidence = copy.deepcopy(self.evidence)
+        evidence["checks"][0]["workflowId"] = 1
+        self.refuses(evidence=evidence, contains="native producer")
 
     def test_policy_inventory_is_new_unprovisioned_and_keeps_current_gates(self):
         self.assertEqual("source-qualified-not-installed", self.policy["status"])

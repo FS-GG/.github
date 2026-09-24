@@ -17,8 +17,9 @@ authenticated browser form; a repository API token cannot perform that form step
 Install it with **Only select repositories**, selecting just
 `FS-GG/FS.GG.Coordination.Authority` (repository ID `1351660651`). Do not install it on `.github`, other
 repositories or all repositories. The operation token must name only repository ID `1351660651` and
-request `contents:write` (with implicit `metadata:read`). Source, PR, check and workflow reads use the
-trusted workflow's separate read-only `GITHUB_TOKEN`; this App needs no Administration, Checks, Pull
+request `contents:write` (with implicit `metadata:read`). Source, PR, check and workflow-run/job reads use
+the trusted workflow's separate read-only `GITHUB_TOKEN` (`actions`, `checks`, `contents` and
+`pull-requests` read); this App needs no Administration, Checks, Pull
 requests, Actions, Workflows, repository creation or organization grant. The journal Git object/ref
 endpoints require Contents write; token requests must explicitly narrow both repository ID and
 permission even though the App installation itself is already selected-repository.

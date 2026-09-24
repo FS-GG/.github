@@ -13,6 +13,7 @@ import base64
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -156,6 +157,50 @@ def observe(environ: dict[str, str]) -> dict:
     checks = checks_response.get("check_runs")
     if not isinstance(checks, list) or len(checks) != checks_response["total_count"]:
         raise QUALIFICATION.Refusal("incomplete native check-run population")
+    expected_producers = policy["qualification"]["checkProducers"]
+    expected_names = set(policy["qualification"]["requiredChecks"] + policy["qualification"]["requiredGateChecks"])
+    if set(expected_producers) != expected_names:
+        raise QUALIFICATION.Refusal("check-producer population differs from required checks")
+    run_cache: dict[int, dict] = {}
+
+    def producer(check: dict, name: str) -> dict:
+        url = check.get("details_url")
+        pattern = rf"https://github\.com/{re.escape(repository)}/actions/runs/([1-9][0-9]*)/job/([1-9][0-9]*)"
+        match = re.fullmatch(pattern, url) if isinstance(url, str) else None
+        if match is None:
+            raise QUALIFICATION.Refusal(f"check has no native Actions job identity: {name}")
+        run_id, job_id = map(int, match.groups())
+        suite = check.get("check_suite")
+        suite_id = suite.get("id") if isinstance(suite, dict) else None
+        if check.get("id") != job_id or not isinstance(suite_id, int) or isinstance(suite_id, bool) or suite_id < 1:
+            raise QUALIFICATION.Refusal(f"check/job/suite identity differs: {name}")
+        if run_id not in run_cache:
+            run = api(f"repos/{repository}/actions/runs/{run_id}")
+            if not isinstance(run, dict):
+                raise QUALIFICATION.Refusal(f"native Actions run unavailable: {name}")
+            run_cache[run_id] = run
+        run = run_cache[run_id]
+        job = api(f"repos/{repository}/actions/jobs/{job_id}")
+        expected = expected_producers[name]
+        attempt = job.get("run_attempt") if isinstance(job, dict) else None
+        current_attempt = run.get("run_attempt")
+        run_repository = run.get("repository")
+        if (run.get("id") != run_id or run.get("workflow_id") != expected["workflowId"]
+                or run.get("path") != expected["path"] or run.get("event") != expected["event"]
+                or run.get("head_sha") != head or run.get("check_suite_id") != suite_id
+                or not isinstance(run_repository, dict) or run_repository.get("full_name") != repository
+                or not isinstance(current_attempt, int) or isinstance(current_attempt, bool) or current_attempt < 1
+                or not isinstance(job, dict) or job.get("id") != job_id or job.get("run_id") != run_id
+                or job.get("head_sha") != head or job.get("name") != name
+                or job.get("check_run_url") != f"https://api.github.com/repos/{repository}/check-runs/{job_id}"
+                or job.get("status") != check.get("status") or job.get("conclusion") != check.get("conclusion")
+                or not isinstance(attempt, int) or isinstance(attempt, bool)
+                or attempt < 1 or attempt > current_attempt):
+            raise QUALIFICATION.Refusal(f"check came from an unexpected workflow or attempt: {name}")
+        return {"checkRunId": job_id, "workflowRunId": run_id, "runAttempt": attempt,
+                "checkSuiteId": suite_id, "workflowId": expected["workflowId"],
+                "workflowPath": expected["path"]}
+
     def select(name: str) -> dict:
         matches = [check for check in checks if check.get("name") == name]
         if not matches or any(
@@ -164,6 +209,9 @@ def observe(environ: dict[str, str]) -> dict:
             for check in matches
         ):
             raise QUALIFICATION.Refusal(f"missing, stale or wrong-app check: {name}")
+        native = {check["id"]: producer(check, name) for check in matches}
+        if len(native) != len(matches):
+            raise QUALIFICATION.Refusal(f"duplicate native check identity: {name}")
         try:
             def rank(check: dict) -> tuple[datetime, int]:
                 started = datetime.fromisoformat(check["started_at"].replace("Z", "+00:00"))
@@ -177,7 +225,8 @@ def observe(environ: dict[str, str]) -> dict:
         if check.get("status") != "completed" or check.get("conclusion") != "success":
             raise QUALIFICATION.Refusal(f"latest native check is not successful: {name}")
         return {"name": name, "conclusion": check["conclusion"],
-                "sourceSha": check["head_sha"], "appId": check["app"]["id"]}
+                "sourceSha": check["head_sha"], "appId": check["app"]["id"],
+                **native[check["id"]]}
 
     selected = [select(name) for name in policy["qualification"]["requiredChecks"]]
     gate_selected = [select(name) for name in policy["qualification"]["requiredGateChecks"]]
