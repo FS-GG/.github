@@ -57,7 +57,7 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
     if not isinstance(source, str) or not SHA.fullmatch(source):
         raise Refusal("source SHA is missing or malformed")
     require_equal(runtime.get("schema"), "fsgg.github.v2-ci-runtime/1", "unsupported runtime schema")
-    require_equal(runtime.get("eventName"), trigger["event"], "wrong event: only an automatic push is admitted")
+    require_equal(runtime.get("eventName"), trigger["event"], "wrong event for the selected policy")
     require_equal(runtime.get("repository"), policy["repository"], "wrong source repository")
     require_equal(runtime.get("ref"), trigger["ref"], "wrong source ref: protected main is required")
     require_equal(runtime.get("eventAfter"), source, "wrong source: push after SHA differs from the runtime source")

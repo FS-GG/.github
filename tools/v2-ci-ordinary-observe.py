@@ -20,6 +20,7 @@ from datetime import datetime
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / "policy/v2-ci-ordinary-settlement.json"
+REHEARSAL_POLICY_PATH = ROOT / "policy/v2-ci-ordinary-settlement-rehearsal.json"
 SPEC = importlib.util.spec_from_file_location(
     "v2_ci_ordinary_qualification", ROOT / "tools/v2-ci-ordinary-qualification.py"
 )
@@ -51,15 +52,17 @@ def current_file(repository: str, path: str, revision: str) -> bytes:
         raise QUALIFICATION.Refusal(f"current protected file malformed: {path}") from error
 
 
-def current_authority(repository: str, policy: dict) -> None:
+def current_authority(repository: str, policy: dict, policy_path: pathlib.Path = POLICY_PATH) -> None:
     """Fence a queued or rerun job against the present protected source."""
     before = api(f"repos/{repository}/git/ref/heads/main")
     revision = before.get("object", {}).get("sha") if isinstance(before, dict) else None
     if not isinstance(revision, str) or not QUALIFICATION.SHA.fullmatch(revision):
         raise QUALIFICATION.Refusal("current main ref is malformed")
-    paths = ["policy/v2-ci-ordinary-settlement.json", policy["workflow"]["path"]]
+    paths = [str(policy_path.relative_to(ROOT)), policy["workflow"]["path"]]
     if policy["credentialJob"]["installed"]:
-        paths.append("policy/v2-ci-ordinary-settlement-anchor.json")
+        paths.append("policy/v2-ci-ordinary-settlement-rehearsal-anchor.json"
+                     if policy_path == REHEARSAL_POLICY_PATH
+                     else "policy/v2-ci-ordinary-settlement-anchor.json")
     for path in paths:
         if current_file(repository, path, revision) != (ROOT / path).read_bytes():
             raise QUALIFICATION.Refusal(f"current protected authority changed: {path}")
@@ -102,20 +105,28 @@ def equivalent_tree(repository: str, head: str, source: str) -> str:
     return trees[0]
 
 
-def observe(environ: dict[str, str]) -> dict:
-    policy = QUALIFICATION.read_json(str(POLICY_PATH))
+def observe(environ: dict[str, str], rehearsal: bool = False) -> dict:
+    policy_path = REHEARSAL_POLICY_PATH if rehearsal else POLICY_PATH
+    policy = QUALIFICATION.read_json(str(policy_path))
     source = environ.get("GITHUB_SHA", "")
     repository = policy["repository"]
+    expected_workflow = (".github/workflows/v2-ci-ordinary-rehearsal.yml" if rehearsal
+                         else ".github/workflows/v2-ci-ordinary-settlement.yml")
+    expected_event = "workflow_dispatch" if rehearsal else "push"
+    expected_environment = "ordinary-v2-rehearsal" if rehearsal else "ordinary-v2"
     if (repository != "FS-GG/.github"
-            or policy["workflow"]["path"] != ".github/workflows/v2-ci-ordinary-settlement.yml"
-            or not isinstance(policy["credentialJob"]["installed"], bool)):
+            or policy["workflow"]["path"] != expected_workflow
+            or policy["trigger"]["event"] != expected_event
+            or policy["credentialJob"]["environment"] != expected_environment
+            or not isinstance(policy["credentialJob"]["installed"], bool)
+            or (rehearsal and policy["credentialJob"]["installed"] is not True)):
         raise QUALIFICATION.Refusal("unexpected protected repository, workflow or activation")
     if not QUALIFICATION.SHA.fullmatch(source):
         raise QUALIFICATION.Refusal("invalid triggering SHA")
     if environ.get("GITHUB_REPOSITORY") != repository:
         raise QUALIFICATION.Refusal("wrong triggering repository")
-    if environ.get("GITHUB_EVENT_NAME") != "push" or environ.get("GITHUB_REF") != "refs/heads/main":
-        raise QUALIFICATION.Refusal("only a protected-main push is admitted")
+    if environ.get("GITHUB_EVENT_NAME") != expected_event or environ.get("GITHUB_REF") != "refs/heads/main":
+        raise QUALIFICATION.Refusal("only the pinned protected-main event is admitted")
     if environ.get("EXPECTED_WORKFLOW_SHA") != source:
         raise QUALIFICATION.Refusal("workflow revision differs from triggering source")
     expected_workflow_ref = f"{repository}/{policy['workflow']['path']}@refs/heads/main"
@@ -125,7 +136,7 @@ def observe(environ: dict[str, str]) -> dict:
                               capture_output=True, text=True, cwd=ROOT).stdout.strip()
     if checkout != source:
         raise QUALIFICATION.Refusal("checkout differs from triggering source")
-    current_authority(repository, policy)
+    current_authority(repository, policy, policy_path)
     run_id, attempt = environ.get("GITHUB_RUN_ID", ""), environ.get("GITHUB_RUN_ATTEMPT", "")
     if not run_id.isdecimal() or not attempt.isdecimal() or int(run_id) < 1 or int(attempt) < 1:
         raise QUALIFICATION.Refusal("invalid workflow run identity")
@@ -231,7 +242,7 @@ def observe(environ: dict[str, str]) -> dict:
     selected = [select(name) for name in policy["qualification"]["requiredChecks"]]
     gate_selected = [select(name) for name in policy["qualification"]["requiredGateChecks"]]
 
-    digest = hashlib.sha256(POLICY_PATH.read_bytes()).hexdigest()
+    digest = hashlib.sha256(policy_path.read_bytes()).hexdigest()
     runtime = {
         "schema": "fsgg.github.v2-ci-runtime/1", "eventName": environ["GITHUB_EVENT_NAME"],
         "repository": repository, "ref": environ["GITHUB_REF"],
@@ -261,14 +272,15 @@ def observe(environ: dict[str, str]) -> dict:
 
 
 def main() -> int:
-    if len(sys.argv) != 3 or sys.argv[1] not in ("produce", "verify"):
-        print("usage: v2-ci-ordinary-observe.py produce|verify RECEIPT_PATH", file=sys.stderr)
+    actions = ("produce", "verify", "produce-rehearsal", "verify-rehearsal")
+    if len(sys.argv) != 3 or sys.argv[1] not in actions:
+        print("usage: v2-ci-ordinary-observe.py produce|verify|produce-rehearsal|verify-rehearsal RECEIPT_PATH", file=sys.stderr)
         return 2
     try:
-        actual = observe(dict(os.environ))
+        actual = observe(dict(os.environ), rehearsal=sys.argv[1].endswith("-rehearsal"))
         target = pathlib.Path(sys.argv[2])
         encoded = json.dumps(actual, sort_keys=True, separators=(",", ":")) + "\n"
-        if sys.argv[1] == "produce":
+        if sys.argv[1].startswith("produce"):
             if target.exists() or target.is_symlink():
                 raise QUALIFICATION.Refusal("receipt path already exists")
             target.write_text(encoded, encoding="utf-8")

@@ -57,6 +57,9 @@ jobs:
     environment: ordinary-v2
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      PACKAGE_VERSION: 0.1.2
+      PACKAGE_SHA256: 627d9f54d038d47ef59635f92bd4fd4af2da7bfc971a938b6de1292503b0307e
     permissions:
       actions: read
       contents: read
@@ -85,8 +88,36 @@ jobs:
           receipt="$RUNNER_TEMP/ordinary-v2-receipt/ordinary-v2-preflight.json"
           test "$(sha256sum "$receipt" | cut -d ' ' -f 1)" = "$EXPECTED_RECEIPT_SHA256"
           python3 tools/v2-ci-ordinary-observe.py verify "$receipt"
-      - name: Refuse until the exact Coordination installer and dedicated custody are enrolled
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Install only the pinned public Coordination CLI archive
         shell: bash
         run: |
-          echo '::error::ordinary-v2 installed provider and dedicated keys are not enrolled'
-          exit 3
+          set -euo pipefail
+          package_dir="$RUNNER_TEMP/ordinary-v2-package"
+          mkdir "$package_dir"
+          package="$package_dir/FS.GG.Coordination.Cli.$PACKAGE_VERSION.nupkg"
+          curl --fail --location --silent --show-error \
+            "https://api.nuget.org/v3-flatcontainer/fs.gg.coordination.cli/$PACKAGE_VERSION/fs.gg.coordination.cli.$PACKAGE_VERSION.nupkg" \
+            --output "$package"
+          test "$(sha256sum "$package" | cut -d ' ' -f 1)" = "$PACKAGE_SHA256"
+          config="$RUNNER_TEMP/ordinary-v2-local-only.config"
+          cat > "$config" <<CFG
+          <?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear/><add key="pinned" value="$package_dir"/></packageSources></configuration>
+          CFG
+          dotnet tool install FS.GG.Coordination.Cli --version "$PACKAGE_VERSION" \
+            --tool-path "$RUNNER_TEMP/ordinary-v2-cli" --configfile "$config" --no-cache
+      - name: Execute exactly one installed ordinary settlement attempt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          FSGG_V2_PREFLIGHT_RECEIPT: ${{ runner.temp }}/ordinary-v2-receipt/ordinary-v2-preflight.json
+          V2_ORDINARY_APP_ID: ${{ secrets.V2_ORDINARY_APP_ID }}
+          V2_ORDINARY_APP_PRIVATE_KEY: ${{ secrets.V2_ORDINARY_APP_PRIVATE_KEY }}
+          V2_ORDINARY_AUTHORIZER_PRIVATE_KEY: ${{ secrets.V2_ORDINARY_AUTHORIZER_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/ordinary-v2-cli/fsgg-coordination" ordinary-settlement execute
