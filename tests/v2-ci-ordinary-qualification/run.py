@@ -61,8 +61,8 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
                 "policySha256": self.digest,
             },
             "checks": [
-                {"name": "contract-coherence / coherence", "conclusion": "success", "sourceSha": HEAD, "appId": 15368},
-                {"name": "routine-eligibility", "conclusion": "success", "sourceSha": HEAD, "appId": 15368},
+                {"name": name, "conclusion": "success", "sourceSha": HEAD, "appId": 15368}
+                for name in self.policy["qualification"]["requiredChecks"]
             ],
         }
 
@@ -165,6 +165,12 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         self.assertEqual(0, observation["requiredReviewerCount"])
         self.assertEqual(0, observation["secretCount"])
         self.assertEqual("inert-shell-not-activation", observation["disposition"])
+
+    def test_activation_requires_matching_status(self):
+        self.policy["credentialJob"]["installed"] = True
+        self.refuses(contains="activation status differs")
+        self.policy["status"] = "installed"
+        self.assertEqual("qualified", self.qualify()["status"])
 
 
 if __name__ == "__main__":

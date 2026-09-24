@@ -43,7 +43,11 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
             associations: list[dict[str, Any]], evidence: dict[str, Any]) -> dict[str, Any]:
     require_equal(policy.get("schema"), "fsgg.github.v2-ci-ordinary-settlement-policy/1",
                   "unsupported policy schema")
-    require_equal(policy.get("status"), "source-qualified-not-installed", "policy is not in the source-only state")
+    installed = policy.get("credentialJob", {}).get("installed")
+    if not isinstance(installed, bool):
+        raise Refusal("credential activation is malformed")
+    expected_status = "installed" if installed else "source-qualified-not-installed"
+    require_equal(policy.get("status"), expected_status, "policy activation status differs from credential job")
 
     trigger = policy["trigger"]
     workflow = policy["workflow"]

@@ -32,7 +32,13 @@
     "requiredCheckAppId": 15368,
     "requiredChecks": [
       "contract-coherence / coherence",
-      "routine-eligibility"
+      "projection",
+      "roster-closure",
+      "drift",
+      "claim-generation",
+      "Lint every shell file in the repo (pinned shellcheck)",
+      "claim-fence",
+      "architecture-map reconcile"
     ]
   },
   "credentialJob": {

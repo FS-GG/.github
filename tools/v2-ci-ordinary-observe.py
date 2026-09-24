@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import base64
 import json
 import os
 import pathlib
@@ -38,10 +39,75 @@ def api(path: str) -> dict | list:
         raise QUALIFICATION.Refusal(f"malformed native GitHub evidence: {path}") from error
 
 
+def current_file(repository: str, path: str, revision: str) -> bytes:
+    response = api(f"repos/{repository}/contents/{path}?ref={revision}")
+    if not isinstance(response, dict) or response.get("encoding") != "base64":
+        raise QUALIFICATION.Refusal(f"current protected file unavailable: {path}")
+    try:
+        return base64.b64decode("".join(response["content"].split()), validate=True)
+    except (KeyError, TypeError, ValueError) as error:
+        raise QUALIFICATION.Refusal(f"current protected file malformed: {path}") from error
+
+
+def current_authority(repository: str, policy: dict) -> None:
+    """Fence a queued or rerun job against the present protected source."""
+    before = api(f"repos/{repository}/git/ref/heads/main")
+    revision = before.get("object", {}).get("sha") if isinstance(before, dict) else None
+    if not isinstance(revision, str) or not QUALIFICATION.SHA.fullmatch(revision):
+        raise QUALIFICATION.Refusal("current main ref is malformed")
+    paths = ["policy/v2-ci-ordinary-settlement.json", policy["workflow"]["path"]]
+    if policy["credentialJob"]["installed"]:
+        paths.append("policy/v2-ci-ordinary-settlement-anchor.json")
+    for path in paths:
+        if current_file(repository, path, revision) != (ROOT / path).read_bytes():
+            raise QUALIFICATION.Refusal(f"current protected authority changed: {path}")
+    after = api(f"repos/{repository}/git/ref/heads/main")
+    if not isinstance(after, dict) or after.get("object", {}).get("sha") != revision:
+        raise QUALIFICATION.Refusal("current main ref moved during authority read")
+
+
+def required_checks(repository: str, policy: dict) -> list[str]:
+    branch = api(f"repos/{repository}/branches/main")
+    if not isinstance(branch, dict) or branch.get("protected") is not True:
+        raise QUALIFICATION.Refusal("live main branch protection unavailable")
+    protection = branch.get("protection")
+    required = protection.get("required_status_checks") if isinstance(protection, dict) else None
+    checks = required.get("checks") if isinstance(required, dict) else None
+    if not isinstance(checks, list) or not checks:
+        raise QUALIFICATION.Refusal("live required-check population unavailable")
+    names = []
+    for check in checks:
+        if not isinstance(check, dict) or check.get("app_id") != policy["qualification"]["requiredCheckAppId"]:
+            raise QUALIFICATION.Refusal("live required-check App differs from policy")
+        names.append(check.get("context"))
+    if (not all(isinstance(name, str) and name for name in names)
+            or len(names) != len(set(names))
+            or set(names) != set(policy["qualification"]["requiredChecks"])):
+        raise QUALIFICATION.Refusal("live required-check population differs from policy")
+    return names
+
+
+def equivalent_tree(repository: str, head: str, source: str) -> str:
+    trees = []
+    for sha in (head, source):
+        commit = api(f"repos/{repository}/git/commits/{sha}")
+        tree = commit.get("tree", {}).get("sha") if isinstance(commit, dict) else None
+        if not isinstance(tree, str) or not QUALIFICATION.SHA.fullmatch(tree):
+            raise QUALIFICATION.Refusal("native commit tree is malformed")
+        trees.append(tree)
+    if trees[0] != trees[1]:
+        raise QUALIFICATION.Refusal("merged source tree differs from qualified PR head")
+    return trees[0]
+
+
 def observe(environ: dict[str, str]) -> dict:
     policy = QUALIFICATION.read_json(str(POLICY_PATH))
     source = environ.get("GITHUB_SHA", "")
     repository = policy["repository"]
+    if (repository != "FS-GG/.github"
+            or policy["workflow"]["path"] != ".github/workflows/v2-ci-ordinary-settlement.yml"
+            or not isinstance(policy["credentialJob"]["installed"], bool)):
+        raise QUALIFICATION.Refusal("unexpected protected repository, workflow or activation")
     if not QUALIFICATION.SHA.fullmatch(source):
         raise QUALIFICATION.Refusal("invalid triggering SHA")
     if environ.get("GITHUB_REPOSITORY") != repository:
@@ -57,6 +123,7 @@ def observe(environ: dict[str, str]) -> dict:
                               capture_output=True, text=True, cwd=ROOT).stdout.strip()
     if checkout != source:
         raise QUALIFICATION.Refusal("checkout differs from triggering source")
+    current_authority(repository, policy)
     run_id, attempt = environ.get("GITHUB_RUN_ID", ""), environ.get("GITHUB_RUN_ATTEMPT", "")
     if not run_id.isdecimal() or not attempt.isdecimal() or int(run_id) < 1 or int(attempt) < 1:
         raise QUALIFICATION.Refusal("invalid workflow run identity")
@@ -79,6 +146,8 @@ def observe(environ: dict[str, str]) -> dict:
     head = current_pull["head"]["sha"]
     if not QUALIFICATION.SHA.fullmatch(head):
         raise QUALIFICATION.Refusal("invalid associated PR head")
+    tree = equivalent_tree(repository, head, source)
+    required_checks(repository, policy)
 
     checks_response = api(f"repos/{repository}/commits/{head}/check-runs?per_page=100")
     if not isinstance(checks_response, dict) or checks_response.get("total_count", 101) > 100:
@@ -90,8 +159,13 @@ def observe(environ: dict[str, str]) -> dict:
     selected = []
     for name in required:
         matches = [check for check in checks if check.get("name") == name]
-        if len(matches) != 1 or matches[0].get("app", {}).get("id") != policy["qualification"]["requiredCheckAppId"]:
-            raise QUALIFICATION.Refusal(f"missing, duplicate or wrong-app check: {name}")
+        if not matches or any(
+            check.get("app", {}).get("id") != policy["qualification"]["requiredCheckAppId"]
+            or check.get("head_sha") != head
+            or check.get("conclusion") != "success"
+            for check in matches
+        ):
+            raise QUALIFICATION.Refusal(f"missing, failed, stale or wrong-app check: {name}")
         check = matches[0]
         selected.append({"name": name, "conclusion": check.get("conclusion"),
                          "sourceSha": check.get("head_sha"),
@@ -121,6 +195,7 @@ def observe(environ: dict[str, str]) -> dict:
     receipt["runId"] = int(run_id)
     receipt["runAttempt"] = int(attempt)
     receipt["activation"] = bool(policy["credentialJob"]["installed"])
+    receipt["qualifiedTreeSha"] = tree
     return receipt
 
 
