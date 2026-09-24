@@ -1049,6 +1049,7 @@ when funded. No stage acquires mutable completion checkboxes in this document.
 |---|---|---|---|
 | **V0 — Receive the simplified baseline and decide v2 bindings** | `.github` policy, Coordination runtime, Governance and receiver owners; predecessor outputs plus governance integration | Proportional integration/contract process; protected changes for eligibility/authority | One adopted profile mapping identifies enabled classes, obligations, synchronization, trust, current writer and R5 receiver contract; any needed GS2 changes are registered before use |
 | **V1 — Preserve accepted event/queue qualification and incumbent fencing** | Accepted GS2-07.1–07.8 and GS2-08; requalify only affected changes | Routine source delivery with owning technical acceptance; isolated effects keep their permission ceilings | Queue/reconciliation/operating behavior is qualified; all live incumbent writer routes are fenced or explicitly disabled |
+| **I1 — Unattended CI credential interlude** | `.github` policy and trusted workflow, Coordination one-attempt installer, reviewer guidance and CI cost baseline; parallel with unfinished GS2-09 source | Rootless fdev for development/secret-free checks, ephemeral remote post-merge credential CI; no host interaction or subagent raw-key role; current v1/OpenV2 human gates unchanged | Isolated installed refusal/recovery/readback with host wallet unavailable; zero routine human/host-agent relay; selected profile joins V3 or is deferred, measured against §7.4 |
 | **V2 — Deliver the complete callable v2 path and migration rehearsal** | GS2-09 and affected existing adapter/runtime contracts | Modeled implementation and installed/sandbox acceptance, not fixture-only completion | Real installed entry points connect observations, decisions, provider effects and recovery; migrate/retry/rollback/omission tests pass on representative copies |
 | **V3 — Freeze the coherent candidate and prepare receivers** | GS2-10; R5 profile qualification inputs | Comprehensive exact-candidate process | Q0–Q7, installed clean/upgrade profiles, whole-cutover rehearsal, staffed bounded window and concurrent-change disposition |
 | **V4 — Freeze, switch and verify while closed** | GS2-11–12 | Protected cutover operation | Normal writes closed, every receiver/settings transformation verified, isolated protocol and routine journeys pass, pre-open rollback executable |
@@ -1077,6 +1078,9 @@ flowchart TD
     Rehearse --> Omit["GS2-09.8 no omission / idempotency / parent closure"]
     Contracts -. prepare controls concurrently .-> Omit
     Policy["V0 effective routine policy and receiver binding"] --> Freeze["V3 / GS2-10 exact candidate qualification"]
+    Policy --> I1["I1 trusted CI credential path"]
+    V1 --> I1
+    I1 -. selected profile adopted or deferred .-> Freeze
     Receivers["Receiver inventory / published pins / clean and retained proof"] --> Freeze
     Omit --> Freeze
     Changes["Finish or defer concurrent candidate-input changes"] --> Freeze
@@ -1095,11 +1099,18 @@ The immediate **source** lanes below can overlap when their touch-sets and share
 Protected operation ownership, credential custody, journal writes and final cutover stay serialized at their
 real authority boundary. A blocked effect does not block a source-only lane.
 
+I1 is the [V2-CI-I1 interlude](github-substrate-v2-roadmap.md#v2-ci-i1--unattended-credential-execution-interlude),
+not a retroactive GS2 acceptance. Its policy, typed installer, selected reviewer guidance and
+CI baseline can be prepared alongside GS2-09.7/09.8. Only adopting its credential-bearing
+receiver profile joins V3; an unqualified profile is explicitly deferred. This keeps the
+existing source/effect separation and does not authorize a current protected write.
+
 | Lane and accountable owner | Ready work | Join / stop condition |
 |---|---|---|
 | **Migration observations — Coordination** | Reconcile the local prototype, finish all nine authority readers, terminal/nested pagination and two-pass source identity; independent refusal controls. | Exact complete isolated-copy observations before manifest/effects. Partial live diagnostics cannot satisfy this join. |
 | **Migration execution/recovery — Coordination** | Reuse callable adapters and the draft step boundary; build the closed effect interpreter, ordered durable driver, archive verification and executable pre-open rollback. | Reviewed source and unchanged canonical-model correspondence; native run waits for exact copy, artifact and effect authority. Coordinate shared adapter edits with the observation lane. |
 | **Admission readiness — existing protected-operation owner** | Finish the independently owned operation and obtain its exact authorized readback. | Only its governed effects wait on credentials, approvals and fresh prestate. A failure remains with that owner; other lanes receive a bounded interface/result. |
+| **I1 unattended credential path — `.github` and Coordination** | In parallel, select trusted CI/secret topology, compose one-attempt installer and refusal tests, write a narrow reviewer checklist, and measure duplicated CI/administrative delay. | Isolated installed join and receiver decision before GS2-10 if selected. Current v1 admission/OpenV2 gates do not change in this lane. |
 | **Omission controls — Coordination qualification owner** | Extend exact-population, added-subject, duplicate, replay and receipt-prefix controls already started in PR #507. | GS2-09.8 acceptance waits for representative .7 evidence; authoring independent controls does not. |
 | **Routine profile / receivers — `.github`, Governance, SDD, Templates and actual receivers** | Record actual enforcement call sites, tool/package/default identities, clean/upgrade cases and supported/deferred profiles. | GS2-10 accepts a coherent exact candidate; every changed input is refreshed before freeze or explicitly deferred. Pure Governance APIs alone do not qualify wiring. |
 | **Telemetry / measurement — `.github` producer, installed operator** | Repair attributed observation gaps and qualify prospective published/installed changes under their own authority. | No general migration dependency. R5 needs its actual ordinary-v2 cohort; missing efficiency evidence cannot manufacture or veto unrelated operational acceptance. |
@@ -1309,6 +1320,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Event and queue qualification** | V1, GS2-07.6–07.7: qualify the queue and measure narrow reconciliation, coalescing and audit repair | Coordination; preserve accepted native units and resume only unfinished scope | [GS2-07.7 event-benefit subroadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-07-7-event-benefit.md), scoped to 07.7; native acceptance is recorded in [PR #329](https://github.com/FS-GG/FS.GG.Coordination/pull/329) |
 | **Runtime operations qualification** | V1 / GS2-07.8: accepted selected no-host operation/audit scope | Coordination; preserve the accepted disposition, qualify only newly included runtime behavior | [GS2-07.8 owning plan](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/docs/roadmaps/gs2-07-8-runtime-operations.md) and its accepted receipt |
 | **Universal bridge and receiver fencing** | V1, GS2-08: protected epoch ledger, complete current-writer coverage, published bridge, receiver adoption and old-client refusal | `.github` bridge owner, with Coordination and receiver owners; GS2-08.1–08.9 are accepted, active installed bypasses are retired and Q4 remains unclaimed | [GS2-08.8 receiver adoption horizon](roadmaps/gs2-08-universal-v1-bridge.md#gs2-088-receiver-adoption--window-a), [receiver acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/417) and [residual-writer acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/419) |
+| **Unattended CI credential execution** | I1: next bounded interlude for trusted post-merge secret use, one-attempt installation, reviewer checklist and measured CI/bureaucracy cost | `.github` policy/secret owner with Coordination installer and selected receiver; source slices run beside GS2-09, installed adoption joins GS2-10 only if qualified | [V2-CI-I1 design](coordination/2026-09-24-v2-unattended-ci-credential-interlude.md) and [ADR-0088](adr/0088-ci-owned-unattended-credential-execution.md); no current v1/OpenV2 human gate or live credential route changes by this design |
 | **Callable ordinary v2 execution** | V2 / GS2-09.9: bounded installed source-delivery composition, native isolated recovery and discovery handoff complete | Coordination; preserve exact 0.1.1 artifact, receiver and permission ceiling; no fleet production or migration authority | [Completed V2-CALL-01 plan](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/docs/roadmaps/callable-ordinary-v2-execution.md), [readiness](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/gs2-09-9/callable-readiness.json) and [handoff](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json). Historical 0.1.0 bytes remain unchanged; 0.1.1 is the accepted repair identity |
 | **Migration tooling and representative rehearsal** | V2 / GS2-09: .1–.6 contracts accepted; .7 provider execution/rehearsal and .8 omission/parent closure remain | Coordination with receiver and protected-operation owners; source lanes and effect join are separated in §9.1 | [Exact GS2 sequence](github-substrate-v2-roadmap.md#gs2-09--build-migration-archive-and-rollback-tooling), [current implementation window](#93-v1v2-make-v2-usable-before-freezing-it) and [audit](reports/2026-09-24-v2-roadmap-code-audit.md). Existing local .7 plan/source at `82b4772d…` must be reconciled and published before replacing this draft locator with a durable owner link |
 | **Coherent candidate and new-workspace qualification** | V3, GS2-10: bind published tools, template/provider pins, guidance, clean/upgrade receiver cases and the rehearsed cutover window | `.github` cutover owner, with Coordination, SDD and Templates; completed candidate inputs | No subroadmap linked yet |
@@ -1570,6 +1582,7 @@ programme-wide approval. Resolve the following decisions only at the boundary th
 | Boundary | Remaining decision or evidence | Owner |
 |---|---|---|
 | V0 / GS2-10 | Bind the effective routine profile, retained technical obligations and supported/deferred receiver population. Keep R4/R5 efficiency claims separate from operational acceptance. | `.github` policy, Coordination and actual receivers |
+| I1 / before GS2-10 | Select the trusted CI credential topology and exact ordinary operation class; qualify the one-attempt source/effect join or explicitly defer it. Review the current v1 and `OpenV2` human gates separately if either is to change. | `.github` policy owner with Coordination and credential custodian |
 | GS2-09.7 | Exact representative copy set, executable candidate, missing-provider dispositions, effect authority and recovery/cleanup ownership. | Coordination and protected-operation owner |
 | GS2-10 | Freeze artifact/default identities; finish or defer concurrent candidate changes; accept the measured closed-write window, latest abort point and staffed recovery plan. | Cutover owner with producer/receiver owners |
 | GS2-13 / GS2-14 | Irreversible production open, actual observations, contraction and `OperatingV2` evidence. | Existing protected cutover authority |
@@ -1578,5 +1591,6 @@ programme-wide approval. Resolve the following decisions only at the boundary th
 
 The 10% bureaucracy ceiling and intervention definitions in section 7.4 remain in force; incomplete
 measurement does not certify compliance. This document introduces no extra admission, board census,
-reporting service or approval cycle. The next implementation starts from §9.3 and the owner-native
-contracts, with independent source lanes available as shown in §9.1.
+reporting service or approval cycle. The next bounded implementation window includes I1's
+parallel source slices alongside §9.3 and the owner-native contracts, with the joins and
+permission limits shown in §9.1.

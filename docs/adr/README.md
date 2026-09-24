@@ -112,6 +112,7 @@ registry like any other, and this org gates its registries.
 
 | [0086](0086-proportionate-pipeline-preflight.md) | Proportionate preflight for complex pipelines | Accepted |
 | [0087](0087-single-owner-v1-admission-genesis-approval.md) | Single-owner protected approval for one-time v1 admission genesis | Accepted |
+| [0088](0088-ci-owned-unattended-credential-execution.md) | CI-owned unattended credential execution for a future ordinary-v2 operation class; agent critique is not credential authority | Accepted |
 
 ## Supersession map
 
