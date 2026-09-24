@@ -11,7 +11,7 @@ Status: **ready window 01 complete; feature not delivered; credential publicatio
 
 This is the executable subroadmap for the [V2-CI-I1 design](../coordination/2026-09-24-v2-unattended-ci-credential-interlude.md),
 [ADR-0088](../adr/0088-ci-owned-unattended-credential-execution.md) and the
-[unified roadmap part](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-level-subroadmaps-and-planning-owners).
+[unified roadmap part](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
 It preserves the current v1 admission and `OpenV2` human gates. Source delivery supplies no protected-write
 authority. Routine work uses one accountable owner and one PR per ready window; protected environment,
 credential, anchor, publication and receiver effects retain their own authority and readback.
