@@ -141,17 +141,22 @@ native usage, public dashboard freshness or efficiency from repository source al
 learning and telemetry improvements remain outside the migration critical path unless a concrete frozen
 input or operation depends on them.
 
-### 9. Routine policy does not establish an available merge writer
+### 9. A sealed automation helper is not a blanket source-PR prohibition
 
 The inspected [.github routine helper][routine-helper] deliberately raises `EffectAdmissionUnavailable`
 before any merge request because common v1 effect admission is unavailable. The
-[writer census][writer-census] classifies this boundary as read-only. The adopted routine policy still
-allows source preparation and qualification; it does not restore the sealed writer.
+[writer census][writer-census] classifies that helper boundary as read-only. Its seal must remain intact.
 
-Correction: qualify the exact source PR independently, then verify an admitted landing path before its
-merge effect. GitHub merge capability, an older successful merge, or a synthetic callable acceptance does
-not by itself establish that path. Admission readiness remains with its existing operation owner; this
-audit introduces no bypass or new authority requirement.
+The accepted [single-owner delivery decision][owner-delivery] and [routine item route][routine-item]
+separately authorize native exact-head PR delivery after required technical checks. Neither names the
+sealed helper as the sole merger. For this source-only roadmap/skill PR, the requested native squash merge
+can therefore use that route, without changing the helper or bypassing GitHub protection. No source merge
+authorizes a protected admission, release or cutover operation.
+
+Correction: scope a refusal to its actual entry point and governing contract before declaring other work
+blocked. Verify an alternative route is explicitly sanctioned; CLI capability and previous successful
+merges alone are insufficient. The initial blanket landing hold during this audit was an overbroad
+inference, corrected by tracing these accepted sources.
 
 ## Recommended acceptance sequence
 
@@ -196,3 +201,5 @@ is the readable dependency graph and owner/lane table. The native GS2 roadmap re
 [utel]: https://github.com/FS-GG/.github/blob/d6ee7c79d67c3bdc2e3af07dcbe0e606967f76b5/docs/roadmaps/utel-release-successor.md
 [routine-helper]: https://github.com/FS-GG/.github/blob/d6ee7c79d67c3bdc2e3af07dcbe0e606967f76b5/tools/routine-delivery.py
 [writer-census]: https://github.com/FS-GG/.github/blob/d6ee7c79d67c3bdc2e3af07dcbe0e606967f76b5/docs/coordination/v1-writer-census.json
+[owner-delivery]: https://github.com/FS-GG/.github/blob/d6ee7c79d67c3bdc2e3af07dcbe0e606967f76b5/docs/adr/0079-single-accountable-delivery-authority.md
+[routine-item]: https://github.com/FS-GG/.github/blob/d6ee7c79d67c3bdc2e3af07dcbe0e606967f76b5/.agents/skills/pnext-item/SKILL.md

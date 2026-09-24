@@ -34,6 +34,10 @@ and effect authority. Name independent work that remains possible during a prote
 the shared resource/touch-set that requires an integrator or serialized execution. The graph does not grant
 permission, allocate staff or authorize extra agents.
 
+Scope a tool refusal to its actual entry point and governing contract before declaring every delivery
+route blocked. An alternative must be explicitly sanctioned by the current policy; a successful older
+merge or available CLI capability is not authority. Preserve the refused boundary unchanged.
+
 Connect each finding to an evidence link, planning correction and acceptance example. Existing accepted
 components should be reused at their proven scope. Do not create a new generic router, executor or replay
 implementation merely because its installed consumer is unfinished. Keep package publication, receiver
