@@ -693,6 +693,26 @@ have to be re-derived, not renamed. And `SkillMirror.fsi` **did** move in this s
 measures it — the oracle `#load`s the implementation files only, so a signature-file change is
 invisible to both the table and the gate.
 
+### 2026-09-24 re-derivation against current SDD main
+
+The obsolete reconcile PR [#2595](https://github.com/FS-GG/.github/pull/2595) pinned a snapshot at
+SDD `b56aeb32` and was closed. We measured the protected SDD main at
+`cb89bcafb95efa1d11ecd29c21ca4108cd30a2cf` instead. Between the prior fixture pin
+`745f4ba29ddfb6bbe753c895af9297bdf16330a1` and that head, the **only** commit touching
+`Schemas.fs`, `SkillMirror.fs`, or `SkillMirror.fsi` is `b56aeb32` (FS.GG.SDD#992), the Fantomas 8
+formatting pass. Source review found record, list, and indentation formatting in those files; it
+did not identify a changed branch or digest operation in `verify` or `sha256`.
+
+The direct command `bash tests/skill-union/skillmirror-oracle.sh --lib
+<SDD-checkout>/src/FS.GG.Contracts` reproduced all 10 `verify` facts and all 11 digest values at
+`cb89bcaf`. Its four disagreements before re-pinning were provenance only: the top-level
+`SkillMirror.fs` digest, both loaded-file digests, and the digest-vector source digest. We updated
+both provenance blocks and ran the oracle again with zero disagreements. This establishes agreement
+for the table's 21 measured vectors at that source head. The oracle still does not load
+`SkillMirror.fsi` or cover behavior outside those vectors. The `skillmirror-redrive` workflow now
+keeps its hermetic validation job under the GS2-08.9 retirement boundary; it no longer writes a
+standing reconcile PR.
+
 ### Intentional differences are asserted, not commented
 
 One vector carries a `divergence` block, and it is asserted in **both** directions — the shell must
