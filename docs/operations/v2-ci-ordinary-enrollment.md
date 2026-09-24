@@ -33,8 +33,12 @@ do not grant the new App an integrity bypass or weaken either rule. The credenti
 the live writer/integrity ruleset differs from the accepted public binding. This settings update is a
 one-time protected setup effect, not part of ordinary settlement permission.
 The writer ruleset currently excludes `refs/heads/fsgg/v2/journal/cutover/d5`; the accepted binding
-must preserve that exclusion and every other condition exactly. Read each ruleset with a credential
-that returns its complete `bypass_actors` array; an anonymous response that omits actors is insufficient.
+must preserve that exclusion and every other condition exactly. The one-time acceptance read uses a
+ruleset administrator and captures the complete `bypass_actors` array and `updated_at` instant. GitHub
+omits bypass actors for a caller without ruleset write access. The unattended App retains only Contents
+write; it compares the accepted update instant, all visible ruleset fields and effective branch rules on
+every operation, and compares actors too if GitHub returns them. A missing update instant or any drift
+refuses. The App does not receive Administration merely to inspect the hidden array.
 
 ## Dedicated private material and public anchor
 
@@ -88,6 +92,7 @@ independently read back. Its exact schema is `fsgg.github.v2-ci-ordinary-settlem
   "rulesets": {
     "writer": {
       "id": 21872113, "name": "v2-journal-writer", "enforcement": "active",
+      "updatedAt": "<UTC-time-after-new-App-bypass-readback>",
       "conditions": {"ref_name": {
         "include": ["refs/heads/fsgg/v2/journal/**/*"],
         "exclude": ["refs/heads/fsgg/v2/journal/cutover/d5"]
@@ -100,6 +105,7 @@ independently read back. Its exact schema is `fsgg.github.v2-ci-ordinary-settlem
     },
     "integrity": {
       "id": 21872115, "name": "v2-journal-integrity", "enforcement": "active",
+      "updatedAt": "<UTC-time-after-admin-readback>",
       "conditions": {"ref_name": {
         "include": ["refs/heads/fsgg/v2/journal/**/*"], "exclude": []
       }},
@@ -119,8 +125,9 @@ independently read back. Its exact schema is `fsgg.github.v2-ci-ordinary-settlem
 ```
 
 The displayed zeros and angle-bracket values are explanatory placeholders, not accepted data. Replace
-the writer `bypassActors` zero with the new App ID after independently reading back the live rule. The
-installed validator must reject an absent anchor, nonpositive IDs, unsupported key, changed policy,
+the writer `bypassActors` zero with the new App ID after independently reading back the live rule. Normalize
+the update instants to UTC before publishing; GitHub may render the same instant with different offsets.
+The installed validator must reject an absent anchor, nonpositive IDs, unsupported key, changed policy,
 wrong repository/permission, or changed ruleset and effective rules. Capture the App ID and installation ID from GitHub's own settings/API
 readback, not from a typed operator claim. Record only public identities in the repository. The
 environment secret inventory remains separate and never records secret values.
@@ -143,6 +150,7 @@ callable-isolated keys as a fallback.
 
 GitHub's [App registration guidance](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app),
 [App token scoping](https://docs.github.com/en/rest/apps/apps#create-an-installation-access-token-for-an-app),
+[ruleset read visibility](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset),
 and [Git ref permissions](https://docs.github.com/en/rest/git/refs) describe the external provider steps
 and permission ceiling used here.
 
