@@ -17,7 +17,8 @@ change v1 admission, or replace the `OpenV2` gate. The machine-readable authorit
 The `.github` Actions environment `ordinary-v2` was observed on 2026-09-24 as an inert shell: custom
 deployment branch policy `main` (policy id `60918716`), zero required reviewers and zero secrets. It is
 not installed operation evidence. Milestone 04 owns enrollment of new public identities and secret
-provisioning through the GitHub App browser manifest flow.
+provisioning through the GitHub App browser registration flow. The exact one-time setup packet is
+[Ordinary-v2 dedicated custody enrollment](v2-ci-ordinary-enrollment.md).
 
 | Future environment secret name | Purpose | Current disposition |
 |---|---|---|
@@ -27,7 +28,8 @@ provisioning through the GitHub App browser manifest flow.
 
 The v1 admission and callable isolated-operation credentials are outside this inventory and must not be
 copied, renamed or accepted as substitutes. Public SPKI/App identities, the trust anchor, installation id,
-permission ceiling, rotation owner and revocation procedure remain pending until milestone 04.
+permission ceiling, rotation and revocation procedure are specified in the enrollment packet. Actual
+IDs and the accepted public anchor remain pending until milestone 04.
 
 ## Fixed reviewer checklist
 
