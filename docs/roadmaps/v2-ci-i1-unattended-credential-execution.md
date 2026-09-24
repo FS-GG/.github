@@ -7,7 +7,7 @@ description: "Six bounded milestones for a trusted post-merge ordinary-v2 settle
 
 # V2-CI-I1 — unattended credential execution
 
-Status: **ready window 01 complete; feature not delivered; credential publication and activation pending**.
+Status: **01 source merged; 02 source in review; 03 secret-free predecessor prepared; installed credential execution pending**.
 
 This is the executable subroadmap for the [V2-CI-I1 design](../coordination/2026-09-24-v2-unattended-ci-credential-interlude.md),
 [ADR-0088](../adr/0088-ci-owned-unattended-credential-execution.md) and the
@@ -33,9 +33,8 @@ callable-operation keys are outside the class.
   environment, runner, operation class, association population and stale/failed evidence. Record the bounded
   baseline below. Evidence: `policy/v2-ci-ordinary-settlement.json`,
   `tools/v2-ci-ordinary-qualification.py`, `tests/v2-ci-ordinary-qualification/run.py` and
-  `docs/operations/v2-ci-ordinary-credential-review.md`. The validator consumes caller-supplied fixture
-  evidence in this milestone; it is a deterministic contract validator, not a claim that the prospective
-  `coherent-qualification` and `ordinary-settlement-contract` contexts already exist.
+  `docs/operations/v2-ci-ordinary-credential-review.md`. Milestone 03 replaces the initial fixture-only
+  evidence producer and provisional check names with native API reads and observed check identities.
 - [ ] **02 — Typed settlement-only Coordination command.** In `FS.GG.Coordination`, compose the existing typed
   readers and transport behind one non-interactive command. Add expected-absent shared-shard journal initialization,
   canonical signed intent, a stable original plan/operation/attempt identity across workflow reruns, one CAS
@@ -49,7 +48,13 @@ callable-operation keys are outside the class.
   actual job dependency and environment/permission boundary, including good, deliberately broken and
   unavailable-tool preflight cases. Implement and bind the required checks to their real exact identities, or
   revise the prospective policy names before installation. Install the synthetic test; do not add request or
-  manual triggers.
+  manual triggers. The prepared workflow now observes a unique merged PR and independently fetches exact
+  PR-head `contract-coherence / coherence` and `routine-eligibility` check runs. It binds a receipt to the
+  protected push, policy digest, workflow revision and run identity; the dependent environment job rederives
+  the same receipt. Its credential effect stays gated inactive and refuses if enabled without the pinned
+  Coordination provider. A native read against merged PR #3663 and its exact head succeeded; focused
+  good/stale/wrong-app/missing-population cases pass. This is source qualification, not the installed
+  two-job success required to check off 03.
 - [ ] **04 — Dedicated App, keys and immutable publication.** Through the browser manifest/protected setup path,
   create the dedicated ordinary-v2 App and authorizer identities, accept the public anchor, provision only the
   named `ordinary-v2` environment secrets, publish byte-identical pinned installer artifacts and read back
