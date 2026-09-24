@@ -45,15 +45,51 @@
       "architecture-map reconcile"
     ],
     "checkProducers": {
-      "contract-coherence / coherence": {"workflowId": 303535682, "path": ".github/workflows/coherence.yml", "event": "pull_request"},
-      "routine-eligibility": {"workflowId": 352355034, "path": ".github/workflows/routine-eligibility.yml", "event": "pull_request_target"},
-      "projection": {"workflowId": 303535682, "path": ".github/workflows/coherence.yml", "event": "pull_request"},
-      "roster-closure": {"workflowId": 303535682, "path": ".github/workflows/coherence.yml", "event": "pull_request"},
-      "drift": {"workflowId": 309898637, "path": ".github/workflows/touch-set-drift.yml", "event": "pull_request"},
-      "claim-generation": {"workflowId": 303535682, "path": ".github/workflows/coherence.yml", "event": "pull_request"},
-      "Lint every shell file in the repo (pinned shellcheck)": {"workflowId": 314999858, "path": ".github/workflows/shell-lint.yml", "event": "pull_request"},
-      "claim-fence": {"workflowId": 335750902, "path": ".github/workflows/fsgg-claim-fence.yml", "event": "pull_request"},
-      "architecture-map reconcile": {"workflowId": 305220590, "path": ".github/workflows/architecture-map.yml", "event": "pull_request"}
+      "contract-coherence / coherence": {
+        "workflowId": 303535682,
+        "path": ".github/workflows/coherence.yml",
+        "event": "pull_request"
+      },
+      "routine-eligibility": {
+        "workflowId": 352355034,
+        "path": ".github/workflows/routine-eligibility.yml",
+        "event": "pull_request_target"
+      },
+      "projection": {
+        "workflowId": 303535682,
+        "path": ".github/workflows/coherence.yml",
+        "event": "pull_request"
+      },
+      "roster-closure": {
+        "workflowId": 303535682,
+        "path": ".github/workflows/coherence.yml",
+        "event": "pull_request"
+      },
+      "drift": {
+        "workflowId": 309898637,
+        "path": ".github/workflows/touch-set-drift.yml",
+        "event": "pull_request"
+      },
+      "claim-generation": {
+        "workflowId": 303535682,
+        "path": ".github/workflows/coherence.yml",
+        "event": "pull_request"
+      },
+      "Lint every shell file in the repo (pinned shellcheck)": {
+        "workflowId": 314999858,
+        "path": ".github/workflows/shell-lint.yml",
+        "event": "pull_request"
+      },
+      "claim-fence": {
+        "workflowId": 335750902,
+        "path": ".github/workflows/fsgg-claim-fence.yml",
+        "event": "pull_request"
+      },
+      "architecture-map reconcile": {
+        "workflowId": 305220590,
+        "path": ".github/workflows/architecture-map.yml",
+        "event": "pull_request"
+      }
     }
   },
   "credentialJob": {
@@ -66,7 +102,7 @@
     ],
     "installed": false,
     "liveObservation": {
-      "observedAt": "2026-09-24T14:30:01Z",
+      "observedAt": "2026-09-24T19:45:51.967077Z",
       "environmentId": 22664505321,
       "branchPolicyId": 60918716,
       "customBranchPolicy": "main",
@@ -75,8 +111,8 @@
       "customBranchPolicies": true,
       "canAdminsBypass": true,
       "requiredReviewerCount": 0,
-      "secretCount": 0,
-      "disposition": "inert-shell-not-activation"
+      "secretCount": 3,
+      "disposition": "dedicated-custody-enrolled-pending-isolated-rehearsal"
     }
   },
   "credentialInventory": [
@@ -84,22 +120,22 @@
       "name": "V2_ORDINARY_AUTHORIZER_PRIVATE_KEY",
       "purpose": "sign canonical ordinary-v2 settlement intent",
       "generation": "new-v2-dedicated",
-      "provisioned": false,
-      "publicIdentity": "pending-milestone-04"
+      "provisioned": true,
+      "publicIdentity": "ordinary-v2-production-6121c3f2ab38acf3; spki-sha256:6121c3f2ab38acf38a37f782eb7775da78598b9cfabc0054917d3d59fe50e3ee"
     },
     {
       "name": "V2_ORDINARY_APP_ID",
       "purpose": "identify the repository-scoped ordinary-v2 GitHub App",
       "generation": "new-v2-dedicated",
-      "provisioned": false,
-      "publicIdentity": "pending-milestone-04"
+      "provisioned": true,
+      "publicIdentity": "app:5064713; installation:164553252"
     },
     {
       "name": "V2_ORDINARY_APP_PRIVATE_KEY",
       "purpose": "mint a short-lived repository-scoped installation token",
       "generation": "new-v2-dedicated",
-      "provisioned": false,
-      "publicIdentity": "pending-milestone-04"
+      "provisioned": true,
+      "publicIdentity": "app:5064713; installation:164553252"
     }
   ],
   "forbiddenCredentialReuse": [

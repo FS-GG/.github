@@ -161,16 +161,24 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         evidence["checks"][0]["workflowId"] = 1
         self.refuses(evidence=evidence, contains="native producer")
 
-    def test_policy_inventory_is_new_unprovisioned_and_keeps_current_gates(self):
+    def test_policy_inventory_is_enrolled_and_keeps_current_gates(self):
         self.assertEqual("source-qualified-not-installed", self.policy["status"])
+        self.assertFalse(self.policy["credentialJob"]["installed"])
         self.assertEqual("trusted-main-push-predecessor", self.policy["qualification"]["producerStatus"])
         self.assertEqual("native-API-derived-evidence",
                          self.policy["qualification"]["currentValidatorRole"])
         self.assertEqual(15368, self.policy["qualification"]["requiredCheckAppId"])
         inventory = self.policy["credentialInventory"]
+        anchor = json.loads((ROOT / "policy/v2-ci-ordinary-settlement-anchor.json").read_text())
         self.assertTrue(inventory)
         self.assertTrue(all(item["generation"] == "new-v2-dedicated" for item in inventory))
-        self.assertTrue(all(item["provisioned"] is False for item in inventory))
+        self.assertTrue(all(item["provisioned"] is True for item in inventory))
+        self.assertEqual(5064713, anchor["writer"]["appId"])
+        self.assertEqual(164553252, anchor["writer"]["installationId"])
+        self.assertTrue(all(str(anchor["writer"]["appId"]) in item["publicIdentity"]
+                            for item in inventory if item["name"] != "V2_ORDINARY_AUTHORIZER_PRIVATE_KEY"))
+        self.assertTrue(any(anchor["authorizer"]["publicKeySpkiSha256"] in item["publicIdentity"]
+                            for item in inventory))
         self.assertEqual({"v1-admission-genesis", "OpenV2"}, set(self.policy["unchangedGates"]))
         names = {item["name"] for item in inventory}
         self.assertFalse(names.intersection(self.policy["forbiddenCredentialReuse"]))
@@ -182,8 +190,8 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         self.assertTrue(observation["customBranchPolicies"])
         self.assertTrue(observation["canAdminsBypass"])
         self.assertEqual(0, observation["requiredReviewerCount"])
-        self.assertEqual(0, observation["secretCount"])
-        self.assertEqual("inert-shell-not-activation", observation["disposition"])
+        self.assertEqual(3, observation["secretCount"])
+        self.assertEqual("dedicated-custody-enrolled-pending-isolated-rehearsal", observation["disposition"])
 
     def test_activation_requires_matching_status(self):
         self.policy["credentialJob"]["installed"] = True
