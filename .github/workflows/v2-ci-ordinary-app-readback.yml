@@ -42,7 +42,7 @@ jobs:
           FSGG_APP_ID: ${{ secrets.V2_ORDINARY_REHEARSAL_APP_ID }}
           FSGG_APP_PRIVATE_KEY: ${{ secrets.V2_ORDINARY_REHEARSAL_APP_PRIVATE_KEY }}
           FSGG_EXPECTED_APP_ID: "0"
-          FSGG_EXPECTED_NAME: FS-GG Ordinary V2 Rehearsal
+          FSGG_EXPECTED_NAME: FS-GG Ordinary V2 Rehearsa
           FSGG_EXPECTED_REPOSITORY: FS-GG/FS.GG.Coordination.Authority.Sandbox
           FSGG_EXPECTED_REPOSITORY_ID: "1385801070"
         run: python3 tools/v2-ci-ordinary-app-readback.py
