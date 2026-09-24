@@ -2,34 +2,36 @@
 title: "Ordinary-v2 CI credential inventory and review"
 category: Operations
 categoryindex: 4
-description: "Public custody inventory and fixed source-review checklist for the prospective unattended ordinary-v2 settlement path."
+description: "Public custody inventory and fixed source-review checklist for the installed ordinary-v2 settlement candidate."
 ---
 
 # Ordinary-v2 CI credential inventory and review
 
-This inventory covers only the prospective `ordinary-post-merge-delivery-settlement` class from
+This inventory covers only the `ordinary-post-merge-delivery-settlement` class from
 [V2-CI-I1](../roadmaps/v2-ci-i1-unattended-credential-execution.md). It does not activate a writer,
 change v1 admission, or replace the `OpenV2` gate. The machine-readable authority is
 [`policy/v2-ci-ordinary-settlement.json`](../../policy/v2-ci-ordinary-settlement.json).
 
 ## Public custody inventory
 
-The `.github` Actions environment `ordinary-v2` was observed on 2026-09-24 as an inert shell: custom
-deployment branch policy `main` (policy id `60918716`), zero required reviewers and zero secrets. It is
-not installed operation evidence. Milestone 04 owns enrollment of new public identities and secret
-provisioning through the GitHub App browser registration flow. The exact one-time setup packet is
-[Ordinary-v2 dedicated custody enrollment](v2-ci-ordinary-enrollment.md).
+The `.github` Actions environment `ordinary-v2` has custom deployment branch policy `main`
+(policy id `60918716`), zero required reviewers and exactly three dedicated secrets. The public
+anchor binds App `5064713`, installation `164553252` and authorizer key ID
+`ordinary-v2-production-6121c3f2ab38acf3`; the installed sandbox qualification uses a second App
+and authorizer. The [enrollment packet](v2-ci-ordinary-enrollment.md) records the setup and the
+[installed qualification](v2-ci-i1-installed-qualification.md) records its hosted evidence. Production
+`credentialJob.installed` remains false until the protected `OpenV2` and exact-candidate gates.
 
-| Future environment secret name | Purpose | Current disposition |
+| Environment secret name | Purpose | Current disposition |
 |---|---|---|
-| `V2_ORDINARY_AUTHORIZER_PRIVATE_KEY` | Sign only canonical ordinary-v2 settlement intent | New dedicated key; absent |
-| `V2_ORDINARY_APP_ID` | Select the repository-scoped ordinary-v2 App | New dedicated App; absent |
-| `V2_ORDINARY_APP_PRIVATE_KEY` | Mint its short-lived installation token | New dedicated key; absent |
+| `V2_ORDINARY_AUTHORIZER_PRIVATE_KEY` | Sign only canonical ordinary-v2 settlement intent | Provisioned; public digest in anchor |
+| `V2_ORDINARY_APP_ID` | Select the repository-scoped ordinary-v2 App | Provisioned; App ID `5064713` |
+| `V2_ORDINARY_APP_PRIVATE_KEY` | Mint its short-lived installation token | Provisioned; private value stays in environment |
 
 The v1 admission and callable isolated-operation credentials are outside this inventory and must not be
 copied, renamed or accepted as substitutes. Public SPKI/App identities, the trust anchor, installation id,
-permission ceiling, rotation and revocation procedure are specified in the enrollment packet. Actual
-IDs and the accepted public anchor remain pending until milestone 04.
+permission ceiling, rotation and revocation procedure are specified in the enrollment packet and
+the accepted public anchor.
 
 ## Fixed reviewer checklist
 
@@ -52,8 +54,8 @@ values.
   is immutable and does not expose general signing, token issuance or arbitrary command entry points.
 - One stable operation/attempt identity survives workflow reruns. Expected-absent/CAS, unknown-result
   reconciliation, independent readback and replay refusals remain exercised.
-- v1 genesis and `OpenV2` remain unchanged. Provisioning, anchor enrollment, installed rehearsal and
-  receiver activation each retain their later explicit evidence boundary.
+- v1 genesis and `OpenV2` remain unchanged. The completed provisioning, anchor enrollment and installed
+  rehearsal do not bypass the separate receiver activation decision.
 
 The reviewer can request source repair. The reviewer does not hold credentials, approve as another person,
 or authorize a protected effect.

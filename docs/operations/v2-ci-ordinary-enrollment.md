@@ -1,8 +1,10 @@
 # Ordinary-v2 dedicated custody enrollment
 
-This packet prepares the one-time enrollment for V2-CI-I1. The ordinary post-merge workflow remains
-inactive until the pinned Coordination installer, public anchor, dedicated keys, and isolated hosted
-qualification all pass. Enrollment does not authorize `OpenV2` or change the current v1 admission gate.
+This packet records the completed one-time enrollment for V2-CI-I1. The pinned installer, dedicated
+production and rehearsal custody, public anchors and isolated hosted qualification are in place.
+The production ordinary post-merge credential job remains inactive while the real cutover ledger is
+`OperatingV1`; enrollment does not authorize `OpenV2` or change the current v1 admission gate.
+The [installed qualification record](v2-ci-i1-installed-qualification.md) links the exact hosted runs.
 The [Coordination CLI 0.1.2 release](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.2)
 is published. Its reviewed package payload is `sha256:5633d9be2263e77437619a75a2411e4e82e48d763124df472b8e1b7c9e1dfd68`;
 the signed archive served by nuget.org is pinned in both workflows as
@@ -29,9 +31,9 @@ endpoints require Contents write; token requests must explicitly narrow both rep
 permission even though the App installation itself is already selected-repository.
 
 The Authority repository's live `v2-journal-writer` ruleset (`21872113`) protects
-`refs/heads/fsgg/v2/journal/**/*` with creation/update rules and currently lists only incumbent App
-`4882140` as an always-bypass actor. After the new App ID is known, add **that exact App ID** as one
-more bypass actor for this writer ruleset, then independently read back its scope and actors. Retain the
+`refs/heads/fsgg/v2/journal/**/*` with creation/update rules and lists incumbent App
+`4882140` and dedicated ordinary App `5064713` as always-bypass actors. Both were independently read
+back with the exact scope and actors. Retain the
 incumbent until its separate governed retirement. The `v2-journal-integrity` ruleset (`21872115`)
 protects the same journal population against deletion/non-fast-forward and has **zero** bypass actors;
 do not grant the new App an integrity bypass or weaken either rule. The credential job must refuse when
@@ -53,9 +55,9 @@ activation until a separate ruleset attestor can supply complete unattended evid
 
 ## Dedicated private material and public anchor
 
-Provision these three **new** values directly into the `.github` Actions `ordinary-v2` environment.
-That environment has a custom `main` branch policy and zero required reviewers. Its shell was read back
-on 2026-09-24 with zero secrets; this is setup only.
+The three dedicated values were provisioned directly into the `.github` Actions `ordinary-v2`
+environment. It has a custom `main` branch policy and zero required reviewers. Its public inventory
+now reads back exactly the three named secrets; values are never part of that readback.
 
 | Environment secret | Value | Public counterpart |
 |---|---|---|
@@ -148,9 +150,9 @@ environment secret inventory remains separate and never records secret values.
 Publication must pin one immutable Coordination artifact and its content digest in the protected workflow.
 First run the installed synthetic matrix with the separate rehearsal App and authorizer in the sandbox
 Authority repository described below. The actual production `OpenV2` state remains a separate gate.
-Only after this isolated readback and the public anchor are accepted may a source PR set
-`credentialJob.installed` to `true`. The normal main-push route then has no per-run human reviewer or
-host credential session.
+The isolated readback and public anchor are accepted. Keep `credentialJob.installed=false` until the
+protected `OpenV2` decision and GS2-10 exact candidate qualification permit activation. The normal
+main-push route then has no per-run human reviewer or host credential session.
 
 For rotation, disable activation, enroll the new App key or authorizer key directly in the environment,
 publish its public identity, qualify the exact new installer/workflow/policy bytes, and reconcile original
@@ -170,10 +172,11 @@ and permission ceiling used here.
 The isolated hosted matrix uses a distinct public
 [`FS-GG/FS.GG.Coordination.Authority.Sandbox`](https://github.com/FS-GG/FS.GG.Coordination.Authority.Sandbox)
 repository, ID `1385801070`, seeded at `fe6292e9fa729a57cebbe4c8cf4d51dcad05500c`.
-Its active journal writer ruleset is `23947019` (creation/update, zero bypass until enrollment) and its
-integrity ruleset is `23947025` (deletion/non-fast-forward, zero bypass). The `.github`
+Its active journal writer ruleset is `23947019` (creation/update, now bypassed only by rehearsal App
+`5065136`) and its integrity ruleset is `23947025` (deletion/non-fast-forward, zero bypass). The `.github`
 `ordinary-v2-rehearsal` environment, ID `22669445419`, has custom `main` branch policy `60924371`,
-zero required reviewers and zero secrets. These are inert setup shells, not successful operations.
+zero required reviewers and exactly the three rehearsal secrets. The hosted installed results are in
+the [qualification record](v2-ci-i1-installed-qualification.md#hosted-installed-matrix).
 The sandbox synthetic epoch lives on the separate
 `refs/heads/ordinary-v2-rehearsal-epoch` ref, currently commit
 `4f02add98e091cd268979468f9c15ffe59435d43`. Its `head.json` and `event.json` bind
@@ -190,6 +193,12 @@ authorizer key ID/SPKI digest. Add only that App ID as the sandbox writer-rulese
 zero integrity bypass. The rehearsal profile and anchor must be separately pinned and reject the
 production repository ID, App, environment and real epoch. The production profile must reject the
 rehearsal repository and synthetic epoch before signing.
+
+The registered rehearsal App's displayed name is `FS-GG Ordinary V2 Rehearsa` (without the final
+“l”), App ID `5065136`, installation ID `164565492`. The production App is `FS-GG Ordinary V2
+Settlement`, App ID `5064713`, installation ID `164553252`. Their separate public identities and
+ruleset instants are pinned in the two anchor files; the spelling of the displayed rehearsal name
+has no role in the App ID or installation binding.
 
 Using the production App in this sandbox would let rehearsal code holding its private key mint a
 production Authority token, even if one token request was scoped to the sandbox. The two App
