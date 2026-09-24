@@ -701,7 +701,8 @@ SDD `b56aeb32` and was closed. We measured the protected SDD main at
 `745f4ba29ddfb6bbe753c895af9297bdf16330a1` and that head, the **only** commit touching
 `Schemas.fs`, `SkillMirror.fs`, or `SkillMirror.fsi` is `b56aeb32` (FS.GG.SDD#992), the Fantomas 8
 formatting pass. Source review found record, list, and indentation formatting in those files; it
-did not identify a changed branch or digest operation in `verify` or `sha256`.
+did not identify a changed branch or digest operation in `verify` or `sha256`. The six commits from
+`b56aeb32` to `cb89bcaf` changed none of those three library files.
 
 The direct command `bash tests/skill-union/skillmirror-oracle.sh --lib
 <SDD-checkout>/src/FS.GG.Contracts` reproduced all 10 `verify` facts and all 11 digest values at
