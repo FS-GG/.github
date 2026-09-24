@@ -18,6 +18,7 @@ CENSUS_PATH = ROOT / "docs/coordination/v1-writer-census.json"
 RECEIVER_PATH = ROOT / "docs/coordination/v1-writer-receiver-census.json"
 LEGACY_PATH = ROOT / "tests/producer-fence-attacks/legacy-probe-evidence.json"
 EXTERNAL_PATH = ROOT / "tests/producer-fence-attacks/external-route-evidence.json"
+READ_ONLY_SUCCESSORS_PATH = ROOT / "tests/producer-fence-attacks/read-only-route-successors.json"
 GS2089_RELEASE_PATH = ROOT / "docs/reports/gs2-08-9-release-route-dispositions.json"
 CLIENT_PATH = ROOT / "src/FS.GG.Coord.Cli/Client.fs"
 WRITE_FIXTURE_PATH = ROOT / "tests/coord-engine-e2e/writes.sh"
@@ -30,6 +31,62 @@ def fail(message: str) -> None:
 
 def file_sha(path: pathlib.Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def validate_kit_read_only_successor(historical: dict[str, object], successor: dict[str, object], source: bytes) -> None:
+    """Admit a changed Kit route only while its current bytes retain the GS2-08.9 capability loss."""
+    path = ".github/workflows/kit-materialize.yml"
+    expected_proof = (
+        "contents-read-only; no job permission override, App token, secret read, "
+        "provider write command, or materialize job"
+    )
+    if successor.get("path") != path or successor.get("predecessorSha256") != historical.get("sha256"):
+        fail("Kit successor does not bind the accepted historical route")
+    if successor.get("sha256") != hashlib.sha256(source).hexdigest():
+        fail("Kit successor does not bind the current route bytes")
+    if successor.get("disposition") != "current-revision-read-only" or successor.get("proof") != expected_proof:
+        fail("Kit successor does not attest the retained read-only disposition")
+
+    # Parse the live indentation structure. This workflow is fixed to a small YAML shape, so an
+    # unknown job, permission form, or action is a refusal. Comment-only historical prose is not
+    # authority; the accepted old evidence and candidate census cannot make a new writer safe.
+    lines = [line.rstrip() for line in source.decode("utf-8").splitlines()
+             if line.strip() and not line.lstrip().startswith("#")]
+    def block(key: str) -> list[str]:
+        indices = [i for i, line in enumerate(lines) if line == key]
+        if len(indices) != 1:
+            fail(f"Kit successor has no unique top-level {key}")
+        start = indices[0] + 1
+        end = next((i for i in range(start, len(lines)) if not lines[i][0].isspace()), len(lines))
+        return lines[start:end]
+
+    if block("permissions:") != ["  contents: read"]:
+        fail("Kit successor can obtain a token beyond contents:read")
+    jobs = block("jobs:")
+    job_names = re.findall(r"(?m)^  ([a-z][a-z0-9-]*):\s*$", "\n".join(jobs))
+    if job_names != ["bump-shape", "bump-mechanical", "receiver-validate"]:
+        fail("Kit successor changed the three read-only job identities")
+    if any(re.match(r"^    (?:permissions|uses):", line) for line in jobs):
+        fail("Kit successor adds a job permission override or reusable callee")
+    active = "\n".join(lines)
+    if "actions/create-github-app-token" in active or re.search(r"\$\{\{\s*secrets(?:\.|\[)", active):
+        fail("Kit successor can read an App or repository secret")
+    uses = [match.group(1) or match.group(2) for match in re.finditer(
+        r"(?m)^        uses:\s*(\S+)\s*$|^      - uses:\s*(\S+)\s*$", "\n".join(jobs))]
+    if sorted(uses) != sorted(["actions/checkout@v7", "actions/checkout@v7",
+                             "actions/setup-dotnet@v6", "actions/setup-python@v7"]):
+        fail("Kit successor introduces an unreviewed action")
+    forbidden = (
+        r"\bgh\s+api\s+-X\s+(?:POST|PATCH|PUT|DELETE)\b",
+        r"\bgh\s+pr\s+(?:create|edit|merge|close)\b",
+        r"\bgh\s+release\s+(?:create|edit|upload|delete)\b",
+        r"\bgit\s+push\b",
+        r"\bdotnet\s+nuget\s+push\b",
+        r"\bcurl\b[^\n]*\s-X\s+(?:POST|PATCH|PUT|DELETE)\b",
+        r"\brepos/[^\s]+/dispatches\b",
+    )
+    if any(re.search(pattern, active, re.I) for pattern in forbidden):
+        fail("Kit successor introduces a provider write command")
 
 
 def canonical_digest(value: object) -> str:
@@ -111,6 +168,7 @@ def validate_external_and_legacy(oracle: dict[str, object]) -> tuple[dict[str, o
     census = json.loads(CENSUS_PATH.read_text())
     receivers = json.loads(RECEIVER_PATH.read_text())
     external = json.loads(EXTERNAL_PATH.read_text())
+    read_only_successors = json.loads(READ_ONLY_SUCCESSORS_PATH.read_text())
     legacy = json.loads(LEGACY_PATH.read_text())
 
     dispositions = {"conditional-remote-writer", "protected-admin-writer", "publish-writer", "remote-writer"}
@@ -120,6 +178,12 @@ def validate_external_and_legacy(oracle: dict[str, object]) -> tuple[dict[str, o
     unresolved_sources = {row["path"] for row in external["routes"] if row["gs2089"] == "unresolved"}
     successor = json.loads(GS2089_RELEASE_PATH.read_text()) if GS2089_RELEASE_PATH.is_file() else None
     successor_routes = {row["path"]: row for row in successor["routes"]} if successor else {}
+    kit_path = ".github/workflows/kit-materialize.yml"
+    if (read_only_successors.get("schema") != "fsgg.gs2-08.6-read-only-route-successors/1"
+            or len(read_only_successors.get("routes", [])) != 1
+            or read_only_successors["routes"][0].get("path") != kit_path):
+        fail("read-only successor attestation must cover only the Kit workflow")
+    kit_successor = read_only_successors["routes"][0]
     removed = unresolved_sources - expected_sources
     declared_removed = set(successor.get("censusAdjustment", {}).get("removedWriterRows", [])) if successor else set()
     if route_sources != oracle_sources or unresolved_sources - declared_removed != expected_sources:
@@ -129,8 +193,13 @@ def validate_external_and_legacy(oracle: dict[str, object]) -> tuple[dict[str, o
     for row in external["routes"]:
         current = file_sha(ROOT / row["path"])
         if row["sha256"] != current:
-            successor_row = successor_routes.get(row["path"], {})
-            if successor_row.get("sha256") != current:
+            if row["path"] == kit_path:
+                if row.get("sha256") != "c665d20100ec37068c2eae8fbadb22ab22cd9f571a539174c1a85dc917b59575":
+                    fail("accepted Kit predecessor identity changed")
+                if row.get("status") != "current-revision-read-only" or row.get("gs2089") != "resolved":
+                    fail("accepted Kit route was not a resolved read-only route")
+                validate_kit_read_only_successor(row, kit_successor, (ROOT / kit_path).read_bytes())
+            elif successor_routes.get(row["path"], {}).get("sha256") != current:
                 fail(f"external route source hash drifted without GS2-08.9 successor: {row['path']}")
         if row["gs2089"] not in {"unresolved", "resolved"} or row["status"] in {"pass", "refusal-observed"}:
             fail(f"unexecuted external route was overstated: {row['path']}")
@@ -211,6 +280,7 @@ def main(args: argparse.Namespace) -> None:
         "receiverCensusSha256": file_sha(RECEIVER_PATH),
         "legacyEvidenceSha256": file_sha(LEGACY_PATH),
         "externalRouteEvidenceSha256": file_sha(EXTERNAL_PATH),
+        "readOnlySuccessorsSha256": file_sha(READ_ONLY_SUCCESSORS_PATH),
         "liveCompositionSha256": file_sha(CLIENT_PATH),
         "loopbackWriteFixtureSha256": file_sha(WRITE_FIXTURE_PATH),
         "checkoutHead": git_head,
