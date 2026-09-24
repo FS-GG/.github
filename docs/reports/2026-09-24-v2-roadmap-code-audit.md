@@ -25,6 +25,12 @@ reconcile it before writing another implementation. Its reported live diagnostic
 No Authority ref, signer, credential, admission operation, receiver default or package was changed by this
 audit. The digest-bound GS2 roadmap and accepted receipts were deliberately left byte-identical.
 
+**Subsequent status, not part of this inspection:** later on 2026-09-24, the separately protected
+[OperatingV1 admission genesis](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5814570932)
+was installed and independently verified at generation 1 `AdmissionsOpen`. The unified progress report
+and graph now distinguish that completed root from the still-open post-genesis append and effect-authority
+joins. This event does not retroactively change the inspected source revisions or qualify GS2-09.7.
+
 ## Findings and corrections
 
 ### 1. The unified frontier lagged its native owners
