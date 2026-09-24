@@ -20,6 +20,11 @@ section 9.8 for named feature parts and subroadmap links, section 9.9 for genera
 and sections 8.5/9.7 for cooperative client/master orchestration. Original plans supply relevant detail.
 Do not treat the large unified document as an unchecked task list to exhaustively expand.
 
+When asked to audit, reconcile or restructure the programme, read
+[evidence-audit.md](references/evidence-audit.md). That mode inspects actual code and native evidence,
+updates the current frontier and dependency graph, and preserves pinned contracts. It does not dispatch
+the feature-planning/implementation loop merely because the audit edits its roadmap.
+
 Identify an active feature from the user's request, current work/PR and existing feature-roadmap links.
 Resume it with its original identity and cost lineage. If multiple active features are genuinely ambiguous,
 ask which one to advance while continuing independent read-only inspection. Do not invent a new registry.

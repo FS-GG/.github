@@ -10,7 +10,8 @@ description: "A researched successor plan from the current v2 frontier: process 
 Short name: **Unified Roadmap**. In FS-GG development discussions, **“the roadmap”**, **“current roadmap”**
 and **“compacted roadmap”** refer to this document unless another roadmap is explicitly named.
 
-Authored: **2026-09-07 15:42:10 UTC**. Status: **proposed successor design and roadmap**.
+Authored: **2026-09-07 15:42:10 UTC**. Evidence reconciliation: **2026-09-24**.
+Status: **active programme; V2 migration implementation and rehearsal remain the critical path**.
 
 **Start from completed development simplification and the existing v2 implementation. Finish and qualify
 the remaining migration, preserve the simplified experience on installed v2 receivers, then invest in
@@ -18,7 +19,7 @@ bounded execution and operations research only for demonstrated unmet needs.** T
 which development process applies to each kind of work, where its behavior belongs, what evidence is
 needed, and how the programmes join.
 
-This is the consolidated planning proposal for the current tracks in the
+This is the consolidated plan for the current tracks in the
 [development master](development-master.md): v2, development simplification carryover, OR orchestration,
 PB performance-bounded flow, and governance integration. It incorporates their relevant dependencies and
 preserves later portfolio options. It does not restart simplification, completed v2 units, or old kernel
@@ -47,632 +48,108 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
-Choreo **hosted-writer source and formal qualification complete**, **2026-09-18**:
-Coordination's [C0–C6 programme](https://github.com/FS-GG/FS.GG.Coordination/blob/8135bb68bac07e941897ec556568c52ade6a492c/docs/roadmaps/choreo-akka-fsharp-trace-correspondence.md)
-completed in [PR #428](https://github.com/FS-GG/FS.GG.Coordination/pull/428), merge
-`8135bb68bac07e941897ec556568c52ade6a492c`. The four-process Host/Journal/Runner/GitHubProvider model supplies
-eight genuine Quint traces replayed through production seams with memory and PostgreSQL journals. C4 fixed
-proven absence incorrectly advancing completion and missing PostgreSQL retry-intent metadata. C5 qualified
-64 progress states and 1,162 bounded fault states; fault exploration admits one retry and one completed
-crash/recovery cycle per operation. The retained flat-model safety graph separately covers admission-related
-conditions outside that message model. The complete canonical inventory and fresh-checkout exercise passed.
-Reuse the [qualification decision](https://github.com/FS-GG/FS.GG.Coordination/blob/8135bb68bac07e941897ec556568c52ade6a492c/docs/architecture/choreo-qualification.md)
-and [maintenance guide](https://github.com/FS-GG/FS.GG.Coordination/blob/8135bb68bac07e941897ec556568c52ade6a492c/docs/architecture/choreo-correspondence.md).
-This is additional E1 foundation evidence, not callable-v2 acceptance, installed adoption of the fixes,
-federation qualification or a new V2 prerequisite. The historical installed O3 baseline retains its exact
-artifact scope; the source-to-installed follow-up is owned in section 9.6.
+**Current frontier: callable v2 is qualified for its isolated scope; GS2-09.1–.6 migration contracts are
+accepted; GS2-09.7 representative execution and GS2-09.8 omission proof remain open.** Fleet production
+`OpenV2`, Q4 and `OperatingV2` are not established by those results.
 
-V2-CALL-01 **callable ordinary-v2 published and opt-in receiver adopted**, **2026-09-18**:
-Coordination [PR #421](https://github.com/FS-GG/FS.GG.Coordination/pull/421), merge
-`86043ea33398877864f9d82a68d10c3def90c6c2`, delivered V2-CALL-01.1–.2: the owning GS2-09.9 amendment,
-strict observation and deterministic sealed-plan boundary, installed-source `delivery inspect|plan|advance`
-composition, guarded advancement and interruption-safe durable recovery. Coordination
-[PR #422](https://github.com/FS-GG/FS.GG.Coordination/pull/422), merge
-`1bd60a3e2dddc37827a7562b133305e1282e2c20`, then delivered `.3a`: real GitHub observation/readback,
-protected sharded-journal and native merge composition plus an immutable release-preparation route for exact
-package `FS.GG.Coordination.Cli` 0.1.0, SHA-256
-`ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf`. Coordination
-[PR #430](https://github.com/FS-GG/FS.GG.Coordination/pull/430), merge
-`2e92dfb533be94c540b12a1f6a58a914ba7132bd`, records `.3b`: the protected dual-feed operation published
-those exact normalized payload bytes as `v0.1.0`, recovered without duplicate publication and verified the
-public tool. `.github` [PR #3539](https://github.com/FS-GG/.github/pull/3539) then adopted 0.1.0 in its canonical opt-in tool manifest alongside the legacy 0.90.0
-bridge, with clean/retained/idempotent/conflict/uninstall fixtures and installed pre-`OpenV2` refusal.
-Installed isolated-provider/native acceptance, `OpenV2`, Q4 and the distinct GS2-09 migration/rehearsal work
-remain pending. No production writer was enabled and no live provider effect was performed.
+This report was reconciled against protected repository revisions on **2026-09-24**. The
+[code audit](reports/2026-09-24-v2-roadmap-code-audit.md) records exact revisions, implementation boundaries,
+limitations and corrections. The [dependency graph and parallel lanes](#91-dependencies-and-parallelism)
+identify executable work; the [feature index](#98-feature-parts-and-subroadmap-index) links its owners.
 
-O3 **controlled adoption complete**, **2026-09-16**:
-Coordination [PR #398](https://github.com/FS-GG/FS.GG.Coordination/pull/398) qualified two distinct projects
-sharing one durable ordinary slot, transient observation failure and scoped recovery. The first installed attempt
-correctly stopped when the shipped binary lacked a non-dispatching reservation interface. Coordination
-[PR #400](https://github.com/FS-GG/FS.GG.Coordination/pull/400), merge
-`9f506c4e9440e675d87e50d9f756620ebaecb8bb`, added the bounded offline verifier; all required checks passed and
-the unrelated formal fanout was canceled. Bundle run
-[35110483612](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/35110483612) served artifact
-`10452461386`, bound to tree `18f7930dce2f2c4110da74896a5b279438600d35` and Host SHA-256
-`3c99a152c7d443de79d0a6df7a7bcff2c7b1c8ef47dd9d458f8fdb5c8a1059cd`.
-
-Main installed that exact bundle as image digest
-`sha256:03a51da09d7d25def2d8bb70f64bacd710b881a65df5f14f030eac974d7befdc` and invoked the verifier once on a
-new schema-2 store. A reserved capacity 1, B was refused unchanged, unknown accounting and a mismatched release
-retained A, exact release admitted the original B request, durable reopen preserved both intents, and terminal
-readback observed zero active reservations, commands, candidates and external effects. Result SHA-256 is
-`b689f89812a7965df83383c1f5667cb8f53809b696fae4b8f38bae30470e7eb7`. No Host service, runner, provider,
-model, GitHub work item or reboot ran; all fixed and return units finished stopped and disabled. O0–O3 and the
-standalone roadmap are now **12/12 complete**. Wider execution, hosting and cooperative profiles remain
-conditional, and no workspace or lifecycle default changed.
-
-O2 **trusted bounded Main pilot complete**, **2026-09-16**:
-Coordination [PR #393](https://github.com/FS-GG/FS.GG.Coordination/pull/393) retired the inaccessible original
-scope without inventing completion or usage, and [PR #396](https://github.com/FS-GG/FS.GG.Coordination/pull/396)
-produced the final generation-bound admission and immutable two-container application bundle. One admitted
-implementation turn created exact `.github` candidate `18a8df69135f29d719b2736847006843ec225dd8`.
-The physical host reboot changed boot identity from `12690d45-efc6-4eb5-99d8-cc1484046873` to
-`e24b787b-b7db-4cf4-ae04-cfe7f9f886b7` while preserving the attempt and journal.
-
-The automatic postboot helper exposed a persisted read-only session-policy mismatch and made zero recovery
-requests; SystemAdmin [PR #108](https://github.com/EHotwagner/SystemAdmin/pull/108) now refuses that mismatch.
-The first manual recovery then exposed a zero-mutation trailing-slash repository URL defect. Coordination
-[PR #397](https://github.com/FS-GG/FS.GG.Coordination/pull/397), merge
-`1d3b683d804cb369914a3fbb29757c36c533e130`, supplied the focused repair and served-verified replacement
-bundle. The same generation-1 attempt recovered from the byte-identical admission, resumed once and natively
-merged [`.github` PR #3515](https://github.com/FS-GG/.github/pull/3515) as
-`cf840ff9f760d2fdebcdca84caf0ae24f75b8dfa`; issue [#3514](https://github.com/FS-GG/.github/issues/3514),
-its claim and branch are closed, and all units are stopped and disabled. No second model attempt or reboot
-occurred. Known implementation usage is input 77,429, cached input 38,528, output 556 and reasoning output 0;
-subscription cost remains unknown. The repaired automatic helper was not exercised across another reboot;
-manual same-attempt recovery supplies the accepted reboot and native-delivery evidence.
-
-O2-I4 and O2 are complete. This result brought the standalone roadmap to **11/12**; the O3 completion recorded
-above brings it to **12/12**. No workspace or lifecycle default changed.
-
-O2-I4c **formal validation parallelized**, **2026-09-15**:
-Coordination [PR #390](https://github.com/FS-GG/FS.GG.Coordination/pull/390) merged tested head
-`a68fec32b0b031b0520766f05dd845cc83f778c7` as `5c42ae5dc8e535e7c07be54460978da2a491b79f`;
-both bind tree `5085237c67299609cf71f624293159291e01eb94`. All required native checks and the
-complete coherent aggregate passed. A shared six-execution matrix runs the canonical base, 15 semantic
-scenarios and epoch scenario alongside the other obligations. Strict aggregation requires all 17 formal
-fragments with current candidate/source/contract/toolchain bindings, then restores logical partition 1
-for the unchanged six-obligation final aggregate. Missing valid reuse still requires current qualification;
-prior-receipt search examines at most 25 candidates and never cancels coherent validation.
-
-Successful [native run 34993852935](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34993852935)
-reduced whole-workflow job elapsed time from **35m50s to 22m51s (36.2%)** against accepted B's
-[run 34982237662](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34982237662).
-Formal execution through aggregation took **18m44s**, or **21m05s including preparation**, versus the
-old formal job's **29m46s**. Fresh retained TRX results prove **378/378 unit** and **609/609 architecture**
-tests passed. Their optimistic dispatch now actually executes the suites. Summed job time increased from
-**45m04s to 105m31s** with real suite execution and fanout overhead; this is observed runner occupation,
-not billed usage or a cost-saving claim. These are single-run observations, not a statistical performance bound.
-
-Lost-host retirement, the source-owned new-admission preparer, final bundle adoption and the distinct
-local reboot pilot remain pending under the
-[owning plan](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/o2-local-continuation.md).
-O2/O3 and **10/12** remain unchanged; no workspace default or runtime was activated.
-
-O2-I4c **paused recovery source delivered**, **2026-09-15**:
-Coordination [PR #389](https://github.com/FS-GG/FS.GG.Coordination/pull/389) binds candidate
-`5f51af1e713dec698f5e7c3ee2e4722288ef3ea3`, tree `5815c9b000b52c35da599281fd569ee16a0d95cd`;
-merge `29dea17d88f8654de92a634a197541080deb0827` has the same tree and all required native checks passed.
-Its authenticated recovery route reconstructs the durable graph
-from unchanged admission bytes, obtains fresh repository/issue/claim readback and remains paused until
-a separate resume. Immutable execution and delivery deadlines bound model work to 30 minutes and the
-whole attempt to two hours; older admissions gain no extended authority. Expired or displaced authority
-permits observation of exposed effects without new dispatch or model work.
-Focused PostgreSQL replacement tests passed with the packaged executor and controlled GitHub responses;
-this is source evidence, with external GitHub delivery still owned by the live pilot. Current-source
-formal qualification ran all 16 bounded scenarios; receipt SHA-256 is
-`ed4e865ad31e184cbeaa3f8641a41c76cc32fdc564249b7fc7802a89bb81f474`.
-The [owning local-continuation plan](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/o2-local-continuation.md)
-records recovery and lost-host retirement. SystemAdmin's receiver correction
-[PR #107](https://github.com/EHotwagner/SystemAdmin/pull/107) merged as
-`0c1e4e990bd77cd0538c139d73071672cea82e27`, with candidate/merge tree
-`9b7c1b7ff7fbfdf417d13211e8dc14fa6983e23b` and all three native checks passing.
-Its current caller SHA-256 is `14c79b1b3afd6f491b33b864d6bb8a92b2479346f58b6cc1b672126b40854969`;
-eight focused tests preserve unknown, false and true termination observations distinctly. The earlier
-transport fixture remains scoped evidence; no model or sandbox probe was repeated for this parser fix.
-The subsequent formal-partition correction and actual test-dispatch evidence are recorded above.
-Final bundle publication/adoption, original-attempt retirement and the distinct local reboot pilot remain
-pending. O2/O3 and **10/12** remain unchanged; no workspace default or runtime was activated.
-
-O2-I4c **bounded recovery caller delivered**, **2026-09-15**:
-SystemAdmin [PR #106](https://github.com/EHotwagner/SystemAdmin/pull/106) merged tested head
-`8f6596c3b54cb4928cd7b7ddc76ce77dffd6ea19` as `25db883dd57b33806e44bf1b037973f5f10a01b0`;
-both bind tree `2581492d9d441a6f1d1c435b7c2af8665a78506c`, with all three native checks passing.
-The small proxy-compatible caller preserves exact input bytes and separates recovery, status and control;
-its SHA-256 is `7017ad58c44ed8e78796f85c9a88c8c4f95bb6a0b43d32df0e87882f00048349`.
-The exact final client's zero-model localhost fixture observed separate recovery200 and paused-status503
-requests with original bytes and no resume; receipt SHA-256 is
-`e8ea8918db98117a237c5d5f5a6770d239707b7f6ca8facc621b74bc912f6ffe`.
-Focused source tests also cover strict boolean acceptance and numeric-value refusal.
-This source includes [PR #105](https://github.com/EHotwagner/SystemAdmin/pull/105)'s qualified correction
-charging preparation writes to the original launch deadline (merge `69e2ca87e8a17f642b1de2091f792938cb8205d2`).
-The actual producer recovery bundle and installed process/reboot qualification remain pending. No pilot
-admission or existing development-session reentry occurred; O2/O3 and **10/12** remain unchanged.
-
-O2-I4c **finite owned-process return mechanism delivered**, **2026-09-15**:
-SystemAdmin [PR #104](https://github.com/EHotwagner/SystemAdmin/pull/104) merged tested head
-`6f7dfa97b21ca43f959c55246726e92b6d09b1d3` as `b0e0854c2219a153cbae806cf7144d5844976cd1`;
-both bind tree `6e43ad9ebb07dc7b22ac8fe4c828cfa4eed4daa7`. All three native checks passed.
-Its inert Linux supervisor enforces fixed authority/runtime bounds and a durable one-use ticket,
-then adopts and reaps owned descendants across separate process groups. A disposable container fixture
-proved cleanup after the host command was killed, including a separate-session child, while an unrelated
-process survived. The fixture made zero model calls; receipt SHA-256 is
-`ad080e12acdba2f20d23f15a1dd209adc95e7afabebe473ecbc33ee0c8ae1906`.
-This qualifies the return mechanism while its supervisor survives. Actual session return, final deployment
-binding and physical reboot remain pending; no existing development session was restarted. O2/O3 and
-**10/12** remain unchanged.
-
-O2-I4c **trusted operator capability source delivered**, **2026-09-15**:
-SystemAdmin [PR #103](https://github.com/EHotwagner/SystemAdmin/pull/103) merged tested head
-`8ec516aaaa4e63fe9de013d8d75deb812df73fca` as `7bf2404261879ffec29fe2a80ce1689603b333cd`;
-both bind tree `078da588ad8b17c83bc54d7c359b8a54ce6ddbd8`, with all three native checks passing.
-The inert operator packet now distinguishes observation from explicit recovery capabilities and binds
-its client, units and writable paths. Local native fixtures used zero model calls to prove authenticated
-loopback requests, selected writes, protected-ticket/outside-write refusal and disposable unit cleanup.
-Native fixture receipt SHA-256 is `beda3e4d1e598c8ec0a1115818c4be6be100286cecea2f708c1746752b84a7fe`.
-Its expected duplicate-ticket refusal ended the harness before it wrote an overall passed status;
-the individual observations above remain verified, with duplicate refusal covered separately.
-Readback audit SHA-256 is `47c3266d12d2852af12c9b1bc2e6849c9a297525700cae42f733687bb9a70d1f`.
-The proxy permits all ports on 127.0.0.1; the selected guard directory is writable and the deterministic
-launcher retains same-user service control. This is no claim of command isolation. The actual recovery
-client, installed activation and physical reboot remain unqualified. O2/O3 and **10/12** remain unchanged.
-
-O2-I4c **source-health repair delivered; headless operator return qualified**, **2026-09-15**:
-Coordination [PR #388](https://github.com/FS-GG/FS.GG.Coordination/pull/388) merged tested head
-`1024cd709748c7332272ae44cc4fac0f20addbea` as `55b2154e7adfdefa5f4993901eb45d04fed44905`;
-both bind tree `133ef8431f28253c5103b81bc6d285a4a42d7a80`. All required native/coherent checks,
-including formal validation, passed. The change repairs the runner's concurrent startup observation,
-fixture identities/deadlines, scheduled test-project/PostgreSQL selection, and the GitHub CLI invocation.
-No interim runtime bundle was published or installed; the recovery-capable bundle remains pending.
-Main also qualified local headless operator login and exact-session return with two bounded fixture-only
-turns in about 159 seconds. Native receipt SHA-256 is
-`19411082c1dae8bf8a896d2915ad40a75dcfac8a8dd212cdd31a473611bee945`.
-Both transient units stopped/unloaded; pilot model calls and live effects were zero. This does not prove
-physical reboot, live recovery commands or token refresh. Supported paused recovery, original-attempt
-retirement and the new local live pilot remain pending; O2/O3 and **10/12** remain unchanged.
-
-O2-I4c **local subject and operator-return source delivered**, **2026-09-15**:
-SystemAdmin [PR #101](https://github.com/EHotwagner/SystemAdmin/pull/101) merged tested head
-`45e120bb6c3069b10c7afb948d5d4c354d625a51` as `69cd2ae8c3c927ecbc68f51f62652ffa1761fcd0`;
-both bind tree `5daff0f231ce85a1d171738b39fc84bb5fde4b91`. All three native checks passed.
-The canonical renderer now accepts a complete digest-bound repository/issue identity for a distinct
-local representative, refuses incomplete or mismatched explicit input, and labels historical compatibility.
-SystemAdmin [PR #102](https://github.com/EHotwagner/SystemAdmin/pull/102) also merged tested head
-`e985339edce0f982a243a866cfaf82b96cec402c` as `de6b3b6b4fdeac68dd435e230f24506a0962da05`;
-both bind tree `628df5e1c4f491618becca2ca08034a6d5081163`, with all three native checks passing.
-It delivers inert preparation for one finite operator-session return, with boot/expiry/digest checks,
-consume-once launch and bounded cleanup. Source tests do not establish actual headless login, live recovery
-capability or physical reboot success. Those operational qualifications remain pending.
-Neither change installs or admits the new subject. Original-attempt retirement remains pending;
-O2/O3 and the top-level **10/12** count are unchanged. No workspace default changed.
-
-O2-I4c **distinct local bootstrap delivered; live qualification pending**, **2026-09-15**:
-the user selected local replication after the original Main host became unavailable.
-SystemAdmin [PR #100](https://github.com/EHotwagner/SystemAdmin/pull/100) merged tested head
-`ec234c46814f8714a720a5410451da243a66fe07` as `9505e641758e4e7e479e5c02d87ded36a623b9c5`;
-both bind tree `f402e0cb9e535051a0796a0f1b2abef4c4ea62a7`. All three native checks passed.
-The replacement host has a distinct initialized store, an actual initialization-generated backup identity,
-guarded canonical units, authenticated paused readback across an ordered restart, and a retained cold backup.
-Bootstrap evidence SHA-256 is `b7429e9e6ee3ab64ca35c1adc9522e4dac481209e93a4ab4f1dd387506964c6e`;
-the installed binding receipt is `7c2f621ca8a62dbd03c6c565e70bbfdf218a0a125a238052d4130c65e1e09a1a`.
-Both services are stopped and disabled; the bootstrap had no model or GitHub effect capabilities.
-This proves separate local preparation. Original [PR #3481](https://github.com/FS-GG/.github/pull/3481)
-remains open at candidate `3ed0d603276496ba4bcd11660525d8cf37556b28`; its original journal and post-reboot
-outcome remain unavailable. Corrected runtime qualification, local live recovery, and original-attempt
-disposition remain pending. O2/O3 and the top-level **10/12** count are unchanged. No generated workspace
-or lifecycle default changed. Telemetry remains `not-configured`, with native collaboration usage unsupported.
-
-SVG-WORKSPACE-01.4/.6 **completed — local deployment accepted and evidence frozen**, **2026-09-15**:
-Templates [PR #492](https://github.com/FS-GG/FS.GG.Templates/pull/492) merged as
-`a9371afcf22c6986e3c324b1ce85edfc9ee97235` and closed every workspace milestone. The frozen product source
-is `2d8802d527e01afe4755ae7015a5627be88e318f`; retained Templates 0.14.0 package SHA-256 is
-`340250f942efef30702bf8c3f1f9a9096ca246c1bb4b244a2c5806ac49398380`. The accepted Podman/Docker Compose
-deployment uses Caddy as the production-shaped static edge and reverse proxy for the ASP.NET authority.
-It proves served Player/Studio identity, two-client SignalR WebSocket reconnect and retained rollback locally.
-Public DNS/TLS, host reboot survival and external availability are not claimed and are deferred to
-[Templates #491](https://github.com/FS-GG/FS.GG.Templates/issues/491). The
-[freeze report](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/reports/2026-09-15-svg-workspace-freeze.md)
-binds the source, artifact and qualification inventory. [SVG-RELEASE-D](roadmaps/svg-release-d.md) is selected
-for exact Templates/wizard publication, public-only receiver qualification and compatible product activation;
-its later lifecycle-default effect retains the OperatingV2/SDD prerequisite.
-
-SVG-WORKSPACE-01.5 **completed — installed development and retained adoption**, **2026-09-15**:
-Templates [#486](https://github.com/FS-GG/FS.GG.Templates/pull/486) merged reviewed head
-`deacec061a23a75f8302d86539187aec89253227` as `6b797aa6099680ab06763200d1d2a11ed4b7ae16`.
-All exact-head native checks passed, including [composition](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34921402206),
-[source/browser/Orca](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34921401811),
-[public receivers](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34921401747) and
-[typed receivers](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34921401993).
-The complete adopter qualifies public Templates 0.10–0.13 upgrades, whole-inventory refusal, authored-content
-and skill preservation, interrupted apply/rollback recovery and newer-edit protection. Actual wizard 0.11.2
-and public SDD 1.8.0 materialization bind the qualified candidate; the fresh four-baseline matrix is reused
-only after independent archive and generated-file comparisons established identical product bytes and modes.
-The PR's [native package](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34921401820), SHA-256
-`a96116fe581eb78969d165ead3813ee6b4f1c0161dcadf9dc26f80a01241514f`, differs from the .4 candidate
-only in repository-commit metadata. Four real public synthetic receiver PRs delivered routine repair and
-selected Arcade semantic changes: clean [repair](https://github.com/FS-GG/svg-workspace-public-clean-20260914/pull/2)
-and [semantic change](https://github.com/FS-GG/svg-workspace-public-clean-20260914/pull/3), retained
-[repair](https://github.com/FS-GG/svg-workspace-public-retained-20260914/pull/2) and
-[semantic change](https://github.com/FS-GG/svg-workspace-public-retained-20260914/pull/3).
-The [adoption report](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/reports/2026-09-14-svg-complete-workspace-adoption.md)
-records offline profile-2 authority, bounded profile-1 migration, lifecycle compatibility and native
-pending/stale-head refusal. The later .4/.6 freeze accepts the local container deployment boundary; these
-.5 deliveries do not publish Templates/wizard or activate the later lifecycle default.
-
-SVG-WORKSPACE-01.4 **source and installed journeys delivered**, **2026-09-15**:
-Templates [#485](https://github.com/FS-GG/FS.GG.Templates/pull/485) merged as
-`80f9c843737e8351c3ea04fe61a88a3a7538a7d4`. The complete candidate carries blank authoring through
-play, persistence, schema-3 export and two-browser authority, with Tactical/Arcade examples, bounded rule
-correspondence and retained replay compatibility. Scene identity, keyboard focus and input attributes now
-survive drawing edits and history changes. Reviewed head `871489891236c7a79625c56a22ee978da881870f`
-passed native [source, three-browser and Chromium/Orca qualification](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34920041582),
-[public-baseline qualification](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34920041596),
-[typed receivers](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34920041588) and
-[composition](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34920042036).
-The [unpublished native archive](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34920041593)
-has SHA-256 `364b1c500dede32a9117d1e4c90daf8d44975698c0178f305836c7fd85940b2e`.
-The screen-reader journey uses actual Orca focus mode and observes speech output; physical audio remains
-unobserved. Subsequent PRs #489/#490 exercise the versioned static/ASP.NET deployment and rollback through
-the local Caddy edge; PR #492 accepts that as .4 and freezes .6. Durable public hosting remains #491.
-
-SVG-WORKSPACE-01.3 **completed at source and installed-candidate boundaries**, **2026-09-14**:
-Templates [#484](https://github.com/FS-GG/FS.GG.Templates/pull/484) merged as
-`3f3a9c59bdee936e2bee97d52471e5e4a111226e`. The 0.14.0 candidate makes the cooperative SVG arena
-the omitted/default product and supports Player, Studio, tactical, arcade and complete bundles. One
-shared domain drives authoritative gameplay, transformed Studio content, persistence and complete replay;
-legacy selections retain their documented behavior. The root build produces separate static-player and
-authority-server artifacts, with missing/drifted dependency-lock refusal and empty-cache restoration.
-Exact reviewed source `7c5c65c3862e93669b53ac76cd0af762bd024030` passed native
-[source-C](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34870595676),
-[public-C](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34870595873),
-[typed receivers](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34870595826) and
-[composition](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34870596389).
-The [no-publish package run](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34870595708)
-retains artifact `10358294588`, a 313-entry archive with SHA-256
-`7a188a844fe3f36eacf05973215ac1907505a7a250ecd457d9ce849e66c0cfaa`.
-Installed wizard 0.11.2 from [#3476](https://github.com/FS-GG/.github/pull/3476), public SDD 1.8.0 and
-these exact Templates bytes passed bundle/owner/refusal/legacy checks and generated default/legacy builds;
-the final receipt SHA-256 is `0fe564f99fd27760517d4fa7e6ed1e840961261ba5aa2ac570aeb7adb2a832c9`.
-**The initial .1–.3 window is complete.** The later .4/.5 journeys and adoption plus the accepted local
-deployment and .6 freeze extend it. Templates and wizard publication, and eligible lifecycle-default
-activation, remain Release D; this source delivery does not change the public baseline.
-
-SVG-WORKSPACE-01.2 **completed**, **2026-09-14**: SDD **1.8.0** and the shared **0.89.0**
-routine producer are published.
-SDD [#984](https://github.com/FS-GG/FS.GG.SDD/pull/984) and native release/readback
-[34845942599](https://github.com/FS-GG/FS.GG.SDD/actions/runs/34845942599) bind retained original
-archives to both feeds and qualify installed neutral Quint profile-1/profile-2 authoring, inspection,
-refusal, recovery and bounded migration in an actual network namespace. The receiver embeds the
-published Game/Rendering/Audio owner manifests and Drivers' seven-file routine workspace payload.
-The [Templates receiver checkpoint](https://github.com/FS-GG/FS.GG.Templates/pull/483) records a
-five-bundle installed audit against the exact retained **Templates 0.14.0 candidate**, including both
-agent roots, owner sidecars and negative selections, explicit legacy flags and no-clobber upgrade.
-Candidate source `f4d2ee63a6e1200e733d7f36fdcbafa07c7907ef` and no-push native run
-[34850052710](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34850052710) identify those
-unpublished Templates bytes. This audit qualifies receiver transport and selection, not the complete
-`.3` product: it exposed a response-file bypass of the candidate's old/new-selector guard, repaired and
-qualified by `.3` above. Native composition
-[34850362401](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34850362401) passed and the
-canonical checkpoint merged as `c658fc38c72c62360794843f11cafa874e7d85bc`. The `.3` completion above
-now establishes the complete game composition; final Release D and its lifecycle-default conditions remain ahead.
-
-SVG-WORKSPACE-01.1 owner guidance published, **2026-09-14**: Rendering Skills **0.2.0**,
-Game Skills **0.9.0** and Audio Skills **0.1.0** are available on both feeds. Native readback runs
-[Rendering 34833403039](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/34833403039),
-[Game 34828061816](https://github.com/FS-GG/FS.GG.Game/actions/runs/34828061816) and
-[Audio 34829313855](https://github.com/FS-GG/FS.GG.Audio/actions/runs/34829313855) bind owner manifests,
-source commits and matching feed payloads. Rendering retained its original before either push; Audio
-retained the recovered org archive before its public push. Game's original run retained no CI archive;
-its read-only recovery establishes feed equality and exact owner contents, without claiming original custody.
-The [Templates subroadmap](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md)
-records the native evidence. Owner publication was the `.1` boundary; `.2` above now establishes
-installed receiver transport. Complete generated game composition is qualified by `.3` above; C20,
-Release D and lifecycle activation remain ahead.
-
-SVG-PREVIEW-C.5 and **Release C completed**, **2026-09-14**: Templates
-[PR #481](https://github.com/FS-GG/FS.GG.Templates/pull/481) merged as
-`7b202c9a6053e017e9ffc17fec0c53aa9bb15ac0`. Public receiver run
-[34822927445](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34822927445) qualified downloaded
-Templates 0.13.0 against Rendering 0.31.0, Game 0.16.0, Net 0.6.0, Audio 0.6.0 and SDD 1.7.0. Direct,
-SDD, typed/profile-2, wizard/adopter and retained 0.10–0.12 routes passed, including three-browser
-replay/network/scale/accessibility and preservation/rollback. The [Release-C plan](roadmaps/svg-preview-c.md)
-binds the native artifacts and fresh exact-release-source timing evidence; physical-device and heap limits
-remain explicit. Composition and release-route validation also passed.
-
-**SVG-WORKSPACE-01 is complete** through its [Templates-owned subroadmap](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md).
-Milestones **.1–.6** deliver owner guidance, installed SDD, default SVG composition, local containerized Caddy
-deployment/rollback, installed development/adoption and the final evidence freeze. Durable public hosting is
-separately deferred to Templates #491. [SVG-RELEASE-D](roadmaps/svg-release-d.md) is selected. Its compatible
-Templates/wizard publication and product-default work may proceed now; the later single-lifecycle default still
-requires actual OperatingV2 evidence and the owning SDD change.
-
-SVG-PREVIEW-C.4 Templates publication completed, **2026-09-14**: native release run
-[34820243790](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34820243790) published Templates
-**0.13.0** and verified all **205 payload entries** on GitHub Packages and nuget.org against the retained
-original archive. Its immutable tag names `6acdfc5f5da41156db0aeaffcd54885b3b9e66be`; the
-[Release-C plan](roadmaps/svg-preview-c.md) records custody, hashes and readback artifacts.
-**SVG-PREVIEW-C.5 installed public qualification is next**. Public package availability is established;
-complete Release C, C20, Release D and lifecycle/default activation remain separate outcomes.
-
-SVG-PREVIEW-C.3 Templates source adoption completed, **2026-09-14**:
-[Templates #480](https://github.com/FS-GG/FS.GG.Templates/pull/480) merged as
-`6acdfc5f5da41156db0aeaffcd54885b3b9e66be`. The exact public-producer candidate passed
-three-browser presentation/authoring/input/replay/scale/network, installed typed/profile-2, retained
-adoption/rollback, composition and pretag package checks. The [Release-C plan](roadmaps/svg-preview-c.md)
-records the native evidence. **SVG-PREVIEW-C.4 Templates publication is next**; Templates 0.12.0 remains
-the public baseline until 0.13.0 dual-feed readback. Public installed qualification, C20, Release D and
-lifecycle/default activation remain separate outcomes.
-
-SVG-PREVIEW-C.2 producer publication completed, **2026-09-14**: Rendering 0.31.0 (19 archives),
-Game 0.16.0 (three) and Net 0.6.0 (six) were published and payload-verified on both feeds through runs
-[34806339482](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/34806339482),
-[34815287187](https://github.com/FS-GG/FS.GG.Game/actions/runs/34815287187) and
-[34815521271](https://github.com/FS-GG/FS.GG.Net/actions/runs/34815521271).
-The [Release-C plan](roadmaps/svg-preview-c.md) binds exact sources, tags and retained custody/readback
-artifacts. **SVG-PREVIEW-C.3 Templates adoption is next**. Templates 0.12.0 remains the installed public
-baseline; Templates 0.13.0 publication, Release-C installed qualification, C20, Release D and the applicable
-activation conditions remain outstanding. Current consumer pins are recorded independently of newer
-producer availability.
-
-SVG-PREVIEW-C.1 producer preparation completed, **2026-09-14**:
-[Rendering #1322](https://github.com/FS-GG/FS.GG.Rendering/pull/1322) merged as
-`96810c3c66ba888ecd03a0e10fe6374fd88917f9`, [Game #635](https://github.com/FS-GG/FS.GG.Game/pull/635)
-as `996832a6ebb5c893199627b0ecc46f7c1da848cd`, and [Net #87](https://github.com/FS-GG/FS.GG.Net/pull/87)
-as `ada81df43ab344fccbab701493b5d0c585627a32`. Their coherent 19/3/6-package preparations passed the
-owner-native release, API compatibility and required CI gates. The [Release-C plan](roadmaps/svg-preview-c.md)
-records the source evidence and separate skills-package boundary. **SVG-PREVIEW-C.2 publication is next**;
-Release B remains the public installed baseline, and source merge does not establish new public packages,
-updated installed product skills or lifecycle/default activation. Telemetry is not configured on this host;
-native collaboration usage remains unsupported and is not estimated.
-
-SVG Release-C handoff reconciled, **2026-09-14**: Release B is complete through
-[Templates #475](https://github.com/FS-GG/FS.GG.Templates/pull/475), merge
-`0aecc8ff7592ab097d58ed6ff79176223fcd7a25`, and its successful public receiver run
-[34764132598](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34764132598).
-[Replay](roadmaps/svg-replay-01.md), [networking](roadmaps/svg-network-01.md), and
-[scale](roadmaps/svg-scale-01.md) subsequently completed at the source/generated-candidate boundary,
-with final Templates merges [#476](https://github.com/FS-GG/FS.GG.Templates/pull/476),
-[#478](https://github.com/FS-GG/FS.GG.Templates/pull/478), and
-[#479](https://github.com/FS-GG/FS.GG.Templates/pull/479).
-**SVG-PREVIEW-C is selected** through its [release plan](roadmaps/svg-preview-c.md).
-Release B remains the installed public baseline; Release C publication and public receiver qualification
-are pending. Complete C20, Release D and lifecycle/default activation remain separate outcomes.
-
-LEARN-01 planning delivery, **2026-09-12 10:03 UTC**:
-[`.github` PR #3449](https://github.com/FS-GG/.github/pull/3449) merged as
-`93ea5e39a5aa89c35942ca1920365352644d4a4b`, delivering the
-[stable-policy orchestration and statistical-learning design](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md).
-It records the selected direction: broad fixed profiles, comprehensive task/decision/outcome observations,
-whole-issue context/token accounting, robust controlled comparisons before finer or adaptive routing,
-and later opt-in community contribution through an isolated HTTPS intake on Main. The first future source
-window is LEARN-01.1–.3; installed experimentation is .4–.5 and community participation is .6.
-This is design delivery only. Implementation, experiments, endpoint/repository creation, data collection
-and runtime policy activation remain unstarted; O2/O3 and GS2 completion authorities are unchanged.
-
-Standalone O2 publication update, **2026-09-12 07:28 UTC**:
-[Coordination #373](https://github.com/FS-GG/FS.GG.Coordination/pull/373) merged as
-`a22c7f97533e7bb4c60a891a49994ca5b0995189` after exact-head bootstrap and coherent validation passed.
-It corrects authoritative Main controls/readiness, selected routine-docs GitHub qualification and
-pending/rate-limit pacing before publication. SystemAdmin reports launcher source
-[#53](https://github.com/EHotwagner/SystemAdmin/pull/53) merged as
-`0740031b6b794e33dcec5fd21d6b8efa469c6115`, with deployment 21/21, runner 10/10 and launcher 8/8
-tests passing. Protected Host/runner workflows
-[34675488727](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34675488727) and
-[34675488512](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34675488512) published and
-served-verified immutable artifacts from that exact source. SystemAdmin reports the launcher and
-artifact binding accepted in [#54](https://github.com/EHotwagner/SystemAdmin/pull/54), merge
-`346b09c861b869482a3a0c779af00c1f33b77da0`; that private-repository receipt is mailbox-attributed.
-The installation remains inert. Installed qualification, actual subscription pilot,
-recovery/reboot proof and O3 remain pending.
-
-Standalone O2-I2 installed qualification, **2026-09-13 18:17 UTC**: guarded PostgreSQL replacement
-and v1 durability are complete. SystemAdmin protected `main` is
-`cdf54050b8a63d9d8fa1838831d0f3fea46ef07e`; the installed PostgreSQL unit is SHA-256
-`485f760ccdcaf95dadbf71750c9beda2a5d921ca3db5040177d06a57ab9dc424` and preserves its rootless
-Podman runtime across a full unit stop. The corrected `orchestration_o0` selector passed existing v1
-root/pilot continuity, a fresh logical backup and wholly isolated restore, network-none/no-published-port
-confinement, clean stop and second start, explicit restart, repeated data readback and final stop. The
-ordinary immutable lifecycle result is SHA-256
-`302535c928a11233e7727e7d1f8c14e60be0db639e1b130c8cb38995d653a7f2`; all five O2 units finished
-inactive with guarded ports closed. The top-level roadmap remains **10/12** complete. The O2-I3 result
-follows; live pilot, recovery and O3 remain pending. Telemetry remains
-`not-configured`, and native collaboration usage remains unsupported rather than inferred.
-
-Standalone O2-I3 paused-v2 qualification, **2026-09-13 19:28 UTC**: Coordination merge
-`d9ec7b4f807f28f55aa836e5a1be8c9495c30af4` (tree `e4c76146ab9232cb56a3125aa9d785324af009e9`)
-produced candidate run `34777324192` and payload SHA-256
-`afe9faf15cfcf6a1ce08ac9c139e162004a4eda26f02179598d13e0cb8b332e8`; SystemAdmin pins are
-`a7b9bfe99060313d30fa6fb22ad904e3be53bf2c` (tree `adc6ba5fa6b3f186e70ce19cdc68cbeb85c64d44`),
-with installed config/unit SHAs `3ce749afc822572f178016d9bbaeb1b498b865b8c0124890f8f5f6e4ac136d5a` and
-`24702278c3d37b6fb7f3db295190986dfd487c412fee2f244328561ca0141a9c`. Evidence SHA-256
-`1c8ac5c65e4afa18ad991fb65b1b643b0bf0a4a77452d97b141bc9d2cf1d79e8` proves authenticated paused
-operation, refusal paths, durable replay/restart and final stop without dispatch or GitHub effects.
-Top-level progress remains **10/12**; O2-I4 live pilot and recovery is next. Telemetry remains
-`not-configured`, with native collaboration usage unsupported.
-
-Operational statuses last reconciled: **2026-09-12 07:28 UTC**; LEARN-01 planning delivery recorded
-**2026-09-12 15:14 UTC**. SVG programme status was reconciled **2026-09-14**. Current operational frontier:
-**V0 and V1 in parallel; SVG Releases A–C are complete and SVG-WORKSPACE-01 is selected**.
-
-This section is the progress indicator for this roadmap. It reports accepted native units, merged source,
-installed operation and observed behavior separately because they have different completion authorities. A
-merged PR is not an installed capability, and an installed setting is not an accepted GS2 unit. The detailed
-subroadmaps and content-addressed native receipts remain the source of completion truth; this section is a dated
-human-readable projection over that evidence.
+Native accepted receipts, merged source, immutable publication, installed adoption and live operation are
+different evidence classes. Each claim below retains that distinction. Earlier progress narratives and
+per-milestone SVG rows are preserved in the
+[pre-reconciliation snapshot](https://github.com/FS-GG/.github/blob/d6ee7c79d67c3bdc2e3af07dcbe0e606967f76b5/docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md#0-current-progress-report).
+They are historical observations, not another current task list.
 
 **Mandatory closure update:** every Unified Roadmap item that reaches authoritative **Closed** or **Done** must
-update this progress report. When the owning change is in this repository, include the progress update in the same
-PR. When closure occurs in another repository or through a live operation, land the progress update immediately
-after authoritative readback. A progress-only follow-up is asynchronous and does not delay the owning delivery,
-but the programme driver must not select another roadmap item while the completed item is still absent here.
-Ordinary CI ticks, waiting and intermediate implementation checkpoints do not require a document revision.
-For the SVG programme, every milestone's owning session must update both its canonical subroadmap checkbox and
-the milestone projection below after native merge/readback and before selecting the next milestone. These rows
-link to owning evidence and do not replace it; a missing projection is stale reporting, never completion authority.
+update this report after native readback. Include same-repository updates in the owning PR; cross-repository
+projection follows asynchronously without delaying its delivery. The programme driver must not select the
+next item while the completed item is absent here. Update the relevant current row and its evidence link;
+retain detailed milestone history in the owning plan. CI ticks and intermediate checkpoints need no edit.
 
 ### 0.1 Stage progress
 
-| Stage | Indicator | Completed evidence | Remaining exit work |
-|---|---|---|---|
-| **LEARN-01 — Stable policy and statistical learning** | **Design delivered; implementation not started** | [PR #3449](https://github.com/FS-GG/.github/pull/3449) supplies one [feature plan](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md) joining existing V0 telemetry, E0 comparison and selected E1/O0–O3 foundations. Context/token efficiency and slow, evidence-based policy refinement are explicit goals. | .1–.3 define the baseline/experiment, extend observation and integrate fixed profiles/context; .4–.5 qualify installed operation and evaluate the first controlled comparison. Later .6 adds consented community contribution via isolated Main intake and disclosure-controlled GitHub aggregates. No implementation, efficiency, O2/O3 or v2 completion is claimed. |
-| **V0 — Simplified baseline and v2 bindings** | **In progress** | Routine delivery is the canonical default for eligible work; protected operations retain explicit authority. The private telemetry engine/store, prospective runtime and CI observation, canonical budget reducer, post-completion activity/review model and public dashboard are operational. The approved physical host runs the exact merged engine with an empty privacy-conservative alias allowlist, host-native recurrence and event activation; a completed-root hook published a verified immutable feed and the deployed page was read back against it. | Finish the R2/R4/R5 evidence denominators. Close remaining automatic parent/child, CI-selection and unsupported native-usage coverage gaps without making telemetry block delivery. |
-| **V1 — Event/queue qualification and incumbent fencing** | **Accepted through GS2-08.9** | GS2-07.1–07.8 and GS2-08.1–08.9 have accepted native receipts. The exact public 0.90.0 bridge is adopted across the qualified receiver families; residual workflow, script, publication and helper writers are sealed or administratively disabled, and active installed helper/runtime bypasses are retired. | Preserve the accepted receipts and retired routes while entering V2. Q4 remains separately unclaimed. |
-| **V2 — Callable v2 and migration rehearsal** | **Entered; V2-CALL-01.1–.3c delivered** | Coordination [PR #421](https://github.com/FS-GG/FS.GG.Coordination/pull/421) delivers the strict callable contract and recovery source; [PR #422](https://github.com/FS-GG/FS.GG.Coordination/pull/422) adds real GitHub/journal composition; [PR #430](https://github.com/FS-GG/FS.GG.Coordination/pull/430) records protected dual-feed publication of exact tool package `FS.GG.Coordination.Cli` 0.1.0 (`sha256:ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf`); `.github` [PR #3539](https://github.com/FS-GG/.github/pull/3539) canonically pins it alongside the legacy bridge with fail-closed receiver fixtures. | `.4` installed isolated-provider/native acceptance and `.5` migration handoff remain; `OpenV2`, Q4 and GS2-09 discovery/migration/retry/rollback/omission rehearsal remain pending. Production effects stay disabled. |
-| **V3 — Coherent candidate and receivers** | **Not entered** | Receiver inventories and prior clean-install/upgrade evidence exist as inputs. | GS2-10 candidate freeze, exact tool/template/provider pins, comprehensive qualification and clean/upgrade receiver proof. |
-| **V4 — Closed switch** | **Not entered** | Cutover contracts and protected-operation boundaries exist. | GS2-11–12 freeze, drain, closed switch, verification and executable pre-open rollback. |
-| **V5 — Open v2 and ordinary use** | **Not entered** | No `OpenV2` authority has been exercised. | GS2-13 irreversible open decision, permanent v1 fence, ordinary v2 journeys and `ObservingV2`. |
-| **V6 — Observation and v1 retirement** | **Not entered** | No post-open observation window exists. | GS2-14 immediate baseline and 15 distinct completed-work readings, receiver carryover, contraction and old-client/clean-install proof. |
-| **E0–E1 / F0–F5 — Execution and cooperation** | **Selected single-host foundation complete; wider scope conditional** | The [standalone O0–O3 roadmap](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md) owns the selected Akka.NET actor, bounded execution and durable Main-host work. Source, immutable Host/runner publication, installed operation, one physical-reboot recovery, native delivery and controlled two-project serial adoption are accepted through O3. This is partial E1 foundation delivery, not completion of E0's comparative measurements or F0–F5 federation. | Reuse the selected contracts and qualified implementation; do not schedule a second actor/executor build or repeat runtime selection for the same scope. Additional planners, federation and broader defaults retain sections 8–9's conditions. O0–O3 does not complete or gate V0/V1. |
-| **Selected standalone O0–O3 — Bounded execution** | **Complete — pilot, reboot recovery and controlled adoption accepted** | The provider-neutral core culminated in one generation-bound Codex attempt that survived a physical reboot and natively merged [`.github` #3515](https://github.com/FS-GG/.github/pull/3515). O3 then qualified two projects sharing capacity 1 and verified the installed offline lifecycle with zero terminal effects. All units are stopped and disabled. | Claude, OpenCode and DeepSeek remain intended adapters. Stronger credential isolation, wider scope and defaults remain separately conditional. |
-| **SVG-FOUND-01 — SVG game engine foundation** | **Complete; published through Release A** | Rendering PRs [#1279](https://github.com/FS-GG/FS.GG.Rendering/pull/1279) and [#1280](https://github.com/FS-GG/FS.GG.Rendering/pull/1280) delivered the portable Scene/browser packages. Templates PRs [#459](https://github.com/FS-GG/FS.GG.Templates/pull/459), [#460](https://github.com/FS-GG/FS.GG.Templates/pull/460) and [#461](https://github.com/FS-GG/FS.GG.Templates/pull/461) delivered neutral/tactical consumers and an exact retained local candidate packet. Its isolated fresh install built and served the selected scene to Chromium; the separate retained upgrade preserved authored and skill digests and reported collisions before writing. S.I.R. remained read-only. | Release A subsequently published and qualified this foundation. Later authoring, runtime, scale and default decisions retain their own milestones. |
-| **SVG-QUAL-01 — Installed model qualification** | **Complete through .3 and public Release-A receivers** | SDD source [PR #981](https://github.com/FS-GG/FS.GG.SDD/pull/981) and release [PR #982](https://github.com/FS-GG/FS.GG.SDD/pull/982) published the exact SDD 1.7.0 provisioning route. Rendering [PR #1281](https://github.com/FS-GG/FS.GG.Rendering/pull/1281), merge `815783987fbf1d6f2e8165e2ae31ddf0bf61db2d`, bound its canonical literate model to 192 identical packaged .NET/Fable transitions and the browser effect boundary. Templates [PR #462](https://github.com/FS-GG/FS.GG.Templates/pull/462), merge `b081808cc8c802d264d8fdeaf417911ca821c211`, qualified separate clean and retained installed profile-2 receivers, including a 384-transition semantic amendment, actual Chromium observations, refusal and preservation controls. S.I.R. remained strictly read-only. | Templates #467 repeated the model and reducer proof from public Rendering/Templates archives. Later defaults remain separate. |
-| **SVG-SCENE-02 — Scene/renderer contract** | **Delivered through .7 and published in Release A** | `.github` [PR #3435](https://github.com/FS-GG/.github/pull/3435) froze the M0 inventory. Game [PR #621](https://github.com/FS-GG/FS.GG.Game/pull/621), merge `494bd45591851c03496460e250f6584025fb5e52`, delivered Rendering-free contract-only session envelopes. Rendering [PR #1282](https://github.com/FS-GG/FS.GG.Rendering/pull/1282), merge `acfca1e87866f7c1b4cab3b064e225d8f585a977`, delivered portable identified documents, reference/limit validation, affine and asset/extension contracts. Rendering [PR #1283](https://github.com/FS-GG/FS.GG.Rendering/pull/1283), merge `b3a8a2c4caf6945bb0a2d9570a11d6b27fd8fb96`, delivered selected paint/definition validation, typed serialization/export and packed .NET/Fable plus Chromium export-reload evidence while preserving the 192-transition corpus. Rendering [PR #1284](https://github.com/FS-GG/FS.GG.Rendering/pull/1284), merge `3a94881fc01845cc9d8faf9f413db214df94326f`, delivered retained-node reconciliation, accessible semantic selection, loss-safe pointer ownership and an atomic revisioned document reducer; its additive 192-transition document corpus agrees through the real .NET/Fable reducer while the original 192-transition corpus remains unchanged. Rendering [PR #1285](https://github.com/FS-GG/FS.GG.Rendering/pull/1285), merge `70f8fbf2aedacee0f14ce7548423c51c3c026572`, qualified offline public-SDD model authoring, matching real .NET/Fable replay and first-divergence mutation controls, all three browser families, and the accessible desktop journey through actual Orca/AT-SPI observation. Rendering [PR #1286](https://github.com/FS-GG/FS.GG.Rendering/pull/1286), merge `c4e50dcb239ccb62453cdd47505f1a8d1095814e`, qualified the frozen Preview-A performance/resource workloads, retained raw exact-host evidence and proved all three negative controls kill their intended gates. Templates [PR #463](https://github.com/FS-GG/FS.GG.Templates/pull/463), merge `03fe39dcf37c42b645163348b780bb36b4e43720`, delivered the full opt-in generated candidate, isolated clean source-only and typed receivers, matching 192+192 .NET/Fable replay, and collision-safe retained adoption with interruption and explicit rollback. | SVG-PREVIEW-A subsequently published and qualified the feature through installed public clean and retained receivers. M3/M4 editor/input tooling, M5 session runtime, arbitrary import, complete C18/C19, retained heap, physical presentation/mobile and later releases remain unclaimed. |
-| **SVG-PREVIEW-A — Installed scene/renderer preview** | **Complete — Release A** | Rendering run [34690467974](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/34690467974) published and read back the 19-package 0.29.0 set. Templates [PR #464](https://github.com/FS-GG/FS.GG.Templates/pull/464) prepared 0.11.0; recovery runs [34697652000](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34697652000) and [34703775170](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34703775170) published and read back all 187 payload entries; [PR #467](https://github.com/FS-GG/FS.GG.Templates/pull/467) qualified public direct, SDD, typed, wizard and retained receivers. | SVG remains opt-in and defaults are unchanged. The subsequent authoring/input/runtime/presentation candidates are complete; heap, physical mobile, complete C18/C19 and later capabilities remain future work. |
-| **SVG-AUTHOR-01 — Vector content and scene authoring** | **Complete at source/generated-candidate boundary** | Rendering [#1302](https://github.com/FS-GG/FS.GG.Rendering/pull/1302)–[#1304](https://github.com/FS-GG/FS.GG.Rendering/pull/1304) deliver safe import, atomic authoring, the optional studio, bounded geometry/resources and editable scenes. Templates [#469](https://github.com/FS-GG/FS.GG.Templates/pull/469) qualifies the generated candidate. | Release B published and qualified this capability; defaults remain unchanged. |
-| **SVG-INPUT-01 — Command and workspace interaction** | **Complete at source/generated-candidate boundary** | Rendering [#1306](https://github.com/FS-GG/FS.GG.Rendering/pull/1306)–[#1309](https://github.com/FS-GG/FS.GG.Rendering/pull/1309) deliver the catalog, modal resolver, workspace reducer and disposable browser device host. Templates [#470](https://github.com/FS-GG/FS.GG.Templates/pull/470) qualifies keyboard, pointer, touch, gamepad and Orca/AT-SPI journeys. | Release B published and qualified this capability; physical mobile remains a separate evidence dimension. |
-| **SVG-RUNTIME-01 — Sessions and continuous gameplay** | **Complete at source/generated-candidate boundary** | Game [#622](https://github.com/FS-GG/FS.GG.Game/pull/622)–[#625](https://github.com/FS-GG/FS.GG.Game/pull/625) deliver fixed-step sessions, generation-safe operations and continuous collision. Rendering [#1310](https://github.com/FS-GG/FS.GG.Rendering/pull/1310)–[#1311](https://github.com/FS-GG/FS.GG.Rendering/pull/1311) deliver the browser clock/projection host and native gamepad repair. Templates [#471](https://github.com/FS-GG/FS.GG.Templates/pull/471) qualifies the generated continuous game. | Release B published and qualified local play; networking candidates are complete pending Release C. |
-| **SVG-PRESENT-01 — Animation, browser audio and persistence** | **Complete at source/generated-candidate boundary** | Rendering [#1314](https://github.com/FS-GG/FS.GG.Rendering/pull/1314)–[#1316](https://github.com/FS-GG/FS.GG.Rendering/pull/1316), Audio [#292](https://github.com/FS-GG/FS.GG.Audio/pull/292), Game [#627](https://github.com/FS-GG/FS.GG.Game/pull/627), and Templates [#472](https://github.com/FS-GG/FS.GG.Templates/pull/472) deliver deterministic clips, browser presentation/audio/storage, save migration and the installed generated journey. | Release B published and qualified this capability; listening evidence remains disclosed separately from automated graph evidence. |
-| **SVG-PREVIEW-B — Installed authoring/runtime preview** | **Complete — Release B** | The [Preview-B plan](roadmaps/svg-preview-b.md) records dual-feed publication/readback of Rendering 0.30.0, Game 0.15.0, Audio 0.6.0 and Templates 0.12.0. [Templates #475](https://github.com/FS-GG/FS.GG.Templates/pull/475) and run [34764132598](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34764132598) qualify installed public clean and retained receivers. | Opt-in preview; defaults remain unchanged. |
-| **SVG-REPLAY-01 — Replay, planning and rules** | **Complete at source/generated-candidate boundary** | The [replay plan](roadmaps/svg-replay-01.md) binds Game #630–#632 and Templates [#476](https://github.com/FS-GG/FS.GG.Templates/pull/476) to .NET/Fable correspondence, typed-SDD freshness and three-browser Review/Plan journeys. | Public installation remains Release C. |
-| **SVG-NETWORK-01 — Multiplayer and resync** | **Complete at source/generated-candidate boundary** | The [network plan](roadmaps/svg-network-01.md) binds Game #633/#634, Net #86 and Templates [#477](https://github.com/FS-GG/FS.GG.Templates/pull/477)/[#478](https://github.com/FS-GG/FS.GG.Templates/pull/478) to authoritative two-client reconnect, refusal, resync and replay. | Public installation remains Release C. |
-| **SVG-SCALE-01 — Accessibility and measured scale** | **Complete at source/generated-candidate boundary** | The [scale plan](roadmaps/svg-scale-01.md) binds Rendering #1319–#1321 and Templates [#479](https://github.com/FS-GG/FS.GG.Templates/pull/479) to frozen Chromium budgets and Chromium/Firefox/WebKit accessibility evidence. | Public installation remains Release C; unavailable measurement dimensions stay disclosed. |
-| **SVG-PREVIEW-C — Installed replay/network/scale preview** | **Complete — Release C** | The [Release-C plan](roadmaps/svg-preview-c.md) targets Rendering 0.31.0, Game 0.16.0, Net 0.6.0 and Templates 0.13.0, retaining Audio 0.6.0 and SDD 1.7.0. | Producer and Templates publication, dual-feed verification and public clean/retained receiver qualification are complete. SVG remains opt-in; C20 and Release D are separate. |
-| **SVG-WORKSPACE-01 — Complete generated workspace** | **Complete — .1–.6 frozen** | The [Templates-owned plan](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md) records guidance, SDD transport, complete composition, installed development/adoption, and the accepted local Caddy deployment/rollback. [#492](https://github.com/FS-GG/FS.GG.Templates/pull/492) freezes the exact source and evidence. | [Release D](roadmaps/svg-release-d.md) owns public Templates/wizard adoption and activation. Durable public DNS/TLS/reboot evidence is deferred to Templates #491. |
+| Stage | Verified position | Remaining exit and owner |
+|---|---|---|
+| **V0 — Simplified baseline and v2 binding** | Routine is the adopted source-delivery default. Governance routing/reuse primitives and telemetry sources exist; their presence does not prove the complete installed routine-v2 profile or efficiency. | `.github`, Coordination, Governance and receivers bind the effective routine obligations and R5 receiving population before candidate freeze. R2/R4/R5 measurement gaps remain separately attributed. |
+| **V1 — Events, queue and incumbent fence** | GS2-07.1–.8 and GS2-08.1–.9 retain accepted native evidence. The exact 0.90.0 bridge and residual-writer retirement are reusable inputs. | Preserve the accepted fence and census through new source and receiver changes. Do not reopen completed units or infer Q4. |
+| **V2 — Callable path and migration rehearsal** | V2-CALL-01.1–.5 complete at their bounded callable boundary. Package 0.1.1, native isolated effect/recovery, cleanup and discovery handoff are evidenced. GS2-09.1–.6 accept pure migration contracts. | Coordination completes provider capture, migration execution, isolated representative rehearsal (.7), then independent omission/idempotency proof and parent closure (.8). Protected effect readiness is a separate join. |
+| **V3 — Exact candidate and receivers** | Not accepted. Existing publication, provider, tool and receiver evidence can support preparation. | GS2-10 freezes exact inputs, qualifies the complete candidate and clean/retained receivers, rehearses the cutover, and closes concurrent changes. |
+| **V4 — Closed switch** | Not entered by this audit. | GS2-11–12: authorized freeze/drain, exact switch, verification, and executable rollback while still closed. |
+| **V5 — Open and ordinary use** | No fleet production `OpenV2` acceptance identified. The synthetic callable target is not the fleet. | GS2-13 owns irreversible open, permanent v1 fence, real ordinary journeys and `ObservingV2`. |
+| **V6 — Observation and retirement** | No accepted post-open window identified. | GS2-14 owns baseline plus 15 distinct completed-work readings, contraction and `OperatingV2`; R5's independent cohort/30-day follow-up remains separate. |
+| **E0/E1 and O0–O3** | Selected single-host O0–O3 is accepted; Choreo C0–C6 is source/formal-qualified. | Reuse these foundations. Exact installed inclusion of later Choreo fixes and comparative-value claims require their own evidence; neither blocks migration source work. |
+| **F0–F5 / LEARN-01** | Retained conditional protocol/learning scopes; no completion inferred from O3. | Select only an authorized bounded window with its actual entry conditions. Production canaries retain their operating-epoch and effect authority. |
 
 #### SVG milestone projection
 
-This table is a concise navigation projection. The linked feature subroadmaps and owner-native PRs, commits,
-checks, artifacts and operation receipts remain authoritative.
+The owning [SVG programme](2026-09-07-064259-svg-game-engine-template-design-roadmap.md) and feature plans
+retain individual milestone evidence. Foundation, model qualification, scene, authoring, input, runtime,
+presentation, replay, network, scale and public Releases A–C are delivered at their declared scopes.
+[SVG-WORKSPACE-01.1–.6](https://github.com/FS-GG/FS.GG.Templates/blob/273c9218960215ee856de9e59a769a0e7b63da8f/docs/roadmaps/svg-workspace-01.md)
+is frozen; [Release D.1–.4](roadmaps/svg-release-d.md) publishes and activates the compatible SVG product
+default through Templates 0.14.0 and wizard 0.11.2. Release D.5 remains open for actual `OperatingV2`
+and separately qualified lifecycle/default activation. Durable public hosting remains Templates #491.
 
-Reconciled SVG feature-milestone states: **73 completed; SVG-WORKSPACE-01.1–.6 complete**.
-The latest published producer set is Rendering 0.31.0, Game 0.16.0, Net 0.6.0 and Audio 0.6.0.
-Templates 0.13.0 is the qualified installed Release-C baseline. The frozen 0.14.0 candidate introduces the
-default SVG composition; workspace source, installed journeys, local deployment/rollback, adoption and freeze
-pass. Release D publication and public-only qualification remain ahead. Published defaults remain unchanged.
-
-| Milestone | Projected state | Native evidence | Remaining boundary |
-|---|---|---|---|
-| **SVG-FOUND-01.1** | **Completed** | [`.github` PR #3422](https://github.com/FS-GG/.github/pull/3422) and the [extraction-boundary audit](reports/2026-09-11-svg-game-engine-extraction-boundary.md) | None for .1; the audit did not publish or activate anything. |
-| **SVG-FOUND-01.2** | **Completed** | Rendering [PR #1279](https://github.com/FS-GG/FS.GG.Rendering/pull/1279), merge [`646817c8`](https://github.com/FS-GG/FS.GG.Rendering/commit/646817c847e034e31ff2e6a2da91e7b847a8eb8b) | Local candidate only; publication remained pending. |
-| **SVG-FOUND-01.3** | **Completed** | Rendering [PR #1280](https://github.com/FS-GG/FS.GG.Rendering/pull/1280), merge [`d29f272c`](https://github.com/FS-GG/FS.GG.Rendering/commit/d29f272c741d534a8269c4995c3b2da00fb97669) | Foundation browser observations were not complete M9 qualification. |
-| **SVG-FOUND-01.4** | **Completed** | Templates [PR #459](https://github.com/FS-GG/FS.GG.Templates/pull/459), merge [`d19fc1d4`](https://github.com/FS-GG/FS.GG.Templates/commit/d19fc1d48647edfebad4a706db64648017fead65), and [PR #460](https://github.com/FS-GG/FS.GG.Templates/pull/460), merge [`2c76c4ba`](https://github.com/FS-GG/FS.GG.Templates/commit/2c76c4ba84fbb1afd53647e302bc6d8a1f34d011) | Defaults unchanged; S.I.R. remained read-only. |
-| **SVG-FOUND-01.5** | **Completed** | Templates [PR #461](https://github.com/FS-GG/FS.GG.Templates/pull/461), merge [`31c09270`](https://github.com/FS-GG/FS.GG.Templates/commit/31c092703b35726dcf1173611c675b3cb7db0a29), plus its candidate artifact/readback packet | Producer/template publication and installed public qualification remained pending. |
-| **SVG-QUAL-01.1** | **Completed** | SDD [PR #981](https://github.com/FS-GG/FS.GG.SDD/pull/981), merge `2e3a68bd…`, and release [PR #982](https://github.com/FS-GG/FS.GG.SDD/pull/982), merge `b1a3bc1c…`, with byte-identical dual-feed SDD 1.7.0 readback | Rendering/Templates candidates remained local. |
-| **SVG-QUAL-01.2** | **Completed** | Rendering [PR #1281](https://github.com/FS-GG/FS.GG.Rendering/pull/1281), merge [`81578398`](https://github.com/FS-GG/FS.GG.Rendering/commit/815783987fbf1d6f2e8165e2ae31ddf0bf61db2d), and 192 identical .NET/Fable transitions | No Rendering publication occurred. |
-| **SVG-QUAL-01.3** | **Completed** | Templates [PR #462](https://github.com/FS-GG/FS.GG.Templates/pull/462), merge [`b081808c`](https://github.com/FS-GG/FS.GG.Templates/commit/b081808cc8c802d264d8fdeaf417911ca821c211), with clean/retained installed receivers | Rendering/Templates packages and public-feed receiver qualification remained pending. |
-| **SVG-SCENE-02.1** | **Completed** | [`.github` PR #3435](https://github.com/FS-GG/.github/pull/3435), merge `eafdb603…`, and the [M0 inventory](reports/2026-09-11-svg-scene-02-m0-inventory.md) | Inventory did not complete missing C01–C20 capabilities. |
-| **SVG-SCENE-02.2** | **Completed** | Game [PR #621](https://github.com/FS-GG/FS.GG.Game/pull/621), merge [`494bd455`](https://github.com/FS-GG/FS.GG.Game/commit/494bd45591851c03496460e250f6584025fb5e52), and Rendering [PR #1282](https://github.com/FS-GG/FS.GG.Rendering/pull/1282), merge [`acfca1e8`](https://github.com/FS-GG/FS.GG.Rendering/commit/acfca1e87866f7c1b4cab3b064e225d8f585a977) | Contract envelopes only: no M5 runtime, publication, generated-workspace change or default activation. |
-| **SVG-SCENE-02.3** | **Completed** | Rendering [PR #1283](https://github.com/FS-GG/FS.GG.Rendering/pull/1283), merge [`b3a8a2c4`](https://github.com/FS-GG/FS.GG.Rendering/commit/b3a8a2c4caf6945bb0a2d9570a11d6b27fd8fb96), and its [paint/definition report](https://github.com/FS-GG/FS.GG.Rendering/blob/b3a8a2c4caf6945bb0a2d9570a11d6b27fd8fb96/docs/reports/2026-09-11-svg-scene-02-paint-definitions.md) | Typed round trip/export is not arbitrary SVG import; wider browser/accessibility/performance qualification remains .5/.6. |
-| **SVG-SCENE-02.4** | **Completed** | Rendering [PR #1284](https://github.com/FS-GG/FS.GG.Rendering/pull/1284), merge [`3a94881f`](https://github.com/FS-GG/FS.GG.Rendering/commit/3a94881fc01845cc9d8faf9f413db214df94326f), and its [retained-accessible interaction report](https://github.com/FS-GG/FS.GG.Rendering/blob/3a94881fc01845cc9d8faf9f413db214df94326f/docs/reports/2026-09-12-svg-scene-02-retained-accessible-interaction.md) | Contract foundations only: complete editor/input tooling and .5 multi-browser/assistive-technology qualification remain pending. Packages stayed local. |
-| **SVG-SCENE-02.5** | **Completed** | Rendering [PR #1285](https://github.com/FS-GG/FS.GG.Rendering/pull/1285), merge [`70f8fbf2`](https://github.com/FS-GG/FS.GG.Rendering/commit/70f8fbf2aedacee0f14ce7548423c51c3c026572), and its [model/browser qualification report](https://github.com/FS-GG/FS.GG.Rendering/blob/70f8fbf2aedacee0f14ce7548423c51c3c026572/docs/reports/2026-09-12-svg-scene-02-model-browser-qualification.md) | Model and real reducer replay, three browser families and actual Orca/AT-SPI observation passed. Physical touch/mobile GPU, publication and defaults remain unclaimed. |
-| **SVG-SCENE-02.6** | **Completed** | Rendering [PR #1286](https://github.com/FS-GG/FS.GG.Rendering/pull/1286), merge [`c4e50dcb`](https://github.com/FS-GG/FS.GG.Rendering/commit/c4e50dcb239ccb62453cdd47505f1a8d1095814e), its [performance report](https://github.com/FS-GG/FS.GG.Rendering/blob/c4e50dcb239ccb62453cdd47505f1a8d1095814e/docs/reports/2026-09-12-svg-scene-02-preview-a-performance.md) and [raw receipt](https://github.com/FS-GG/FS.GG.Rendering/blob/c4e50dcb239ccb62453cdd47505f1a8d1095814e/readiness/svg-scene-02-6/preview-a-performance.json) | Frozen exact-host latency/startup/idle/retention/resource/lifecycle predicates and three failure controls passed. Heap, physical presentation/mobile, complete C19/M9, publication and defaults remain unclaimed. |
-| **SVG-SCENE-02.7** | **Completed** | Templates [PR #463](https://github.com/FS-GG/FS.GG.Templates/pull/463), merge [`03fe39dc`](https://github.com/FS-GG/FS.GG.Templates/commit/03fe39dcf37c42b645163348b780bb36b4e43720), and its [Preview-A handoff report](https://github.com/FS-GG/FS.GG.Templates/blob/03fe39dcf37c42b645163348b780bb36b4e43720/docs/reports/2026-09-12-svg-scene-02-preview-a-handoff.md) | Full local clean/typed and retained adoption evidence passed. Public producer/template publication and installed public receivers remain the unselected SVG-PREVIEW-A boundary; no default changed. |
-| **SVG-PREVIEW-A.1** | **Completed** | Rendering [PR #1287](https://github.com/FS-GG/FS.GG.Rendering/pull/1287), merge [`142a27ae`](https://github.com/FS-GG/FS.GG.Rendering/commit/142a27aee552c104cf9594ca778bc7b6a9e32f83), plus bootstrap [PR #1288](https://github.com/FS-GG/FS.GG.Rendering/pull/1288), merge [`f0b4fc92`](https://github.com/FS-GG/FS.GG.Rendering/commit/f0b4fc92063ab4f4e31739e675edcd0122b7d18f) | Recoverable 19-archive preparation only. Publication, tags and version axes remained untouched. |
-| **SVG-PREVIEW-A.2** | **Completed** | Rendering release run [34690467974](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/34690467974), exact source `c654a33b…`, and recovery PR [#1301](https://github.com/FS-GG/FS.GG.Rendering/pull/1301) | All 19 retained archives were published to both feeds and payload-read exact; no remaining Release-A producer boundary. |
-| **SVG-PREVIEW-A.3** | **Completed** | Templates [PR #464](https://github.com/FS-GG/FS.GG.Templates/pull/464), merge [`6a66e0a3`](https://github.com/FS-GG/FS.GG.Templates/commit/6a66e0a31c33feab4c8f650709b585df6ac3d4c4) | Public Rendering `[0.29.0]` pins and bounded adoption/rollback passed; defaults stayed unchanged. |
-| **SVG-PREVIEW-A.4** | **Completed** | Templates release/recovery runs [34697652000](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34697652000) and [34703775170](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34703775170) | Retained original 0.11.0 bytes reached both feeds; 187 payload entries and all five installed identities verified. |
-| **SVG-PREVIEW-A.5** | **Completed — Release A** | Templates [PR #467](https://github.com/FS-GG/FS.GG.Templates/pull/467), merge [`23298d54`](https://github.com/FS-GG/FS.GG.Templates/commit/23298d54c3f44a5a5cd476c999fc473a2ea7e4b1), exact-head receiver run [34700795032](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34700795032) | Direct-none, SDD-none, typed/profile-2, wizard two-step and retained 0.10.0 upgrade passed. Its SVG-AUTHOR-01 handoff subsequently completed; heap, physical mobile and later complete C18/C19 remain explicit future dimensions. |
-| **SVG-AUTHOR-01.1–.2** | **Completed** | Rendering [PR #1302](https://github.com/FS-GG/FS.GG.Rendering/pull/1302), merge [`66bcc805`](https://github.com/FS-GG/FS.GG.Rendering/commit/66bcc805534ad7ae75686ab266ca134ef52c059e) | Safe versioned import and atomic content/asset/scene transactions; public packages remained unchanged. |
-| **SVG-AUTHOR-01.3–.4** | **Completed** | Rendering [PR #1303](https://github.com/FS-GG/FS.GG.Rendering/pull/1303), merge [`229b2dce`](https://github.com/FS-GG/FS.GG.Rendering/commit/229b2dce92287b4b0eb53dd35bfa858a42c2babc) | Optional vector studio, bounded Boolean geometry, fonts and licensed reusable content; player isolation retained. |
-| **SVG-AUTHOR-01.5** | **Completed** | Rendering [PR #1304](https://github.com/FS-GG/FS.GG.Rendering/pull/1304), merge [`ab0de59a`](https://github.com/FS-GG/FS.GG.Rendering/commit/ab0de59a5797393f1eaff6dd3146b53ae8bf1a67) | Editable grid/freeform scenes and immutable producer packet; publication remained pending. |
-| **SVG-AUTHOR-01.6** | **Completed** | Templates [PR #469](https://github.com/FS-GG/FS.GG.Templates/pull/469), merge [`219fbc96`](https://github.com/FS-GG/FS.GG.Templates/commit/219fbc963fe50563ae584f8b788ce93da9ec072d) | Generated direct/SDD/wizard/retained authoring journeys passed; public installation remains Preview B. |
-| **SVG-INPUT-01.1** | **Completed** | Rendering [PR #1306](https://github.com/FS-GG/FS.GG.Rendering/pull/1306), merge [`2c13986c`](https://github.com/FS-GG/FS.GG.Rendering/commit/2c13986cf7173ba96467dd812e8c33a712a540d0) | One portable command/gesture catalog; no browser authority or publication. |
-| **SVG-INPUT-01.2** | **Completed** | Rendering [PR #1307](https://github.com/FS-GG/FS.GG.Rendering/pull/1307), merge [`78893361`](https://github.com/FS-GG/FS.GG.Rendering/commit/788933616a4da752ad6e45364bdad1b9a70dc410) | Deterministic modal/sequence resolver and ambiguity/refusal policy. |
-| **SVG-INPUT-01.3** | **Completed** | Rendering [PR #1308](https://github.com/FS-GG/FS.GG.Rendering/pull/1308), merge [`ab085314`](https://github.com/FS-GG/FS.GG.Rendering/commit/ab0853144ac5d9a8043bbdfc748727be1ec22166) | Panels, focus, layout, binding profiles and live help share portable state. |
-| **SVG-INPUT-01.4** | **Completed** | Rendering [PR #1309](https://github.com/FS-GG/FS.GG.Rendering/pull/1309), merge [`9205407a`](https://github.com/FS-GG/FS.GG.Rendering/commit/9205407a3ae660d6f9bf208d78a6813f256aa917) | Browser keyboard/pointer/touch/gamepad ownership, native-edit boundaries and AT parity passed. |
-| **SVG-INPUT-01.5** | **Completed** | Templates [PR #470](https://github.com/FS-GG/FS.GG.Templates/pull/470), merge [`66220b5b`](https://github.com/FS-GG/FS.GG.Templates/commit/66220b5b6d0e1feef5fee5524f8cbd325a60e7d5) | Exact generated input composition passed three browsers and Orca/AT-SPI; publication remains Preview B. |
-| **SVG-RUNTIME-01.1** | **Completed** | Game [PR #622](https://github.com/FS-GG/FS.GG.Game/pull/622), merge [`492357ee`](https://github.com/FS-GG/FS.GG.Game/commit/492357ee38bc958995146afc3bd4dd1f56a231ad) | Portable fixed-step session authority and bounded catch-up. |
-| **SVG-RUNTIME-01.2** | **Completed** | Game [PR #623](https://github.com/FS-GG/FS.GG.Game/pull/623), merge [`575c3bcc`](https://github.com/FS-GG/FS.GG.Game/commit/575c3bcc17507765dc583ddc49aa2eb774b4148c) | Generation-safe operations and bounded projection backpressure. |
-| **SVG-RUNTIME-01.3** | **Completed** | Game [PR #624](https://github.com/FS-GG/FS.GG.Game/pull/624), repair [#625](https://github.com/FS-GG/FS.GG.Game/pull/625), merge [`c6de5b83`](https://github.com/FS-GG/FS.GG.Game/commit/c6de5b83eaa3d3f14909b42c3f8c3c94558157c9) | Continuous arena collision and exact .NET/Fable correspondence. |
-| **SVG-RUNTIME-01.4** | **Completed** | Rendering [PR #1310](https://github.com/FS-GG/FS.GG.Rendering/pull/1310), repair [#1311](https://github.com/FS-GG/FS.GG.Rendering/pull/1311), merge [`50bb064c`](https://github.com/FS-GG/FS.GG.Rendering/commit/50bb064c8acb0251a469ca406d193551f8e209d1) | Browser cadence, lifecycle, retained projection and native gamepad lists passed all browser families. |
-| **SVG-RUNTIME-01.5** | **Completed** | Templates [PR #471](https://github.com/FS-GG/FS.GG.Templates/pull/471), merge [`4a392a18`](https://github.com/FS-GG/FS.GG.Templates/commit/4a392a18ada74a87a12dd0b31aebaa7039a84b86) | Generated continuous arcade journey passed; networking and public installation remain later boundaries. |
-| **SVG-PRESENT-01.1** | **Completed** | Rendering [PR #1314](https://github.com/FS-GG/FS.GG.Rendering/pull/1314), merge [`bb106dbc`](https://github.com/FS-GG/FS.GG.Rendering/commit/bb106dbc13868443ef5f52071ccc032f48ed1a8d) | Portable deterministic clips, tracks, loops, seek and live cue policy. |
-| **SVG-PRESENT-01.2** | **Completed** | Rendering [PR #1315](https://github.com/FS-GG/FS.GG.Rendering/pull/1315), merge [`4ff16688`](https://github.com/FS-GG/FS.GG.Rendering/commit/4ff16688e1c3dff41f0427e46ec468baa88f55c3) | Retained animation host, bounded decoration, reduced motion and terminal lifecycle passed. |
-| **SVG-PRESENT-01.3** | **Completed** | Audio [PR #292](https://github.com/FS-GG/FS.GG.Audio/pull/292), merge [`3015051f`](https://github.com/FS-GG/FS.GG.Audio/commit/3015051f95354f302d2d8b75a072c9ad300e1c6f) | Gesture-unlocked Web Audio graph, buses, bounds and disposal; audibility remains disclosed separately. |
-| **SVG-PRESENT-01.4** | **Completed** | Game [PR #627](https://github.com/FS-GG/FS.GG.Game/pull/627), merge [`91ef49ea`](https://github.com/FS-GG/FS.GG.Game/commit/91ef49ea638032686ea967083198fd82f2de028e) | Versioned save identity, adjacent migration and recoverable autosave authority. |
-| **SVG-PRESENT-01.5** | **Completed** | Rendering [PR #1316](https://github.com/FS-GG/FS.GG.Rendering/pull/1316), merge [`65a64478`](https://github.com/FS-GG/FS.GG.Rendering/commit/65a64478527cfe12dce5cb401d0a5d6e592abb76) | Transactional IndexedDB, stable archives, recovery and three-browser lifecycle passed. |
-| **SVG-PRESENT-01.6** | **Completed** | Templates [PR #472](https://github.com/FS-GG/FS.GG.Templates/pull/472), exact-head run [34753052167](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34753052167) | Generated animation/audio/save/archive journey passed all browsers; public installation remains Preview B. |
-| **SVG-PREVIEW-B.1–.5** | **Completed — Release B** | [Release-B publication and installed receiver evidence](roadmaps/svg-preview-b.md) | Public Rendering 0.30.0, Game 0.15.0, Audio 0.6.0 and Templates 0.12.0; no default activation. |
-| **SVG-REPLAY-01.1–.5** | **Completed** | [Replay closure evidence](roadmaps/svg-replay-01.md#closure-evidence), including Templates merge `802795361fbc560a2970543d615434fc021725f2` | C14–C16/M7 source and generated candidate; public installation remains Release C. |
-| **SVG-NETWORK-01.1–.5** | **Completed** | [Network closure evidence](roadmaps/svg-network-01.md#closure-evidence), including Templates merge `1b8d43f81fd84cafa0e8fd5b50ccb3831cec14b1` | C17/M8 source and generated candidate; public installation remains Release C. |
-| **SVG-SCALE-01.1–.5** | **Completed** | [Scale milestone evidence](roadmaps/svg-scale-01.md#milestones), including Rendering merge `1f4d822034284312dd6230a7af0e3afc089afdce` and Templates merge `6e531ffa3baf63971554296f243dd5a041d15b3f` | C18/C19/M9 source and generated candidate; public installation remains Release C. |
-| **SVG-PREVIEW-C.1** | **Completed** | Rendering [#1322](https://github.com/FS-GG/FS.GG.Rendering/pull/1322), Game [#635](https://github.com/FS-GG/FS.GG.Game/pull/635), Net [#87](https://github.com/FS-GG/FS.GG.Net/pull/87), and the [preparation evidence](roadmaps/svg-preview-c.md#milestones) | 28 archives prepared across the three producer sets; no Release-C publication or installed-public qualification. |
-| **SVG-PREVIEW-C.2** | **Completed** | [Exact producer publication and readback evidence](roadmaps/svg-preview-c.md#milestones) | Rendering 0.31.0, Game 0.16.0 and Net 0.6.0 are public on both feeds. Templates adoption/publication and installed-public qualification remain .3–.5. |
-| **SVG-PREVIEW-C.3** | **Completed** | Templates [#480](https://github.com/FS-GG/FS.GG.Templates/pull/480), merge `6acdfc5f5da41156db0aeaffcd54885b3b9e66be`, and [source qualification](roadmaps/svg-preview-c.md#milestones) | Public producer pins adopted in the 0.13.0 source candidate; package publication and public receiver qualification remain .4–.5. |
-| **SVG-PREVIEW-C.4** | **Completed** | Templates release [34820243790](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34820243790) and [custody/readback evidence](roadmaps/svg-preview-c.md#milestones) | Templates 0.13.0 is public on both feeds, with 205 exact payload entries. Installed-public acceptance remains .5. |
-| **SVG-PREVIEW-C.5** | **Completed** | Templates [#481](https://github.com/FS-GG/FS.GG.Templates/pull/481), merge `7b202c9a6053e017e9ffc17fec0c53aa9bb15ac0`, and public receiver run [34822927445](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34822927445) | Release C is complete through public clean/retained replay/network/scale qualification. C20, Release D and later activation remain separate. |
-| **SVG-WORKSPACE-01.1** | **Completed — owner guidance published** | [Owner publication/readback evidence](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md#ready-milestone-window), Rendering [34833403039](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/34833403039), Game [34828061816](https://github.com/FS-GG/FS.GG.Game/actions/runs/34828061816), Audio [34829313855](https://github.com/FS-GG/FS.GG.Audio/actions/runs/34829313855) | Public Rendering/Game/Audio skills are verified; SDD installation and bundle selection remain .2, generated workspace composition .3, and final Release D remains separate. |
-| **SVG-WORKSPACE-01.2** | **Completed — published installed receiver** | SDD [#984](https://github.com/FS-GG/FS.GG.SDD/pull/984), public readback [34845942599](https://github.com/FS-GG/FS.GG.SDD/actions/runs/34845942599), and Templates [#483](https://github.com/FS-GG/FS.GG.Templates/pull/483), merge `c658fc38…` | Public SDD 1.8.0/Drivers 0.89.0 deliver exact owner guidance and routine tools; offline authority and five-bundle candidate transport pass. Full Templates composition and contradiction validation remain .3; public adoption and lifecycle activation remain Release D. |
-| **SVG-WORKSPACE-01.3** | **Completed — source and installed candidate** | Templates [#484](https://github.com/FS-GG/FS.GG.Templates/pull/484), merge `3f3a9c59…`, [native composition](https://github.com/FS-GG/FS.GG.Templates/actions/runs/34870596389), and installed wizard from [#3476](https://github.com/FS-GG/.github/pull/3476) | Default SVG gameplay, shared Studio content, bundle/legacy/refusal behavior, locked builds and exact installed candidate selection pass. Source journeys and upgrade/development proof are delivered through .4/.5; public Templates/wizard adoption remains Release D. |
-| **SVG-WORKSPACE-01.4** | **Completed — local deployment accepted** | Templates [#485](https://github.com/FS-GG/FS.GG.Templates/pull/485), [#489](https://github.com/FS-GG/FS.GG.Templates/pull/489), [#490](https://github.com/FS-GG/FS.GG.Templates/pull/490), and exact container-edge evidence frozen by #492 | Local Caddy serves Player/Studio and reverse-proxies ASP.NET/SignalR with reconnect and rollback. Public DNS/TLS/reboot/availability are unclaimed and deferred to #491. |
-| **SVG-WORKSPACE-01.5** | **Completed — installed development and retained adoption** | Templates [#486](https://github.com/FS-GG/FS.GG.Templates/pull/486), merge `6b797aa6…`, four delivered public synthetic receiver PRs and the [adoption report](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/reports/2026-09-14-svg-complete-workspace-adoption.md) | None for .5; public Templates/wizard publication and later lifecycle-default activation remain separate. |
-| **SVG-WORKSPACE-01.6** | **Completed — evidence frozen** | Templates [#492](https://github.com/FS-GG/FS.GG.Templates/pull/492), merge `a9371afc…`, and the [freeze report](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/reports/2026-09-15-svg-workspace-freeze.md) | Exact Templates 0.14.0 and wizard 0.11.2 publication plus installed-public qualification proceed in [Release D](roadmaps/svg-release-d.md). |
-
-No single percentage is reported. The stage gates are deliberately non-fungible: source commits, accepted unit
-receipts, installed settings, live journeys and elapsed observation windows cannot be added into a meaningful
-effort percentage.
+SDD 2.0.0 introduced the omitted **Typed SDD backend** choice; the current inspected SDD release record is
+2.0.2. This does not change the distinct provider lifecycle tokens or prove every generated receiver adopted
+2.0.2. Product default, backend default and workspace lifecycle default must not share one completion label.
 
 ### 0.2 Process and telemetry progress
 
-| Workstream | State | Evidence now available | Honest remaining gap |
-|---|---|---|---|
-| **Routine-process doctrine** | **Adopted for eligible work** | The work-roadmap, work-board, drive-board and single-item routes select routine delivery by default. Strict orchestration is reserved for work that actually needs protected authority, unresolved decisions or the heavier evidence contract. Cheap classification/reuse may admit work before nonblocking coherent confidence runs finish. | R4 still lacks its adequate routine cohort and 30-day follow-up; R5 still lacks an authorized ordinary-v2 journey and independent measured v2 cohort. |
-| **Private telemetry store** | **Operational** | `.github` PRs [#3376](https://github.com/FS-GG/.github/pull/3376), [#3378](https://github.com/FS-GG/.github/pull/3378) and [#3379](https://github.com/FS-GG/.github/pull/3379) delivered schema 8 and its live FK-safe revision repairs. The approved host store runs SQLite WAL with zero pending/quarantined batches after retained replay and a clean foreign-key check. | The database is private host state and must never be copied to Git/GitHub. Platform-native collaboration token capture remains unsupported and explicit. |
-| **Process observation** | **Operational for instrumented attempts** | Typed planning, implementation, review, validation, delivery, repair, operations and unclassified spans; exact usage attribution; complication events; revisioned attempt/item reviews; and `item-detail/1` are deployed. | Native usage is recorded only when the runtime supplies it. Missing population or attribution remains unknown; tokens are never divided by elapsed time. |
-| **Public dashboard source** | **Operational** | Bounded Actions/merged-delivery views, privacy filtering, the engine-owned coherent `/2` snapshot, strict mixed-runtime coverage and one-basis total proof, safe preview/install/verify, and semantic-no-op event refresh are merged and adopted on the exact host engine. Open pages now check the same-origin snapshot approximately every minute while visible and preserve last-good data and interaction state across failed or unchanged checks; scheduled public-source collection uses GitHub's five-minute minimum. | Preserve schema, privacy, boundedness and fail-closed source acceptance as the engine evolves. Browser checks do not shorten host, Actions queue, build, deployment or cache latency. |
-| **Public dashboard operation** | **Operational** | An exact empty alias allowlist was approved by digest. The physical host has marker-owned host-native recurrence enabled and active, plus a closed event receipt without embedded credentials. A real completed-root hook published and immutably verified [commit `2edf246…`](https://github.com/FS-GG/.github/commit/2edf24678840c47a7a8a1306cf9947755007d07d). [Pages run `34355973095`](https://github.com/FS-GG/.github/actions/runs/34355973095) succeeded, and an independent HTTP 200 read bound the deployed `host/3` payload to exact source `209410f…`, that host commit and public revision `851ab857…`. | Continue bounded health monitoring. Missing native collaboration usage remains explicit and is not estimated. |
+Routine delivery is selected by the adopted policy, not a sensitive-path or GS2 label. Canonical model
+checks and effect safeguards remain independently binding. Governance's pure route, severity and exact-key
+reuse functions are implemented; their effective consumer wiring belongs in V0/V3 acceptance.
 
-Current private topology is intentionally not embedded in the repository. The host config selects one durable
-store and installed engine; GitHub receives only an explicitly allowlisted, bounded public projection. Raw
-sessions, SQLite/WAL files, private identities and unrestricted review prose remain off GitHub.
+The former “0.91.0 publication blocked” status is superseded: the
+[telemetry release owner](roadmaps/utel-release-successor.md#release-result-and-remaining-host-boundary)
+records publication/readback and later successor work. Read its current promoted artifact and the operator's
+installed receipt separately. A public package or dashboard source commit does not identify a running Host.
+
+Prospective telemetry can join native usage only where the configured runtime exposes a verifiable record.
+Missing parent/child population, terminal usage, CI attribution or Host acknowledgment remains an explicit
+gap. Private stores and credentials remain private; public projection keeps its closed allowlist.
+This audit neither requalified a live Host nor measured an efficiency cohort.
 
 ### 0.3 GS2 progress at the current frontier
 
-| Unit/window | State | Delivered or observed | Still required |
-|---|---|---|---|
-| **GS2-07.1–07.8** | **Accepted** | All eight event, reconciliation, audit, security, merge-group, queue, measurement and selected no-host runtime-operation units have content-addressed accepted receipts. Scheduled complete audits remain authoritative; no webhook host was silently introduced. | Reuse these receipts at comprehensive closure. The bounded event-benefit result does not prove installed production savings or authorize reduced polling. |
-| **GS2-08.1 — Epoch wire** | **Accepted** | Native receipt `49c70359…` freezes the bridge/epoch semantics and accepted prerequisite. | Preserve exact correspondence through later initializer, writer and receiver work. |
-| **GS2-08.2 — Ledger protections** | **Accepted** | [Coordination PR #410](https://github.com/FS-GG/FS.GG.Coordination/pull/410) records the native receipt after the protected initialization, durable monitoring and exact operational readback. | Preserve the accepted authority and monitor evidence through publication and adoption. |
-| **GS2-08.3 — Writer census** | **Accepted** | [Coordination PR #402](https://github.com/FS-GG/FS.GG.Coordination/pull/402) accepts the closed producer and receiver population, including 54 command roots and cross-repository writer/callsite surfaces. | Preserve census closure as later writer routes are published, adopted or retired. |
-| **GS2-08.4 — Common precondition** | **Accepted** | [Coordination PR #405](https://github.com/FS-GG/FS.GG.Coordination/pull/405) accepts the common effect fence and its exact native gate evidence. | Preserve the accepted fence semantics through bridge publication and receiver adoption. |
-| **GS2-08.5–08.6 — Incumbent behavior and attacks** | **Accepted** | [Coordination PR #412](https://github.com/FS-GG/FS.GG.Coordination/pull/412) accepts the fleet admission registry and producer integration. [PR #413](https://github.com/FS-GG/FS.GG.Coordination/pull/413) accepts 66 independent Q3/Q6 attack tests over 16 production callsites and six real boundaries. | Q4 remains unclaimed. The observed 0.75.4 bypass, unavailable 0.58.0 artifact and 22 unavailable or non-redirectable external routes remain explicit GS2-08.9 inputs. |
-| **GS2-08.7 — Publish immutable bridge** | **Accepted** | Coordination [PR #416](https://github.com/FS-GG/FS.GG.Coordination/pull/416) accepts public coherent set 0.90.0 from exact source `3adada5a…`; receipt `0cac376a…` binds promoted content `sha256:52b277…`. | Preserve exact release and manifest identity through receiver adoption. |
-| **GS2-08.8 — Receiver adoption** | **Accepted** | Coordination [PR #417](https://github.com/FS-GG/FS.GG.Coordination/pull/417) accepts all eight receiver families against exact protected source, public package, installed-command and fail-closed evidence. | Preserve the accepted receiver identities through V2 migration. |
-| **GS2-08.9 — Disable residual writers** | **Accepted** | Coordination [PR #419](https://github.com/FS-GG/FS.GG.Coordination/pull/419) accepts the sealed or administratively disabled residual routes and protected runtime retirement evidence: no active NewSddWorkspace installation or trusted caller combines historical helper bytes with mutation credentials. | Preserve the retired routes. Q4 remains unclaimed and is not inferred from this acceptance. |
-| **UTEL-REL-01 — Telemetry coherent release successor** | **0.91.0 source candidate; publication blocked** | Native child-usage reconciliation and durable remote receipt settlement are merged after the public 0.90.0 cut. The [successor release contract](roadmaps/utel-release-successor.md) keeps the accepted seal and specifies per-effect authority, exact three-package archives, recovery qualification and installed-host adoption. All three 0.91.0 packages pack locally, the CLI installs from the candidate feed, and the release seal refuses both 0.90 and 0.91 legacy effects. A read-only scoped feed run saw 0.90.0 newest on both feeds. | Qualify a distinct effect-admitted publication route, decide the nuget.org authority boundary and recheck 0.91.0 unused immediately before effects. Then publish and promote exact bytes before Main adopts them. Keep the five legacy workflows disabled and both sealed scripts refusing effects. |
-| **GS2-09.9 / V2-CALL-01.1–.3c — Callable ordinary-v2 producer and opt-in receiver** | **Published and adopted opt-in; production disabled** | Coordination [PR #421](https://github.com/FS-GG/FS.GG.Coordination/pull/421) registers the owning amendment and delivers the source contract and recovery composition; [PR #422](https://github.com/FS-GG/FS.GG.Coordination/pull/422) composes the real GitHub/journal path; [PR #430](https://github.com/FS-GG/FS.GG.Coordination/pull/430) records protected publication of exact package `FS.GG.Coordination.Cli` 0.1.0 (`sha256:ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf`); `.github` [PR #3539](https://github.com/FS-GG/.github/pull/3539) pins it alongside the legacy bridge and verifies pre-`OpenV2` refusal. | Qualify isolated installed/provider behavior in `.4`, then hand off to migration in `.5`. This does not accept GS2-09 migration, Q4, external native effects or `OpenV2`. |
+| Evidence | Scope established | Scope still open |
+|---|---|---|
+| [GS2-07 and GS2-08 accepted receipts](https://github.com/FS-GG/FS.GG.Coordination/tree/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/accepted) | Event/queue qualification, bridge, receiver adoption and residual-writer disposition. | Preserve validity across later changes; no Q4 or production open inferred. |
+| [Callable readiness](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/gs2-09-9/callable-readiness.json) and [handoff](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json) | Installed 0.1.1 in one admitted synthetic disposable repository; sealed plan, provider/journal recovery, no-op replay and cleanup. | Migration/cutover, production targets, release effects and general writer enablement are excluded. |
+| [GS2-09.1–.6 receipts](https://github.com/FS-GG/FS.GG.Coordination/tree/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/accepted) | Discovery, manifest, transforms, live-operation dispositions, sealed history and rollback **contracts**. | Fresh nine-authority provider capture, effect execution and actual representative rollback. |
+| [Replay/omission source controls, PR #507](https://github.com/FS-GG/FS.GG.Coordination/pull/507) | Exact manifest replay, added-subject refusal and every rollback receipt prefix under controlled tests. | Live interruption/retry, complete copy population and independent .7/.8 acceptance. |
+| Local GS2-09.7 prototype at `82b4772d3807dfec08901f898d9129ab76e88aac` | Existing step-execution/provider-reader work to inspect and preserve before implementation. | No remote branch or protected-main inclusion was observed. It is not delivered or provider-accepted evidence. |
 
 ### 0.4 Active work and immediate critical path
 
-1. **Continue entered V2 with V2-CALL-01.4–.5, then GS2-09 migration.** Qualify the exact published and adopted
-   callable artifact's isolated installed/provider journey, hand off the callable boundary, and then deliver representative migration,
-   recovery, rollback and omission proofs while preserving the accepted V1 fence and keeping Q4 and `OpenV2`
-   unclaimed.
-2. **Finish SVG-RELEASE-D lifecycle activation after OperatingV2.** SVG-WORKSPACE-01.1–.6 and
-   SVG-RELEASE-D.1–.4 are complete with the accepted local Caddy deployment boundary, public Templates 0.14.0
-   and wizard 0.11.2, public-only receiver qualification, and the SVG product default active under supported
-   lifecycles. SDD 2.0.0 now supplies the released Quint-default producer capability and explicit F# compatibility.
-   Durable hosting continues separately in Templates #491; only the protected single-lifecycle activation remains,
-   and it is gated by actual OperatingV2 evidence that producer publication cannot manufacture.
+1. **Resume the existing GS2-09.7 implementation.** Recover its exact local work, compare it with current
+   protected main, and qualify source slices through the normal reviewed route. Complete the remaining
+   provider surfaces and closed migration interpreter; do not rebuild GS2-09.1–.6 contracts.
+2. **In parallel, finish independently owned admission/effect readiness and prepare V0/V3 inputs.**
+   The current protected admission operation has its own owner. Read-only research, controlled source tests,
+   receiver inventory and omission controls can proceed without exercising that operation. Their common
+   integration point is the exact isolated executable candidate, not a blanket source-work blockade.
+3. **Join at real representative acceptance.** Bind complete copy-specific discovery, manifest, journal,
+   effects, archive and rollback; execute all interruption cuts and a second round, then establish .8
+   no-omission/idempotency and complete GS2-09 closure.
+4. **Freeze only the qualified candidate.** Finish or explicitly defer competing publications/default/pin
+   changes, then execute GS2-10–14 under their existing contracts and operating authority.
 
-The current public game baseline is the compatible Release-D workspace through milestone .4: Rendering 0.31.0,
-Game 0.16.0, Net 0.6.0, Audio 0.6.0, Templates 0.14.0 and wizard 0.11.2. SDD 2.0.0 supplies the qualified
-Quint-default producer capability. These producer deliveries do not activate the later single-lifecycle default.
+The [lane table](#91-dependencies-and-parallelism) names each owner, ready work and join condition.
 
 ### 0.5 Known limits and decision state
 
-- **No current human product decision blocks source work.** Routine source delivery and proportional parallel
-  qualification are the canonical defaults.
-- **Protected live operations still need exact authority.** General permission to continue does not substitute for
-  fresh prestate, protected-environment authorization, credential custody or immutable readback.
-- **Telemetry completeness is scoped.** Store integrity and the instrumented prospective path are operational;
-  native collaboration usage and some automatic parent/child population discovery remain unsupported rather than
-  estimated.
-- **Dashboard publication is a privacy boundary.** Private-item aliases, categories, repositories, evidence links
-  and notes require an explicit closed allowlist. The database itself never moves to GitHub.
-- **The current roadmaps are navigation, not duplicate ledgers.** A checked subroadmap item requires its owning
-  source/native evidence. Every item closure must be projected here; ordinary CI ticks do not create progress
-  revisions.
+This is an evidence-backed planning reconciliation, not a new contract or effect authorization.
+The digest-bound [GS2 execution roadmap](github-substrate-v2-roadmap.md) and accepted receipts remain
+unchanged. Historical “pending” fields in a sealed handoff describe its observation time; new accepted
+receipts supersede their status without rewriting those bytes.
+
+No stage-wide percentage is asserted: pure contracts, isolated provider execution, installed receivers and
+fleet cutover have materially different remaining work. Missing evidence is unknown, not zero or failure.
+Broader portfolio proposals remain visible in section 15 without becoming hidden prerequisites.
 
 ## 1. Starting point and the simplification handoff
 
@@ -701,59 +178,41 @@ The handoff consists of existing source references, not a new report family:
 | Removed obligations and retained predicates | The owning policy says what was deleted, made advisory, moved asynchronous or retained blocking | No generated guidance or v2 caller silently restores removed ceremony |
 | Receiver ownership | Policy publisher, runtime owner and installation families are identified | Qualify clean installs, upgrades and retained protected paths |
 
-The dated source snapshot below predates this completed handoff. It is evidence of where implementation
-stands, not a claim that the predecessor is already finished. Existing authorized GS2 work can continue
-under its current contracts while predecessor work finishes; this proposal does not suspend it.
+The source snapshot below establishes implementation and evidence boundaries, not completion of every
+predecessor measurement. Existing authorized GS2 work can continue under its current contracts while
+predecessor work finishes; this roadmap does not suspend it.
 
 ### 1.2 Verified source snapshot
 
-Research used local source and read-only GitHub observations on September 7. GitHub default-branch heads
-matched the inspected checkouts:
+The current review fetched each default branch and inspected the exact revisions below, rather than
+assuming a local checkout was current. Source inspection and retained acceptance evidence support the
+claims; this review did not repeat live release, admission, migration or installed-host operations.
 
-| Repository | Revision inspected | Planning consequence |
+| Repository | Protected default revision inspected | Concrete boundary inspected |
 |---|---|---|
-| `FS-GG/.github` | `a6880e965bba91400090dc387ed74f27d39bce9a` | Master/inventory, adopted routine pilot, delivery helper and observer are available |
-| `FS-GG/FS.GG.Coordination` | `e2be0cca5a9398cc80e341f68fbc17cd2b3962d6` | V2 acceptance through GS2-07.5; GS2-07.6 registered; economics producer repaired |
-| `FS-GG/FS.GG.Governance` | `3f265769d2b23ce36cbe0d05985e3c715dfead4f` | Pure routing, enforcement and exact-key reuse already exist; installed wiring is a separate question |
-| `FS-GG/FS.GG.SDD` | `8577e1b85cfb7892c372e033456a63ca46e17e71` | Explicit Quint backend and consumer-defined profile have implementation and release documentation |
+| `FS-GG/.github` | `d6ee7c79d67c3bdc2e3af07dcbe0e606967f76b5` | Routine policy/helper, receiver tool manifest, GS2 sequence, release/default plans and source skill roots |
+| `FS-GG/FS.GG.Coordination` | `e96f4821a40c595ebe960e6cf126ace748852f30` | Callable CLI/runtime, accepted GS2-09.1–.6 contracts, replay/omission controls and retained callable native receipts |
+| `FS-GG/FS.GG.Governance` | `df47d597fbddbbf41b8facc034185fc9755ef6f6` | Pure routing, severity and freshness-key reuse; consumer installation is a different boundary |
+| `FS-GG/FS.GG.SDD` | `cb89bcafb95efa1d11ecd29c21ca4108cd30a2cf` | Driver materialization, 2.0.x backend/lifecycle distinction and FsQuint consumer release qualification |
+| `FS-GG/FS.GG.Templates` | `273c9218960215ee856de9e59a769a0e7b63da8f` | Exact Rendering provider pin, frozen workspace and public Release-D receiver evidence |
 
-The [v2 roadmap](github-substrate-v2-roadmap.md) records acceptance through GS2-07.5.
-[Coordination PR #319](https://github.com/FS-GG/FS.GG.Coordination/pull/319) registered GS2-07.6 without
-implementing the queue pilot. The remaining migration starts there, with GS2-08 bridge work parallel where
-its actual prerequisites permit. Acceptance count is not a percentage estimate of remaining effort:
-installation, cross-repository integration, operational qualification and irreversible cutover still remain.
+The [audit](reports/2026-09-24-v2-roadmap-code-audit.md) supplies code-level links and remaining acceptance.
+The September 7 source survey remains available in the
+[historical snapshot](https://github.com/FS-GG/.github/blob/d6ee7c79d67c3bdc2e3af07dcbe0e606967f76b5/docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md#12-verified-source-snapshot);
+its GS2-07.5 frontier, CLI-only-preparation observation and SDD 1.5.0 release are historical inputs, not
+current implementation gaps.
 
-R0/R1 have implementation evidence in [PR #3320](https://github.com/FS-GG/.github/pull/3320) and
-[PR #3321](https://github.com/FS-GG/.github/pull/3321). R2 has both the
-[observer](https://github.com/FS-GG/.github/pull/3322) and
-[economics producer](https://github.com/FS-GG/FS.GG.Coordination/pull/321) merged. The most recent scheduled
-run observed, [34100605443](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/34100605443), failed on
-the older pre-fix revision. Successful post-fix push qualification is not evidence of scheduled artifact
-delivery. R2 closure and the R4/R5 programme claims remain separate.
-
-During final review, [PR #3324](https://github.com/FS-GG/.github/pull/3324) merged at 15:47:26 UTC as
-`86669a2ccb4a23e42609f55b4fe8f85e6a5104a3`, adding an R3 release/replay implementation slice. Its PR
-explicitly reserves milestone closure for post-merge verification. This newer evidence reinforces the
-handoff approach: consume completed predecessor outcomes rather than schedule their implementation here.
-
-A subsequent observation at 16:11 UTC found [PR #3326](https://github.com/FS-GG/.github/pull/3326) merged,
-recording R3 post-merge evidence and starting the fixed R4 cohort. Its empty cohort explicitly reports
-insufficient evidence. Starting that comparison does not complete R4 or the successor's entry handoff.
-Section 7.5 records a separate live workflow/protection observation made while preparing this document.
-
-The inspected [Coordination CLI](https://github.com/FS-GG/FS.GG.Coordination/blob/e2be0cca5a9398cc80e341f68fbc17cd2b3962d6/src/FS.GG.Coordination.Cli/Program.fs)
-exposes preparation/qualification commands and explicitly reports no enabled production commands. Adapter
-qualification cannot stand in for an installed, ordinary end-to-end execution path.
-
-The newer [SDD 1.5.0 release document](https://github.com/FS-GG/FS.GG.SDD/blob/8577e1b85cfb7892c372e033456a63ca46e17e71/docs/release/quint-general-1.5.0.md)
-and [lifecycle guide](https://github.com/FS-GG/FS.GG.SDD/blob/8577e1b85cfb7892c372e033456a63ca46e17e71/docs/typed-sdd-lifecycle.md)
-describe consumer-defined bounded Quint models and the explicit backend. Do not schedule a new generic
-compiler from the older Q2-not-started banner. This review did not independently restore packages from both
-feeds or qualify all receiver defaults; implementation stages still verify the exact published artifacts.
+The local Coordination branch `routine/gs2-09-7-rehearsal` at `82b4772d…` is explicitly separate from
+protected main. Its provider-reader and step-execution source can be reused after review, but no remote
+publication or native migration acceptance is inferred.
 
 ## 2. Research method and findings
 
 ### 2.1 Offline analysis
+
+The [September 24 code audit](reports/2026-09-24-v2-roadmap-code-audit.md) supersedes the original
+implementation-status observations below. The following design rationale remains useful; it does not
+reopen delivered capabilities or certify newer installed behavior.
 
 The review compared the master and programme inventory with the v2 roadmap and architecture amendment,
 R0–R5, OR H0–H8/F0–F5, PB0–PB8, the governance proposal, Quint migration, and telemetry automation.
@@ -863,14 +322,15 @@ Their original detailed requirements are mapped in section 14; unneeded features
 
 For any supported action, determine:
 
-1. **Delivery/evidence profile:** routine, modeled/contract work, protected operation, or unresolved.
+1. **Delivery process and evidence:** routine by default; heavyweight only for explicit human-named scope.
+   Modeled/contract work selects substantive checks, and protected effects select their own safeguards.
 2. **Synchronization need:** isolated, a named shared resource/grant, or unresolved conflict domain.
 3. **Operating authority:** permitted now, preparation only, deferred, or refused under the current epoch.
 4. **Capacity:** available within an enforceable limit, deferred, or observationally budgeted.
 
 These are conceptual decisions emitted through existing supported outputs, not four forms or new registries.
-A routine source change can require an exclusive test-environment grant. A private worktree does not make
-a release or authority change routine. An unresolved observation cannot be normalized to a negative match.
+A routine source change can require an exclusive test-environment grant. A private worktree does not
+authorize a release or authority effect; its source PR still follows the selected delivery process. An unresolved observation cannot be normalized to a negative match.
 
 ## 4. Which development process applies, and where
 
@@ -901,9 +361,9 @@ without changing the rule that only explicit human-named scope selects heavyweig
 | Ordinary source work using an exclusive shared environment | Any eligible product | Same routine process plus automatic resource acquisition only for the shared action | Valid environment grant and relevant technical results | Qualified resource adapter, conflict identity and recovery owner; otherwise the resource action waits |
 | Implementation change under an existing canonical model | Coordination protocols, modeled product behavior | Model-constrained implementation: inspect model, plan correspondence, implement, test/replay affected behavior | Current conformance and affected invariants; scoped reusable evidence where allowed | Published SDD/Quint toolchain and consumer-owned replay; no ceremonial model edit when semantics are unchanged |
 | Change to modeled behavior or an authority protocol | Coordination, Governance semantics where modeled, product protocols | Typed specification process: change canonical source explicitly, review semantic delta, implement and independently test correspondence | Type/effect checks, witnesses, bounded invariant/formal evidence, negative controls, real adapter tests as applicable | Owning domain model and supported profile; protected scope selects its stronger delivery predicates |
-| Significant feature with unresolved requirements but no useful formal state model | Product/consumer owner | Supported Standard SDD where applicable; clarify the uncertain behavior and deliver small slices | Behavioral requirements and relevant implementation/consumer evidence | Existing lifecycle selection; routine exemption only where actually supported, no silent lifecycle-token change |
-| Public API/schema, provider, lifecycle, policy or generated-guidance change | Actual producer plus receivers | Contract change process and publish-before-adopt; relevant SDD/typed process for its semantics | Compatibility, producer publication and installed receiver evidence | Named producer/receiver boundary; protected policy route for changes affecting eligibility or authority |
-| A registered GS2 implementation unit | Primarily Coordination; `.github` for bridge/authority work | Existing repository-owned migration workflow and exact registered acceptance contract | Scoped child qualification; cold comprehensive parent closure; required review evidence and accepted unit result | Current pinned unit and satisfied predecessor receipts; a routine-looking diff does not waive GS2 acceptance |
+| Significant feature with unresolved requirements but no useful formal state model | Product/consumer owner | Routine source delivery; clarify the uncertain behavior and deliver small slices; heavyweight SDD only for explicit human-named scope | Behavioral requirements and relevant implementation/consumer evidence | Existing lifecycle selection; no silent lifecycle-token change or inferred heavyweight process |
+| Public API/schema, provider, lifecycle, policy or generated-guidance change | Actual producer plus receivers | Routine source delivery with contract qualification and publish-before-adopt; modeled checks where applicable | Compatibility, producer publication and installed receiver evidence | Named producer/receiver boundary; protected policy route for changes affecting eligibility or authority |
+| A registered GS2 implementation unit | Primarily Coordination; `.github` for bridge/authority work | Routine source delivery plus the exact registered technical acceptance contract | Scoped child qualification; cold comprehensive parent closure; required review evidence and accepted unit result | Current pinned unit and satisfied predecessor receipts; a routine-looking diff does not waive GS2 acceptance |
 | Release, deployment, credentials, destructive migration or cutover | Authorized operation owner | Protected operation process, distinct from source PR delivery | Current authority, exact plan/artifacts, protected effects, output verification and recovery | Operation-specific permissions, grants and current epoch; no invented PR for a PR-less operation |
 | Read-only OR/PB investigation | Coordination domain owner; `.github` policy analysis | Bounded research or pure prototype, with a named question and stop budget | Reproducible local evidence and honest limits | Existing tools; no hosted writer, model-dispatch service or default activation prerequisite |
 | Stateful PB/OR execution change | Coordination | Modeled controller change and adversarial replay/correspondence; protected canary activation separately | Finite progress, reservations, late effects, crash recovery and policy comparison | Shared executor contract, published tooling and operation-specific eligibility |
@@ -936,8 +396,9 @@ Requirement uncertainty first calls for focused clarification and a behavioral e
 itself force a feature into a complete SDD artifact family. Use heavyweight SDD ceremony only when a human
 explicitly selects it for named scope.
 
-Omitted lifecycle remains whatever the installed accepted configuration specifies. The current SDD guide
-says `sdd`; this document does not flip it to `typed-sdd` or `none`. A lightweight delivery profile and a
+Omitted lifecycle remains whatever the installed accepted configuration specifies. The inspected SDD 2.0.x release
+changes the omitted Typed SDD backend to Quint while preserving provider lifecycle tokens; this document
+does not flip the workspace lifecycle to `typed-sdd` or `none`. A lightweight delivery profile and a
 lifecycle/backend selection are separate dimensions. If an installed consumer cannot express the intended
 combination, that is a real integration gap to fix before claiming the profile works there.
 
@@ -1347,6 +808,10 @@ narrow budgets; the predecessor's existing broad performance contract retains it
 
 ### 7.5 Observed bottleneck: full-board projection on the merge path
 
+The measurements and workflow/protection observations in this section are from **September 7**.
+They motivate the retained optimization criteria; re-observe the current workflow and enforcement before
+assigning a repair or claiming this remains the live bottleneck.
+
 The current [board lifecycle workflow](https://github.com/FS-GG/.github/blob/86669a2ccb4a23e42609f55b4fe8f85e6a5104a3/.github/workflows/coord-board-reconcile.yml)
 admits a run for each of the following events, with no changed-path filter:
 
@@ -1583,71 +1048,77 @@ when funded. No stage acquires mutable completion checkboxes in this document.
 | Stage | Work and owning sources | Development process | Observable exit |
 |---|---|---|---|
 | **V0 — Receive the simplified baseline and decide v2 bindings** | `.github` policy, Coordination runtime, Governance and receiver owners; predecessor outputs plus governance integration | Proportional integration/contract process; protected changes for eligibility/authority | One adopted profile mapping identifies enabled classes, obligations, synchronization, trust, current writer and R5 receiver contract; any needed GS2 changes are registered before use |
-| **V1 — Finish event/queue qualification and fence the incumbent** | GS2-07.6–07.8; GS2-08 in parallel where ready | Existing registered GS2 process; isolated operations under their permission ceilings | Queue/reconciliation/operating behavior is qualified; all live incumbent writer routes are fenced or explicitly disabled |
+| **V1 — Preserve accepted event/queue qualification and incumbent fencing** | Accepted GS2-07.1–07.8 and GS2-08; requalify only affected changes | Routine source delivery with owning technical acceptance; isolated effects keep their permission ceilings | Queue/reconciliation/operating behavior is qualified; all live incumbent writer routes are fenced or explicitly disabled |
 | **V2 — Deliver the complete callable v2 path and migration rehearsal** | GS2-09 and affected existing adapter/runtime contracts | Modeled implementation and installed/sandbox acceptance, not fixture-only completion | Real installed entry points connect observations, decisions, provider effects and recovery; migrate/retry/rollback/omission tests pass on representative copies |
 | **V3 — Freeze the coherent candidate and prepare receivers** | GS2-10; R5 profile qualification inputs | Comprehensive exact-candidate process | Q0–Q7, installed clean/upgrade profiles, whole-cutover rehearsal, staffed bounded window and concurrent-change disposition |
 | **V4 — Freeze, switch and verify while closed** | GS2-11–12 | Protected cutover operation | Normal writes closed, every receiver/settings transformation verified, isolated protocol and routine journeys pass, pre-open rollback executable |
 | **V5 — Open v2 and prove ordinary use** | GS2-13; functional R5 journeys | Protected OpenV2 decision followed by enabled ordinary-v2 process | Permanent v1 fence, actual routine and required protocol journeys, named recovery owner, ObservingV2 |
 | **V6 — Observe, complete carryover and contract v1** | GS2-14; R5 cohort and receiver retirement | Ordinary repair under v2, protected contraction and existing Q10 | Immediate baseline and 15 distinct completed-work readings, required operational gates, deletion/clean-install proof; R5 efficiency claimed separately only when its own evidence passes |
 | **E0 — Test one residual execution hypothesis** | Shared OR H0/H1 and PB0 investment decision | Bounded research/prototype | Measured unmet need, chosen experiment, comparison protocol, investment/stop limits; stop is an acceptable result |
-| **E1 — Qualify and optionally adopt one shared execution capability** | Reuse the selected standalone O0–O3 actor/execution foundation; remaining PB/OR hosting, scheduling and comparative-value scope | Continue the owning O2/O3 roadmap for selected work; qualify only additional gaps through modeled implementation, shadow and authorized canary/receiver work | Selected source, installed operation and live acceptance remain distinct; broader class/default and comparative-value claims need their own evidence |
+| **E1 — Qualify and optionally adopt one shared execution capability** | Reuse the selected standalone O0–O3 actor/execution foundation; remaining PB/OR hosting, scheduling and comparative-value scope | Reuse completed O0–O3; qualify only additional gaps through modeled implementation, shadow and authorized canary/receiver work | Selected source, installed operation and live acceptance remain distinct; broader class/default and comparative-value claims need their own evidence |
 | **F0–F5 — Cooperative clients receive jobs from a project master** | Retained OR §8A feature, using E1 foundations; see section 9.7 | Protocol modeling, enrolled read-only sessions, sandbox lab, independent verification shadow, separately authorized canary and measured adoption | An enrolled client can receive and execute a bounded job; the master can reject fabricated/stale submissions and independently verify and deliver a valid contribution through reconnect/restart |
 
 ### 9.1 Dependencies and parallelism
 
+**Solid arrows are acceptance dependencies. Dashed arrows permit preparation or reuse; they do not grant
+effect authority.** Completed inputs remain visible so the graph does not schedule them again. The exact
+GS2 contracts own acceptance; this graph introduces no new unit or mutable completion ledger.
+
 ```mermaid
 flowchart TD
-    H[Completed current-route simplification handoff] --> V0[V0 Bind adopted profile to v2]
-    F[Accepted GS2 through 07.5] --> Q[V1 Queue and event qualification]
-    B[Qualified epoch prerequisites] --> Bridge[V1 Bridge and receiver fencing]
-    Q --> V2[V2 Callable path and migration rehearsal]
-    Bridge --> V2
-    V0 --> V2
-    V2 --> V3[V3 Candidate and installed qualification]
-    V3 --> V4[V4 Frozen switch and closed verification]
-    V4 --> V5[V5 OpenV2 and real journeys]
-    V5 --> V6[V6 Observation and contraction]
-    V6 --> Operating[OperatingV2]
-    H -. read-only experiment allowed .-> E0[E0 Residual need and bounded experiment]
-    E0 --> E1[E1 Pre-canary capability qualification]
-    Selected[Selected standalone trusted single-host scope] --> O2[O2 Akka execution and Main pilot]
-    O2 --> O3[O3 Controlled adoption]
-    O3 -. reuse qualified foundations, not duplicate implementation .-> E1
-    Operating --> Canary[Class-specific mutation canary]
-    E1 --> Canary
-    Canary --> Adopt[E1 Evidence-based adoption decision]
-    E0 -. optional cooperative research .-> F0[F0 Cooperative protocol and scope]
-    F0 --> FPrep[F1-F3 Sessions, contribution lab and verification shadow]
-    E1 -. qualified session and execution foundations .-> FPrep
-    FPrep --> FCanary[F4 Enrolled-peer contribution canary]
-    Operating --> FCanary
-    FCanary --> F5[F5 Measured cooperative adoption]
-    V5 -. ordinary-v2 measurement .-> R5[R5 carryover evidence]
-    V6 -. operational observations .-> R5
+    V1["Accepted GS2-07 / GS2-08 fence"] --> Contracts["Accepted GS2-09.1-.6 contracts"]
+    Call["Callable 0.1.1 isolated acceptance / handoff"] --> Join["GS2-09.7 exact isolated candidate"]
+    Contracts --> Read["Complete nine-authority provider capture"]
+    Contracts --> Execute["Closed migration interpreter / durable recovery"]
+    Read --> Join
+    Execute --> Join
+    Authority["Protected admission and copy-specific effect authority"] --> Join
+    Join --> Rehearse["GS2-09.7 migrate / interrupt / retry / rollback / rerun"]
+    Rehearse --> Omit["GS2-09.8 no omission / idempotency / parent closure"]
+    Contracts -. prepare controls concurrently .-> Omit
+    Policy["V0 effective routine policy and receiver binding"] --> Freeze["V3 / GS2-10 exact candidate qualification"]
+    Receivers["Receiver inventory / published pins / clean and retained proof"] --> Freeze
+    Omit --> Freeze
+    Changes["Finish or defer concurrent candidate-input changes"] --> Freeze
+    Freeze --> Closed["V4 / GS2-11-12 freeze / switch / verify while closed"]
+    Closed --> Open["V5 / GS2-13 separately authorized OpenV2"]
+    Open --> Observe["V6 / GS2-14 baseline + 15 distinct items / contraction"]
+    Observe --> Operating["OperatingV2"]
+    Open -. actual routine population .-> R5["Separate R5 cohort and 30-day follow-up"]
+    Operating --> Lifecycle["Release D.5 lifecycle activation and receiver proof"]
+    Foundations["Accepted O0-O3 / source-qualified Choreo"] -. reuse .-> Extensions["Optional E0/E1 / LEARN / F0-F3 preparation"]
+    Extensions --> Canary["Separately selected E1 / F4 production canary"]
+    Operating --> Canary
 ```
 
-The GS2 roadmap retains exact prerequisite authority. This graph does not manufacture prerequisites for
-already authorized units: the V0→V2 join concerns the claimed simplified ordinary path, while unaffected
-migration work may continue. GS2-08's fence must include new writers introduced by simplification,
-including native helper and automation routes. GS2-08.3 now carries a content-addressed producer and receiver
-source census across the registry-derived fleet, including legacy tool-source and delegated-callee correspondence;
-that source closure is not installed receiver behavior and does not implement the GS2-08.4 fence.
+The immediate **source** lanes below can overlap when their touch-sets and shared resources are disjoint.
+Protected operation ownership, credential custody, journal writes and final cutover stay serialized at their
+real authority boundary. A blocked effect does not block a source-only lane.
 
-Suggested initial capacity allocation is one primary remaining-v2 implementation lane and one independent
-bridge/receiver-preparation lane when contracts and touch sets permit. Use remaining capacity for actual
-critical defects and bounded read-only investigation, not simultaneous OR and PB executor builds. This is
-a planning recommendation, not a change to current claim/parallel-work policy or a claim about available
-staff. Review and integration capacity limit useful concurrency.
+| Lane and accountable owner | Ready work | Join / stop condition |
+|---|---|---|
+| **Migration observations — Coordination** | Reconcile the local prototype, finish all nine authority readers, terminal/nested pagination and two-pass source identity; independent refusal controls. | Exact complete isolated-copy observations before manifest/effects. Partial live diagnostics cannot satisfy this join. |
+| **Migration execution/recovery — Coordination** | Reuse callable adapters and the draft step boundary; build the closed effect interpreter, ordered durable driver, archive verification and executable pre-open rollback. | Reviewed source and unchanged canonical-model correspondence; native run waits for exact copy, artifact and effect authority. Coordinate shared adapter edits with the observation lane. |
+| **Admission readiness — existing protected-operation owner** | Finish the independently owned operation and obtain its exact authorized readback. | Only its governed effects wait on credentials, approvals and fresh prestate. A failure remains with that owner; other lanes receive a bounded interface/result. |
+| **Omission controls — Coordination qualification owner** | Extend exact-population, added-subject, duplicate, replay and receipt-prefix controls already started in PR #507. | GS2-09.8 acceptance waits for representative .7 evidence; authoring independent controls does not. |
+| **Routine profile / receivers — `.github`, Governance, SDD, Templates and actual receivers** | Record actual enforcement call sites, tool/package/default identities, clean/upgrade cases and supported/deferred profiles. | GS2-10 accepts a coherent exact candidate; every changed input is refreshed before freeze or explicitly deferred. Pure Governance APIs alone do not qualify wiring. |
+| **Telemetry / measurement — `.github` producer, installed operator** | Repair attributed observation gaps and qualify prospective published/installed changes under their own authority. | No general migration dependency. R5 needs its actual ordinary-v2 cohort; missing efficiency evidence cannot manufacture or veto unrelated operational acceptance. |
+| **Optional/product work — owning repositories** | Authorized independent research/source work, reused O3/Choreo/FsQuint foundations, and unrelated product fixes. | Candidate-affecting changes join the same freeze disposition. Release D.5 and production canaries keep their specific `OperatingV2` gates. |
 
-Candidate delivery uses [ADR-0084](adr/0084-semantic-reuse-never-cancels-coherent-validation.md)'s cheap
-content/semantic classifier and bounded recovery. A `reused` exact-head receipt can overlap native delivery
-with coherent closure; `current` or missing reuse waits for that closure, and `deferred`/`failed` does not
-advance. Pending post-merge validation is carried into the stage; disputed validation blocks every dependent
-qualification, publication, or activation until repaired.
+These are concurrency opportunities, not an instruction to spawn workers or assume staffing. Use one
+integrator for shared Coordination surfaces and exact candidate assembly. Pause only the dependent effect
+when an authority input is missing; state which independent source work remains useful.
+
+[ADR-0084](adr/0084-semantic-reuse-never-cancels-coherent-validation.md) still governs CI concurrency:
+validated exact-head `reused` evidence may overlap native delivery with coherent closure; `current` or
+missing reuse waits for closure; `deferred`/`failed` refuses. Pending post-merge confidence is distinct
+from disputed evidence, which blocks dependent qualification, publication and activation.
 
 ### 9.2 V0: bind the handoff without restarting it
 
-Inspect the completed predecessor's policy and installed behavior. Resolve the governance proposal's
+Inspect the adopted predecessor policy and actual installed behavior. Keep incomplete R2/R4/R5
+measurement claims explicit; their absence does not reopen accepted source or suspend independent GS2 work.
+Resolve the governance proposal's
 independent synchronization decision and the ownership table in section 3. Record every retained predicate
 at its actual enforcing boundary. If a missing capability belongs to the predecessor's promised scope,
 return that exact gap to its owner; do not conceal it inside a new general controller.
@@ -1663,41 +1134,39 @@ an explicit owner and later target population; do not claim a simplified-v2 defa
 
 ### 9.3 V1–V2: make v2 usable before freezing it
 
-GS2-07.6 should exercise the real queue's admission, base/head movement, required-check changes, expiry,
-failure and rollback under its registered isolated/representative boundary. Proposed additions from the
-v2 appendix include event bursts followed by unrelated work and measurable queue/coalescing limits;
-adopt these in the owning contract before executing them as acceptance requirements.
+**Reuse completed inputs.** GS2-07.1–.8 and GS2-08.1–.9 are accepted. Preserve their event/audit behavior,
+bridge artifact, receiver census and residual-writer dispositions. New writers still need the common
+fence; accepted source controls do not authorize a new installed route.
 
-GS2-07.7 measures narrow reconciliation, missed-event repair, API cost and waiting. Reduce polling only
-from observed benefit. GS2-07.8 qualifies deployment, rotation, outages, backlog recovery and emergency
-disable for any host included in the actual candidate. An optional accelerator can remain disabled only
-through an explicit owning-unit disposition with the supported audit/reconciliation behavior preserved.
+The callable gap identified in the original survey is closed at its declared scope. The
+[owning V2-CALL-01 plan](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/docs/roadmaps/callable-ordinary-v2-execution.md)
+records published 0.1.1, canonical opt-in adoption, native isolated-provider recovery/cleanup and handoff.
+Its `delivery inspect|plan|advance` composition is one ordinary source-delivery operation. Its explicit
+permission ceiling excludes fleet migration, production targets and general activation. Do not rebuild
+this path or substitute its synthetic `OpenV2` observation for the fleet epoch.
 
-GS2-08 delivers the universal bridge and protected epoch ledger, discovers every current writer,
-publishes/adopts exact bridge identities and seals unfenceable clients. Challenge races with the ledger,
-old clients, stale caches, tool upgrades and newly introduced helper paths. No class is exempt just because
-its merge call is native.
+**Next executable window: GS2-09.7.** This remains the owning unit; the rows below decompose its
+implementation and qualification without creating a second set of acceptance IDs.
 
-Before V3, identify the exact installed entry point that connects the qualified adapters into ordinary
-execution. The present CLI observation makes this a concrete completion question. Map missing wiring into
-the owning existing GS2 contract or explicitly amend it; do not silently invent an extra unregistered
-implementation phase or assume a future OR service will supply it. Exercise it through an isolated real
-provider journey, with actor/host absent if the claimed supported baseline requires neither.
+| Slice | Reuse / implementation | Meaningful exit |
+|---|---|---|
+| Recover existing source | Compare local `routine/gs2-09-7-rehearsal` at `82b4772d…` with current protected main; preserve step-execution, Project/native-relation readers and tests. | Reviewable source PR and relevant canonical-model/adapter checks; local diagnostics are labeled separately. |
+| Complete provider capture | Populate every authority required by `GitHubCompleteDiscoveryQualification.expectedAuthorities`: issues, Project items/fields, hierarchy/dependencies, claim/events, review/delivery/release, settings, workflow pins and receivers. | Two complete copy-specific reads with exact identity, revision, raw-byte digest, terminal pagination and stable population. Unknown, partial, contradictory or unsupported observations refuse. |
+| Compose exact migration | Feed accepted .1–.6 contracts from those reads; implement only closed typed effects through current adapters, exact journal CAS/generation, intent before dispatch, readback and recovery. | Fresh-process interruption tests cover every effect phase; unknown outcomes remain pending, known-applied replay has no duplicate dispatch. No arbitrary manifest-supplied REST/script executor. |
+| Qualify representative copies | Join reviewed executable artifacts, scoped isolated subjects, operation-specific authority and independent controls; migrate, interrupt, retry, archive-verify, rollback before open, and migrate again. | Retained actual provider and journal readback, complete target population, request counts, rollback results, cleanup, observed duration/API headroom and limitations. Only then native .7 acceptance. |
 
-Before V2-CALL-01.4 acceptance, Coordination compares its existing production callable recovery evidence
-against the relevant Choreo failure cases: unknown versus absent versus applied outcomes, lost responses,
-stale retry observations, durable intent recovery and native completion. Reuse tests that already establish
-these properties and add only missing coverage through the owning GS2-09.9 contract/amendment route. The
-callable service deliberately runs without Host, actors or PostgreSQL; hosted-writer replay is not proof of
-that separate composition and does not add those dependencies. Preserve the exact prepared/published artifact:
-a required implementation repair takes its own versioned producer/adoption path rather than silently replacing
-frozen bytes. This coverage comparison belongs inside the existing installed qualification window, not a new
-migration stage or a requirement to rebuild the Choreo programme.
+**Then GS2-09.8 and parent closure.** Extend the independent controls already delivered in PR #507.
+Prove that exact-manifest rerun changes nothing and added/omitted/duplicate subjects are detected against
+the actual provider population. The in-memory rollback-prefix test is useful source evidence, not an
+executed provider rollback. Run comprehensive parent closure over the exact accepted child set.
 
-GS2-09 supplies full discovery, immutable transforms/manifests, active-operation disposition, sealed
-history, migration, rollback and omission/idempotency proofs. Rehearsals cover actual receiver families,
-not only an adapter fixture. If a provider capability is unavailable, qualify the accepted fallback or
-disposition the affected class rather than treating unavailable as passed.
+Code must continue to satisfy the canonical Quint protocol and production correspondence. The callable
+and hosted-writer Choreo tests supply reusable cases for absent/applied/unknown, lost response, stale retry
+and durable recovery, but neither is a substitute for migration-provider evidence. The migration path does
+not acquire an actor/Host/PostgreSQL dependency merely because those separate components are qualified.
+
+GS2-09.1–.6 receipts remain immutable contract acceptance. Provider capability gaps are explicit refusals
+or reviewed dispositions in the owning scope; they are never normalized into passed rehearsal evidence.
 
 ### 9.4 V3–V4: stabilize a deliberately bounded cutover
 
@@ -1836,12 +1305,12 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 
 | Part Astra plans | Stage and bounded outcome | Accountable planning owner and entry | Feature subroadmap |
 |---|---|---|---|
-| **Simplified baseline and v2 policy binding** | V0: consume the predecessor handoff; bind routine policy, Governance enforcement, logging gaps and the R5 receiver contract | `.github`, with Coordination, Governance and receiver owners; inspect actual predecessor results and decide the remaining integration | [UTEL-01 telemetry correctness](roadmaps/utel-01-telemetry-correctness.md)'s real merged-PR observation and [UTEL local telemetry store](roadmaps/utel-local-telemetry-store.md) source windows UTEL-02/03A/04A/05A/08A are delivered, including private post-completion process observations and the versioned item-detail query boundary. [UTEL operational completeness](roadmaps/utel-operational-completeness.md) covers prospective automatic repo-owned runtime/CI reconciliation, coherent publication, host/scaffold adoption and future-only operational qualification; unsupported platform-native child capture remains explicit. [UTEL-DASH public telemetry dashboard](roadmaps/utel-telemetry-dashboard.md) is operational: coherent engine source, privacy adapter, safe setup, host-native recurrence, event receipt, terminal-triggered immutable publication, deployed-page readback and state-preserving in-page refresh are complete. Remaining telemetry rollout gaps are automatic ordinary parent/child and CI population selection, `collaboration.spawn_agent` usage coverage, and generated defaults. Reuse the [R0–R5 source plan](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md) and its delivered evidence for the remaining V0 scope |
+| **Simplified baseline and v2 policy binding** | V0: bind adopted routine policy, actual enforcement/receiver wiring and R5 population; keep current merge-writer availability explicit | `.github`, Coordination, Governance and receivers; source qualification can proceed while the existing operation owner restores admitted effect readiness | [R0–R5 source plan](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md), [UTEL correctness](roadmaps/utel-01-telemetry-correctness.md), [local store](roadmaps/utel-local-telemetry-store.md), [operational completeness](roadmaps/utel-operational-completeness.md), [dashboard](roadmaps/utel-telemetry-dashboard.md), [release successor](roadmaps/utel-release-successor.md) and [current audit](reports/2026-09-24-v2-roadmap-code-audit.md). Reuse delivered source; verify the selected published/installed versions and prospective coverage without inferring complete native usage or efficiency |
 | **Event and queue qualification** | V1, GS2-07.6–07.7: qualify the queue and measure narrow reconciliation, coalescing and audit repair | Coordination; preserve accepted native units and resume only unfinished scope | [GS2-07.7 event-benefit subroadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-07-7-event-benefit.md), scoped to 07.7; native acceptance is recorded in [PR #329](https://github.com/FS-GG/FS.GG.Coordination/pull/329) |
-| **Runtime operations qualification** | V1, GS2-07.8: qualify deployment, rollback, rotation, outage recovery and emergency disable for the runtime actually included | Coordination; accepted event/queue prerequisites; decide which runtime is included or explicitly disabled | No subroadmap linked yet |
+| **Runtime operations qualification** | V1 / GS2-07.8: accepted selected no-host operation/audit scope | Coordination; preserve the accepted disposition, qualify only newly included runtime behavior | [GS2-07.8 owning plan](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/docs/roadmaps/gs2-07-8-runtime-operations.md) and its accepted receipt |
 | **Universal bridge and receiver fencing** | V1, GS2-08: protected epoch ledger, complete current-writer coverage, published bridge, receiver adoption and old-client refusal | `.github` bridge owner, with Coordination and receiver owners; GS2-08.1–08.9 are accepted, active installed bypasses are retired and Q4 remains unclaimed | [GS2-08.8 receiver adoption horizon](roadmaps/gs2-08-universal-v1-bridge.md#gs2-088-receiver-adoption--window-a), [receiver acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/417) and [residual-writer acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/419) |
-| **Callable ordinary v2 execution** | V2: exact callable source joins observation, deterministic sealed decision, guarded provider effect and durable recovery; the protected producer is published and canonically adopted opt-in | Coordination; V2-CALL-01.1–.2 are delivered in [PR #421](https://github.com/FS-GG/FS.GG.Coordination/pull/421), `.3a` producer preparation in [PR #422](https://github.com/FS-GG/FS.GG.Coordination/pull/422), `.3b` publication in [PR #430](https://github.com/FS-GG/FS.GG.Coordination/pull/430), and `.3c` receiver adoption in [`.github` PR #3539](https://github.com/FS-GG/.github/pull/3539). `.4` installed isolated-provider/native acceptance and `.5` migration handoff remain pending | [V2-CALL-01 callable ordinary-v2 execution plan](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/callable-ordinary-v2-execution.md). Published and pinned package `FS.GG.Coordination.Cli` 0.1.0 is bound to `sha256:ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf`; the legacy 0.90.0 bridge remains alongside it. Adoption does not claim live provider effects, installed native acceptance, `OpenV2`, Q4 or GS2-09 migration completion |
-| **Migration tooling and representative rehearsal** | V2, GS2-09: discovery, transforms, manifests, migration, retry, rollback and omission proofs on representative receivers | Coordination, with receiver owners; follows the callable execution window and reuses accepted native GS2-05–08 evidence | Subroadmap is the first deliverable of the implementation window; no migration implementation has started |
+| **Callable ordinary v2 execution** | V2 / GS2-09.9: bounded installed source-delivery composition, native isolated recovery and discovery handoff complete | Coordination; preserve exact 0.1.1 artifact, receiver and permission ceiling; no fleet production or migration authority | [Completed V2-CALL-01 plan](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/docs/roadmaps/callable-ordinary-v2-execution.md), [readiness](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/gs2-09-9/callable-readiness.json) and [handoff](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json). Historical 0.1.0 bytes remain unchanged; 0.1.1 is the accepted repair identity |
+| **Migration tooling and representative rehearsal** | V2 / GS2-09: .1–.6 contracts accepted; .7 provider execution/rehearsal and .8 omission/parent closure remain | Coordination with receiver and protected-operation owners; source lanes and effect join are separated in §9.1 | [Exact GS2 sequence](github-substrate-v2-roadmap.md#gs2-09--build-migration-archive-and-rollback-tooling), [current implementation window](#93-v1v2-make-v2-usable-before-freezing-it) and [audit](reports/2026-09-24-v2-roadmap-code-audit.md). Existing local .7 plan/source at `82b4772d…` must be reconciled and published before replacing this draft locator with a durable owner link |
 | **Coherent candidate and new-workspace qualification** | V3, GS2-10: bind published tools, template/provider pins, guidance, clean/upgrade receiver cases and the rehearsed cutover window | `.github` cutover owner, with Coordination, SDD and Templates; completed candidate inputs | No subroadmap linked yet |
 | **Controlled cutover and first ordinary use** | V4–V5, GS2-11–13: freeze and drain, switch while closed, verify rollback, then separately authorize OpenV2 and observe real journeys | `.github` cutover owner with Coordination and receiver owners; qualified candidate and staffed operation window | No subroadmap linked yet; one plan retains the closed-switch and irreversible-open boundaries |
 | **Observation, receiver carryover and v1 retirement** | V6, GS2-14/R5: immediate baseline and 15 distinct completed-work readings, contraction, clean-install/upgrade proof and separately qualified routine efficiency | `.github` migration owner with Coordination and receivers; OpenV2 and the actual receiving populations | No subroadmap linked yet |
@@ -1936,7 +1405,7 @@ default decisions; progress through V0–V6 alone does not select a new product 
 | GS2-06.7 | Consume the adopted reduced obligation set with explicit selection guarantee | Publish/qualify policy and aggregate behavior; do not reinterpret the accepted soundness receipt |
 | GS2-07.6/07.7 | Burst/coalescing, unrelated subjects, base movement, required-context identity and observer isolation | Reconcile already registered contracts before new acceptance cases are asserted |
 | GS2-08.3–08.9 | Include every predecessor-created writer and installed helper route in fencing and old-client tests | Extend the current census and coverage through its owner; disable unsupported writers before freeze |
-| GS2-09 and affected runtime wiring | Demonstrate actual installed callable behavior before candidate qualification | Register the precise missing implementation in an existing owner contract or accepted amendment |
+| GS2-09 and migration runtime wiring | Reuse accepted callable 0.1.1 and .1–.6 contracts; finish complete provider capture and real .7/.8 rehearsal | Keep installed source-delivery permission distinct from migration authority; qualify the exact closed interpreter and representative copy population |
 | GS2-10.1/10.5 | Freeze the profile, enforcing components, tool/guidance identities and receiver classes | Enable-and-qualify or explicitly defer; no proposal frozen as implemented behavior |
 | GS2-12.7/12.8 | Closed routine journey plus complete protocol journey and negative cases | Preserve no ordinary production writing before OpenV2 |
 | GS2-13.3 | Actual enabled ordinary-v2 journey plus required protocol capability coverage | Native/provider evidence from installed tools, not an in-memory fixture |
@@ -2078,7 +1547,7 @@ section 4.3 regardless of whether the originating programme is considered periph
 | [Accepted SVG game engine and Fable workspace programme](2026-09-07-064259-svg-game-engine-template-design-roadmap.md), with [SVG-FOUND-01 foundation](roadmaps/svg-game-engine-foundation.md), [SVG-QUAL-01 installed model qualification](roadmaps/svg-game-engine-installed-model-qualification.md) and [revision rationale](2026-09-07-121207-svg-game-engine-roadmap-revision-proposal.md) | Product-owned ordered feature sequence through complete C01–C20, M0–M11, section 13 and Releases A–D; modeled game/protocol semantics where relevant, published packages and generated-workspace journeys | Preserve SDD/Game/Rendering/Net/Audio/Templates ownership, capability scope and default-player distinction. S.I.R. is strictly read-only for the entire programme. Independent source/qualification work has no V0–V6 completion prerequisite, while protected releases and later defaults keep their own authority and epoch evidence |
 | [Polyglot web architecture](reports/2026-07-27-163509-polyglot-web-product-architecture-and-implementation-design.md) | Provider/contract process and installed consumer qualification | Preserve neutral TypeScript versus selected Fable/game providers; reconcile existing ADR-0071 implementation before creating residual work |
 | [Fable bindings/Glutinum proposals](reports/2026-09-03-101829-fable-bindings-glutinum-quint-analysis.md) and [Xantham evaluation](reports/2026-09-08-105454-xantham-fable-bindings-evaluation.md) | Producer-owned converter/adapter slices, public contract and runtime proof; the Xantham feature is indexed in section 9.8 | Analysis completion is not implementation; no new converter is required for v2 unless a demonstrated generic dependency exists |
-| [FsQuint reusable Quint–F# integration](roadmaps/2026-09-18-065148-fsquint-design-and-roadmap.md) | Proposed public library extraction: one owner for generic ITF/replay/tool integration, an independent F# example, and versioned SDD/Coordination consumption | Reuse completed Choreo evidence; no duplicate generic implementations, new V2 prerequisite, package publication or installed adoption is implied by this design |
+| [FsQuint reusable Quint–F# integration](roadmaps/2026-09-18-065148-fsquint-design-and-roadmap.md) | Implementation moved to [FsQuint](https://github.com/FS-GG/FsQuint/blob/main/docs/roadmaps/fsquint.md); inspected Coordination and SDD consumers document stable 0.1.0 adoption | Reuse the published generic package and consumer-owned models/replay. Do not reopen extraction from historical unchecked design rows or infer installed Host adoption |
 | [S.I.R. Quint handbook](2026-08-27-sir-combat-quint-learning-handbook-design-and-roadmap.md) | S.I.R.-owned learning/publication; executable examples require their actual domain evidence | Learning work can proceed independently; no cross-project index becomes combat authority |
 | [Symbology showcase](reports/2026-07-05-starcraft2-unit-symbology-library-design.md) | Optional rendering/product experiment and owner compatibility check | Deferred selection, no implicit current priority |
 | [Coordination churn redesign](reports/2026-08-14-090508-coordination-churn-redesign-roadmap.md) and [change amplification](coordination/2026-08-22-coordination-change-risk-mitigation-design.md) | Map surviving release, completeness and recovery defects to the current owner | Reuse delivered work and predecessor simplification; do not restart historical stages |
@@ -2095,23 +1564,19 @@ successor link rather than turning historical unchecked items into a new backlog
 
 ## 16. Decisions needed to activate this successor
 
-The recommended decisions are concrete and bounded:
+Routine source delivery and the selected O0–O3 foundation are already adopted. They do not need a new
+programme-wide approval. Resolve the following decisions only at the boundary that consumes them:
 
-1. Accept the predecessor handoff at its actual scope, with R5 proof assigned to the v2 boundaries.
-2. Adopt the process matrix through owning policy/contracts, including independent synchronization and
-   complete-fact routing; preserve the installed lifecycle/default distinction.
-3. Assign Coordination one shared bounded execution component for any later PB/OR implementation.
-4. Include or defer the routine v2 profile before GS2-10; map missing callable wiring and new writer
-   fencing into existing owner contracts before claiming candidate readiness.
-5. Establish the cutover's measured window, abort boundary and operational ownership through GS2-10.
-6. Adopt the 10% bureaucracy ceiling, comprehensive automatic logging and one intervention after fifteen
-   cumulative distinct breaches above 10% or any item above 25%, targeting a return toward 5%. Bind the
-   definitions and counter/reset behavior in section 7.4 to the existing observer and routine policy;
-   preserve the separately named predecessor comparison where its current contract still applies.
-7. Fund E0 only for a measured residual need; choose one experiment and leave optional feature families
-   disabled until their incremental value and applicable guarantees are qualified.
+| Boundary | Remaining decision or evidence | Owner |
+|---|---|---|
+| V0 / GS2-10 | Bind the effective routine profile, retained technical obligations and supported/deferred receiver population. Keep R4/R5 efficiency claims separate from operational acceptance. | `.github` policy, Coordination and actual receivers |
+| GS2-09.7 | Exact representative copy set, executable candidate, missing-provider dispositions, effect authority and recovery/cleanup ownership. | Coordination and protected-operation owner |
+| GS2-10 | Freeze artifact/default identities; finish or defer concurrent candidate changes; accept the measured closed-write window, latest abort point and staffed recovery plan. | Cutover owner with producer/receiver owners |
+| GS2-13 / GS2-14 | Irreversible production open, actual observations, contraction and `OperatingV2` evidence. | Existing protected cutover authority |
+| Release D.5 | After `OperatingV2`, qualify and activate the receiver/workspace lifecycle default using its owning sources. | SDD, Templates and default-policy owner |
+| Optional E0/E1 / F0–F5 / LEARN | Select a measured residual need and bounded next window; authorize only its specific installed/canary boundary. | Owning feature and operation owners |
 
-These decisions belong to programme activation and changed boundaries, not every ordinary PR. This design
-adds no inventory-freshness gate, board census requirement, permanent reporting service or independent
-approval cycle. Its implementation should make the selected process evident to the developer while
-keeping the necessary authority and recovery functions reliable underneath it.
+The 10% bureaucracy ceiling and intervention definitions in section 7.4 remain in force; incomplete
+measurement does not certify compliance. This document introduces no extra admission, board census,
+reporting service or approval cycle. The next implementation starts from §9.3 and the owner-native
+contracts, with independent source lanes available as shown in §9.1.

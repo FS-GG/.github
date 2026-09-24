@@ -22,6 +22,13 @@ prove installed behavior. Reuse existing models, components, accepted units and 
 Research online only where current primary sources help decide a material unknown. Do not quietly
 promote assumptions into requirements or silently remove a requested capability.
 
+Trace a claimed capability through its actual caller, implementation, acceptance artifact and receiver.
+Label unmerged/local work separately from protected source; preserve it before proposing replacement.
+A pure plan or controlled rollback test does not establish a provider executor or executed rollback.
+Draw hard dependencies at the acceptance/effect that consumes them: a later protected operation can block
+native acceptance while independent readers, controlled tests and receiver preparation proceed. Name
+shared touch-sets and the integrator before suggesting concurrency.
+
 The planner may ask about a consequential unresolved product decision while continuing independent
 analysis. Routine implementation choices are made using context and judgment, without creating an
 approval round. Findings outside the selected feature remain links or explicit deferred questions.
