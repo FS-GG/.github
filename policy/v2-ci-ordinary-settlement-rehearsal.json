@@ -99,7 +99,7 @@
     ],
     "installed": true,
     "liveObservation": {
-      "observedAt": "2026-09-24T14:30:01Z",
+      "observedAt": "2026-09-24T19:55:22.514421Z",
       "environmentId": 22669445419,
       "branchPolicyId": 60924371,
       "customBranchPolicy": "main",
@@ -108,8 +108,8 @@
       "customBranchPolicies": true,
       "canAdminsBypass": true,
       "requiredReviewerCount": 0,
-      "secretCount": 0,
-      "disposition": "isolated-hosted-rehearsal-pending-custody"
+      "secretCount": 3,
+      "disposition": "dedicated-custody-enrolled-pending-hosted-matrix"
     }
   },
   "credentialInventory": [
@@ -117,22 +117,22 @@
       "name": "V2_ORDINARY_REHEARSAL_AUTHORIZER_PRIVATE_KEY",
       "purpose": "sign canonical ordinary-v2 settlement intent",
       "generation": "new-v2-dedicated",
-      "provisioned": false,
-      "publicIdentity": "pending-rehearsal-enrollment"
+      "provisioned": true,
+      "publicIdentity": "ordinary-v2-rehearsal-eb605151c5e400f8; spki-sha256:eb605151c5e400f82c0aeebee97f49374c3299b8709e7421d515a5bfc9b5f895"
     },
     {
       "name": "V2_ORDINARY_REHEARSAL_APP_ID",
       "purpose": "identify the repository-scoped ordinary-v2 GitHub App",
       "generation": "new-v2-dedicated",
-      "provisioned": false,
-      "publicIdentity": "pending-rehearsal-enrollment"
+      "provisioned": true,
+      "publicIdentity": "app:5065136; installation:164565492"
     },
     {
       "name": "V2_ORDINARY_REHEARSAL_APP_PRIVATE_KEY",
       "purpose": "mint a short-lived repository-scoped installation token",
       "generation": "new-v2-dedicated",
-      "provisioned": false,
-      "publicIdentity": "pending-rehearsal-enrollment"
+      "provisioned": true,
+      "publicIdentity": "app:5065136; installation:164565492"
     }
   ],
   "forbiddenCredentialReuse": [
