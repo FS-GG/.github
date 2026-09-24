@@ -27,6 +27,8 @@
   "qualification": {
     "phase": "secret-free-predecessor",
     "credentialAccess": false,
+    "producerStatus": "pending-milestone-03",
+    "currentValidatorRole": "caller-supplied-evidence-contract-only",
     "requiredChecks": [
       "coherent-qualification",
       "ordinary-settlement-contract"

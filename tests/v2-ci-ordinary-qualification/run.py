@@ -139,6 +139,9 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
 
     def test_policy_inventory_is_new_unprovisioned_and_keeps_current_gates(self):
         self.assertEqual("source-qualified-not-installed", self.policy["status"])
+        self.assertEqual("pending-milestone-03", self.policy["qualification"]["producerStatus"])
+        self.assertEqual("caller-supplied-evidence-contract-only",
+                         self.policy["qualification"]["currentValidatorRole"])
         inventory = self.policy["credentialInventory"]
         self.assertTrue(inventory)
         self.assertTrue(all(item["generation"] == "new-v2-dedicated" for item in inventory))

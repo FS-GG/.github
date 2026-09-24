@@ -33,7 +33,9 @@ callable-operation keys are outside the class.
   environment, runner, operation class, association population and stale/failed evidence. Record the bounded
   baseline below. Evidence: `policy/v2-ci-ordinary-settlement.json`,
   `tools/v2-ci-ordinary-qualification.py`, `tests/v2-ci-ordinary-qualification/run.py` and
-  `docs/operations/v2-ci-ordinary-credential-review.md`.
+  `docs/operations/v2-ci-ordinary-credential-review.md`. The validator consumes caller-supplied fixture
+  evidence in this milestone; it is a deterministic contract validator, not a claim that the prospective
+  `coherent-qualification` and `ordinary-settlement-contract` contexts already exist.
 - [ ] **02 — Typed settlement-only Coordination command.** In `FS.GG.Coordination`, compose the existing typed
   readers and transport behind one non-interactive command. Add expected-absent shared-shard journal initialization,
   canonical signed intent, a stable original plan/operation/attempt identity across workflow reruns, one CAS
@@ -45,7 +47,9 @@ callable-operation keys are outside the class.
 - [ ] **03 — Trusted two-job workflow.** Add a push-to-main-only workflow whose secret-free predecessor invokes
   milestone 01 and whose dependent credential job invokes only the pinned milestone 02 artifact. Prove the
   actual job dependency and environment/permission boundary, including good, deliberately broken and
-  unavailable-tool preflight cases. Install the synthetic test; do not add request or manual triggers.
+  unavailable-tool preflight cases. Implement and bind the required checks to their real exact identities, or
+  revise the prospective policy names before installation. Install the synthetic test; do not add request or
+  manual triggers.
 - [ ] **04 — Dedicated App, keys and immutable publication.** Through the browser manifest/protected setup path,
   create the dedicated ordinary-v2 App and authorizer identities, accept the public anchor, provision only the
   named `ordinary-v2` environment secrets, publish byte-identical pinned installer artifacts and read back
