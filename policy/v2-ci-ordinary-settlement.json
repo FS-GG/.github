@@ -1,0 +1,92 @@
+{
+  "schema": "fsgg.github.v2-ci-ordinary-settlement-policy/1",
+  "policyId": "v2-ci-i1-ordinary-settlement-v1",
+  "status": "source-qualified-not-installed",
+  "repository": "FS-GG/.github",
+  "operationClass": "ordinary-post-merge-delivery-settlement",
+  "trigger": {
+    "event": "push",
+    "ref": "refs/heads/main",
+    "associationEndpoint": "GET /repos/FS-GG/.github/commits/{sourceSha}/pulls",
+    "associationCount": 1,
+    "requireMerged": true,
+    "requireMergeCommitMatch": true
+  },
+  "workflow": {
+    "path": ".github/workflows/v2-ci-ordinary-settlement.yml",
+    "revision": "sourceSha",
+    "requestEventsForbidden": [
+      "pull_request",
+      "pull_request_target"
+    ],
+    "manualEventsForbidden": [
+      "workflow_dispatch",
+      "repository_dispatch"
+    ]
+  },
+  "qualification": {
+    "phase": "secret-free-predecessor",
+    "credentialAccess": false,
+    "producerStatus": "pending-milestone-03",
+    "currentValidatorRole": "caller-supplied-evidence-contract-only",
+    "requiredChecks": [
+      "coherent-qualification",
+      "ordinary-settlement-contract"
+    ]
+  },
+  "credentialJob": {
+    "environment": "ordinary-v2",
+    "runner": "github-hosted-ephemeral",
+    "requiredReviewers": 0,
+    "protectedBranchesOnly": true,
+    "allowedBranches": [
+      "main"
+    ],
+    "installed": false,
+    "liveObservation": {
+      "observedAt": "2026-09-24T14:30:01Z",
+      "environmentId": 22664505321,
+      "branchPolicyId": 60918716,
+      "customBranchPolicy": "main",
+      "customBranchPolicyCount": 1,
+      "protectedBranches": false,
+      "customBranchPolicies": true,
+      "canAdminsBypass": true,
+      "requiredReviewerCount": 0,
+      "secretCount": 0,
+      "disposition": "inert-shell-not-activation"
+    }
+  },
+  "credentialInventory": [
+    {
+      "name": "V2_ORDINARY_AUTHORIZER_PRIVATE_KEY",
+      "purpose": "sign canonical ordinary-v2 settlement intent",
+      "generation": "new-v2-dedicated",
+      "provisioned": false,
+      "publicIdentity": "pending-milestone-04"
+    },
+    {
+      "name": "V2_ORDINARY_APP_ID",
+      "purpose": "identify the repository-scoped ordinary-v2 GitHub App",
+      "generation": "new-v2-dedicated",
+      "provisioned": false,
+      "publicIdentity": "pending-milestone-04"
+    },
+    {
+      "name": "V2_ORDINARY_APP_PRIVATE_KEY",
+      "purpose": "mint a short-lived repository-scoped installation token",
+      "generation": "new-v2-dedicated",
+      "provisioned": false,
+      "publicIdentity": "pending-milestone-04"
+    }
+  ],
+  "forbiddenCredentialReuse": [
+    "CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY",
+    "V1_ADMISSION_AUTHORIZER_PRIVATE_KEY",
+    "V1_ADMISSION_APP_PRIVATE_KEY"
+  ],
+  "unchangedGates": [
+    "v1-admission-genesis",
+    "OpenV2"
+  ]
+}
