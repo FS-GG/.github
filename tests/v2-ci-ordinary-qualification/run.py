@@ -199,6 +199,19 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         self.policy["status"] = "installed"
         self.assertEqual("qualified", self.qualify()["status"])
 
+    def test_rehearsal_custody_is_disjoint_from_production(self):
+        production = json.loads((ROOT / "policy/v2-ci-ordinary-settlement-anchor.json").read_text())
+        rehearsal = json.loads((ROOT / "policy/v2-ci-ordinary-settlement-rehearsal-anchor.json").read_text())
+        self.assertNotEqual(production["writer"]["appId"], rehearsal["writer"]["appId"])
+        self.assertNotEqual(production["writer"]["installationId"], rehearsal["writer"]["installationId"])
+        self.assertNotEqual(production["authorizer"]["publicKeySpkiSha256"],
+                            rehearsal["authorizer"]["publicKeySpkiSha256"])
+        self.assertEqual("FS-GG/FS.GG.Coordination.Authority.Sandbox", rehearsal["writer"]["repository"])
+        self.assertEqual(1385801070, rehearsal["writer"]["repositoryId"])
+        self.assertEqual([{"actorId": rehearsal["writer"]["appId"], "actorType": "Integration", "bypassMode": "always"}],
+                         rehearsal["rulesets"]["writer"]["bypassActors"])
+        self.assertEqual([], rehearsal["rulesets"]["integrity"]["bypassActors"])
+
 
 if __name__ == "__main__":
     unittest.main()

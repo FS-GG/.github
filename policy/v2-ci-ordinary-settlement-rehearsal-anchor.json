@@ -1,0 +1,102 @@
+{
+  "schema": "fsgg.github.v2-ci-ordinary-settlement-anchor/1",
+  "policyId": "v2-ci-i1-ordinary-settlement-rehearsal-v1",
+  "operationClass": "ordinary-post-merge-delivery-settlement",
+  "authorizer": {
+    "keyId": "ordinary-v2-rehearsal-eb605151c5e400f8",
+    "algorithm": "RSA-PSS-SHA256",
+    "publicKeySpkiSha256": "eb605151c5e400f82c0aeebee97f49374c3299b8709e7421d515a5bfc9b5f895"
+  },
+  "writer": {
+    "appId": 5065136,
+    "installationId": 164565492,
+    "repository": "FS-GG/FS.GG.Coordination.Authority.Sandbox",
+    "repositoryId": 1385801070,
+    "permissions": {
+      "contents": "write",
+      "metadata": "read"
+    }
+  },
+  "rulesets": {
+    "writer": {
+      "id": 23947019,
+      "name": "v2-journal-writer-rehearsal",
+      "enforcement": "active",
+      "updatedAt": "2026-09-24T19:53:31.960000Z",
+      "conditions": {
+        "ref_name": {
+          "exclude": [],
+          "include": [
+            "refs/heads/fsgg/v2/journal/**/*"
+          ]
+        }
+      },
+      "rules": [
+        {
+          "type": "creation"
+        },
+        {
+          "type": "update"
+        }
+      ],
+      "bypassActors": [
+        {
+          "actorId": 5065136,
+          "actorType": "Integration",
+          "bypassMode": "always"
+        }
+      ]
+    },
+    "integrity": {
+      "id": 23947025,
+      "name": "v2-journal-integrity-rehearsal",
+      "enforcement": "active",
+      "updatedAt": "2026-09-24T15:28:27.922000Z",
+      "conditions": {
+        "ref_name": {
+          "exclude": [],
+          "include": [
+            "refs/heads/fsgg/v2/journal/**/*"
+          ]
+        }
+      },
+      "rules": [
+        {
+          "type": "deletion"
+        },
+        {
+          "type": "non_fast_forward"
+        }
+      ],
+      "bypassActors": []
+    }
+  },
+  "effectiveRules": [
+    {
+      "type": "creation",
+      "rulesetId": 23947019,
+      "rulesetSourceType": "Repository",
+      "rulesetSource": "FS-GG/FS.GG.Coordination.Authority.Sandbox"
+    },
+    {
+      "type": "update",
+      "rulesetId": 23947019,
+      "rulesetSourceType": "Repository",
+      "rulesetSource": "FS-GG/FS.GG.Coordination.Authority.Sandbox"
+    },
+    {
+      "type": "deletion",
+      "rulesetId": 23947025,
+      "rulesetSourceType": "Repository",
+      "rulesetSource": "FS-GG/FS.GG.Coordination.Authority.Sandbox"
+    },
+    {
+      "type": "non_fast_forward",
+      "rulesetId": 23947025,
+      "rulesetSourceType": "Repository",
+      "rulesetSource": "FS-GG/FS.GG.Coordination.Authority.Sandbox"
+    }
+  ],
+  "acceptedAt": "2026-09-24T19:55:07.755684Z",
+  "sourceCommit": "46b3053f07e8b930b6f2d04d2df665af5b8e2adb"
+}
