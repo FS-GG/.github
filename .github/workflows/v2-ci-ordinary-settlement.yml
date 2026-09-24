@@ -8,7 +8,6 @@ permissions:
   contents: read
   checks: read
   pull-requests: read
-  actions: read
 
 concurrency:
   group: v2-ci-ordinary-settlement-${{ github.sha }}
@@ -61,7 +60,6 @@ jobs:
       contents: read
       checks: read
       pull-requests: read
-      actions: read
     steps:
       - name: Check out exact protected authority source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

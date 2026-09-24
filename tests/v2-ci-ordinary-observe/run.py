@@ -102,6 +102,8 @@ class NativeObservationTests(unittest.TestCase):
         self.assertIn("needs: [preflight]", workflow)
         self.assertIn("if: needs.preflight.outputs.activation == 'true'", workflow)
         self.assertIn("environment: ordinary-v2", workflow)
+        self.assertIn("  checks: read\n  pull-requests: read", workflow)
+        self.assertNotIn("  actions: read", workflow)
         self.assertIn("python3 tools/v2-ci-ordinary-observe.py verify", workflow)
         self.assertIn("exit 3", workflow)
 
