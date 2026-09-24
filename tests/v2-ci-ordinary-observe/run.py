@@ -29,9 +29,9 @@ class NativeObservationTests(unittest.TestCase):
             "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "1",
         }
         self.pull = {
-            "number": 3662, "state": "closed", "merged_at": "2026-09-24T13:09:45Z",
+            "number": 3662, "node_id": "PR_kwDOOrdinary3662", "state": "closed", "merged_at": "2026-09-24T13:09:45Z",
             "merge_commit_sha": SOURCE, "head": {"sha": HEAD},
-            "base": {"ref": "main", "repo": {"full_name": "FS-GG/.github"}},
+            "base": {"ref": "main", "sha": "af5a748d075d6578300822c8b64251c7c85b3f91", "repo": {"full_name": "FS-GG/.github"}},
         }
         self.checks = {
             "total_count": 2,
@@ -64,6 +64,7 @@ class NativeObservationTests(unittest.TestCase):
         receipt = self.run_observation()
         self.assertEqual(SOURCE, receipt["sourceSha"])
         self.assertEqual(HEAD, receipt["qualificationSha"])
+        self.assertEqual("PR_kwDOOrdinary3662", receipt["pullRequestNodeId"])
         self.assertEqual(123, receipt["runId"])
         self.assertFalse(receipt["activation"])
 
@@ -93,6 +94,12 @@ class NativeObservationTests(unittest.TestCase):
         self.checks["total_count"] = 3
         with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "incomplete native check-run"):
             self.run_observation()
+
+    def test_unavailable_native_api_refuses_without_treating_403_as_absence(self):
+        unavailable = subprocess.CompletedProcess(["gh", "api"], 1, "", "HTTP 403")
+        with patch.object(MODULE.subprocess, "run", return_value=unavailable):
+            with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "native GitHub evidence unavailable"):
+                MODULE.api("repos/FS-GG/.github/pulls/3662")
 
     def test_workflow_has_no_manual_or_pr_trigger_and_settlement_needs_receipt(self):
         workflow = (ROOT / ".github/workflows/v2-ci-ordinary-settlement.yml").read_text()

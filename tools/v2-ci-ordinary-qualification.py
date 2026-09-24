@@ -80,6 +80,10 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
     head_sha = (pull.get("head") or {}).get("sha")
     if not isinstance(head_sha, str) or not SHA.fullmatch(head_sha):
         raise Refusal("associated pull request head SHA is invalid")
+    node_id = pull.get("node_id")
+    base_sha = (pull.get("base") or {}).get("sha")
+    if not isinstance(node_id, str) or not node_id or not isinstance(base_sha, str) or not SHA.fullmatch(base_sha):
+        raise Refusal("associated pull request identity is incomplete")
 
     require_equal(evidence.get("schema"), "fsgg.github.v2-ci-qualification-evidence/1",
                   "unsupported qualification evidence schema")
@@ -117,6 +121,8 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
         "policySha256": digest,
         "sourceSha": source,
         "pullRequest": number,
+        "pullRequestNodeId": node_id,
+        "pullRequestBaseSha": base_sha,
         "mergeCommitSha": source,
         "qualificationSha": head_sha,
         "requiredChecks": sorted(checks, key=lambda check: check["name"]),

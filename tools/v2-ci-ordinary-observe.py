@@ -69,11 +69,13 @@ def observe(environ: dict[str, str]) -> dict:
     if not isinstance(number, int) or isinstance(number, bool) or number < 1:
         raise QUALIFICATION.Refusal("invalid associated PR number")
     current_pull = api(f"repos/{repository}/pulls/{number}")
-    for key in ("number", "merged_at", "merge_commit_sha"):
+    for key in ("number", "node_id", "merged_at", "merge_commit_sha"):
         if pull.get(key) != current_pull.get(key):
             raise QUALIFICATION.Refusal("associated PR changed between native reads")
     if pull.get("head", {}).get("sha") != current_pull.get("head", {}).get("sha"):
         raise QUALIFICATION.Refusal("associated PR head changed between native reads")
+    if pull.get("base", {}).get("sha") != current_pull.get("base", {}).get("sha"):
+        raise QUALIFICATION.Refusal("associated PR base changed between native reads")
     head = current_pull["head"]["sha"]
     if not QUALIFICATION.SHA.fullmatch(head):
         raise QUALIFICATION.Refusal("invalid associated PR head")

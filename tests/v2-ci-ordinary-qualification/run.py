@@ -41,11 +41,12 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         }
         self.associations = [{
             "number": 3662,
+            "node_id": "PR_kwDOOrdinary3662",
             "state": "closed",
             "merged_at": "2026-09-24T13:09:45Z",
             "merge_commit_sha": SOURCE,
             "head": {"sha": HEAD},
-            "base": {"ref": "main", "repo": {"full_name": "FS-GG/.github"}},
+            "base": {"ref": "main", "sha": "af5a748d075d6578300822c8b64251c7c85b3f91", "repo": {"full_name": "FS-GG/.github"}},
         }]
         self.evidence = {
             "schema": "fsgg.github.v2-ci-qualification-evidence/1",
