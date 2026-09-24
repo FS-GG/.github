@@ -34,6 +34,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-09-24** — GS2-10.6 REGISTRY RECONCILE (owners FS.GG.SDD and `.github`; SDD#987, .github#2965/#299/#1200): added `fs-gg-sdd-typed-correspond` and `-typed-reconcile` from SDD's current schema-v2 manifest, then reconciled five stale body digests (`-typed-author`, `-typed-migrate`, `work-roadmap`, `work-board`, `publishing-and-deployment`) with `fsgg-skill-registry-check --write`. No schema or materialization predicate changed; registry = manifest = bytes at the recorded producer heads.
+
 - **2026-09-15** — SVG-RELEASE-D ACTIVATION (`publishing-and-deployment`; owner `.github`; .github#3488, Templates#493): reconciled the generated operator publishing inventory after Templates 0.14.0 and wizard 0.11.2 passed both-feed readback and installed public qualification. Registry = manifest = bytes; this changes no skill schema, predicate, or delivery package.
 
 - **2026-09-14** — FABLE HTTP GUIDANCE (`fable-http-codecs`; owner Templates; producer PR #484): reconciled the Templates owner manifest's replacement for `fable-remoting`, preserving its Fable-game selection predicate and exact owner body digest. Public Templates adoption remains Release D; retained modified guidance must be preserved by the bounded upgrade.
