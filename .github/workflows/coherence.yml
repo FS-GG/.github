@@ -93,6 +93,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: Qualify the ordinary-v2 post-merge policy boundary
         run: bash tests/v2-ci-ordinary-qualification/run.sh
+      - name: Qualify the native observer and workflow boundary
+        run: python3 tests/v2-ci-ordinary-observe/run.py
 
   # Engine-build siting gate (.github#2653). No harness a WORKER runs may build the coordination
   # engine into the worker's own checkout: `scripts/fsgg-coord`'s tier 2a prefers such an artifact
