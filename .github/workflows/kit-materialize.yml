@@ -81,13 +81,14 @@
 # THAT package version, judge against what that version ships:
 #
 #     restore the receiver's project  ->  project.assets.json names the resolved FS.GG.Kit version
-#     that version                    ->  the immutable hub tag `kit/v<version>` (release-kit.yml)
-#     that tag                        ->  peeled to a 40-hex COMMIT, and the rule is checked out THERE
+#     that version                    ->  `kit/v<version>` for legacy, or the successor coherent release
+#     successor release               ->  manifest and restored nuspec bind the tag to one source commit
+#     that commit                    ->  the rule is checked out THERE, by its 40-hex SHA
 #
-# `release-kit.yml` refuses to publish a version that has no matching tag on the published commit, so
-# "the pin names a real, immutable hub commit" is an invariant that gate keeps rather than a hope this
-# one holds — forward. The tag is still MUTABLE and two already-published versions (0.1.0, 0.4.0)
-# have none; #1784 is the coherence check and the tag protection that close that.
+# Legacy `release-kit.yml` refuses to publish without its matching Kit tag. The successor publisher
+# instead creates only a coherent-set tag under its protected journal. Its package nuspec and public
+# content-addressed manifest bind that tag to the exact source commit; a mismatch refuses before the
+# rule checkout. This preserves the pin's immutable source identity across both release protocols.
 #
 # WHAT IS STILL NOT PINNED, SAID PLAINLY (#1783). THE RULE is pinned; THIS FILE is not. Receivers
 # call it as `kit-materialize.yml@main`, so the probe below, the `x.y.z` grammar, the tag scheme and
@@ -274,7 +275,7 @@ jobs:
     # EXACTLY TWO STEPS WRITE IT: `probe` (its own refusals, and the abstention) and `report` (the
     # pinned rule's own exit code). `report` wins when it ran, because it is the later and better
     # answer. Every OTHER way this job can end — a failed restore, a multi-line step output, an
-    # unresolvable `kit/v<version>` tag, a runner that died — writes NOTHING, so this evaluates to
+    # unresolvable release tag, a runner that died — writes NOTHING, so this evaluates to
     # the EMPTY STRING. That is deliberate and it is the #266 default: the consumer reds on empty,
     # so a job that reached no verdict can never be read as one that reached `mechanical`. A new
     # failure path added below inherits that safety WITHOUT being listed here.
@@ -421,11 +422,13 @@ jobs:
             -getProperty:FsggKitSkillRoots,FsggKitRetiredSkillRoots,FsggKitViewSkillRoots,FsggKitMaterializeBuildConfig \
             > "$RUNNER_TEMP/kit-props.json"
 
-      # THE PINNED REF (.github#1772). `kit/v<version>` is the tag release-kit.yml releases from and
-      # refuses to publish without, so a restored version names exactly one immutable hub commit. It
-      # is PEELED here — an annotated tag's own object id is not a commit and `actions/checkout` would
-      # be resolving a name rather than a commit — and the resolved 40-hex sha is what the checkout
-      # below is given. Nothing about this reads `main`.
+      # THE PINNED REF (.github#1772). Releases before 0.91.0 use `kit/v<version>`; the protected
+      # release-successor/1 publisher starts at 0.91.0 and uses only `coherent-set/v<version>`.
+      # Select the scheme from that immutable publication boundary, never from tag availability: a
+      # stray Kit tag must not bypass successor qualification. For a successor, bind the coherent tag
+      # to the published manifest AND the restored Kit nuspec's repository commit before checking
+      # out its rule. A moved coherent-set tag cannot silently select another rule. Neither path reads
+      # the hub's moving `main`, and no receiver creates a missing release tag.
       #
       # The version is attacker-adjacent (a fork's pull request chooses what it pins), so it is
       # validated to a bare `x.y.z` BEFORE it is ever composed into a ref. Everything that can go
@@ -435,6 +438,7 @@ jobs:
         id: rule-ref
         env:
           KIT_VERSION: ${{ steps.inputs.outputs.kit-version }}
+          KIT_DIR: ${{ steps.inputs.outputs.kit-dir }}
         run: |
           set -uo pipefail
           refuse() {
@@ -451,16 +455,68 @@ jobs:
             '') refuse "the restore named no FS.GG.Kit version, so there is no pinned rule to fetch." ;;
             *[!0-9.]*|.*|*.|*..*) refuse "the restored FS.GG.Kit version '$KIT_VERSION' is not a bare x.y.z, so it cannot name a release ref. Refusing rather than resolving a ref a pull request chose." ;;
           esac
-          tag="kit/v$KIT_VERSION"
+          [[ "$KIT_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] \
+            || refuse "the restored FS.GG.Kit version '$KIT_VERSION' is not a canonical x.y.z release version."
           url="https://github.com/FS-GG/.github.git"
+          if (( BASH_REMATCH[1] > 0 || BASH_REMATCH[2] >= 91 )); then
+            tag="coherent-set/v$KIT_VERSION"
+          else
+            tag="kit/v$KIT_VERSION"
+          fi
           refs="$(git ls-remote "$url" "refs/tags/$tag" "refs/tags/$tag^{}")" \
             || refuse "could not list \`$tag\` on $url."
           peeled="$(printf '%s\n' "$refs" | awk -v t="refs/tags/$tag^{}" '$2==t {print $1; exit}')"
           plain="$(printf  '%s\n' "$refs" | awk -v t="refs/tags/$tag"     '$2==t {print $1; exit}')"
           sha="${peeled:-$plain}"
+          [ -n "$sha" ] || refuse "FS-GG/.github has no \`$tag\` release tag for restored FS.GG.Kit $KIT_VERSION; refusing to select a moving rule."
+          if [ "$tag" = "coherent-set/v$KIT_VERSION" ]; then
+            manifest="$RUNNER_TEMP/kit-release-manifest.json"
+            curl --fail --silent --show-error --location \
+              "https://github.com/FS-GG/.github/releases/download/$tag/release-manifest.json" \
+              --output "$manifest" || refuse "the successor release $tag has no readable public manifest."
+            python3 - "$manifest" "$KIT_DIR" "$KIT_VERSION" "$sha" <<'PY' \
+              || refuse "the successor release $tag, its Kit member, restored nuspec and tagged source disagree."
+          import hashlib, json, pathlib, sys, xml.etree.ElementTree as ET
+          def require(condition, reason):
+              if not condition:
+                  raise SystemExit(reason)
+          manifest_path, kit_dir, version, sha = sys.argv[1:]
+          manifest = json.loads(pathlib.Path(manifest_path).read_text(encoding="utf-8"))
+          descriptor = manifest["descriptor"]
+          canonical = json.dumps(descriptor, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+          content_id = "sha256:" + hashlib.sha256(canonical).hexdigest()
+          require(manifest["schema"] == "fsgg.release-saga/1", "release manifest schema differs")
+          require(descriptor["policyVersion"] == "release-successor/1", "release policy differs")
+          require(descriptor["channel"] == "stable", "release channel is not stable")
+          require(descriptor["version"] == version, "release version differs from restored Kit")
+          require(descriptor["sourceSha"] == sha, "release source differs from tag")
+          require(manifest["contentId"] == content_id, "release content ID differs from descriptor")
+          receipt = manifest["state"]["channelPromotion"]["receipt"]
+          require(receipt["version"] == version and receipt["sourceSha"] == sha,
+                  "promoted receipt differs from release")
+          require(receipt["contentId"] == content_id, "promoted receipt content ID differs")
+          members = [p for p in descriptor["packages"] if p.get("id") == "FS.GG.Kit"]
+          require(len(members) == 1 and members[0]["version"] == version,
+                  "release has no unique matching Kit member")
+          require(members[0]["artifact"]["path"] == f"FS.GG.Kit.{version}.nupkg",
+                  "release Kit artifact name differs")
+          nuspecs = list(pathlib.Path(kit_dir).glob("*.nuspec"))
+          require(len(nuspecs) == 1, "restored Kit has no unique nuspec")
+          root = ET.parse(nuspecs[0]).getroot()
+          metadata = root.find("{*}metadata")
+          require(metadata is not None, "restored Kit nuspec has no metadata")
+          require(metadata.findtext("{*}id") == "FS.GG.Kit", "restored package is not FS.GG.Kit")
+          require(metadata.findtext("{*}version") == version, "restored Kit version differs")
+          repository = metadata.find("{*}repository")
+          require(repository is not None, "restored Kit has no repository identity")
+          require(repository.get("url") == "https://github.com/FS-GG/.github",
+                  "restored Kit repository differs")
+          require(repository.get("commit") == sha, "restored Kit source differs from tag")
+          PY
+          fi
           case "$sha" in
             [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) : ;;
-            *) refuse "FS-GG/.github has no tag \`$tag\`, so FS.GG.Kit $KIT_VERSION names no immutable hub commit. Remedy: have a release owner create and publish that tag, then re-run. (release-kit.yml refuses to publish untagged, so only versions released before that gate can be missing one.)" ;;
+            *) refuse "the release tag \`$tag\` does not resolve to a 40-hex commit; refusing to select a rule." ;;
           esac
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "Rule pinned to FS-GG/.github@$sha ($tag), chosen by this receiver's own pin."
@@ -531,7 +587,7 @@ jobs:
             #
             # BUT EXIT 2 IS ALSO WHAT `argparse` EXITS ON A BAD COMMAND LINE, and the rule is pinned
             # while THIS FILE tracks the hub's `main` — so the day someone adds a flag here, every
-            # receiver on an older `kit/v*` runs a rule that rejects the argv and exits 2. Mapping
+            # receiver on an older release runs a rule that rejects the argv and exits 2. Mapping
             # that to "abstains" would report a green non-verdict for a rule that never ran: #266
             # exactly. An abstention says so in words; a usage error does not. Demand the word.
             2) case "$out" in
@@ -630,7 +686,7 @@ jobs:
           #   1  not mechanical        FAILURE  read it in full.
           #   3  REFUSED               FAILURE  no verdict was reached. Never a pass (#266).
           #   ''/other                 FAILURE  `bump-shape` ended without publishing a verdict at
-          #                                     all — a failed restore, an unresolvable kit/v tag, a
+          #                                     all — a failed restore, an unresolvable release tag, a
           #                                     dead runner, or a path added later that writes none.
           #                                     "I could not evaluate this" is not "it passed" (#266),
           #                                     and this arm is what makes that the DEFAULT.
@@ -677,7 +733,7 @@ jobs:
             *) { echo "### kit-bump-mechanical: REFUSED — kit-bump-shape published no verdict (this is not a pass)"; echo
                  echo "The \`kit-bump-shape\` job ended without publishing a verdict code — it received"
                  printf '%s\n' "\`${VERDICT:-<empty>}\`. That is a job that failed before it could grade"
-                 echo "anything (a failed restore, an unresolvable \`kit/v<version>\` tag, a runner that"
+                 echo "anything (a failed restore, an unresolvable release tag, a runner that"
                  echo "died), or a new failure path in it that writes no verdict. Read that job's log."
                  echo; echo "Reporting this as a pass would be \"I could not evaluate it\" spelled as \"I"
                  echo "evaluated it and it passed\", which is what #266 forbids. So it is RED."
