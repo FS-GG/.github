@@ -59,7 +59,7 @@ class NativeObservationTests(unittest.TestCase):
         check["details_url"] = (
             f"https://github.com/FS-GG/.github/actions/runs/{1000 + check['id']}/job/{check['id']}")
 
-    def run_observation(self):
+    def run_observation(self, rehearsal=False):
         def fake_run(args, **_kwargs):
             if args[:2] == ["git", "rev-parse"]:
                 return subprocess.CompletedProcess(args, 0, SOURCE + "\n", "")
@@ -98,7 +98,7 @@ class NativeObservationTests(unittest.TestCase):
                 raise AssertionError(path)
             return subprocess.CompletedProcess(args, 0, json.dumps(body), "")
         with patch.object(MODULE.subprocess, "run", side_effect=fake_run):
-            return MODULE.observe(self.env)
+            return MODULE.observe(self.env, rehearsal=rehearsal)
 
     def test_native_success_is_run_and_pr_head_bound_but_inactive(self):
         receipt = self.run_observation()
@@ -113,7 +113,7 @@ class NativeObservationTests(unittest.TestCase):
 
     def test_no_request_event_or_stale_workflow_revision(self):
         self.env["GITHUB_EVENT_NAME"] = "pull_request"
-        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "protected-main push"):
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "pinned protected-main event"):
             self.run_observation()
         self.env["GITHUB_EVENT_NAME"] = "push"
         self.env["EXPECTED_WORKFLOW_SHA"] = "a" * 40
@@ -184,6 +184,18 @@ class NativeObservationTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "current protected authority changed"):
             self.run_observation()
 
+    def test_rehearsal_uses_distinct_dispatch_policy_and_environment(self):
+        self.env["GITHUB_EVENT_NAME"] = "workflow_dispatch"
+        self.env["GITHUB_WORKFLOW_REF"] = (
+            "FS-GG/.github/.github/workflows/v2-ci-ordinary-rehearsal.yml@refs/heads/main")
+        with patch.object(MODULE, "current_authority", return_value=None):
+            receipt = self.run_observation(rehearsal=True)
+        self.assertEqual("v2-ci-i1-ordinary-settlement-rehearsal-v1", receipt["policyId"])
+        self.assertEqual("ordinary-v2-rehearsal", receipt["environment"])
+        self.assertTrue(receipt["activation"])
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "pinned protected-main event"):
+            self.run_observation()
+
     def test_unavailable_native_api_refuses_without_treating_403_as_absence(self):
         unavailable = subprocess.CompletedProcess(["gh", "api"], 1, "", "HTTP 403")
         with patch.object(MODULE.subprocess, "run", return_value=unavailable):
@@ -201,7 +213,32 @@ class NativeObservationTests(unittest.TestCase):
         self.assertIn("  checks: read\n  pull-requests: read", workflow)
         self.assertIn("  actions: read", workflow)
         self.assertIn("python3 tools/v2-ci-ordinary-observe.py verify", workflow)
-        self.assertIn("exit 3", workflow)
+        self.assertIn("ordinary-settlement execute", workflow)
+        self.assertIn("V2_ORDINARY_APP_PRIVATE_KEY: ${{ secrets.V2_ORDINARY_APP_PRIVATE_KEY }}", workflow)
+        self.assertIn("PACKAGE_VERSION: 0.1.2", workflow)
+        self.assertIn("PACKAGE_SHA256: 627d9f54d038d47ef59635f92bd4fd4af2da7bfc971a938b6de1292503b0307e", workflow)
+        self.assertNotIn("__SERVED_SHA256__", workflow)
+        self.assertIn('test "$(sha256sum "$package" | cut -d \' \' -f 1)" = "$PACKAGE_SHA256"', workflow)
+        self.assertNotIn("secrets.", workflow.split("  preflight:", 1)[1].split("  settle:", 1)[0])
+
+    def test_rehearsal_workflow_is_manual_main_fenced_and_uses_distinct_custody(self):
+        workflow = (ROOT / ".github/workflows/v2-ci-ordinary-rehearsal.yml").read_text()
+        self.assertIn("  workflow_dispatch:", workflow)
+        self.assertNotIn("  push:", workflow)
+        self.assertIn("needs: [preflight]", workflow)
+        self.assertIn("if: needs.preflight.outputs.activation == 'true'", workflow)
+        self.assertIn("environment: ordinary-v2-rehearsal", workflow)
+        self.assertIn("produce-rehearsal", workflow)
+        self.assertIn("verify-rehearsal", workflow)
+        self.assertIn("ordinary-settlement rehearse", workflow)
+        self.assertIn("V2_ORDINARY_REHEARSAL_APP_PRIVATE_KEY: ${{ secrets.V2_ORDINARY_REHEARSAL_APP_PRIVATE_KEY }}", workflow)
+        self.assertNotIn("V2_ORDINARY_APP_PRIVATE_KEY: ${{ secrets.V2_ORDINARY_APP_PRIVATE_KEY }}", workflow)
+        self.assertNotIn("secrets.", workflow.split("  preflight:", 1)[1].split("  rehearse:", 1)[0])
+        production = (ROOT / ".github/workflows/v2-ci-ordinary-settlement.yml").read_text()
+        for key in ("PACKAGE_VERSION", "PACKAGE_SHA256"):
+            pattern = rf"^      {key}: (.+)$"
+            self.assertEqual(re.search(pattern, production, re.MULTILINE).group(1),
+                             re.search(pattern, workflow, re.MULTILINE).group(1))
 
 
 if __name__ == "__main__":

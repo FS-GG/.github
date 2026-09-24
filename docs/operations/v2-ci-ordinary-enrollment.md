@@ -3,6 +3,10 @@
 This packet prepares the one-time enrollment for V2-CI-I1. The ordinary post-merge workflow remains
 inactive until the pinned Coordination installer, public anchor, dedicated keys, and isolated hosted
 qualification all pass. Enrollment does not authorize `OpenV2` or change the current v1 admission gate.
+The [Coordination CLI 0.1.2 release](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.2)
+is published. Its reviewed package payload is `sha256:5633d9be2263e77437619a75a2411e4e82e48d763124df472b8e1b7c9e1dfd68`;
+the signed archive served by nuget.org is pinned in both workflows as
+`sha256:627d9f54d038d47ef59635f92bd4fd4af2da7bfc971a938b6de1292503b0307e`.
 
 ## Exact App registration
 
@@ -40,6 +44,12 @@ omits bypass actors for a caller without ruleset write access. The unattended Ap
 write; it compares the accepted update instant, all visible ruleset fields and effective branch rules on
 every operation, and compares actors too if GitHub returns them. A missing update instant or any drift
 refuses. The App does not receive Administration merely to inspect the hidden array.
+This is an explicit GitHub-provider drift-detection assumption: the visible `updated_at` value must
+change when the hidden bypass actor set changes. The low-privilege API response alone cannot prove the
+actor set on each run. Independently read back the complete actors with an administrator at enrollment,
+then wait at least one minute after the last ruleset edit before accepting the public anchor so a
+same-second edit cannot share the accepted timestamp. If GitHub changes this API contract, disable
+activation until a separate ruleset attestor can supply complete unattended evidence.
 
 ## Dedicated private material and public anchor
 
@@ -164,6 +174,11 @@ Its active journal writer ruleset is `23947019` (creation/update, zero bypass un
 integrity ruleset is `23947025` (deletion/non-fast-forward, zero bypass). The `.github`
 `ordinary-v2-rehearsal` environment, ID `22669445419`, has custom `main` branch policy `60924371`,
 zero required reviewers and zero secrets. These are inert setup shells, not successful operations.
+The sandbox synthetic epoch lives on the separate
+`refs/heads/ordinary-v2-rehearsal-epoch` ref, currently commit
+`4f02add98e091cd268979468f9c15ffe59435d43`. Its `head.json` and `event.json` bind
+`fleet-cutover:fs-gg-v2-rehearsal`, generation 1, phase `OpenV2` and the event digest. It is
+outside the journal writer ruleset and cannot satisfy the production epoch fence.
 
 Rehearsal must use a **second** dedicated App, authorizer key and environment secret set. The
 [preconfigured rehearsal registration form](https://github.com/organizations/FS-GG/settings/apps/new?name=FS-GG+Ordinary+V2+Rehearsal&description=Isolated+ordinary-v2+settlement+qualification+writer&url=https%3A%2F%2Fgithub.com%2FFS-GG%2FFS.GG.Coordination.Authority.Sandbox&public=false&webhook_active=false&contents=write)

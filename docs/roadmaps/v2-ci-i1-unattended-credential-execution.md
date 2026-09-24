@@ -7,7 +7,7 @@ description: "Six bounded milestones for a trusted post-merge ordinary-v2 settle
 
 # V2-CI-I1 — unattended credential execution
 
-Status: **01 source merged; 02 source in review; 03 secret-free predecessor prepared; installed credential execution pending**.
+Status: **01–02 source merged; 03 secret-free predecessor observed on protected main; 04 installer published; dedicated custody and installed execution pending**.
 
 This is the executable subroadmap for the [V2-CI-I1 design](../coordination/2026-09-24-v2-unattended-ci-credential-interlude.md),
 [ADR-0088](../adr/0088-ci-owned-unattended-credential-execution.md) and the
@@ -35,7 +35,7 @@ callable-operation keys are outside the class.
   `tools/v2-ci-ordinary-qualification.py`, `tests/v2-ci-ordinary-qualification/run.py` and
   `docs/operations/v2-ci-ordinary-credential-review.md`. Milestone 03 replaces the initial fixture-only
   evidence producer and provisional check names with native API reads and observed check identities.
-- [ ] **02 — Typed settlement-only Coordination command.** In `FS.GG.Coordination`, compose the existing typed
+- [x] **02 — Typed settlement-only Coordination command.** In `FS.GG.Coordination`, compose the existing typed
   readers and transport behind one non-interactive command. Add expected-absent shared-shard journal initialization,
   canonical signed intent, a stable original plan/operation/attempt identity across workflow reruns, one CAS
   attempt, independent readback and same-attempt reconciliation for unknown replies. Refuse altered intent,
@@ -43,6 +43,13 @@ callable-operation keys are outside the class.
   currently assumes `refs/heads/fsgg/v2/journal/operation/{first2digest}` exists before it stores
   `ordinary/{digest}.json`; this milestone reuses `LedgerInitializationAdapter`'s expected-absent/ref
   reconciliation patterns and preserves other shard entries while closing that first-use gap.
+  [Coordination #515](https://github.com/FS-GG/FS.GG.Coordination/pull/515) merged source
+  `a6c1155591836582e28a0651def31cb6afeb8859` as protected commit
+  `57f1328345fd58915da3f398e5c442dbd40b891a`. Its exact-head hosted gates passed after
+  one targeted rerun of an Apalache startup timeout. The zero-argument production command refuses
+  missing receipt or custody; a separate `rehearse` command pins sandbox policy, keys, rulesets and
+  synthetic epoch. Both commands keep incomplete outcomes nonzero, and a later epoch cannot mint a
+  second operation identity for the same source.
 - [ ] **03 — Trusted two-job workflow.** Add a push-to-main-only workflow whose secret-free predecessor invokes
   milestone 01 and whose dependent credential job invokes only the pinned milestone 02 artifact. Prove the
   actual job dependency and environment/permission boundary, including good, deliberately broken and
@@ -66,11 +73,36 @@ callable-operation keys are outside the class.
   equality of PR-head and merged Git trees, native workflow/run/job/attempt identity for each check, and
   current-main policy/workflow bytes plus installed-anchor bytes before revalidating a receipt. A changed
   activation policy thus revokes an older queued run or rerun. These are source-level fences;
-  the credential job stays inactive until its installed provider and hosted matrix qualify.
+  the credential job stays inactive until its installed provider and hosted matrix qualify. The first
+  hardened [run 36022292819](https://github.com/FS-GG/.github/actions/runs/36022292819)
+  refused a duplicate successful coherence check while the credential job remained skipped. The
+  corrected producer selection then succeeded on protected-main
+  [run 36025187067](https://github.com/FS-GG/.github/actions/runs/36025187067), merge
+  `bd88ef6a2bce98ce3274cc716004ed759b528dd9`, with public artifact `10819737108`
+  (`sha256:1af1e223d90b7dba5ff1c74d6db7e627043317fbab9fb0e6603a8981cdbb36b1`).
+  Its receipt binds the exact merged tree, both settlement checks, all eight live branch gates,
+  and each selected native run/job/check identity. The dependent credential job was skipped.
 - [ ] **04 — Dedicated App, keys and immutable publication.** Through the preconfigured browser registration and protected setup path,
   create the dedicated ordinary-v2 App and authorizer identities, accept the public anchor, provision only the
-  named `ordinary-v2` environment secrets, publish byte-identical pinned installer artifacts and read back
+  named `ordinary-v2` environment secrets, publish the same prepared installer bytes to both feeds and read back
   environment, installation, permission and artifact state. Do not reuse v1 or callable keys.
+  NuGet.org may add its signature to the served archive; compare the package payload and pin the final
+  served archive digest used by the workflow.
+  [Coordination #516](https://github.com/FS-GG/FS.GG.Coordination/pull/516) and
+  [#517](https://github.com/FS-GG/FS.GG.Coordination/pull/517) merged the protected 0.1.2 publisher
+  and its retained-artifact recovery path. Preparation run `36028503111` retained exact archive
+  `sha256:5633d9be2263e77437619a75a2411e4e82e48d763124df472b8e1b7c9e1dfd68`;
+  the first publication attempt refused before effects on a different checkout-root build digest.
+  [Run 36041319746](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36041319746)
+  reproduced the retained bytes at the original hosted root and pushed them to GitHub Packages and
+  nuget.org; anonymous installation waited for nuget.org indexing. Recovery
+  [run 36042503421](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36042503421)
+  verified both served feeds, anonymous installation, tag `v0.1.2` at protected source merge
+  `57f1328345fd58915da3f398e5c442dbd40b891a`, and the
+  [release](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.2). Nuget.org's signed
+  served archive is `sha256:627d9f54d038d47ef59635f92bd4fd4af2da7bfc971a938b6de1292503b0307e`;
+  its package payload matches the retained archive. Dedicated App and authorizer enrollment, public
+  anchors and protected environment secrets remain absent, so this milestone stays unchecked.
 - [ ] **05 — Isolated hosted installed matrix.** With bounded non-production refs, exercise success,
   wrong-key/anchor, stale evidence/authority, altered payload, wrong workflow/environment, duplicate attempt,
   crash-before-write, crash-after-write/unknown reply and stable replay reconciliation. Preserve one effect
@@ -78,8 +110,11 @@ callable-operation keys are outside the class.
   The isolated sandbox shell is now `FS-GG/FS.GG.Coordination.Authority.Sandbox` (repo ID
   `1385801070`, seed `fe6292e9…`), with active writer/integrity rulesets `23947019`/`23947025` and
   separate main-only `ordinary-v2-rehearsal` environment `22669445419`. Both rulesets currently have
-  zero App bypass and the environment has zero secrets. A distinct rehearsal App/key and compiled
-  profile are required so a synthetic run cannot mint a production Authority token.
+  zero App bypass and the environment has zero secrets. Its separate synthetic OpenV2 epoch ref
+  `refs/heads/ordinary-v2-rehearsal-epoch` points at `4f02add98e091cd268979468f9c15ffe59435d43`;
+  the readback binds aggregate `fleet-cutover:fs-gg-v2-rehearsal`, generation 1 and the event digest.
+  A distinct rehearsal App/key and compiled profile are required so a synthetic run cannot mint a
+  production Authority token.
 - [ ] **06 — Receiver and candidate disposition.** Measure before/after critical path, runner time and narrow
   administrative overhead; record coverage and sample limits. Adopt the exact receiver/profile before GS2-10
   freeze only if installed evidence is complete, otherwise explicitly defer it. Source merge alone cannot mark
@@ -112,6 +147,8 @@ The first `.github` ordinary-v2 preflight run `36019271890` adds one after-sourc
 created at 15:19:01Z, started at 15:20:15Z and completed at 15:20:25Z, yielding about 74 seconds of
 queue and 10 seconds of hosted execution. Its credential job was skipped and consumed no runner. This one
 inactive run is neither an installed-route timing nor a comparable after-cohort for the Coordination baseline.
+The hardened run `36025187067` queued for about 40 seconds and executed its preflight for 16 seconds;
+its credential job also remained skipped. Neither run demonstrates installed-path latency.
 
 ## Workspace impact
 
