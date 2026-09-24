@@ -68,6 +68,11 @@ callable-operation keys are outside the class.
   wrong-key/anchor, stale evidence/authority, altered payload, wrong workflow/environment, duplicate attempt,
   crash-before-write, crash-after-write/unknown reply and stable replay reconciliation. Preserve one effect
   identity and a public receipt/readback; a real protected operation is not a fixture.
+  The isolated sandbox shell is now `FS-GG/FS.GG.Coordination.Authority.Sandbox` (repo ID
+  `1385801070`, seed `fe6292e9…`), with active writer/integrity rulesets `23947019`/`23947025` and
+  separate main-only `ordinary-v2-rehearsal` environment `22669445419`. Both rulesets currently have
+  zero App bypass and the environment has zero secrets. A distinct rehearsal App/key and compiled
+  profile are required so a synthetic run cannot mint a production Authority token.
 - [ ] **06 — Receiver and candidate disposition.** Measure before/after critical path, runner time and narrow
   administrative overhead; record coverage and sample limits. Adopt the exact receiver/profile before GS2-10
   freeze only if installed evidence is complete, otherwise explicitly defer it. Source merge alone cannot mark
@@ -95,6 +100,11 @@ The public-repository timing API reported zero billed duration, which does not m
 job timestamps instead. Queue, setup, useful checks, retry cost and critical path stay separate. These three
 runs do not establish duplicated compiler/formal work or a bureaucracy percentage. Milestone 06 needs a larger,
 attributed before/after cohort.
+
+The first `.github` ordinary-v2 preflight run `36019271890` adds one after-source observation: its job was
+created at 15:19:01Z, started at 15:20:15Z and completed at 15:20:25Z, yielding about 74 seconds of
+queue and 10 seconds of hosted execution. Its credential job was skipped and consumed no runner. This one
+inactive run is neither an installed-route timing nor a comparable after-cohort for the Coordination baseline.
 
 ## Workspace impact
 

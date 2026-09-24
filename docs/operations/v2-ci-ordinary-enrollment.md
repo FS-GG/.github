@@ -113,3 +113,28 @@ GitHub's [App registration guidance](https://docs.github.com/en/apps/creating-gi
 [App token scoping](https://docs.github.com/en/rest/apps/apps#create-an-installation-access-token-for-an-app),
 and [Git ref permissions](https://docs.github.com/en/rest/git/refs) describe the external provider steps
 and permission ceiling used here.
+
+## Separate installed rehearsal custody
+
+The isolated hosted matrix uses a distinct public
+[`FS-GG/FS.GG.Coordination.Authority.Sandbox`](https://github.com/FS-GG/FS.GG.Coordination.Authority.Sandbox)
+repository, ID `1385801070`, seeded at `fe6292e9fa729a57cebbe4c8cf4d51dcad05500c`.
+Its active journal writer ruleset is `23947019` (creation/update, zero bypass until enrollment) and its
+integrity ruleset is `23947025` (deletion/non-fast-forward, zero bypass). The `.github`
+`ordinary-v2-rehearsal` environment, ID `22669445419`, has custom `main` branch policy `60924371`,
+zero required reviewers and zero secrets. These are inert setup shells, not successful operations.
+
+Rehearsal must use a **second** dedicated App, authorizer key and environment secret set. The
+[preconfigured rehearsal registration form](https://github.com/organizations/FS-GG/settings/apps/new?name=FS-GG+Ordinary+V2+Rehearsal&description=Isolated+ordinary-v2+settlement+qualification+writer&url=https%3A%2F%2Fgithub.com%2FFS-GG%2FFS.GG.Coordination.Authority.Sandbox&public=false&webhook_active=false&contents=write)
+requests only Contents write, no webhook and no organization permissions. Install it only on sandbox
+repository ID `1385801070`. Put its new private material directly into `ordinary-v2-rehearsal` as
+`V2_ORDINARY_REHEARSAL_APP_ID`, `V2_ORDINARY_REHEARSAL_APP_PRIVATE_KEY` and
+`V2_ORDINARY_REHEARSAL_AUTHORIZER_PRIVATE_KEY`; publish only the App/installation IDs and a fresh
+authorizer key ID/SPKI digest. Add only that App ID as the sandbox writer-ruleset bypass, retaining
+zero integrity bypass. The rehearsal profile and anchor must be separately pinned and reject the
+production repository ID, App, environment and real epoch. The production profile must reject the
+rehearsal repository and synthetic epoch before signing.
+
+Using the production App in this sandbox would let rehearsal code holding its private key mint a
+production Authority token, even if one token request was scoped to the sandbox. The two App
+installations and private keys therefore stay disjoint.
