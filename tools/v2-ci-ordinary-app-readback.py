@@ -71,6 +71,13 @@ def main():
     jwt = app_jwt(app_id, os.environ["FSGG_APP_PRIVATE_KEY"])
     app = request("/app", jwt)
     expected_permissions = {"contents": "write", "metadata": "read"}
+    observed_app = {
+        "appIdDigits": [int(digit) for digit in str(app.get("id", "")) if digit.isdigit()],
+        "name": app.get("name"),
+        "owner": app.get("owner", {}).get("login"),
+        "permissions": app.get("permissions"),
+        "events": app.get("events"),
+    }
     if (
         app.get("id") != app_id
         or app.get("name") != expected_name
@@ -78,7 +85,7 @@ def main():
         or app.get("permissions") != expected_permissions
         or app.get("events") != []
     ):
-        raise RuntimeError("App identity or permission ceiling differs from enrollment")
+        raise RuntimeError("App identity or permission ceiling differs from enrollment: " + json.dumps(observed_app, sort_keys=True))
 
     installation = request(f"/repos/{expected_repository}/installation", jwt)
     if (
