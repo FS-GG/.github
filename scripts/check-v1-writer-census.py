@@ -68,6 +68,7 @@ MANDATORY_SOURCES = {
     ".github/workflows/fsgg-dispatch-broker.yml",
     ".github/workflows/github-substrate-v2-authority-qualification.yml",
     ".github/workflows/release-coord-engine.yml",
+    "scripts/gs2-09-7-mint-sandbox-token.py",
     "dist/skill-union-assert.sh",
     "registry/repos.yml",
     "registry/dependencies.yml",
