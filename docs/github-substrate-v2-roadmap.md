@@ -1908,6 +1908,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   refuses a journal-only terminal receipt that hides an active token: a fresh challenge-bound
   native readback must match the sealed mint, token and installation identities; 124 local
   controls pass. The protected adapter, authentic joint seal and scheduler remain uninstalled.
+  [Scheduled-recovery draft #3738](https://github.com/FS-GG/.github/pull/3738)
+  refuses a native revoke without a pinned durable host schedule and independent joint-seal
+  readback; 132 local controls pass. Protected complete enqueue, atomic schedule/claim
+  ordering and pre-pending mint escalation remain uninstalled.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.

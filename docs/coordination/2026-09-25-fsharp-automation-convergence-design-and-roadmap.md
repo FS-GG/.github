@@ -157,7 +157,11 @@ an atomic cross-root snapshot, ABA safety, output rollback or installed parity.
 [Game complete-receiver draft #656](https://github.com/FS-GG/FS.GG.Game/pull/656)
 binds the metadata contract to supplied exact planned manifest and skill bytes after a
 red-before metadata-only false green; 23 receiver, 42 policy and 27 physical-source
-controls pass. Trustworthy physical receiver observation and installed parity remain.
+controls pass. [Game read-only receiver draft #657](https://github.com/FS-GG/FS.GG.Game/pull/657)
+captures bytes/modes/uid/gid through held no-follow Linux descriptors and refuses the
+characterized symlink/path-swap false green; 11 observer, 23 contract and 27 physical-source
+controls pass. Atomic snapshot, ABA/post-check changes, output effects and installed parity
+remain.
 These stacked
 drafts need owner acceptance and installed evidence before receiver or release adoption.
 
