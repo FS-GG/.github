@@ -628,6 +628,26 @@ RB7U="$(root "$WORK/cover-onesided-unfiltered")"
 wf "$RB7U/.github/workflows/pair.yml" '      - "docs/**"' '      - "docs/**"'
 expect "an absent one-sided paths key remains genuinely unfiltered" 0 "ok:" "$RB7U"
 
+# PyYAML resolves bare YAML 1.1 booleans, numbers and nulls to non-string values. Turning each
+# back into text with `str()` gives Rule (b) a filter Actions did not receive, so a one-sided
+# workflow can silently become green alongside an unrelated clean pair.
+for item in true 42 null; do
+  RB7T="$(root "$WORK/cover-onesided-typed-$item")"
+  { echo "name: w"; echo "on:"; echo "  push:"; echo "    paths: [$item]"
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+    > "$RB7T/.github/workflows/w.yml"
+  wf "$RB7T/.github/workflows/pair.yml" '      - "docs/**"' '      - "docs/**"'
+  expect "a bare non-string path item $item is NO VERDICT, not a stringified filter" \
+    3 "push.paths:\` contains a non-string pattern" "$RB7T"
+done
+
+RB7TQ="$(root "$WORK/cover-onesided-quoted-string")"
+{ echo "name: w"; echo "on:"; echo "  push:"; echo "    paths: ['true', '42', 'null']"
+  echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+  > "$RB7TQ/.github/workflows/w.yml"
+wf "$RB7TQ/.github/workflows/pair.yml" '      - "docs/**"' '      - "docs/**"'
+expect "quoted string path items remain valid filters" 0 "ok:" "$RB7TQ"
+
 # ---- rule (b)'s escape hatch ---------------------------------------------------------------
 RB8="$(root "$WORK/cover-hatch")"
 proj "$RB8" "src/A" "../B/B.fsproj"
