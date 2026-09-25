@@ -28,7 +28,6 @@ module Board =
             Fields: Map<string, Field>
         }
 
-    /// Caller-supplied identity for the dormant direct-project bootstrap path.
     type ExactProject = { Owner: string; Number: int; Title: string; Id: string }
 
     type BlockedByObservation =
@@ -281,8 +280,6 @@ module Board =
                                         Fields = fields
                                     }
 
-    /// A dormant, single-query alternative for a project whose exact identity is already pinned by
-    /// the caller. It deliberately does not change `bootstrap` or `bootstrapCached` admission.
     let bootstrapExactProject (transport: IGitHubTransport) (expected: ExactProject) : IoResult<BoardMap> =
         let subject = $"the exact project %s{expected.Owner}/%d{expected.Number}"
 
