@@ -670,9 +670,12 @@ def project_graph(root: str) -> dict[str, list[str]]:
     # Treating it as a leaf would certify an incomplete closure, even if its path is covered.
     for source, refs in graph.items():
         for target in refs:
-            if target not in graph and os.path.isfile(os.path.join(root_path, target)):
-                raise GateError(f"{source}: ProjectReference target {target!r} is outside "
-                                "discovered project roster; requires MSBuild project evaluation")
+            if target not in graph:
+                if os.path.isfile(os.path.join(root_path, target)):
+                    raise GateError(f"{source}: ProjectReference target {target!r} is outside "
+                                    "discovered project roster; requires MSBuild project evaluation")
+                raise GateError(f"{source}: ProjectReference target {target!r} is absent from "
+                                "discovered project roster; cannot certify its dependency closure")
     return graph
 
 
