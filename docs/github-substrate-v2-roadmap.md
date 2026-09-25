@@ -180,6 +180,13 @@ Before dispatching a unit, classify every adjacent row as one of:
 The Coordination board remains the visibility and dependency projection. It is not allowed to recreate the
 superseded execution plan by presenting a historical M-series row as `Ready`.
 
+The [F# automation convergence interlude](#v2-fs-i1--f-automation-convergence-interlude)
+uses these same classes. Its `FSC` slices are planning anchors, not new GS2 receipt IDs or a second
+scheduler. A port selected for the cutover candidate is a `candidate-input-change`; a separately
+proven defect in a required gate is a `v2-blocker`; optional ports can remain `parallel-product` or
+be explicitly `cutover-deferred`. Count shebangs, inline workflow code, and generated receivers when
+classifying an executable path; suffix-only inventory is incomplete.
+
 ### 1.5 Single-operator execution readiness
 
 The [governing execution contract](coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md#single-operator-execution)
@@ -1501,6 +1508,49 @@ GS2-11.3 through the switch and verification window, do not start or advance
 independent telemetry mutations: stop ingress, drain active work, and preserve
 the fleet freeze until the roadmap explicitly releases deferred programs.
 
+### V2-FS-I1 — F# automation convergence interlude
+
+The [17-repository review](reports/2026-09-25-fsgg-fleet-code-architecture-review.md)
+and [design and staged roadmap](coordination/2026-09-25-fsharp-automation-convergence-design-and-roadmap.md)
+identifies policy, registry, manifest, provider and projection logic suitable for owner-specific F#
+tools. It also identifies shell launchers, independent Python oracles, native credential adapters,
+generated receivers and historical evidence that remain until a separately qualified replacement
+exists. This is a parallel planning part, **not a new GS2 unit, acceptance receipt, or universal
+Python/Bash removal gate**. The prior
+[telemetry/roadmap-closure design](reports/2026-09-04-fsharp-roadmap-telemetry-and-projection-automation-design.md)
+requires current-source reconciliation before any remaining work is scheduled; current Host and
+dashboard roadmaps and V2-CI-I1 retain their owners.
+
+The preparation lanes are independent when touch sets do not overlap: executable/receiver census,
+confirmed source-closure, CI-output and path-coherence repairs, pure `.github` policy scaffolding,
+effective executable-step wiring repair, SDD generic artifact contract, Templates provider composition,
+product skill-staging characterization, and read-only Coordination/release transport analysis. At each
+scheduling pass, fill `min(available agent slots, safe disjoint bounded lanes)` with accountable owners;
+do not leave a slot idle solely because a later receipt, producer publication or protected merge is queued.
+Provisional source branches, draft PRs, characterization, scaffolds, tests and refactors may proceed
+against a recorded base while their merge or activation prerequisite is pending. Record the prerequisite,
+non-authoritative status, exact head and intended follow-up repair/rebase in the owning PR. When the
+prerequisite lands, the same owner rebases or repairs that PR, reruns affected local and hosted controls,
+and only then seeks normal admission. Serialize overlapping shared files, immutable producer publication
+and receiver pinning, protected merge order, sandbox mutations, live gate flips and Authority writes. A published
+producer and exact installed receiver proof precede removal of old logic. Preserve the independent
+refusal controls, owner-specific BOM/CRLF policies, credential custody, ambiguous-effect recovery,
+and Q0–Q10 qualification strength. Enduring `.github` policy tooling avoids V1-only Coord runtime
+dependencies. Telemetry Contracts and Store reference the Coord Core assembly; Store compiles telemetry
+source from a historical Coord CLI path into the Store assembly. Host references Contracts and Store,
+not the Coord CLI binary, and its package includes Core. Q9 inventories this exact closure and
+qualifies any V1-only dependency removal. GS2-14 does not require deleting every Coord project.
+
+Before GS2-10, record which bounded ports actually enter the candidate and explicitly defer the
+remainder. Selected package/lock, registry, workflow, generated receiver and settings changes must
+be qualified and stabilized before freeze. A later change mints a new full Q0–Q7 candidate or waits
+for `OperatingV2`; no optional port may cross GS2-11–GS2-12. The GS2-09.7 isolated rehearsal,
+GS2-09.9 callable handoff, `OpenV2` human approval and 15-real-item observation remain unchanged.
+At this proposal's review, **no optional F# port is selected** for GS2-10; census, current-source
+reconciliation, source-only implementation and read-only parity can proceed, while publication and receiver flips default to
+deferral. The confirmed source repairs follow their own normal gates. Change that selection
+only with exact installed evidence and an explicit prefreeze candidate-input disposition.
+
 ### GS2-09 — Build migration, archive, and rollback tooling
 
 **Parents:** `.github#2954`, `.github#2963`, `.github#2965`
@@ -1513,6 +1563,14 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
   and the exact callable-readiness handoff consumed by discovery. It performs no fleet migration, does not open
   v2, and remains an additive prerequisite before representative rehearsal. The exact GS2-09.9 qualification
   and custom acceptance receipt are pending.
+
+  An independent offline review of the sealed isolated-operation adapter reproduced wrong PR head/base
+  acceptance after an ambiguous POST, force-push-enabled protection acceptance after an ambiguous PUT,
+  and an exception-chain secret leak. [Coordination draft #547](https://github.com/FS-GG/FS.GG.Coordination/pull/547)
+  records the non-authoritative characterization. The current #545 candidate's green checks do not prove
+  these identity-bound Q3/Q6 refusals; its auto-merge was disabled and its receipt is disputed. Keep the
+  historical packets immutable. Qualify a versioned operator with rotated contract/proposal/validator
+  digests and fresh exact Q3/Q6 negative controls before issuing any GS2-09.9 acceptance receipt.
 
   [Protected callable discovery handoff](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json)
   records the packet received by discovery; it is not the GS2-09.9 acceptance receipt.
@@ -1562,7 +1620,8 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
 
 - [ ] **GS2-10.1 — Freeze candidate identities.** Record source commits, dependency locks, model/compiler
   fingerprints, packages, container/tool assets if any, workflows, App build, verifier artifacts, Typed
-  SDD lifecycle-default decision, provider/scaffolder identities, and every receiver head/settings profile.
+  SDD lifecycle-default decision, provider/scaffolder identities, every receiver head/settings profile,
+  and any selected F# tooling contract, canonicalization policy and installed artifact identity.
 - [ ] **GS2-10.2 — Run the full qualification matrix.** No selective rerun may replace a failed full
   result; repairs create a new candidate identity.
 - [ ] **GS2-10.3 — Complete live shadow comparison.** Read the complete fleet repeatedly over a bounded
@@ -1709,7 +1768,9 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
   `ContractingV1(plan)` or extend observation without changing the eligible population or denominator.
 - [ ] **GS2-14.5 — Delete v1 runtime code.** Remove v1 readers/writers, public generic mutation routes,
   compatibility adapters, old event/schema decoders, and source packages/workflows after exact static and
-  runtime inventory checks.
+  runtime inventory checks. Include Contracts/Store's Core assembly dependency, Store's historical
+  CLI-path source link and Host's packaged closure in that inventory. Retain or extract reusable code
+  only with clean-install, package/loaded-assembly and old-client refusal proof.
 - [ ] **GS2-14.6 — Delete v1 data authorities.** Remove Class/Kind/Repo Scope/Blocked-by Project fields,
   body sentinels/metadata parsers, old status writers, control comments used as authority, and temporary
   backfill projections after exact deletion checks.
@@ -1742,7 +1803,10 @@ or v1 retired. It must not delay `GS2-11` once all actual cutover prerequisites 
 - broader Typed SDD extensions for contract topology, skill delivery, Governance rules, provider/template
   composition, and executable TestSpecs;
 - a later decision to make `typed-sdd` the default lifecycle, subject to the `GS2-10` candidate-freeze
-  rule above; and
+  rule above;
+- optional F# ports of Coordination credential transport, release custody, telemetry successors and
+  shell launchers from [V2-FS-I1](#v2-fs-i1--f-automation-convergence-interlude), except a bounded
+  selected prefreeze cohort or a separately proven required-gate repair; and
 - convenience UI, reports, or projections that do not authorize a coordination decision.
 
 These may proceed independently with their own evidence. If one becomes a real prerequisite, the governing
