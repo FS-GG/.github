@@ -77,12 +77,24 @@ check(workflow("false && python3 scripts/check-alpha.py\nbash tests/alpha/run.sh
       "checker behind literal false and-list", fixture_body="#!/bin/sh\necho harmless\n")
 check(workflow("python3 scripts/check-alpha.py || echo ignored\nbash tests/alpha/run.sh"), False,
       "checker failure masked by successful fallback", fixture_body="#!/bin/sh\necho harmless\n")
+check(workflow("python3 scripts/check-alpha.py | cat\nbash tests/alpha/run.sh"), False,
+      "checker failure masked by pipeline", fixture_body="#!/bin/sh\necho harmless\n")
+check(workflow("python3 scripts/check-alpha.py ; echo ignored\nbash tests/alpha/run.sh"), False,
+      "checker failure masked by unconditional command", fixture_body="#!/bin/sh\necho harmless\n")
+check(workflow("python3 scripts/check-alpha.py & wait\nbash tests/alpha/run.sh"), False,
+      "checker failure masked by background wait", fixture_body="#!/bin/sh\necho harmless\n")
+check(workflow('out="$(python3 scripts/check-alpha.py ; echo ignored)"\nbash tests/alpha/run.sh'), False,
+      "checker failure masked inside command substitution", fixture_body="#!/bin/sh\necho harmless\n")
 check(workflow("bash tests/alpha/run.sh || echo ignored"), False,
       "fixture failure masked by successful fallback")
+check(workflow("bash tests/alpha/run.sh | cat"), False,
+      "fixture failure masked by pipeline")
 check(workflow("bash tests/alpha/run.sh"), False, "checker behind false fixture and-list",
       fixture_body="#!/bin/sh\nfalse && python3 scripts/check-alpha.py\n")
 check(workflow("bash tests/alpha/run.sh"), False, "checker failure masked inside fixture",
       fixture_body="#!/bin/sh\npython3 scripts/check-alpha.py || echo ignored\n")
+check(workflow("bash tests/alpha/run.sh"), False, "checker failure masked inside fixture by unconditional command",
+      fixture_body="#!/bin/sh\npython3 scripts/check-alpha.py ; echo ignored\n")
 check("name: fixture\njobs:\n  gate:\n    runs-on: ubuntu-latest\n    steps:\n"
       "      - run: &gate |\n          python3 scripts/check-alpha.py\n          bash tests/alpha/run.sh\n"
       "      - run: *gate\n", True, "YAML block scalar anchor execution")

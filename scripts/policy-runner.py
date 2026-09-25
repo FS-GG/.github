@@ -123,6 +123,12 @@ def active_shell_lines(script: str):
         classified_capture = bool(re.search(r"\|\|\s*rc=\$\?(?=\s|;|$)", code))
         if re.match(r"\s*false\s*&&", code) or ("||" in code and not classified_capture):
             continue
+        # A pipeline, command list, or background command can end successfully
+        # after this checker fails. Refuse the whole line, including command
+        # substitutions; their quoted text still executes shell operators.
+        # `&&` and the existing classified `|| rc=$?` capture stay eligible.
+        if re.search(r"(?<!\|)\|(?!\|)|;|(?<![&>])&(?![&])", code):
+            continue
         declaration = re.search(r"<<-?\s*['\"]?([A-Za-z_][A-Za-z_0-9]*)['\"]?", code)
         if declaration:
             heredoc = declaration.group(1)
