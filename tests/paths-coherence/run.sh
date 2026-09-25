@@ -696,6 +696,23 @@ for value in '{42: {paths: [src/A/**]}}' "'push/evil'" "['push/evil']"; do
     3 "invalid event name" "$REN"
 done
 
+# An event entry can be null (unfiltered) or a mapping (possibly with paths). A non-null scalar
+# or sequence is neither. Treating it as an unfiltered event silently discards a malformed filter;
+# the clean sibling below makes that omission look like a successful Rule (b) audit.
+event_value_case=0
+for entry in 'push: 42' 'pull_request: [src/A/**]' 'push: !!str null'; do
+  event_value_case=$((event_value_case+1))
+  REV="$(root "$WORK/cover-event-value-$event_value_case")"
+  proj "$REV" "src/A" "../B/B.fsproj"
+  proj "$REV" "src/B"
+  { echo "name: w"; echo "on:"; echo "  $entry"
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+    > "$REV/.github/workflows/w.yml"
+  cp "$RS/.github/workflows/w.yml" "$REV/.github/workflows/pair.yml"
+  expect "non-null event value $entry cannot hide the workflow" \
+    3 "must be a mapping or null" "$REV"
+done
+
 # ---- rule (b)'s escape hatch ---------------------------------------------------------------
 RB8="$(root "$WORK/cover-hatch")"
 proj "$RB8" "src/A" "../B/B.fsproj"
