@@ -516,6 +516,28 @@ wf "$RB2/.github/workflows/w.yml" '      - "src/A/**"
       - "src/B/**"'
 expect "...and covering it satisfies the rule" 0 "ok:" "$RB2"
 
+# MSBuild implicitly imports an SDK's props and targets. Both SDK spellings below can add a
+# ProjectReference outside the project's own XML; treating either as a no-reference leaf is green
+# while a push to B would skip this workflow. The custom SDK source is present in the fixture to
+# make the hidden edge concrete, though this pure gate must refuse before trying to evaluate it.
+for sdk_shape in attribute child; do
+  RSDK="$(root "$WORK/cover-custom-sdk-$sdk_shape")"
+  mkdir -p "$RSDK/src/A" "$RSDK/sdk/Injected.Graph.Sdk/Sdk"
+  cat > "$RSDK/sdk/Injected.Graph.Sdk/Sdk/Sdk.props" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup></Project>
+XML
+  printf '<Project />\n' > "$RSDK/sdk/Injected.Graph.Sdk/Sdk/Sdk.targets"
+  if [ "$sdk_shape" = attribute ]; then
+    printf '<Project Sdk="Injected.Graph.Sdk" />\n' > "$RSDK/src/A/A.fsproj"
+  else
+    printf '<Project><Sdk Name="Injected.Graph.Sdk" /></Project>\n' > "$RSDK/src/A/A.fsproj"
+  fi
+  proj "$RSDK" "src/B"
+  wf "$RSDK/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+  expect "Rule (b) refuses $sdk_shape custom SDK imports before a graph verdict" \
+    3 "unverified project SDK" "$RSDK"
+done
+
 # GitHub's paths filters give ?, + and [] operator meanings that glob_to_regex does not
 # implement. A pattern whose literal spelling equals a dependency can still fail to select that
 # dependency on a real push. Certifying it as covered is the false-green Rule (b) must refuse.
