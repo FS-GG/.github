@@ -1046,6 +1046,7 @@ changing the protected holds:
 | [GS2-09.7 #725](https://github.com/FS-GG/FS.GG.Coordination/pull/725) | `8f46f41a16fb6707b3f2ae8a555fbd621d02c934` | Native activity reconciler binds initial issue-page origin, owner/repo and repository ID to configured options; 720 full unit tests. Protected option pins and provider byte custody, Q5/Q6 remain open. |
 | [GS2-09.9 #726](https://github.com/FS-GG/FS.GG.Coordination/pull/726) | `d753d9c4470ba8a8903301197794d950790579d9` | Adversarial correction to #724 adds missing #550 v5 contract, source/workflow, request, journal and grant evidence cells and fixes the late-drift journal-read counter; 18 links resolve. Runnable source and protected reviewer remain absent. |
 | [FSC-03 F# #3812](https://github.com/FS-GG/.github/pull/3812) | `ef20439a8b326cedf66e12595f6df3224197b50d` | Pure SHA-1 Git-tree object walker derives a complete supplied project roster; 199 tests, local read-only 350-object/27-project dogfood matched `git ls-tree`. Root tree and project bytes lack authenticated binding. |
+| [GS2-09.7 #727](https://github.com/FS-GG/FS.GG.Coordination/pull/727) | `65bbb126db8718c57aeb1715dd7e77082751f70b` | Read-only owner packet distinguishes registered Q4 diagnostic repository from an unselected migration copy and records protected admission, exact run/attempt/target, native byte custody and journal/receipt joins for Q5/Q6. No protected action. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
