@@ -23,22 +23,24 @@ a selected App secret without a matching inventory in the Python gate.
 Red-before, Python returned a finding when the default inventory was too narrow
 and green when it was broad enough; F# returned NO_VERDICT in both cases. The
 same fallback also produced green for a `vars.*` identity and a literal App ID;
-strict mode now refuses both unsupported forms. The corpus expects each Python
-refusal reason and reports three remaining differences:
+strict mode now refuses both unsupported forms. This follow-up also rejects
+repeated YAML mapping keys at every nesting level: red-before, Python returned
+green for duplicate caller permissions, callee events and App permission inputs
+while F# refused each. The corpus expects the Python refusal reason and reports
+two remaining differences:
 
-- F# refuses duplicate YAML keys; PyYAML keeps the last value.
 - The F# aggregate covers one bound caller/callee pair; Python enumerates all
   rostered caller repositories. A second caller can therefore produce a Python
   finding outside that one F# pair.
 - F# requires every workflow in its supplied authority roster. Python scans
   the authority directory without a separate expected manifest.
 
-The duplicate-key and authority-roster differences are conservative refusals.
+The authority-roster difference is a conservative refusal.
 The fleet case needs authenticated caller enumeration and a fleet aggregate.
 The local fixture cannot prove provider authentication, current App installation
 grants, accepted scaffold dependencies or installed receiver parity. The live
 receiver currently supplies a default App inventory for some selected App
 secrets. It must supply explicit per-identity facts before the new mode can be
 enabled, and unsupported `vars.*` or literal identities need an authenticated
-binding design or source migration. The Python gate's default behavior remains
-unchanged in this draft.
+binding design or source migration. Strict App identity mode remains opt-in;
+duplicate-key refusal applies to every YAML read in the proposed Python source.

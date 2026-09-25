@@ -198,6 +198,29 @@ algebra "a job-level block that satisfies the callee passes, despite a bare top 
         0 "ok:" $'permissions:\n  contents: read' \
         $'    permissions:\n      contents: read\n      packages: read'
 
+WDUP="$WORK/w-duplicate-caller"; mkdir -p "$WDUP/FS-GG__R"
+cat > "$WDUP/FS-GG__R/c.yml" <<'YAML'
+permissions: { contents: none }
+permissions: { contents: read, packages: read }
+jobs:
+  sync:
+    uses: FS-GG/.github/.github/workflows/cal.yml@main
+YAML
+expect "duplicate caller permissions refuse before the second key can mask an undergrant" \
+  3 "duplicate YAML mapping key 'permissions'" "$WDUP" "$RC"
+
+RDUP="$WORK/r-duplicate-callee"; mkdir -p "$RDUP/.github/workflows" "$RDUP/registry"
+cat > "$RDUP/.github/workflows/cal.yml" <<'YAML'
+on: { workflow_call: {}, workflow_call: {} }
+permissions: { contents: read }
+jobs: { x: { steps: [{ run: 'true' }] } }
+YAML
+roster "$RDUP/registry/repos.yml" FS-GG/R
+WCALDUP="$WORK/w-duplicate-callee"; mkdir -p "$WCALDUP/FS-GG__R"
+caller "$WCALDUP/FS-GG__R/c.yml" "permissions: { contents: read }" "cal.yml@main"
+expect "duplicate callee workflow_call event refuses before selecting a last value" \
+  3 "duplicate YAML mapping key 'workflow_call'" "$WCALDUP" "$RDUP"
+
 # =============================================================================================
 # 2b. App-token installation grants. A request outside the pinned grant inventory makes GitHub
 # refuse the ENTIRE mint before any later step runs, so it must be a pre-merge finding too.
@@ -238,6 +261,20 @@ expect "a separately custodied App selects its explicit required grant contract"
   1 "issues: requests write, installation grants none" "$WAPP" "$RC" \
   --app-grants contents:read,issues:write --require-app-identity-grants \
   --app-grants-for DEDICATED_APP_CLIENT_ID=contents:read
+cat > "$RC/.github/workflows/app-token-duplicate.yml" <<'YAML'
+jobs:
+  mint:
+    steps:
+      - uses: actions/create-github-app-token@v3
+        with:
+          permission-contents: none
+          permission-contents: read
+YAML
+expect "duplicate App permission input refuses before the second key can mask the first" \
+  3 "duplicate YAML mapping key 'permission-contents'" "$WAPP" "$RC" \
+  --app-grants contents:read,issues:write --require-app-identity-grants \
+  --app-grants-for DEDICATED_APP_CLIENT_ID=issues:write
+rm "$RC/.github/workflows/app-token-duplicate.yml"
 
 # GS2-08.9 retires the automatic publisher and its App-token/package request. Pin that capability
 # loss directly, then keep the auditor inversion independent of the retired production workflow.
