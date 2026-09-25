@@ -432,4 +432,119 @@ syntaxRefused "empty job map refuses" "jobs-empty"
 syntaxRefused "wrong authority workflow repository refuses comparison" "app-workflow-repository-mismatch"
     (AppGrantComparison.compareWorkflow bound "FS-GG/Other" "authority.yml" workflowWithApp)
 
+let aggregateText =
+    "jobs:\n  build:\n    steps:\n      - uses: actions/create-github-app-token@v3\n        with: { permission-contents: read }\n"
+let expectedJob: WorkflowJobShape =
+    { JobId = "build"; IsReusableCall = false; StepCount = 1; AppStepIndices = [ 1 ] }
+let expectedWorkflow: AuthorityWorkflowExpectation =
+    { Path = ".github/workflows/one.yml"; Jobs = [ expectedJob ] }
+let authorityRoster: AuthorityWorkflowRoster =
+    { Repository = "FS-GG/.github"; SourceRef = "source-commit"; Workflows = [ expectedWorkflow ] }
+let authorityWorkflow: AuthorityWorkflowSnapshot =
+    { Repository = "FS-GG/.github"
+      Path = ".github/workflows/one.yml"
+      SourceRef = "source-commit"
+      Text = aggregateText }
+let inventorySnapshot: AppInventorySnapshot =
+    { SourceRef = "source-commit"; Inventory = appFact }
+let aggregateEvidence: AggregatePermissionEvidence =
+    { Roster = Some authorityRoster
+      Workflows = Some [ authorityWorkflow ]
+      Inventories = Some [ inventorySnapshot ] }
+let aggregate evidence = PermissionAggregate.evaluate "source-commit" bound evidence
+
+expect "detailed scanner binds job and App step positions"
+    (Ok { InspectedSteps = 1; Jobs = [ expectedJob ]
+          Requests = [ { JobId = "build"; StepIndex = 1; AppIdentitySecret = None
+                         Requested = Scopes [ "contents", "read" ] } ] })
+    (WorkflowPermissionSyntax.appTokenStepsDetailed expectedWorkflow.Path aggregateText)
+expect "complete authority workflow and inventory facts satisfy the gate" (Ok GateSatisfied)
+    (aggregate aggregateEvidence)
+let secondWorkflow: AuthorityWorkflowExpectation =
+    { Path = ".github/workflows/two.yml"
+      Jobs = [ { JobId = "audit"; IsReusableCall = false; StepCount = 1; AppStepIndices = [] } ] }
+let secondSnapshot: AuthorityWorkflowSnapshot =
+    { Repository = "FS-GG/.github"
+      Path = secondWorkflow.Path
+      SourceRef = "source-commit"
+      Text = "jobs: { audit: { steps: [ { run: echo ready } ] } }\n" }
+let twoWorkflowEvidence =
+    { aggregateEvidence with
+        Roster = Some { authorityRoster with Workflows = [ expectedWorkflow; secondWorkflow ] }
+        Workflows = Some [ authorityWorkflow; secondSnapshot ] }
+expect "all selected authority workflows are scanned" (Ok GateSatisfied)
+    (aggregate twoWorkflowEvidence)
+expect "missing authoritative workflow roster refuses" (Error "workflow-roster-missing")
+    (aggregate { aggregateEvidence with Roster = None })
+expect "omitted selected workflow refuses before any gate verdict" (Error "workflow-missing")
+    (aggregate { twoWorkflowEvidence with Workflows = Some [ authorityWorkflow ] })
+expect "missing selected job refuses" (Error "workflow-shape-mismatch")
+    (aggregate { aggregateEvidence with
+                   Roster = Some { authorityRoster with
+                                       Workflows = [ { expectedWorkflow with Jobs = [ expectedJob; { expectedJob with JobId = "audit" } ] } ] } })
+let duplicateAppText =
+    "jobs:\n  build:\n    steps:\n      - uses: actions/create-github-app-token@v3\n        with: { permission-contents: read }\n      - uses: actions/create-github-app-token@v3\n        with: { permission-contents: read }\n"
+expect "duplicate App step refuses against expected positions" (Error "workflow-shape-mismatch")
+    (aggregate { aggregateEvidence with Workflows = Some [ { authorityWorkflow with Text = duplicateAppText } ] })
+expect "omitted selected App step refuses" (Error "workflow-shape-mismatch")
+    (aggregate { aggregateEvidence with
+                   Workflows = Some [ { authorityWorkflow with Text = "jobs: { build: { steps: [ { run: echo ready } ] } }\n" } ] })
+expect "duplicated App index in roster refuses" (Error "workflow-roster-invalid")
+    (aggregate { aggregateEvidence with
+                   Roster = Some { authorityRoster with
+                                       Workflows = [ { expectedWorkflow with Jobs = [ { expectedJob with AppStepIndices = [ 1; 1 ] } ] } ] } })
+expect "missing inventory facts refuse" (Error "inventories-missing")
+    (aggregate { aggregateEvidence with Inventories = None })
+expect "wrong default inventory identity refuses" (Error "inventory-missing")
+    (aggregate { aggregateEvidence with Inventories = Some [ { inventorySnapshot with Inventory = { appFact with InventoryId = "other-app" } } ] })
+expect "wrong bound inventory grants refuse" (Error "inventory-binding-mismatch")
+    (aggregate { aggregateEvidence with Inventories = Some [ { inventorySnapshot with Inventory = { appFact with Grants = [ "contents", Write ] } } ] })
+expect "duplicate inventory identity refuses" (Error "inventories-duplicate")
+    (aggregate { aggregateEvidence with Inventories = Some [ inventorySnapshot; inventorySnapshot ] })
+expect "unknown static App request refuses before gate verdict" (Error "app-request-refused:permissions-level-unknown")
+    (aggregate { aggregateEvidence with
+                   Workflows = Some [ { authorityWorkflow with Text = aggregateText.Replace("permission-contents: read", "permission-contents: admin") } ] })
+expect "dynamic App request refuses before gate verdict" (Error "workflow-syntax:app-permission-dynamic")
+    (aggregate { aggregateEvidence with
+                   Workflows = Some [ { authorityWorkflow with Text = aggregateText.Replace("permission-contents: read", "permission-contents: '${{ inputs.level }}'") } ] })
+expect "stale roster source ref refuses" (Error "stale-source-ref")
+    (aggregate { aggregateEvidence with Roster = Some { authorityRoster with SourceRef = "old-commit" } })
+expect "stale workflow source ref refuses" (Error "stale-source-ref")
+    (aggregate { aggregateEvidence with Workflows = Some [ { authorityWorkflow with SourceRef = "old-commit" } ] })
+expect "stale inventory source ref refuses" (Error "stale-source-ref")
+    (aggregate { aggregateEvidence with Inventories = Some [ { inventorySnapshot with SourceRef = "old-commit" } ] })
+let otherAppText =
+    "jobs:\n  build:\n    steps:\n      - uses: actions/create-github-app-token@v3\n        with:\n          client-id: ${{ secrets.OTHER_APP_CLIENT_ID }}\n          permission-contents: read\n"
+expect "wrong separately custodied App identity needs matching inventory" (Error "inventory-missing")
+    (aggregate { aggregateEvidence with
+                   Workflows = Some [ { authorityWorkflow with Text = otherAppText } ] })
+let otherAppFact = { appFact with InventoryId = "OTHER_APP_CLIENT_ID" }
+expect "separately custodied App binds its own inventory" (Ok GateSatisfied)
+    (aggregate { aggregateEvidence with
+                   Workflows = Some [ { authorityWorkflow with Text = otherAppText } ]
+                   Inventories = Some [ inventorySnapshot; { inventorySnapshot with Inventory = otherAppFact } ] })
+expect "App over-request yields an aggregate finding"
+    (Ok(GateFindings [ { Subject = ".github/workflows/one.yml [build] App-token step 1"
+                         UnderGrants = [ { Scope = "contents"; Required = Write; Granted = Read } ] } ]))
+    (aggregate { aggregateEvidence with
+                   Workflows = Some [ { authorityWorkflow with Text = aggregateText.Replace("permission-contents: read", "permission-contents: write") } ] })
+let narrowCaller = { bound with Call = { bound.Call with JobPermissions = Scopes [] } }
+expect "caller undergrant yields an aggregate finding"
+    (Ok(GateFindings [ { Subject = "FS-GG/FS.GG.Game -> reuse.yml@main"
+                         UnderGrants = [ { Scope = "contents"; Required = Read; Granted = NoAccess } ] } ]))
+    (PermissionAggregate.evaluate "source-commit" narrowCaller aggregateEvidence)
+let unprovenCaller =
+    { bound with Call = { bound.Call with WorkflowPermissions = Absent; JobPermissions = Absent } }
+expect "unproven caller default refuses aggregate verdict" (Error "caller-default-unproven")
+    (PermissionAggregate.evaluate "source-commit" unprovenCaller aggregateEvidence)
+expect "non-callable callee refuses aggregate verdict" (Error "callee-syntax:not-callable")
+    (PermissionAggregate.evaluate "source-commit" { bound with CalleeText = "on: push\n" } aggregateEvidence)
+expect "null workflow fact path refuses without exception" (Error "workflow-source-invalid")
+    (aggregate { aggregateEvidence with Workflows = Some [ { authorityWorkflow with Path = null } ] })
+expect "incomplete workflow evidence beats an App undergrant finding" (Error "workflow-missing")
+    (aggregate { aggregateEvidence with
+                   Roster = Some { authorityRoster with
+                                       Workflows = [ expectedWorkflow; { expectedWorkflow with Path = ".github/workflows/two.yml" } ] }
+                   Workflows = Some [ { authorityWorkflow with Text = aggregateText.Replace("permission-contents: read", "permission-contents: write") } ] })
+
 printfn "permission reducer: %d controls passed" passed
