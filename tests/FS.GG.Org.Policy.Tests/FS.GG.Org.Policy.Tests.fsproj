@@ -8,6 +8,7 @@
     <Compile Include="WorkflowSyntaxTests.fs" />
     <Compile Include="GitTreeProjectsTests.fs" />
     <Compile Include="GitCommitProvenanceTests.fs" />
+    <Compile Include="GitHubCommitMembershipTests.fs" />
     <Compile Include="RuleATests.fs" />
     <Compile Include="RuleBTests.fs" />
     <Compile Include="ProjectReferenceXmlTests.fs" />

@@ -323,6 +323,21 @@ module ProjectReferenceXml =
         | Error diagnostic -> Error diagnostic
         | Ok verified -> inspectSuppliedGitSnapshot verified.TreeId treeObjects sources
 
+    /// Add a repository-scoped GitHub commit lookup to the pure snapshot chain. The GraphQL
+    /// reader and accepted pin are still uninstalled trust boundaries.
+    let inspectSuppliedGitHubMembershipSnapshot
+        (pin: GitCommitProvenance.ExactCommitPin)
+        (membershipReader: GitHubCommitMembership.IReadOnlyGraphQlReader)
+        (commitReader: GitCommitProvenance.IReadOnlyCommitReader)
+        (rootTreeId: string)
+        (treeObjects: (string * byte[]) list)
+        (sources: (string * byte[]) list)
+        : Result<Map<string, string list>, SyntaxDiagnostic> =
+        match GitHubCommitMembership.inspectProvisionalMembership pin rootTreeId membershipReader with
+        | Error diagnostic -> Error diagnostic
+        | Ok membership ->
+            inspectSuppliedPinnedGitSnapshot pin commitReader membership.TreeId treeObjects sources
+
     /// A local observation of one caller-supplied implicit file. The result does not establish
     /// nearest-file selection, import closure, source provenance, or a Rule (b) graph verdict.
     type SuppliedImplicitObservation = NoDirectReferenceInSuppliedXml
