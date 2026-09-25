@@ -1710,6 +1710,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   absent producer, observer, issuer/reviewer, target, credential, CAS journal, grant and
   native readback evidence. Its proposed negative controls are unrun; the packet is not
   protected install or one-POST authorization.
+  [No-effect candidate verifier #585](https://github.com/FS-GG/FS.GG.Coordination/pull/585)
+  checks supplied source/workflow/artifact/runtime pins, actor, review, target and one-POST
+  intent against independent expectations, with four focused synthetic test methods.
+  Even matching input remains `authorized=false` and `can_dispatch=false`; protected
+  observers, selected credential/target, CAS/replay, grant and installed effect are absent.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
