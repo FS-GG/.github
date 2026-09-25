@@ -38,9 +38,9 @@ module GitHubCommitMembership =
         not (isNull (box request))
         && String.Equals(request.Document, document, StringComparison.Ordinal)
         && not (isNull request.Owner)
-        && Regex.IsMatch(request.Owner, "^[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant)
+        && Regex.IsMatch(request.Owner, @"\A[A-Za-z0-9_.-]+\z", RegexOptions.CultureInvariant)
         && not (isNull request.Name)
-        && Regex.IsMatch(request.Name, "^[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant)
+        && Regex.IsMatch(request.Name, @"\A[A-Za-z0-9_.-]+\z", RegexOptions.CultureInvariant)
         && canonicalSha1 request.CommitId
 
     let rec private duplicateKey (element: JsonElement) =
@@ -128,7 +128,7 @@ module GitHubCommitMembership =
         if isNull (box pin)
            || String.IsNullOrWhiteSpace pin.RepositoryNodeId
            || isNull pin.RepositoryFullName
-           || not (Regex.IsMatch(pin.RepositoryFullName, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant)) then
+           || not (Regex.IsMatch(pin.RepositoryFullName, @"\A[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\z", RegexOptions.CultureInvariant)) then
             error "<pin>" "exact repository identity is absent or malformed"
         elif not (canonicalSha1 pin.CommitId) || not (canonicalSha1 expectedTreeId) then
             error "<pin>" "commit and tree IDs must be exact lowercase SHA-1 values"

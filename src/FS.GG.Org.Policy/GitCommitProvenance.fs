@@ -70,7 +70,7 @@ module GitCommitProvenance =
         if isNull (box pin)
            || String.IsNullOrWhiteSpace pin.RepositoryNodeId
            || isNull pin.RepositoryFullName
-           || not (Regex.IsMatch(pin.RepositoryFullName, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant)) then
+           || not (Regex.IsMatch(pin.RepositoryFullName, @"\A[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\z", RegexOptions.CultureInvariant)) then
             error "<pin>" "exact repository identity is absent or malformed"
         elif not (canonicalSha1 pin.CommitId) then
             error "<pin>" "exact commit ID must be 40 lowercase SHA-1 hexadecimal characters"

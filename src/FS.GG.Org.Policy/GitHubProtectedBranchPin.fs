@@ -34,7 +34,7 @@ module GitHubProtectedBranchPin =
     let private validSegment (value: string) =
         not (isNull value)
         && value <> "." && value <> ".."
-        && Regex.IsMatch(value, "^[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant)
+        && Regex.IsMatch(value, @"\A[A-Za-z0-9_.-]+\z", RegexOptions.CultureInvariant)
 
     /// The concrete transport must reject arbitrary URLs before attaching its bearer token.
     let internal isExactReadRequest (request: ExactRequest) =
@@ -108,7 +108,7 @@ module GitHubProtectedBranchPin =
         if isNull (box repository)
            || String.IsNullOrWhiteSpace repository.RepositoryNodeId
            || isNull repository.RepositoryFullName
-           || not (Regex.IsMatch(repository.RepositoryFullName, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant))
+           || not (Regex.IsMatch(repository.RepositoryFullName, @"\A[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\z", RegexOptions.CultureInvariant))
            || (repository.RepositoryFullName.Split('/') |> Array.exists (validSegment >> not)) then
             error "<repository>" "exact repository identity is absent or malformed"
         elif isNull (box reader) then

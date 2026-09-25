@@ -56,6 +56,30 @@ module GitHubProtectedBranchPinTests =
         refused "SHA-1" (Ok(response (branchJson.Replace(commitId, commitId + "\\n"))))
 
     [<Fact>]
+    let ``repository name with terminal newline cannot mint protected pin`` () =
+        let malformedRepo = { repo with RepositoryFullName = repo.RepositoryFullName + "\n" }
+        let mutable calls = 0
+        let unsafeReader =
+            { new GitHubProtectedBranchPin.IReadOnlyProtectedBranchReader with
+                member _.ReadExact request =
+                    calls <- calls + 1
+                    Ok { response branchJson with ResponseUrl = request.Url } }
+        match GitHubProtectedBranchPin.inspectProvisionalPin malformedRepo unsafeReader with
+        | Error diagnostic -> Assert.Equal("github-protected-pin", diagnostic.Code)
+        | Ok pin -> failwithf "noncanonical repository minted protected pin: %A" pin
+        Assert.Equal(0, calls)
+
+    [<Fact>]
+    let ``terminal newline request segment cannot reach protected transport`` () =
+        let request: GitHubProtectedBranchPin.ExactRequest =
+            { Owner = "FS-GG"; Name = ".github"; Branch = "main"; Url = endpoint }
+        let malformedName = ".github\n"
+        let malformed =
+            { request with Name = malformedName
+                           Url = "https://api.github.com/repos/FS-GG/" + malformedName + "/branches/main" }
+        Assert.False(GitHubProtectedBranchPin.isExactReadRequest malformed)
+
+    [<Fact>]
     let ``duplicate protected or commit fields cannot mask rejected facts`` () =
         refused "duplicate" (Ok(response (branchJson.Replace("\"protected\":true", "\"protected\":false,\"protected\":true"))))
         refused "duplicate" (Ok(response (branchJson.Replace("\"sha\":\"" + commitId + "\"", "\"sha\":\"" + String.replicate 40 "a" + "\",\"sha\":\"" + commitId + "\""))))
