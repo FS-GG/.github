@@ -298,6 +298,25 @@ module GitTreeProjectsTests =
         |> List.iter (fun reserved -> refused "reserved .git" (fst reserved) [ reserved; edgeA ])
 
     [<Fact>]
+    let ``Git NTFS short alias for dotgit cannot certify a project roster`` () =
+        // Fixed raw trees from git hash-object --literally; git fsck --strict reports hasDotgit.
+        [ objectRow "aad3b0cd5096988e3efd93373d7058b1a1872916"
+              "NDAwMDAgZ2l0fjEAnONbjSuXJRIjSFiiL5F43IeMyoQ="
+          objectRow "421e30f6f744e0e174bad1b3329e2352c7ebaf57"
+              "NDAwMDAgR0lUfjEAnONbjSuXJRIjSFiiL5F43IeMyoQ="
+          objectRow "a29375bf21bb81b89fb5b3ff36ecaaada4461a61"
+              "NDAwMDAgZ2l0fjEuAJzjW40rlyUSI0hYoi+ReNyHjMqE" ]
+        |> List.iter (fun reserved -> refused "reserved .git" (fst reserved) [ reserved; edgeA ])
+
+        // git~2 is not the reserved short alias and must remain a normal directory.
+        let other =
+            objectRow "e90cbb74eb4d9490c6f61ef936592a5909347bb5"
+                "NDAwMDAgZ2l0fjIAnONbjSuXJRIjSFiiL5F43IeMyoQ="
+        match GitTreeProjects.inspectSha1 (fst other) [ other; edgeA ] with
+        | Error diagnostic -> failwithf "valid short name refused: %A" diagnostic
+        | Ok roster -> Assert.Equal("git~2/A.fsproj", fst roster.Head)
+
+    [<Fact>]
     let ``Git tree object entries must retain canonical byte and directory order`` () =
         // git hash-object --literally fixed these objects; git fsck --strict reports treeNotSorted.
         [ objectRow "6eab66dbdf50063bb5d919ae4202e7a0bea9a4d5"

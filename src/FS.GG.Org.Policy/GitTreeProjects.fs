@@ -77,13 +77,15 @@ module GitTreeProjects =
                         let mode = Encoding.ASCII.GetString(bytes, offset, space - offset)
                         try
                             let name = strictUtf8.GetString(bytes, space + 1, nul - space - 1)
+                            let normalizedName = name.TrimEnd([| ' '; '.' |])
                             if mode.StartsWith("0", StringComparison.Ordinal) then
                                 error path "zero-padded tree entry mode"
                             elif String.IsNullOrWhiteSpace name
                                || name = "." || name = ".."
                                || name.Contains('/') || name.Contains('\\') then
                                 error path "malformed tree entry name"
-                            elif String.Equals(name.TrimEnd([| ' '; '.' |]), ".git", StringComparison.OrdinalIgnoreCase) then
+                            elif String.Equals(normalizedName, ".git", StringComparison.OrdinalIgnoreCase)
+                                 || String.Equals(normalizedName, "git~1", StringComparison.OrdinalIgnoreCase) then
                                 error path "reserved .git tree entry name"
                             elif Set.contains name seen then
                                 error path "duplicate tree entry name"
