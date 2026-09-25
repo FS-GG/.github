@@ -137,7 +137,12 @@ refuses duplicate roster identities hidden by Unicode case folding; 199 F#, 48 P
 26 differential controls pass, while provider authentication remains open.
 [Templates unsafe-archive draft #522](https://github.com/FS-GG/FS.GG.Templates/pull/522)
 refuses unsafe ZIP paths and symlink members in release readbacks; current GitHub Packages
-still has no served-byte verdict. [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
+still has no served-byte verdict. [Templates signature-inventory draft #523](https://github.com/FS-GG/FS.GG.Templates/pull/523)
+refuses signed local/GitHub and unsigned or empty-signature NuGet archives that previously
+produced false success receipts; local retained-release and signed NuGet readbacks pass
+across 402 unsigned payload members. It checks signature-member shape, not cryptographic
+validity, and current GitHub Packages still has no verdict.
+[FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)
 adds source-only ref checks at feed entry, after each download and before receipt after a
