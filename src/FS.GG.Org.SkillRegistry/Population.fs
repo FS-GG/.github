@@ -16,7 +16,8 @@ type ManifestState = Parsed of ManifestEntry list | Unreadable of string | Absen
 type Checkout = { Repo: string; Manifest: ManifestState }
 
 /// Inputs whose roster and reachable population were independently enumerated by the caller.
-type PopulationInput = { Rostered: string list; Checkouts: Checkout list; Rows: RegistryRow list }
+/// A missing or unreadable roster must be carried as Error, never converted to an empty set.
+type PopulationInput = { Rostered: Result<string list, string>; Checkouts: Checkout list; Rows: RegistryRow list }
 
 /// A deterministic refusal; no input is silently dropped from the population check.
 type PopulationFinding = { Code: string; Subject: string; Detail: string }
@@ -54,6 +55,10 @@ module Population =
 
     /// Inspect one enumerated population. Findings are sorted for stable test and command output.
     let inspect (input: PopulationInput) : PopulationFinding list =
+        let rostered =
+            match input.Rostered with
+            | Ok names -> names
+            | Error _ -> []
         let checkoutByRepo = input.Checkouts |> Seq.map (fun checkout -> checkout.Repo, checkout) |> Map.ofSeq
         let rowById = input.Rows |> Seq.map (fun row -> row.Id, row) |> Map.ofSeq
         let named = input.Rows |> List.choose (fun row -> sourceRepo row.Source) |> Set.ofList
@@ -61,11 +66,15 @@ module Population =
         let mutable findings = []
         let add value = findings <- value :: findings
 
-        for item in duplicates "roster-duplicate" input.Rostered do add item
+        match input.Rostered with
+        | Error reason -> add (finding "roster-unreadable" "registry/repos.yml" reason)
+        | Ok _ -> ()
+
+        for item in duplicates "roster-duplicate" rostered do add item
         for item in duplicates "checkout-duplicate" (input.Checkouts |> Seq.map (fun checkout -> checkout.Repo)) do add item
         for item in duplicates "registry-duplicate" (input.Rows |> Seq.map (fun row -> row.Id)) do add item
 
-        for repo in input.Rostered |> Set.ofList do
+        for repo in rostered |> Set.ofList do
             if not (roots.Contains repo) then add (finding "roster-unreachable" repo "rostered repository has no checkout")
 
         for row in input.Rows do
