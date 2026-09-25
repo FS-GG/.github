@@ -664,6 +664,22 @@ for second in paths '!!str paths'; do
     3 "duplicate mapping key" "$RBD"
 done
 
+# PyYAML gives bare `on` a boolean key but quoted or !!str `on` a string key. Constructed-key
+# uniqueness therefore misses the duplicate spelling, and triggers() reads only the string key.
+# The malformed copy can hide a project-naming push filter behind an unfiltered second value.
+for second in "'on'" '!!str on'; do
+  RBT="$(root "$WORK/cover-tagged-on-${second//[^a-zA-Z0-9]/_}")"
+  proj "$RBT" "src/A" "../B/B.fsproj"
+  proj "$RBT" "src/B"
+  { echo "name: w"; echo "on:"; echo "  push: {paths: [src/A/**]}"
+    echo "$second: push"
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+    > "$RBT/.github/workflows/w.yml"
+  cp "$RS/.github/workflows/w.yml" "$RBT/.github/workflows/pair.yml"
+  expect "tagged duplicate $second cannot mask a project filter" \
+    3 "duplicate mapping key" "$RBT"
+done
+
 # An `on:` sequence is a list of event NAMES. Stringifying a mapping or YAML boolean fabricates
 # an event name, so a workflow's apparent push.paths can disappear while a clean sibling keeps the
 # audit at exit 0. The parser must refuse the malformed item before coverage is considered.

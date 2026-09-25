@@ -250,10 +250,15 @@ class UniqueKeySafeLoader(yaml.SafeLoader):
     def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict:
         self.flatten_mapping(node)
         mapping: dict = {}
+        spellings: set[str] = set()
         for key_node, value_node in node.value:
             key = self.construct_object(key_node, deep=deep)
+            # YAML 1.1 types bare `on` as True, while quoted/!!str `on` is a string. Their
+            # constructed keys differ, but Actions sees two spellings of the same workflow field.
+            # Refuse both constructed-key and scalar-spelling duplicates before either can mask it.
+            spelling = key_node.value if isinstance(key_node, yaml.ScalarNode) else None
             try:
-                duplicate = key in mapping
+                duplicate = key in mapping or (spelling is not None and spelling in spellings)
             except TypeError as e:
                 raise yaml.constructor.ConstructorError(
                     "while constructing a mapping", node.start_mark,
@@ -265,6 +270,8 @@ class UniqueKeySafeLoader(yaml.SafeLoader):
                     f"duplicate mapping key {key!r}", key_node.start_mark,
                 )
             mapping[key] = self.construct_object(value_node, deep=deep)
+            if spelling is not None:
+                spellings.add(spelling)
         return mapping
 
 
