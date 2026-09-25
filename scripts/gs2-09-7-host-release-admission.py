@@ -6,6 +6,8 @@ The caller must keep this port outside the candidate and workflow workspace.
 """
 
 import datetime as dt
+import hashlib
+import json
 import re
 from typing import Protocol
 from urllib.parse import urlsplit
@@ -33,6 +35,31 @@ def require(condition: bool, reason: str) -> None:
 class ProtectedAdmissionPort(Protocol):
     def describe(self) -> dict: ...
     def read_admission(self, run_id: int, run_attempt: int) -> dict: ...
+
+
+def decision_id_for(context: dict, signer_spki_sha256: str,
+                    target: dict) -> str:
+    """Stable one-use subject; token mint and decision lifetime are excluded."""
+    subject = {
+        "resourceId": PINNED_ADMISSION_RESOURCE_ID,
+        "workflowRepository": target["workflowRepository"],
+        "workflowPath": target["workflowPath"],
+        "environment": target["environment"],
+        "workflowSha": context["workflowSha"],
+        "candidateSha": context["candidateSha"],
+        "runId": context["runId"],
+        "runAttempt": context["runAttempt"],
+        "runNonce": context["runNonce"],
+        "sandboxRepositoryId": target["sandboxRepositoryId"],
+        "sandboxRepositoryNodeId": target["sandboxRepositoryNodeId"],
+        "projectNodeId": target["projectNodeId"],
+        "signerSpkiSha256": signer_spki_sha256,
+        "releasePolicySha256": PINNED_RELEASE_POLICY_SHA256,
+    }
+    raw = (RECORD_SCHEMA + "\n").encode("ascii") + json.dumps(
+        subject, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=True, allow_nan=False).encode("ascii")
+    return hashlib.sha256(raw).hexdigest()
 
 
 def check_port(port: ProtectedAdmissionPort | None) -> None:
@@ -108,7 +135,7 @@ def require_admitted(port: ProtectedAdmissionPort | None, context: dict,
     expected = {
         "schema": RECORD_SCHEMA,
         "resourceId": PINNED_ADMISSION_RESOURCE_ID,
-        "decisionId": record["decisionId"],
+        "decisionId": decision_id_for(context, signer_spki_sha256, target),
         "state": "admitted",
         "workflowRepository": target["workflowRepository"],
         "workflowPath": target["workflowPath"],

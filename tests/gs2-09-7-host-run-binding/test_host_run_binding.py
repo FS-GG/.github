@@ -39,7 +39,15 @@ class FakeAdmissionPort:
         self.record = {
             "schema": module.admission.RECORD_SCHEMA,
             "resourceId": ADMISSION_RESOURCE,
-            "decisionId": "d" * 64,
+            "decisionId": module.admission.decision_id_for(
+                context, signer_pin, {
+                    "workflowRepository": module.HOST_REPOSITORY,
+                    "workflowPath": module.WORKFLOW,
+                    "environment": module.ENVIRONMENT,
+                    "sandboxRepositoryId": module.SANDBOX_ID,
+                    "sandboxRepositoryNodeId": module.SANDBOX_NODE,
+                    "projectNodeId": module.PROJECT_NODE,
+                }),
             "state": "admitted",
             "workflowRepository": module.HOST_REPOSITORY,
             "workflowPath": module.WORKFLOW,
@@ -242,6 +250,12 @@ class HostRunBindingTests(unittest.TestCase):
                 with self.assertRaisesRegex(host.Refused, "admission-binding"):
                     self.build()
         self.admission_port.record = original
+
+    def test_alternate_decision_id_for_same_admitted_subject_refuses(self):
+        original = self.admission_port.record
+        self.admission_port.record = {**original, "decisionId": "f" * 64}
+        with self.assertRaisesRegex(host.Refused, "admission-binding"):
+            self.build()
 
     def test_protected_admission_descriptor_or_readback_failure_refuses(self):
         self.admission_port.descriptor = {

@@ -28,6 +28,10 @@ the authority decision ID and exact token binding before any live handoff.
 The current source-only claim is not evidence of that rule. Endpoint and
 policy digest pins remain empty, and their real provenance is unqualified.
 
+The later source-only decision-ID claim repair is recorded in
+`gs2-09-7-admission-once.md`. Its protected storage and revocation ordering
+remain unqualified.
+
 GS2-09.7 Q5/Q6 native receiver readback and protected receipt remain open.
 This change does not authorize sandbox dispatch, provider effect, token
 release, Authority write, protected merge, receipt, or cutover.

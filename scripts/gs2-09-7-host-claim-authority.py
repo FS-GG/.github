@@ -13,6 +13,7 @@ from typing import Protocol
 
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 STORE_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-claim-store/1"
+CLAIM_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-decision-claim/1"
 REVOKER_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-revoker/1"
 
 # A future protected host revision must pin an independently credentialed CAS
@@ -33,8 +34,9 @@ def require(condition: bool, reason: str) -> None:
 
 class ProtectedStore(Protocol):
     def describe(self) -> dict: ...
-    def cas_claim_once(self, binding_id: str, token_sha256: str) -> str: ...
-    def read_claim(self, binding_id: str) -> str: ...
+    def cas_claim_once(self, decision_id: str, binding_id: str,
+                       token_sha256: str) -> str: ...
+    def read_claim(self, decision_id: str) -> dict: ...
     def append_revoke_intent(self, binding_id: str, token_sha256: str) -> str: ...
     def append_revoked_receipt(self, binding_id: str, token_sha256: str) -> str: ...
 
@@ -105,11 +107,14 @@ class HostClaimAuthority:
     read back. Caller-owned files or self-reported metadata are not authority.
     """
 
-    def __init__(self, expected_binding_id: str, expected_token_sha256: str,
+    def __init__(self, expected_decision_id: str, expected_binding_id: str,
+                 expected_token_sha256: str,
                  store: ProtectedStore | None, revoker: ProtectedRevoker | None):
-        require(type(expected_binding_id) is str and HEX64.fullmatch(expected_binding_id)
+        require(type(expected_decision_id) is str and HEX64.fullmatch(expected_decision_id)
+                and type(expected_binding_id) is str and HEX64.fullmatch(expected_binding_id)
                 and type(expected_token_sha256) is str
                 and HEX64.fullmatch(expected_token_sha256), "binding-identity")
+        self.decision_id = expected_decision_id
         self.binding_id = expected_binding_id
         self.token_sha256 = expected_token_sha256
         self.store = store
@@ -119,28 +124,34 @@ class HostClaimAuthority:
         check_store(self.store)
         check_revoker(self.revoker)
 
-    def claim_once(self, binding_id: str) -> str:
+    def claim_once(self, decision_id: str, binding_id: str,
+                   token_sha256: str) -> str:
         self._authority()
-        require(binding_id == self.binding_id, "binding-identity")
+        require(decision_id == self.decision_id
+                and binding_id == self.binding_id
+                and token_sha256 == self.token_sha256, "binding-identity")
         try:
-            result = self.store.cas_claim_once(binding_id, self.token_sha256)
+            result = self.store.cas_claim_once(decision_id, binding_id,
+                                               token_sha256)
         except Exception:
             result = "unknown"
         if result == "committed":
             # A positive CAS response is not proof of durable commit. Require
             # exact native readback before the token can leave host custody.
             try:
-                observed = self.store.read_claim(binding_id)
+                observed = self.store.read_claim(decision_id)
             except Exception:
-                observed = "unknown"
-            return ("granted" if type(observed) is str
-                    and observed == self.token_sha256 else "unknown")
+                observed = None
+            expected = {"schema": CLAIM_SCHEMA, "decisionId": decision_id,
+                        "bindingId": binding_id, "tokenSha256": token_sha256}
+            return ("granted" if type(observed) is dict
+                    and observed == expected else "unknown")
         if result == "duplicate":
             return "duplicate"
         # Readback can locate a possibly committed claim for recovery, but a
         # lost CAS response never grants another token handoff.
         try:
-            self.store.read_claim(binding_id)
+            self.store.read_claim(decision_id)
         except Exception:
             pass
         return "unknown"
