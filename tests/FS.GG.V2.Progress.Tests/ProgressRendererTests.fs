@@ -86,6 +86,42 @@ module ProgressRendererTests =
         ContextUsedTokens = 191000L; ContextCapacityTokens = 258000L
     }
 
+    let private rootSessionId = "01a0d6e3-6928-7352-b724-f449e585c41c"
+    let private childSessionId = "01a0d6e3-6928-7352-b724-f449e585c41d"
+
+    let private nativeCounters input cached output : NativeTokenCounters = {
+        InputTokens = input; CachedInputTokens = cached; OutputTokens = output
+        TotalTokens = input + output
+    }
+
+    let private nativeEvent minutes ordinal counters percent : NativeTokenCountEvent = {
+        ObservedAt = at.AddMinutes(-minutes); Ordinal = ordinal; Counters = counters
+        PrimaryRate = percent |> Option.map (fun used -> {
+            LimitId = "codex"; WindowMinutes = 10080; UsedPercent = used
+            ResetsAt = DateTimeOffset(2026, 9, 30, 7, 28, 0, TimeSpan.Zero)
+        })
+    }
+
+    let private teamWindow () : TeamCounterWindow = {
+        RootSessionId = rootSessionId
+        WindowStart = at.AddMinutes(-10.0); WindowEnd = at
+        DeclaredSessionCount = 2
+        Sessions = [
+            { SessionId = rootSessionId; ParentSessionId = None
+              StartedAt = at.AddMinutes(-30.0); CompleteThrough = at
+              HistoryComplete = true; CollectorVerified = true; EvidenceId = "root-jsonl-sha256-1"
+              Events = [
+                  nativeEvent 21.0 1L (nativeCounters 100L 20L 40L) (Some 70M)
+                  nativeEvent 11.0 2L (nativeCounters 100L 20L 40L) (Some 70M)
+                  nativeEvent 1.0 3L (nativeCounters 130L 25L 50L) (Some 72M)
+              ] }
+            { SessionId = childSessionId; ParentSessionId = Some rootSessionId
+              StartedAt = at.AddMinutes(-14.0); CompleteThrough = at
+              HistoryComplete = true; CollectorVerified = true; EvidenceId = "child-jsonl-sha256-1"
+              Events = [ nativeEvent 5.0 1L (nativeCounters 20L 4L 10L) (Some 71M) ] }
+        ]
+    }
+
     let private render snapshot =
         match ProgressRenderer.renderSnapshot snapshot with
         | Ok markdown -> markdown
@@ -143,6 +179,11 @@ module ProgressRendererTests =
                 "- Authenticated CLI /status weekly evidence: 🔘 Unknown — none supplied"
                 "- Context occupancy: 🔘 Unknown — none supplied"
                 "- Period usage: 🔘 Unknown — genuine native turn usage has not been supplied"
+                "- Completed periods: 🔘 Unknown — no complete native team counter history"
+                "- All-period team total: 🔘 Unknown — no complete native team counter history"
+                "- Team mean per completed period: 🔘 Unknown — no complete native team counter window"
+                "- Native weekly allowance: 🔘 Unknown — no fresh native primary.used_percent observation"
+                "- Weekly exhaustion estimate: 🔘 Unknown — no qualified weekly percent slope"
                 ""
                 "## Protected holds"
                 ""
@@ -221,6 +262,69 @@ module ProgressRendererTests =
         refuses "genuine native turn IDs and usage" (withUsage { usage with Runner = { runner with NativeTurns = [] } })
         refuses "positive native turn token counts"
             (withUsage { usage with Runner = { runner with NativeTurns = [ { TurnId = "native-turn-1"; InputTokens = 0; OutputTokens = 0 } ] } })
+
+    [<Fact>]
+    let ``team counter mean divides all completed root-anchored periods including an idle period`` () =
+        let baseline = baseSnapshot ()
+        let window = teamWindow ()
+        let actual = render { baseline with PeriodUsage = NativeCounterPeriodUsage window }
+        Assert.Equal(actual, render { baseline with PeriodUsage = NativeCounterPeriodUsage window })
+        Assert.Contains("team-wide 10-minute native token_count delta 2026-09-25 11:50:00 UTC to 2026-09-25 12:00:00 UTC: input=50, cached input=9, noncached input=41, output=20, total=70; sessions=2", actual)
+        Assert.Contains("3 completed 10-minute periods from 2026-09-25 11:30:00 UTC through 2026-09-25 12:00:00 UTC; zero-use periods included", actual)
+        Assert.Contains("input=150, cached input=29, noncached input=121, output=60, total=210 tokens across all completed periods", actual)
+        Assert.Contains("input=50.00, cached input=9.67, noncached input=40.33, output=20.00, total=70.00 team tokens/period", actual)
+        Assert.Contains("- Team mean per completed period:", actual)
+        Assert.DoesNotContain("tokens/session", actual)
+        Assert.Contains("used=72.00%, remaining=28.00%", actual)
+        Assert.Contains("approximately 2026-09-25 14:19:00 UTC at the observed weekly percent slope", actual)
+        Assert.Contains("End-to-end capture acceptance: 🟡 Pending", actual)
+        let changedEvent = { window.Sessions.Head.Events.[2] with Counters = nativeCounters 230L 25L 50L }
+        let changedRoot = { window.Sessions.Head with Events = List.updateAt 2 changedEvent window.Sessions.Head.Events }
+        let changedWindow = { window with Sessions = changedRoot :: window.Sessions.Tail }
+        let changed = render { baseline with PeriodUsage = NativeCounterPeriodUsage changedWindow }
+        Assert.Contains("total=170; sessions=2", changed)
+        Assert.Contains("approximately 2026-09-25 14:19:00 UTC", changed)
+
+        let idleDescendants =
+            [ for ordinal in 1 .. 28 ->
+                { window.Sessions.Tail.Head with
+                    SessionId = $"idle-descendant-{ordinal}"
+                    ParentSessionId = Some childSessionId
+                    Events = [] } ]
+        let wholeTeam =
+            { window with DeclaredSessionCount = 30
+                          Sessions = window.Sessions @ idleDescendants }
+        let wholeTeamText = render { baseline with PeriodUsage = NativeCounterPeriodUsage wholeTeam }
+        Assert.Contains("total=70.00 team tokens/period", wholeTeamText)
+        Assert.Contains("sessions=30", wholeTeamText)
+
+    [<Fact>]
+    let ``native counter claims fail closed on lineage provenance and arithmetic`` () =
+        let baseline = baseSnapshot ()
+        let window = teamWindow ()
+        let withWindow value = { baseline with PeriodUsage = NativeCounterPeriodUsage value }
+        let root = window.Sessions.Head
+        let child = window.Sessions.Tail.Head
+        refuses "declared native session count" (withWindow { window with DeclaredSessionCount = 30 })
+        refuses "native session lineage" (withWindow { window with Sessions = [ root; { child with ParentSessionId = Some "foreign" } ] })
+        refuses "collector-verified complete-history provenance"
+            (withWindow { window with Sessions = [ { root with HistoryComplete = false }; child ] })
+        refuses "native session history must cover the report window"
+            (withWindow { window with Sessions = [ { root with CompleteThrough = at.AddSeconds(-1.0) }; child ] })
+        let badComponents = { root.Events.[2] with Counters = { root.Events.[2].Counters with TotalTokens = 999L } }
+        let badComponentsRoot = { root with Events = List.updateAt 2 badComponents root.Events }
+        refuses "native token_count components disagree"
+            (withWindow { window with Sessions = [ badComponentsRoot; child ] })
+        let decreased = { root.Events.[2] with Counters = nativeCounters 90L 19L 50L }
+        let decreasedRoot = { root with Events = List.updateAt 2 decreased root.Events }
+        refuses "native cumulative counters decreased"
+            (withWindow { window with Sessions = [ decreasedRoot; child ] })
+        let badCachedDelta = { root.Events.[2] with Counters = nativeCounters 130L 60L 50L }
+        let badCachedRoot = { root with Events = List.updateAt 2 badCachedDelta root.Events }
+        refuses "native cached input delta exceeds input delta"
+            (withWindow { window with Sessions = [ badCachedRoot; child ] })
+        refuses "native completed periods must be anchored at root session start"
+            (withWindow { window with Sessions = [ { root with StartedAt = at.AddMinutes(-29.0) }; child ] })
 
     [<Fact>]
     let ``history uses UTC newest-first tie breaks and exactly five real rows`` () =

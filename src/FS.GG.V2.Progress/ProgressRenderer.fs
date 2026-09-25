@@ -153,7 +153,86 @@ type NativePeriodUsage = {
     CollectorVerified: bool
 }
 
-type PeriodUsage = UnknownPeriodUsage | NativeTurnPeriodUsage of NativePeriodUsage
+/// Native JSONL token_count totals are cumulative within one session.
+/// Cached input is a subset of input; total equals input plus output.
+type NativeTokenCounters = {
+    InputTokens: int64
+    CachedInputTokens: int64
+    OutputTokens: int64
+    TotalTokens: int64
+}
+
+type NativePrimaryRate = {
+    LimitId: string
+    WindowMinutes: int
+    UsedPercent: decimal
+    ResetsAt: DateTimeOffset
+}
+
+type NativeTokenCountEvent = {
+    ObservedAt: DateTimeOffset
+    Ordinal: int64
+    Counters: NativeTokenCounters
+    PrimaryRate: NativePrimaryRate option
+}
+
+type NativeSessionCounters = {
+    SessionId: string
+    ParentSessionId: string option
+    StartedAt: DateTimeOffset
+    CompleteThrough: DateTimeOffset
+    HistoryComplete: bool
+    CollectorVerified: bool
+    EvidenceId: string
+    Events: NativeTokenCountEvent list
+}
+
+type TeamCounterWindow = {
+    RootSessionId: string
+    WindowStart: DateTimeOffset
+    WindowEnd: DateTimeOffset
+    DeclaredSessionCount: int
+    Sessions: NativeSessionCounters list
+}
+
+type PeriodUsage =
+    | UnknownPeriodUsage
+    | NativeTurnPeriodUsage of NativePeriodUsage
+    | NativeCounterPeriodUsage of TeamCounterWindow
+
+type CounterTotals = {
+    Input: decimal
+    CachedInput: decimal
+    Output: decimal
+    Total: decimal
+}
+
+type NativeRatePoint = {
+    ObservedAt: DateTimeOffset
+    Ordinal: int64
+    SessionId: string
+    EvidenceId: string
+    Rate: NativePrimaryRate
+}
+
+type ExhaustionEstimate =
+    | NoRateSlope
+    | EstimatedAt of DateTimeOffset
+    | NotBeforeReset
+    | AlreadyAtLimit
+
+type TeamCounterSummary = {
+    RootStartedAt: DateTimeOffset
+    WindowStart: DateTimeOffset
+    WindowEnd: DateTimeOffset
+    CompletedPeriodCount: int64
+    SessionCount: int
+    LatestPeriodDelta: CounterTotals
+    AllPeriodsTotal: CounterTotals
+    AllPeriodMean: CounterTotals
+    LatestRate: NativeRatePoint option
+    Exhaustion: ExhaustionEstimate
+}
 
 type NamedState = { Name: string; State: Status; Detail: string }
 
@@ -188,6 +267,7 @@ type DerivedProgress = {
     LaneCounts: LaneCounts
     EvidenceCounts: EvidenceCounts
     RecentCompletions: Completion list
+    CounterSummary: TeamCounterSummary option
 }
 
 module ProgressRenderer =
@@ -230,6 +310,8 @@ module ProgressRenderer =
     let private utc (value: DateTimeOffset) = value.Offset = TimeSpan.Zero
     let private timeText (value: DateTimeOffset) =
         value.ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture)
+    let private decimalText (value: decimal) = value.ToString("0.00", CultureInfo.InvariantCulture)
+    let private integerText (value: decimal) = value.ToString("0", CultureInfo.InvariantCulture)
 
     let private sha40 (value: string) =
         not (isNull value) && Regex.IsMatch(value, "\\A[0-9a-f]{40}\\z", RegexOptions.CultureInvariant)
@@ -261,6 +343,159 @@ module ProgressRenderer =
         if sixth <> 0 then sixth else
         ordinal.Compare(left.Link |> Option.map _.Label |> Option.defaultValue "",
                         right.Link |> Option.map _.Label |> Option.defaultValue "")
+
+    let private zeroCounters =
+        { InputTokens = 0L; CachedInputTokens = 0L; OutputTokens = 0L; TotalTokens = 0L }
+
+    let private counterDelta after before =
+        { Input = decimal after.InputTokens - decimal before.InputTokens
+          CachedInput = decimal after.CachedInputTokens - decimal before.CachedInputTokens
+          Output = decimal after.OutputTokens - decimal before.OutputTokens
+          Total = decimal after.TotalTokens - decimal before.TotalTokens }
+
+    let private sumTotals left right =
+        { Input = left.Input + right.Input
+          CachedInput = left.CachedInput + right.CachedInput
+          Output = left.Output + right.Output
+          Total = left.Total + right.Total }
+
+    let private zeroTotals = { Input = 0M; CachedInput = 0M; Output = 0M; Total = 0M }
+
+    let private deriveCounterWindow (asOf: DateTimeOffset) (window: TeamCounterWindow)
+        : Result<TeamCounterSummary, string list> =
+        let errors = ResizeArray<string>()
+        let require condition message = if not condition then errors.Add message
+        let period = TimeSpan.FromMinutes 10.0
+        require (utc window.WindowStart && utc window.WindowEnd
+                 && window.WindowEnd - window.WindowStart = period
+                 && window.WindowEnd <= asOf && asOf - window.WindowEnd < period)
+            "native counter period must be the latest completed ten-minute UTC window"
+        require (nonblank window.RootSessionId) "native counter root session must be supplied"
+        require (window.DeclaredSessionCount > 0 && window.DeclaredSessionCount = window.Sessions.Length)
+            "declared native session count disagrees with supplied sessions"
+        let ids = window.Sessions |> List.map _.SessionId
+        require (ids.Length = (ids |> List.distinct).Length) "native session IDs must be unique"
+        require (window.Sessions |> List.exists (fun session ->
+            session.SessionId = window.RootSessionId && session.ParentSessionId.IsNone))
+            "native counter root must have no parent"
+        let rootStartedAt =
+            window.Sessions |> List.tryFind (fun session -> session.SessionId = window.RootSessionId)
+            |> Option.map _.StartedAt |> Option.defaultValue window.WindowStart
+        let elapsed = window.WindowEnd - rootStartedAt
+        require (utc rootStartedAt && elapsed.Ticks >= period.Ticks
+                 && elapsed.Ticks % period.Ticks = 0L
+                 && window.WindowStart = window.WindowEnd - period)
+            "native completed periods must be anchored at root session start"
+        let mutable reachable = Set.singleton window.RootSessionId
+        for _ in 1 .. window.Sessions.Length do
+            for session in window.Sessions do
+                if session.ParentSessionId |> Option.exists reachable.Contains then
+                    reachable <- reachable.Add session.SessionId
+        require (reachable.Count = window.Sessions.Length)
+            "native session lineage must close under the selected root"
+        for session in window.Sessions do
+            require (nonblank session.SessionId && nonblank session.EvidenceId
+                     && session.CollectorVerified && session.HistoryComplete)
+                "native session requires collector-verified complete-history provenance"
+            require (utc session.StartedAt && utc session.CompleteThrough
+                     && session.StartedAt >= rootStartedAt
+                     && session.StartedAt <= asOf
+                     && session.CompleteThrough = asOf)
+                "native session history must cover the report window"
+            for event in session.Events do
+                require (utc event.ObservedAt && event.ObservedAt >= session.StartedAt
+                         && event.ObservedAt <= session.CompleteThrough && event.Ordinal >= 0L)
+                    "native token_count event time or ordinal is invalid"
+                let c = event.Counters
+                require (c.InputTokens >= 0L && c.CachedInputTokens >= 0L
+                         && c.OutputTokens >= 0L && c.TotalTokens >= 0L
+                         && c.CachedInputTokens <= c.InputTokens
+                         && decimal c.InputTokens + decimal c.OutputTokens = decimal c.TotalTokens)
+                    "native token_count components disagree"
+                event.PrimaryRate |> Option.iter (fun rate ->
+                    require (nonblank rate.LimitId && rate.WindowMinutes = 10080
+                             && rate.UsedPercent >= 0M && rate.UsedPercent <= 100M
+                             && utc rate.ResetsAt && rate.ResetsAt > event.ObservedAt)
+                        "native primary weekly rate limit is invalid")
+            for previous, current in session.Events |> List.pairwise do
+                require (previous.Ordinal < current.Ordinal
+                         && previous.ObservedAt <= current.ObservedAt)
+                    "native token_count events must follow ordinal and time order"
+                let a, b = previous.Counters, current.Counters
+                require (a.InputTokens <= b.InputTokens
+                         && a.CachedInputTokens <= b.CachedInputTokens
+                         && a.OutputTokens <= b.OutputTokens
+                         && a.TotalTokens <= b.TotalTokens)
+                    "native cumulative counters decreased"
+                require (decimal b.CachedInputTokens - decimal a.CachedInputTokens
+                         <= decimal b.InputTokens - decimal a.InputTokens)
+                    "native cached input delta exceeds input delta"
+        if errors.Count > 0 then Error(errors |> Seq.distinct |> Seq.sort |> Seq.toList)
+        else
+            let lastAt cutoff (events: NativeTokenCountEvent list) =
+                events |> List.filter (fun event -> event.ObservedAt <= cutoff)
+                       |> List.tryLast |> Option.map _.Counters |> Option.defaultValue zeroCounters
+            let latestDelta =
+                window.Sessions
+                |> List.map (fun session ->
+                    counterDelta (lastAt window.WindowEnd session.Events)
+                                 (lastAt window.WindowStart session.Events))
+                |> List.fold sumTotals zeroTotals
+            let allTotal =
+                window.Sessions
+                |> List.map (fun session -> counterDelta (lastAt window.WindowEnd session.Events) zeroCounters)
+                |> List.fold sumTotals zeroTotals
+            let periodCount = elapsed.Ticks / period.Ticks
+            let count = decimal periodCount
+            let mean =
+                { Input = allTotal.Input / count; CachedInput = allTotal.CachedInput / count
+                  Output = allTotal.Output / count; Total = allTotal.Total / count }
+            let ratePoints =
+                window.Sessions
+                |> List.collect (fun session ->
+                    session.Events |> List.choose (fun event ->
+                        event.PrimaryRate |> Option.map (fun rate ->
+                            { ObservedAt = event.ObservedAt; Ordinal = event.Ordinal
+                              SessionId = session.SessionId; EvidenceId = session.EvidenceId
+                              Rate = rate })))
+                |> List.sortWith (fun a b ->
+                    let byTime = compare a.ObservedAt b.ObservedAt
+                    if byTime <> 0 then byTime else
+                    let bySession = ordinal.Compare(a.SessionId, b.SessionId)
+                    if bySession <> 0 then bySession else compare a.Ordinal b.Ordinal)
+            let latest =
+                ratePoints
+                |> List.filter (fun point ->
+                    point.ObservedAt >= asOf - period && point.ObservedAt <= asOf)
+                |> List.tryLast
+            let exhaustion =
+                match latest with
+                | None -> NoRateSlope
+                | Some current when current.Rate.UsedPercent >= 100M -> AlreadyAtLimit
+                | Some current ->
+                    let prior =
+                        ratePoints
+                        |> List.filter (fun point ->
+                            point.Rate.LimitId = current.Rate.LimitId
+                            && point.Rate.ResetsAt = current.Rate.ResetsAt
+                            && point.ObservedAt <= current.ObservedAt - TimeSpan.FromMinutes 10.0)
+                        |> List.tryLast
+                    match prior with
+                    | None -> NoRateSlope
+                    | Some before ->
+                        let rise = current.Rate.UsedPercent - before.Rate.UsedPercent
+                        if rise <= 0M then NoRateSlope else
+                        let observedTicks = decimal (current.ObservedAt - before.ObservedAt).Ticks
+                        let remainingTicks =
+                            Decimal.Truncate((100M - current.Rate.UsedPercent) * observedTicks / rise)
+                        let untilReset = decimal (current.Rate.ResetsAt - current.ObservedAt).Ticks
+                        if remainingTicks > untilReset then NotBeforeReset
+                        else EstimatedAt(current.ObservedAt.AddTicks(int64 remainingTicks))
+            Ok { RootStartedAt = rootStartedAt
+                 WindowStart = window.WindowStart; WindowEnd = window.WindowEnd
+                 CompletedPeriodCount = periodCount; SessionCount = window.Sessions.Length
+                 LatestPeriodDelta = latestDelta; AllPeriodsTotal = allTotal
+                 AllPeriodMean = mean; LatestRate = latest; Exhaustion = exhaustion }
 
     /// Validates caller-supplied facts and derives only counts and display order.
     /// The collector must verify provenance of runner items and Host receipts before constructing a claim.
@@ -429,6 +664,7 @@ module ProgressRenderer =
             require (status.ContextCapacityTokens > 0L && status.ContextUsedTokens >= 0L
                      && status.ContextUsedTokens <= status.ContextCapacityTokens)
                 "CLI /status context occupancy must fit its capacity")
+        let mutable counterSummary: TeamCounterSummary option = None
         match snapshot.PeriodUsage with
         | UnknownPeriodUsage -> ()
         | NativeTurnPeriodUsage usage ->
@@ -457,6 +693,10 @@ module ProgressRenderer =
                 require (turn.InputTokens >= 0 && turn.OutputTokens >= 0
                          && int64 turn.InputTokens + int64 turn.OutputTokens > 0L)
                     "period usage requires positive native turn token counts"
+        | NativeCounterPeriodUsage window ->
+            match deriveCounterWindow snapshot.AsOf window with
+            | Ok summary -> counterSummary <- Some summary
+            | Error findings -> for finding in findings do errors.Add finding
 
         for hold in snapshot.ProtectedHolds do requireText "protected hold" hold
         for check in snapshot.Checks do
@@ -482,7 +722,8 @@ module ProgressRenderer =
             completion.Link |> Option.iter (requireLink "completion")
         let recent = snapshot.CompletionHistory |> List.sortWith completionCompare |> List.truncate 5
         if errors.Count > 0 then Error(errors |> Seq.distinct |> Seq.sort |> Seq.toList)
-        else Ok { Snapshot = snapshot; LaneCounts = laneCounts; EvidenceCounts = counts; RecentCompletions = recent }
+        else Ok { Snapshot = snapshot; LaneCounts = laneCounts; EvidenceCounts = counts
+                  RecentCompletions = recent; CounterSummary = counterSummary }
 
     let private escape (value: string) =
         value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;")
@@ -552,6 +793,44 @@ module ProgressRenderer =
                 let input = usage.Runner.NativeTurns |> List.sumBy (fun turn -> int64 turn.InputTokens)
                 let output = usage.Runner.NativeTurns |> List.sumBy (fun turn -> int64 turn.OutputTokens)
                 $"🔵 Completed/Info — input={input}, output={output} native turn tokens; window {timeText usage.WindowStart} to {timeText usage.WindowEnd}; {renderLink usage.Runner.Evidence}"
+            | NativeCounterPeriodUsage _ ->
+                match progress.CounterSummary with
+                | None -> "🔘 Unknown — native counter window has not qualified"
+                | Some summary ->
+                    let delta = summary.LatestPeriodDelta
+                    let noncached = delta.Input - delta.CachedInput
+                    $"🔵 Completed/Info — team-wide 10-minute native token_count delta {timeText summary.WindowStart} to {timeText summary.WindowEnd}: input={integerText delta.Input}, cached input={integerText delta.CachedInput}, noncached input={integerText noncached}, output={integerText delta.Output}, total={integerText delta.Total}; sessions={summary.SessionCount}; cached input is included in input"
+        let periodsText, allTotalText, meanText, nativeRateText, exhaustionText =
+            match progress.CounterSummary with
+            | None ->
+                "🔘 Unknown — no complete native team counter history",
+                "🔘 Unknown — no complete native team counter history",
+                "🔘 Unknown — no complete native team counter window",
+                "🔘 Unknown — no fresh native primary.used_percent observation",
+                "🔘 Unknown — no qualified weekly percent slope"
+            | Some summary ->
+                let total = summary.AllPeriodsTotal
+                let mean = summary.AllPeriodMean
+                let periodsText =
+                    $"🔵 Completed/Info — {summary.CompletedPeriodCount} completed 10-minute periods from {timeText summary.RootStartedAt} through {timeText summary.WindowEnd}; zero-use periods included"
+                let totalText =
+                    $"🔵 Completed/Info — input={integerText total.Input}, cached input={integerText total.CachedInput}, noncached input={integerText (total.Input - total.CachedInput)}, output={integerText total.Output}, total={integerText total.Total} tokens across all completed periods"
+                let meanText =
+                    $"🔵 Completed/Info — input={decimalText mean.Input}, cached input={decimalText mean.CachedInput}, noncached input={decimalText (mean.Input - mean.CachedInput)}, output={decimalText mean.Output}, total={decimalText mean.Total} team tokens/period"
+                let rateText =
+                    match summary.LatestRate with
+                    | None -> "🔘 Unknown — no fresh native primary.used_percent observation"
+                    | Some point ->
+                        let used = decimalText point.Rate.UsedPercent + "%"
+                        let remaining = decimalText (100M - point.Rate.UsedPercent) + "%"
+                        $"🔵 Completed/Info — used={used}, remaining={remaining}; observed={timeText point.ObservedAt}; reset={timeText point.Rate.ResetsAt}; limit={escape point.Rate.LimitId}; session={escape point.SessionId}; ordinal={point.Ordinal}; provenance={escape point.EvidenceId}"
+                let estimateText =
+                    match summary.Exhaustion with
+                    | NoRateSlope -> "🔘 Unknown — need two same-reset weekly percent observations at least 10 minutes apart"
+                    | EstimatedAt instant -> $"🟡 Pending — approximately {timeText instant} at the observed weekly percent slope"
+                    | NotBeforeReset -> "🔵 Completed/Info — observed weekly percent slope projects no exhaustion before reset"
+                    | AlreadyAtLimit -> "🔴 Failed/Unsafe — native weekly used percent reached 100%"
+                periodsText, totalText, meanText, rateText, estimateText
         [
             "# V2 progress update"
             ""
@@ -588,6 +867,11 @@ module ProgressRenderer =
             ""
             yield! statusRows
             $"- Period usage: {periodUsageText}"
+            $"- Completed periods: {periodsText}"
+            $"- All-period team total: {allTotalText}"
+            $"- Team mean per completed period: {meanText}"
+            $"- Native weekly allowance: {nativeRateText}"
+            $"- Weekly exhaustion estimate: {exhaustionText}"
             ""
             "## Protected holds"
             ""
