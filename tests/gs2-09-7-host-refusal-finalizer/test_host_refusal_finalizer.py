@@ -315,6 +315,33 @@ class HostRefusalFinalizerTests(unittest.TestCase):
         self.assertEqual(0, self.release_port.invocations)
         self.assertEqual(2, self.port.calls.count("native-revoke"))
 
+    def test_store_outage_across_restart_cannot_prove_one_native_attempt(self):
+        native_calls = []
+        def unknown_observation(_token):
+            return "unknown"
+        def lost_native_response(_token):
+            native_calls.append("revoke")
+            raise OSError("native result unavailable")
+
+        self.port.claim_native_attempt_once = None
+        self.port.observe = unknown_observation
+        self.port.revoke = lost_native_response
+        first = self.run_finalizer()
+        self.assertEqual("not-invoked", first["release"])
+        self.assertEqual("pending", first["revocation"])
+
+        # A recovered host has no durable marker in either process. The same
+        # provider can receive another best-effort call while readback is unknown.
+        self.port = FakeFinalizerPort(self.fixture.token, self.fixture.context)
+        self.port.claim_native_attempt_once = None
+        self.port.observe = unknown_observation
+        self.port.revoke = lost_native_response
+        second = finalizer.recover_pending(self.port, MINT_ID)
+        self.assertEqual("pending", second["revocation"])
+        self.assertEqual("pending", second["disposition"])
+        self.assertEqual(0, self.release_port.invocations)
+        self.assertEqual(["revoke", "revoke"], native_calls)
+
     def test_unknown_invocation_is_not_retried_and_is_pending(self):
         self.release_port.invoke_result = "unknown"
         first = self.run_finalizer()
