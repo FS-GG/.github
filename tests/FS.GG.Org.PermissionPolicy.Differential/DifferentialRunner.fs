@@ -47,7 +47,6 @@ let run path =
     let callerText = field "caller_yaml" scenario
     let calleeText = field "callee_yaml" scenario
     let inventories = items "inventories" scenario
-    let defaultInventory = inventories |> List.tryFind (fun value -> field "id" value = "default")
     let authorityRoster: AuthorityWorkflowRoster =
         {
             Repository = "FS-GG/.github"
@@ -72,30 +71,74 @@ let run path =
           Workflows = Some workflows
           Inventories = Some inventoryFacts }
 
-    match WorkflowPermissionSyntax.callerCall "caller.yml" "sync" callerText with
-    | Error diagnostic -> report (Error("caller-syntax:" + diagnostic.Code))
-    | Ok call ->
-        let selectedInventory = defaultInventory |> Option.map inventory
-        let facts: PermissionBindingFacts =
-            {
-                CallerRepository = callerRepository
-                Roster =
-                    Some
-                        { Repository = "FS-GG/.github"
-                          Path = "registry/repos.yml"
-                          Repositories = items "roster_repositories" scenario |> List.map (fun item -> item.GetString()) }
-                Callee =
-                    Some
-                        { Repository = "FS-GG/.github"
-                          WorkflowPath = ".github/workflows/" + call.Callee
-                          Ref = call.Ref
-                          Origin = if call.Ref = "main" then WorkingTree else ExactRefRead
-                          Text = calleeText }
-                AppGrants = selectedInventory
-            }
-        match PermissionEvidenceBinding.bind callerRepository "default" call facts with
-        | Error code -> report (Error("binding:" + code))
-        | Ok bound -> PermissionAggregate.evaluate sourceRef bound evidence |> report
+    let callerRoster: CallerFleetRoster =
+        { Repository = "FS-GG/.github"
+          Path = "registry/repos.yml"
+          SourceRef = sourceRef
+          Repositories =
+            items "expected_caller_workflows" scenario
+            |> List.map (fun value ->
+                { Repository = field "repository" value
+                  SourceRef = field "source_ref" value
+                  WorkflowPaths = items "paths" value |> List.map _.GetString() }) }
+    let callerSourceRef repository =
+        callerRoster.Repositories
+        |> List.find (fun item -> item.Repository = repository)
+        |> _.SourceRef
+    let rosterFact: RosterFact =
+        { Repository = "FS-GG/.github"
+          Path = "registry/repos.yml"
+          Repositories = items "roster_repositories" scenario |> List.map _.GetString() }
+    let callerSnapshots: CallerWorkflowSnapshot list =
+        let first =
+            { Repository = callerRepository
+              WorkflowPath = ".github/workflows/caller.yml"
+              SourceRef = callerSourceRef callerRepository
+              Text = callerText }
+        let others =
+            (property "additional_callers" scenario).EnumerateObject()
+            |> Seq.collect (fun entry ->
+                entry.Value.EnumerateArray()
+                |> Seq.mapi (fun index value ->
+                    { Repository = entry.Name
+                      WorkflowPath = $".github/workflows/caller-{index + 1}.yml"
+                      SourceRef = callerSourceRef entry.Name
+                      Text = value.GetString() }))
+            |> Seq.toList
+        first :: others
+    let callFacts: CallerCallFact list =
+        items "caller_call_facts" scenario
+        |> List.map (fun value ->
+            let repository = field "repository" value
+            let callee = field "callee" value
+            let calleeRef = field "ref" value
+            let selectedInventory =
+                inventories
+                |> List.tryFind (fun item -> field "id" item = field "inventory_id" value)
+                |> Option.map inventory
+            let selectedCallee =
+                if calleeRef = "main" then calleeText
+                else field calleeRef (property "pinned_callees" scenario)
+            { Repository = repository
+              WorkflowPath = field "path" value
+              JobId = field "job_id" value
+              InventoryId = field "inventory_id" value
+              BindingFacts =
+                { CallerRepository = repository
+                  Roster = Some rosterFact
+                  Callee = Some
+                    { Repository = "FS-GG/.github"
+                      WorkflowPath = ".github/workflows/" + callee
+                      Ref = calleeRef
+                      Origin = if calleeRef = "main" then WorkingTree else ExactRefRead
+                      Text = selectedCallee }
+                  AppGrants = selectedInventory } })
+    let fleetEvidence: CallerFleetEvidence =
+        { Roster = Some callerRoster
+          Workflows = Some callerSnapshots
+          Calls = Some callFacts
+          Authority = evidence }
+    PermissionFleet.evaluate sourceRef fleetEvidence |> report
 
 let args = Environment.GetCommandLineArgs()
 if args.Length <> 2 then failwith "usage: DifferentialRunner <scenario.json>"

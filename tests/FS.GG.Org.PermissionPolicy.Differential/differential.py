@@ -48,9 +48,7 @@ EXPECTED_PYTHON = {
     "authority_roster_omitted_workflow": "NO_VERDICT",
     "authority_roster_duplicate_workflow": "NO_VERDICT",
 }
-KNOWN_PAIRS = {
-    "rostered_second_caller_undergrants": ("FINDING", "OK"),
-}
+KNOWN_PAIRS = {}
 
 CALLEE = """on: { workflow_call: {} }
 permissions: { contents: read }
@@ -78,6 +76,14 @@ BASE = {
     "caller_yaml": caller(),
     "callee_yaml": CALLEE,
     "roster_repositories": ["FS-GG/R"],
+    "expected_caller_workflows": [
+        {"repository": "FS-GG/R", "source_ref": "fixture-r-head",
+         "paths": [".github/workflows/caller.yml"]},
+    ],
+    "caller_call_facts": [
+        {"repository": "FS-GG/R", "path": ".github/workflows/caller.yml",
+         "job_id": "sync", "callee": "cal.yml", "ref": "main", "inventory_id": "default"},
+    ],
     "authority_workflows": [
         {"path": ".github/workflows/cal.yml", "text": CALLEE},
         {"path": ".github/workflows/app.yml", "text": APP},
@@ -178,12 +184,18 @@ def cases():
     def extra_rostered_repo(s):
         s["roster_repositories"].append("FS-GG/S")
         s["additional_callers"]["FS-GG/S"] = [caller("permissions: { contents: none }")]
+        s["expected_caller_workflows"].append(
+            {"repository": "FS-GG/S", "source_ref": "fixture-s-head",
+             "paths": [".github/workflows/caller-1.yml"]})
+        s["caller_call_facts"].append(
+            {"repository": "FS-GG/S", "path": ".github/workflows/caller-1.yml",
+             "job_id": "sync", "callee": "cal.yml", "ref": "main", "inventory_id": "default"})
 
-    add("rostered_second_caller_undergrants", extra_rostered_repo,
-        "F# aggregate covers one bound caller pair; authenticated fleet enumeration remains external")
+    add("rostered_second_caller_undergrants", extra_rostered_repo)
 
     def pinned(s):
         s["caller_yaml"] = caller(target="cal.yml@v1")
+        s["caller_call_facts"][0]["ref"] = "v1"
         s["pinned_callees"]["v1"] = CALLEE
         s["callee_yaml"] = CALLEE
         s["authority_workflows"][0]["text"] = CALLEE.replace(

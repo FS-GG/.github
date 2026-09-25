@@ -550,4 +550,69 @@ expect "incomplete workflow evidence beats an App undergrant finding" (Error "wo
                                        Workflows = [ expectedWorkflow; { expectedWorkflow with Path = ".github/workflows/two.yml" } ] }
                    Workflows = Some [ { authorityWorkflow with Text = aggregateText.Replace("permission-contents: read", "permission-contents: write") } ] })
 
+let fleetTarget = "FS-GG/.github/.github/workflows/reuse.yml@main"
+let firstCallerText = $"permissions: {{ contents: read }}\njobs: {{ sync: {{ uses: {fleetTarget} }} }}\n"
+let secondCallerText = $"permissions: {{ contents: none }}\njobs: {{ sync: {{ uses: {fleetTarget} }} }}\n"
+expect "caller parser enumerates every organization call job"
+    (Ok [ "first", call; "second", call ])
+    (WorkflowPermissionSyntax.callerCallJobs "caller.yml"
+        $"permissions: {{ contents: read }}\njobs: {{ first: {{ uses: {fleetTarget} }}, second: {{ uses: {fleetTarget} }} }}\n")
+syntaxRefused "dynamic caller target refuses fleet enumeration" "call-target-dynamic"
+    (WorkflowPermissionSyntax.callerCallJobs "caller.yml"
+        "jobs: { sync: { uses: '${{ inputs.target }}' } }\n")
+let fleetRoster: CallerFleetRoster =
+    { Repository = "FS-GG/.github"
+      Path = "registry/repos.yml"
+      SourceRef = "source-commit"
+      Repositories =
+        [ { Repository = "FS-GG/R"; SourceRef = "r-head"
+            WorkflowPaths = [ ".github/workflows/caller.yml" ] }
+          { Repository = "FS-GG/S"; SourceRef = "s-head"
+            WorkflowPaths = [ ".github/workflows/caller.yml" ] } ] }
+let fleetRosterFact: RosterFact =
+    { Repository = "FS-GG/.github"
+      Path = "registry/repos.yml"
+      Repositories = [ "FS-GG/R"; "FS-GG/S" ] }
+let firstSnapshot: CallerWorkflowSnapshot =
+    { Repository = "FS-GG/R"; WorkflowPath = ".github/workflows/caller.yml"
+      SourceRef = "r-head"; Text = firstCallerText }
+let secondCallerSnapshot =
+    { firstSnapshot with Repository = "FS-GG/S"; SourceRef = "s-head"; Text = secondCallerText }
+let firstCallFact: CallerCallFact =
+    { Repository = "FS-GG/R"; WorkflowPath = firstSnapshot.WorkflowPath
+      JobId = "sync"; InventoryId = "pinned-default-app"
+      BindingFacts = { bindingFacts with CallerRepository = "FS-GG/R"; Roster = Some fleetRosterFact } }
+let secondCallFact =
+    { firstCallFact with Repository = "FS-GG/S"
+                         BindingFacts = { firstCallFact.BindingFacts with CallerRepository = "FS-GG/S" } }
+let fleetEvidence: CallerFleetEvidence =
+    { Roster = Some fleetRoster
+      Workflows = Some [ firstSnapshot; secondCallerSnapshot ]
+      Calls = Some [ firstCallFact; secondCallFact ]
+      Authority = aggregateEvidence }
+let fleet evidence = PermissionFleet.evaluate "source-commit" evidence
+expect "second rostered caller undergrant is a fleet finding"
+    (Ok(GateFindings [ UnderGrantFinding(
+        "FS-GG/S -> reuse.yml@main",
+        [ { Scope = "contents"; Required = Read; Granted = NoAccess } ]) ]))
+    (fleet fleetEvidence)
+expect "missing second caller workflow refuses before fleet verdict"
+    (Error "caller-workflow-facts-mismatch")
+    (fleet { fleetEvidence with Workflows = Some [ firstSnapshot ] })
+expect "missing second bound call refuses before fleet verdict"
+    (Error "caller-call-facts-mismatch")
+    (fleet { fleetEvidence with Calls = Some [ firstCallFact ] })
+expect "duplicate bound call facts refuse"
+    (Error "caller-call-facts-duplicate")
+    (fleet { fleetEvidence with Calls = Some [ firstCallFact; secondCallFact; secondCallFact ] })
+expect "stale second caller snapshot refuses"
+    (Error "stale-source-ref")
+    (fleet { fleetEvidence with Workflows = Some [ firstSnapshot; { secondCallerSnapshot with SourceRef = "old" } ] })
+let wrongSecondCallFact =
+    { secondCallFact with
+        BindingFacts = { secondCallFact.BindingFacts with Roster = Some roster } }
+expect "mismatched per-call roster refuses"
+    (Error "caller-roster-binding-mismatch")
+    (fleet { fleetEvidence with Calls = Some [ firstCallFact; wrongSecondCallFact ] })
+
 printfn "permission reducer: %d controls passed" passed

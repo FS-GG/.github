@@ -12,5 +12,6 @@
     <Compile Include="PermissionEvidenceBinding.fs" />
     <Compile Include="AppGrantComparison.fs" />
     <Compile Include="PermissionAggregate.fs" />
+    <Compile Include="PermissionFleet.fs" />
   </ItemGroup>
 </Project>
