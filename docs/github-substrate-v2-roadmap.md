@@ -121,7 +121,7 @@ Project 2 with `organization_projects=read` named in the response. The runner's 
 effective organization Projects read access to Project 2 (including any needed organization
 approval), or a separately accepted direct-Project-1 bootstrap change, is required for this
 route. No WorkItem or native turn was admitted through that failed query.
-At the 2026-09-25 16:36 UTC recheck, the current credential again read the exact
+At the 2026-09-25 21:17 UTC recheck, the current credential again read the exact
 Coordination Project 1 (`PVT_kwDOEYAWY84Bb08W`) and again received
 `Resource not accessible by personal access token` for Project 2. The direct Project 1
 bootstrap drafts remain unaccepted and uninstalled, so this does not admit a runner item
@@ -1222,6 +1222,10 @@ changing the protected holds:
 | [FSC-05 F# #603](https://github.com/FS-GG/FS.GG.Templates/pull/603) | `35a699e010004eed6d18b0d30e71797f38153252` | Dormant provider reader refuses present but empty YAML `parameters:` block, which independent YamlDotNet reads as null rather than a sequence; red-before, 68 F# tests, 49 provider-tool and 34 archive custody tests. Intentionally stricter than live Python; selected archive NO_VERDICT. |
 | [GS2-09.7 #826](https://github.com/FS-GG/FS.GG.Coordination/pull/826) | `42eee0d7a8c9321bd269fac90181899370493b3a` | Source-only recovery refuses non-UTC signed-expiry markers at expected, handoff and snapshot readbacks; two red-before offset-rewrite controls and 769 full unit tests. Protected raw-byte signer/reader custody, #3690 adjudication and Q5/Q6 held. |
 | [GS2-09.9 #827](https://github.com/FS-GG/FS.GG.Coordination/pull/827) | `bb920de6f85afed06d2dce5584cf9d3a35bc2a5a` | Offline native pull reader/classifier refuses nested head/base repository owner/name/URL contradictions across listed and detail PR rows; lost-response red-before and 73 focused tests. External pins remain provisional; #545/#550 installed provider, grant and native effect held. |
+| [Telemetry usage #828](https://github.com/FS-GG/FS.GG.Coordination/pull/828) | `3da7be2cfa0a50c9848985f7ec90ba8539702425` | Dormant direct-session mapper refuses known inadequate `thread-last-total-snapshot`, exec-child and upstream-response counter provenance labels; copied-live red-before, six focused and 256 full Release execution tests. Arbitrary provenance/current-session source and genuine runner/applied Host capture remain NO_VERDICT. |
+| [GS2-09.7 #829](https://github.com/FS-GG/FS.GG.Coordination/pull/829) | `61e652e9a4b9fd3f4371b3e5c7f4c9ff5f62b688` | Standalone fake signed native snapshot verifier now shares recovery inspector's phase-shape refusal for impossible token and revocation-receipt combinations; red-before and 770 full unit tests. Protected native bytes/signer/store, #3690 adjudication and Q5/Q6 held. |
+| [FSC-05 F# #604](https://github.com/FS-GG/FS.GG.Templates/pull/604) | `430a70b352250c948682b43cfe2840529ea2b8e9` | Dormant F# provider parser refuses duplicate floor metadata keys, including `requires` and `adr`; independent YamlDotNet red-before, 68 F# tests, 52 provider-tool and 34 archive custody tests. Intentionally stricter than live Python; selected archive NO_VERDICT. |
+| [GS2-09.9 #830](https://github.com/FS-GG/FS.GG.Coordination/pull/830) | `c3585f9d639ad4b6d5d1f09d72b277980df267fc` | Offline native pull/protection reader refuses within-probe repository node-ID drift and malformed present node IDs after one lost-response POST; red-before and 76 focused tests. Protected selected target node, #545/#550 installed provider, grant and native effect remain held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
