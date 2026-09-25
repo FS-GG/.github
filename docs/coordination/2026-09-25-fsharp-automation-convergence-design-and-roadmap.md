@@ -194,6 +194,10 @@ closes that three-reader difference for invalid lifecycle names by making F# `gr
 run its existing provider validation and requiring the same name grammar in Python;
 four new triad controls and 29 provider-tool fixture cases pass. Full YAML, foreign
 JSON and installed receiver parity remain open.
+[Templates JSON-shaped line draft #537](https://github.com/FS-GG/FS.GG.Templates/pull/537)
+refuses JSON object or array fragments at provider-field indentation that Python
+previously accepted while F# `grade` refused; four new and 29 provider-tool fixture
+controls pass. This does not establish full foreign JSON or installed parity.
 [SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
 refuses an observed same-length overwrite after the first held-descriptor read by
 checking descriptor metadata around two byte passes; 21 focused controls and the
@@ -211,6 +215,11 @@ artifact omitted from selected, captured and candidate sets; default-branch prod
 also allows contained paths outside `readiness/<id>`. Thirty-four focused controls pass.
 Current producer omission of absent/unreadable declared artifacts still needs a policy
 decision before adoption; arbitrary-root physical closure and installed parity remain.
+[SDD absence-disposition draft #1012](https://github.com/FS-GG/FS.GG.SDD/pull/1012)
+uses accepted feature 115 FR-009 to classify missing or unreadable declared performance
+evidence as non-authorizing. Current producer still omits both paths, while the provisional
+bundle refuses them; 37 focused controls pass. A producer join must surface the refusal
+before output, with arbitrary-root physical closure and installed parity still open.
 [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)

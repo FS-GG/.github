@@ -175,6 +175,11 @@ missing tail/terminal, broken predecessor chain, foreign binding, altered bytes 
 post-gap entries; 109 adapter controls pass. It returns only provisional terminal or
 gap. Durable store, seal issuer, trusted recovery source, live subscription and Host
 submission remain absent.
+[Prospective subscription gate #601](https://github.com/FS-GG/FS.GG.Coordination/pull/601)
+reserves an issued challenge before a future authenticated current-session source and
+checks workspace/item, native session, thread, transport, protocol and time bindings;
+117 adapter controls pass. The trusted live source, subscribed `turn/started` journal
+receipt and Host route are absent, so capture remains unaccepted.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
@@ -1796,6 +1801,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   witness, binding repository, App/installation IDs, exact permissions, target response
   hashes and expiry; five new and 35 upstream fake controls pass. Protected issuer
   custody, real effective-token scope and complete target prestate remain unproved.
+  [GET-only target prestate #602](https://github.com/FS-GG/FS.GG.Coordination/pull/602)
+requires two complete matching absent-marker censuses and binds selected run, attempt,
+repository, refs and transcript digest to a distinct witness; five new and 40 upstream
+fake controls pass. Protected reader identity, witness custody, target continuity and
+execution credential reconciliation remain unproved; no dispatch is enabled.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
