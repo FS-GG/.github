@@ -338,6 +338,22 @@ module ProjectReferenceXml =
         | Ok membership ->
             inspectSuppliedPinnedGitSnapshot pin commitReader membership.TreeId treeObjects sources
 
+    /// Derive the provisional exact commit pin from the observed protected main branch before
+    /// repository membership, commit bytes, tree and project bytes are checked.
+    let inspectSuppliedProtectedBranchSnapshot
+        (repository: GitHubProtectedBranchPin.ExactRepository)
+        (branchReader: GitHubProtectedBranchPin.IReadOnlyProtectedBranchReader)
+        (membershipReader: GitHubCommitMembership.IReadOnlyGraphQlReader)
+        (commitReader: GitCommitProvenance.IReadOnlyCommitReader)
+        (rootTreeId: string)
+        (treeObjects: (string * byte[]) list)
+        (sources: (string * byte[]) list)
+        : Result<Map<string, string list>, SyntaxDiagnostic> =
+        match GitHubProtectedBranchPin.inspectProvisionalPin repository branchReader with
+        | Error diagnostic -> Error diagnostic
+        | Ok pin ->
+            inspectSuppliedGitHubMembershipSnapshot pin membershipReader commitReader rootTreeId treeObjects sources
+
     /// A local observation of one caller-supplied implicit file. The result does not establish
     /// nearest-file selection, import closure, source provenance, or a Rule (b) graph verdict.
     type SuppliedImplicitObservation = NoDirectReferenceInSuppliedXml
