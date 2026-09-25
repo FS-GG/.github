@@ -576,6 +576,46 @@ echo '<Project><ItemGroup>' > "$RBX/src/A/A.fsproj"
 wf "$RBX/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
 expect "malformed project XML refuses before a graph verdict" 3 "invalid project XML" "$RBX"
 
+# MSBuild expands semicolon item lists, globs, percent escapes, and properties before the build.
+# Treating the raw Include as one path lets a filter cover that fabricated edge while omitting an
+# actual referenced project or its transitive closure.
+RBI="$(root "$WORK/cover-msbuild-item-list")"
+proj "$RBI" "src/A" "../B/B.fsproj;../C/C.fsproj"
+proj "$RBI" "src/B"
+proj "$RBI" "src/C"
+wf "$RBI/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/B/B.fsproj;../C/C.fsproj"' '      - "src/A/**"
+      - "src/B/B.fsproj;../C/C.fsproj"'
+expect "semicolon Include cannot become one covered fake project edge" \
+  3 "requires MSBuild evaluation" "$RBI"
+
+RBW="$(root "$WORK/cover-msbuild-wildcard")"
+proj "$RBW" "src/A" "../B/*.fsproj"
+proj "$RBW" "src/B" "../C/C.fsproj"
+proj "$RBW" "src/C"
+wf "$RBW/.github/workflows/w.yml" '      - "src/A/**"
+      - "**/B/*.fsproj"' '      - "src/A/**"
+      - "**/B/*.fsproj"'
+expect "wildcard Include cannot hide a referenced project's transitive dependency" \
+  3 "requires MSBuild evaluation" "$RBW"
+
+RBE="$(root "$WORK/cover-msbuild-escaped-semicolon")"
+proj "$RBE" "src/A" "../B%3BC/B%3BC.fsproj"
+proj "$RBE" "src/B;C"
+wf "$RBE/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/B%3BC/**"' '      - "src/A/**"
+      - "src/B%3BC/**"'
+expect "percent-escaped Include cannot become one covered fake path" \
+  3 "requires MSBuild evaluation" "$RBE"
+
+RBP="$(root "$WORK/cover-msbuild-property")"
+proj "$RBP" "src/A" '../$(Target)/B.fsproj'
+wf "$RBP/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/$(Target)/**"' '      - "src/A/**"
+      - "src/$(Target)/**"'
+expect "property-valued Include cannot become a literal graph edge" \
+  3 "requires MSBuild evaluation" "$RBP"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
