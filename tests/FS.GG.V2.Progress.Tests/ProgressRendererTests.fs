@@ -25,10 +25,13 @@ module ProgressRendererTests =
         Lanes = [
             lane "B" Idle Gpt6Astra General Pending None
             lane "A" Running Gpt6Sol DirectV2 ActiveHealthy (Some(explicitLaunch Gpt6Sol))
+            { lane "O" Running Gpt6Sol General ActiveHealthy
+                (Some { Model = Gpt6Sol; Effort = High; Source = ExplicitUserInstruction;
+                        EvidenceId = "visible-profile-1" }) with Role = Orchestrator }
         ]
         DeclaredLaneCounts = {
-            Total = 2; Active = 1; ReservedDirectV2 = 1; ActiveReservedDirectV2 = 1
-            ByModel = [ Gpt6Astra, 1; Gpt6Sol, 1 ]
+            Total = 3; Active = 2; ReservedDirectV2 = 1; ActiveReservedDirectV2 = 1
+            ByModel = [ Gpt6Astra, 1; Gpt6Sol, 2 ]
         }
         Workstreams = [
             { Name = "Telemetry"; State = ActiveHealthy; Detail = "Queue ready"; PrCount = 1; EvidenceCount = 2 }
@@ -82,6 +85,9 @@ module ProgressRendererTests =
         | Ok _ -> failwithf "unsupported claim accepted: %s" reason
         | Error errors -> Assert.Contains(reason, String.concat "; " errors)
 
+    let private replaceWorker (baseline: ProgressSnapshot) worker =
+        { baseline with Lanes = [ baseline.Lanes.[0]; worker; baseline.Lanes.[2] ] }
+
     [<Fact>]
     let ``Markdown bytes are stable and telemetry readiness is separate from capture`` () =
         let actual = render (baseSnapshot ())
@@ -98,9 +104,10 @@ module ProgressRendererTests =
                 "| --- | --- | --- | --- | --- | --- | --- | --- |"
                 "| A | Worker | Running | gpt-6-sol | high | Reserved direct V2 | 🟢 Active/Healthy | Explicit orchestrator spawn (spawn-record-1) |"
                 "| B | Worker | Idle | gpt-6-astra | high | General | 🟡 Pending | — |"
+                "| O | Orchestrator | Running | gpt-6-sol | high | General | 🟢 Active/Healthy | Explicit user instruction (visible-profile-1) |"
                 ""
-                "Total: 2; active: 1; reserved direct V2: 1; active reserved direct V2: 1."
-                "Models: gpt-6-astra: 1, gpt-6-sol: 1."
+                "Total: 3; active: 2; reserved direct V2: 1; active reserved direct V2: 1."
+                "Models: gpt-6-astra: 1, gpt-6-sol: 2."
                 ""
                 "## Workstreams"
                 ""
@@ -199,11 +206,11 @@ module ProgressRendererTests =
     [<Fact>]
     let ``lane total model effort and reservation claims must match detail`` () =
         let baseline = baseSnapshot ()
-        refuses "declared total lane count" { baseline with DeclaredLaneCounts = { baseline.DeclaredLaneCounts with Total = 3 } }
+        refuses "declared total lane count" { baseline with DeclaredLaneCounts = { baseline.DeclaredLaneCounts with Total = 4 } }
         refuses "declared model counts" { baseline with DeclaredLaneCounts = { baseline.DeclaredLaneCounts with ByModel = [ Gpt6Sol, 2 ] } }
         refuses "declared direct V2 reservation count" { baseline with DeclaredLaneCounts = { baseline.DeclaredLaneCounts with ReservedDirectV2 = 0 } }
         refuses "declared active direct V2 reservation count" { baseline with DeclaredLaneCounts = { baseline.DeclaredLaneCounts with ActiveReservedDirectV2 = 0 } }
-        refuses "lane IDs must be unique" { baseline with Lanes = [ baseline.Lanes.[0]; { baseline.Lanes.[1] with Id = "B" } ] }
+        refuses "lane IDs must be unique" (replaceWorker baseline { baseline.Lanes.[1] with Id = "B" })
         refuses "declared PR/evidence counts" { baseline with DeclaredEvidenceCounts = { Prs = 2; Evidence = 2 } }
 
     [<Fact>]
@@ -241,9 +248,9 @@ module ProgressRendererTests =
     let ``an Astra reserved lane cannot stand in for a Sol high direct V2 worker`` () =
         let baseline = baseSnapshot ()
         let astra = { baseline.Lanes.[1] with Model = Gpt6Astra; Launch = Some(explicitLaunch Gpt6Astra) }
-        refuses "active V2 worker requires explicit gpt-6-sol/high launch evidence"
-            { baseline with Lanes = [ baseline.Lanes.[0]; astra ];
-                            DeclaredLaneCounts = { baseline.DeclaredLaneCounts with ByModel = [ Gpt6Astra, 2 ] } }
+        refuses "active V2 worker requires explicit gpt-6-sol/high spawn evidence"
+            { replaceWorker baseline astra with
+                DeclaredLaneCounts = { baseline.DeclaredLaneCounts with ByModel = [ Gpt6Astra, 2; Gpt6Sol, 1 ] } }
 
     [<Fact>]
     let ``healthy telemetry without authenticated and configured observations cannot qualify`` () =
@@ -265,22 +272,22 @@ module ProgressRendererTests =
         let baseline = baseSnapshot ()
         let worker = baseline.Lanes.[1]
         let runningPending = { worker with State = Pending }
-        let rendered = render { baseline with Lanes = [ baseline.Lanes.[0]; runningPending ] }
-        Assert.Contains("Total: 2; active: 1; reserved direct V2: 1; active reserved direct V2: 1.", rendered)
+        let rendered = render (replaceWorker baseline runningPending)
+        Assert.Contains("Total: 3; active: 2; reserved direct V2: 1; active reserved direct V2: 1.", rendered)
         Assert.Contains("| A | Worker | Running | gpt-6-sol | high | Reserved direct V2 | 🟡 Pending |", rendered)
 
         refuses "running lane requires explicit launch settings evidence"
-            { baseline with Lanes = [ baseline.Lanes.[0]; { worker with Launch = None } ] }
+            (replaceWorker baseline { worker with Launch = None })
         refuses "lane model/effort disagrees with explicit launch settings"
-            { baseline with Lanes = [ baseline.Lanes.[0]; { worker with Launch = Some { (explicitLaunch Gpt6Sol) with Effort = Medium } } ] }
+            (replaceWorker baseline { worker with Launch = Some { (explicitLaunch Gpt6Sol) with Effort = Medium } })
         refuses "runtime self-introspection is not launch settings provenance"
-            { baseline with Lanes = [ baseline.Lanes.[0]; { worker with Launch = Some { (explicitLaunch Gpt6Sol) with Source = RuntimeSelfIntrospection } } ] }
+            (replaceWorker baseline { worker with Launch = Some { (explicitLaunch Gpt6Sol) with Source = RuntimeSelfIntrospection } })
         refuses "active reserved direct V2 worker is required"
-            { baseline with Lanes = [ baseline.Lanes.[0]; { worker with Activity = Idle } ];
-                            DeclaredLaneCounts = { baseline.DeclaredLaneCounts with Active = 0; ActiveReservedDirectV2 = 0 } }
+            { replaceWorker baseline { worker with Activity = Idle } with
+                DeclaredLaneCounts = { baseline.DeclaredLaneCounts with Active = 1; ActiveReservedDirectV2 = 0 } }
         refuses "direct V2 reservation requires a worker role"
-            { baseline with Lanes = [ baseline.Lanes.[0]; { worker with Role = Orchestrator } ];
-                            DeclaredLaneCounts = { baseline.DeclaredLaneCounts with ActiveReservedDirectV2 = 0 } }
+            { replaceWorker baseline { worker with Role = Orchestrator } with
+                DeclaredLaneCounts = { baseline.DeclaredLaneCounts with ActiveReservedDirectV2 = 0 } }
 
     [<Fact>]
     let ``healthy telemetry needs separately verified health and configured workspace facts`` () =
@@ -312,3 +319,40 @@ module ProgressRendererTests =
         refuses "completion requires a terminal result and evidence link"
             { baseline with CompletionHistory = [ { entry with Link = None } ] }
         Assert.Contains("🔴 Failed/Unsafe", render { baseline with CompletionHistory = [ { entry with Result = FailedUnsafe } ] })
+
+    [<Fact>]
+    let ``Astra orchestrator cannot satisfy explicit Sol high profile`` () =
+        let baseline = baseSnapshot ()
+        let orchestrator = {
+            baseline.Lanes.[2] with
+                Model = Gpt6Astra
+                Launch = Some { Model = Gpt6Astra; Effort = High;
+                                Source = ExplicitUserInstruction; EvidenceId = "visible-profile-1" }
+        }
+        refuses "running orchestrator requires explicit gpt-6-sol/high visible-profile evidence"
+            { baseline with Lanes = [ baseline.Lanes.[0]; baseline.Lanes.[1]; orchestrator ];
+                            DeclaredLaneCounts = {
+                                baseline.DeclaredLaneCounts with ByModel = [ Gpt6Astra, 2; Gpt6Sol, 1 ]
+                            } }
+        refuses "running orchestrator requires explicit gpt-6-sol/high visible-profile evidence"
+            { baseline with Lanes = [ baseline.Lanes.[0]; baseline.Lanes.[1];
+                                      { baseline.Lanes.[2] with Launch = Some(explicitLaunch Gpt6Sol) } ] }
+
+    [<Fact>]
+    let ``active report requires exactly one orchestrator`` () =
+        let baseline = baseSnapshot ()
+        refuses "active progress snapshot requires exactly one orchestrator"
+            { baseline with Lanes = baseline.Lanes |> List.take 2;
+                            DeclaredLaneCounts = { baseline.DeclaredLaneCounts with Total = 2; Active = 1;
+                                                                                  ByModel = [ Gpt6Astra, 1; Gpt6Sol, 1 ] } }
+        refuses "active progress snapshot requires exactly one orchestrator"
+            { baseline with Lanes = baseline.Lanes @ [ { baseline.Lanes.[2] with Id = "O2" } ];
+                            DeclaredLaneCounts = { baseline.DeclaredLaneCounts with Total = 4; Active = 3;
+                                                                                  ByModel = [ Gpt6Astra, 1; Gpt6Sol, 3 ] } }
+
+    [<Fact>]
+    let ``worker instruction alone is not an explicit spawn record`` () =
+        let baseline = baseSnapshot ()
+        let worker = baseline.Lanes.[1]
+        refuses "active V2 worker requires explicit gpt-6-sol/high spawn evidence"
+            (replaceWorker baseline { worker with Launch = Some { (explicitLaunch Gpt6Sol) with Source = ExplicitUserInstruction } })
