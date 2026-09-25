@@ -1038,6 +1038,7 @@ changing the protected holds:
 | [FSC-04 #1041](https://github.com/FS-GG/FS.GG.SDD/pull/1041) | `2079be649681c496629b5af11c3760026ae7486b` | Pinned closed-root selection refuses Unicode/case aliases, including a late alias during capture; 1,500 Commands tests. ABA, Windows and cross-root proof remain open. |
 | [GS2-09.7 #722](https://github.com/FS-GG/FS.GG.Coordination/pull/722) | `08ecebc9fa2b407ae1a76f3b3f575c7f1113b938` | Raw-to-typed project binder refuses duplicate or blank item IDs across captured rows; 140 focused tests. Hosted checks queued, initial census and Q5/Q6 held. |
 | [FSC-03 F# #3811](https://github.com/FS-GG/.github/pull/3811) | `979afbcc3bc26f41488caad55ec0f4f788e64d6b` | Pure supplied-graph reader refuses unverified custom SDK declarations, matching Python #3810; 191 policy tests. SDK/Import provenance and evaluated graph remain open. |
+| [GS2-09.9 #723](https://github.com/FS-GG/FS.GG.Coordination/pull/723) | `fb3df0645d60759f5bc8c056bc4f98af5e27f178` | Git-tree witness requires the exact versioned closed byte-verifier success result; 21 focused tests, witness cannot dispatch and #550 held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
