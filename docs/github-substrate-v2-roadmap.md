@@ -1641,6 +1641,14 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   repairs a second source false green after an ambiguous response: an extra required status
   context was ignored while `ExactProtection` was returned. Its 24 focused offline controls
   refuse foreign, duplicate or malformed contexts without activating the operator.
+  [Protection-flag draft #576](https://github.com/FS-GG/FS.GG.Coordination/pull/576)
+  refuses an unselected enabled optional protection flag that previously still produced
+  `ExactProtection` after an ambiguous response; 25 focused offline controls pass. The
+  protected target, credential, journal, grant and one-POST authority remain absent.
+  [Selected-null draft #577](https://github.com/FS-GG/FS.GG.Coordination/pull/577)
+  repairs a missing-versus-null false green for required review and restriction fields after
+  ambiguous readback; 26 focused offline controls pass. It does not authorize the provisional
+  operator or any protected provider effect.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
