@@ -576,6 +576,33 @@ echo '<Project><ItemGroup>' > "$RBX/src/A/A.fsproj"
 wf "$RBX/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
 expect "malformed project XML refuses before a graph verdict" 3 "invalid project XML" "$RBX"
 
+# Well-formed XML is not necessarily an MSBuild project. A ProjectReference-looking child under
+# another root cannot supply an evaluated project graph, even when both apparent paths are covered.
+RBR="$(root "$WORK/cover-invalid-project-root")"
+proj "$RBR" "src/A"
+proj "$RBR" "src/B"
+cat > "$RBR/src/A/A.fsproj" <<'XML'
+<NotProject><ProjectReference Include="../B/B.fsproj" /></NotProject>
+XML
+wf "$RBR/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/B/**"' '      - "src/A/**"
+      - "src/B/**"'
+expect "well-formed XML with a non-Project root refuses graph facts" \
+  3 "project XML root must be Project" "$RBR"
+
+RBN="$(root "$WORK/cover-legacy-msbuild-namespace")"
+proj "$RBN" "src/A" "../B/B.fsproj"
+proj "$RBN" "src/B"
+cat > "$RBN/src/A/A.fsproj" <<'XML'
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup>
+</Project>
+XML
+wf "$RBN/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/B/**"' '      - "src/A/**"
+      - "src/B/**"'
+expect "legacy-namespaced Project root still supplies its reference graph" 0 "ok:" "$RBN"
+
 # MSBuild expands semicolon item lists, globs, percent escapes, and properties before the build.
 # Treating the raw Include as one path lets a filter cover that fabricated edge while omitting an
 # actual referenced project or its transitive closure.

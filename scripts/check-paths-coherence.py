@@ -518,6 +518,9 @@ def project_graph(root: str) -> dict[str, list[str]]:
                 project = ET.parse(path)
             except (OSError, ET.ParseError) as e:
                 raise GateError(f"{rel}: unreadable or invalid project XML — {e}") from e
+            root_tag = project.getroot().tag
+            if not isinstance(root_tag, str) or root_tag.rsplit("}", 1)[-1] != "Project":
+                raise GateError(f"{rel}: project XML root must be Project")
             refs = []
             # XML decodes character references in Include. Scanning raw attribute bytes can
             # fabricate a path which a workflow covers while missing the real referenced project.
