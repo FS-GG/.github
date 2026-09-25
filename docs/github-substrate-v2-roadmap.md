@@ -783,6 +783,26 @@ at `beabcd4db20b544d48568eae5f899ada93ab7ff7` adds a distinct local
 observation for supplied `Directory.Build` XML and refuses direct references,
 imports and relevant task outputs (140 tests). It does not authenticate nearest
 file selection, transitive imports or installed receiver parity.
+[Coordination GS2-09.9 #678](https://github.com/FS-GG/FS.GG.Coordination/pull/678)
+at `3a5ba5d2cd6bddeee0557c84a0901a19c7474c64` snapshots an integrated
+source result before a later approval port can replace its archive bytes (24
+fake-port tests); [#679](https://github.com/FS-GG/FS.GG.Coordination/pull/679)
+at `c09782e6eb9268dfddfd90fb98c06f7efea6e1d4` snapshots earlier producer
+and artifact results before later reads can rewrite actor or digest (27 tests).
+Neither supplies protected native custody or clears #545/#550.
+[Coordination GS2-09.7 #680](https://github.com/FS-GG/FS.GG.Coordination/pull/680)
+at `81dd56f7d59a68b4120b8cc5c207a6f4a5723b81` refuses duplicate raw
+PR identity/revision JSON members (134 focused tests), while initial census,
+full raw-to-typed inspection, journal/custom receipts and Q5/Q6 remain held.
+[`.github` FSC-03 Python #3789](https://github.com/FS-GG/.github/pull/3789)
+at `a2b1398f4d75a4d443d21c7939a195b6de156b7a` recognizes case-varied
+MSBuild `ProjectReference` item names across direct, Remove, target-time and
+implicit-file paths (146 fixtures). Matching F# main graph handling, evaluated
+imports and installed parity remain open.
+[Templates FSC-05 #573](https://github.com/FS-GG/FS.GG.Templates/pull/573)
+at `3827c9ebfda7feef59058d326b7b3fa4a8f9a84a` refuses reserved
+punctuation and ASCII controls in any ZIP member name (56 payload, 29 archive
+controls); complete ZIP closure and producer/receiver authority remain open.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
