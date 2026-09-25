@@ -29,11 +29,13 @@ class FakeAtomicStore(contract.AtomicRecoveryStorePort):
         self.lock = Lock()
         self.seal = copy.deepcopy(source.census_seal)
         self.generation = source.joint_generation
+        self.floor_resource_id = "protected-floor-test"
         self.batch = None
         self.claims = {}
         self.operations = []
 
-    def append_schedule_batch_once(self, batch, seal_id, high_water):
+    def append_schedule_batch_once(self, batch, seal_id, high_water,
+                                   expected_generation, floor_resource_id):
         with self.lock:
             if self.batch is not None:
                 return "duplicate"
@@ -44,6 +46,8 @@ class FakeAtomicStore(contract.AtomicRecoveryStorePort):
                     batch["pendingSha256"] != self.seal["pendingSha256"] or \
                     batch["mintSha256"] != self.seal["mintSha256"] or \
                     batch["jointGeneration"] != self.generation or \
+                    expected_generation != self.generation or \
+                    floor_resource_id != self.floor_resource_id or \
                     batch["pendingCount"] != self.seal["pendingCount"] or \
                     len(batch["jobs"]) != batch["pendingCount"] or \
                     batch["state"] != "committed":
@@ -78,11 +82,14 @@ class FakeAtomicStore(contract.AtomicRecoveryStorePort):
             self.operations.append("withdraw")
             return "committed"
 
-    def claim_recovery_once(self, mint_id, binding_id, schedule_id, batch_id):
+    def claim_recovery_once(self, mint_id, binding_id, schedule_id, batch_id,
+                            expected_generation, floor_resource_id):
         with self.lock:
             if self.batch is None or self.batch["batchId"] != batch_id \
                     or self.batch["state"] != "committed" \
-                    or self.batch["jointGeneration"] != self.generation:
+                    or self.batch["jointGeneration"] != self.generation \
+                    or expected_generation != self.generation \
+                    or floor_resource_id != self.floor_resource_id:
                 return "refused"
             matches = [job for job in self.batch["jobs"]
                        if job["mintId"] == mint_id
@@ -122,12 +129,14 @@ class AtomicStoreTests(unittest.TestCase):
 
     def append(self):
         return self.store.append_schedule_batch_once(
-            self.batch, self.batch["sealId"], self.batch["highWater"])
+            self.batch, self.batch["sealId"], self.batch["highWater"],
+            self.batch["jointGeneration"], self.store.floor_resource_id)
 
     def claim(self):
         return self.store.claim_recovery_once(
             self.job["mintId"], self.job["bindingId"],
-            self.job["scheduleId"], self.batch["batchId"])
+            self.job["scheduleId"], self.batch["batchId"],
+            self.batch["jointGeneration"], self.store.floor_resource_id)
 
     def withdraw(self):
         return self.store.withdraw_schedule_batch_once(
@@ -137,11 +146,21 @@ class AtomicStoreTests(unittest.TestCase):
         incomplete = copy.deepcopy(self.batch)
         incomplete["jobs"] = []
         self.assertEqual("refused", self.store.append_schedule_batch_once(
-            incomplete, incomplete["sealId"], incomplete["highWater"]))
+            incomplete, incomplete["sealId"], incomplete["highWater"],
+            incomplete["jointGeneration"], self.store.floor_resource_id))
         self.assertIsNone(self.store.read_schedule_batch(self.batch["sealId"]))
         self.assertEqual("committed", self.append())
         self.assertEqual("duplicate", self.append())
         self.assertEqual(self.batch, self.store.read_schedule_batch(self.batch["sealId"]))
+
+    def test_append_rejects_stale_generation_or_foreign_floor_at_commit(self):
+        self.assertEqual("refused", self.store.append_schedule_batch_once(
+            self.batch, self.batch["sealId"], self.batch["highWater"],
+            self.batch["jointGeneration"] + 1, self.store.floor_resource_id))
+        self.assertEqual("refused", self.store.append_schedule_batch_once(
+            self.batch, self.batch["sealId"], self.batch["highWater"],
+            self.batch["jointGeneration"], "foreign-floor"))
+        self.assertIsNone(self.store.read_schedule_batch(self.batch["sealId"]))
 
     def test_concurrent_full_batch_appends_commit_once(self):
         start = Barrier(3)
@@ -174,6 +193,17 @@ class AtomicStoreTests(unittest.TestCase):
         self.assertEqual(claim, self.store.read_recovery_claim(self.job["mintId"]))
         self.assertEqual("refused", self.claim())
         self.assertEqual(["append", "claim", "withdraw"], self.store.operations)
+
+    def test_claim_rejects_head_advance_or_foreign_floor_at_commit(self):
+        self.assertEqual("committed", self.append())
+        self.store.generation += 1
+        self.assertEqual("refused", self.claim())
+        self.store.generation -= 1
+        self.assertEqual("refused", self.store.claim_recovery_once(
+            self.job["mintId"], self.job["bindingId"],
+            self.job["scheduleId"], self.batch["batchId"],
+            self.batch["jointGeneration"], "foreign-floor"))
+        self.assertIsNone(self.store.read_recovery_claim(self.job["mintId"]))
 
     def test_concurrent_claim_and_withdrawal_have_one_order(self):
         for _ in range(12):

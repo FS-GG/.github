@@ -257,7 +257,7 @@ def _batch_readback(port: ProtectedRecoveryPort, seal: dict,
 
 
 def _schedule_readback(port: ProtectedRecoveryPort, mint_id: str,
-                       binding_id: str, mint: dict, token_sha256: str) -> tuple[str, str, str, int]:
+                       binding_id: str, mint: dict, token_sha256: str) -> tuple[str, str, dict, int, str]:
     try:
         schedule = port.read_schedule(mint_id)
     except Exception as error:
@@ -355,7 +355,8 @@ def _schedule_readback(port: ProtectedRecoveryPort, mint_id: str,
             and schedule["jointGeneration"] == generation,
             "joint-generation")
     batch_id = _batch_readback(port, seal, schedule, generation)
-    return schedule["scheduleId"], batch_id, schedule["sealId"], generation
+    return (schedule["scheduleId"], batch_id, seal, generation,
+            joint_record["floorResourceId"])
 
 
 def _binding_record(port: ProtectedRecoveryPort, mint_id: str,
@@ -442,12 +443,14 @@ def recover_one(port: ProtectedRecoveryPort | None, mint_id: str,
     _binding_record(port, mint_id, expected_binding_id, mint, token_sha256)
     require(finalizer._read_state(port, "read_pending", finalizer.PENDING_SCHEMA,
                                   mint_id, token_sha256), "pending-intent")
-    schedule_id, batch_id, seal_id, generation = _schedule_readback(
+    schedule_id, batch_id, seal, generation, floor_resource_id = _schedule_readback(
         port, mint_id, expected_binding_id, mint, token_sha256)
+    seal_id = seal["sealId"]
 
     try:
         claim = port.claim_recovery_once(mint_id, expected_binding_id,
-                                         schedule_id, batch_id)
+                                         schedule_id, batch_id, generation,
+                                         floor_resource_id)
     except Exception:
         claim = "unknown"
     claim_state = "fresh" if claim == "committed" else \
@@ -458,6 +461,17 @@ def recover_one(port: ProtectedRecoveryPort | None, mint_id: str,
                                      seal_id, generation)
     if not claim_readback:
         claim_state = "unknown"
+    if claim_readback:
+        try:
+            current = joint.verify_joint_seal(
+                port, seal, dt.datetime.now(dt.timezone.utc))
+            if current["generation"] != generation or \
+                    current["floorResourceId"] != floor_resource_id:
+                claim_readback = False
+        except Exception:
+            claim_readback = False
+        if not claim_readback:
+            claim_state = "unknown"
     if claim_readback:
         attempt = finalizer.native_attempt_record(
             mint_id, token_sha256, mint["contextSha256"],
