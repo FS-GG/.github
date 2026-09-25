@@ -723,6 +723,37 @@ wf "$RBTC/.github/workflows/w.yml" '      - "src/A/**"
       - "src/B/**"'
 expect "unrelated target item leaves a static reference readable" 0 "ok:" "$RBTC"
 
+# A task can emit an item directly into ProjectReference during target execution. There is no
+# ProjectReference XML element for the reader to notice, so an A-only filter otherwise looks clean.
+RBTO="$(root "$WORK/cover-task-output-reference")"
+proj "$RBTO" "src/A"
+proj "$RBTO" "src/B"
+cat > "$RBTO/src/A/A.fsproj" <<'XML'
+<Project><Target Name="Inject" BeforeTargets="ResolveProjectReferences">
+  <CreateItem Include="../B/B.fsproj">
+    <Output TaskParameter="Include" ItemName="ProjectReference" />
+  </CreateItem>
+</Target></Project>
+XML
+wf "$RBTO/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "task Output cannot hide a target-time ProjectReference" \
+  3 "task Output to ProjectReference requires evaluation" "$RBTO"
+
+RBTOC="$(root "$WORK/cover-unrelated-task-output")"
+proj "$RBTOC" "src/A" "../B/B.fsproj"
+proj "$RBTOC" "src/B"
+cat > "$RBTOC/src/A/A.fsproj" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup>
+  <Target Name="Generate"><CreateItem Include="generated.txt">
+    <Output TaskParameter="Include" ItemName="Content" />
+  </CreateItem></Target>
+</Project>
+XML
+wf "$RBTOC/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/B/**"' '      - "src/A/**"
+      - "src/B/**"'
+expect "unrelated task Output leaves a static reference readable" 0 "ok:" "$RBTOC"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
