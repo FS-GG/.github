@@ -36,6 +36,18 @@ module ProjectReferenceXmlTests =
         Assert.Equal<string list>([ "src/B/B.fsproj" ], parsed "src/A/A.fsproj" xml)
 
     [<Theory>]
+    [<InlineData("include='../B/B.fsproj'")>]
+    [<InlineData("Update='../B/B.fsproj'")>]
+    [<InlineData("")>]
+    let ``ProjectReference without exact Include cannot certify empty graph`` attributes =
+        let xml = "<Project><ItemGroup><ProjectReference " + attributes + " /></ItemGroup></Project>"
+        match ProjectReferenceXml.inspect "src/A/A.fsproj" xml with
+        | Error diagnostic ->
+            Assert.Equal("project-reference", diagnostic.Code)
+            Assert.Contains("Include", diagnostic.Message)
+        | Ok references -> failwithf "ProjectReference without exact Include emitted graph: %A" references
+
+    [<Theory>]
     [<InlineData(" ../B/B.fsproj")>]
     [<InlineData("../B/B.fsproj ")>]
     [<InlineData("../B/B.fsproj&#10;")>]

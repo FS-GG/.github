@@ -157,12 +157,14 @@ module ProjectReferenceXml =
                     for element in document.Descendants() do
                         if isProjectReference element && invalid.IsNone then
                             let includeAttribute = element.Attribute(XName.Get("Include"))
-                            if not (isNull includeAttribute) then
+                            if isNull includeAttribute then
+                                invalid <- Some "ProjectReference has no exact Include; requires MSBuild evaluation"
+                            else
                                 match resolve projectPath includeAttribute.Value with
                                 | Some target -> references.Add(target)
-                                | None -> invalid <- Some includeAttribute.Value
+                                | None -> invalid <- Some("unresolvable Include: " + includeAttribute.Value)
                     match invalid with
-                    | Some value -> error "project-reference" projectPath ("unresolvable Include: " + value)
+                    | Some message -> error "project-reference" projectPath message
                     | None -> Ok(List.ofSeq references)
             with
             | :? XmlException as ex -> error "project-xml" projectPath ex.Message
