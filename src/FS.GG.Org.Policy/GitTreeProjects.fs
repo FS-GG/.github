@@ -60,6 +60,12 @@ module GitTreeProjects =
             else compareAt (index + 1)
         compareAt 0
 
+    let private ignoredDotgitAliasChar c =
+        c = '\u200c' || c = '\u200d' || c = '\u200e' || c = '\u200f'
+        || (c >= '\u202a' && c <= '\u202e')
+        || (c >= '\u206a' && c <= '\u206f')
+        || c = '\ufeff'
+
     let private parseTree path (bytes: byte[]) : Result<Entry list, SyntaxDiagnostic> =
         let strictUtf8 = UTF8Encoding(false, true)
         let rec parse offset seen entries =
@@ -77,10 +83,9 @@ module GitTreeProjects =
                         let mode = Encoding.ASCII.GetString(bytes, offset, space - offset)
                         try
                             let name = strictUtf8.GetString(bytes, space + 1, nul - space - 1)
-                            // These observed HFS-ignored code points can conceal a .git tree name.
+                            // These Git-ignored format characters can conceal a .git tree name.
                             let aliasName =
-                                name.Replace("\u200c", "").Replace("\u200d", "")
-                                    .Replace("\u200e", "").Replace("\ufeff", "")
+                                String(name.ToCharArray() |> Array.filter (ignoredDotgitAliasChar >> not))
                             let normalizedName = aliasName.TrimEnd([| ' '; '.' |])
                             let streamSeparator = aliasName.IndexOf(':')
                             let streamBase =

@@ -361,6 +361,21 @@ module GitTreeProjectsTests =
         | Ok roster -> Assert.Equal(".git\u200b/A.fsproj", fst roster.Head)
 
     [<Fact>]
+    let ``Git bidi formatting aliases of dotgit cannot certify a project roster`` () =
+        // Fixed raw trees from git hash-object --literally; git fsck --strict reports hasDotgit.
+        [ objectRow "907987d66573dadb534aa108e592498f859941ea"
+              "NDAwMDAgLmdpdOKAjwCc41uNK5clEiNIWKIvkXjch4zKhA==" // U+200F
+          objectRow "7ec30e35c969781fa202dcaf679fca2362373fc7"
+              "NDAwMDAgLmdpdOKAqgCc41uNK5clEiNIWKIvkXjch4zKhA==" // U+202A
+          objectRow "42b80f59dcc0a7f6c58340b3ae61e3bae6166ef0"
+              "NDAwMDAgLmdpdOKArgCc41uNK5clEiNIWKIvkXjch4zKhA==" // U+202E
+          objectRow "0edd79f03ec845725e124cccd703c6c825bcf2ea"
+              "NDAwMDAgLmdpdOKBqgCc41uNK5clEiNIWKIvkXjch4zKhA==" // U+206A
+          objectRow "c9e952b0411cc175cd4ac83f83d193cb5fdc68b8"
+              "NDAwMDAgLmdpdOKBrwCc41uNK5clEiNIWKIvkXjch4zKhA==" ] // U+206F
+        |> List.iter (fun reserved -> refused "reserved .git" (fst reserved) [ reserved; edgeA ])
+
+    [<Fact>]
     let ``Git tree object entries must retain canonical byte and directory order`` () =
         // git hash-object --literally fixed these objects; git fsck --strict reports treeNotSorted.
         [ objectRow "6eab66dbdf50063bb5d919ae4202e7a0bea9a4d5"
