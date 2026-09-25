@@ -113,9 +113,15 @@ def active_shell_lines(script: str):
         if not stripped or stripped.startswith("#"):
             continue
         code = line.split("#", 1)[0]
-        # An explicit success fallback discards this line's exit verdict. Keep
-        # it out of both direct and transitive gate evidence.
-        if re.search(r"\|\|\s*(?:true|:)(?=\s|;|$)", code):
+        # A literal false and-list never invokes its right side. A disjunction
+        # cannot prove that a failing checker/fixture fails the step: its right
+        # side may succeed. Refuse the whole line conservatively, including
+        # transitive fixture evidence.
+        # Retain the repository's existing rc capture form. Its workflow
+        # classifiers are verified separately; this recognizer does not prove
+        # that a newly added capture has a matching failure classifier.
+        classified_capture = bool(re.search(r"\|\|\s*rc=\$\?(?=\s|;|$)", code))
+        if re.match(r"\s*false\s*&&", code) or ("||" in code and not classified_capture):
             continue
         declaration = re.search(r"<<-?\s*['\"]?([A-Za-z_][A-Za-z_0-9]*)['\"]?", code)
         if declaration:

@@ -73,6 +73,19 @@ check(workflow("python3 scripts/check-alpha.py || :\nbash tests/alpha/run.sh"), 
       "checker failure masked by colon", fixture_body="#!/bin/sh\necho harmless\n")
 check(workflow("bash tests/alpha/run.sh || true"), False, "fixture failure masked by true")
 check(workflow("bash tests/alpha/run.sh || :"), False, "fixture failure masked by colon")
+check(workflow("false && python3 scripts/check-alpha.py\nbash tests/alpha/run.sh"), False,
+      "checker behind literal false and-list", fixture_body="#!/bin/sh\necho harmless\n")
+check(workflow("python3 scripts/check-alpha.py || echo ignored\nbash tests/alpha/run.sh"), False,
+      "checker failure masked by successful fallback", fixture_body="#!/bin/sh\necho harmless\n")
+check(workflow("bash tests/alpha/run.sh || echo ignored"), False,
+      "fixture failure masked by successful fallback")
+check(workflow("bash tests/alpha/run.sh"), False, "checker behind false fixture and-list",
+      fixture_body="#!/bin/sh\nfalse && python3 scripts/check-alpha.py\n")
+check(workflow("bash tests/alpha/run.sh"), False, "checker failure masked inside fixture",
+      fixture_body="#!/bin/sh\npython3 scripts/check-alpha.py || echo ignored\n")
+check("name: fixture\njobs:\n  gate:\n    runs-on: ubuntu-latest\n    steps:\n"
+      "      - run: &gate |\n          python3 scripts/check-alpha.py\n          bash tests/alpha/run.sh\n"
+      "      - run: *gate\n", True, "YAML block scalar anchor execution")
 check(workflow("bash tests/alpha/run.sh"), True, "checker via executable fixture")
 check(workflow("bash tests/alpha/run.sh"), False, "checker only in fixture comment",
       fixture_body="#!/bin/sh\necho harmless # scripts/check-alpha.py\n")
