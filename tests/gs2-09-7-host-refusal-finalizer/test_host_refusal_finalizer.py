@@ -145,10 +145,10 @@ class FakeReleasePort:
         self.invoke_result = "complete"
         self.on_invoke = None
 
-    def claim_once(self, binding_id):
-        if binding_id in self.claims:
+    def claim_once(self, decision_id, binding_id, token_sha256):
+        if decision_id in self.claims:
             return "duplicate"
-        self.claims.add(binding_id)
+        self.claims.add(decision_id)
         return "granted"
 
     def invoke_candidate_once(self, token, binding):

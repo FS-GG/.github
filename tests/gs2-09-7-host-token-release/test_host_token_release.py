@@ -29,13 +29,13 @@ class FakePort:
         self.invoke_result = "complete"
         self.revoke_result = "confirmed"
 
-    def claim_once(self, binding_id):
+    def claim_once(self, decision_id, binding_id, token_sha256):
         self.calls.append("claim")
         if self.claim_result is not None:
             return self.claim_result
-        if binding_id in self.claimed:
+        if decision_id in self.claimed:
             return "duplicate"
-        self.claimed.add(binding_id)
+        self.claimed.add(decision_id)
         return "granted"
 
     def invoke_candidate_once(self, token, binding):
@@ -104,6 +104,20 @@ class HostTokenReleaseTests(unittest.TestCase):
         self.assertEqual("pending", second["disposition"])
         self.assertEqual("duplicate-refused", second["outcome"])
         self.assertEqual(0, second["invocationCount"])
+        self.assertEqual(1, self.port.calls.count("invoke"))
+
+    def test_two_token_bindings_under_one_admission_decision_allow_one_handoff(self):
+        first = self.run_release()
+        second_token = "second-fake-sandbox-installation-token-123456789"
+        second_proof = {**self.fixture.proof,
+                        "tokenSha256": hashlib.sha256(second_token.encode()).hexdigest()}
+        second_envelope = self.fixture.build(proof=second_proof,
+                                             token=second_token)
+        second = release.release_once(
+            second_envelope, self.fixture.raw(second_proof), second_token,
+            self.public, self.fixture.context, self.fixture.now, self.port)
+        self.assertEqual("candidate-complete", first["outcome"])
+        self.assertEqual("duplicate-refused", second["outcome"])
         self.assertEqual(1, self.port.calls.count("invoke"))
 
     def test_no_port_or_pin_refuses_before_claim_and_handoff(self):
