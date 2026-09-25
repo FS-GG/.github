@@ -288,7 +288,7 @@ pass under local SDK 10.0.401, while pinned 10.0.400 hosted checks are queued.
 `67b92631f68eb69993c46c4c22ff9e4a7070913d` additionally refuses two rollback domains
 sharing one target identity, a red-before map-collapse false green; 23 focused controls pass
 under the local SDK, while pinned hosted checks and native target readback remain open.
-Neither draft authorizes a protected effect, merge, Authority write, receiver flip or cutover.
+These drafts authorize no protected effect, merge, Authority write, receiver flip or cutover.
 Optional FSC-03 [`.github` Rule (b) #3753](https://github.com/FS-GG/.github/pull/3753)
 at `194e08a11439ef7663085f3f3947c2f765500884` keeps `*` within one path segment in
 the pure supplied-graph reducer; 83 Release controls and a three-case Python comparison pass.
@@ -305,6 +305,18 @@ Stacked [Templates #548](https://github.com/FS-GG/FS.GG.Templates/pull/548) at
 to F# behind a bounded Python physical ZIP reader and refuses config-free, duplicate, aliased,
 foreign-field and malformed payload maps; 14 new and 29 stacked controls pass. Its local
 payload verdict does not establish selected, served or installed archive custody.
+[Coordination GS2-09.9 #621](https://github.com/FS-GG/FS.GG.Coordination/pull/621)
+at `cafbb64fb080cee43d924733db1e2883ce7fb1b5` adds a closed fake-port join of
+installed refusal and independent zero-effect audit observations; 14 focused and inherited
+tests pass. Its injected ports cannot authenticate a protected runner/auditor or prove
+transient ABA absence, so it confers no effect authority. An independent review asks the
+owner to bind the expected audit actor or explain how immutable event identity supplies it.
+[`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
+`238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
+excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
+Differential review found the live Python `allow_uncovered()` still accepts a marker inside
+a valid multiline quoted scalar. That exact parity repair is a separate source lane; the
+F# replacement and live receiver remain unaccepted.
 
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
 
