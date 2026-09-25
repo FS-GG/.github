@@ -100,6 +100,17 @@ cutover until the invariant is restored and freshly observed, while safe disjoin
 These two probes establish endpoint and workspace readiness only. Claim that this Codex transcript was
 captured only after separate event-level capture and durable acknowledgement evidence identifies it.
 
+**Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
+with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
+Record the orchestrator's visible model/effort profile and launch every worker, including replacements,
+with explicit `model=gpt-6-sol` and `reasoning_effort=high` arguments. Those explicit launch settings
+are enforceable evidence for counting worker lanes; runtime self-introspection is optional and may be
+unavailable, in which case record that limit without discounting an explicitly configured worker.
+Do not count a worker whose launch settings are missing or different. Preserve the reserved direct V2
+worker among compliant lanes. If the orchestrator's visible profile is missing or different, report
+the capability gap and arrange a compliant handoff before claiming compliant orchestration or
+advancing protected actions. Model-family descriptions and task text alone are not launch evidence.
+
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
 
 The README-only repository exists at the explicitly authorized inert bootstrap commit
