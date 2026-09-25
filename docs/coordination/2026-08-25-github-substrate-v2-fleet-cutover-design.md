@@ -702,6 +702,31 @@ by an open operation receive full v2 migration.
 
 ## 10. Fleet cutover protocol
 
+### Single-operator execution
+
+One accountable operator drives preparation, qualification, execution, recovery and observation through
+agents and protected CI. [ADR-0079](../adr/0079-single-accountable-delivery-authority.md) permits the
+owner to perform fresh critique passes for the named review disciplines; independently authored tests,
+native evidence and provider readback retain their separate technical meaning. No role label or
+subagent supplies a distinct security identity when a protected verifier requires one.
+
+Before candidate freeze, GS2-10 must prove an installed execution route for every planned effect through
+`OperatingV2`, including administrative settings, cutover journal transitions, rollback, observation and
+contraction. Bind the exact interpreter/workflow, targets, credential scope, approval, durable attempt,
+readback and recovery to the manifest. Reuse existing protected installations where their observed
+capabilities suffice. Rehearse the complete route and record every residual manual action; automate
+mechanical dispatch, credential relays, evidence collection, status publication and recovery selection
+within the accepted plan. A source merge or dry plan cannot establish installed capability.
+
+The [single-operator audit](2026-09-25-v2-single-operator-autonomy-audit.md) maps the remaining dependencies.
+It found that the live `fleet-cutover` environment still prevents an initiating owner from approving
+their own run, and its self-review rule differs from Coordination's conformance predicate.
+[Proposed ADR-0090](../adr/0090-single-operator-v2-cutover-execution.md) specifies a dedicated one-owner
+profile; it requires policy acceptance, implementation, installation and qualification before use.
+Current live restrictions remain binding. GS2-13.2 retains genuine protected human approval for the
+exact irreversible `OpenV2` decision. The proposed profile needs no second human, but cannot be replaced
+by unattended approval under the owner's identity.
+
 ### 10.0 Bootstrap qualification lane
 
 V2 is not implemented or certified through the existing coordination validation/verification lifecycle.
