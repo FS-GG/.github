@@ -1527,6 +1527,14 @@ effective executable-step wiring repair, SDD generic artifact contract, Template
 product skill-staging characterization, and read-only Coordination/release transport analysis. At each
 scheduling pass, fill `min(available agent slots, safe disjoint bounded lanes)` with accountable owners;
 do not leave a slot idle solely because a later receipt, producer publication or protected merge is queued.
+Reserve at least one **active worker lane** (in addition to the roadmap orchestrator) for direct V2
+critical-path delivery at every scheduling pass. That worker advances the current GS2 gate, its
+concrete blocker, or the next V2 prerequisite; queue observation alone does not fill the reservation.
+Optional F# ports, review and refactoring use only the remaining worker slots. When the reserved
+worker finishes, assign another direct V2 task before filling an optional slot; never backfill the
+reservation with migration work. If no direct V2 source or evidence task can start, record the exact
+external authority or source blocker and keep the reserved slot unassigned rather than counting an
+optional worker as V2 delivery. This reservation is a scheduling rule, not permission to bypass any gate.
 Provisional source branches, draft PRs, characterization, scaffolds, tests and refactors may proceed
 against a recorded base while their merge or activation prerequisite is pending. Record the prerequisite,
 non-authoritative status, exact head and intended follow-up repair/rebase in the owning PR. When the
