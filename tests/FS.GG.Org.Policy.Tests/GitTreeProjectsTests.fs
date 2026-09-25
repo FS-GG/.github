@@ -307,6 +307,14 @@ module GitTreeProjectsTests =
         |> List.iter (fun row -> refused "tree entry order" (fst row) [ row; edgeA ])
 
     [<Fact>]
+    let ``zero padded Git directory mode cannot certify project roster`` () =
+        // git hash-object --literally; git fsck --strict reports zeroPaddedFilemode.
+        let padded =
+            objectRow "64cc4612426f67120731d0cdcf28db7f5a70d378"
+                "MDQwMDAwIHNyYwCc41uNK5clEiNIWKIvkXjch4zKhA=="
+        refused "zero-padded" (fst padded) [ padded; edgeA ]
+
+    [<Fact>]
     let ``Git directory order treats directory name as ending in slash`` () =
         let ordered =
             objectRow "9cf1687f89c5ae5916534a943585cccb3cebea73"

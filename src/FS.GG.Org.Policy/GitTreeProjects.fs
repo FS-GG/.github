@@ -51,7 +51,7 @@ module GitTreeProjects =
         // Git compares raw name bytes, treating a directory's terminal byte as '/'.
         let leftName = Encoding.UTF8.GetBytes(left.Name)
         let rightName = Encoding.UTF8.GetBytes(right.Name)
-        let terminal entry = if entry.Mode = "40000" || entry.Mode = "040000" then int '/' else 0
+        let terminal entry = if entry.Mode = "40000" then int '/' else 0
         let rec compareAt index =
             let leftByte = if index < leftName.Length then int leftName.[index] else terminal left
             let rightByte = if index < rightName.Length then int rightName.[index] else terminal right
@@ -77,7 +77,9 @@ module GitTreeProjects =
                         let mode = Encoding.ASCII.GetString(bytes, offset, space - offset)
                         try
                             let name = strictUtf8.GetString(bytes, space + 1, nul - space - 1)
-                            if String.IsNullOrWhiteSpace name
+                            if mode.StartsWith("0", StringComparison.Ordinal) then
+                                error path "zero-padded tree entry mode"
+                            elif String.IsNullOrWhiteSpace name
                                || name = "." || name = ".."
                                || name.Contains('/') || name.Contains('\\') then
                                 error path "malformed tree entry name"
@@ -142,7 +144,7 @@ module GitTreeProjects =
                                     | entry :: rest ->
                                         let path = if prefix = "" then entry.Name else prefix + "/" + entry.Name
                                         match entry.Mode with
-                                        | "40000" | "040000" ->
+                                        | "40000" ->
                                             if projectName path then
                                                 error path "project-shaped tree entry is not a project blob"
                                             else
