@@ -950,6 +950,30 @@ echo '<Project><PropertyGroup><Version>1.0</Version></PropertyGroup></Project>' 
 wf "$RBAPS/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
 expect "in-root nearest targets file shadows an above-root source" 0 "ok:" "$RBAPS"
 
+# The nearest path may be in --root while a symlink supplies XML bytes from outside it. That
+# external source is not in the authenticated repository graph, even when its current XML is benign.
+for kind in props targets; do
+  RBLS_PARENT="$WORK/cover-implicit-symlink-$kind"
+  RBLS="$(root "$RBLS_PARENT/repo")"
+  proj "$RBLS" "src/A"
+  mkdir -p "$RBLS_PARENT/outside"
+  echo '<Project><PropertyGroup><Version>1.0</Version></PropertyGroup></Project>' \
+    > "$RBLS_PARENT/outside/Directory.Build.$kind"
+  ln -s "../outside/Directory.Build.$kind" "$RBLS/Directory.Build.$kind"
+  wf "$RBLS/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+  expect "symlinked implicit Directory.Build.$kind cannot certify an external source" \
+    3 "implicit Directory.Build.$kind resolves outside repository root" "$RBLS"
+done
+
+RBLIN="$(root "$WORK/cover-implicit-symlink-inside")"
+proj "$RBLIN" "src/A"
+mkdir -p "$RBLIN/build"
+echo '<Project><PropertyGroup><Version>1.0</Version></PropertyGroup></Project>' \
+  > "$RBLIN/build/local.targets"
+ln -s "build/local.targets" "$RBLIN/Directory.Build.targets"
+wf "$RBLIN/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "in-root symlinked implicit source preserves local provenance" 0 "ok:" "$RBLIN"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
