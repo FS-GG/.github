@@ -2091,6 +2091,12 @@ fake controls pass. Protected reader identity, witness custody, target continuit
   durable one-use authority here. Protected owners must qualify a shared attempt
   store, provider idempotency or authoritative exact-token readback with crash,
   lost-result and ACL traces before Q5/Q6.
+  [Protected supplier packet #3748](https://github.com/FS-GG/.github/pull/3748)
+  assigns admission, App/vault, signer/floor, shared marker store, revoker/provider,
+  outage policy and Q5/Q6 facts to owner roles without asserting a protected principal.
+  It requires proved idempotency or settled exact-token native readback before retry;
+  active or unknown alone holds. The focused finalizer suite passes 35 controls, while
+  live pins and protected receipts remain absent.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
