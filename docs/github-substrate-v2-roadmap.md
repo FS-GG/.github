@@ -352,6 +352,12 @@ format, producer artifact and independent reviewer still lack authoritative proo
 repository-identity/object-format claim and distinct reader custody for that witness;
 19 focused and inherited tests pass. Protected event, reader, artifact and reviewer
 authentication remain open, with both workflows disabled and #550 held.
+[Coordination #628](https://github.com/FS-GG/FS.GG.Coordination/pull/628) at
+`0a28a6e7e12c8e2e0dd2ef686aad9db46ef309b7` binds a fake producer run and
+separately read artifact bundle to selected source/archive identity and refuses a
+digest-consistent symlink-mode ZIP false green; 23 focused and inherited tests pass.
+The reviewed producer workflow is not yet in integrated source, and protected producer,
+download and reviewer evidence remain absent. The closed output grants no native effect.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
@@ -381,6 +387,10 @@ including case-variant ancestor aliases, that previously returned a payload matc
 `0eb690ce4a7699ae3ffe235dc32047936d2a83be` refuses a 64-hex digest with a trailing
 newline that a regex anchor had accepted; 21 payload and 29 archive controls pass.
 Producer, served-byte, transaction, installed and receiver holds remain unchanged.
+[Templates #553](https://github.com/FS-GG/FS.GG.Templates/pull/553) at
+`09130c225779c76be33d1e8c050c6e91d34f84ae` refuses asset path components with
+trailing periods or ASCII spaces that previously returned a payload match; 24 payload
+and 29 archive controls pass. This is still local comparator evidence only.
 [`.github` FSC-03 #3756](https://github.com/FS-GG/.github/pull/3756) at
 `ee36fbce6784a6edd1915b0fdb216ba80ed078bd` checks PR and push path filters
 independently in the pure Rule (b) reducer, closing a red-before push-only omission;
