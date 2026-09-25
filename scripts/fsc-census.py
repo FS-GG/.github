@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Read-only, reproducible source and workflow invocation census.
 
-Run with: uv run --with pyyaml python3 scripts/fsc-census.py --root .
+Run with: uv run --with pyyaml==6.0.3 python3 scripts/fsc-census.py --root .
 The output is source evidence, not a semantic effective-step or installed-byte proof.
 """
 
