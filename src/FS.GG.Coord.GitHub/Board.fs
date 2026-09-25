@@ -328,27 +328,41 @@ module Board =
                                     match Reads.connectionComplete subject "the board's field map" FieldsWindow connection with
                                     | Error e -> Error e
                                     | Ok() ->
-                                        let fields =
-                                            connection.GetProperty("nodes").EnumerateArray()
-                                            |> Seq.choose (fun node ->
-                                                match readString node "name", readString node "id", readString node "dataType" with
-                                                | Some name, Some fieldId, Some dataType ->
-                                                    fieldTypeOf dataType node
-                                                    |> Option.map (fun fieldType -> name, { Id = fieldId; Type = fieldType })
-                                                | _ -> None)
-                                            |> Map.ofSeq
+                                        let nodes =
+                                            connection.GetProperty("nodes").EnumerateArray() |> Seq.toList
+                                        let identities =
+                                            nodes |> List.map (fun node -> readString node "name", readString node "id")
+                                        let names = identities |> List.choose fst
+                                        let ids = identities |> List.choose snd
 
-                                        if Map.isEmpty fields then
-                                            Error(Malformed(subject, "the exact project has no readable fields"))
+                                        if names.Length <> nodes.Length
+                                           || ids.Length <> nodes.Length
+                                           || List.exists String.IsNullOrWhiteSpace names
+                                           || List.exists String.IsNullOrWhiteSpace ids
+                                           || names.Length <> (names |> List.distinct |> List.length)
+                                           || ids.Length <> (ids |> List.distinct |> List.length) then
+                                            Error(Malformed(subject, "the exact project field identities are missing or duplicated"))
                                         else
-                                            Ok
-                                                {
-                                                    Number = actualNumber
-                                                    Id = id
-                                                    Owner = owner
-                                                    Title = title
-                                                    Fields = fields
-                                                }
+                                            let fields =
+                                                nodes |> List.choose (fun node ->
+                                                    match readString node "name", readString node "id", readString node "dataType" with
+                                                    | Some name, Some fieldId, Some dataType ->
+                                                        fieldTypeOf dataType node
+                                                        |> Option.map (fun fieldType -> name, { Id = fieldId; Type = fieldType })
+                                                    | _ -> None)
+                                                |> Map.ofList
+
+                                            if Map.isEmpty fields then
+                                                Error(Malformed(subject, "the exact project has no readable fields"))
+                                            else
+                                                Ok
+                                                    {
+                                                        Number = actualNumber
+                                                        Id = id
+                                                        Owner = owner
+                                                        Title = title
+                                                        Fields = fields
+                                                    }
                                 | _ -> Error(Malformed(subject, "the exact project's field map is missing"))
                             | _ -> Error(Malformed(subject, "the direct project response does not match the pinned owner, number, title and id"))
                         | _ -> Error(Malformed(subject, "the direct project response has no readable organization or project"))
