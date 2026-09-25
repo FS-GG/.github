@@ -299,6 +299,19 @@ module Board =
                     [ "owner", VString expected.Owner; "number", VNumber(double expected.Number) ]
                     subject)
                 (fun data ->
+                    // JsonElement.TryGetProperty picks the last raw member. The exact-board path
+                    // cannot treat a shadowed identity, count, type or option as one fact.
+                    let rec noShadowedMembers (node: JsonElement) =
+                        match node.ValueKind with
+                        | JsonValueKind.Object ->
+                            let seen = HashSet<string>(StringComparer.Ordinal)
+                            node.EnumerateObject()
+                            |> Seq.forall (fun property ->
+                                seen.Add property.Name && noShadowedMembers property.Value)
+                        | JsonValueKind.Array ->
+                            node.EnumerateArray() |> Seq.forall noShadowedMembers
+                        | _ -> true
+
                     let readString (node: JsonElement) (name: string) =
                         if node.ValueKind <> JsonValueKind.Object then None
                         else
@@ -307,6 +320,8 @@ module Board =
                             | _ -> None
 
                     match data.TryGetProperty "organization" with
+                    | _ when not (noShadowedMembers data) ->
+                        Error(Malformed(subject, "the exact project response contains duplicate raw JSON members"))
                     | true, org when org.ValueKind = JsonValueKind.Object ->
                         match readString org "login", org.TryGetProperty "projectV2" with
                         | Some owner, (true, project) when project.ValueKind = JsonValueKind.Object ->
