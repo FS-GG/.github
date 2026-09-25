@@ -1524,8 +1524,15 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
   expected outcomes, and lookup index without putting permanent v1 upcasters in the v2 production closure.
 - [x] **GS2-09.6 — Implement rollback plans.** Restore settings, receiver pins, v1 projections, schedules,
   and authority snapshot through `VerifiedV2`; make each step resumable from receipts.
-- [ ] **GS2-09.7 — Rehearse on representative copies.** Run migrate, interrupt every step, retry,
-  rollback, re-run, and archive verification in isolated repositories/Project snapshots.
+- [ ] **GS2-09.7 — Rehearse on the registered isolated cohort.** Extend the protected `.github`
+  qualification workflow to seed a representative, nonce-owned fixture in the existing private sandbox
+  repository and Project 2 using its App identity and target guards. Recheck exact targets and grants before
+  effects; run migrate,
+  interrupt every step, retry, rollback, re-run, verify the archive, and prove cleanup and zero residue.
+  No separately supplied copy or credential is a prerequisite. Full nine-authority discovery, Q5/Q6
+  evidence and independent controls remain required; a source-only or historical Q4 run does not accept
+  this unit. The [governing cohort contract](coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md#registered-migration-rehearsal-cohort)
+  owns the target and permission boundary.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
 
