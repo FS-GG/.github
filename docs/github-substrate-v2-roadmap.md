@@ -180,6 +180,11 @@ reserves an issued challenge before a future authenticated current-session sourc
 checks workspace/item, native session, thread, transport, protocol and time bindings;
 117 adapter controls pass. The trusted live source, subscribed `turn/started` journal
 receipt and Host route are absent, so capture remains unaccepted.
+[First native-start receipt draft #603](https://github.com/FS-GG/FS.GG.Coordination/pull/603)
+binds a supplied first `turn/started` append receipt to the prospective subscription,
+exact challenge/session, connection, canonical frame digest and time order; 124 adapter
+controls pass. Authenticated live reader/transport, durable store and Host receipt remain
+absent, so no direct-session capture is accepted.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
@@ -1805,7 +1810,12 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
 requires two complete matching absent-marker censuses and binds selected run, attempt,
 repository, refs and transcript digest to a distinct witness; five new and 40 upstream
 fake controls pass. Protected reader identity, witness custody, target continuity and
-execution credential reconciliation remain unproved; no dispatch is enabled.
+  execution credential reconciliation remain unproved; no dispatch is enabled.
+  [Scope/prestate join #604](https://github.com/FS-GG/FS.GG.Coordination/pull/604)
+  compares supplied effective App scope and target prestate through closed fake ports;
+  a red-before Python boolean-as-repository-ID false green was repaired, and 16 focused
+  controls pass. Protected reader identity, provider-backed scope, witness custody and
+  target continuity remain absent; installed one-POST authority stays closed.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
@@ -2030,6 +2040,11 @@ execution credential reconciliation remain unproved; no dispatch is enabled.
   exposed false success and native revoke after a head advance. 185 focused local
   controls pass. Protected signer/store/floor installation, ACL and transaction proof,
   #3690 admission and Q5/Q6 remain open.
+  [Shared native-attempt claim draft #3745](https://github.com/FS-GG/.github/pull/3745)
+  binds recovery's one-use marker to the durable claim, expected generation and pinned
+  floor before native revoke; a head advance before the claim and a marker without a
+  durable claim were red-before false greens. 189 focused local controls pass. Installed
+  shared namespace, transaction ordering and native readback remain unproved.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
