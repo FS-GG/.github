@@ -24,12 +24,26 @@ type Effort = Low | Medium | High | XHigh | Max | Ultra
 
 type Reservation = General | DirectV2
 
+type LaneRole = Orchestrator | Worker
+type LaneActivity = Running | Idle | Finished
+type LaunchSource = ExplicitUserInstruction | ExplicitOrchestratorSpawn | RuntimeSelfIntrospection
+
+type LaunchEvidence = {
+    Model: LaneModel
+    Effort: Effort
+    Source: LaunchSource
+    EvidenceId: string
+}
+
 type Lane = {
     Id: string
+    Role: LaneRole
+    Activity: LaneActivity
     Model: LaneModel
     Effort: Effort
     Reservation: Reservation
     State: Status
+    Launch: LaunchEvidence option
 }
 
 type LaneCounts = {
@@ -85,9 +99,30 @@ type CaptureClaim =
     | NoAcceptedCaptureClaim
     | AcceptedCaptureClaim of RunnerItem * HostReceipt * QueueObservation
 
+type AuthenticatedHealthObservation = {
+    Authenticated: bool
+    Ready: bool
+    CollectorVerified: bool
+    ObservedAt: DateTimeOffset
+    EvidenceId: string
+}
+
+type ConfiguredWorkspaceObservation = {
+    Configured: bool
+    CollectorVerified: bool
+    WorkspaceId: string
+    Pending: int
+    PendingUnacknowledged: int
+    UnacknowledgedLossy: bool
+    ObservedAt: DateTimeOffset
+    EvidenceId: string
+}
+
 type Telemetry = {
     WorkspaceId: string
     Readiness: Status
+    HealthObservation: AuthenticatedHealthObservation option
+    WorkspaceObservation: ConfiguredWorkspaceObservation option
     Pending: int
     PendingUnacknowledged: int
     UnacknowledgedLossy: bool
@@ -155,6 +190,13 @@ module ProgressRenderer =
         | General -> "General"
         | DirectV2 -> "Reserved direct V2"
 
+    let private roleText = function Orchestrator -> "Orchestrator" | Worker -> "Worker"
+    let private activityText = function Running -> "Running" | Idle -> "Idle" | Finished -> "Finished"
+    let private launchSourceText = function
+        | ExplicitUserInstruction -> "Explicit user instruction"
+        | ExplicitOrchestratorSpawn -> "Explicit orchestrator spawn"
+        | RuntimeSelfIntrospection -> "Runtime self-introspection"
+
     let private utc (value: DateTimeOffset) = value.Offset = TimeSpan.Zero
     let private timeText (value: DateTimeOffset) =
         value.ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture)
@@ -205,6 +247,27 @@ module ProgressRenderer =
         require (laneIds.Length = (laneIds |> List.distinct).Length) "lane IDs must be unique"
         for lane in snapshot.Lanes do
             requireText "lane ID" lane.Id
+            if lane.Reservation = DirectV2 then
+                require (lane.Role = Worker) "direct V2 reservation requires a worker role"
+            match lane.Launch with
+            | Some launch ->
+                requireText "launch evidence ID" launch.EvidenceId
+                require (launch.Model = lane.Model && launch.Effort = lane.Effort)
+                    "lane model/effort disagrees with explicit launch settings"
+                require (launch.Source <> RuntimeSelfIntrospection)
+                    "runtime self-introspection is not launch settings provenance"
+            | None -> ()
+            if lane.Activity = Running then
+                require lane.Launch.IsSome "running lane requires explicit launch settings evidence"
+            if lane.Role = Worker && lane.Activity = Running then
+                require (lane.Model = Gpt6Sol && lane.Effort = High
+                         && (match lane.Launch with
+                             | Some launch ->
+                                 launch.Model = Gpt6Sol && launch.Effort = High
+                                 && launch.Source <> RuntimeSelfIntrospection
+                                 && nonblank launch.EvidenceId
+                             | None -> false))
+                    "active V2 worker requires explicit gpt-6-sol/high launch evidence"
         let lanes = snapshot.Lanes |> List.sortWith (fun a b -> ordinal.Compare(a.Id, b.Id))
         let byModel =
             lanes
@@ -212,10 +275,10 @@ module ProgressRenderer =
             |> List.sortWith (fun (a, _) (b, _) -> ordinal.Compare(modelText a, modelText b))
         let laneCounts = {
             Total = lanes.Length
-            Active = lanes |> List.filter (fun x -> x.State = ActiveHealthy) |> List.length
+            Active = lanes |> List.filter (fun x -> x.Activity = Running) |> List.length
             ReservedDirectV2 = lanes |> List.filter (fun x -> x.Reservation = DirectV2) |> List.length
             ActiveReservedDirectV2 =
-                lanes |> List.filter (fun x -> x.Reservation = DirectV2 && x.State = ActiveHealthy) |> List.length
+                lanes |> List.filter (fun x -> x.Role = Worker && x.Reservation = DirectV2 && x.Activity = Running) |> List.length
             ByModel = byModel
         }
         require (snapshot.DeclaredLaneCounts.Total = laneCounts.Total) "declared total lane count disagrees with lanes"
@@ -224,6 +287,7 @@ module ProgressRenderer =
             "declared direct V2 reservation count disagrees with lanes"
         require (snapshot.DeclaredLaneCounts.ActiveReservedDirectV2 = laneCounts.ActiveReservedDirectV2)
             "declared active direct V2 reservation count disagrees with lanes"
+        require (laneCounts.ActiveReservedDirectV2 > 0) "active reserved direct V2 worker is required"
         require (snapshot.DeclaredLaneCounts.ByModel = laneCounts.ByModel)
             "declared model counts disagree with lanes"
 
@@ -248,7 +312,26 @@ module ProgressRenderer =
             "telemetry workspace must be a plain identifier"
         require (telemetry.Pending >= 0 && telemetry.PendingUnacknowledged >= 0)
             "telemetry queue counts must be nonnegative"
+        telemetry.HealthObservation |> Option.iter (fun health ->
+            requireUtc "health observation" health.ObservedAt
+            require (health.ObservedAt <= snapshot.AsOf) "health observation exceeds report time"
+            requireText "health evidence ID" health.EvidenceId)
+        telemetry.WorkspaceObservation |> Option.iter (fun workspace ->
+            requireUtc "workspace observation" workspace.ObservedAt
+            require (workspace.ObservedAt <= snapshot.AsOf) "workspace observation exceeds report time"
+            requireText "workspace evidence ID" workspace.EvidenceId
+            require (workspace.WorkspaceId = telemetry.WorkspaceId) "workspace observation ID disagrees with telemetry workspace"
+            require (workspace.Pending = telemetry.Pending
+                     && workspace.PendingUnacknowledged = telemetry.PendingUnacknowledged
+                     && workspace.UnacknowledgedLossy = telemetry.UnacknowledgedLossy)
+                "workspace observation queue disagrees with telemetry queue")
         if telemetry.Readiness = ActiveHealthy then
+            require (match telemetry.HealthObservation, telemetry.WorkspaceObservation with
+                     | Some health, Some workspace ->
+                         health.Authenticated && health.Ready && health.CollectorVerified
+                         && workspace.Configured && workspace.CollectorVerified
+                     | _ -> false)
+                "healthy telemetry requires authenticated health and configured workspace observations"
             require (telemetry.Pending = 0 && telemetry.PendingUnacknowledged = 0
                      && not telemetry.UnacknowledgedLossy)
                 "healthy telemetry readiness conflicts with queue status"
@@ -300,6 +383,9 @@ module ProgressRenderer =
             requireText "completion item" completion.Item
             requireText "completion workstream" completion.Workstream
             require (sha40 completion.RecordedRoadmapHead) "completion roadmap head must be lowercase 40-hex"
+            require ((completion.Result = CompletedInfo || completion.Result = FailedUnsafe)
+                     && completion.Link.IsSome)
+                "completion requires a terminal result and evidence link"
             completion.Link |> Option.iter (requireLink "completion")
         let recent = snapshot.CompletionHistory |> List.sortWith completionCompare |> List.truncate 5
         if errors.Count > 0 then Error(errors |> Seq.distinct |> Seq.sort |> Seq.toList)
@@ -327,7 +413,11 @@ module ProgressRenderer =
             |> List.map (fun x -> $"| {escape x.Name} | {statusText x.State} | {escape x.Detail} |")
         let laneRows =
             lanes |> List.map (fun lane ->
-                $"| {escape lane.Id} | {modelText lane.Model} | {effortText lane.Effort} | {reservationText lane.Reservation} | {statusText lane.State} |")
+                let launch =
+                    lane.Launch
+                    |> Option.map (fun value -> $"{launchSourceText value.Source} ({escape value.EvidenceId})")
+                    |> Option.defaultValue "—"
+                $"| {escape lane.Id} | {roleText lane.Role} | {activityText lane.Activity} | {modelText lane.Model} | {effortText lane.Effort} | {reservationText lane.Reservation} | {statusText lane.State} | {launch} |")
         let modelSummary =
             progress.LaneCounts.ByModel
             |> List.map (fun (model, count) -> $"{modelText model}: {count}")
@@ -343,6 +433,16 @@ module ProgressRenderer =
             match snapshot.Telemetry.Capture with
             | NoAcceptedCaptureClaim -> "🟡 Pending — no end-to-end capture acceptance claimed"
             | AcceptedCaptureClaim _ -> "🔵 Completed/Info — end-to-end capture accepted from supplied evidence"
+        let healthText =
+            snapshot.Telemetry.HealthObservation
+            |> Option.map (fun value ->
+                $"authenticated={value.Authenticated}, ready={value.Ready}, collector verified={value.CollectorVerified}, evidence={escape value.EvidenceId}")
+            |> Option.defaultValue "none supplied"
+        let workspaceText =
+            snapshot.Telemetry.WorkspaceObservation
+            |> Option.map (fun value ->
+                $"configured={value.Configured}, collector verified={value.CollectorVerified}, evidence={escape value.EvidenceId}")
+            |> Option.defaultValue "none supplied"
         [
             "# V2 progress update"
             ""
@@ -351,8 +451,8 @@ module ProgressRenderer =
             ""
             "## Lanes"
             ""
-            "| Lane | Model | Effort | Reservation | State |"
-            "| --- | --- | --- | --- | --- |"
+            "| Lane | Role | Activity | Model | Effort | Reservation | State | Launch settings evidence |"
+            "| --- | --- | --- | --- | --- | --- | --- | --- |"
             yield! laneRows
             ""
             $"Total: {progress.LaneCounts.Total}; active: {progress.LaneCounts.Active}; reserved direct V2: {progress.LaneCounts.ReservedDirectV2}; active reserved direct V2: {progress.LaneCounts.ActiveReservedDirectV2}."
@@ -370,6 +470,8 @@ module ProgressRenderer =
             ""
             $"- Telemetry readiness: {statusText snapshot.Telemetry.Readiness}"
             $"- Workspace: `{escape snapshot.Telemetry.WorkspaceId}`"
+            $"- Authenticated health observation: {healthText}"
+            $"- Configured workspace observation: {workspaceText}"
             $"- Current queue: pending={snapshot.Telemetry.Pending}, pending unacknowledged={snapshot.Telemetry.PendingUnacknowledged}, unacknowledged lossy={string snapshot.Telemetry.UnacknowledgedLossy |> _.ToLowerInvariant()}"
             $"- End-to-end capture acceptance: {captureText}"
             ""
