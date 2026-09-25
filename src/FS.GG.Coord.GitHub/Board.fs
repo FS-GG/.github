@@ -300,9 +300,11 @@ module Board =
                     subject)
                 (fun data ->
                     let readString (node: JsonElement) (name: string) =
-                        match node.TryGetProperty name with
-                        | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
-                        | _ -> None
+                        if node.ValueKind <> JsonValueKind.Object then None
+                        else
+                            match node.TryGetProperty name with
+                            | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
+                            | _ -> None
 
                     match data.TryGetProperty "organization" with
                     | true, org when org.ValueKind = JsonValueKind.Object ->
@@ -334,14 +336,31 @@ module Board =
                                             nodes |> List.map (fun node -> readString node "name", readString node "id")
                                         let names = identities |> List.choose fst
                                         let ids = identities |> List.choose snd
+                                        let optionsUnambiguous (node: JsonElement) =
+                                            match readString node "dataType" with
+                                            | Some "SINGLE_SELECT" ->
+                                                match node.TryGetProperty "options" with
+                                                | true, options when options.ValueKind = JsonValueKind.Array ->
+                                                    let choices = options.EnumerateArray() |> Seq.toList
+                                                    let optionNames = choices |> List.choose (fun option -> readString option "name")
+                                                    let optionIds = choices |> List.choose (fun option -> readString option "id")
+                                                    optionNames.Length = choices.Length
+                                                    && optionIds.Length = choices.Length
+                                                    && not (List.exists String.IsNullOrWhiteSpace optionNames)
+                                                    && not (List.exists String.IsNullOrWhiteSpace optionIds)
+                                                    && optionNames.Length = (optionNames |> List.distinct |> List.length)
+                                                    && optionIds.Length = (optionIds |> List.distinct |> List.length)
+                                                | _ -> false
+                                            | _ -> true
 
                                         if names.Length <> nodes.Length
                                            || ids.Length <> nodes.Length
                                            || List.exists String.IsNullOrWhiteSpace names
                                            || List.exists String.IsNullOrWhiteSpace ids
                                            || names.Length <> (names |> List.distinct |> List.length)
-                                           || ids.Length <> (ids |> List.distinct |> List.length) then
-                                            Error(Malformed(subject, "the exact project field identities are missing or duplicated"))
+                                           || ids.Length <> (ids |> List.distinct |> List.length)
+                                           || not (List.forall optionsUnambiguous nodes) then
+                                            Error(Malformed(subject, "the exact project field or option identities are missing or duplicated"))
                                         else
                                             let fields =
                                                 nodes |> List.choose (fun node ->
