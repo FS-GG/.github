@@ -208,8 +208,9 @@ def _read_state(port: ProtectedFinalizerPort, method: str, schema: str,
             and (schema != PENDING_SCHEMA or state["revokeRequired"] is True))
 
 
-def _finalize(port: ProtectedFinalizerPort, mint_id: str, token: str) -> str:
-    """Attempt revocation even after an unknown journal/provider response."""
+def _finalize(port: ProtectedFinalizerPort, mint_id: str, token: str,
+              may_attempt_revoke: bool = False) -> str:
+    """Observe on validated replay; a known duplicate skips native revoke."""
     try:
         check_revoker(port)
     except Exception:
@@ -223,13 +224,20 @@ def _finalize(port: ProtectedFinalizerPort, mint_id: str, token: str) -> str:
     pending = _read_state(port, "read_pending", PENDING_SCHEMA,
                           mint_id, token_sha256)
     try:
-        port.revoke(token)
-    except Exception:
-        pass
-    try:
         observed = port.observe(token)
     except Exception:
         observed = "unknown"
+    if observed == "active" and may_attempt_revoke:
+        try:
+            port.revoke(token)
+        except Exception:
+            pass
+        try:
+            observed = port.observe(token)
+        except Exception:
+            observed = "unknown"
+    # An unknown first observation may follow a lost prior revoke result.
+    # Only a protected one-use native effect authority can safely retry it.
     if observed != "revoked" or not pending:
         return "pending"
     try:
@@ -247,6 +255,12 @@ def _emergency_revoke(port: ProtectedFinalizerPort, token: str) -> None:
     evidence, regardless of the native response.
     """
     check_revoker(port)
+    try:
+        observed = port.observe(token)
+    except Exception:
+        observed = "unknown"
+    if observed == "revoked":
+        return
     try:
         port.revoke(token)
     except Exception:
@@ -283,11 +297,14 @@ def execute_with_finalizer(envelope_raw: bytes, proof_raw: bytes, token: str,
                 "mintId": mint_id, "release": "not-invoked",
                 "revocation": "pending", "disposition": "pending"}
     release_status = "not-invoked"
+    may_attempt_revoke = True
     try:
         try:
             pending_write = port.append_pending(mint_id, token_sha256)
         except Exception:
             pending_write = "unknown"
+        if pending_write == "duplicate":
+            may_attempt_revoke = False
         if pending_write == "committed" and _read_state(
                 port, "read_pending", PENDING_SCHEMA, mint_id, token_sha256):
             try:
@@ -300,7 +317,8 @@ def execute_with_finalizer(envelope_raw: bytes, proof_raw: bytes, token: str,
             except Exception:
                 release_status = "refused-or-unknown"
     finally:
-        finalizer_status = _finalize(port, mint_id, token)
+        finalizer_status = _finalize(port, mint_id, token,
+                                     may_attempt_revoke)
     return {"schema": "fsgg.github-substrate-v2.sandbox-host-finalization/1",
             "mintId": mint_id, "release": release_status,
             "revocation": finalizer_status,
@@ -308,7 +326,7 @@ def execute_with_finalizer(envelope_raw: bytes, proof_raw: bytes, token: str,
 
 
 def recover_pending(port: ProtectedFinalizerPort | None, mint_id: str) -> dict:
-    """Crash recovery only revokes; it never retries candidate invocation."""
+    """Crash recovery observes pending effects; it never retries them."""
     check_revoker(port)
     check_vault(port)
     require(type(mint_id) is str and release.host.HEX64.fullmatch(mint_id), "mint-id")
@@ -327,6 +345,12 @@ def recover_pending(port: ProtectedFinalizerPort | None, mint_id: str) -> dict:
         mint_record(port, mint_id, record["tokenSha256"])
         require(digest_token(token) == record["tokenSha256"], "token-escrow")
     except Exception:
+        _emergency_revoke(port, token)
+        return {"schema": "fsgg.github-substrate-v2.sandbox-host-recovery/1",
+                "mintId": mint_id, "revocation": "pending", "disposition": "pending"}
+    if not _read_state(port, "read_pending", PENDING_SCHEMA,
+                       mint_id, record["tokenSha256"]):
+        # A crash before durable pending intent is outside the pending census.
         _emergency_revoke(port, token)
         return {"schema": "fsgg.github-substrate-v2.sandbox-host-recovery/1",
                 "mintId": mint_id, "revocation": "pending", "disposition": "pending"}
