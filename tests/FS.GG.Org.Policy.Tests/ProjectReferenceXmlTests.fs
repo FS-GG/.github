@@ -408,6 +408,88 @@ module ProjectReferenceXmlTests =
         | Error diagnostic -> Assert.Equal("project-roster", diagnostic.Code)
         | Ok graph -> failwithf "missing expected roster produced a graph: %A" graph
 
+    let private edgeXml = "<Project><ProjectReference Include='../B/B.fsproj' /></Project>"
+    let private emptyXml = "<Project />"
+    let private edgeSha256 = "67539b59c35347a172f09efbac972a6a678601284cba86fdebcca3cbf46200f3"
+    let private emptySha256 = "400b35829b2a391f4048da02e1108b98db09431b2947e806a184743bd1b33c3a"
+    let private utf8 (text: string) = System.Text.Encoding.UTF8.GetBytes(text)
+
+    [<Fact>]
+    let ``stale supplied project bytes cannot erase an expected reference`` () =
+        let expected = [ "src/A/A.fsproj", edgeSha256; "src/B/B.fsproj", emptySha256 ]
+        let stale = [ "src/A/A.fsproj", utf8 emptyXml; "src/B/B.fsproj", utf8 emptyXml ]
+        match ProjectReferenceXml.inspectSuppliedProjectBytesAgainstDigests expected stale with
+        | Error diagnostic ->
+            Assert.Equal("project-source-digest", diagnostic.Code)
+            Assert.Equal("src/A/A.fsproj", diagnostic.Path)
+        | Ok graph -> failwithf "stale A bytes erased the expected A to B edge: %A" graph
+
+    [<Theory>]
+    [<InlineData("67539B59C35347A172F09EFBAC972A6A678601284CBA86FDEBCCA3CBF46200F3")>]
+    [<InlineData("not-a-sha256")>]
+    let ``noncanonical expected digest cannot certify source bytes`` digest =
+        let expected = [ "src/A/A.fsproj", digest ]
+        let sources = [ "src/A/A.fsproj", utf8 edgeXml ]
+        match ProjectReferenceXml.inspectSuppliedProjectBytesAgainstDigests expected sources with
+        | Error diagnostic -> Assert.Equal("project-source-digest", diagnostic.Code)
+        | Ok graph -> failwithf "bad digest accepted: %A" graph
+
+    [<Fact>]
+    let ``duplicate expected digest row cannot overwrite a binding`` () =
+        let expected = [ "src/A/A.fsproj", edgeSha256; "src/A/A.fsproj", emptySha256 ]
+        let sources = [ "src/A/A.fsproj", utf8 emptyXml ]
+        match ProjectReferenceXml.inspectSuppliedProjectBytesAgainstDigests expected sources with
+        | Error diagnostic -> Assert.Equal("project-source-digest", diagnostic.Code)
+        | Ok graph -> failwithf "duplicate digest erased a binding: %A" graph
+
+    [<Fact>]
+    let ``matching digest over invalid XML byte encoding has no graph verdict`` () =
+        let expected = [ "src/A/A.fsproj", "eddf68639913a3cb8331cdfe7f87559e0beccf2c289c0d90ac4d89b3204004f8" ]
+        let sources = [ "src/A/A.fsproj", [| 0xc3uy; 0x28uy |] ]
+        match ProjectReferenceXml.inspectSuppliedProjectBytesAgainstDigests expected sources with
+        | Error diagnostic -> Assert.Equal("project-source-xml", diagnostic.Code)
+        | Ok graph -> failwithf "invalid XML bytes produced a graph: %A" graph
+
+    [<Fact>]
+    let ``raw XML declaration governs dependency decoding`` () =
+        let declaredLatin1 =
+            "<?xml version='1.0' encoding='iso-8859-1'?><Project>"
+            + "<ProjectReference Include='../B/Bé.fsproj' /></Project>"
+        let expected =
+            [ "src/A/A.fsproj", "7f33bfc02160207e285393f6e05c16f5aa65b26188bbb27cfdb1b6df83596382"
+              "src/B/Bé.fsproj", emptySha256 ]
+        let sources = [ "src/A/A.fsproj", utf8 declaredLatin1; "src/B/Bé.fsproj", utf8 emptyXml ]
+        match ProjectReferenceXml.inspectSuppliedProjectBytesAgainstDigests expected sources with
+        | Error diagnostic -> Assert.Equal("project-roster", diagnostic.Code)
+        | Ok graph -> failwithf "text-decoded UTF8 invented the covered dependency: %A" graph
+
+    [<Fact>]
+    let ``raw UTF16 project bytes retain their declared dependency`` () =
+        let xml =
+            "<?xml version='1.0' encoding='utf-16'?><Project>"
+            + "<ProjectReference Include='../B/B.fsproj' /></Project>"
+        let bytes = Array.append (System.Text.Encoding.Unicode.GetPreamble()) (System.Text.Encoding.Unicode.GetBytes(xml))
+        let expected =
+            [ "src/A/A.fsproj", "77c9fc3a4ce0566fcf950a398cdf73dc0a480b3de3c220c7b8cd110b52e35a95"
+              "src/B/B.fsproj", emptySha256 ]
+        let sources = [ "src/A/A.fsproj", bytes; "src/B/B.fsproj", utf8 emptyXml ]
+        match ProjectReferenceXml.inspectSuppliedProjectBytesAgainstDigests expected sources with
+        | Error diagnostic -> failwithf "declared UTF16 source was refused: %A" diagnostic
+        | Ok graph -> Assert.Equal<string list>([ "src/B/B.fsproj" ], graph.["src/A/A.fsproj"])
+
+    [<Fact>]
+    let ``matching raw source digests preserve the referenced project edge`` () =
+        let expected = [ "src/A/A.fsproj", edgeSha256; "src/B/B.fsproj", emptySha256 ]
+        let sources = [ "src/B/B.fsproj", utf8 emptyXml; "src/A/A.fsproj", utf8 edgeXml ]
+        match ProjectReferenceXml.inspectSuppliedProjectBytesAgainstDigests expected sources with
+        | Error diagnostic -> failwithf "matching source digests were refused: %A" diagnostic
+        | Ok graph ->
+            match RuleB.inspect [ "src/A/**" ] graph with
+            | Error diagnostic -> failwithf "unexpected coverage refusal: %A" diagnostic
+            | Ok coverage ->
+                Assert.Equal<(string * string) list>(
+                    [ "src/A/A.fsproj", "src/B/B.fsproj" ], coverage.Uncovered)
+
     [<Theory>]
     [<InlineData(false)>]
     [<InlineData(true)>]

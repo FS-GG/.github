@@ -3,6 +3,7 @@ namespace FS.GG.Org.Policy
 open System
 open System.Collections.Generic
 open System.IO
+open System.Security.Cryptography
 open System.Text.RegularExpressions
 open System.Xml
 open System.Xml.Linq
@@ -214,6 +215,69 @@ module ProjectReferenceXml =
                         match Set.difference suppliedSet expectedSet |> Seq.tryHead with
                         | Some path -> error "project-roster" path (sprintf "supplied project %s is absent from expected roster" path)
                         | None -> Ok graph
+
+    /// Bind supplied raw XML bytes to a separately supplied digest roster before reducing the
+    /// graph. XML decoding follows the byte stream's declaration. Digest provenance and complete
+    /// provider enumeration remain external requirements; this function authenticates neither.
+    let inspectSuppliedProjectBytesAgainstDigests
+        (expected: (string * string) list)
+        (sources: (string * byte[]) list)
+        : Result<Map<string, string list>, SyntaxDiagnostic> =
+        if isNull (box expected) || List.isEmpty expected then
+            error "project-roster" "<projects>" "expected digest roster is absent or empty"
+        elif isNull (box sources) || List.isEmpty sources then
+            error "project-roster" "<projects>" "supplied project bytes are absent or empty"
+        else
+            let rec bindDigests bindings remaining =
+                match remaining with
+                | [] -> Ok bindings
+                | (path, digest) :: rest ->
+                    if not (normalized path) || not (discoverableProject path) then
+                        error "project-roster" path "digest roster identity must be a normalized discoverable project path"
+                    elif Map.containsKey path bindings then
+                        error "project-source-digest" path "duplicate expected digest binding"
+                    elif isNull digest || not (Regex.IsMatch(digest, "^[0-9a-f]{64}$", RegexOptions.CultureInvariant)) then
+                        error "project-source-digest" path "expected SHA-256 digest must be 64 lowercase hexadecimal characters"
+                    else
+                        bindDigests (Map.add path digest bindings) rest
+            match bindDigests Map.empty expected with
+            | Error diagnostic -> Error diagnostic
+            | Ok digests ->
+                let settings = XmlReaderSettings()
+                settings.DtdProcessing <- DtdProcessing.Prohibit
+                settings.XmlResolver <- null
+                let rec readSources
+                    (seen: Set<string>)
+                    (decoded: (string * string) list)
+                    (remaining: (string * byte[]) list) =
+                    match remaining with
+                    | [] ->
+                        inspectSuppliedProjectSetAgainstRoster (expected |> List.map fst) (List.rev decoded)
+                    | (path, bytes) :: rest ->
+                        if not (normalized path) || not (discoverableProject path) then
+                            error "project-roster" path "supplied bytes identity must be a normalized discoverable project path"
+                        elif Set.contains path seen then
+                            error "project-roster" path "duplicate supplied project bytes identity"
+                        elif isNull bytes then
+                            error "project-source-xml" path "supplied project bytes are absent"
+                        else
+                            match Map.tryFind path digests with
+                            | None -> error "project-roster" path "supplied project bytes are absent from expected digest roster"
+                            | Some expectedDigest ->
+                                let actual = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()
+                                if actual <> expectedDigest then
+                                    error "project-source-digest" path "supplied bytes do not match expected SHA-256 digest"
+                                else
+                                    try
+                                        use input = new MemoryStream(bytes, false)
+                                        use reader = XmlReader.Create(input, settings)
+                                        let document = XDocument.Load(reader)
+                                        let xml = document.ToString(SaveOptions.DisableFormatting)
+                                        readSources (Set.add path seen) ((path, xml) :: decoded) rest
+                                    with
+                                    | :? XmlException as ex -> error "project-source-xml" path ex.Message
+                                    | :? ArgumentException as ex -> error "project-source-xml" path ex.Message
+                readSources Set.empty [] sources
 
     /// A local observation of one caller-supplied implicit file. The result does not establish
     /// nearest-file selection, import closure, source provenance, or a Rule (b) graph verdict.
