@@ -817,6 +817,53 @@ echo '<Project><PropertyGroup><Version>1.0</Version></PropertyGroup></Project>' 
 wf "$RBIS/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
 expect "nearest implicit targets file shadows an unimported parent" 0 "ok:" "$RBIS"
 
+# MSBuild item names are case-insensitive even though XML element names are case-sensitive. A
+# lower-case ProjectReference must be treated as the same item in every graph-reader position.
+RBCI="$(root "$WORK/cover-casefold-include")"
+proj "$RBCI" "src/A"
+proj "$RBCI" "src/B"
+cat > "$RBCI/src/A/A.fsproj" <<'XML'
+<Project><ItemGroup><projectreference Include="../B/B.fsproj" /></ItemGroup></Project>
+XML
+wf "$RBCI/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "lower-case ProjectReference Include cannot hide an uncovered project" \
+  1 "nothing in the filter selects 'src/B'" "$RBCI"
+
+RBCR="$(root "$WORK/cover-casefold-remove")"
+proj "$RBCR" "src/A"
+proj "$RBCR" "src/B"
+cat > "$RBCR/src/A/A.fsproj" <<'XML'
+<Project><ItemGroup>
+  <ProjectReference Include="../B/B.fsproj" />
+  <projectreference Remove="../B/B.fsproj" />
+</ItemGroup></Project>
+XML
+wf "$RBCR/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "lower-case ProjectReference Remove requires evaluation" \
+  3 "ProjectReference Remove requires MSBuild evaluation" "$RBCR"
+
+RBCT="$(root "$WORK/cover-casefold-target")"
+proj "$RBCT" "src/A"
+proj "$RBCT" "src/B"
+cat > "$RBCT/src/A/A.fsproj" <<'XML'
+<Project><Target Name="Inject" BeforeTargets="ResolveProjectReferences">
+  <ItemGroup><projectreference Include="../B/B.fsproj" /></ItemGroup>
+</Target></Project>
+XML
+wf "$RBCT/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "lower-case target-time ProjectReference requires evaluation" \
+  3 "target-time ProjectReference requires evaluation" "$RBCT"
+
+RBCB="$(root "$WORK/cover-casefold-implicit")"
+proj "$RBCB" "src/A"
+proj "$RBCB" "src/B"
+cat > "$RBCB/Directory.Build.targets" <<'XML'
+<Project><ItemGroup><projectreference Include="../B/B.fsproj" /></ItemGroup></Project>
+XML
+wf "$RBCB/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "lower-case implicit ProjectReference requires evaluation" \
+  3 "implicit Directory.Build.targets contains ProjectReference" "$RBCB"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
