@@ -1862,6 +1862,12 @@ fake controls pass. Protected reader identity, witness custody, target continuit
   pins and permissions. Its entry always exits 78 and the closed port performs zero
   token, CAS and HTTP calls; eight focused controls and a local clean-install canary
   pass. It is not a protected install, grant or executable native effect.
+  [Closed artifact hardening #613](https://github.com/FS-GG/FS.GG.Coordination/pull/613)
+  makes alternate native source inert rather than importable and rejects a ZIP with
+  trailing bytes even if its supplied manifest is rewritten; ten focused controls
+  pass. Its approved manifest digest remains caller-supplied without protected
+  independent approval. Both proposal workflows stay disabled, and no installed
+  effect authority follows.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
@@ -2115,6 +2121,12 @@ fake controls pass. Protected reader identity, witness custody, target continuit
   omissions and zero residue. It reuses the accepted Q4 sandbox/App route under
   ADR-0089 and requests no new credential; 35 focused finalizer controls pass.
   Installed host authority and native rehearsal evidence remain absent.
+  [Q4 admission/installation packet #3750](https://github.com/FS-GG/.github/pull/3750)
+  records that the installed Q4 workflow still runs GS2-04.9 with direct candidate
+  token handoff, while #3690 merged source has no separate OperatingV1 effect admission
+  and live signer/store/recovery pins remain blank. It names independent protected
+  release, workflow, credential, store, revoker and Q5/Q6 readback actions; no installed
+  authority or sandbox acceptance is inferred.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.

@@ -227,6 +227,11 @@ requires exact bytes for all five reviewed descriptors after a parameter-only mu
 left the prior narrow pin result unchanged; 21 focused controls pass. The live selected
 archive remains `NO_VERDICT`. Source digests do not establish producer, served-byte,
 installed or receiver authority.
+[Templates nuspec-source draft #544](https://github.com/FS-GG/FS.GG.Templates/pull/544)
+requires one direct nuspec repository URL/type and commit matching the selected source
+baseline after a wrong commit yielded a false narrow roster match; 25 focused controls
+pass. The live archive remains `NO_VERDICT`. Nuspec metadata alone does not authenticate
+the producer, served bytes, installed provider or receiver.
 [SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
 refuses an observed same-length overwrite after the first held-descriptor read by
 checking descriptor metadata around two byte passes; 21 focused controls and the
@@ -266,6 +271,11 @@ unreadable or truncated, with distinct diagnostics; a complete authored absent f
 was red before repair. All 1410 command tests and warning-free Release build pass.
 Selected-file bundle custody, cross-root atomicity, output rollback and installed parity
 remain open.
+[SDD pinned-performance join #1016](https://github.com/FS-GG/FS.GG.SDD/pull/1016)
+recaptures declared performance paths through selected-file handles before v2 bundle
+verification, refusing stale supplied bytes, links, aliases and omissions; 1415 command
+tests pass. Core `.fsgg` and `work/<id>` producer closure, cross-root consistency,
+output rollback and installed parity remain open.
 [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)
