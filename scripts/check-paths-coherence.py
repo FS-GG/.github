@@ -244,9 +244,33 @@ class GateError(Exception):
     """A condition under which the gate must fail rather than skip. Maps to exit 3."""
 
 
+class UniqueKeySafeLoader(yaml.SafeLoader):
+    """SafeLoader semantics with a refusal before a repeated mapping key overwrites evidence."""
+
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict:
+        self.flatten_mapping(node)
+        mapping: dict = {}
+        for key_node, value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            try:
+                duplicate = key in mapping
+            except TypeError as e:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping", node.start_mark,
+                    "unhashable mapping key", key_node.start_mark,
+                ) from e
+            if duplicate:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping", node.start_mark,
+                    f"duplicate mapping key {key!r}", key_node.start_mark,
+                )
+            mapping[key] = self.construct_object(value_node, deep=deep)
+        return mapping
+
+
 def load_yaml(text: str, what: str) -> dict:
     try:
-        doc = yaml.safe_load(text)
+        doc = yaml.load(text, Loader=UniqueKeySafeLoader)
     except yaml.YAMLError as e:
         raise GateError(f"{what}: not parsable as YAML — {e}") from e
     if not isinstance(doc, dict):
