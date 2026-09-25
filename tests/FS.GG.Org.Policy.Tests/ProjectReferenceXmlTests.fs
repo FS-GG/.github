@@ -35,6 +35,24 @@ module ProjectReferenceXmlTests =
         let xml = "<Project><ItemGroup><ProjectReference Include='..\\B\\B.fsproj' /></ItemGroup></Project>"
         Assert.Equal<string list>([ "src/B/B.fsproj" ], parsed "src/A/A.fsproj" xml)
 
+    [<Theory>]
+    [<InlineData(" ../B/B.fsproj")>]
+    [<InlineData("../B/B.fsproj ")>]
+    [<InlineData("../B/B.fsproj&#10;")>]
+    let ``surrounding Include whitespace cannot become a literal graph path`` includeValue =
+        let xml = "<Project><ItemGroup><ProjectReference Include='" + includeValue
+                  + "' /></ItemGroup></Project>"
+        match ProjectReferenceXml.inspect "src/A/A.fsproj" xml with
+        | Error diagnostic ->
+            Assert.Equal("project-reference", diagnostic.Code)
+            Assert.Contains("unresolvable Include", diagnostic.Message)
+        | Ok references -> failwithf "surrounding whitespace invented a graph edge: %A" references
+
+    [<Fact>]
+    let ``internal path spaces remain literal graph characters`` () =
+        let xml = "<Project><ItemGroup><ProjectReference Include='../B Name/B Name.fsproj' /></ItemGroup></Project>"
+        Assert.Equal<string list>([ "src/B Name/B Name.fsproj" ], parsed "src/A/A.fsproj" xml)
+
     [<Fact>]
     let ``commented reference is not an edge`` () =
         let xml =

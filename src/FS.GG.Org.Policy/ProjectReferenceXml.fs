@@ -37,6 +37,9 @@ module ProjectReferenceXml =
     let private resolve (projectPath: string) (includePath: string) =
         let relative = includePath.Replace('\\', '/')
         if String.IsNullOrWhiteSpace relative
+           // Evaluated MSBuild items trim surrounding whitespace. Preserve no static edge when
+           // these XML bytes would name a different path before evaluation.
+           || not (String.Equals(relative, relative.Trim(), StringComparison.Ordinal))
            || relative.StartsWith("/", StringComparison.Ordinal)
            || Regex.IsMatch(relative, "^[A-Za-z]:", RegexOptions.CultureInvariant)
            // MSBuild expands item lists, globs, and %-escaped characters. One literal graph edge
