@@ -1682,7 +1682,9 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   The #3690 source merge was not admitted through the common OperatingV1 effect boundary; preserve that
   observation separately from any sandbox receipt. [Coordination draft #556](https://github.com/FS-GG/FS.GG.Coordination/pull/556)
   records the protected-rehearsal decision packet and its hold on authenticated run/candidate/nonce
-  binding, installed command, and native Q5/Q6 evidence. No rehearsal dispatch is implied by either draft.
+  binding, installed command, and native Q5/Q6 evidence. [Stacked verifier draft #558](https://github.com/FS-GG/FS.GG.Coordination/pull/558)
+  checks a proposed signed run envelope with offline refusal tests, but #3690 has no protected signer,
+  pinned verifier key or admitted host release gate. No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
   [Coordination draft #553](https://github.com/FS-GG/FS.GG.Coordination/pull/553) adds source-only
