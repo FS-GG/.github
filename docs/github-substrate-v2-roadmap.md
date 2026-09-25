@@ -288,6 +288,12 @@ pass under local SDK 10.0.401, while pinned 10.0.400 hosted checks are queued.
 `67b92631f68eb69993c46c4c22ff9e4a7070913d` additionally refuses two rollback domains
 sharing one target identity, a red-before map-collapse false green; 23 focused controls pass
 under the local SDK, while pinned hosted checks and native target readback remain open.
+[Coordination #623](https://github.com/FS-GG/FS.GG.Coordination/pull/623) at
+`51d10bc41e166bb18d7505b5fa4da9f64e4a0ece` adds a separately pinned-seal Q6 resume
+entry after a red-before validly resealed substitute passed the legacy self-pinned helper.
+The accepted GS2-09.6 command bytes are unchanged; 24 focused local-SDK controls pass.
+Protected expected-seal provenance, installed native five-domain readback and Q5/Q6 receipt
+remain open.
 These drafts authorize no protected effect, merge, Authority write, receiver flip or cutover.
 Optional FSC-03 [`.github` Rule (b) #3753](https://github.com/FS-GG/.github/pull/3753)
 at `194e08a11439ef7663085f3f3947c2f765500884` keeps `*` within one path segment in
@@ -309,14 +315,25 @@ payload verdict does not establish selected, served or installed archive custody
 at `cafbb64fb080cee43d924733db1e2883ce7fb1b5` adds a closed fake-port join of
 installed refusal and independent zero-effect audit observations; 14 focused and inherited
 tests pass. Its injected ports cannot authenticate a protected runner/auditor or prove
-transient ABA absence, so it confers no effect authority. An independent review asks the
-owner to bind the expected audit actor or explain how immutable event identity supplies it.
+transient ABA absence, so it confers no effect authority. An independent review exposed an
+unselected positive audit actor false green; stacked
+[Coordination #622](https://github.com/FS-GG/FS.GG.Coordination/pull/622) at
+`13a5d55b8a0bb976302bfbee70df9a5d1151d771` now requires that actor to match an
+explicitly selected ID. Fifteen focused and inherited tests pass, but protected selection
+of that actor, runner and artifact remains absent.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
 Differential review found the live Python `allow_uncovered()` still accepts a marker inside
-a valid multiline quoted scalar. That exact parity repair is a separate source lane; the
-F# replacement and live receiver remain unaccepted.
+a valid multiline quoted scalar on current main. Source audit found draft #3698 already
+repairs that case through its shared scalar-span logic; a separate lane is adding an
+independent full-gate regression on #3698. The repair is not live until #3698 receives
+owner acceptance and protected readback. The F# replacement remains unaccepted.
+[Templates #549](https://github.com/FS-GG/FS.GG.Templates/pull/549) at
+`b3b3b9622e78ced0839a60b0dfd7c61625978a23` makes the F# comparator return
+NO_VERDICT for decomposed Unicode template paths instead of a false payload match;
+16 focused and 29 stacked controls pass. Producer, served-byte, transaction, installed
+and receiver custody remain open.
 
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
 
