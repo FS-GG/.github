@@ -52,6 +52,10 @@ check(workflow("echo harmless") + "# python3 scripts/check-alpha.py; bash tests/
       "workflow comments")
 check(workflow("echo 'python3 scripts/check-alpha.py; bash tests/alpha/run.sh'"), False,
       "inert shell string")
+check(workflow("python3 scripts/check-alpha.py\necho harmless # bash tests/alpha/run.sh"), False,
+      "fixture in inline shell comment")
+check(workflow("bash tests/alpha/run.sh\necho harmless # out=\"$(python scripts/check-alpha.py)\""),
+      False, "checker in inline shell comment", fixture_body="#!/bin/sh\necho harmless\n")
 check(workflow(direct, job_if="false"), False, "disabled job")
 check(workflow(direct, step_if="${{ false }}"), False, "disabled step")
 check(workflow(direct, continue_on_error="true"), False, "non-gating step")

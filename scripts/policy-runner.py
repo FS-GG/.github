@@ -105,11 +105,12 @@ def run_invokes(script: str, path: str) -> bool:
             continue
         if not stripped or stripped.startswith("#"):
             continue
-        declaration = re.search(r"<<-?\s*['\"]?([A-Za-z_][A-Za-z_0-9]*)['\"]?", line)
+        code = line.split("#", 1)[0]
+        declaration = re.search(r"<<-?\s*['\"]?([A-Za-z_][A-Za-z_0-9]*)['\"]?", code)
         if declaration:
             heredoc = declaration.group(1)
         try:
-            lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|()")
+            lexer = shlex.shlex(code, posix=True, punctuation_chars=";&|()")
             lexer.whitespace_split = True
             lexer.commenters = "#"
             tokens = list(lexer)
@@ -132,7 +133,7 @@ def run_invokes(script: str, path: str) -> bool:
         # Command substitutions in assignments are executable even inside double quotes.
         # Requiring an assignment prefix avoids treating a quoted example as a command.
         assignment = r"(?:^|[;\s])\w+=[\"']?\$\(\s*(?:python(?:3)?|bash|sh)\s+" + re.escape(path) + r"(?=\s|\))"
-        if re.search(assignment, line) and not re.search(r"\w+='\$\(", line):
+        if re.search(assignment, code) and not re.search(r"\w+='\$\(", code):
             return True
     return False
 
