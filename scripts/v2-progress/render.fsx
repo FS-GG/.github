@@ -1,6 +1,7 @@
 #r "../../src/FS.GG.V2.Progress/bin/Release/net10.0/FS.GG.V2.Progress.dll"
 
 open System
+open System.Globalization
 open System.IO
 open System.Text.Json
 open FS.GG.V2.Progress
@@ -19,7 +20,10 @@ let string (value: JsonElement) (name: string) = prop value name |> str
 let boolean (value: JsonElement) (name: string) = (prop value name).GetBoolean()
 let number (value: JsonElement) (name: string) = (prop value name).GetInt32()
 let integer (value: JsonElement) (name: string) = (prop value name).GetInt64()
-let instant (value: JsonElement) = DateTimeOffset.Parse(str value).ToUniversalTime()
+let instant (value: JsonElement) =
+    let parsed = DateTimeOffset.Parse(str value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+    if parsed.Offset <> TimeSpan.Zero then fail "report timestamps must carry a UTC offset"
+    parsed
 let time (value: JsonElement) (name: string) = prop value name |> instant
 let items (value: JsonElement) = value.EnumerateArray() |> Seq.toList
 let strings (value: JsonElement) (name: string) = prop value name |> items |> List.map str
@@ -74,6 +78,9 @@ let readSnapshot (root: JsonElement) : ProgressSnapshot =
     let metadataAt = time root "metadataObservedAt"
     if metadataAt > asOf || asOf - metadataAt > TimeSpan.FromMinutes 2.0 then
         fail "lane/workstream/completion metadata is stale or future-dated; rebuild and validate it within two minutes of the report"
+    let completions = prop root "completions" |> items |> List.map readCompletion
+    if completions |> List.exists (fun completion -> completion.CompletedAt > metadataAt) then
+        fail "a completed draft postdates the metadata verification"
     let lanes = prop root "lanes" |> items |> List.map readLane
     let streams = prop root "workstreams" |> items |> List.map readWorkstream
     let telemetry = prop root "telemetry"
@@ -119,7 +126,7 @@ let readSnapshot (root: JsonElement) : ProgressSnapshot =
       Checks = prop root "checks" |> items |> List.map readNamed
       Risks = prop root "risks" |> items |> List.map readNamed
       NextActions = strings root "nextActions"
-      CompletionHistory = prop root "completions" |> items |> List.map readCompletion }
+      CompletionHistory = completions }
 
 if fsi.CommandLineArgs.Length <> 2 then
     eprintfn "usage: dotnet fsi scripts/v2-progress/render.fsx SNAPSHOT.json"
