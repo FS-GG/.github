@@ -2071,6 +2071,13 @@ fake controls pass. Protected reader identity, witness custody, target continuit
   descriptor, marker readback and pending census; 196 focused local controls pass.
   Installed one-key serializable store/ACL and native provider-call ordering remain
   unproved, including emergency outage and unknown-readback double-revoke risk.
+  [Emergency recovery characterization #3747](https://github.com/FS-GG/.github/pull/3747)
+  reproduces two best-effort native revokes across a restart after a lost response and
+  unknown readback while both verdicts remain pending and candidate handoff stays
+  blocked; 197 focused local controls pass. Source-only changes cannot establish
+  durable one-use authority here. Protected owners must qualify a shared attempt
+  store, provider idempotency or authoritative exact-token readback with crash,
+  lost-result and ACL traces before Q5/Q6.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
