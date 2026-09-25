@@ -1596,10 +1596,12 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   [stacked loopback transport draft #551](https://github.com/FS-GG/FS.GG.Coordination/pull/551)
   exercise strict offline predicates and controlled lost-response HTTP cases. The
   [v5 contract and qualification draft #550](https://github.com/FS-GG/FS.GG.Coordination/pull/550)
-  remains non-authoritative. A staged installed exact-artifact transport/parser proof, historical
-  archive revalidation, and reviewed Q3/Q6 equivalence or a new protected isolated native operation
-  are still required before rotating the gate/index and accepting GS2-09.9. Loopback unit tests
-  alone do not prove the production runtime boundary.
+  remains non-authoritative. Its staged exact-copy loopback harness exercises corrected classifier,
+  HTTP and durable-fence paths, but an independent boundary review found it insufficient for the
+  installed provider/credential path and corrected native-effect clause. Qualify the corrected
+  version through an actual installed provider path or a new protected isolated native operation,
+  revalidate the historical archive as historical evidence, and rerun exact Q3/Q6 before rotating
+  the gate/index or accepting GS2-09.9. Loopback results alone do not prove that boundary.
 
   [Protected callable discovery handoff](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json)
   records the packet received by discovery; it is not the GS2-09.9 acceptance receipt.
