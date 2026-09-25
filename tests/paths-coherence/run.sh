@@ -754,6 +754,24 @@ wf "$RBTOC/.github/workflows/w.yml" '      - "src/A/**"
       - "src/B/**"'
 expect "unrelated task Output leaves a static reference readable" 0 "ok:" "$RBTOC"
 
+# MSBuild expands Output ItemName expressions at target execution. This property currently names
+# ProjectReference, so the static reader's literal-name check silently misses a real B edge.
+RBTOD="$(root "$WORK/cover-dynamic-task-output-name")"
+proj "$RBTOD" "src/A"
+proj "$RBTOD" "src/B"
+cat > "$RBTOD/src/A/A.fsproj" <<'XML'
+<Project><PropertyGroup><OutputItem>ProjectReference</OutputItem></PropertyGroup>
+  <Target Name="Inject" BeforeTargets="ResolveProjectReferences">
+    <CreateItem Include="../B/B.fsproj">
+      <Output TaskParameter="Include" ItemName="$(OutputItem)" />
+    </CreateItem>
+  </Target>
+</Project>
+XML
+wf "$RBTOD/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "dynamic task Output ItemName cannot hide an emitted reference" \
+  3 "dynamic task Output ItemName requires evaluation" "$RBTOD"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
