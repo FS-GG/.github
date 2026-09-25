@@ -216,6 +216,13 @@ title, ID or incomplete fields, while leaving the ordinary runner bootstrap unch
 the pinned ID and 24 fields under the same credential that still fails unrelated
 all-project enumeration. Owner acceptance, opt-in runner wiring and qualification are
 required before a genuine work item can be admitted; no capture is claimed.
+At 2026-09-25 20:04 UTC, the draft was repaired at exact head
+`a3557baeb47f7221dda8399b1556e4232d447ef8`: three duplicate XML doc comments
+in `Board.fs` were removed because their public API descriptions already live in
+`Board.fsi`. This follows the signature-doc gate's no-new-baseline rule and repairs
+the hosted red from the prior head; local signature-doc-siting fixtures passed
+90/90, and the Release GitHub project built with zero warnings/errors. Fresh
+hosted checks and owner acceptance are still required; no runner item was admitted.
 [Opt-in runner bootstrap wiring #3752](https://github.com/FS-GG/.github/pull/3752)
 passes an exact-Project-1 mode through batch/next/take while leaving the default route
 unchanged; exact-head GitHub adapter 844/844 and scheduling CLI 8/8 pass. It is a source-only
@@ -1116,6 +1123,16 @@ changing the protected holds:
 | [FSC-04 #1050](https://github.com/FS-GG/FS.GG.SDD/pull/1050) | `58132088a92426a036c98545c73c042e82d1fb25` | Optional selected-commit preview refuses a nested copied source borrowing its enclosing repository commit; four focused and 1,541 Commands tests. Repository/object-store authority, full-source and common-instant proof remain open. |
 | [FSC-03 F# #3829](https://github.com/FS-GG/.github/pull/3829) | `50f95a7183cb0d8f4f107433c7d4585d6d235e0f` | Dormant ProjectReference XML reducer refuses items without exact `Include`, including lowercase and Update-only forms; 284 F# tests plus local MSBuild refusal probe. Live Python gate/evaluated graph/installed parity held. |
 | [Telemetry usage #771](https://github.com/FS-GG/FS.GG.Coordination/pull/771) | `c398b839f30eba846139abc9c8f02072c9e87c4f` | Dormant v2 `commandExecution` reducer refuses malformed optional numeric, nullable text and source-enum fields; 26 focused and 190 full Release execution tests. Other ThreadItem variants and genuine Host capture remain open. |
+| [GS2-09.7 #772](https://github.com/FS-GG/FS.GG.Coordination/pull/772) | `b11bbf9adf1ab1d36afa44d558ab40556037a111` | Source-only journal claim binds exact protected store-head resource/artifact, atomic compare capability and corpus/head SHA into the one-use request; 742 full unit tests. Real shared transaction, release interlock and Q5/Q6 remain held. |
+| [FSC-03 F# #3830](https://github.com/FS-GG/.github/pull/3830) | `18d22e367cc8529e351e500f1dadb5d35a54e920` | Dormant protected-pin, GraphQL and raw-commit reducers refuse repository node IDs with whitespace/control characters before provisional facts; 287 F# tests. Provider provenance/installed receiver held. |
+| [GS2-09.9 #773](https://github.com/FS-GG/FS.GG.Coordination/pull/773) | `cb356e45717fc5e912e0fc3f0d9d006ebb7a0fc2` | Closed fake-port installed no-grant refusal joins exact #764 ZIP and runner path/image/runtime, exit 78 and zero-effect audit; 19 focused tests. Fake records cannot authorize protected install or #550 native effect; #545 held. |
+| [Telemetry usage #774](https://github.com/FS-GG/FS.GG.Coordination/pull/774) | `5aeceaf123e1d308d86bd5bd8293ee30b739f533` | Dormant v2 parser validates required `fileChange` payload and nested change/kind variants from pinned schemas; 30 focused and 194 full Release execution tests. Other variants and genuine runner/Host capture remain open. |
+| [FSC-03 F# #3831](https://github.com/FS-GG/.github/pull/3831) | `b4ca40b2cea57df8ba61eccf22bc90939594e4e3` | Dormant branch, GraphQL membership/request and raw-commit identity guards refuse `.` or `..` repository segments before provisional facts; 290 F# tests. Provider/installed receiver held. |
+| [Telemetry usage #775](https://github.com/FS-GG/FS.GG.Coordination/pull/775) | `85be0cb62586d023df743c84e294e5f69e4bde9c` | Dormant `mcpToolCall` parser requires arguments, server, tool and closed status while leaving schema-permitted argument JSON open; 33 focused and 197 full Release execution tests. Optional result/error and Host capture pending. |
+| [FSC-04 #1051](https://github.com/FS-GG/FS.GG.SDD/pull/1051) | `7b7880f93faf6f521e7bde20e27d976a6d4290b1` | Read-only selected-commit preview refuses symlinked `.git` and forged gitfile roots that borrow a sibling repository; four focused and 1,545 Commands tests. Git registry/object-store authority and common instant open. |
+| [FSC-03 F# #3832](https://github.com/FS-GG/.github/pull/3832) | `7ab7b1ac3438db0f0f697904411029459780deac` | Dormant raw-commit adapter refuses NUL in extra headers; independent `git fsck --strict` rejected the fixed red-before object; 291 F# tests. Provider/installed parity held. |
+| [GS2-09.9 #776](https://github.com/FS-GG/FS.GG.Coordination/pull/776) | `44db648373d20c1ae2ce86c5bf740894cb0a09f7` | Fake-port producer witness binds selected #764 ZIP/disabled workflow, exact run/actor/artifact and #773 installed refusal; 24 focused tests. Protected producer/provider/runner identity and #550/#545 held. |
+| [GS2-09.7 #777](https://github.com/FS-GG/FS.GG.Coordination/pull/777) | `c5bf52cced9fbe623e88779f72aaad4d38a48c41` | Source-only release-reservation fake port checks signed seal, protected store/journal heads, one-use claim and atomic compare-and-consume readback; 746 full unit tests. Installed same-authority storage/token handoff and Q5/Q6 held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
