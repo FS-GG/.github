@@ -631,6 +631,17 @@ ZIP closure or producer/served/receiver proof.
 at `e28648547a8a2b00c4cf89ce9cb995c5f7cfa91f` refuses explicit MSBuild
 task output into `ProjectReference` (136 fixtures); matching F# handling,
 dynamic item names, implicit imports and installed parity remain open.
+[Coordination GS2-09.9 #663](https://github.com/FS-GG/FS.GG.Coordination/pull/663)
+at `021a1275a4631ced671c047979714779920d526e` snapshots a mutable
+operation-plan reader scope after a fake credential-drift false green (15 tests);
+protected plan/seal custody and native admission remain held.
+[Coordination GS2-09.7 #662](https://github.com/FS-GG/FS.GG.Coordination/pull/662)
+at `9c839d0aeda2a30b3656ec33847eb2cd467f25bf` refuses a census node ID
+reused as an activity ID (40 focused tests); journal/adapter and Q5/Q6 remain
+unaccepted. [`.github` FSC-03 F# #3782](https://github.com/FS-GG/.github/pull/3782)
+at `7122041148d1f99395f1220d5b5075b5bde75fbf` refuses task output into
+`ProjectReference` (126 tests), matching source-only Python #3781. Dynamic item
+names, implicit imports and installed parity remain separate.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
