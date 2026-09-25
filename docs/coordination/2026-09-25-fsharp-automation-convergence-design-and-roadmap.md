@@ -148,7 +148,9 @@ text after a quoted or plain version; six copied-live-descriptor parity controls
 This is a narrow parser repair. [Templates repeated-pin draft #525](https://github.com/FS-GG/FS.GG.Templates/pull/525)
 refuses a duplicated selected provider minimum pin that Python previously accepted while
 F# refused; five new offline controls pass. A duplicate provider ID whose second entry
-has no floor still passes both readers, so general duplicate-ID closure remains separate.
+has no floor still passed both readers. [Templates contract-ID draft #526](https://github.com/FS-GG/FS.GG.Templates/pull/526)
+now refuses duplicate selected IDs within `contracts:` in six new controls while preserving
+the live registry's valid same-ID `coherence:` entry. Broader YAML/foreign JSON parity remains.
 [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)

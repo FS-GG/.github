@@ -1743,6 +1743,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   read-only injected port; five adapter and five observer tests pass. Real evidence needs
   a separately reviewed protected `.github` read-only App transport and identity
   attestation with selected Actions/Contents/metadata scope. No effect route is added.
+  [Review/audit observer #591](https://github.com/FS-GG/FS.GG.Coordination/pull/591)
+  composes injected read-only approval history and membership with a distinct protected
+  audit-event port; 15 relevant fake controls pass. Protected App identity/permission
+  attestation and immutable approval event ID/time remain absent; dispatch is refused.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
