@@ -12,7 +12,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: github-substrate-v2-sandbox-${{ inputs.candidate_sha }}
+  # Shared by every workflow that writes the registered Q4 / GS2-09.7 sandbox.
+  # Keep this fixed across candidate revisions and workflow names.
+  group: github-substrate-v2-registered-sandbox
+  queue: max
   cancel-in-progress: false
 
 jobs:
