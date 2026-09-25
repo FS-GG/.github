@@ -103,11 +103,20 @@ orchestration runner: record that item's native turn IDs and usage, obtain an **
 whose workspace and item identities exactly match the run, and then verify the workspace queue returns
 to `pending=0`, `pendingUnacknowledged=0`, and `unacknowledgedLossy=false`. Preserve the run/turn/receipt
 correlation as evidence; an enqueued event, a ready Host, or a zero queue alone is not capture acceptance.
+The acceptance record must bind the runner invocation and genuine work-item identity to the native
+turn IDs and usage, the Host receipt's applied state and exact workspace/item pair, and a later
+authenticated zero-queue observation. Do not substitute a synthetic item, an uninstrumented CLI
+turn, a receipt for another workspace or item, or a pre-run zero-queue reading. At the 2026-09-25
+checkpoint this acceptance is **pending**: the authenticated board query refused access, so no
+genuine admitted item, runner turns or usage, or matching applied Host receipt was established.
 The current direct interactive `codex --yolo` session is outside that runner. Wrapping it with
 `fdev-telemetry exec` supplies credentials but does not emit native turn records; fleet capture of
 direct fdev sessions requires a distinct session producer and its own qualification. Do not claim
 this Codex transcript was captured without event-level evidence. Neither the readiness probes nor
 an applied telemetry Host receipt clears the separate GS2-09.9 installed-provider/native-effect hold.
+[Coordination draft #557](https://github.com/FS-GG/FS.GG.Coordination/pull/557) describes the
+prospective direct-session producer and negative acceptance cases; that source-only design is not
+an installed producer, a captured turn, or an applied receipt.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
@@ -1621,9 +1630,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   [v5 contract and qualification draft #550](https://github.com/FS-GG/FS.GG.Coordination/pull/550)
   remains non-authoritative. [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
-  replay reservation or installed effect entry. The #550 staged exact-copy loopback harness exercises
-  corrected classifier, HTTP and durable-fence paths, but an independent boundary review found it insufficient for the
-  installed provider/credential path and corrected native-effect clause. Qualify the corrected
+  replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
+  is a deterministic local clean-install candidate whose inspection still refuses dispatch; it is
+  not a protected installed provider or native-effect proof. The #550 staged exact-copy loopback
+  harness exercises corrected classifier, HTTP and durable-fence paths, but an independent boundary
+  review found it insufficient for the installed provider/credential path and corrected native-effect clause. Qualify the corrected
   version through an actual installed provider path or a new protected isolated native operation,
   revalidate the historical archive as historical evidence, and rerun exact Q3/Q6 before rotating
   the gate/index or accepting GS2-09.9. Loopback results alone do not prove that boundary.
@@ -1669,7 +1680,9 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   expiry, and host pin before either live candidate path calls a provider. This is source-only
   consistency evidence, not independent protected authorization, host run-binding, or Q5/Q6 acceptance.
   The #3690 source merge was not admitted through the common OperatingV1 effect boundary; preserve that
-  observation separately from any sandbox receipt. No rehearsal dispatch is implied by the draft.
+  observation separately from any sandbox receipt. [Coordination draft #556](https://github.com/FS-GG/FS.GG.Coordination/pull/556)
+  records the protected-rehearsal decision packet and its hold on authenticated run/candidate/nonce
+  binding, installed command, and native Q5/Q6 evidence. No rehearsal dispatch is implied by either draft.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
   [Coordination draft #553](https://github.com/FS-GG/FS.GG.Coordination/pull/553) adds source-only
