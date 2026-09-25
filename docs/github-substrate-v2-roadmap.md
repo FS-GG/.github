@@ -165,6 +165,10 @@ collection, publication and Authority writes outside this pure draft. After owne
 the V2 status-update workflow may collect immutable facts, validate/render them, review the
 output and publish through its existing route; a rendered summary cannot clear a protected
 receipt, merge or cutover hold.
+[Renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) is source-only; its
+initial six focused tests pass, and owner repair is pending for explicit Sol/high launch
+evidence, a worker-only reserved count, authenticated readiness facts and linked completed
+history. No live update workflow is pinned to that draft.
 
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
 
@@ -1689,6 +1693,9 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   closes a lost-response tag-object false green by requiring the selected ref URL, commit
   object type and selected-repository commit URL; 30 focused offline controls pass. Its
   protected installed-provider and native-effect hold is unchanged.
+  [Pagination-coherence draft #582](https://github.com/FS-GG/FS.GG.Coordination/pull/582)
+  refuses contradictory first/previous page links that previously allowed `ExactPull`
+  after a lost POST; 31 focused offline controls pass. It is source-only and stacked on #581.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)

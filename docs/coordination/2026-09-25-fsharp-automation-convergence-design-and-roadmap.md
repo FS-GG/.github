@@ -142,7 +142,10 @@ closes a caller-supplied commit false green by selecting local tag commit eviden
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)
 adds source-only ref checks at feed entry, after each download and before receipt after a
 red-before stale-tag false green; five new controls pass. ABA/post-check movement, tag
-protection and signature remain unproved. These stacked
+protection and signature remain unproved. [FsQuint payload-parity draft #26](https://github.com/FS-GG/FsQuint/pull/26)
+closes a narrower Python/F# disagreement for empty, signature-only or directory-only
+ZIP payload projections in seven new controls; the stacked root `.nuspec` selector already
+refuses them on the complete served path. These stacked
 drafts need owner acceptance and installed evidence before receiver or release adoption.
 
 **V2-PROG-01 — deterministic progress projection.** A bounded `.github` F# source draft
@@ -160,6 +163,10 @@ a Last 5 completed table with timestamp, item/workstream, result, evidence PR/li
 roadmap head. Truncate to five without padding. Test byte stability, ordering, truncation,
 labels, and fail-closed telemetry/lane claims. This is a source-only reporting aid; it does
 not issue receipts, write Authority, activate a workflow or change protected status.
+[Initial renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) has a new
+nonpackable source/test pair and six passing focused tests. Owner repair is pending for
+explicit launch evidence, worker-only reserved capacity, authenticated readiness facts,
+and completion-only linked history; its draft output is not yet an accepted status source.
 
 Independent review of these draft ports has already found false greens in Unicode JSON digest
 encoding, unsupported provider schemas, malformed source digests, misplaced telemetry archive
