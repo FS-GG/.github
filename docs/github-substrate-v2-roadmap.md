@@ -1035,6 +1035,15 @@ changing the protected holds:
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
 lacks initial census, full typed inspect, journal/custom receipts and Q5/Q6.
+The protected Coordination sequence is
+[#532](https://github.com/FS-GG/FS.GG.Coordination/pull/532) →
+[#527](https://github.com/FS-GG/FS.GG.Coordination/pull/527) →
+[#526](https://github.com/FS-GG/FS.GG.Coordination/pull/526) →
+[#529](https://github.com/FS-GG/FS.GG.Coordination/pull/529), under the
+Coordination owner's gate. At the 2026-09-25 18:36 UTC read-only check,
+#532 was behind with no review decision, #527 was blocked with cancelled
+old-head jobs, and #526/#529 were draft and behind. No protected merge
+was inferred from source-only draft checks.
 FSC-03 lacks authenticated roster/Import/evaluated-graph and installed
 receiver parity. FSC-04 lacks ABA/post-check/cross-root/Windows and effect
 proof. FSC-05 selected native versus retained release remains NO_VERDICT and
