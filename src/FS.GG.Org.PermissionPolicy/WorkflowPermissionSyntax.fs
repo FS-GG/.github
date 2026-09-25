@@ -151,6 +151,29 @@ module WorkflowPermissionSyntax =
         | :? YamlException -> error "yaml-invalid" path
         | :? ArgumentException -> error "yaml-invalid" path
 
+    /// Extract every repository identity from supplied registry bytes. The caller must authenticate
+    /// the bytes and source ref; this parser only enforces the local YAML and identity shape.
+    let registryRepositories path text =
+        parse path text
+        |> Result.bind (fun root ->
+            match memberValue "repos" root with
+            | Some (:? YamlSequenceNode as repos) when repos.Children.Count > 0 ->
+                let names =
+                    repos.Children
+                    |> Seq.map (fun item ->
+                        mapping item |> Option.bind (memberValue "full") |> Option.bind stringScalar)
+                    |> Seq.toList
+                if names |> List.exists (function
+                    | Some name -> not (Regex.IsMatch(name, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant))
+                    | None -> true) then
+                    error "registry-repos-shape" path
+                else
+                    let values = names |> List.choose id
+                    if values.Length <> (values |> Set.ofList |> Set.count) then
+                        error "registry-repos-duplicate" path
+                    else Ok values
+            | _ -> error "registry-repos-shape" path)
+
     let private block (value: YamlMappingNode) =
         match memberValue "permissions" value with
         | None -> Absent
