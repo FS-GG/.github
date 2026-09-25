@@ -993,6 +993,11 @@ changing the protected holds:
 | [FSC-05 #579](https://github.com/FS-GG/FS.GG.Templates/pull/579) | `ab392ae799c24f2be8b6e32d63d3c3bbc762577f` | Refuses unowned bytes before ZIP central directory; 69 payload/29 custody controls. |
 | [FSC-05 #580](https://github.com/FS-GG/FS.GG.Templates/pull/580) | `840f32f4be5db240e61da0d5a4bf98fb91926f90` | Refuses nonzero multi-disk ZIP markers; 72 payload/29 custody controls. |
 | [FSC-05 #581](https://github.com/FS-GG/FS.GG.Templates/pull/581) | `8f8252a7588a0079fa7653b65614dc64010782e5` | Binds ZIP end-record entry counts to parsed members; 76 payload/29 custody controls. |
+| [GS2-09.7 #703](https://github.com/FS-GG/FS.GG.Coordination/pull/703) | `42d1adafadb6b3c849ee3a27a8a72fe0c5338d7b` | Refuses duplicate raw ruleset condition members; 145 focused tests. |
+| [GS2-09.9 #704](https://github.com/FS-GG/FS.GG.Coordination/pull/704) | `50bce2b99ca0347ccce055303f3dc44293ab585d` | Binds nested pull repository URLs to selected target and refuses list/detail drift; 83 fake-port tests. |
+| [FSC-03 F# #3801](https://github.com/FS-GG/.github/pull/3801) | `b3ae107d4e5b3d911d850fbb34029412099bf451` | Pure Rule B refuses a referenced node absent from its supplied graph; 148 policy tests. Supplied graph remains unauthenticated. |
+| [FSC-05 #582](https://github.com/FS-GG/FS.GG.Templates/pull/582) | `9dc235eb69778c0e74740fe24fc9675ab74f1141` | Refuses nonempty ZIP central member comments; 77 payload/29 custody controls. |
+| [GS2-09.7 #705](https://github.com/FS-GG/FS.GG.Coordination/pull/705) | `7af17b858f2d274011fde2f71cd562926a2cb6f4` | Refuses duplicate nested ruleset parameter members before retaining JSON; 146 focused tests. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
@@ -1002,6 +1007,20 @@ receiver parity. FSC-04 lacks ABA/post-check/cross-root/Windows and effect
 proof. FSC-05 selected native versus retained release remains NO_VERDICT and
 lacks complete ZIP closure, producer/served-byte custody, #511 CAS and
 receiver proof. No draft authorizes a protected merge or cutover.
+
+[V2-PROG-01 renderer draft #3735](https://github.com/FS-GG/.github/pull/3735)
+at `98df3b385958aecc8224d69e7a9b3b762343d42a` adds a typed local JSONL
+diagnostic path and a script workflow that obtains fresh authenticated
+telemetry readiness, scans the root session family, and renders the pure F#
+snapshot. Local counter, weekly allowance and projection rows explicitly say
+their collector/account scope is unverified; they do not claim Host capture.
+The separate metadata file supplies lanes, workstreams and completion history;
+the F# script requires that metadata to be dated within two minutes of the
+scan, and the orchestrator must rebuild it from live roster/PR evidence before
+each ten-minute report. A fresh fixture rendered with unverified usage and
+pending capture; a three-minute-old fixture was refused. The local path passed
+24 focused renderer tests and a live read-only render. It remains a source-only
+draft pending owner acceptance.
 
 At the 17:51 UTC source checkpoint, the newest five completed **draft
 commits** were verified against their PR heads. Their completion is source
