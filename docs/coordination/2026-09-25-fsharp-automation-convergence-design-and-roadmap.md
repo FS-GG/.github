@@ -207,6 +207,11 @@ returns `NO_VERDICT` for three live `0.13.0` owner pins against the selected `0.
 native archive and ambiguous game short-name mapping, despite green floor graders;
 ten focused read-only controls pass. A synthetic exact pin match is only a roster match,
 not served-byte or installed provider authority. GitHub Packages remains 403/no-verdict.
+[Templates reviewed-roster draft #540](https://github.com/FS-GG/FS.GG.Templates/pull/540)
+refuses an added provider descriptor omitted from the five-row reviewed roster, linked
+descriptor files and a non-owner switched onto the selected package; 13 focused controls
+pass. The live mixed pins still return `NO_VERDICT`; baseline authentication, changing-tree
+snapshot, served-byte custody and installed parity remain open.
 [SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
 refuses an observed same-length overwrite after the first held-descriptor read by
 checking descriptor metadata around two byte passes; 21 focused controls and the
