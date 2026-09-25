@@ -1684,6 +1684,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   repairs a refusal-record false green that omitted the pinned interpreter and archive. Its
   52 isolated controls require the exact interpreter, `-I -S`, canonical installed archive path
   and subcommand for both proposed probes; no protected installation or native effect follows.
+  [Archive-object draft #572](https://github.com/FS-GG/FS.GG.Coordination/pull/572)
+  repairs a source-only observation that named the archive path and hash without the object
+  actually probed. Its 53 isolated controls require matching regular-file real path, device,
+  inode and exact digest before and after both probes; a protected observer must still collect
+  those facts from the installed filesystem under read-only custody.
   The #550 staged exact-copy loopback
   harness exercises corrected classifier, HTTP and durable-fence paths, but an independent boundary
   review found it insufficient for the installed provider/credential path and corrected native-effect clause. Qualify the corrected
@@ -1774,8 +1779,13 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   [Admission-freshness draft #3724](https://github.com/FS-GG/.github/pull/3724) repairs
   stale-decision false greens at signer and release by requiring canonical UTC issuance,
   expiry and a maximum ten-minute lifetime. Its 90 local controls pass; the fake port cannot
-  prove protected authority, clock or durable storage. One-use claim identity per admission
-  decision remains unresolved because the current source keys by signed token binding digest.
+  prove protected authority, clock or durable storage. At this layer, one-use claim identity
+  remained unresolved because the source keyed claims by signed token binding digest.
+  [Decision-claim draft #3725](https://github.com/FS-GG/.github/pull/3725) repairs that
+  false green: two distinct token bindings under one admission decision previously reached
+  the fake candidate twice. Its 94 local controls derive a stable decision ID excluding token
+  and validity time, then require durable claim and exact decision/binding/token readback.
+  Protected single-key CAS durability, ACLs and revocation-versus-claim ordering remain open.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
