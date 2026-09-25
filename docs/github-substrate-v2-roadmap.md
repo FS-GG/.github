@@ -1061,6 +1061,7 @@ changing the protected holds:
 | [GS2-09.9 #735](https://github.com/FS-GG/FS.GG.Coordination/pull/735) | `a19627eedb34a5060787a9dfcc7c28f811b2f31f` | Source-only sealed-plan adapter returns immutable, non-authorizing canonical request bytes from the same verified read; 17 focused tests. Protected plan/seal and #550 dispatch remain held. |
 | [Telemetry usage #736](https://github.com/FS-GG/FS.GG.Coordination/pull/736) | `f60d2cf10ecb5aec5ea2a6747a86722c6bab80e1` | Dormant direct-session usage reducer refuses malformed but equal reservation/subscription scope keys; 152 adapter tests. Current-session authentication and completed-turn usage remain no-verdict. |
 | [GS2-09.7 #737](https://github.com/FS-GG/FS.GG.Coordination/pull/737) | `f4bc3c8cfad696497eef0addb05c7549fb5758c2` | Source-only census binder refuses captured POST, redirect and byte-substituted bodies; 727 full unit tests. Protected native HTTP/provider custody and Q5/Q6 remain held. |
+| [FSC-03 F# #3815](https://github.com/FS-GG/.github/pull/3815) | `7d5a67e3ce29970e309ae294a844b8e1044ae98a` | Pure GitHub GraphQL response adapter binds exact repository, commit and tree identity and refuses partial/foreign/duplicate JSON; 221 tests. Authenticated transport and accepted pin remain uninstalled. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
