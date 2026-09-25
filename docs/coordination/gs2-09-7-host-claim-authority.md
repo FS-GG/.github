@@ -10,8 +10,9 @@ refuses every production claim and revocation.
 
 The protected host must pin an exact HTTPS store origin, resource ID, and
 endpoint in reviewed source. The endpoint must identify a durable, atomic
-create-if-absent record keyed by the SHA-256 digest of the exact signed binding
-payload. The record binds the token SHA-256 digest and survives host process
+create-if-absent record keyed by the derived protected admission decision ID
+described in `gs2-09-7-admission-once.md`. The record binds the exact signed
+binding digest and token SHA-256 digest and survives host process
 restart and run retry. A duplicate key, including one left by a crash between
 claim commit and token handoff, must refuse another handoff. A CAS timeout or
 lost response is `unknown` even when later readback finds the record: it never

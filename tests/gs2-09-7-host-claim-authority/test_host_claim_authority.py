@@ -48,20 +48,22 @@ class FakeStore:
     def describe(self):
         return self.descriptor
 
-    def cas_claim_once(self, binding_id, token_sha256):
+    def cas_claim_once(self, decision_id, binding_id, token_sha256):
         self.calls.append("cas")
         if self.claim_result is not None:
             return self.claim_result
-        if binding_id in self.claims:
+        if decision_id in self.claims:
             return "duplicate"
-        self.claims[binding_id] = token_sha256
+        self.claims[decision_id] = {
+            "schema": authority.CLAIM_SCHEMA, "decisionId": decision_id,
+            "bindingId": binding_id, "tokenSha256": token_sha256}
         if self.lose_claim_response:
             raise OSError("response lost after commit")
         return "committed"
 
-    def read_claim(self, binding_id):
+    def read_claim(self, decision_id):
         self.calls.append("read")
-        return self.claims.get(binding_id, "absent")
+        return self.claims.get(decision_id, "absent")
 
     def append_revoke_intent(self, binding_id, token_sha256):
         self.calls.append("intent")
@@ -104,8 +106,8 @@ class ReleasePort:
         self.claim = claim
         self.invocations = 0
 
-    def claim_once(self, binding_id):
-        return self.claim.claim_once(binding_id)
+    def claim_once(self, decision_id, binding_id, token_sha256):
+        return self.claim.claim_once(decision_id, binding_id, token_sha256)
 
     def invoke_candidate_once(self, token, binding):
         self.invocations += 1
@@ -117,6 +119,7 @@ class ReleasePort:
 
 class HostClaimAuthorityTests(unittest.TestCase):
     def setUp(self):
+        self.decision_id = "d" * 64
         self.binding_id = "a" * 64
         self.token_digest = hashlib.sha256(TOKEN.encode()).hexdigest()
         self.store = FakeStore()
@@ -132,13 +135,15 @@ class HostClaimAuthorityTests(unittest.TestCase):
         self.addCleanup(setattr, authority, "PINNED_STORE_ENDPOINT", original_endpoint)
 
     def claim(self):
-        return authority.HostClaimAuthority(self.binding_id, self.token_digest,
+        return authority.HostClaimAuthority(self.decision_id, self.binding_id,
+                                            self.token_digest,
                                             self.store, self.revoker)
 
     def test_unconfigured_store_refuses_before_any_claim_or_revocation(self):
         authority.PINNED_STORE_ORIGIN = ""
         with self.assertRaisesRegex(authority.Refused, "store-unconfigured"):
-            self.claim().claim_once(self.binding_id)
+            self.claim().claim_once(self.decision_id, self.binding_id,
+                                    self.token_digest)
         with self.assertRaisesRegex(authority.Refused, "store-unconfigured"):
             self.claim().revoke(TOKEN)
         self.assertEqual([], self.store.calls)
@@ -163,29 +168,61 @@ class HostClaimAuthorityTests(unittest.TestCase):
             with self.subTest(change=change):
                 self.store.descriptor = {**FakeStore().descriptor, **change}
                 with self.assertRaises(authority.Refused):
-                    self.claim().claim_once(self.binding_id)
+                    self.claim().claim_once(self.decision_id, self.binding_id,
+                                            self.token_digest)
         self.assertEqual([], self.store.calls)
 
     def test_foreign_revoker_or_binding_refuses_before_cas(self):
         self.revoker.descriptor["credentialScope"] = "candidate-token"
         with self.assertRaisesRegex(authority.Refused, "revoker-authority"):
-            self.claim().claim_once(self.binding_id)
+            self.claim().claim_once(self.decision_id, self.binding_id,
+                                    self.token_digest)
         self.revoker.descriptor["credentialScope"] = "protected-host-only"
         with self.assertRaisesRegex(authority.Refused, "binding-identity"):
-            self.claim().claim_once("b" * 64)
+            self.claim().claim_once(self.decision_id, "b" * 64,
+                                    self.token_digest)
         self.assertEqual([], self.store.calls)
 
     def test_durable_claim_allows_one_handoff_even_after_new_host_instance(self):
-        self.assertEqual("granted", self.claim().claim_once(self.binding_id))
-        self.assertEqual("duplicate", self.claim().claim_once(self.binding_id))
+        self.assertEqual("granted", self.claim().claim_once(
+            self.decision_id, self.binding_id, self.token_digest))
+        self.assertEqual("duplicate", self.claim().claim_once(
+            self.decision_id, self.binding_id, self.token_digest))
         self.assertEqual(["cas", "read", "cas"], self.store.calls)
+
+    def test_second_token_binding_under_same_decision_is_duplicate(self):
+        self.assertEqual("granted", self.claim().claim_once(
+            self.decision_id, self.binding_id, self.token_digest))
+        second_binding = "b" * 64
+        second_token_digest = "c" * 64
+        second = authority.HostClaimAuthority(
+            self.decision_id, second_binding, second_token_digest,
+            self.store, self.revoker)
+        self.assertEqual("duplicate", second.claim_once(
+            self.decision_id, second_binding, second_token_digest))
+        self.assertEqual(self.binding_id,
+                         self.store.claims[self.decision_id]["bindingId"])
+
+    def test_false_commit_with_foreign_native_binding_does_not_grant(self):
+        self.store.claim_result = "committed"
+        self.store.claims[self.decision_id] = {
+            "schema": authority.CLAIM_SCHEMA,
+            "decisionId": self.decision_id,
+            "bindingId": "b" * 64,
+            "tokenSha256": self.token_digest,
+        }
+        self.assertEqual("unknown", self.claim().claim_once(
+            self.decision_id, self.binding_id, self.token_digest))
 
     def test_lost_cas_response_never_grants_even_if_readback_says_committed(self):
         self.store.lose_claim_response = True
-        self.assertEqual("unknown", self.claim().claim_once(self.binding_id))
-        self.assertEqual(self.token_digest, self.store.claims[self.binding_id])
+        self.assertEqual("unknown", self.claim().claim_once(
+            self.decision_id, self.binding_id, self.token_digest))
+        self.assertEqual(self.token_digest,
+                         self.store.claims[self.decision_id]["tokenSha256"])
         self.assertEqual(["cas", "read"], self.store.calls)
-        self.assertEqual("duplicate", self.claim().claim_once(self.binding_id))
+        self.assertEqual("duplicate", self.claim().claim_once(
+            self.decision_id, self.binding_id, self.token_digest))
 
     def test_revoke_requires_durable_intent_native_observation_and_receipt(self):
         self.assertEqual("confirmed", self.claim().revoke(TOKEN))
@@ -256,8 +293,10 @@ class ReleaseCompositionTests(unittest.TestCase):
                                           self.public, self.fixture.pin,
                                           self.fixture.context, self.fixture.now)
         self.binding_id = hashlib.sha256(release.host.canonical_payload(binding)).hexdigest()
+        self.decision_id = release.host.ADMISSION_PORT.record["decisionId"]
         self.claim = authority.HostClaimAuthority(
-            self.binding_id, hashlib.sha256(self.fixture.token.encode()).hexdigest(),
+            self.decision_id, self.binding_id,
+            hashlib.sha256(self.fixture.token.encode()).hexdigest(),
             self.store, self.revoker)
         self.port = ReleasePort(self.claim)
 
@@ -267,7 +306,9 @@ class ReleaseCompositionTests(unittest.TestCase):
                                     self.fixture.now, self.port)
 
     def test_crash_after_claim_before_handoff_refuses_rerun(self):
-        self.assertEqual("granted", self.claim.claim_once(self.binding_id))
+        self.assertEqual("granted", self.claim.claim_once(
+            self.decision_id, self.binding_id,
+            hashlib.sha256(self.fixture.token.encode()).hexdigest()))
         # A new host process sees the durable CAS, so it cannot hand off again.
         result = self.run_release()
         self.assertEqual("duplicate-refused", result["outcome"])

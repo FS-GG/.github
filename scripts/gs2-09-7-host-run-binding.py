@@ -139,7 +139,7 @@ def sign(private_key_pem: bytes, payload: bytes) -> bytes:
 
 
 def require_admission(context: dict, signer_spki_sha256: str,
-                      now: dt.datetime) -> None:
+                      now: dt.datetime) -> dict:
     target = {
         "workflowRepository": HOST_REPOSITORY,
         "workflowPath": WORKFLOW,
@@ -149,8 +149,8 @@ def require_admission(context: dict, signer_spki_sha256: str,
         "projectNodeId": PROJECT_NODE,
     }
     try:
-        admission.require_admitted(ADMISSION_PORT, context,
-                                   signer_spki_sha256, target, now)
+        return admission.require_admitted(ADMISSION_PORT, context,
+                                          signer_spki_sha256, target, now)
     except admission.Refused as error:
         raise Refused(str(error)) from error
 

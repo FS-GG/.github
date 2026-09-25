@@ -10,7 +10,7 @@ authority supplies it.
 
 The `ProtectedReleasePort` is an **unimplemented protected host interface**, with three ordered operations:
 
-1. `claim_once(binding_id)` performs a durable, atomic one-use claim keyed by the canonical signed binding. Only `granted` permits a candidate handoff. `duplicate` refuses; `unknown` remains pending. An in-process set or candidate-writable file is insufficient because candidate code runs with access to the same Actions workspace and can erase or forge it.
+1. `claim_once(decision_id, binding_id, token_sha256)` performs a durable, atomic one-use claim keyed by the derived protected admission decision ID. Exact native readback must bind that ID to the signed binding and token digest. Only `granted` permits a candidate handoff. `duplicate` refuses; `unknown` remains pending. An in-process set or candidate-writable file is insufficient because candidate code runs with access to the same Actions workspace and can erase or forge it.
 2. `invoke_candidate_once(token, binding)` synchronously hands the scoped token to the exact reviewed candidate once. An unknown response is not retried; recovery must use native readback and the protected journal. This method must include the candidate's bounded operation and cleanup lifecycle before it reports `complete`.
 3. `revoke(token)` obtains the native revocation verdict after any claim attempt. A missing or unconfirmed revocation leaves the release pending even if the candidate invocation reported complete. A refusal before `claim_once` leaves revocation to the outer protected mint workflow's mandatory finalizer; it must not assume that an invalid envelope made an already minted token disappear.
 

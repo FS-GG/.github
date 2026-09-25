@@ -39,7 +39,8 @@ def require(condition: bool, reason: str) -> None:
 
 
 class ProtectedReleasePort(Protocol):
-    def claim_once(self, binding_id: str) -> str:
+    def claim_once(self, decision_id: str, binding_id: str,
+                   token_sha256: str) -> str:
         """Durable host-owned CAS: 'granted', 'duplicate', or 'unknown'."""
 
     def invoke_candidate_once(self, token: str, binding: dict) -> str:
@@ -80,7 +81,8 @@ def verify_signature(public_key_pem: bytes, payload: bytes, signature: bytes) ->
 
 def verify_envelope(envelope_raw: bytes, proof_raw: bytes, token: str,
                     public_key_pem: bytes, pinned_spki_sha256: str,
-                    context: dict, now: dt.datetime) -> dict:
+                    context: dict, now: dt.datetime,
+                    include_admission: bool = False) -> dict | tuple[dict, dict]:
     """Authenticate the exact signed host binding against runner-owned facts."""
     require(type(pinned_spki_sha256) is str and host.HEX64.fullmatch(pinned_spki_sha256),
             "trust-anchor-unconfigured")
@@ -110,7 +112,7 @@ def verify_envelope(envelope_raw: bytes, proof_raw: bytes, token: str,
     nonce = f'{context["runId"]}-{context["runAttempt"]}-{context["candidateSha"]}'
     require(context["runNonce"] == nonce, "run-nonce")
     try:
-        host.require_admission(context, pinned_spki_sha256, now)
+        admission_record = host.require_admission(context, pinned_spki_sha256, now)
     except host.Refused as error:
         raise Refused(str(error)) from error
     require(type(token) is str and len(token) > 20 and token.isascii()
@@ -172,7 +174,7 @@ def verify_envelope(envelope_raw: bytes, proof_raw: bytes, token: str,
         raise Refused("signature") from error
     require(bool(signature), "signature")
     verify_signature(public_key_pem, host.canonical_payload(binding), signature)
-    return binding
+    return (binding, admission_record) if include_admission else binding
 
 
 def release_once(envelope_raw: bytes, proof_raw: bytes, token: str,
@@ -186,11 +188,13 @@ def release_once(envelope_raw: bytes, proof_raw: bytes, token: str,
     require(port is not None and all(callable(getattr(port, name, None)) for name in
                                  ("claim_once", "invoke_candidate_once", "revoke")),
             "release-port-unconfigured")
-    binding = verify_envelope(envelope_raw, proof_raw, token, public_key_pem,
-                              host.PINNED_SPKI_SHA256, context, now)
+    binding, admission_record = verify_envelope(
+        envelope_raw, proof_raw, token, public_key_pem,
+        host.PINNED_SPKI_SHA256, context, now, include_admission=True)
     binding_id = hashlib.sha256(host.canonical_payload(binding)).hexdigest()
+    decision_id = admission_record["decisionId"]
     try:
-        claim = port.claim_once(binding_id)
+        claim = port.claim_once(decision_id, binding_id, binding["tokenSha256"])
     except Exception:
         claim = "unknown"
     invoked = False

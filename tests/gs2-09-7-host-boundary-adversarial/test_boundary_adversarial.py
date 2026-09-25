@@ -40,20 +40,23 @@ class ClaimStore:
                 "credentialScope": "protected-host-only",
                 "candidateCanWrite": False}
 
-    def cas_claim_once(self, binding_id, token_sha256):
+    def cas_claim_once(self, decision_id, binding_id, token_sha256):
         self.calls.append("cas")
         if self.false_commit:
             return "committed"
-        if binding_id in self.records:
+        if decision_id in self.records:
             return "duplicate"
-        self.records[binding_id] = token_sha256
+        self.records[decision_id] = {
+            "schema": claim_source.CLAIM_SCHEMA,
+            "decisionId": decision_id, "bindingId": binding_id,
+            "tokenSha256": token_sha256}
         if self.lost_response:
             raise OSError("lost after durable commit")
         return "committed"
 
-    def read_claim(self, binding_id):
+    def read_claim(self, decision_id):
         self.calls.append("read")
-        return self.records.get(binding_id, "absent")
+        return self.records.get(decision_id, "absent")
 
     def append_revoke_intent(self, binding_id, token_sha256):
         return "committed"
@@ -82,8 +85,8 @@ class ReleasePort:
         self.authority = authority
         self.invocations = 0
 
-    def claim_once(self, binding_id):
-        return self.authority.claim_once(binding_id)
+    def claim_once(self, decision_id, binding_id, token_sha256):
+        return self.authority.claim_once(decision_id, binding_id, token_sha256)
 
     def invoke_candidate_once(self, token, binding):
         self.invocations += 1
@@ -133,7 +136,9 @@ class ClaimBoundaryTests(unittest.TestCase):
                                           fixture.context, fixture.now)
         binding_id = hashlib.sha256(release.host.canonical_payload(binding)).hexdigest()
         token_sha256 = hashlib.sha256(fixture.token.encode()).hexdigest()
-        self.authority = claim_source.HostClaimAuthority(binding_id, token_sha256,
+        decision_id = release.host.ADMISSION_PORT.record["decisionId"]
+        self.authority = claim_source.HostClaimAuthority(decision_id,
+                                                         binding_id, token_sha256,
                                                          self.store, Revoker())
         self.port = ReleasePort(self.authority)
 
