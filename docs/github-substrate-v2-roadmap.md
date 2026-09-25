@@ -274,8 +274,12 @@ the **team mean per completed period** as cumulative team usage through the last
 boundary divided by the number of completed periods. Render count, root start, completed end,
 input, cached/noncached input, output and total; keep per-session diagnostics separate. Missing
 lineage, history, provenance or completed boundary yields Unknown. Estimate weekly exhaustion
-only from at least two fresh, same-limit, same-reset used-percent readings at least ten minutes
-apart; mark it approximate or Unknown, never derive it from raw token totals. Native JSONL
+from the earliest and latest compatible used-percent readings across the root session,
+bound to the same collector-verified account scope, limit and reset and at least ten
+minutes apart. A flat rounded latest ten-minute pair must not suppress an all-session
+rise, such as the locally observed 34% at 04:47 to 77% at 16:28 on 2026-09-25.
+Label the projection approximate, continuous-use and account-wide; preserve Unknown when
+all-session points are flat or incompatible. Never derive it from raw token totals. Native JSONL
 counters are distinct from instrumented runner turn IDs and usage plus the matching applied
 Host receipt. They do not establish end-to-end telemetry capture or clear GS2-09.9.
 The read-only local audit at 2026-09-25 16:11:32 UTC covered this root session plus 29
@@ -302,6 +306,12 @@ period, 28 additional idle descendants, team rather than per-session mean, cache
 arithmetic, byte stability and fail-closed lineage, provenance and counter claims. A
 weekly exhaustion estimate derives only from same-reset percentage slope. The external
 collector has not been installed or authenticated; no direct-session Host capture follows.
+The follow-up source-only head `005c64d6ffadbf38b8748b23208656fc7f6aad90`
+requires collector-verified account scope for weekly rates and uses the earliest compatible
+same-account, same-limit, same-reset rate point with the latest fresh point. A flat rounded
+last-ten-minute pair no longer hides a positive all-session slope; all-session flat or
+incompatible points still render Unknown. The estimate says continuous-use and account-wide;
+23 focused tests pass, including those refusal cases.
 No live update workflow is pinned to that draft.
 
 **Current bounded parallel source evidence.** Reserved direct GS2-09.9

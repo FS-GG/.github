@@ -363,7 +363,11 @@ anchor periods to the root session start, include zero-use periods, divide the c
 team total through the last completed boundary by completed-period count, and report count,
 start/end, total and cached/noncached breakdown. Per-session diagnostics are separate.
 Refresh weekly used-percent allowance for each ten-minute report and estimate exhaustion
-from same-limit, same-reset percentage slope over at least ten minutes, never token totals.
+from the earliest and latest compatible same-account, same-limit, same-reset observations
+across the root session at least ten minutes apart. A rounded flat latest period does not
+erase a positive all-session slope. Label the projection continuous-use, account-wide and
+approximate; preserve NoRateSlope for flat or incompatible all-session points, and never
+derive it from token totals.
 Native JSONL counts do not prove instrumented runner turns or an applied Host receipt and do
 not clear capture acceptance or GS2-09.9. The pure renderer validates these supplied claims; it
 cannot itself authenticate the CLI or instrument a direct interactive Codex session.
@@ -388,6 +392,9 @@ The next source-only revision at `2b7b9f3dcd55e95cdbac0ffc51ef0860d7041803`
 adds native JSONL cumulative team projection with 23 focused tests. It includes a
 30-session fixture with 28 idle descendants and still divides by completed root-anchored
 periods; it does not claim authenticated collection or applied Host capture.
+The next head `005c64d6ffadbf38b8748b23208656fc7f6aad90` uses earliest-to-latest
+compatible account-wide weekly percentages across the root session, retaining Unknown
+for flat or incompatible all-session evidence; 23 focused tests pass.
 
 Independent review of these draft ports has already found false greens in Unicode JSON digest
 encoding, unsupported provider schemas, malformed source digests, misplaced telemetry archive
