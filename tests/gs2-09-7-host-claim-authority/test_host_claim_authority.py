@@ -178,7 +178,7 @@ class HostClaimAuthorityTests(unittest.TestCase):
     def test_durable_claim_allows_one_handoff_even_after_new_host_instance(self):
         self.assertEqual("granted", self.claim().claim_once(self.binding_id))
         self.assertEqual("duplicate", self.claim().claim_once(self.binding_id))
-        self.assertEqual(["cas", "cas"], self.store.calls)
+        self.assertEqual(["cas", "read", "cas"], self.store.calls)
 
     def test_lost_cas_response_never_grants_even_if_readback_says_committed(self):
         self.store.lose_claim_response = True

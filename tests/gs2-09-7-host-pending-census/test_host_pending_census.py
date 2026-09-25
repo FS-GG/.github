@@ -155,10 +155,17 @@ class PendingCensusTests(unittest.TestCase):
             (census, "PINNED_JOURNAL_ORIGIN"): ORIGIN,
             (census, "PINNED_JOURNAL_RESOURCE_ID"): JOURNAL_ID,
             (census, "PINNED_JOURNAL_ENDPOINT"): JOURNAL_ENDPOINT,
+            (census.worker, "PINNED_RECOVERY_ORIGIN"): ORIGIN,
             (census.worker, "PINNED_RECOVERY_RESOURCE_ID"): RECOVERY_ID,
+            (census.worker, "PINNED_RECOVERY_ENDPOINT"): ORIGIN + "/recovery",
             (census.worker, "PINNED_RECOVERY_WORKER_ID"): WORKER_ID,
+            (census.worker.finalizer, "PINNED_FINALIZER_ORIGIN"): ORIGIN,
             (census.worker.finalizer, "PINNED_FINALIZER_RESOURCE_ID"): FINALIZER_ID,
+            (census.worker.finalizer, "PINNED_FINALIZER_ENDPOINT"):
+                ORIGIN + "/pending",
             (census.worker.finalizer, "PINNED_TOKEN_VAULT_ID"): VAULT_ID,
+            (census.worker.finalizer, "PINNED_REVOKER_ID"):
+                "protected-native-revoker-test",
         }
         for (module, name), value in pins.items():
             original = getattr(module, name)
