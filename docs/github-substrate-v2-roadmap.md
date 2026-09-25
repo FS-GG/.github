@@ -1090,6 +1090,23 @@ GraphQL probe again resolved pinned Coordination Project 1 but returned
 `FORBIDDEN Resource not accessible by personal access token` for Project 2;
 the installed all-project runner remains unable to qualify an end-to-end item.
 
+At the 18:34:59 UTC rendered checkpoint, a newly checked roster and exact PR
+heads counted six active Sol/high lanes, including the reserved GS2-09.9 and
+direct GS2-09.7 workers. The local root family had 30 sessions and 82 completed
+ten-minute periods. The latest 18:17:05–18:27:05 UTC period had 42,264,763
+input tokens (41,966,592 cached; 298,171 noncached), 96,581 output and
+42,361,344 total; the all-period team mean, including zero-use periods, was
+31,362,490.20 total. Local weekly usage was 87% at 18:34:34, leaving 13%,
+with a conditional continuous-use, account-wide same-reset projection near
+21:57 UTC. These remain **unverified local diagnostics**. Authenticated health
+and `main-fsharp-dev` workspace status were ready/configured with zero pending
+and unacknowledged items and no lossy state; end-to-end runner/Host capture
+remained pending. The five completion rows cited roadmap head `c01dc9f8`,
+which had already recorded those exact source heads. The wrapper command
+rendered successfully with zero build warnings/errors; the 24 focused tests
+passed. A separate three-minute-old metadata run exited 2 and left no report
+file, confirming the source-only freshness guard refuses that stale input.
+
 At the 17:51 UTC source checkpoint, the newest five completed **draft
 commits** were verified against their PR heads. Their completion is source
 preparation, not an accepted V2 receipt or authorization to merge:
