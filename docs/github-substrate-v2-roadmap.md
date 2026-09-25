@@ -998,6 +998,10 @@ changing the protected holds:
 | [FSC-03 F# #3801](https://github.com/FS-GG/.github/pull/3801) | `b3ae107d4e5b3d911d850fbb34029412099bf451` | Pure Rule B refuses a referenced node absent from its supplied graph; 148 policy tests. Supplied graph remains unauthenticated. |
 | [FSC-05 #582](https://github.com/FS-GG/FS.GG.Templates/pull/582) | `9dc235eb69778c0e74740fe24fc9675ab74f1141` | Refuses nonempty ZIP central member comments; 77 payload/29 custody controls. |
 | [GS2-09.7 #705](https://github.com/FS-GG/FS.GG.Coordination/pull/705) | `7af17b858f2d274011fde2f71cd562926a2cb6f4` | Refuses duplicate nested ruleset parameter members before retaining JSON; 146 focused tests. |
+| [GS2-09.9 #706](https://github.com/FS-GG/FS.GG.Coordination/pull/706) | `bd85c334c41b1f9c78179e918829c55b817ea0c6` | Binds present pull URL to selected repository and number; 86 fake-port tests. |
+| [FSC-03 F# #3802](https://github.com/FS-GG/.github/pull/3802) | `7418842a49da10f9944a2106d14e1d65a3401794` | Refuses Windows drive-prefixed paths in pure Rule B graph and project inputs; 154 policy tests. |
+| [FSC-04 #1037](https://github.com/FS-GG/FS.GG.SDD/pull/1037) | `4e2b5bf0aa760154b006197beea9281cd60c84e2` | Reserves checked first-pass file length to reduce test-thread allocation; 1,483 Commands tests, no peak-memory or atomicity proof. |
+| [FSC-05 #583](https://github.com/FS-GG/FS.GG.Templates/pull/583) | `6f65af89837b6da010a5a5983be247490de07b1f` | Refuses altered selected central/local ZIP header metadata; 82 payload/29 custody controls. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
