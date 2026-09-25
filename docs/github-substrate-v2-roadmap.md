@@ -302,7 +302,12 @@ Accepted #3698 and installed parity remain prerequisites. FSC-04
 [SDD #1018](https://github.com/FS-GG/FS.GG.SDD/pull/1018) at
 `6d12c523bcb02cd1644fe7e4429bd1ed82818a4c` characterizes co-batched authored and
 generated writes without rollback; 1,424 tests pass, but producer verification/staging policy
-is undecided. FSC-05 [Templates #547](https://github.com/FS-GG/FS.GG.Templates/pull/547)
+is undecided. Stacked [SDD #1019](https://github.com/FS-GG/FS.GG.SDD/pull/1019) at
+`773a91d1c3be1026e86c36300c7adc58b5b61b5d` adds a pure typed preview binding
+proposed work-model JSON root, generated-view source, identity, output path and physical
+capture to one v2 candidate; 1,429 Commands tests pass. The separate verification wave
+and authored-file staging or rollback decision remain required. FSC-05
+[Templates #547](https://github.com/FS-GG/FS.GG.Templates/pull/547)
 at `cd0753d5f4cc7a20155b24f29eb58c6567442363` finds identical template configs can mask
 39 extra members and 33 changed bodies in retained archives; selected/retained parity remains
 NO_VERDICT, and local NuGet-shaped matching is payload-only, not served-feed custody.
@@ -326,9 +331,13 @@ of that actor, runner and artifact remains absent.
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
 Differential review found the live Python `allow_uncovered()` still accepts a marker inside
 a valid multiline quoted scalar on current main. Source audit found draft #3698 already
-repairs that case through its shared scalar-span logic; a separate lane is adding an
-independent full-gate regression on #3698. The repair is not live until #3698 receives
-owner acceptance and protected readback. The F# replacement remains unaccepted.
+repairs that case through its shared scalar-span logic; stacked
+[`.github` #3755](https://github.com/FS-GG/.github/pull/3755) at
+`c5e4cd7bb935c5a6183819a2e20fd2575f25bc0f` adds independent full-gate Rule (b)
+regression controls (91 Python fixtures) without duplicating the repair. Current main
+falsely passes the fixture, while #3698/#3755 refuse and a real later comment remains
+accepted. The repair is not live until this stack receives owner acceptance and protected
+readback. The F# replacement remains unaccepted.
 [Templates #549](https://github.com/FS-GG/FS.GG.Templates/pull/549) at
 `b3b3b9622e78ced0839a60b0dfd7c61625978a23` makes the F# comparator return
 NO_VERDICT for decomposed Unicode template paths instead of a false payload match;
