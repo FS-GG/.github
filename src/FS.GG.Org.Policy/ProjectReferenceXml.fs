@@ -140,6 +140,39 @@ module ProjectReferenceXml =
             | :? XmlException as ex -> error "project-xml" projectPath ex.Message
             | :? ArgumentException as ex -> error "project-xml" projectPath ex.Message
 
+    /// Assemble only caller-supplied project XML into a closed local graph. Duplicate identities
+    /// and missing referenced sources refuse before Map construction can erase evidence. This
+    /// does not authenticate discovery, file bytes, implicit imports, or evaluated MSBuild items.
+    let inspectSuppliedProjectSet
+        (sources: (string * string) list)
+        : Result<Map<string, string list>, SyntaxDiagnostic> =
+        if isNull (box sources) || List.isEmpty sources then
+            error "project-roster" "<projects>" "supplied project source set is absent or empty"
+        else
+            let rec collect seen graph remaining =
+                match remaining with
+                | [] ->
+                    let missing =
+                        graph
+                        |> Map.toSeq
+                        |> Seq.tryPick (fun (project, references) ->
+                            references
+                            |> List.tryFind (fun dependency -> not (Map.containsKey dependency graph))
+                            |> Option.map (fun dependency -> project, dependency))
+                    match missing with
+                    | Some(project, dependency) ->
+                        error "project-roster" project (sprintf "referenced project %s is absent from supplied source set" dependency)
+                    | None -> Ok graph
+                | (path, xml) :: rest ->
+                    if Set.contains path seen then
+                        error "project-roster" path "duplicate supplied project identity"
+                    else
+                        match inspect path xml with
+                        | Error diagnostic -> Error diagnostic
+                        | Ok references ->
+                            collect (Set.add path seen) (Map.add path references graph) rest
+            collect Set.empty Map.empty sources
+
     /// A local observation of one caller-supplied implicit file. The result does not establish
     /// nearest-file selection, import closure, source provenance, or a Rule (b) graph verdict.
     type SuppliedImplicitObservation = NoDirectReferenceInSuppliedXml

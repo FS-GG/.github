@@ -280,3 +280,48 @@ module ProjectReferenceXmlTests =
     let ``MSBuild item expansion syntax cannot become one fabricated graph edge`` includePath =
         let xml = "<Project><ProjectReference Include='" + includePath + "' /></Project>"
         refused "project-reference" "src/A/A.fsproj" xml
+
+    [<Fact>]
+    let ``duplicate supplied project identity cannot overwrite an outgoing edge`` () =
+        let sources =
+            [ "src/A/A.fsproj", "<Project><ProjectReference Include='../B/B.fsproj' /></Project>"
+              "src/A/A.fsproj", "<Project />"
+              "src/B/B.fsproj", "<Project />" ]
+        match ProjectReferenceXml.inspectSuppliedProjectSet sources with
+        | Error diagnostic ->
+            Assert.Equal("project-roster", diagnostic.Code)
+            Assert.Contains("duplicate", diagnostic.Message)
+        | Ok graph -> failwithf "duplicate source silently overwrote graph facts: %A" graph
+
+    [<Fact>]
+    let ``omitted referenced project refuses a supplied source set`` () =
+        let sources =
+            [ "src/A/A.fsproj", "<Project><ProjectReference Include='../B/B.fsproj' /></Project>" ]
+        match ProjectReferenceXml.inspectSuppliedProjectSet sources with
+        | Error diagnostic ->
+            Assert.Equal("project-roster", diagnostic.Code)
+            Assert.Contains("src/B/B.fsproj", diagnostic.Message)
+        | Ok graph -> failwithf "omitted B cannot produce a closed graph: %A" graph
+
+    [<Fact>]
+    let ``complete supplied source set carries an uncovered dependency`` () =
+        let sources =
+            [ "src/A/A.fsproj", "<Project><ProjectReference Include='../B/B.fsproj' /></Project>"
+              "src/B/B.fsproj", "<Project />" ]
+        match ProjectReferenceXml.inspectSuppliedProjectSet sources with
+        | Error diagnostic -> failwithf "unexpected source-set refusal: %A" diagnostic
+        | Ok graph ->
+            match RuleB.inspect [ "src/A/**" ] graph with
+            | Error diagnostic -> failwithf "unexpected coverage refusal: %A" diagnostic
+            | Ok coverage ->
+                Assert.Equal<(string * string) list>(
+                    [ "src/A/A.fsproj", "src/B/B.fsproj" ], coverage.Uncovered)
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let ``absent or empty supplied source set has no graph verdict`` absent =
+        let sources = if absent then Unchecked.defaultof<(string * string) list> else []
+        match ProjectReferenceXml.inspectSuppliedProjectSet sources with
+        | Error diagnostic -> Assert.Equal("project-roster", diagnostic.Code)
+        | Ok graph -> failwithf "missing source set cannot yield graph facts: %A" graph
