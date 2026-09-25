@@ -223,12 +223,13 @@ draft, not an installed or admitted runner. The broader CLI has one UTEL-06D con
 failure also reproduced on #3751's base. The denied all-project route remains blocked until
 owner acceptance and installed qualification; no native turns or applied Host receipt exist.
 [Exact-board duplicate-field draft #3772](https://github.com/FS-GG/.github/pull/3772)
-stacks on #3752 at `065564ada8b3a7e1ac238f16cea530c0ab98b6ad`. A red-before
+stacks on #3752 at `56266f65174c492226c7a25c29a87652c38a64e9`. A red-before
 complete Project 1 response with duplicate `Status` field names silently selected the
-shadow ID/options; the dormant direct route now refuses missing, blank or duplicate
-field names/IDs before map construction. Its Release GitHub adapter suite passes
-845/845. This draft neither installs the runner mode nor admits an item; Project 2
-remains PAT-forbidden on the installed enumeration route.
+shadow ID/options; another complete response with duplicate `Ready` option names
+silently selected a shadow option ID. The dormant direct route now refuses missing,
+blank or duplicate field and single-select option names/IDs before map construction.
+Its Release GitHub adapter suite passes 846/846. This draft neither installs the runner
+mode nor admits an item; Project 2 remains PAT-forbidden on the installed enumeration route.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
@@ -509,6 +510,24 @@ without installed F# parity. [Templates FSC-05 #561](https://github.com/FS-GG/FS
 at `5877040fb77560468aa520455b5858c70187531e` turns malformed UTF-8 ZIP
 member names into NO_VERDICT (42 payload, 29 archive controls), with served-byte,
 transaction and receiver holds unchanged.
+Later draft source evidence remains distinct from protected acceptance:
+[Coordination GS2-09.9 #652](https://github.com/FS-GG/FS.GG.Coordination/pull/652)
+at `4c4615f6e4761e39051d1f94ea867a9ff71b14b3` requires the immutable
+reviewer witness before fake installed no-grant runner/audit readback (50 tests),
+with both workflows disabled and #545/#550 held;
+[Coordination GS2-09.7 #651](https://github.com/FS-GG/FS.GG.Coordination/pull/651)
+at `b1b119f2b57a954e2e7a7c78792bb4b90e3e134d` adds partial workflow-permissions
+readback (113 tests), with settings authority incomplete and Q5/Q6 held.
+[SDD FSC-04 #1026](https://github.com/FS-GG/FS.GG.SDD/pull/1026) at
+`cf92c80f45580f6ed818a5a058417b8fa6a0cb94` checks separately supplied
+work-candidate rows but cannot prove physical inventory completeness (1,453
+Commands tests). [`.github` FSC-03 #3774](https://github.com/FS-GG/.github/pull/3774)
+at `286a2e4aa836002313f316d953cc10b7efd86e5e` makes the Python graph gate
+refuse unevaluated MSBuild Import (127 fixtures), with installed parity pending.
+[Templates FSC-05 #562](https://github.com/FS-GG/FS.GG.Templates/pull/562)
+at `4bc07cac34d69fad7f97145c2c48e363c7982937` makes the Python archive reader
+return NO_VERDICT on an unsafe ZIP member outside template paths (43 payload, 29
+archive tests), without producer, served-byte or receiver authority.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
