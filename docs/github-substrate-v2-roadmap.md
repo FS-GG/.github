@@ -1013,6 +1013,9 @@ changing the protected holds:
 | [GS2-09.9 #710](https://github.com/FS-GG/FS.GG.Coordination/pull/710) | `6ced357930e81ada8753b7305627f6dd73d4fea5` | Requires present and type-sensitive equal selected pull list/detail fields; 92 fake-port tests, native effect still held. |
 | [FSC-03 F# #3805](https://github.com/FS-GG/.github/pull/3805) | `a927784f1496d6644bf3311c7f9bceeaffe03e9b` | Pure supplied-source assembler refuses `.proj`/`.targets` identities outside the live Python project's discovered extension roster; 166 policy tests, source provenance still unauthenticated. |
 | [GS2-09.7 #711](https://github.com/FS-GG/FS.GG.Coordination/pull/711) | `74ea9066da07a2adba2e8e0971e4c3decafe2a43` | Raw-to-typed provider adapter refuses duplicate PR marker members in a captured issue page before extraction; 133 focused tests. Initial census and Q5/Q6 remain held. |
+| [GS2-09.9 #712](https://github.com/FS-GG/FS.GG.Coordination/pull/712) | `826d9c1dc38b43a59f3acb8dbed35e0a91edcb33` | Strict native JSON parser refuses exponent overflow before repository readback; 94 fake-port tests, one-attempt native effect held. |
+| [FSC-05 #586](https://github.com/FS-GG/FS.GG.Templates/pull/586) | `1e80421fcec60f95824ce64508d4858fc03f962c` | Refuses invalid DOS date/time fields even when ZIP local and central values agree; 94 payload/29 custody controls, selected archive NO_VERDICT. |
+| [FSC-03 F# #3806](https://github.com/FS-GG/.github/pull/3806) | `a4ea873e96ef51628469a4a30cd9bab00e7c5289` | Dormant pure handoff requires supplied project XML identities to match a supplied expected roster; 174 policy tests, expected roster still unauthenticated. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
