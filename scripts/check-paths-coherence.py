@@ -296,7 +296,12 @@ def triggers(doc: dict, what: str) -> dict:
             if isinstance(got, dict):
                 return got
             if isinstance(got, list):
-                return {str(k): None for k in got}
+                if any(not isinstance(k, str) for k in got):
+                    raise GateError(
+                        f"{what}: `on:` sequence contains a non-string event; refusing to invent "
+                        "an event name from a YAML mapping, boolean, number, or null."
+                    )
+                return {k: None for k in got}
             if isinstance(got, str):
                 return {got: None}
             raise GateError(

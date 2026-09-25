@@ -664,6 +664,21 @@ for second in paths '!!str paths'; do
     3 "duplicate mapping key" "$RBD"
 done
 
+# An `on:` sequence is a list of event NAMES. Stringifying a mapping or YAML boolean fabricates
+# an event name, so a workflow's apparent push.paths can disappear while a clean sibling keeps the
+# audit at exit 0. The parser must refuse the malformed item before coverage is considered.
+for item in '{push: {paths: [src/A/**]}}' true; do
+  RES="$(root "$WORK/cover-event-sequence-${item//[^a-zA-Z0-9]/_}")"
+  proj "$RES" "src/A" "../B/B.fsproj"
+  proj "$RES" "src/B"
+  { echo "name: w"; echo "on: [$item]"
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+    > "$RES/.github/workflows/w.yml"
+  cp "$RS/.github/workflows/w.yml" "$RES/.github/workflows/pair.yml"
+  expect "non-string on sequence item $item cannot hide workflow selection" \
+    3 "sequence contains a non-string event" "$RES"
+done
+
 # ---- rule (b)'s escape hatch ---------------------------------------------------------------
 RB8="$(root "$WORK/cover-hatch")"
 proj "$RB8" "src/A" "../B/B.fsproj"
