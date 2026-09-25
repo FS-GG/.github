@@ -121,6 +121,11 @@ Project 2 with `organization_projects=read` named in the response. The runner's 
 effective organization Projects read access to Project 2 (including any needed organization
 approval), or a separately accepted direct-Project-1 bootstrap change, is required for this
 route. No WorkItem or native turn was admitted through that failed query.
+At the 2026-09-25 16:36 UTC recheck, the current credential again read the exact
+Coordination Project 1 (`PVT_kwDOEYAWY84Bb08W`) and again received
+`Resource not accessible by personal access token` for Project 2. The direct Project 1
+bootstrap drafts remain unaccepted and uninstalled, so this does not admit a runner item
+or clear end-to-end capture acceptance.
 The current direct interactive `codex --yolo` session is outside that runner. Wrapping it with
 `fdev-telemetry exec` supplies credentials but does not emit native turn records; fleet capture of
 direct fdev sessions requires a distinct session producer and its own qualification. Do not claim
@@ -285,6 +290,14 @@ Host receipt. They do not establish end-to-end telemetry capture or clear GS2-09
 The read-only local audit at 2026-09-25 16:11:32 UTC covered this root session plus 29
 descendants and 17,938 native `token_count` events, with zero counter decreases or component
 mismatches; this is source evidence, not an authenticated Host capture receipt.
+The 16:38:26 UTC read-only refresh found the same 30-session root family, 18,719
+`token_count` events and zero counter-component or decrease findings. Across 71
+completed root-anchored periods, the local diagnostic team mean was 30,194,132.73
+total tokens/period; the latest completed period totaled 38,369,280 tokens. Root-session
+weekly readings rose from 34% at 04:47 to 78% at 16:38, giving an approximate
+continuous-use, account-wide projection of 22:34 UTC on 2026-09-25. This ad hoc
+local scan lacks authenticated collector/account provenance and does not establish
+instrumented runner turns, an applied Host receipt or capture acceptance.
 [Renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) is source-only; its
 first owner repair adds explicit worker launch evidence, activity-based counts, a worker-only
 reserved count, authenticated readiness observations and linked terminal completion rows.
@@ -415,6 +428,28 @@ referenced assembly (1,445 Commands tests), without installed-package proof.
 `Straße`/`Strasse` casefold alias (37 payload and 29 archive controls), with full Unicode,
 producer, served-byte, transaction and receiver parity open. None of these drafts grants
 protected receipt, merge, native effect or cutover authority.
+Subsequent source-only follow-ups preserve the same boundaries:
+[Coordination GS2-09.9 #641](https://github.com/FS-GG/FS.GG.Coordination/pull/641)
+at `5e8b87a8756adeeeda34afeff8a2cc80a90d86b2` refuses mutable protected
+source/approval credential drift (41 focused tests), with both workflows disabled;
+[Coordination GS2-09.9 #643](https://github.com/FS-GG/FS.GG.Coordination/pull/643)
+at `dadfeb79470321c1cd1457adddeca6abd3e203d7` pins the disabled workflow's
+exact SHA-256 and Git blob ID in producer/reviewer joins after forged-source false greens
+(43 focused tests), without protected approval or effect;
+[Coordination GS2-09.7 #642](https://github.com/FS-GG/FS.GG.Coordination/pull/642)
+at `c661b089ff073bd6de241c7de9cbe2f5bf828561` binds a two-read core-settings
+digest but marks settings authority incomplete (108 focused tests), with ten other
+settings surfaces and Q5/Q6 open. [SDD FSC-04 #1024](https://github.com/FS-GG/FS.GG.SDD/pull/1024)
+at `901df809e74e473e329d1cc324366b72d88a815d` refuses preview capture when
+blocking model diagnostics exist (1,447 Commands tests), while command diagnostics,
+staging/rollback and installed parity remain held. [`.github` FSC-03 #3768](https://github.com/FS-GG/.github/pull/3768)
+at `a5601c55831606f2eff307271bcbac12e00b1ee6` repairs the Python pure matcher
+trailing-newline false green (116 fixtures); it does not assert end-to-end XML filename
+coverage or installed F# parity. [Templates FSC-05 #559](https://github.com/FS-GG/FS.GG.Templates/pull/559)
+at `ca78ca177cb73fc2fec80e02717e372700066399` refuses Python Unicode 16.0 full-fold
+expansion paths in the F# payload comparator (40 payload and 29 archive controls), with
+simple-fold, Unicode-version, producer and receiver parity still open. These are draft
+source facts, not protected receipts.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
