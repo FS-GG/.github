@@ -61,6 +61,19 @@ module ProjectReferenceXmlTests =
     let ``target-time ProjectReference changes cannot become static graph facts`` inner =
         refused "project-reference" "src/A/A.fsproj" ("<Project>" + inner + "</Project>")
 
+    [<Theory>]
+    [<InlineData("<ProjectReference Include='../B/B.fsproj' /><ProjectReference Remove='../B/B.fsproj' />")>]
+    [<InlineData("<ProjectReference Remove='../B/B.fsproj' />")>]
+    let ``top-level ProjectReference Remove requires item evaluation`` items =
+        refused "project-reference" "src/A/A.fsproj" ("<Project><ItemGroup>" + items + "</ItemGroup></Project>")
+
+    [<Fact>]
+    let ``unrelated item Remove leaves static ProjectReference readable`` () =
+        let xml =
+            "<Project><ItemGroup><ProjectReference Include='../B/B.fsproj' />"
+            + "<Content Include='generated.txt' /><Content Remove='generated.txt' /></ItemGroup></Project>"
+        Assert.Equal<string list>([ "src/B/B.fsproj" ], parsed "src/A/A.fsproj" xml)
+
     [<Fact>]
     let ``unrelated target items do not obscure static ProjectReference`` () =
         let xml =

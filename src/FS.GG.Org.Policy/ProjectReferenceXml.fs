@@ -49,6 +49,7 @@ module ProjectReferenceXml =
     /// Explicit imports and target-time ProjectReference changes require MSBuild evaluation.
     /// Tasks may also emit ProjectReference items without an item element in these XML bytes.
     /// Dynamic Output item names cannot be resolved from one XML file.
+    /// ProjectReference Remove changes the evaluated item set and is not a static edge.
     /// No filesystem reads or assertions about a complete project roster occur here.
     let inspect (projectPath: string) (xml: string) : Result<string list, SyntaxDiagnostic> =
         if not (normalized projectPath) then
@@ -70,6 +71,11 @@ module ProjectReferenceXml =
                     document.Descendants()
                     |> Seq.exists (fun element ->
                         element.Name.LocalName = "ProjectReference" && inTarget element)
+                let removedReference =
+                    document.Descendants()
+                    |> Seq.exists (fun element ->
+                        element.Name.LocalName = "ProjectReference"
+                        && not (isNull (element.Attribute(XName.Get("Remove")))))
                 let outputItemNames =
                     document.Descendants()
                     |> Seq.filter (fun element -> element.Name.LocalName = "Output" && inTarget element)
@@ -92,6 +98,8 @@ module ProjectReferenceXml =
                     error "project-reference" projectPath "explicit MSBuild Import requires evaluation"
                 elif targetReference then
                     error "project-reference" projectPath "target-time ProjectReference changes require evaluation"
+                elif removedReference then
+                    error "project-reference" projectPath "ProjectReference Remove requires MSBuild evaluation"
                 elif dynamicTaskOutputName then
                     error "project-reference" projectPath "dynamic task Output ItemName requires evaluation"
                 elif taskOutputReference then
