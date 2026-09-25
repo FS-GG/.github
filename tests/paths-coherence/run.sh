@@ -679,6 +679,23 @@ for item in '{push: {paths: [src/A/**]}}' true; do
     3 "sequence contains a non-string event" "$RES"
 done
 
+# The other `on:` forms must also reject event names the parser cannot bind. A numeric mapping
+# key, or a string with event-name punctuation, is not an Actions event. A clean sibling makes a
+# skipped malformed workflow look like a successful Rule (b) audit unless this is refused.
+event_case=0
+for value in '{42: {paths: [src/A/**]}}' "'push/evil'" "['push/evil']"; do
+  event_case=$((event_case+1))
+  REN="$(root "$WORK/cover-event-name-$event_case")"
+  proj "$REN" "src/A" "../B/B.fsproj"
+  proj "$REN" "src/B"
+  { echo "name: w"; echo "on: $value"
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+    > "$REN/.github/workflows/w.yml"
+  cp "$RS/.github/workflows/w.yml" "$REN/.github/workflows/pair.yml"
+  expect "invalid on event name $value cannot disappear from the audit" \
+    3 "invalid event name" "$REN"
+done
+
 # ---- rule (b)'s escape hatch ---------------------------------------------------------------
 RB8="$(root "$WORK/cover-hatch")"
 proj "$RB8" "src/A" "../B/B.fsproj"

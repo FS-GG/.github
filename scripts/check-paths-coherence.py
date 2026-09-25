@@ -290,10 +290,19 @@ def triggers(doc: dict, what: str) -> dict:
     which here would mean skipping it. scripts/test made exactly that mistake (#879); do not repeat
     it. Anything that is none of the three spellings is refused, not guessed.
     """
+    def event_name(value: object) -> str:
+        # An invalid mapping key or scalar is not an event. Accepting it can silently remove a
+        # workflow from Rule (b)'s coverage audit while a clean sibling keeps the run green.
+        if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", value):
+            raise GateError(f"{what}: `on:` contains invalid event name {value!r}.")
+        return value
+
     for key in ("on", True):
         if key in doc:
             got = doc[key]
             if isinstance(got, dict):
+                for event in got:
+                    event_name(event)
                 return got
             if isinstance(got, list):
                 if any(not isinstance(k, str) for k in got):
@@ -301,9 +310,9 @@ def triggers(doc: dict, what: str) -> dict:
                         f"{what}: `on:` sequence contains a non-string event; refusing to invent "
                         "an event name from a YAML mapping, boolean, number, or null."
                     )
-                return {k: None for k in got}
+                return {event_name(k): None for k in got}
             if isinstance(got, str):
-                return {got: None}
+                return {event_name(got): None}
             raise GateError(
                 f"{what}: `on:` is {type(got).__name__}, not a string, list, or mapping — this gate "
                 f"cannot tell what triggers the workflow, and guessing would silently skip it (#266)."
