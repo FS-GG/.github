@@ -483,7 +483,8 @@ def glob_to_regex(pattern: str) -> re.Pattern[str]:
         else:
             out.append(re.escape(pattern[i]))
             i += 1
-    out.append("$")
+    # `$` also matches just before a final newline; only the absolute end is a covered path.
+    out.append(r"\Z")
     return re.compile("".join(out))
 
 

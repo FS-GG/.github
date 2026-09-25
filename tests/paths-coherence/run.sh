@@ -577,6 +577,31 @@ wf "$RBG2/.github/workflows/w.yml" '      - "src/A/**"
 expect "\`**\` DOES cross \`/\` — \`src/nested/**\` covers a project nested below it" \
   0 "ok:" "$RBG2"
 
+# Python's `$` regex anchor matches before a final newline. The pure matcher must require the
+# entire supplied path, including that final byte; this edge cannot be exercised through the
+# current XML ProjectReference reader, which does not decode character references into filenames.
+mapfile -t matcher_edge < <(python3 - "$TOOL" <<'PY'
+import importlib.util
+import sys
+spec = importlib.util.spec_from_file_location("paths_coherence", sys.argv[1])
+gate = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gate)
+path = "src/B/B.fsproj\n"
+print(gate.selects(path, ["src/B/B.fsproj"]))
+print(gate.selects(path, [path]))
+PY
+)
+if [ "${matcher_edge[0]:-}" = False ]; then
+  ok "exact path pattern without final newline cannot cover a newline-suffixed path"
+else
+  bad "exact pattern falsely covers newline-suffixed path" "matcher returned ${matcher_edge[0]:-<none>}"
+fi
+if [ "${matcher_edge[1]:-}" = True ]; then
+  ok "exact pattern including final newline still covers that path"
+else
+  bad "exact pattern including newline stopped covering its path" "matcher returned ${matcher_edge[1]:-<none>}"
+fi
+
 # ---- the three false positives the rule's narrowness is measured to prevent -----------------
 #
 # Each of these fires if "declares a project" is read loosely, and each would red a workflow whose
