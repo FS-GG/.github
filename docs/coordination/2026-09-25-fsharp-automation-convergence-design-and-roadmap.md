@@ -237,6 +237,11 @@ streams every bounded regular archive member and refuses CRC-corrupt or FIFO ent
 that the narrow observer previously accepted; 27 focused controls pass. The live
 selected archive remains `NO_VERDICT`, with producer, served-byte and installed proof
 still absent.
+[Templates ZIP-origin/mode draft #546](https://github.com/FS-GG/FS.GG.Templates/pull/546)
+requires Unix-origin regular 0644 entries after executable-mode and DOS-origin aliases
+gave a false narrow roster match; 29 focused controls pass. The selected archive still
+returns `NO_VERDICT` for mixed pins and ambiguous short names, with served-byte and
+installed parity absent.
 [SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
 refuses an observed same-length overwrite after the first held-descriptor read by
 checking descriptor metadata around two byte passes; 21 focused controls and the
@@ -281,6 +286,11 @@ recaptures declared performance paths through selected-file handles before v2 bu
 verification, refusing stale supplied bytes, links, aliases and omissions; 1415 command
 tests pass. Core `.fsgg` and `work/<id>` producer closure, cross-root consistency,
 output rollback and installed parity remain open.
+[SDD independent core-source probe #1017](https://github.com/FS-GG/FS.GG.SDD/pull/1017)
+recaptures required `.fsgg` and work-model sources plus recognized optional files through
+pinned no-follow reads before performance/bundle verification, refusing stale supplied
+spec/config bytes and omitted newly present tasks; 1422 command tests pass. Generation-plan
+integration, simultaneous cross-root consistency and installed parity remain open.
 [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)

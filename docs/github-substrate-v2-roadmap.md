@@ -2139,6 +2139,12 @@ fake controls pass. Protected reader identity, witness custody, target continuit
   and live signer/store/recovery pins remain blank. It names independent protected
   release, workflow, credential, store, revoker and Q5/Q6 readback actions; no installed
   authority or sandbox acceptance is inferred.
+  [Pure interruption-cut draft #615](https://github.com/FS-GG/FS.GG.Coordination/pull/615)
+  adds before-intent, after-readback and before-receipt cases to Coordination's
+  in-memory migration-step model with fake read/write/dispatch assertions; 11 focused
+  tests pass under local SDK 10.0.401. The repository pins unavailable local 10.0.400,
+  and real fresh-process provider cuts, nine-authority Q5 interpretation, rollback and
+  protected Q5/Q6 receipt remain unproved.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
