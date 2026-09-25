@@ -515,6 +515,11 @@ def project_graph(root: str) -> dict[str, list[str]]:
     root_path = os.path.abspath(root)
     implicit_refs: dict[str, bool] = {}
 
+    def is_project_reference(element: ET.Element) -> bool:
+        # MSBuild item names are case-insensitive; XML structural names still retain case.
+        return (isinstance(element.tag, str)
+                and element.tag.rsplit("}", 1)[-1].casefold() == "projectreference")
+
     def nearest_implicit(project_path: str, filename: str) -> str | None:
         folder = os.path.dirname(os.path.abspath(project_path))
         while os.path.commonpath((root_path, folder)) == root_path:
@@ -547,8 +552,7 @@ def project_graph(root: str) -> dict[str, list[str]]:
                     except (OSError, ET.ParseError) as e:
                         raise GateError(f"{source_rel}: unreadable or invalid implicit MSBuild XML — {e}") from e
                     implicit_refs[source] = any(
-                        isinstance(element.tag, str)
-                        and element.tag.rsplit("}", 1)[-1] == "ProjectReference"
+                        is_project_reference(element)
                         for element in imported.iter()
                     )
                 if implicit_refs[source]:
@@ -563,7 +567,7 @@ def project_graph(root: str) -> dict[str, list[str]]:
                     if not isinstance(child.tag, str):
                         continue
                     tag = child.tag.rsplit("}", 1)[-1]
-                    if tag == "ProjectReference":
+                    if is_project_reference(child):
                         raise GateError(f"{rel}: target-time ProjectReference requires evaluation")
                     if tag == "Output":
                         item_name = child.get("ItemName", "")
@@ -583,7 +587,7 @@ def project_graph(root: str) -> dict[str, list[str]]:
                         f"{rel}: explicit MSBuild Import requires MSBuild import evaluation; "
                         "refusing an incomplete ProjectReference graph."
                     )
-                if tag != "ProjectReference":
+                if not is_project_reference(element):
                     continue
                 if element.get("Remove") is not None:
                     raise GateError(f"{rel}: ProjectReference Remove requires MSBuild evaluation")
