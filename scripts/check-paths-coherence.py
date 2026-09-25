@@ -580,6 +580,18 @@ def project_graph(root: str) -> dict[str, list[str]]:
             root_tag = project.getroot().tag
             if not isinstance(root_tag, str) or root_tag.rsplit("}", 1)[-1] != "Project":
                 raise GateError(f"{rel}: project XML root must be Project")
+            # SDK props/targets are implicit imports. A custom SDK can add ProjectReference items
+            # absent from these project bytes; a static no-edge verdict would then be false green.
+            # Only the two attribute spellings used by this tree remain in the historical static
+            # subset. This is not proof of their resolved SDK contents or global resolver inputs.
+            sdk = project.getroot().get("Sdk")
+            if sdk is not None and sdk not in ("Microsoft.NET.Sdk", "Microsoft.NET.Sdk.Web"):
+                raise GateError(f"{rel}: unverified project SDK {sdk!r} can import ProjectReference "
+                                "items; requires authenticated MSBuild SDK evaluation")
+            if any(isinstance(child.tag, str) and child.tag.rsplit("}", 1)[-1] == "Sdk"
+                   for child in project.getroot()):
+                raise GateError(f"{rel}: unverified project SDK child element can import "
+                                "ProjectReference items; requires authenticated MSBuild SDK evaluation")
             if sets_targets_override(project.getroot()):
                 raise GateError(f"{rel}: DirectoryBuildTargetsPath overrides implicit target selection; "
                                 "requires MSBuild import evaluation")
