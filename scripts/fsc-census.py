@@ -118,8 +118,12 @@ def workflow_steps(root: Path, paths: set[str], names: list[str]) -> tuple[list[
                 run = step.get("run")
                 uses = step.get("uses")
                 if isinstance(run, str):
-                    targets = run_targets(run, paths)
                     shell = step.get("shell", "runner-default")
+                    if not isinstance(shell, str) or not shell.strip():
+                        steps.append({"workflow": name, "job": job_name, "step": index,
+                                      "error": "workflow run shell is not a scalar"})
+                        continue
+                    targets = run_targets(run, paths)
                     steps.append({"workflow": name, "job": job_name, "step": index,
                                   "shell": shell, "interpreter_hints": interpreter_hints(shell, run),
                                   "targets": targets, "run": run})
@@ -157,6 +161,10 @@ def composite_action_steps(root: Path, paths: set[str], names: list[str]) -> tup
             uses = step.get("uses")
             if isinstance(run, str):
                 shell = step.get("shell", "runner-default")
+                if not isinstance(shell, str) or not shell.strip():
+                    steps.append({"action": name, "step": index,
+                                  "error": "composite action run shell is not a scalar"})
+                    continue
                 steps.append({"action": name, "step": index, "shell": shell,
                               "interpreter_hints": interpreter_hints(shell, run),
                               "targets": run_targets(run, paths), "run": run})

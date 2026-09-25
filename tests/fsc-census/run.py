@@ -59,4 +59,8 @@ with tempfile.TemporaryDirectory() as folder:
     (root / ".github/actions/setup/action.yml").write_text("runs: [broken]\n")
     invalid_action = module.census(root)
     assert ".github/actions/setup/action.yml: action runs is not a mapping" in invalid_action["issues"]
-print("fsc-census controls: 12 passed")
+    (root / ".github/actions/setup/action.yml").write_text(
+        "runs:\n  using: composite\n  steps:\n    - shell: []\n      run: python3 -V\n")
+    invalid_shell = module.census(root)
+    assert ".github/actions/setup/action.yml: composite action run shell is not a scalar" in invalid_shell["issues"]
+print("fsc-census controls: 13 passed")
