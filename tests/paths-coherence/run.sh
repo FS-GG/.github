@@ -974,6 +974,26 @@ ln -s "build/local.targets" "$RBLIN/Directory.Build.targets"
 wf "$RBLIN/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
 expect "in-root symlinked implicit source preserves local provenance" 0 "ok:" "$RBLIN"
 
+# A project path itself may be a symlink. Its XML bytes are outside the supplied source inventory
+# when the target escapes --root, even though the path matched the in-root project glob.
+RBPS_PARENT="$WORK/cover-project-source-symlink"
+RBPS="$(root "$RBPS_PARENT/repo")"
+mkdir -p "$RBPS/src/A" "$RBPS_PARENT/outside"
+echo '<Project><PropertyGroup><ExternalSource>true</ExternalSource></PropertyGroup></Project>' \
+  > "$RBPS_PARENT/outside/A.fsproj"
+ln -s "../../../outside/A.fsproj" "$RBPS/src/A/A.fsproj"
+wf "$RBPS/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "external symlinked project source cannot certify a repo graph" \
+  3 "project source resolves outside repository root" "$RBPS"
+
+RBPLI="$(root "$WORK/cover-project-source-symlink-inside")"
+mkdir -p "$RBPLI/src/A" "$RBPLI/build"
+echo '<Project><PropertyGroup><Version>1.0</Version></PropertyGroup></Project>' \
+  > "$RBPLI/build/source.xml"
+ln -s "../../build/source.xml" "$RBPLI/src/A/A.fsproj"
+wf "$RBPLI/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "in-root symlinked project source remains in the supplied inventory" 0 "ok:" "$RBPLI"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
