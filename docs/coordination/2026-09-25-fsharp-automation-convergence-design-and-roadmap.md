@@ -369,8 +369,9 @@ observations older than five minutes at report time, while accepting the exact b
 18 focused tests pass. A further review repair requires authenticated, collector-verified
 post-Host zero-queue evidence and refuses missing evidence IDs; 18 focused tests pass at
 head `06914d60ba47d2ede36af6d48a04babfe883a0e6`. Its draft output is not an accepted status source.
-The current source-only revision at `4770090b386384566566a217548c3658f5281995`
-adds the typed CLI status/context/native-period separation and passes 21 focused controls.
+The current source-only revision at `7e7ebdee9b502d20a438ea00916956262e3cf35a`
+adds the typed CLI status/context/native-period separation, accepts valid UTC reset offsets,
+binds native period usage to the report workspace and passes 21 focused controls.
 The weekly values above have not been authenticated by the collector.
 
 Independent review of these draft ports has already found false greens in Unicode JSON digest

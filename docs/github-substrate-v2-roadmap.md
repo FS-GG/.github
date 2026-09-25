@@ -268,9 +268,10 @@ Its later freshness repair rejects healthy telemetry observations older than fiv
 18 focused tests pass. A further review repair requires the post-Host zero queue observation
 to carry authenticated, collector-verified evidence; three new refusal cases keep the
 18 focused tests green at exact head `06914d60ba47d2ede36af6d48a04babfe883a0e6`.
-The renderer revision at exact head `4770090b386384566566a217548c3658f5281995` adds typed
+The renderer revision at exact head `7e7ebdee9b502d20a438ea00916956262e3cf35a` adds typed
 authenticated CLI status evidence, separate context occupancy and native-turn period usage.
-Its source/test branch passes 21 focused tests; the
+Its source/test branch passes 21 focused tests, accepts valid UTC reset offsets and binds
+native period runner usage to the report workspace; the
 user-supplied values above are not an authenticated status observation.
 No live update workflow is pinned to that draft.
 
@@ -283,6 +284,10 @@ Direct GS2-09.7 [Coordination #619](https://github.com/FS-GG/FS.GG.Coordination/
 at `5d66e0be94ca1b71c17162319e3a6957ecc6fa52` refuses unescaped delimiter/control
 identities that previously let distinct rollback steps share a plan seal; 22 focused controls
 pass under local SDK 10.0.401, while pinned 10.0.400 hosted checks are queued.
+[Coordination #620](https://github.com/FS-GG/FS.GG.Coordination/pull/620) at
+`67b92631f68eb69993c46c4c22ff9e4a7070913d` additionally refuses two rollback domains
+sharing one target identity, a red-before map-collapse false green; 23 focused controls pass
+under the local SDK, while pinned hosted checks and native target readback remain open.
 Neither draft authorizes a protected effect, merge, Authority write, receiver flip or cutover.
 Optional FSC-03 [`.github` Rule (b) #3753](https://github.com/FS-GG/.github/pull/3753)
 at `194e08a11439ef7663085f3f3947c2f765500884` keeps `*` within one path segment in
@@ -295,6 +300,11 @@ is undecided. FSC-05 [Templates #547](https://github.com/FS-GG/FS.GG.Templates/p
 at `cd0753d5f4cc7a20155b24f29eb58c6567442363` finds identical template configs can mask
 39 extra members and 33 changed bodies in retained archives; selected/retained parity remains
 NO_VERDICT, and local NuGet-shaped matching is payload-only, not served-feed custody.
+Stacked [Templates #548](https://github.com/FS-GG/FS.GG.Templates/pull/548) at
+`030cf73b572e2c3760beb648b72769b9d84cae0e` moves the pure template-payload comparison
+to F# behind a bounded Python physical ZIP reader and refuses config-free, duplicate, aliased,
+foreign-field and malformed payload maps; 14 new and 29 stacked controls pass. Its local
+payload verdict does not establish selected, served or installed archive custody.
 
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
 
