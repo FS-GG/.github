@@ -1011,6 +1011,7 @@ changing the protected holds:
 | [FSC-04 #1038](https://github.com/FS-GG/FS.GG.SDD/pull/1038) | `6ca4befec823793fcb6f585db7bfb8b48984b8ad` | Transfers only freshly completed private Linux pinned-read bytes into `CapturedFile`, preserving defensive copy for supplied arrays; 1,486 Commands tests, no peak-memory or atomicity proof. |
 | [FSC-05 #585](https://github.com/FS-GG/FS.GG.Templates/pull/585) | `519603fa4c4bb46755dc28b221005de0f251083f` | Requires selected ZIP local DOS time/date to match central record; 87 payload/29 custody controls, selected archive still NO_VERDICT. |
 | [GS2-09.9 #710](https://github.com/FS-GG/FS.GG.Coordination/pull/710) | `6ced357930e81ada8753b7305627f6dd73d4fea5` | Requires present and type-sensitive equal selected pull list/detail fields; 92 fake-port tests, native effect still held. |
+| [FSC-03 F# #3805](https://github.com/FS-GG/.github/pull/3805) | `a927784f1496d6644bf3311c7f9bceeaffe03e9b` | Pure supplied-source assembler refuses `.proj`/`.targets` identities outside the live Python project's discovered extension roster; 166 policy tests, source provenance still unauthenticated. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
