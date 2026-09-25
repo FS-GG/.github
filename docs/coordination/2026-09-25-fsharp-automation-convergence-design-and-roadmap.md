@@ -351,9 +351,10 @@ not issue receipts, write Authority, activate a workflow or change protected sta
 An externally collected authenticated CLI `/status` observation may supply a weekly remaining
 percentage, local reset with explicit offset/time zone, provenance ID and observation time.
 Render current context occupancy independently as a window measurement, never as cumulative
-usage or a five-minute token delta. The current user-supplied 26% remaining, 2026-09-30 09:28
-Europe/Vienna reset and 191K/258K context occupancy are test fixtures until authenticated
-collector evidence exists. Period usage remains Unknown until genuine native turn IDs and usage
+usage or a five-minute token delta. The live `/status` panel monitor observed 26% remaining,
+2026-09-30 09:28 Europe/Vienna reset and 191K/258K context occupancy; these lack authenticated
+collector provenance and remain non-authoritative renderer fixtures. Period usage remains
+Unknown until genuine native turn IDs and usage
 or complete collector-verified native `token_count` histories support a bounded period.
 Use native `session_meta.parent_thread_id` to collect the root and every transitive child.
 Validate monotonic cumulative input/cached/output/total counters and their component and
@@ -382,7 +383,7 @@ head `06914d60ba47d2ede36af6d48a04babfe883a0e6`. Its draft output is not an acce
 The current source-only revision at `7e7ebdee9b502d20a438ea00916956262e3cf35a`
 adds the typed CLI status/context/native-period separation, accepts valid UTC reset offsets,
 binds native period usage to the report workspace and passes 21 focused controls.
-The weekly values above have not been authenticated by the collector.
+The monitor-observed weekly values above have not been authenticated by the collector.
 The next source-only revision at `2b7b9f3dcd55e95cdbac0ffc51ef0860d7041803`
 adds native JSONL cumulative team projection with 23 focused tests. It includes a
 30-session fixture with 28 idle descendants and still divides by completed root-anchored

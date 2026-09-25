@@ -254,10 +254,11 @@ receipt, merge or cutover hold.
 Accept authenticated, collector-verified CLI `/status` weekly allowance evidence only with an
 observation time and provenance ID. Record remaining weekly percentage and reset as an explicit
 local offset/time zone; report current context occupancy as a separate window measurement.
-The user-supplied example is **26% left**, reset **2026-09-30 09:28 Europe/Vienna**, with
-**191K/258K context occupancy**. It is a fixture until an authenticated collector observation
-exists, not verified usage. Context occupancy is neither cumulative token usage nor a five-minute
-usage delta. Report period usage as **Unknown** until genuine native turn IDs and input/output
+The live `/status` panel monitor observed **26% left**, reset **2026-09-30 09:28 Europe/Vienna**,
+with **191K/258K context occupancy**. These observations lack authenticated collector
+provenance and remain non-authoritative renderer fixtures until verified; context occupancy
+is neither cumulative token usage nor a five-minute usage delta. Report period usage as
+**Unknown** until genuine native turn IDs and input/output
 usage or complete collector-verified native `token_count` histories support a bounded period;
 do not subtract context readings to invent a delta.
 Give consolidated V2 progress reports every ten minutes while work is active. Refresh weekly
@@ -293,7 +294,7 @@ The renderer revision at exact head `7e7ebdee9b502d20a438ea00916956262e3cf35a` a
 authenticated CLI status evidence, separate context occupancy and native-turn period usage.
 Its source/test branch passes 21 focused tests, accepts valid UTC reset offsets and binds
 native period runner usage to the report workspace; the
-user-supplied values above are not an authenticated status observation.
+monitor-observed values above are not authenticated collector status evidence.
 The next source-only renderer revision at exact head
 `2b7b9f3dcd55e95cdbac0ffc51ef0860d7041803` adds typed native JSONL cumulative
 team counters and root-anchored ten-minute periods. Its 23 focused tests cover a zero-use
