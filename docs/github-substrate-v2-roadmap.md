@@ -1651,6 +1651,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   actor or artifact producer IDs while satisfying pure consistency checks. Its 42 isolated controls
   bind those IDs and refuse self-review, but no protected release packet or installed native effect
   has been observed.
+  [Installed-control draft #566](https://github.com/FS-GG/FS.GG.Coordination/pull/566)
+  repairs a second source-only false green: observation without a source tree, dispatch actor or
+  producer run/artifact IDs passed the proposed installed control. Its 44 isolated controls now
+  require exact identities; a matching local draft packet remains non-authorizing without
+  independent protected source readback and selected digest approval.
   The #550 staged exact-copy loopback
   harness exercises corrected classifier, HTTP and durable-fence paths, but an independent boundary
   review found it insufficient for the installed provider/credential path and corrected native-effect clause. Qualify the corrected
