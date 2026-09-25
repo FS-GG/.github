@@ -222,6 +222,13 @@ unchanged; exact-head GitHub adapter 844/844 and scheduling CLI 8/8 pass. It is 
 draft, not an installed or admitted runner. The broader CLI has one UTEL-06D configuration
 failure also reproduced on #3751's base. The denied all-project route remains blocked until
 owner acceptance and installed qualification; no native turns or applied Host receipt exist.
+[Exact-board duplicate-field draft #3772](https://github.com/FS-GG/.github/pull/3772)
+stacks on #3752 at `22d2f1ede6c3705d3d135c24852972a00350338a`. A red-before
+complete Project 1 response with duplicate `Status` field names silently selected the
+shadow ID/options; the dormant direct route now refuses missing, blank or duplicate
+field identities before map construction. Its Release GitHub adapter suite passes
+845/845. This draft neither installs the runner mode nor admits an item; Project 2
+remains PAT-forbidden on the installed enumeration route.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
@@ -460,6 +467,26 @@ at `ca78ca177cb73fc2fec80e02717e372700066399` refuses Python Unicode 16.0 full-f
 expansion paths in the F# payload comparator (40 payload and 29 archive controls), with
 simple-fold, Unicode-version, producer and receiver parity still open. These are draft
 source facts, not protected receipts.
+Further parallel source-only evidence: [Coordination GS2-09.9 #647](https://github.com/FS-GG/FS.GG.Coordination/pull/647)
+at `6460807b9af2be5e611c551210d2cfd166611e1c` binds producer actor and source
+record through reviewer joins (46 tests), with workflows disabled and #545/#550 held;
+[Coordination GS2-09.9 #648](https://github.com/FS-GG/FS.GG.Coordination/pull/648)
+at `dc8348369b230a6a18bad0e1122ebba98e1c15aa` also binds the checked
+repository ID to the reviewer join after a foreign-repository witness false green
+(47 tests), with the same protected holds;
+[Coordination GS2-09.7 #646](https://github.com/FS-GG/FS.GG.Coordination/pull/646)
+at `926e110f8daf37bb3ee0fbbe054e7648fc800b1f` adds partial Actions-policy
+readback bracketed by core reread (110 tests), with Q5/Q6 and settings closure held.
+[SDD FSC-04 #1025](https://github.com/FS-GG/FS.GG.SDD/pull/1025) at
+`2cee1a8a71f75751bd878be72b8c8eee0bfec051` characterizes duplicate-work-ID
+diagnostics outside the selected-source preview (1,448 Commands tests); a complete
+pinned work inventory and effect decision remain absent. [`.github` FSC-03 #3771](https://github.com/FS-GG/.github/pull/3771)
+at `629a5309daf027cd42cad6021dde77f14eb8ee9f` makes the pure F# XML adapter
+refuse MSBuild Include expansion without an evaluated provider (117 tests); Python
+and installed parity remain open. [Templates FSC-05 #560](https://github.com/FS-GG/FS.GG.Templates/pull/560)
+at `4088d8367bbb253df0b2f76c9ae52ba4591652d1` labels the Python-16/.NET
+NFKC disagreement at U+A7F1 as Unicode drift NO_VERDICT (41 payload, 29 archive
+controls), without widening acceptance or receiver authority.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
