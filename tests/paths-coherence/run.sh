@@ -173,6 +173,34 @@ RN="$(root "$WORK/null-pr")"
 cp "$RS/.github/workflows/w.yml" "$RN/.github/workflows/pair.yml"
 expect "a null pull_request: (every PR, no filter) is not drift" 0 "ok:" "$RN"
 
+# Both events exist here. One is deliberately unfiltered only when a signed YAML comment explains
+# the split. Keep a clean paired sibling in each negative root: before this regression was fixed,
+# the split was skipped and that sibling made the whole audit falsely green instead of no-verdict.
+RSP="$(root "$WORK/split-pr-filtered")"
+{ echo "name: split"; echo "on:"; echo "  pull_request:"; echo "    paths: ['src/**']"
+  echo "  push: { branches: [main] }"
+  echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+  > "$RSP/.github/workflows/split.yml"
+cp "$RS/.github/workflows/w.yml" "$RSP/.github/workflows/paired.yml"
+expect "an unsigned PR-filtered/push-unfiltered split is a FINDING, not a skipped workflow" \
+  1 "one of \`pull_request\`/\`push\` is unfiltered" "$RSP"
+
+RSU="$(root "$WORK/split-push-filtered")"
+{ echo "name: split"; echo "on:"; echo "  pull_request:"
+  echo "  push: { branches: [main], paths: ['src/**'] }"
+  echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+  > "$RSU/.github/workflows/split.yml"
+cp "$RS/.github/workflows/w.yml" "$RSU/.github/workflows/paired.yml"
+expect "the reverse unfiltered/filtered split is also a FINDING" \
+  1 "one of \`pull_request\`/\`push\` is unfiltered" "$RSU"
+
+sed -i '1i # paths-coherence: allow-divergence — push intentionally runs for every change' \
+  "$RSP/.github/workflows/split.yml"
+expect "a signed unfiltered/filtered split is accepted" 0 "ok:" "$RSP"
+
+sed -i '1c # paths-coherence: allow-divergence' "$RSP/.github/workflows/split.yml"
+expect "an unsigned split marker remains a FINDING" 1 "with NO reason" "$RSP"
+
 # =============================================================================================
 # 4. `on:` has three legal spellings, and all three must be RECOGNISED AS LEGAL.
 #

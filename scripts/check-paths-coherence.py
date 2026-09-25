@@ -822,8 +822,10 @@ def main(argv: list[str]) -> int:
         # signed marker says why. This is distinct from a genuinely one-sided workflow: both events
         # exist, but one must report for every change while the other remains path-sensitive.
         reason = allow_divergence(text, where)
+        # Enter even without a marker: that is the finding below. Requiring a marker here would
+        # skip the split at the one-sided return and let a different clean pair make the audit green.
         if ("pull_request" in on and "push" in on
-                and ((pr_raw is None) != (push_raw is None)) and reason is not None):
+                and ((pr_raw is None) != (push_raw is None))):
             pairs_seen += 1
             if reason == UNSIGNED:
                 findings.append(
