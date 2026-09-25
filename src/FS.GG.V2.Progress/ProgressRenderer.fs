@@ -132,6 +132,29 @@ type Telemetry = {
     Capture: CaptureClaim
 }
 
+/// A collector-verified observation of the Codex CLI /status display.
+/// Context occupancy is a window size, not cumulative or period token usage.
+type CliStatusObservation = {
+    Authenticated: bool
+    CollectorVerified: bool
+    EvidenceId: string
+    ObservedAt: DateTimeOffset
+    WeeklyRemainingPercent: int
+    WeeklyResetLocal: DateTimeOffset
+    WeeklyResetTimeZone: string
+    ContextUsedTokens: int64
+    ContextCapacityTokens: int64
+}
+
+type NativePeriodUsage = {
+    WindowStart: DateTimeOffset
+    WindowEnd: DateTimeOffset
+    Runner: RunnerItem
+    CollectorVerified: bool
+}
+
+type PeriodUsage = UnknownPeriodUsage | NativeTurnPeriodUsage of NativePeriodUsage
+
 type NamedState = { Name: string; State: Status; Detail: string }
 
 type Completion = {
@@ -151,6 +174,8 @@ type ProgressSnapshot = {
     Workstreams: Workstream list
     DeclaredEvidenceCounts: EvidenceCounts
     Telemetry: Telemetry
+    CliStatus: CliStatusObservation option
+    PeriodUsage: PeriodUsage
     ProtectedHolds: string list
     Checks: NamedState list
     Risks: NamedState list
@@ -390,6 +415,47 @@ module ProgressRenderer =
                      && not later.UnacknowledgedLossy) "capture requires a later zero, lossless queue"
             require (later.ObservedAt <= snapshot.AsOf) "later queue observation exceeds report time"
 
+        snapshot.CliStatus |> Option.iter (fun status ->
+            require (status.Authenticated && status.CollectorVerified && nonblank status.EvidenceId)
+                "CLI /status requires authenticated collector-verified provenance"
+            requireUtc "CLI /status observation" status.ObservedAt
+            require (status.ObservedAt <= snapshot.AsOf) "CLI /status observation exceeds report time"
+            require (status.WeeklyRemainingPercent >= 0 && status.WeeklyRemainingPercent <= 100)
+                "CLI /status weekly remaining percent must be between 0 and 100"
+            require (nonblank status.WeeklyResetTimeZone && status.WeeklyResetLocal.Offset <> TimeSpan.Zero)
+                "CLI /status weekly reset requires a local time zone and offset"
+            require (status.WeeklyResetLocal > snapshot.AsOf)
+                "CLI /status weekly reset must follow report time"
+            require (status.ContextCapacityTokens > 0L && status.ContextUsedTokens >= 0L
+                     && status.ContextUsedTokens <= status.ContextCapacityTokens)
+                "CLI /status context occupancy must fit its capacity")
+        match snapshot.PeriodUsage with
+        | UnknownPeriodUsage -> ()
+        | NativeTurnPeriodUsage usage ->
+            requireUtc "period start" usage.WindowStart
+            requireUtc "period end" usage.WindowEnd
+            require (usage.WindowStart < usage.WindowEnd && usage.WindowEnd <= snapshot.AsOf)
+                "native period usage requires a past nonempty UTC window"
+            require (usage.CollectorVerified && usage.Runner.Origin = NativeRunnerItem)
+                "period usage requires collector-verified native runner provenance"
+            require (usage.Runner.ObservedAt >= usage.WindowStart
+                     && usage.Runner.ObservedAt <= usage.WindowEnd)
+                "native runner observation must fall within period window"
+            requireUtc "period runner observation" usage.Runner.ObservedAt
+            requireLink "period runner item" usage.Runner.Evidence
+            requireText "period runner workspace" usage.Runner.WorkspaceId
+            requireText "period runner item" usage.Runner.ItemId
+            require (not usage.Runner.NativeTurns.IsEmpty)
+                "period usage requires genuine native turn IDs and usage"
+            let ids = usage.Runner.NativeTurns |> List.map _.TurnId
+            require (ids.Length = (ids |> List.distinct).Length)
+                "period usage native turn IDs must be unique"
+            for turn in usage.Runner.NativeTurns do
+                requireText "period native turn ID" turn.TurnId
+                require (turn.InputTokens >= 0 && turn.OutputTokens >= 0
+                         && int64 turn.InputTokens + int64 turn.OutputTokens > 0L)
+                    "period usage requires positive native turn token counts"
+
         for hold in snapshot.ProtectedHolds do requireText "protected hold" hold
         for check in snapshot.Checks do
             requireText "check name" check.Name
@@ -468,6 +534,22 @@ module ProgressRenderer =
             |> Option.map (fun value ->
                 $"configured={value.Configured}, collector verified={value.CollectorVerified}, observed={timeText value.ObservedAt}, evidence={escape value.EvidenceId}")
             |> Option.defaultValue "none supplied"
+        let statusRows =
+            match snapshot.CliStatus with
+            | None -> [ "- Authenticated CLI /status weekly evidence: 🔘 Unknown — none supplied"
+                        "- Context occupancy: 🔘 Unknown — none supplied" ]
+            | Some status ->
+                let reset = status.WeeklyResetLocal.ToString("yyyy-MM-dd HH:mm zzz", CultureInfo.InvariantCulture)
+                let percent = string status.WeeklyRemainingPercent + "%"
+                [ $"- Authenticated CLI /status weekly evidence: 🔵 Completed/Info — {percent} left; reset {reset} ({escape status.WeeklyResetTimeZone}); observed {timeText status.ObservedAt}; provenance {escape status.EvidenceId}"
+                  $"- Context occupancy: 🔵 Completed/Info — {status.ContextUsedTokens}/{status.ContextCapacityTokens} tokens in current context window; not cumulative usage" ]
+        let periodUsageText =
+            match snapshot.PeriodUsage with
+            | UnknownPeriodUsage -> "🔘 Unknown — genuine native turn usage has not been supplied"
+            | NativeTurnPeriodUsage usage ->
+                let input = usage.Runner.NativeTurns |> List.sumBy (fun turn -> int64 turn.InputTokens)
+                let output = usage.Runner.NativeTurns |> List.sumBy (fun turn -> int64 turn.OutputTokens)
+                $"🔵 Completed/Info — input={input}, output={output} native turn tokens; window {timeText usage.WindowStart} to {timeText usage.WindowEnd}; {renderLink usage.Runner.Evidence}"
         [
             "# V2 progress update"
             ""
@@ -499,6 +581,11 @@ module ProgressRenderer =
             $"- Configured workspace observation: {workspaceText}"
             $"- Current queue: pending={snapshot.Telemetry.Pending}, pending unacknowledged={snapshot.Telemetry.PendingUnacknowledged}, unacknowledged lossy={string snapshot.Telemetry.UnacknowledgedLossy |> _.ToLowerInvariant()}"
             $"- End-to-end capture acceptance: {captureText}"
+            ""
+            "## CLI status and token usage"
+            ""
+            yield! statusRows
+            $"- Period usage: {periodUsageText}"
             ""
             "## Protected holds"
             ""

@@ -52,6 +52,8 @@ module ProgressRendererTests =
             Pending = 0; PendingUnacknowledged = 0; UnacknowledgedLossy = false
             Capture = NoAcceptedCaptureClaim
         }
+        CliStatus = None
+        PeriodUsage = UnknownPeriodUsage
         ProtectedHolds = [ "Authority write remains disabled" ]
         Checks = [ { Name = "Build"; State = CompletedInfo; Detail = "Focused tests pass" } ]
         Risks = [ { Name = "Capture"; State = BlockedIncompleteEvidence; Detail = "No accepted run" } ]
@@ -75,6 +77,14 @@ module ProgressRendererTests =
             Pending = 0; PendingUnacknowledged = 0; UnacknowledgedLossy = false
         }
         runner, host, queue
+
+    let private authenticatedStatus () = {
+        Authenticated = true; CollectorVerified = true; EvidenceId = "cli-status-observation-1"
+        ObservedAt = at.AddMinutes(-1.0); WeeklyRemainingPercent = 26
+        WeeklyResetLocal = DateTimeOffset(2026, 9, 30, 9, 28, 0, TimeSpan.FromHours(2.0))
+        WeeklyResetTimeZone = "Europe/Vienna"
+        ContextUsedTokens = 191000L; ContextCapacityTokens = 258000L
+    }
 
     let private render snapshot =
         match ProgressRenderer.renderSnapshot snapshot with
@@ -128,6 +138,12 @@ module ProgressRendererTests =
                 "- Current queue: pending=0, pending unacknowledged=0, unacknowledged lossy=false"
                 "- End-to-end capture acceptance: 🟡 Pending — no end-to-end capture acceptance claimed"
                 ""
+                "## CLI status and token usage"
+                ""
+                "- Authenticated CLI /status weekly evidence: 🔘 Unknown — none supplied"
+                "- Context occupancy: 🔘 Unknown — none supplied"
+                "- Period usage: 🔘 Unknown — genuine native turn usage has not been supplied"
+                ""
                 "## Protected holds"
                 ""
                 "- 🟠 Blocked/Incomplete evidence — Authority write remains disabled"
@@ -155,6 +171,52 @@ module ProgressRendererTests =
             ] |> String.concat "\n" |> fun value -> value + "\n"
         Assert.Equal(expected, actual)
         Assert.Equal(actual, render (baseSnapshot ()))
+
+    [<Fact>]
+    let ``authenticated CLI status renders weekly allowance and context occupancy without inventing period usage`` () =
+        let baseline = { baseSnapshot () with CliStatus = Some(authenticatedStatus ()) }
+        let actual = render baseline
+        Assert.Equal(actual, render baseline)
+        Assert.Contains("26% left; reset 2026-09-30 09:28 +02:00 (Europe/Vienna)", actual)
+        Assert.Contains("observed 2026-09-25 11:59:00 UTC; provenance cli-status-observation-1", actual)
+        Assert.Contains("191000/258000 tokens in current context window; not cumulative usage", actual)
+        Assert.Contains("- Period usage: 🔘 Unknown — genuine native turn usage has not been supplied", actual)
+        Assert.DoesNotContain("five-minute", actual)
+        Assert.DoesNotContain("5-minute", actual)
+        let changedContext = { baseline with CliStatus = Some { (authenticatedStatus ()) with ContextUsedTokens = 257000L } }
+        Assert.Contains("- Period usage: 🔘 Unknown", render changedContext)
+
+    [<Fact>]
+    let ``CLI status needs authenticated timely provenance and plausible independent fields`` () =
+        let baseline = baseSnapshot ()
+        let status = authenticatedStatus ()
+        let withStatus value = { baseline with CliStatus = Some value }
+        refuses "authenticated collector-verified provenance" (withStatus { status with Authenticated = false })
+        refuses "authenticated collector-verified provenance" (withStatus { status with CollectorVerified = false })
+        refuses "authenticated collector-verified provenance" (withStatus { status with EvidenceId = " " })
+        refuses "observation exceeds report time" (withStatus { status with ObservedAt = at.AddSeconds(1.0) })
+        refuses "weekly remaining percent" (withStatus { status with WeeklyRemainingPercent = 101 })
+        refuses "weekly reset must follow report time" (withStatus { status with WeeklyResetLocal = at.AddMinutes(-1.0) })
+        refuses "local time zone and offset" (withStatus { status with WeeklyResetTimeZone = "" })
+        refuses "context occupancy must fit its capacity" (withStatus { status with ContextUsedTokens = 258001L })
+
+    [<Fact>]
+    let ``period usage requires native runner turns and stays separate from CLI context occupancy`` () =
+        let baseline = { baseSnapshot () with CliStatus = Some(authenticatedStatus ()) }
+        let runner, _, _ = acceptedClaim ()
+        let usage = {
+            WindowStart = at.AddMinutes(-5.0); WindowEnd = at
+            Runner = runner; CollectorVerified = true
+        }
+        let actual = render { baseline with PeriodUsage = NativeTurnPeriodUsage usage }
+        Assert.Contains("input=14, output=7 native turn tokens", actual)
+        Assert.Contains("191000/258000 tokens in current context window", actual)
+        let withUsage value = { baseline with PeriodUsage = NativeTurnPeriodUsage value }
+        refuses "collector-verified native runner provenance" (withUsage { usage with CollectorVerified = false })
+        refuses "collector-verified native runner provenance" (withUsage { usage with Runner = { runner with Origin = SyntheticOrUnknown } })
+        refuses "genuine native turn IDs and usage" (withUsage { usage with Runner = { runner with NativeTurns = [] } })
+        refuses "positive native turn token counts"
+            (withUsage { usage with Runner = { runner with NativeTurns = [ { TurnId = "native-turn-1"; InputTokens = 0; OutputTokens = 0 } ] } })
 
     [<Fact>]
     let ``history uses UTC newest-first tie breaks and exactly five real rows`` () =
