@@ -320,7 +320,16 @@ def validated(raw: object, trigger: str, what: str) -> list[str]:
             f"{what}: `{trigger}.paths:` is present but is not a non-empty list ({raw!r})."
         )
 
-    pats = [str(p) for p in raw]
+    # PyYAML resolves bare YAML 1.1 scalars such as `true`, `42`, and `null` to bool/int/None.
+    # Stringifying them invents a path filter Actions did not receive and can turn an uncovered
+    # one-sided workflow into a clean audit. A quoted spelling is still a real string and passes.
+    for p in raw:
+        if not isinstance(p, str):
+            raise GateError(
+                f"{what}: `{trigger}.paths:` contains a non-string pattern "
+                f"({p!r}, {type(p).__name__}); refusing to guess its Actions spelling."
+            )
+    pats = raw
     for p in pats:
         if p.startswith("!"):
             raise GateError(
