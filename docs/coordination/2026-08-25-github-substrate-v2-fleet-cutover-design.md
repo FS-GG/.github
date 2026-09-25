@@ -728,6 +728,36 @@ evidence designed for this cutover:
    attestation, and install-from-feed tests; and
 9. an independent architecture/security/cutover review over exact candidate artifacts and evidence.
 
+### Registered migration rehearsal cohort
+
+Under [ADR-0088](../adr/0088-reuse-the-protected-q4-sandbox-for-migration-rehearsal.md), GS2-09.7 uses
+the existing non-production Q4 sandbox instead of requesting a new repository, Project copy, or credential
+from a maintainer. The protected `.github` sandbox workflow owns the App secret and mints a
+token for `FS-GG/FS.GG.GitHub.Substrate.Sandbox` only. Its organization Projects grant is broader than the
+single test Project, so the workflow and migration harness must independently pin Project number `2`, node
+`PVT_kwDOEYAWY84BiESo`, private status, and the `fsgg-sandbox-gs2-04-9` purpose marker before any effect.
+They must also pin the App actor, repository node `R_kgDOUKXpqQ`, exact Coordination candidate, and a unique
+run nonce. The existing [Q4 workflow](../../.github/workflows/github-substrate-v2-sandbox-qualification.yml)
+and [GS2-04.9 acceptance](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-04.9.json)
+establish this credential-owning route; each migration run must recheck the live identities and grants.
+The current workflow runs GS2-04.9 only; it does not yet run a migration rehearsal.
+
+The GS2-09.7 workflow extension must seed a bounded representative fixture from the frozen migration
+corpus into that sandbox repository and Project, record the prestate and complete item/field census, execute
+the cohort-specific migration and interruption matrix, verify archive and rollback, then remove its
+nonce-owned resources and prove zero residue. It may reuse existing sandbox fixture issues only after exact
+prestate capture and reverse restoration. The App token never enters a product artifact. A missing grant,
+stale target identity, unavailable Project, incomplete seed, or failed cleanup refuses the run. Neither the
+live Coordination Project nor the production Authority journal becomes a write target. A sandbox Git ref may exercise journal
+CAS and recovery, while the separately accepted GS2-08.2 protection evidence remains the authority for
+production journal rulesets. This split must be visible in Q6 evidence.
+
+This cohort removes manual resource provisioning; it does not relax Q5/Q6. Complete two-pass discovery,
+all nine authorities, exact manifest and dispositions, every interruption cut, no duplicate effect,
+five-domain rollback, distinct rerun, independent omission controls, and fresh provider readback remain
+required. Q5 live-fleet shadow comparison remains read-only. A passing sandbox run cannot itself approve
+GS2-10 readiness, production settings, or `OpenV2`.
+
 The Q0 security artifact is the source-bound
 [threat model](../../work/2953-gh-modernization-m0-invariants/threat-model.md). It enumerates actors,
 assets, the protected epoch, administrative principal, mutable GitHub state, package/supply-chain, and
