@@ -174,6 +174,11 @@ refuses a red-before undeclared late file after one-pass held-directory enumerat
 comparing two scans and change stamps before and after child capture; 34 pinned-capture,
 13 adapter and 36 policy controls pass. Atomic snapshot, ABA/post-check changes,
 in-place content, rollback and installed parity remain open.
+[Audio double-read draft #319](https://github.com/FS-GG/FS.GG.Audio/pull/319)
+refuses a same-length in-place overwrite after a single held-fd read by comparing two
+byte passes and opened-file metadata before, between and after them; 40 pinned-capture,
+13 adapter and 36 policy controls pass. Atomic cross-root consistency, ABA/timestamp-hidden
+or post-check writes and physical manifest custody remain unproved.
 These stacked
 drafts need owner acceptance and installed evidence before receiver or release adoption.
 
