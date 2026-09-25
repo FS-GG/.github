@@ -421,6 +421,13 @@ The initial trusted caller form is a dedicated GitHub Actions admission service 
 workflow and source revision on protected `.github` `main`. Native provider readback must bind its
 repository, workflow path and bytes, head, run ID and attempt, actor, and branch-restricted runtime
 environment to the registered service before any plan is sealed. Dispatch inputs remain lookup hints.
+Before activation, a protected probe must establish the provider's actual signed
+`workflow_sha` and subject semantics against native workflow bytes and run evidence.
+Main's installed service policy admits only independently qualified source and
+workflow revisions with exact byte digests. When a protected `main` merge changes
+the signed revision, the service refuses until a separately governed policy
+rotation qualifies and installs the new identity and retires the old one; the
+requester cannot nominate a revision or widen the permitted set.
 The service job receives no ordinary App private key. A separate protected Main-host issuer process
 retains the dedicated ordinary App key, distinct from the one-time human-reviewed genesis key and
 cutover approval. Until the run provenance, environment restriction, issuer boundary, and key custody
