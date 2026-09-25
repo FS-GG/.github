@@ -159,6 +159,10 @@ YAML/foreign JSON and installed parity remain.
 refuses plain or quoted duplicate scalar parameter keys that Python previously accepted
 while F# refused; three new and 21 prior focused controls pass. It does not establish full
 YAML/foreign JSON parity.
+[Templates required-value draft #529](https://github.com/FS-GG/FS.GG.Templates/pull/529)
+refuses an invalid quoted or plain parameter `required` scalar that Python previously
+accepted; four new and 24 prior focused controls pass. Missing/repeated `required` and
+other parameter grammar remain separate.
 [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)
