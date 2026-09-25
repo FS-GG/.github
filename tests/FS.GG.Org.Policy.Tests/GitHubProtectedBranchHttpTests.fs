@@ -97,6 +97,13 @@ module GitHubProtectedBranchHttpTests =
                 result)
 
     [<Fact>]
+    let ``declared gzip over plain protected JSON cannot mint pin`` () =
+        refused (fun request ->
+            let result = response 200 "application/json" branchJson request
+            result.Content.Headers.ContentEncoding.Add("gzip")
+            result)
+
+    [<Fact>]
     let ``blank credential and foreign request URL never send`` () =
         match GitHubProtectedBranchHttp.Reader.ForFixture("", new FixtureHandler(response 200 "application/json" branchJson)) with
         | Error () -> ()

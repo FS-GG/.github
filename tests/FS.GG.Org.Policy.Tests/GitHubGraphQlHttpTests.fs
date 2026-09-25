@@ -114,6 +114,13 @@ module GitHubGraphQlHttpTests =
                 result)
 
     [<Fact>]
+    let ``declared gzip over plain membership JSON cannot bind commit`` () =
+        refused (fun request ->
+            let result = response 200 "application/json" valid request
+            result.Content.Headers.ContentEncoding.Add("gzip")
+            result)
+
+    [<Fact>]
     let ``blank credential and mutation document cannot reach HTTP handler`` () =
         match GitHubGraphQlHttp.Reader.ForFixture("", new FixtureHandler(response 200 "application/json" valid)) with
         | Error () -> ()

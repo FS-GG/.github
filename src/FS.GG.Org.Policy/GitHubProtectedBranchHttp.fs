@@ -45,6 +45,7 @@ module GitHubProtectedBranchHttp =
                                              request.Url, StringComparison.Ordinal))
                        || isNull response.Content
                        || isNull response.Content.Headers.ContentType
+                       || response.Content.Headers.ContentEncoding.Count <> 0
                        || not (jsonMediaType response.Content.Headers.ContentType.MediaType)
                        || (response.Content.Headers.ContentLength.HasValue
                            && response.Content.Headers.ContentLength.Value > int64 maximumBytes) then
@@ -75,7 +76,10 @@ module GitHubProtectedBranchHttp =
         static member Create(token: string) : Result<Reader, unit> =
             if not (validToken token) then Error ()
             else
-                let handler = new HttpClientHandler(AllowAutoRedirect = false, UseCookies = false)
+                let handler =
+                    new HttpClientHandler(AllowAutoRedirect = false,
+                                          UseCookies = false,
+                                          AutomaticDecompression = DecompressionMethods.None)
                 Ok(new Reader(token, handler))
 
         /// Test assembly only: deterministic response and no external network access.
