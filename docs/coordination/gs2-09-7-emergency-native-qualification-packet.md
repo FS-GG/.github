@@ -36,17 +36,64 @@ claims that an installed team or service already owns them.
 | Protected fact | Supplier to designate | Evidence required from the installed boundary | State |
 | --- | --- | --- | --- |
 | Admitted workflow and candidate | Protected release/admission owner | Immutable admitted workflow SHA and path; exact candidate SHA, run ID, attempt, nonce, sandbox target, and decision ID; native protection/readback rather than a candidate-supplied SHA. #3690 must receive a separate admission decision. | Missing |
-| App credential and token custody | Protected credential/vault custodian | App and installation IDs, actor, selected repository/grants, vault resource ID, token digest and mint binding; host-only key/token ACL and no raw token in the packet. | Missing |
+| Existing sandbox App credential and token custody | Protected `.github` workflow/credential custodian | Re-read the existing App and installation IDs, actor, selected repository/grants, vault resource ID, token digest and mint binding; prove host-only key/token ACL and omit raw tokens. [ADR-0089](../adr/0089-reuse-the-protected-q4-sandbox-for-migration-rehearsal.md) requires no new maintainer-provisioned copy or credential. | Missing for GS2-09.7 |
 | Signed joint head and monotonic floor | Protected signer/store owner | Pinned signer SPKI and policy digests, store/floor endpoints and resource IDs, signed challenge-bound current-head readback, monotonic crash recovery, and candidate/workflow write denial. | Missing |
 | One shared native-attempt key | Protected durable-store owner | Exact `nativeAttemptResourceId`, endpoint and key `(mintId, tokenSha256)`; one linearizable winner across finalizer, recovery, and emergency paths; immutable attempt ID and readback after lost response and restart. Separate namespaces fail. | Missing |
 | Emergency provider operation | Protected revoker/API owner | Exact revoker principal and native route, request identity, provider idempotency evidence **or** exact-token terminal readback with settled prior-call status; timeout and delayed-completion traces. | Missing |
 | Store outage policy | Protected release and revoker owners jointly | Decision for main-store outage and for simultaneous shared-attempt-store outage, including token containment, operator escalation, and prohibition on a false receipt. | Missing |
-| Q5/Q6 native result and receipt | Protected sandbox operator and acceptance owner | Independently observed receiver/effect state and token revocation, exact durable intent/attempt/receipt lineage, complete Q5/Q6 evidence, and an explicit acceptance decision. | Missing |
+| Q5/Q6 native result and receipt | Protected `.github` sandbox operator and Coordination migration/acceptance owner | Independently observed receiver/effect state and token revocation, exact durable intent/attempt/receipt lineage, the full rehearsal matrix below, and an explicit protected acceptance decision. | Missing |
 
 The supplier must attach protected evidence with resource IDs, timestamps,
 operation/attempt IDs, and immutable digests. It must omit private keys, raw
 installation tokens, and candidate workspace secrets. A source pin, fake port,
 or self-reported descriptor cannot fill a missing row.
+
+## Accepted rehearsal scope and installed source boundary
+
+The [GS2-09.7 roadmap](../github-substrate-v2-roadmap.md) and
+[ADR-0089](../adr/0089-reuse-the-protected-q4-sandbox-for-migration-rehearsal.md)
+reuse the registered private Q4 sandbox repository and Project 2. The
+protected `.github` workflow supplies its existing App route; Coordination
+supplies the migration interpreter and independent controls. No separately
+provisioned copy or credential is a prerequisite. Both workflow and interpreter
+must pin the App actor, sandbox repository node `R_kgDOUKXpqQ`, Project 2 node
+`PVT_kwDOEYAWY84BiESo`, private status, purpose marker, exact candidate and
+run nonce before every effect. Seed a bounded nonce-owned representative fixture
+from the frozen corpus and capture its exact prestate. The App's organization
+Projects grant extends beyond Project 2. A selected-repository token alone
+does not bound Project writes. The live Coordination Project and production
+Authority journal remain outside the effect target set.
+
+Read-only source inspection of default `.github` `main` at
+`2e553e41e58ee2f5e27aedcffc7403ce50e7cdd4` found the
+[Q4 sandbox workflow](../../.github/workflows/github-substrate-v2-sandbox-qualification.yml),
+[mint-proof workflow](../../.github/workflows/github-substrate-v2-sandbox-mint-proof.yml),
+and `scripts/gs2-09-7-mint-sandbox-token.py`. The Q4 workflow still executes
+the GS2-04.9 closure command; the mint-proof workflow checks grants and
+revocation. That default-branch tree contains none of the stacked GS2-09.7
+host signer, vault, joint-head/floor, shared-attempt or recovery port files.
+The source references protected App secrets but cannot prove their live value,
+ACL, or installed provider semantics. A Q4 or mint-proof run is not a Q5/Q6
+migration receipt. #3690 remains an unadmitted source observation.
+
+The [Coordination rehearsal contract](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-09-7-representative-rehearsal.md)
+consumes the exact accepted GS2-09.6 receipt and GS2-09.9 callable handoff.
+It requires these additional acceptance readbacks beyond emergency token cleanup:
+
+| Gate | Exact evidence the responsible owner must supply |
+| --- | --- |
+| Q5 population and manifest | Two complete quiescent source and target reads over all nine authorities: `issues-open-and-relevant-closed`, `project-items`, `project-fields`, `hierarchy-and-dependencies`, `claim-and-event-streams`, `review-delivery-release-records`, `repository-settings`, `workflow-pins`, and `receiver-identities`. Seal the nonce-owned copy population, terminal pages, source bytes, predecessor receipts, exact manifest, transform decisions and operation dispositions; a missing page, newly added subject or unsupported authority refuses. |
+| Q5 execution and archive | Use closed typed effects for native issue fields/types, hierarchy and blocking edges, Project state, body metadata, repository settings, receiver pins, schedules and archive publication, with exact prestate, protected journal CAS/generation and persisted intent before dispatch. Read back native relations, Project state, settings, receiver heads and archive records; verify the archive against frozen bytes with its retained verifier. Complete a distinct second migration round from a fresh generation, without reusing the first round's idempotency identity, and compare normalized results and receipts. |
+| Q6 interruption and rollback | Interrupt before intent, after intent, before dispatch, after dispatch with lost response, after readback and before receipt. Recover in a fresh process, reconcile native state, prove no duplicate effect and settled replay of the exact completed operation. Restore authority snapshot, schedules, v1 projections, receiver pins and settings in reverse order from chained receipts; refuse rollback after `OpenV2`. |
+| Independent controls and cleanup | Inject missing terminal page, unexpected subject/Project item, ambiguous transform, changed receiver head, wrong field type, missing native edge, altered manifest, stale journal generation, unavailable observer, partial settings effect and lost response. Verify nonce-owned cleanup, zero residue, token revocation and no unauthorized effect. Q5 live-fleet shadow remains read-only and separate from sandbox writes. |
+
+No row can be closed by fake-port tests, historical Q4 evidence, a partial
+provider capture, or this emergency qualification packet. The protected
+acceptance owner must bind one exact candidate and native receiver readback to
+the completed matrix before issuing a GS2-09.7 receipt. The retained report
+must include provider IDs/revisions, request and journal identities, command
+and artifact hashes, interruption points, effect counts, readback, duration,
+API budget, refusal/unknown outcomes, cleanup and limitations.
 
 ## Required read-only qualification traces
 
