@@ -34,6 +34,7 @@ class FakeFinalizerPort:
         self.revoked = None
         self.lose_pending_response = False
         self.false_pending_commit = False
+        self.cancel_pending = False
         self.lose_revoked_response = False
         self.native_response_lost = False
         self.native_observation = "revoked"
@@ -103,6 +104,8 @@ class FakeFinalizerPort:
         self.pending = {"schema": finalizer.PENDING_SCHEMA,
                         "mintId": mint_id, "tokenSha256": token_sha256,
                         "revokeRequired": True}
+        if self.cancel_pending:
+            raise KeyboardInterrupt()
         if self.lose_pending_response:
             raise OSError("lost after pending commit")
         return "committed"
@@ -327,6 +330,26 @@ class HostRefusalFinalizerTests(unittest.TestCase):
         self.assertIn("native-revoke", self.port.calls)
         self.assertIn("native-observe", self.port.calls)
         self.assertIn("read-revoked", self.port.calls)
+
+    def test_cancellation_after_pending_commit_runs_finalizer(self):
+        self.port.cancel_pending = True
+        with self.assertRaises(KeyboardInterrupt):
+            self.run_finalizer()
+        self.assertEqual(0, self.release_port.invocations)
+        self.assertIn("native-revoke", self.port.calls)
+        self.assertIn("native-observe", self.port.calls)
+        self.assertIn("read-revoked", self.port.calls)
+
+    def test_cancellation_during_mint_lookup_attempts_emergency_revoke(self):
+        def cancel_lookup(_mint_id):
+            raise KeyboardInterrupt()
+        self.port.load_mint = cancel_lookup
+        with self.assertRaises(KeyboardInterrupt):
+            self.run_finalizer()
+        self.assertEqual(0, self.release_port.invocations)
+        self.assertIn("native-revoke", self.port.calls)
+        self.assertIn("native-observe", self.port.calls)
+        self.assertNotIn("append-revoked", self.port.calls)
 
     def test_store_failure_on_crash_recovery_uses_separate_vault_and_revoker(self):
         digest = hashlib.sha256(self.fixture.token.encode()).hexdigest()
