@@ -142,6 +142,10 @@ refuses signed local/GitHub and unsigned or empty-signature NuGet archives that 
 produced false success receipts; local retained-release and signed NuGet readbacks pass
 across 402 unsigned payload members. It checks signature-member shape, not cryptographic
 validity, and current GitHub Packages still has no verdict.
+[Templates scalar-tail parity draft #524](https://github.com/FS-GG/FS.GG.Templates/pull/524)
+closes a red-before Python/F# mismatch in which the Python floor gate ignored foreign
+text after a quoted or plain version; six copied-live-descriptor parity controls pass.
+This is a narrow parser repair; a separate duplicate registry-contract mismatch remains.
 [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)

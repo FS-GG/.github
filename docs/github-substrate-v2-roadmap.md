@@ -1721,6 +1721,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   intent against independent expectations, with four focused synthetic test methods.
   Even matching input remains `authorized=false` and `can_dispatch=false`; protected
   observers, selected credential/target, CAS/replay, grant and installed effect are absent.
+  [Read-only observer ports #587](https://github.com/FS-GG/FS.GG.Coordination/pull/587)
+  bind three previously omitted producer identities and compose source, workflow, review,
+  target-scope and plan observations from supplied bytes; five observer and four candidate
+  tests pass with fake ports closed to file/token/socket/SQLite effects. Protected GitHub
+  authentication, installed artifact/workflow custody and one-POST authority remain absent.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
