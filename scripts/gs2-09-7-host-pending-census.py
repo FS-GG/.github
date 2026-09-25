@@ -94,7 +94,9 @@ def check_port(port: ProtectedCensusPort | None) -> None:
                  worker.finalizer.PINNED_FINALIZER_RESOURCE_ID,
                  worker.finalizer.PINNED_FINALIZER_ENDPOINT,
                  worker.finalizer.PINNED_TOKEN_VAULT_ID,
-                 worker.finalizer.PINNED_REVOKER_ID)),
+                 worker.finalizer.PINNED_REVOKER_ID))
+            and type(worker.finalizer.PINNED_NATIVE_ATTEMPT_RESOURCE_ID) is str
+            and bool(worker.finalizer.PINNED_NATIVE_ATTEMPT_RESOURCE_ID),
             "census-unconfigured")
     methods = ("describe_queue", "describe_journal", "seal_snapshot",
                "read_seal", "read_high_water", "read_page", "read_subject",

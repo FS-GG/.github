@@ -23,6 +23,7 @@ JOURNAL_ID = "pending-journal-test"
 JOURNAL_ENDPOINT = ORIGIN + "/journal"
 FINALIZER_ID = "finalizer-ledger-test"
 VAULT_ID = "protected-token-vault-test"
+NATIVE_ATTEMPT_RESOURCE = "protected-native-attempt-test"
 RECOVERY_ID = "recovery-journal-test"
 WORKER_ID = "protected-recovery-worker-test"
 SEAL_ID = "f" * 64
@@ -224,6 +225,8 @@ class PendingCensusTests(unittest.TestCase):
             (census.worker.finalizer, "PINNED_TOKEN_VAULT_ID"): VAULT_ID,
             (census.worker.finalizer, "PINNED_REVOKER_ID"):
                 "protected-native-revoker-test",
+            (census.worker.finalizer, "PINNED_NATIVE_ATTEMPT_RESOURCE_ID"):
+                NATIVE_ATTEMPT_RESOURCE,
         }
         for (module, name), value in pins.items():
             original = getattr(module, name)
@@ -244,6 +247,18 @@ class PendingCensusTests(unittest.TestCase):
         self.assertEqual(2, self.port.calls.count("read-seal"))
         self.assertEqual(2, self.port.calls.count("read-high-water"))
         self.assertNotIn("tokenSha256", json.dumps(result))
+
+    def test_missing_shared_native_attempt_pin_cannot_advertise_subjects(self):
+        census.worker.finalizer.PINNED_NATIVE_ATTEMPT_RESOURCE_ID = ""
+        with self.assertRaisesRegex(census.Refused, "census-unconfigured"):
+            self.scan()
+        self.assertNotIn("read-page", self.port.calls)
+
+    def test_boolean_shared_native_attempt_pin_cannot_advertise_subjects(self):
+        census.worker.finalizer.PINNED_NATIVE_ATTEMPT_RESOURCE_ID = True
+        with self.assertRaisesRegex(census.Refused, "census-unconfigured"):
+            self.scan()
+        self.assertNotIn("read-page", self.port.calls)
 
     def test_unsigned_complete_seal_cannot_return_subjects(self):
         self.port.read_joint_seal_envelope = None

@@ -25,7 +25,7 @@ PENDING_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-pending/1"
 REVOKED_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-revoked/1"
 VAULT_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-token-vault/1"
 REVOKER_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-native-revoker/1"
-NATIVE_ATTEMPT_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-native-attempt/1"
+NATIVE_ATTEMPT_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-native-attempt/2"
 
 # A protected source review must pin the exact independently credentialed
 # ledger and vault. Empty pins prohibit any candidate invocation here.
@@ -34,6 +34,7 @@ PINNED_FINALIZER_RESOURCE_ID = ""
 PINNED_FINALIZER_ENDPOINT = ""
 PINNED_TOKEN_VAULT_ID = ""
 PINNED_REVOKER_ID = ""
+PINNED_NATIVE_ATTEMPT_RESOURCE_ID = ""
 
 
 class Refused(Exception):
@@ -94,7 +95,9 @@ def digest_context(context: dict) -> str:
 
 def check_port(port: ProtectedFinalizerPort | None) -> None:
     require(all((PINNED_FINALIZER_ORIGIN, PINNED_FINALIZER_RESOURCE_ID,
-                 PINNED_FINALIZER_ENDPOINT, PINNED_TOKEN_VAULT_ID)),
+                 PINNED_FINALIZER_ENDPOINT, PINNED_TOKEN_VAULT_ID))
+            and type(PINNED_NATIVE_ATTEMPT_RESOURCE_ID) is str
+            and bool(PINNED_NATIVE_ATTEMPT_RESOURCE_ID),
             "finalizer-unconfigured")
     methods = ("describe", "load_mint", "recover_token", "append_pending",
                "read_pending", "revoke", "observe", "append_revoked", "read_revoked",
@@ -106,6 +109,7 @@ def check_port(port: ProtectedFinalizerPort | None) -> None:
         "schema", "origin", "resourceId", "endpoint", "vaultId", "durable",
         "atomicCas", "nativeReadback", "escrowEncrypted", "credentialScope",
         "candidateCanWrite", "apiOrigin", "nativeRevocation",
+        "nativeAttemptResourceId",
     }, "finalizer-descriptor")
     endpoint = descriptor["endpoint"]
     require(type(endpoint) is str, "finalizer-endpoint")
@@ -126,6 +130,7 @@ def check_port(port: ProtectedFinalizerPort | None) -> None:
         "resourceId": PINNED_FINALIZER_RESOURCE_ID,
         "endpoint": PINNED_FINALIZER_ENDPOINT,
         "vaultId": PINNED_TOKEN_VAULT_ID,
+        "nativeAttemptResourceId": PINNED_NATIVE_ATTEMPT_RESOURCE_ID,
         "durable": True,
         "atomicCas": True,
         "nativeReadback": True,
@@ -219,12 +224,15 @@ def native_attempt_record(mint_id: str, token_sha256: str,
     require(all(type(value) is str and release.host.HEX64.fullmatch(value)
                 for value in (mint_id, token_sha256, context_sha256, attempt_id))
             and bool(PINNED_FINALIZER_RESOURCE_ID)
-            and bool(PINNED_REVOKER_ID), "native-attempt-identity")
+            and bool(PINNED_REVOKER_ID)
+            and type(PINNED_NATIVE_ATTEMPT_RESOURCE_ID) is str
+            and bool(PINNED_NATIVE_ATTEMPT_RESOURCE_ID), "native-attempt-identity")
     return {
         "schema": NATIVE_ATTEMPT_SCHEMA, "mintId": mint_id,
         "tokenSha256": token_sha256, "contextSha256": context_sha256,
         "finalizerResourceId": PINNED_FINALIZER_RESOURCE_ID,
         "revokerId": PINNED_REVOKER_ID,
+        "nativeAttemptResourceId": PINNED_NATIVE_ATTEMPT_RESOURCE_ID,
         "attemptId": attempt_id,
     }
 

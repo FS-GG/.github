@@ -234,6 +234,8 @@ class CensusBoundaryTests(unittest.TestCase):
                 census_fixture.ORIGIN + "/pending",
             (census.worker.finalizer, "PINNED_REVOKER_ID"):
                 "protected-native-revoker-test",
+            (census.worker.finalizer, "PINNED_NATIVE_ATTEMPT_RESOURCE_ID"):
+                census_fixture.NATIVE_ATTEMPT_RESOURCE,
         }
         for (module, name), value in additional.items():
             original = getattr(module, name)

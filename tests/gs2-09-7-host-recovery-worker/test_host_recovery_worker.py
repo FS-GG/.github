@@ -21,6 +21,7 @@ FINALIZER_RESOURCE = "finalizer-ledger-test"
 FINALIZER_ENDPOINT = ORIGIN + "/pending"
 VAULT = "protected-token-vault-test"
 REVOKER = "protected-native-revoker-test"
+NATIVE_ATTEMPT_RESOURCE = "protected-native-attempt-test"
 RECOVERY_RESOURCE = "recovery-journal-test"
 RECOVERY_ENDPOINT = ORIGIN + "/recovery"
 WORKER_ID = "protected-recovery-worker-test"
@@ -55,6 +56,7 @@ class FakePort:
             "schema": worker.finalizer.FINALIZER_SCHEMA,
             "origin": ORIGIN, "resourceId": FINALIZER_RESOURCE,
             "endpoint": FINALIZER_ENDPOINT, "vaultId": VAULT,
+            "nativeAttemptResourceId": NATIVE_ATTEMPT_RESOURCE,
             "durable": True, "atomicCas": True, "nativeReadback": True,
             "escrowEncrypted": True, "credentialScope": "protected-host-only",
             "candidateCanWrite": False, "apiOrigin": "https://api.github.com",
@@ -352,6 +354,8 @@ class RecoveryWorkerTests(unittest.TestCase):
             (worker.finalizer, "PINNED_FINALIZER_ENDPOINT"): FINALIZER_ENDPOINT,
             (worker.finalizer, "PINNED_TOKEN_VAULT_ID"): VAULT,
             (worker.finalizer, "PINNED_REVOKER_ID"): REVOKER,
+            (worker.finalizer, "PINNED_NATIVE_ATTEMPT_RESOURCE_ID"):
+                NATIVE_ATTEMPT_RESOURCE,
         }
         for (module, name), value in pins.items():
             original = getattr(module, name)
@@ -627,18 +631,40 @@ class RecoveryWorkerTests(unittest.TestCase):
         self.assertEqual("pending", result["revocation"])
         self.assertNotIn("native-revoke", self.port.calls)
 
+    def test_finalizer_and_recovery_claims_share_one_fake_marker(self):
+        self.port.claim = self.exact_claim()
+        first_id = "a" * 64
+        second_id = "b" * 64
+        self.assertEqual("committed", self.port.claim_native_attempt_once(
+            MINT_ID, self.port.token_sha256, first_id))
+        self.assertEqual("duplicate", self.port.claim_recovery_native_attempt_once(
+            MINT_ID, self.port.token_sha256, second_id, 1,
+            worker.joint.floor.PINNED_FLOOR_RESOURCE_ID))
+        self.assertEqual(first_id, self.port.native_attempt["attemptId"])
+
+        self.port.native_attempt = None
+        self.assertEqual("committed", self.port.claim_recovery_native_attempt_once(
+            MINT_ID, self.port.token_sha256, second_id, 1,
+            worker.joint.floor.PINNED_FLOOR_RESOURCE_ID))
+        self.assertEqual("duplicate", self.port.claim_native_attempt_once(
+            MINT_ID, self.port.token_sha256, first_id))
+        self.assertEqual(second_id, self.port.native_attempt["attemptId"])
+
     def test_foreign_native_attempt_blocks_receipt_even_if_provider_revoked(self):
-        self.port.native_attempt = {
-            **worker.finalizer.native_attempt_record(
-                MINT_ID, self.port.token_sha256, self.port.mint["contextSha256"],
-                "d" * 64),
-            "revokerId": "foreign-revoker",
-        }
-        self.port.observations = ["revoked"]
-        result = self.run_worker()
-        self.assertEqual("pending", result["revocation"])
-        self.assertNotIn("native-revoke", self.port.calls)
-        self.assertNotIn("append-receipt", self.port.calls)
+        for field in ("revokerId", "nativeAttemptResourceId"):
+            with self.subTest(field=field):
+                self.port = FakePort()
+                self.port.native_attempt = {
+                    **worker.finalizer.native_attempt_record(
+                        MINT_ID, self.port.token_sha256,
+                        self.port.mint["contextSha256"], "d" * 64),
+                    field: "foreign-authority",
+                }
+                self.port.observations = ["revoked"]
+                result = self.run_worker()
+                self.assertEqual("pending", result["revocation"])
+                self.assertNotIn("native-revoke", self.port.calls)
+                self.assertNotIn("append-receipt", self.port.calls)
 
     def test_lost_shared_attempt_claim_never_retries_native_effect(self):
         self.port.native_attempt_response_lost = True
