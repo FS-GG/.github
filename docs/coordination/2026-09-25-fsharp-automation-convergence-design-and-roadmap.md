@@ -230,6 +230,11 @@ crowded parent without either refusing siblings or admitting them to the physica
 Symlink and case-alias negatives also refuse; 40 focused controls pass. A selected-file
 pinned no-follow reader is the next source prerequisite, while producer integration and
 installed parity remain open.
+[SDD selected-file adapter #1014](https://github.com/FS-GG/FS.GG.SDD/pull/1014)
+captures one explicit file through pinned no-follow directory and file handles while
+allowing unrelated siblings; link, case-alias, swap, in-place write and parent-roster
+negatives refuse. Fifty focused controls pass. Complete producer selection, absent-source
+pre-output refusal, cross-root atomicity, Windows and installed parity remain open.
 [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)

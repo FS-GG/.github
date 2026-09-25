@@ -1816,6 +1816,11 @@ fake controls pass. Protected reader identity, witness custody, target continuit
   a red-before Python boolean-as-repository-ID false green was repaired, and 16 focused
   controls pass. Protected reader identity, provider-backed scope, witness custody and
   target continuity remain absent; installed one-POST authority stays closed.
+  [Independent prestate-witness draft #605](https://github.com/FS-GG/FS.GG.Coordination/pull/605)
+  carries witness principal, credential and time window through the target prestate
+  reader into the App-scope join, refusing reused reader identity and stale claims;
+  16 focused fake controls pass. Protected immutable witness custody, authenticated
+  reader, effective scope and target continuity remain absent.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
