@@ -6,6 +6,9 @@ Every production identity pin remains empty and prevents provider effects.
 """
 
 import importlib.util
+import copy
+import hashlib
+import json
 import secrets
 from pathlib import Path
 from typing import Protocol
@@ -23,6 +26,7 @@ CLAIM_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-claim/1"
 RECEIPT_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-receipt/1"
 SCHEDULER_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-scheduler/1"
 SCHEDULE_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-schedule/1"
+BATCH_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-batch/1"
 CENSUS_SEAL_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-pending-seal/1"
 CENSUS_SUBJECT_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-pending-subject/1"
 
@@ -50,11 +54,12 @@ class ProtectedRecoveryPort(finalizer.ProtectedFinalizerPort, Protocol):
     def describe_recovery(self) -> dict: ...
     def describe_scheduler(self) -> dict: ...
     def read_schedule(self, mint_id: str) -> dict: ...
+    def read_schedule_batch(self, seal_id: str) -> dict: ...
     def read_census_seal(self, seal_id: str) -> dict: ...
     def read_census_subject(self, seal_id: str, mint_id: str) -> dict: ...
     def read_binding(self, mint_id: str) -> dict: ...
     def claim_recovery_once(self, mint_id: str, binding_id: str,
-                            schedule_id: str) -> str: ...
+                            schedule_id: str, batch_id: str) -> str: ...
     def read_recovery_claim(self, mint_id: str) -> dict: ...
     def append_recovery_receipt(self, mint_id: str, binding_id: str,
                                 token_sha256: str) -> str: ...
@@ -108,6 +113,7 @@ def check_scheduler(port: ProtectedRecoveryPort | None) -> None:
     require(port is not None
             and callable(getattr(port, "describe_scheduler", None))
             and callable(getattr(port, "read_schedule", None))
+            and callable(getattr(port, "read_schedule_batch", None))
             and callable(getattr(port, "read_census_seal", None))
             and callable(getattr(port, "read_census_subject", None)),
             "scheduler-unconfigured")
@@ -140,8 +146,102 @@ def check_scheduler(port: ProtectedRecoveryPort | None) -> None:
             "scheduler-endpoint")
 
 
+def _digest(items: list[dict]) -> str:
+    raw = json.dumps(items, sort_keys=True, separators=(",", ":"),
+                     ensure_ascii=True).encode("ascii")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _batch_readback(port: ProtectedRecoveryPort, seal: dict,
+                    schedule: dict) -> str:
+    try:
+        batch = copy.deepcopy(port.read_schedule_batch(seal["sealId"]))
+        after = copy.deepcopy(port.read_schedule_batch(seal["sealId"]))
+    except Exception as error:
+        raise Refused("recovery-batch-unknown") from error
+    require(type(batch) is dict and type(after) is dict and batch == after
+            and set(batch) == {
+                "schema", "batchId", "sealId", "highWater", "pendingCount",
+                "pendingSha256", "mintSha256", "schedulerResourceId",
+                "queueResourceId", "journalResourceId", "recoveryResourceId",
+                "workerId", "jobs", "state",
+            }, "recovery-batch")
+    require(batch["schema"] == BATCH_SCHEMA
+            and type(batch["batchId"]) is str
+            and finalizer.release.host.HEX64.fullmatch(batch["batchId"])
+            and batch["sealId"] == seal["sealId"]
+            and type(batch["highWater"]) is int
+            and batch["highWater"] == seal["highWater"]
+            and type(batch["pendingCount"]) is int
+            and batch["pendingCount"] == seal["pendingCount"]
+            and batch["pendingSha256"] == seal["pendingSha256"]
+            and batch["mintSha256"] == seal["mintSha256"]
+            and batch["schedulerResourceId"] == PINNED_SCHEDULER_RESOURCE_ID
+            and batch["queueResourceId"] == PINNED_CENSUS_QUEUE_RESOURCE_ID
+            and batch["journalResourceId"] == PINNED_CENSUS_JOURNAL_RESOURCE_ID
+            and batch["recoveryResourceId"] == PINNED_RECOVERY_RESOURCE_ID
+            and batch["workerId"] == PINNED_RECOVERY_WORKER_ID
+            and batch["state"] == "committed"
+            and type(batch["jobs"]) is list
+            and len(batch["jobs"]) == seal["pendingCount"], "recovery-batch")
+    subjects = []
+    seen_sequences = set()
+    seen_schedules = set()
+    seen_mints = set()
+    seen_bindings = set()
+    for job in batch["jobs"]:
+        require(type(job) is dict and set(job) == set(schedule)
+                and job["schema"] == SCHEDULE_SCHEMA
+                and job["sealId"] == seal["sealId"]
+                and job["highWater"] == seal["highWater"]
+                and job["pendingSha256"] == seal["pendingSha256"]
+                and job["mintSha256"] == seal["mintSha256"]
+                and job["vaultId"] == finalizer.PINNED_TOKEN_VAULT_ID
+                and job["finalizerResourceId"] == finalizer.PINNED_FINALIZER_RESOURCE_ID
+                and job["recoveryResourceId"] == PINNED_RECOVERY_RESOURCE_ID
+                and job["schedulerResourceId"] == PINNED_SCHEDULER_RESOURCE_ID
+                and job["queueResourceId"] == PINNED_CENSUS_QUEUE_RESOURCE_ID
+                and job["journalResourceId"] == PINNED_CENSUS_JOURNAL_RESOURCE_ID
+                and job["censusComplete"] is True and job["state"] == "committed"
+                and type(job["sequence"]) is int
+                and 1 <= job["sequence"] <= seal["highWater"]
+                and all(type(job[key]) is str
+                        and finalizer.release.host.HEX64.fullmatch(job[key])
+                        for key in ("scheduleId", "mintId", "bindingId",
+                                    "tokenSha256", "contextSha256"))
+                and type(job["sandboxRepositoryId"]) is int
+                and job["sandboxRepositoryId"] == finalizer.release.host.SANDBOX_ID
+                and type(job["appId"]) is int
+                and job["appId"] == finalizer.release.host.APP_ID
+                and job["actor"] == finalizer.release.host.ACTOR
+                and type(job["installationId"]) is int
+                and job["installationId"] > 0, "recovery-batch")
+        require(job["sequence"] not in seen_sequences
+                and job["scheduleId"] not in seen_schedules
+                and job["mintId"] not in seen_mints
+                and job["bindingId"] not in seen_bindings,
+                "recovery-batch-duplicate")
+        seen_sequences.add(job["sequence"])
+        seen_schedules.add(job["scheduleId"])
+        seen_mints.add(job["mintId"])
+        seen_bindings.add(job["bindingId"])
+        subjects.append({
+            "schema": CENSUS_SUBJECT_SCHEMA,
+            **{key: job[key] for key in (
+                "sequence", "mintId", "bindingId", "tokenSha256",
+                "contextSha256", "sandboxRepositoryId", "appId", "actor",
+                "installationId", "journalResourceId", "finalizerResourceId",
+                "vaultId", "recoveryResourceId")},
+            "revokeRequired": True,
+        })
+    require(subjects == sorted(subjects, key=lambda item: item["sequence"])
+            and _digest(subjects) == seal["pendingSha256"]
+            and schedule in batch["jobs"], "recovery-batch-omission")
+    return batch["batchId"]
+
+
 def _schedule_readback(port: ProtectedRecoveryPort, mint_id: str,
-                       binding_id: str, mint: dict, token_sha256: str) -> str:
+                       binding_id: str, mint: dict, token_sha256: str) -> tuple[str, str]:
     try:
         schedule = port.read_schedule(mint_id)
     except Exception as error:
@@ -228,7 +328,8 @@ def _schedule_readback(port: ProtectedRecoveryPort, mint_id: str,
     } and type(subject["sequence"]) is int
       and type(subject["installationId"]) is int
       and subject["revokeRequired"] is True, "recovery-census-subject")
-    return schedule["scheduleId"]
+    batch_id = _batch_readback(port, seal, schedule)
+    return schedule["scheduleId"], batch_id
 
 
 def _binding_record(port: ProtectedRecoveryPort, mint_id: str,
@@ -307,12 +408,12 @@ def recover_one(port: ProtectedRecoveryPort | None, mint_id: str,
     _binding_record(port, mint_id, expected_binding_id, mint, token_sha256)
     require(finalizer._read_state(port, "read_pending", finalizer.PENDING_SCHEMA,
                                   mint_id, token_sha256), "pending-intent")
-    schedule_id = _schedule_readback(port, mint_id, expected_binding_id,
-                                     mint, token_sha256)
+    schedule_id, batch_id = _schedule_readback(
+        port, mint_id, expected_binding_id, mint, token_sha256)
 
     try:
         claim = port.claim_recovery_once(mint_id, expected_binding_id,
-                                         schedule_id)
+                                         schedule_id, batch_id)
     except Exception:
         claim = "unknown"
     claim_state = "fresh" if claim == "committed" else \
