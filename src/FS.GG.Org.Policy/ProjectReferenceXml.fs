@@ -291,6 +291,25 @@ module ProjectReferenceXml =
                                     | :? ArgumentException as ex -> error "project-source-xml" path ex.Message
                 readSources Set.empty [] sources
 
+    /// Reduce a caller-supplied Git tree and an exact set of blob-matching project bytes.
+    /// Copies supplied tree and project bytes once so ID checks and XML parsing observe the
+    /// same local snapshot.
+    /// The root tree still needs an authenticated repository/commit provenance provider.
+    let inspectSuppliedGitSnapshot
+        (rootTreeId: string)
+        (treeObjects: (string * byte[]) list)
+        (sources: (string * byte[]) list)
+        : Result<Map<string, string list>, SyntaxDiagnostic> =
+        let treeSnapshots =
+            if isNull (box treeObjects) then treeObjects
+            else treeObjects |> List.map (fun (oid, bytes) -> oid, if isNull bytes then bytes else Array.copy bytes)
+        let snapshots =
+            if isNull (box sources) then sources
+            else sources |> List.map (fun (path, bytes) -> path, if isNull bytes then bytes else Array.copy bytes)
+        match GitTreeProjects.bindSha1ProjectBlobDigests rootTreeId treeSnapshots snapshots with
+        | Error diagnostic -> Error diagnostic
+        | Ok digests -> inspectSuppliedProjectBytesAgainstDigests digests snapshots
+
     /// A local observation of one caller-supplied implicit file. The result does not establish
     /// nearest-file selection, import closure, source provenance, or a Rule (b) graph verdict.
     type SuppliedImplicitObservation = NoDirectReferenceInSuppliedXml

@@ -1,6 +1,7 @@
 namespace FS.GG.Org.Policy.Tests
 
 open System
+open System.Text
 open FS.GG.Org.Policy
 open Xunit
 
@@ -25,6 +26,64 @@ module GitTreeProjectsTests =
             "MTAwNjQ0IEIuZnNwcm9qAEIwkWFkdAcpD62CTJ/80p7E/pYO"
 
     let private complete = [ root; src; a; b ]
+
+    // This second fixed tree binds A to an actual A -> B edge. The first fixture has two
+    // identical empty project blobs and cannot expose a stale A source.
+    let private edgeRoot =
+        objectRow "2b552d6bf9d7b4458a28fc65663fbc2c7b0221dc"
+            "MTAwNjQ0IFJFQURNRS5tZAC2/ExiC2fZX5U6XBwSMKqrXa2hsDQwMDAwIHNyYwA52/KHUpV/+mkQOSnNWFWL4KxgIg=="
+    let private edgeSrc =
+        objectRow "39dbf28752957ffa69103929cd58558be0ac6022"
+            "NDAwMDAgQQCc41uNK5clEiNIWKIvkXjch4zKhDQwMDAwIEIAiKntiowmvIzzDfFCvu2LgF9XXew="
+    let private edgeA =
+        objectRow "9ce35b8d2b972512234858a22f9178dc878cca84"
+            "MTAwNjQ0IEEuZnNwcm9qAKXQx8j6erOtWXN7LmERQxD3K5F7"
+    let private edgeTrees = [ edgeRoot; edgeSrc; edgeA; b ]
+    let private edgeBytes = Encoding.UTF8.GetBytes("<Project><ProjectReference Include='../B/B.fsproj' /></Project>")
+    let private emptyBytes = Encoding.UTF8.GetBytes("<Project />")
+    let private projectBytes = [ "src/A/A.fsproj", edgeBytes; "src/B/B.fsproj", emptyBytes ]
+
+    let private refusedBlob expectedMessage sources =
+        match ProjectReferenceXml.inspectSuppliedGitSnapshot (fst edgeRoot) edgeTrees sources with
+        | Error diagnostic ->
+            Assert.Equal("git-blob-source", diagnostic.Code)
+            Assert.Contains(expectedMessage, diagnostic.Message)
+        | Ok graph -> failwithf "unbound project bytes produced a graph: %A" graph
+
+    [<Fact>]
+    let ``tree blob binding preserves the A to B edge for Rule b`` () =
+        match ProjectReferenceXml.inspectSuppliedGitSnapshot (fst edgeRoot) edgeTrees projectBytes with
+        | Error diagnostic -> failwithf "bound source refused: %A" diagnostic
+        | Ok graph ->
+            Assert.Equal<string list>([ "src/B/B.fsproj" ], graph.["src/A/A.fsproj"])
+            match RuleB.inspect [ "src/A/**" ] graph with
+            | Error diagnostic -> failwithf "coverage refused: %A" diagnostic
+            | Ok coverage -> Assert.Equal<(string * string) list>([ "src/A/A.fsproj", "src/B/B.fsproj" ], coverage.Uncovered)
+
+    [<Fact>]
+    let ``stale A bytes cannot erase tree bound edge`` () =
+        let stale = [ "src/A/A.fsproj", emptyBytes; "src/B/B.fsproj", emptyBytes ]
+        // A caller can make the older supplied-digest adapter green by choosing the stale
+        // digest too. The fixed Git tree above independently fixes A's actual blob ID.
+        let staleDigest = "400b35829b2a391f4048da02e1108b98db09431b2947e806a184743bd1b33c3a"
+        match ProjectReferenceXml.inspectSuppliedProjectBytesAgainstDigests
+                [ "src/A/A.fsproj", staleDigest; "src/B/B.fsproj", staleDigest ] stale with
+        | Error diagnostic -> failwithf "old supplied digest counterexample changed: %A" diagnostic
+        | Ok graph ->
+            match RuleB.inspect [ "src/A/**" ] graph with
+            | Error diagnostic -> failwithf "counterexample coverage refused: %A" diagnostic
+            | Ok coverage -> Assert.Empty(coverage.Uncovered)
+        refusedBlob "blob ID" stale
+
+    [<Fact>]
+    let ``missing duplicate and foreign supplied project rows refuse blob binding`` () =
+        refusedBlob "absent" [ "src/A/A.fsproj", edgeBytes ]
+        refusedBlob "duplicate" (projectBytes @ [ "src/A/A.fsproj", edgeBytes ])
+        refusedBlob "not in" (projectBytes @ [ "src/C/C.fsproj", emptyBytes ])
+
+    [<Fact>]
+    let ``null project bytes cannot satisfy tree blob ID`` () =
+        refusedBlob "absent" [ "src/A/A.fsproj", Unchecked.defaultof<byte[]>; "src/B/B.fsproj", emptyBytes ]
 
     let private refused expectedMessage rootOid objects =
         match GitTreeProjects.inspectSha1 rootOid objects with
