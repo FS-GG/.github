@@ -1079,6 +1079,10 @@ changing the protected holds:
 | [GS2-09.7 #747](https://github.com/FS-GG/FS.GG.Coordination/pull/747) | `d496707cc0cd8a379dce7f487e8d198d3c4ef68f` | Source-only store installation descriptor pins artifact/ACL digest and role principals before reader invocation, refusing candidate read/write, mutable objects and drift; 730 full unit tests. Real IAM/native custody and Q5/Q6 remain held. |
 | [Telemetry usage #748](https://github.com/FS-GG/FS.GG.Coordination/pull/748) | `45e86f719c7a94f504ab93bfd7bb28cfa19e3db4` | Source-only reservation chronology refuses pre-reservation observation and second-clock rollback with a burned challenge gap; 165 Release execution tests. Trusted clock/current-session usage and Host receipt remain absent. |
 | [GS2-09.9 #749](https://github.com/FS-GG/FS.GG.Coordination/pull/749) | `f5b3897248078498507cc907e9dd303ce10b06fd` | Closed v5 native-request custody joins sealed plan bytes, seal-event witness, journal readback, target digest and typed POST fields, including independent generation/head pin; 18 focused/adjacent tests. Still non-authorizing under #550/#545. |
+| [GS2-09.7 #750](https://github.com/FS-GG/FS.GG.Coordination/pull/750) | `29a4bce39a69ba5015e8e62eb0ae140845795668` | Source-only full-store inventory readback checks complete ordered object set and stable pre/post seal before corpus digest; 731 full unit tests. Native linearizable completeness/freshness and Q5/Q6 remain held. |
+| [FSC-03 F# #3819](https://github.com/FS-GG/.github/pull/3819) | `c0243275a3064bb7ff29bc0eb8f7d0a2ad7c7d67` | Dormant read-only object port materializes reachable Git tree/project blobs by exact SHA-1 ID, kind and raw hash, refusing missing closure; 253 F# tests. Provider/accepted pin/receiver remain uninstalled. |
+| [Telemetry usage #751](https://github.com/FS-GG/FS.GG.Coordination/pull/751) | `dc9243562e407add0b15a34195639c1e266bd4bf` | Source-only subscription handoff retains validation time and burns challenge on first-start clock regression; final full Release execution suite 166 tests. Genuine turn/Host capture remains absent. |
+| [GS2-09.9 #752](https://github.com/FS-GG/FS.GG.Coordination/pull/752) | `9e282a08155fb8188546a508e16703423c502ad3` | Closed provider request spec binds exact verified bytes to fixed GitHub POST path with one-send ceiling, no automatic retry or redirects; 21 focused/adjacent tests. No installed transport, token, grant, CAS or effect. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
@@ -1245,6 +1249,25 @@ unacknowledgedLossy=false. This is readiness only; genuine runner native
 turn/usage and matching applied Host receipt are still absent. Release render
 had zero warnings/errors and renderer tests remained 25/25. No protected
 gate was cleared by this report.
+
+At the 19:27:14 UTC **verified-source** cutoff, the live roster again had six
+active GPT-6-Sol/high lanes with concrete current tasks, including reserved
+GS2-09.9 and direct GS2-09.7 workers. The F# report rendered at 19:28:06
+UTC from recorded roadmap head `26f934d0`. The latest complete
+19:17:05–19:27:05 UTC local team period had 32,311,657 input tokens
+(32,056,960 cached; 254,697 noncached), 116,636 output and 32,428,293
+total. Across 88 completed periods including zero-use periods, the team mean
+was 31,599,902.38 total. Local unverified weekly usage was 91% at 19:27:55,
+leaving 9%; the conditional continuous-use, account-wide projection was near
+21:47 UTC. Authenticated health and `main-fsharp-dev` workspace status were
+ready/configured at 19:28:05–06, pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false; end-to-end runner/Host capture remained pending.
+The five latest verified draft rows were #749, #748, #747, #3818 and #746.
+#750 had a 19:26:59 commit but its worker notice arrived after verification
+froze, so it was explicitly deferred to the next source report; #3819,
+#751 and #752 were committed after the cutoff. The Release render had zero
+warnings/errors, and renderer tests remained 25/25. No protected hold was
+cleared by this report.
 
 At the 17:51 UTC source checkpoint, the newest five completed **draft
 commits** were verified against their PR heads. Their completion is source
