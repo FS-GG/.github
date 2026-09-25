@@ -421,20 +421,23 @@ The initial trusted caller form is a dedicated GitHub Actions admission service 
 workflow and source revision on protected `.github` `main`. Native provider readback must bind its
 repository, workflow path and bytes, head, run ID and attempt, actor, and branch-restricted runtime
 environment to the registered service before any plan is sealed. Dispatch inputs remain lookup hints.
-The runtime environment and ordinary App key custody are separate from the one-time human-reviewed
-genesis environment and from cutover approval. Until that run provenance, environment restriction,
-and key custody are installed and qualified together, the service has no admission authority.
+The service job receives no ordinary App private key. A separate protected Main-host issuer process
+retains the dedicated ordinary App key, distinct from the one-time human-reviewed genesis key and
+cutover approval. Until the run provenance, environment restriction, issuer boundary, and key custody
+are installed and qualified together, the service has no admission authority.
 An in-progress run cannot prove its own origin with a completed-run artifact. Before accessing the
 key, the issuer verifies a GitHub-signed in-run OIDC token with an audience bound to the exact sealed
 plan and nonce, issuer signature and time bounds, one-shot token identity, and repository, workflow,
 source head, run, attempt, job and environment claims. It cross-checks those claims against fresh
-native run, job, workflow-source and environment reads. A caller-supplied run ID, an ambient token,
-or a matching native run lookup alone cannot authenticate the requesting job.
+native run, job, workflow-source and environment reads, then durably consumes the plan and nonce
+before minting. An in-memory `jti` cache alone cannot prevent the job from requesting another token
+for the same plan. A caller-supplied run ID, an ambient token, or a matching native run lookup alone
+cannot authenticate the requesting job.
 
 The service seals one exact admission plan before obtaining its short-lived ordinary App credential.
-A protected issuer verifies the registered service identity and request provenance, exact plan digest,
+The protected issuer verifies the registered service identity and request provenance, exact plan digest,
 operation, expected journal parent, current epoch, repository and one-shot handoff identity before
-obtaining its custody-bound App key. An App JWT is not intrinsically plan-scoped: the trusted issuer and
+minting with its custody-bound App key. An App JWT is not intrinsically plan-scoped: the trusted issuer and
 consumer enforce that binding locally, observe the effective minted token scope and expiry, and refuse
 replay or a changed plan. The credential enters a fixed-operation CAS transport through a bounded
 anonymous descriptor and is never returned as a CLI value or retained in an artifact. The one-time genesis
