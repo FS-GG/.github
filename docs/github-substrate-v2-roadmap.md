@@ -1790,6 +1790,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   the fake candidate twice. Its 94 local controls derive a stable decision ID excluding token
   and validity time, then require durable claim and exact decision/binding/token readback.
   Protected single-key CAS durability, ACLs and revocation-versus-claim ordering remain open.
+  [Atomic-claim draft #3727](https://github.com/FS-GG/.github/pull/3727) repairs a
+  red-before revocation just before CAS that previously allowed fake handoff. Its 96 local
+  controls require an atomic admitted-state claim and exact native readback; the installed
+  shared transaction boundary and post-claim revocation policy remain unproved.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
