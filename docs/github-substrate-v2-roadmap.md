@@ -1646,6 +1646,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   [Readback draft #564](https://github.com/FS-GG/FS.GG.Coordination/pull/564) binds a proposed
   protected source/workflow/artifact/image/approval packet to later installed refusal controls, but
   its observations and immutable coordinates have not been supplied by a protected release.
+  [Adversarial qualification draft #565](https://github.com/FS-GG/FS.GG.Coordination/pull/565)
+  closes a source-only selection gap: a resealed packet could previously substitute the dispatch
+  actor or artifact producer IDs while satisfying pure consistency checks. Its 42 isolated controls
+  bind those IDs and refuse self-review, but no protected release packet or installed native effect
+  has been observed.
   The #550 staged exact-copy loopback
   harness exercises corrected classifier, HTTP and durable-fence paths, but an independent boundary
   review found it insufficient for the installed provider/credential path and corrected native-effect clause. Qualify the corrected
