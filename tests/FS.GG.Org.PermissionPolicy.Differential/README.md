@@ -34,6 +34,11 @@ workflow, and duplicate manifest entries. The F# runner now supplies a caller
 fleet roster, exact workflow snapshots and per-call binding facts to
 `PermissionFleet.evaluate`. Red-before, a second rostered caller under-granted
 while the one-pair F# adapter returned OK; the fleet reducer returns FINDING.
+An external-owner roster row now has its own undergrant control: the live Python
+default sweep and F# fleet reducer both return FINDING for
+`EHotwagner/S.I.R.`. The pure inventory contract separately checks that every
+`repos[].full` row is present, including `non-participant` rows, while
+`outside-fabric` rows are excluded.
 The corpus has zero remaining outcome differences over its supplied facts.
 
 The local fixture cannot prove provider authentication, current App installation

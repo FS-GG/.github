@@ -39,6 +39,7 @@ EXPECTED_PYTHON = {
     "duplicate_app_permission": "NO_VERDICT",
     "dynamic_app_request": "NO_VERDICT",
     "rostered_second_caller_undergrants": "FINDING",
+    "external_rostered_caller_undergrants": "FINDING",
     "pinned_ref_uses_fetched_callee": "OK",
     "non_org_call": "NO_VERDICT",
     "callee_not_callable": "NO_VERDICT",
@@ -181,17 +182,19 @@ def cases():
     add("dynamic_app_request", lambda s: s["authority_workflows"][1].update(
         text=APP.replace("permission-contents: read", "permission-contents: ${{ inputs.level }}")))
 
-    def extra_rostered_repo(s):
-        s["roster_repositories"].append("FS-GG/S")
-        s["additional_callers"]["FS-GG/S"] = [caller("permissions: { contents: none }")]
+    def extra_rostered_repo(s, repo="FS-GG/S"):
+        s["roster_repositories"].append(repo)
+        s["additional_callers"][repo] = [caller("permissions: { contents: none }")]
         s["expected_caller_workflows"].append(
-            {"repository": "FS-GG/S", "source_ref": "fixture-s-head",
+            {"repository": repo, "source_ref": "fixture-s-head",
              "paths": [".github/workflows/caller-1.yml"]})
         s["caller_call_facts"].append(
-            {"repository": "FS-GG/S", "path": ".github/workflows/caller-1.yml",
+            {"repository": repo, "path": ".github/workflows/caller-1.yml",
              "job_id": "sync", "callee": "cal.yml", "ref": "main", "inventory_id": "default"})
 
     add("rostered_second_caller_undergrants", extra_rostered_repo)
+    add("external_rostered_caller_undergrants",
+        lambda s: extra_rostered_repo(s, "EHotwagner/S.I.R."))
 
     def pinned(s):
         s["caller_yaml"] = caller(target="cal.yml@v1")

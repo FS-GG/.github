@@ -39,7 +39,10 @@ type CallerFleetEvidence =
 module PermissionFleet =
     let private authority = "FS-GG/.github"
     let private rosterPath = "registry/repos.yml"
-    let private repositoryName = Regex("^FS-GG/[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant)
+    // The live default sweep selects every repos[].full row, including non-participants and
+    // non-FS-GG owners. Identity membership is checked against the parsed registry separately.
+    let private repositoryName =
+        Regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant)
     let private workflowPath = Regex("^\\.github/workflows/[^/]+\\.ya?ml$", RegexOptions.CultureInvariant)
 
     let private unique values = List.length values = (values |> Set.ofList |> Set.count)

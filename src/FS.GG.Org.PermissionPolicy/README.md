@@ -86,10 +86,14 @@ at that head. A visible empty workflow directory is represented by a terminal
 empty listing; a missing or incomplete listing refuses. The result is explicitly
 `ProvisionalFleetVerdict`. This pure contract does not authenticate the
 registry bytes, the heads, the visibility check behind an empty listing, or
-the provider's claim that an enumeration was terminal. The current fleet
-reducer also accepts only `FS-GG/*` caller identities, so the actual registry's
-non-organization rows require an explicit policy decision and installed proof
-before a live sweep can use this adapter.
+the provider's claim that an enumeration was terminal. The live Python default
+sweep selects every `repos[].full` row, regardless of `role` or owner, including
+the authority and `non-participant` rows. `outside-fabric` rows are not selected;
+`--repo` is a diagnostic override outside this complete fleet contract. The
+pure F# parser and fleet identity check follow that selection, so the checked-in
+registry's `EHotwagner/S.I.R.` row can contribute a finding instead of being
+refused solely for its owner. Installed proof is still required before a live
+sweep can use this adapter.
 
 This source does not fetch a callee at its pinned ref, enumerate the roster or
 workflow files from GitHub, authenticate current installation grants, or
