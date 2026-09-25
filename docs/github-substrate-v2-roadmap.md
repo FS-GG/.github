@@ -1031,6 +1031,7 @@ changing the protected holds:
 | [FSC-04 #1040](https://github.com/FS-GG/FS.GG.SDD/pull/1040) | `1bab7cdc32635a2b6d45b8c7457313907f740f71` | Provisional Linux pinned reader refuses NFC/ignore-case aliases in declarations, physical roster and selected path; 1,496 Commands tests, Windows/ABA/atomicity still unproved. |
 | [FSC-03 Python #3809](https://github.com/FS-GG/.github/pull/3809) | `94c44071bc75dd5de7b243c2b3c9c7efbf66fce5` | Live Rule B gate refuses unsupported GitHub path operators `?`, `+` and `[]` before coverage; 168 fixture controls. Stack acceptance and installed receiver proof remain open. |
 | [GS2-09.9 #719](https://github.com/FS-GG/FS.GG.Coordination/pull/719) | `371948c4e749585e0b0fc599396ad0d25cd540cc` | Closed scaffold verifier refuses a float `nativeSource.size` in a resealed manifest; 19 focused tests. Local approval digest remains caller supplied, #550 held. |
+| [GS2-09.7 #720](https://github.com/FS-GG/FS.GG.Coordination/pull/720) | `677274aac21e234bf1ec4f13c848bbf212a35f1a` | Raw-to-typed issue binder independently checks unique issue identities, unique PR markers and disjoint issue/marker numbers; 139 focused tests. Hosted checks queued, Q5/Q6 held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
