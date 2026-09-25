@@ -146,3 +146,13 @@ module GitHubGraphQlHttpTests =
         match (reader :> GitHubCommitMembership.IReadOnlyGraphQlReader).ExecuteExact unsafeRequest with
         | Error () -> Assert.Equal(0, calls)
         | Ok _ -> failwith "mutation passed read-only transport"
+
+    [<Fact>]
+    let ``malformed bearer credentials cannot construct membership reader`` () =
+        for token in [ "token with space"; "token:scope"; "token;scope"; "token@scope" ] do
+            match GitHubGraphQlHttp.Reader.ForFixture(
+                token, new FixtureHandler(response 200 "application/json" valid)) with
+            | Error () -> ()
+            | Ok reader ->
+                reader.Dispose()
+                failwithf "malformed bearer credential constructed membership reader: %s" token

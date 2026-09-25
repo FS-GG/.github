@@ -4,6 +4,7 @@ open System
 open System.Net
 open System.Net.Http
 open System.Net.Http.Headers
+open System.Text.RegularExpressions
 
 /// Dormant authenticated HTTPS reader for the exact protected-main branch request. No installed
 /// credential source or receiver path constructs it. The fixture handler is test-assembly only.
@@ -11,8 +12,8 @@ module GitHubProtectedBranchHttp =
     let private maximumBytes = 65536
 
     let private validToken (token: string) =
-        not (String.IsNullOrWhiteSpace token)
-        && token |> Seq.forall (fun c -> c >= '!' && c <= '~' && c <> '"' && c <> '\\')
+        not (String.IsNullOrEmpty token)
+        && Regex.IsMatch(token, @"\A[A-Za-z0-9._~+/\-]+=*\z", RegexOptions.CultureInvariant)
 
     let private jsonMediaType (media: string) =
         String.Equals(media, "application/json", StringComparison.OrdinalIgnoreCase)

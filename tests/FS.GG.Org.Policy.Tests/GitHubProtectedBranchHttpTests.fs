@@ -135,5 +135,15 @@ module GitHubProtectedBranchHttpTests =
         | Ok _ -> failwith "path escape reached protected branch reader"
 
     [<Fact>]
+    let ``malformed bearer credentials cannot construct branch reader`` () =
+        for token in [ "token with space"; "token:scope"; "token;scope"; "token@scope" ] do
+            match GitHubProtectedBranchHttp.Reader.ForFixture(
+                token, new FixtureHandler(response 200 "application/json" branchJson)) with
+            | Error () -> ()
+            | Ok reader ->
+                reader.Dispose()
+                failwithf "malformed bearer credential constructed branch reader: %s" token
+
+    [<Fact>]
     let ``authenticated transport does not turn unprotected JSON into pin`` () =
         refused (response 200 "application/vnd.github+json" (branchJson.Replace("true", "false")))

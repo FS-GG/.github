@@ -6,6 +6,7 @@ open System.Net.Http
 open System.Net.Http.Headers
 open System.Text
 open System.Text.Json
+open System.Text.RegularExpressions
 
 /// Dormant read-only HTTPS transport for the fixed GitHub commit-membership query. The normal
 /// factory owns its handler and disables redirects; no credential source or policy entry point
@@ -15,8 +16,8 @@ module GitHubGraphQlHttp =
     let private maximumBytes = 65536
 
     let private validToken (token: string) =
-        not (String.IsNullOrWhiteSpace token)
-        && token |> Seq.forall (fun c -> c >= '!' && c <= '~' && c <> '"' && c <> '\\')
+        not (String.IsNullOrEmpty token)
+        && Regex.IsMatch(token, @"\A[A-Za-z0-9._~+/\-]+=*\z", RegexOptions.CultureInvariant)
 
     let private jsonMediaType (media: string) =
         String.Equals(media, "application/json", StringComparison.OrdinalIgnoreCase)
