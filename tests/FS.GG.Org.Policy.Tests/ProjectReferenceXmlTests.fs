@@ -42,6 +42,19 @@ module ProjectReferenceXmlTests =
             + "<ItemGroup><ProjectReference Include='../B/B.fsproj' /></ItemGroup></Project>"
         Assert.Equal<string list>([ "src/B/B.fsproj" ], parsed "src/A/A.fsproj" xml)
 
+    [<Theory>]
+    [<InlineData("<Project><Import Project='../../build/Refs.props' /></Project>")>]
+    [<InlineData("<Project xmlns='urn:msbuild'><ImportGroup><Import Project='../../build/Refs.props' /></ImportGroup></Project>")>]
+    let ``explicit Import cannot yield a complete single file project graph`` xml =
+        // The imported file can add ProjectReference items absent from these XML bytes.
+        // Returning [] lets an A-only workflow filter pass while imported B is uncovered.
+        refused "project-reference" "src/A/A.fsproj" xml
+
+    [<Fact>]
+    let ``commented Import does not require evaluation`` () =
+        let xml = "<Project><!-- <Import Project='../../build/Refs.props' /> --></Project>"
+        Assert.Empty(parsed "src/A/A.fsproj" xml)
+
     [<Fact>]
     let ``namespaced project reference is still an edge`` () =
         let xml =

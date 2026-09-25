@@ -46,6 +46,7 @@ module ProjectReferenceXml =
             if valid && normalized target then Some target else None
 
     /// Decode ProjectReference Include values and resolve them to normalized repo-relative paths.
+    /// Explicit imports require MSBuild evaluation and cannot supply complete single-file facts.
     /// No filesystem reads or assertions about a complete project roster occur here.
     let inspect (projectPath: string) (xml: string) : Result<string list, SyntaxDiagnostic> =
         if not (normalized projectPath) then
@@ -62,6 +63,8 @@ module ProjectReferenceXml =
                 let document = XDocument.Load(reader)
                 if isNull document.Root || document.Root.Name.LocalName <> "Project" then
                     error "project-xml" projectPath "project XML root must be Project"
+                elif document.Descendants() |> Seq.exists (fun element -> element.Name.LocalName = "Import") then
+                    error "project-reference" projectPath "explicit MSBuild Import requires evaluation"
                 else
                     let references = ResizeArray<string>()
                     let mutable invalid = None
