@@ -74,6 +74,7 @@ required = [
 ]
 positions = [workflow.index("      - name: " + name) for name in required]
 assert positions == sorted(positions)
+assert "test '${{ github.ref }}' = refs/heads/main" in steps["Validate the exact candidate input"]
 assert "ref: ${{ github.sha }}" in steps[required[0]]
 assert "git -C host rev-parse HEAD" in steps[required[1]]
 assert "python3 host/tests/gs2-09-7-mint-proof/run.py" in steps[required[2]]
@@ -81,6 +82,7 @@ assert "python3 host/scripts/gs2-09-7-mint-sandbox-token.py" in steps[required[3
 assert "id: mint" in steps[required[3]]
 assert "steps.mint.outputs.token" in steps[required[4]]
 assert "mint-grants.json" in steps[required[4]]
+assert "sha256sum" in steps[required[4]]
 for name in required[5:7]:
     assert "FSGG_SANDBOX_TOKEN: ${{ steps.mint.outputs.token }}" in steps[name]
     assert "FSGG_SANDBOX_MINT_PROOF:" in steps[name]
