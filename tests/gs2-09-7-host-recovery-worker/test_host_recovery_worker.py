@@ -36,6 +36,7 @@ class FakePort:
         self.claim = None
         self.native_attempt = None
         self.schedule_state = "committed"
+        self.batch_state = "committed"
         self.revoke_schedule_after_read = False
         self.receipt = None
         self.claim_response_lost = False
@@ -147,6 +148,19 @@ class FakePort:
             "vaultId": VAULT, "recoveryResourceId": RECOVERY_RESOURCE,
             "revokeRequired": True,
         }
+        self.census_seal["pendingSha256"] = worker._digest([self.census_subject])
+        self.scheduled["pendingSha256"] = self.census_seal["pendingSha256"]
+        self.schedule_batch = {
+            "schema": worker.BATCH_SCHEMA, "batchId": "9" * 64,
+            "sealId": self.census_seal["sealId"],
+            "highWater": self.census_seal["highWater"], "pendingCount": 1,
+            "pendingSha256": self.census_seal["pendingSha256"],
+            "mintSha256": self.census_seal["mintSha256"],
+            "schedulerResourceId": SCHEDULER_ID,
+            "queueResourceId": QUEUE_ID, "journalResourceId": JOURNAL_ID,
+            "recoveryResourceId": RECOVERY_RESOURCE, "workerId": WORKER_ID,
+            "jobs": [self.scheduled], "state": "committed",
+        }
 
     def describe(self):
         return self.finalizer_descriptor
@@ -177,6 +191,10 @@ class FakePort:
     def read_census_subject(self, seal_id, mint_id):
         self.calls.append("read-census-subject")
         return self.census_subject
+
+    def read_schedule_batch(self, seal_id):
+        self.calls.append("read-schedule-batch")
+        return self.schedule_batch
 
     def load_mint(self, mint_id):
         self.calls.append("load-mint")
@@ -213,10 +231,12 @@ class FakePort:
         self.calls.append("read-binding")
         return self.binding
 
-    def claim_recovery_once(self, mint_id, binding_id, schedule_id):
+    def claim_recovery_once(self, mint_id, binding_id, schedule_id, batch_id):
         self.calls.append("claim-recovery")
-        if self.schedule_state != "committed" or self.scheduled is None \
-                or schedule_id != self.scheduled["scheduleId"]:
+        if self.schedule_state != "committed" or self.batch_state != "committed" \
+                or self.scheduled is None or self.schedule_batch is None \
+                or schedule_id != self.scheduled["scheduleId"] \
+                or batch_id != self.schedule_batch["batchId"]:
             return "refused"
         if self.claim is not None:
             return "duplicate"
@@ -310,6 +330,39 @@ class RecoveryWorkerTests(unittest.TestCase):
         with self.assertRaisesRegex(worker.Refused, "recovery-schedule"):
             self.run_worker()
         self.assertNotIn("claim-recovery", self.port.calls)
+        self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_single_committed_job_without_full_durable_batch_refuses(self):
+        self.port.schedule_batch = None
+        with self.assertRaisesRegex(worker.Refused, "recovery-batch"):
+            self.run_worker()
+        self.assertNotIn("claim-recovery", self.port.calls)
+        self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_omitted_duplicate_or_withdrawn_batch_blocks_claim(self):
+        for mutate in (
+            lambda batch: batch["jobs"].clear(),
+            lambda batch: batch["jobs"].append(batch["jobs"][0].copy()),
+            lambda batch: batch.update(state="withdrawn"),
+        ):
+            with self.subTest(mutate=mutate):
+                self.port = FakePort()
+                mutate(self.port.schedule_batch)
+                with self.assertRaisesRegex(worker.Refused, "recovery-batch"):
+                    self.run_worker()
+                self.assertNotIn("claim-recovery", self.port.calls)
+                self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_batch_withdrawn_after_readback_blocks_atomic_claim(self):
+        self.port.schedule_state = "committed"
+        original = self.port.read_schedule_batch
+        def withdraw(seal_id):
+            result = original(seal_id)
+            self.port.batch_state = "withdrawn"
+            return result
+        self.port.read_schedule_batch = withdraw
+        result = self.run_worker()
+        self.assertEqual("unknown", result["claim"])
         self.assertNotIn("native-revoke", self.port.calls)
 
     def test_revoked_schedule_between_readback_and_claim_blocks_native_effect(self):
