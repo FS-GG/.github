@@ -1073,6 +1073,9 @@ changing the protected holds:
 | [GS2-09.7 #743](https://github.com/FS-GG/FS.GG.Coordination/pull/743) | `0452ad506ea95cb4944db7d4048179e9a227ae99` | Second read-only custody port compares exact store descriptors and object-by-object run/selection/raw capture records, refusing missing or changed store evidence; 730 full unit tests. Protected ACL/native custody, inventory, Q5/Q6 remain held. |
 | [Telemetry usage #744](https://github.com/FS-GG/FS.GG.Coordination/pull/744) | `809b1255933f8e7e1f93f1fe08536868a923a32d` | Source-only continuity gate refuses equal malformed expected/bound scopes before authenticator read; 161 Release execution tests. Current-session usage and Host capture remain no-verdict. |
 | [FSC-03 F# #3817](https://github.com/FS-GG/.github/pull/3817) | `b5f47897f5146f223d83b85ad104f614a733f379` | Source-only strict protected-main response reducer derives a provisional commit pin and composes it with commit/tree/project bytes; 237 tests. Authenticated REST reader is uninstalled and a moving tip is not a durable acceptance receipt. |
+| [GS2-09.9 #745](https://github.com/FS-GG/FS.GG.Coordination/pull/745) | `cee907ebcd0c3a65bcae61e6953a433eba0e841e` | Closed fake-port v5 journal intent readback distinguishes claimed CAS acknowledgment from independent committed-marker readback; 20 focused and adjacent tests. Real protected writer/replay/grant and #550 effect remain held. |
+| [Telemetry usage #746](https://github.com/FS-GG/FS.GG.Coordination/pull/746) | `ba8173aeb79b09d7cd9ef983ff9e29122de81a5d` | Source-only prospective-window validation refuses equal malformed scopes before reservation CAS/current-session source; 163 Release execution tests. Native completed-turn usage and Host receipt remain absent. |
+| [FSC-03 F# #3818](https://github.com/FS-GG/.github/pull/3818) | `f63ad22d9b8568635dff93c16b6eeb9356aaee03` | Dormant fixed-URL protected-branch HTTP reader refuses redirects, status/origin/media mismatch and oversized responses; 247 F# tests. No live request, accepted freshness or installed receiver. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
@@ -1219,6 +1222,26 @@ zero build warnings/errors, and 25 focused tests passed. Drafts #738, #1045,
 #739 and #740 arrived after this render; none was counted as a completed row
 at that cutoff. Their workers were immediately recycled into disjoint source
 tasks, preserving six active lanes.
+
+The next source evidence cutoff was frozen at 19:18:06 UTC rather than chased
+through later arriving drafts. Its F# report rendered at 19:21:42 UTC after
+fresh validation of that frozen source set and the live six-lane task roster;
+the script's two-minute metadata guard had correctly refused the unrefreshed
+19:18 snapshot. The recorded source roadmap head was `a4bd72bd`, with five
+draft completions #3817, #744, #743, #1046 and #742 in newest-first order.
+Drafts #745 (19:19:44 commit) and #746 (19:20:18 commit) were outside the
+cutoff and are assigned to the next report. The latest complete local team
+period, 19:07:05–19:17:05 UTC, had 27,557,809 input tokens (27,217,792
+cached; 340,017 noncached), 106,355 output and 27,664,164 total; the mean
+over 87 completed periods including zero-use periods was 31,590,380.64
+total. Local unverified weekly usage was 91% at 19:21:25, leaving 9%; the
+conditional continuous-use, account-wide projection was near 21:39 UTC.
+Authenticated telemetry health and `main-fsharp-dev` workspace status were
+ready/configured at 19:21:42 with pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false. This is readiness only; genuine runner native
+turn/usage and matching applied Host receipt are still absent. Release render
+had zero warnings/errors and renderer tests remained 25/25. No protected
+gate was cleared by this report.
 
 At the 17:51 UTC source checkpoint, the newest five completed **draft
 commits** were verified against their PR heads. Their completion is source
