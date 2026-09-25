@@ -23,6 +23,7 @@ RESOURCE = "finalizer-ledger-test"
 ENDPOINT = ORIGIN + "/pending"
 VAULT = "protected-token-vault-test"
 REVOKER = "protected-native-revoker-test"
+NATIVE_ATTEMPT_RESOURCE = "protected-native-attempt-test"
 MINT_ID = "a" * 64
 
 
@@ -49,6 +50,7 @@ class FakeFinalizerPort:
             "resourceId": RESOURCE,
             "endpoint": ENDPOINT,
             "vaultId": VAULT,
+            "nativeAttemptResourceId": NATIVE_ATTEMPT_RESOURCE,
             "durable": True,
             "atomicCas": True,
             "nativeReadback": True,
@@ -217,6 +219,7 @@ class HostRefusalFinalizerTests(unittest.TestCase):
                 finalizer.PINNED_FINALIZER_ENDPOINT,
                 finalizer.PINNED_TOKEN_VAULT_ID,
                 finalizer.PINNED_REVOKER_ID,
+                finalizer.PINNED_NATIVE_ATTEMPT_RESOURCE_ID,
                 finalizer.release.host.PINNED_SPKI_SHA256,
                 finalizer.release.host.PINNED_WORKFLOW_SHA)
         finalizer.PINNED_FINALIZER_ORIGIN = ORIGIN
@@ -224,6 +227,7 @@ class HostRefusalFinalizerTests(unittest.TestCase):
         finalizer.PINNED_FINALIZER_ENDPOINT = ENDPOINT
         finalizer.PINNED_TOKEN_VAULT_ID = VAULT
         finalizer.PINNED_REVOKER_ID = REVOKER
+        finalizer.PINNED_NATIVE_ATTEMPT_RESOURCE_ID = NATIVE_ATTEMPT_RESOURCE
         finalizer.release.host.PINNED_SPKI_SHA256 = self.fixture.pin
         finalizer.release.host.PINNED_WORKFLOW_SHA = self.fixture.context["workflowSha"]
         fixture_module.configure_admission(
@@ -235,10 +239,11 @@ class HostRefusalFinalizerTests(unittest.TestCase):
                                 "PINNED_TOKEN_VAULT_ID",
                                 "PINNED_REVOKER_ID"), pins[:5]):
             self.addCleanup(setattr, finalizer, name, value)
+        self.addCleanup(setattr, finalizer, "PINNED_NATIVE_ATTEMPT_RESOURCE_ID", pins[5])
         self.addCleanup(setattr, finalizer.release.host,
-                        "PINNED_SPKI_SHA256", pins[5])
+                        "PINNED_SPKI_SHA256", pins[6])
         self.addCleanup(setattr, finalizer.release.host,
-                        "PINNED_WORKFLOW_SHA", pins[6])
+                        "PINNED_WORKFLOW_SHA", pins[7])
 
     def run_finalizer(self, envelope=None, proof=None):
         return finalizer.execute_with_finalizer(
@@ -274,6 +279,41 @@ class HostRefusalFinalizerTests(unittest.TestCase):
         self.assertEqual("revoked", result["revocation"])
         self.assertEqual("pending", result["disposition"])
         self.assertEqual(1, self.release_port.invocations)
+
+    def test_missing_shared_attempt_namespace_blocks_candidate_handoff(self):
+        self.port.descriptor.pop("nativeAttemptResourceId", None)
+        result = self.run_finalizer()
+        self.assertEqual("not-invoked", result["release"])
+        self.assertEqual(0, self.release_port.invocations)
+
+    def test_blank_or_foreign_shared_attempt_pin_blocks_candidate_handoff(self):
+        for pin in ("", "foreign-native-attempt-store"):
+            with self.subTest(pin=pin):
+                self.port = FakeFinalizerPort(self.fixture.token, self.fixture.context)
+                finalizer.PINNED_NATIVE_ATTEMPT_RESOURCE_ID = pin
+                result = self.run_finalizer()
+                self.assertEqual("not-invoked", result["release"])
+                self.assertEqual(0, self.release_port.invocations)
+
+    def test_boolean_shared_attempt_identity_cannot_alias_protected_namespace(self):
+        finalizer.PINNED_NATIVE_ATTEMPT_RESOURCE_ID = True
+        self.port.descriptor["nativeAttemptResourceId"] = True
+        result = self.run_finalizer()
+        self.assertEqual("not-invoked", result["release"])
+        self.assertEqual(0, self.release_port.invocations)
+
+    def test_emergency_revoke_unknown_readback_has_no_one_use_proof(self):
+        self.port.claim_native_attempt_once = None
+        self.port.native_response_lost = True
+        self.port.observations_override = ["active", "unknown", "active", "unknown"]
+        first = self.run_finalizer()
+        second = self.run_finalizer()
+        self.assertEqual("not-invoked", first["release"])
+        self.assertEqual("not-invoked", second["release"])
+        self.assertEqual("pending", first["revocation"])
+        self.assertEqual("pending", second["revocation"])
+        self.assertEqual(0, self.release_port.invocations)
+        self.assertEqual(2, self.port.calls.count("native-revoke"))
 
     def test_unknown_invocation_is_not_retried_and_is_pending(self):
         self.release_port.invoke_result = "unknown"
