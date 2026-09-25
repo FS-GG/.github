@@ -516,6 +516,22 @@ wf "$RB2/.github/workflows/w.yml" '      - "src/A/**"
       - "src/B/**"'
 expect "...and covering it satisfies the rule" 0 "ok:" "$RB2"
 
+# XML allows single-quoted attribute values. The graph reader must not lose a ProjectReference
+# merely because its Include uses that spelling; an omitted dependency would make Rule (b) green.
+single_ref_case=0
+for attrs in "Include='../B/B.fsproj'" "Label='dependency' Include='../B/B.fsproj'"; do
+  single_ref_case=$((single_ref_case+1))
+  RBS="$(root "$WORK/cover-single-quoted-ref-$single_ref_case")"
+  mkdir -p "$RBS/src/A"
+  { echo '<Project Sdk="Microsoft.NET.Sdk">'; echo '  <ItemGroup>'
+    echo "    <ProjectReference $attrs />"
+    echo '  </ItemGroup>'; echo '</Project>'; } > "$RBS/src/A/A.fsproj"
+  proj "$RBS" "src/B"
+  wf "$RBS/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+  expect "single-quoted ProjectReference $attrs still requires dependency coverage" \
+    1 "nothing in the filter selects 'src/B'" "$RBS"
+done
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
