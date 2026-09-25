@@ -137,6 +137,26 @@ worker among compliant lanes. If the orchestrator's visible profile is missing o
 the capability gap and arrange a compliant handoff before claiming compliant orchestration or
 advancing protected actions. Model-family descriptions and task text alone are not launch evidence.
 
+**Deterministic progress-update projection.** Prepare a source-only `.github`-owned F# renderer
+for V2 checkpoints. An external collector supplies a typed `ProgressSnapshot`; the renderer
+performs pure validation and derivation, then emits byte-stable Markdown. The snapshot records
+each active lane's model, effort, owner and reserved-direct-V2 state; workstream status;
+PR/evidence counts; telemetry readiness and separate end-to-end capture acceptance; protected
+holds; checks, risks and next actions. Reject inconsistent lane counts or a claimed Sol/high
+or reserved lane without explicit launch evidence. Capture may render `Accepted` only with a
+genuine instrumented runner item, native turn IDs and usage, an applied Host receipt matching
+the exact workspace and item, and a later authenticated zero-queue observation. Readiness alone
+must render as readiness, never as capture. Render semantic markers with text labels in plain
+GitHub Markdown: 🟢 Active/Healthy, 🟡 Pending, 🟠 Blocked/Incomplete evidence, 🔴 Failed/Unsafe,
+🔵 Completed/Info, and 🔘 Unknown; do not depend on CSS. Completion history stores UTC
+`DateTimeOffset` values and renders a deterministic newest-first **Last 5 completed** table
+with time, item/workstream, result, evidence link and recorded roadmap head. Show at most five
+real completions, exactly five when at least five exist, with no fabricated padding. Keep
+collection, publication and Authority writes outside this pure draft. After owner acceptance,
+the V2 status-update workflow may collect immutable facts, validate/render them, review the
+output and publish through its existing route; a rendered summary cannot clear a protected
+receipt, merge or cutover hold.
+
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
 
 The README-only repository exists at the explicitly authorized inert bootstrap commit
@@ -1649,6 +1669,13 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   repairs a missing-versus-null false green for required review and restriction fields after
   ambiguous readback; 26 focused offline controls pass. It does not authorize the provisional
   operator or any protected provider effect.
+  [Protection-URL drafts #578](https://github.com/FS-GG/FS.GG.Coordination/pull/578)
+  and [#579](https://github.com/FS-GG/FS.GG.Coordination/pull/579) refuse foreign root,
+  nested and branch protection URLs after ambiguous responses; 27 and 28 focused offline
+  controls pass respectively. [Pull-list draft #580](https://github.com/FS-GG/FS.GG.Coordination/pull/580)
+  requires listed PR state, draft, title and body to be present and agree with detail before
+  classifying a lost-response pull as exact; 29 focused offline controls pass. These stacked
+  source drafts do not supply installed-provider custody or protected one-POST authority.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
@@ -1820,6 +1847,9 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   Its 102 local controls attempt revoke in `finally`, retain unknown outcomes pending and
   forbid a second launch after a consumed claim; installed recovery scheduling and native
   readback remain unproved.
+  [Recovery-observer draft #3732](https://github.com/FS-GG/.github/pull/3732)
+  repairs a duplicate native revoke after restart by observing the first revoke before any
+  retry; 107 focused local controls pass. Installed recovery and native readback remain open.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
