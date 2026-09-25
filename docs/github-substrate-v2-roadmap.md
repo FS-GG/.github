@@ -1029,6 +1029,8 @@ changing the protected holds:
 | [GS2-09.9 #718](https://github.com/FS-GG/FS.GG.Coordination/pull/718) | `6d1e5d86c502a270851ed7196b018d158d7900d9` | Pure closed-candidate check compares canonical selected bytes with packet bytes, refusing Python boolean/float aliases for integer facts; 80 focused tests, candidate remains non-authorizing. Closed archive pin changed to `d665e9b66f42aa3df8b270b792d5958aec6c4bd2bd136010cd146b5e237dcd19`; #550 held. |
 | [FSC-05 #589](https://github.com/FS-GG/FS.GG.Templates/pull/589) | `177d8a53f5b2e48d25b5dab4b9979fdf0cb48979` | Requires Unix 0644 mode for non-template regular ZIP members, retaining the signed signature exception; 99 payload/29 custody controls, selected archive NO_VERDICT. |
 | [FSC-04 #1040](https://github.com/FS-GG/FS.GG.SDD/pull/1040) | `1bab7cdc32635a2b6d45b8c7457313907f740f71` | Provisional Linux pinned reader refuses NFC/ignore-case aliases in declarations, physical roster and selected path; 1,496 Commands tests, Windows/ABA/atomicity still unproved. |
+| [FSC-03 Python #3809](https://github.com/FS-GG/.github/pull/3809) | `94c44071bc75dd5de7b243c2b3c9c7efbf66fce5` | Live Rule B gate refuses unsupported GitHub path operators `?`, `+` and `[]` before coverage; 168 fixture controls. Stack acceptance and installed receiver proof remain open. |
+| [GS2-09.9 #719](https://github.com/FS-GG/FS.GG.Coordination/pull/719) | `371948c4e749585e0b0fc599396ad0d25cd540cc` | Closed scaffold verifier refuses a float `nativeSource.size` in a resealed manifest; 19 focused tests. Local approval digest remains caller supplied, #550 held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
