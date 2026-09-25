@@ -33,6 +33,16 @@ module GitHubCommitMembership =
     let private canonicalSha1 (value: string) =
         not (isNull value) && Regex.IsMatch(value, "^[0-9a-f]{40}$", RegexOptions.CultureInvariant)
 
+    /// The concrete HTTP reader must not execute arbitrary GraphQL documents through this port.
+    let internal isExactReadRequest (request: ExactRequest) =
+        not (isNull (box request))
+        && String.Equals(request.Document, document, StringComparison.Ordinal)
+        && not (isNull request.Owner)
+        && Regex.IsMatch(request.Owner, "^[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant)
+        && not (isNull request.Name)
+        && Regex.IsMatch(request.Name, "^[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant)
+        && canonicalSha1 request.CommitId
+
     let rec private duplicateKey (element: JsonElement) =
         match element.ValueKind with
         | JsonValueKind.Object ->

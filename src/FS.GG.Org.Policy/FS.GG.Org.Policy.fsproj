@@ -10,6 +10,7 @@
     <Compile Include="GitTreeProjects.fs" />
     <Compile Include="GitCommitProvenance.fs" />
     <Compile Include="GitHubCommitMembership.fs" />
+    <Compile Include="GitHubGraphQlHttp.fs" />
     <Compile Include="ProjectReferenceXml.fs" />
     <Compile Include="RuleA.fs" />
     <Compile Include="RuleB.fs" />
@@ -19,5 +20,10 @@
   <ItemGroup>
     <PackageReference Include="FSharp.Core" />
     <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FS.GG.Org.Policy.Tests</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 </Project>
