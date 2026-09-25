@@ -201,6 +201,37 @@ expect "a signed unfiltered/filtered split is accepted" 0 "ok:" "$RSP"
 sed -i '1c # paths-coherence: allow-divergence' "$RSP/.github/workflows/split.yml"
 expect "an unsigned split marker remains a FINDING" 1 "with NO reason" "$RSP"
 
+# The marker licenses only the trigger split; it cannot make an invalid filtered side comparable.
+# Exercise both trigger directions so validation cannot accidentally apply to just one event.
+signed_split() {
+  local file="$1" side="$2" filter="$3"
+  { echo '# paths-coherence: allow-divergence — one trigger intentionally runs for every change'
+    echo 'name: split'
+    echo 'on:'
+    if [ "$side" = pr ]; then
+      echo '  pull_request:'; echo "    paths: $filter"
+      echo '  push: { branches: [main] }'
+    else
+      echo '  pull_request:'
+      echo "  push: { branches: [main], paths: $filter }"
+    fi
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } > "$file"
+}
+
+for side in pr push; do
+  for shape in empty scalar negated; do
+    RSB="$(root "$WORK/split-bad-$side-$shape")"
+    case "$shape" in
+      empty) filter='[]'; needle='is not a non-empty list' ;;
+      scalar) filter='src/**'; needle='is not a non-empty list' ;;
+      negated) filter="['src/**', '!src/private/**']"; needle='Negation makes ORDER' ;;
+    esac
+    signed_split "$RSB/.github/workflows/split.yml" "$side" "$filter"
+    cp "$RS/.github/workflows/w.yml" "$RSB/.github/workflows/paired.yml"
+    expect "signed $side split refuses $shape filtered side" 3 "$needle" "$RSB"
+  done
+done
+
 # =============================================================================================
 # 4. `on:` has three legal spellings, and all three must be RECOGNISED AS LEGAL.
 #
