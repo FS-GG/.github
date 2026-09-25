@@ -219,17 +219,29 @@ signed_split() {
 }
 
 for side in pr push; do
-  for shape in empty scalar negated; do
+  for shape in empty scalar negated null; do
     RSB="$(root "$WORK/split-bad-$side-$shape")"
     case "$shape" in
       empty) filter='[]'; needle='is not a non-empty list' ;;
       scalar) filter='src/**'; needle='is not a non-empty list' ;;
       negated) filter="['src/**', '!src/private/**']"; needle='Negation makes ORDER' ;;
+      null) filter='null'; needle='is not a non-empty list' ;;
     esac
     signed_split "$RSB/.github/workflows/split.yml" "$side" "$filter"
     cp "$RS/.github/workflows/w.yml" "$RSB/.github/workflows/paired.yml"
     expect "signed $side split refuses $shape filtered side" 3 "$needle" "$RSB"
   done
+done
+
+# An explicit null paths key is present and malformed, even without a divergence marker. A null
+# event declaration (RN above) is different: it has no paths key and legitimately means unfiltered.
+for side in pr push; do
+  RNB="$(root "$WORK/split-null-unsigned-$side")"
+  signed_split "$RNB/.github/workflows/split.yml" "$side" 'null'
+  sed -i '1d' "$RNB/.github/workflows/split.yml"
+  cp "$RS/.github/workflows/w.yml" "$RNB/.github/workflows/paired.yml"
+  expect "unsigned $side split refuses explicit null paths key" 3 \
+    'is not a non-empty list' "$RNB"
 done
 
 # =============================================================================================

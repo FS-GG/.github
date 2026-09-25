@@ -281,12 +281,14 @@ def triggers(doc: dict, what: str) -> dict:
     return {}
 
 
-def declared(on: dict, trigger: str) -> tuple[object, bool]:
-    """`(<trigger>.paths as declared or None, whether it declares paths-ignore)`.
+def declared(on: dict, trigger: str) -> tuple[object, bool, bool]:
+    """`(<trigger>.paths value, whether paths is present, whether paths-ignore is present)`.
 
     `pull_request:` with a NULL value means EVERY PR, not "no PR trigger" (`coherence.yml` is in
     that state). Either way it declares no `paths:`, so it is not half of a pair — a workflow with no
-    `paths:` on either trigger is not drift and must not be flagged.
+    `paths:` on either trigger is not drift and must not be flagged. A trigger mapping with an
+    explicit `paths: null` IS a declaration, however, and must reach validated() rather than be
+    mistaken for the absent key.
 
     THIS READS AND DOES NOT JUDGE, and that is the entire fix for a real fail-closed bug.
 
@@ -302,8 +304,8 @@ def declared(on: dict, trigger: str) -> tuple[object, bool]:
     """
     t = on.get(trigger)
     if not isinstance(t, dict):
-        return None, False
-    return (t.get("paths") if "paths" in t else None), ("paths-ignore" in t)
+        return None, False, False
+    return t.get("paths"), ("paths" in t), ("paths-ignore" in t)
 
 
 def validated(raw: object, trigger: str, what: str) -> list[str]:
@@ -712,8 +714,8 @@ def main(argv: list[str]) -> int:
         doc = load_yaml(text, where)
         on = triggers(doc, where)
 
-        pr_raw, pr_ignores = declared(on, "pull_request")
-        push_raw, push_ignores = declared(on, "push")
+        pr_raw, pr_paths, pr_ignores = declared(on, "pull_request")
+        push_raw, push_paths, push_ignores = declared(on, "push")
 
         # RULE (b), AND IT RUNS BEFORE THE PAIRING RULE RETURNS.
         #
@@ -808,10 +810,9 @@ def main(argv: list[str]) -> int:
         # directions, with no way to say whether they agree. Silently skipping it is how a coherence
         # gate fails open (#266), so it is refused.
         #
-        # Note what guards this: `pr_raw is not None`. The refusal can only fire on a workflow that
-        # HAS an allow-list — i.e. one this gate was actually asked to judge. See declared() for the
-        # bug that shape exists to prevent.
-        if (pr_raw is not None and push_ignores) or (push_raw is not None and pr_ignores):
+        # Key presence, not value truthiness, establishes whether the gate was asked to judge an
+        # allow-list. An explicit null is malformed, but still present.
+        if (pr_paths and push_ignores) or (push_paths and pr_ignores):
             raise GateError(
                 f"{where}: one trigger declares `paths:` and the other declares `paths-ignore:`. "
                 f"An ignore-list INVERTS selection, so this gate cannot say whether the two agree — "
@@ -825,10 +826,10 @@ def main(argv: list[str]) -> int:
         # Enter even without a marker: that is the finding below. Requiring a marker here would
         # skip the split at the one-sided return and let a different clean pair make the audit green.
         if ("pull_request" in on and "push" in on
-                and ((pr_raw is None) != (push_raw is None))):
+                and (pr_paths != push_paths)):
             # A signed marker excuses the DIVERGENCE, not an invalid allow-list or a negated
             # pattern whose order changes selection. Validate the present side before honoring it.
-            if pr_raw is None:
+            if not pr_paths:
                 validated(push_raw, "push", where)
             else:
                 validated(pr_raw, "pull_request", where)
@@ -850,7 +851,7 @@ def main(argv: list[str]) -> int:
 
         # One-sided is a deliberate shape (`build-config-propagate.yml` is push-only,
         # `reusable-job-id-coherence.yml` is PR-only) and is not this gate's business.
-        if pr_raw is None or push_raw is None:
+        if not pr_paths or not push_paths:
             continue
 
         pr = validated(pr_raw, "pull_request", where)
