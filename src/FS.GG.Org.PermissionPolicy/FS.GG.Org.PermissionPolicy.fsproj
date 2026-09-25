@@ -6,6 +6,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="YamlDotNet" />
     <Compile Include="Permissions.fs" />
+    <Compile Include="WorkflowPermissionSyntax.fs" />
   </ItemGroup>
 </Project>
