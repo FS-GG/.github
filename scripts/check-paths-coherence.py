@@ -309,8 +309,8 @@ def declared(on: dict, trigger: str) -> tuple[object, bool]:
 def validated(raw: object, trigger: str, what: str) -> list[str]:
     """`<trigger>.paths` as a list of patterns this gate can soundly compare.
 
-    Only ever called on a workflow that IS a pair. A one-sided workflow's patterns are never
-    compared, so refusing them would be a false alarm about a file outside the rule.
+    Only called when both events exist and at least one declares a filter. A truly one-sided
+    workflow's patterns are never compared, so refusing them would be a false alarm.
     """
     if not isinstance(raw, list) or not raw:
         raise GateError(
@@ -826,6 +826,12 @@ def main(argv: list[str]) -> int:
         # skip the split at the one-sided return and let a different clean pair make the audit green.
         if ("pull_request" in on and "push" in on
                 and ((pr_raw is None) != (push_raw is None))):
+            # A signed marker excuses the DIVERGENCE, not an invalid allow-list or a negated
+            # pattern whose order changes selection. Validate the present side before honoring it.
+            if pr_raw is None:
+                validated(push_raw, "push", where)
+            else:
+                validated(pr_raw, "pull_request", where)
             pairs_seen += 1
             if reason == UNSIGNED:
                 findings.append(
