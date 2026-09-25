@@ -294,6 +294,11 @@ entry after a red-before validly resealed substitute passed the legacy self-pinn
 The accepted GS2-09.6 command bytes are unchanged; 24 focused local-SDK controls pass.
 Protected expected-seal provenance, installed native five-domain readback and Q5/Q6 receipt
 remain open.
+[Coordination #625](https://github.com/FS-GG/FS.GG.Coordination/pull/625) at
+`d5808778fa8439fd5aa034ed16f82e71e1f80ddb` checks a complete receipt prefix,
+five ordered target/state claims and terminal OperatingV1/plan-seal claim. Twenty-eight
+focused local-SDK controls pass, but the claims are fake inputs; protected native observer,
+post-restore freshness and exact sandbox/epoch provenance remain absent.
 These drafts authorize no protected effect, merge, Authority write, receiver flip or cutover.
 Optional FSC-03 [`.github` Rule (b) #3753](https://github.com/FS-GG/.github/pull/3753)
 at `194e08a11439ef7663085f3f3947c2f765500884` keeps `*` within one path segment in
@@ -306,7 +311,13 @@ is undecided. Stacked [SDD #1019](https://github.com/FS-GG/FS.GG.SDD/pull/1019) 
 `773a91d1c3be1026e86c36300c7adc58b5b61b5d` adds a pure typed preview binding
 proposed work-model JSON root, generated-view source, identity, output path and physical
 capture to one v2 candidate; 1,429 Commands tests pass. The separate verification wave
-and authored-file staging or rollback decision remain required. FSC-05
+and authored-file staging or rollback decision remain required. Independent review found
+#1019 accepted duplicate JSON keys and a changed model version with intact source rows;
+stacked [SDD #1020](https://github.com/FS-GG/FS.GG.SDD/pull/1020) at
+`7e7582a28ecf5d465f24a1ba94161343c6b0b5fa` recursively refuses duplicate/case-aliased
+properties and requires exact deterministic regeneration. All 1,435 Commands tests pass;
+strict #1020 preview, physical custody and producer effect policy are still needed before
+adoption. FSC-05
 [Templates #547](https://github.com/FS-GG/FS.GG.Templates/pull/547)
 at `cd0753d5f4cc7a20155b24f29eb58c6567442363` finds identical template configs can mask
 39 extra members and 33 changed bodies in retained archives; selected/retained parity remains
@@ -331,6 +342,11 @@ of that actor, runner and artifact remains absent.
 witness binding seven scaffold source files to a selected commit/tree; 18 focused and
 inherited tests and a local object smoke check pass. Protected reader identity/object
 format, producer artifact and independent reviewer still lack authoritative proof.
+[Coordination #626](https://github.com/FS-GG/FS.GG.Coordination/pull/626) at
+`b433c86456f6ab241749e6dba58a5bd99dafe928` requires a separate read-only
+repository-identity/object-format claim and distinct reader custody for that witness;
+19 focused and inherited tests pass. Protected event, reader, artifact and reviewer
+authentication remain open, with both workflows disabled and #550 held.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
@@ -352,11 +368,24 @@ and receiver custody remain open.
 `e272ae4288a6941f46fbcfb57a9032837851cfed` also refuses an extra nested
 config-shaped template member that previously yielded a payload-only match; 18 focused
 and 29 stacked controls pass. Ordinary nested assets remain accepted.
+[Templates #551](https://github.com/FS-GG/FS.GG.Templates/pull/551) at
+`38f0a162d42983f377c3e62d17f8a38090ae7f7b` refuses a file/child-path collision,
+including case-variant ancestor aliases, that previously returned a payload match;
+20 payload and 29 archive controls pass. It is not served or installed custody proof.
 [`.github` FSC-03 #3756](https://github.com/FS-GG/.github/pull/3756) at
 `ee36fbce6784a6edd1915b0fdb216ba80ed078bd` checks PR and push path filters
 independently in the pure Rule (b) reducer, closing a red-before push-only omission;
 98 F# and 91 Python focused fixtures pass. Malformed one-sided `paths: null` is still
-stricter in F# than Python; installed parity remains open.
+stricter in F# than current Python main. Stacked
+[`.github` #3757](https://github.com/FS-GG/.github/pull/3757) at
+`b391106d5d0e6051d535302f1c64cdf462dcaeb3` repairs three red-before Python
+false greens for present one-sided `paths: null`, `[]` and scalar filters while leaving
+an absent key unfiltered; 95 Python fixtures pass. The stack and F# replacement still
+need owner acceptance and installed parity. Stacked
+[`.github` #3758](https://github.com/FS-GG/.github/pull/3758) at
+`0a6daa906ead404b0df8f06c52b71f9142d670d2` additionally refuses bare
+`[true]`, `[42]` and `[null]` path-list values that produced red-before false greens;
+quoted strings remain valid. Ninety-nine Python and 11 matching F# syntax controls pass.
 
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
 
