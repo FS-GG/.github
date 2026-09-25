@@ -1403,6 +1403,17 @@ let ``direct Project 1 bootstrap refuses duplicate single-select option names`` 
     | Error(Malformed _) -> ()
     | other -> failwith $"duplicate direct-project option IDs must refuse — got %A{other}"
 
+[<Theory>]
+[<InlineData("\"dataType\":\"UNRECOGNIZED\"")>]
+[<InlineData("\"dataType\":null")>]
+let ``direct Project 1 bootstrap refuses a partially unreadable field map`` extraType =
+    let response =
+        $"""{{"data":{{"organization":{{"login":"FS-GG","projectV2":{{"id":"PVT_kwDOEYAWY84Bb08W","number":1,"title":"Coordination","fields":{{"totalCount":2,"nodes":[{{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{{"id":"opt_ready","name":"Ready"}}]}},{{"id":"PVTF_extra","name":"Extra",{extraType}}}]}}}}}}}}}}"""
+
+    match bootstrapExactProject (serving response) projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"an unreadable field in an otherwise usable map must refuse — got %A{other}"
+
 [<Fact>]
 let ``direct Project 1 bootstrap propagates authorization errors without enumerating projects`` () =
     let docs = System.Collections.Generic.List<string>()
