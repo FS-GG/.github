@@ -1068,6 +1068,7 @@ changing the protected holds:
 | [GS2-09.7 #740](https://github.com/FS-GG/FS.GG.Coordination/pull/740) | `f06b927e91fec650a3c0ffd620ecc6981fb0aeec` | Source-only census binder refuses foreign provider IDs and ambiguous headers, and includes recorded headers in its corpus digest; 729 full unit tests. Native wire custody, freshness and Q5/Q6 stay held. |
 | [FSC-03 F# #3816](https://github.com/FS-GG/.github/pull/3816) | `b7920dfdf4b6d3b815d8e287954da24dfbdd2420` | Dormant GraphQL HTTP reader fixes the endpoint and refuses redirect, wrong origin/status/media, mutation and oversized/underreported body; 230 F# tests. No live credential, accepted pin or installed receiver. |
 | [GS2-09.9 #741](https://github.com/FS-GG/FS.GG.Coordination/pull/741) | `de3bc6d714da6dbae57d0a23b220e59c336df217` | Closed read-only plan-seal event witness binds canonical event identity/digest to verified plan/request and selected custody facts; eight new and ten existing focused tests. The event backend/identities remain fake-port only and #550/#545 stay held. |
+| [Telemetry usage #742](https://github.com/FS-GG/FS.GG.Coordination/pull/742) | `d33d0b1df180b89701112a15a9f85169ff6b62b4` | Dormant usage adapter refuses malformed typed snapshot/exec/upstream candidates using counter grammars and cumulative domination checks; 160 Release execution tests. Native use and Host receipt remain no-verdict. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
