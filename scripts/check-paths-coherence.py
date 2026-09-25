@@ -320,14 +320,15 @@ def triggers(doc: dict, what: str) -> dict:
     return {}
 
 
-def declared(on: dict, trigger: str) -> tuple[object, bool, bool]:
+def declared(on: dict, trigger: str, what: str) -> tuple[object, bool, bool]:
     """`(<trigger>.paths value, whether paths is present, whether paths-ignore is present)`.
 
     `pull_request:` with a NULL value means EVERY PR, not "no PR trigger" (`coherence.yml` is in
     that state). Either way it declares no `paths:`, so it is not half of a pair — a workflow with no
     `paths:` on either trigger is not drift and must not be flagged. A trigger mapping with an
     explicit `paths: null` IS a declaration, however, and must reach validated() rather than be
-    mistaken for the absent key.
+    mistaken for the absent key. A present event with a non-null, non-mapping value is malformed:
+    treating it as unfiltered would let an unreadable filter disappear from Rule (b)'s audit.
 
     THIS READS AND DOES NOT JUDGE, and that is the entire fix for a real fail-closed bug.
 
@@ -341,9 +342,13 @@ def declared(on: dict, trigger: str) -> tuple[object, bool, bool]:
     A gate may only refuse what it was actually asked to judge. Reading is not judging, so the read
     happens here and every refusal happens in main(), after scope is established.
     """
-    t = on.get(trigger)
-    if not isinstance(t, dict):
+    if trigger not in on:
         return None, False, False
+    t = on[trigger]
+    if t is None:
+        return None, False, False
+    if not isinstance(t, dict):
+        raise GateError(f"{what}: `{trigger}:` must be a mapping or null, got {type(t).__name__}.")
     return t.get("paths"), ("paths" in t), ("paths-ignore" in t)
 
 
@@ -769,8 +774,8 @@ def main(argv: list[str]) -> int:
         doc = load_yaml(text, where)
         on = triggers(doc, where)
 
-        pr_raw, pr_paths, pr_ignores = declared(on, "pull_request")
-        push_raw, push_paths, push_ignores = declared(on, "push")
+        pr_raw, pr_paths, pr_ignores = declared(on, "pull_request", where)
+        push_raw, push_paths, push_ignores = declared(on, "push", where)
 
         # Rule (b)/(c) consume each declared filter independently. Presence, not a truthy value,
         # establishes scope: `paths: null`, `paths: []`, and a scalar are malformed filters, not
