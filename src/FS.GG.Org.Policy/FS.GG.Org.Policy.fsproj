@@ -12,6 +12,7 @@
     <Compile Include="GitHubCommitMembership.fs" />
     <Compile Include="GitHubGraphQlHttp.fs" />
     <Compile Include="GitHubProtectedBranchPin.fs" />
+    <Compile Include="GitHubProtectedBranchHttp.fs" />
     <Compile Include="ProjectReferenceXml.fs" />
     <Compile Include="RuleA.fs" />
     <Compile Include="RuleB.fs" />

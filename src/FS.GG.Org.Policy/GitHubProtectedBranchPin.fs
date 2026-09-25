@@ -31,6 +31,21 @@ module GitHubProtectedBranchPin =
     let private error path message =
         Error { Code = "github-protected-pin"; Path = path; Message = message }
 
+    let private validSegment (value: string) =
+        not (isNull value)
+        && value <> "." && value <> ".."
+        && Regex.IsMatch(value, "^[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant)
+
+    /// The concrete transport must reject arbitrary URLs before attaching its bearer token.
+    let internal isExactReadRequest (request: ExactRequest) =
+        not (isNull (box request))
+        && validSegment request.Owner
+        && validSegment request.Name
+        && String.Equals(request.Branch, "main", StringComparison.Ordinal)
+        && String.Equals(request.Url,
+                         sprintf "https://api.github.com/repos/%s/%s/branches/main" request.Owner request.Name,
+                         StringComparison.Ordinal)
+
     let rec private duplicateKey (element: JsonElement) =
         match element.ValueKind with
         | JsonValueKind.Object ->
@@ -93,7 +108,8 @@ module GitHubProtectedBranchPin =
         if isNull (box repository)
            || String.IsNullOrWhiteSpace repository.RepositoryNodeId
            || isNull repository.RepositoryFullName
-           || not (Regex.IsMatch(repository.RepositoryFullName, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant)) then
+           || not (Regex.IsMatch(repository.RepositoryFullName, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant))
+           || (repository.RepositoryFullName.Split('/') |> Array.exists (validSegment >> not)) then
             error "<repository>" "exact repository identity is absent or malformed"
         elif isNull (box reader) then
             error "<branch>" "read-only protected branch reader is unavailable"

@@ -11,6 +11,7 @@
     <Compile Include="GitHubCommitMembershipTests.fs" />
     <Compile Include="GitHubGraphQlHttpTests.fs" />
     <Compile Include="GitHubProtectedBranchPinTests.fs" />
+    <Compile Include="GitHubProtectedBranchHttpTests.fs" />
     <Compile Include="RuleATests.fs" />
     <Compile Include="RuleBTests.fs" />
     <Compile Include="ProjectReferenceXmlTests.fs" />
