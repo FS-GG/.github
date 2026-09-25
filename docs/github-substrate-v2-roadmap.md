@@ -930,6 +930,44 @@ cohort census, full typed inspect, journal/custom receipts and Q5/Q6 remain.
 at `cae277cad4bf1bcc58851921549c3812525726c5` copies selected audit
 actor before a final scope callback can change the closed readback result
 (45 fake-port tests); protected audit/native-effect custody remains held.
+[SDD FSC-04 #1034](https://github.com/FS-GG/FS.GG.SDD/pull/1034)
+at `03c196a8f90a0c1a68c65a3d196aebe433a25b1b` caps provisional Linux
+pinned complete-root capture at 4,096 files (1,477 Commands tests). ABA,
+post-check, cross-root and Windows/effect parity remain open.
+[Templates FSC-05 #578](https://github.com/FS-GG/FS.GG.Templates/pull/578)
+at `9e29cd0573d3cde787a20e9cb44b190a2d9bc4b1` refuses ZIP readback when
+the runtime Unicode data version differs from the F# comparator's pinned
+16.0.0 data; 68 payload and 29 archive controls pass. Selected native versus
+retained release remains NO_VERDICT; producer/served-byte, #511 CAS,
+installed parity and receiver adoption remain held.
+[Coordination GS2-09.9 #694](https://github.com/FS-GG/FS.GG.Coordination/pull/694)
+at `95e53a9ec72d12514730c42eff6ff99b453ca4f7` copies selected identity
+event before a final scope callback can alter a Git-tree witness (38 focused
+fake-port tests); installed native effects and protected identity custody
+remain held.
+[`.github` FSC-03 Python #3795](https://github.com/FS-GG/.github/pull/3795)
+at `475dc96c41ac8a5dbc4eecffc7cc60f428c98709` refuses external
+symlinked nearest `Directory.Build.props` and `.targets` sources while
+accepting an in-root symlink (156 fixtures). Installed MSBuild can read the
+external target through the lexical in-root link; project-file provenance,
+Import closure, evaluated graph and installed parity remain open.
+[Coordination GS2-09.7 #695](https://github.com/FS-GG/FS.GG.Coordination/pull/695)
+at `7f36e810a40cbd340f7e262dbae7437fe17a9d8f` refuses duplicate raw
+issue-type name and pagination members before typed interpretation (140
+focused tests). Initial census, full typed inspect, protected journal/custom
+receipts and Q5/Q6 remain held.
+
+At the 17:51 UTC source checkpoint, the newest five completed **draft
+commits** were verified against their PR heads. Their completion is source
+preparation, not an accepted V2 receipt or authorization to merge:
+
+| Committed UTC | Workstream / draft | Exact head | Evidence |
+| --- | --- | --- | --- |
+| 2026-09-25 17:50:10 | GS2-09.7 duplicate issue-type refusal | `7f36e810a40cbd340f7e262dbae7437fe17a9d8f` | [Coordination #695](https://github.com/FS-GG/FS.GG.Coordination/pull/695), 140 focused tests |
+| 2026-09-25 17:50:05 | FSC-03 external symlink refusal | `475dc96c41ac8a5dbc4eecffc7cc60f428c98709` | [`.github` #3795](https://github.com/FS-GG/.github/pull/3795), 156 fixtures |
+| 2026-09-25 17:49:58 | GS2-09.9 selected identity copy | `95e53a9ec72d12514730c42eff6ff99b453ca4f7` | [Coordination #694](https://github.com/FS-GG/FS.GG.Coordination/pull/694), 38 fake-port tests |
+| 2026-09-25 17:49:53 | FSC-05 pinned Unicode version | `9e29cd0573d3cde787a20e9cb44b190a2d9bc4b1` | [Templates #578](https://github.com/FS-GG/FS.GG.Templates/pull/578), 68 payload / 29 archive controls |
+| 2026-09-25 17:49:29 | FSC-04 capture file bound | `03c196a8f90a0c1a68c65a3d196aebe433a25b1b` | [SDD #1034](https://github.com/FS-GG/FS.GG.SDD/pull/1034), 1,477 Commands tests |
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
