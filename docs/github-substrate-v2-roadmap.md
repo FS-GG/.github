@@ -1636,7 +1636,9 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   sketches independent issuer, observer, replay and journal CAS boundaries, but its ports are
   unimplemented and every result remains non-dispatchable. [Stacked install-pin draft #560](https://github.com/FS-GG/FS.GG.Coordination/pull/560)
   checks local archive/source and interpreter bytes with read-only negative controls; it lacks
-  protected artifact and runtime provenance or an installed effect path. The #550 staged exact-copy loopback
+  protected artifact and runtime provenance or an installed effect path. [Stacked runtime-closure draft #561](https://github.com/FS-GG/FS.GG.Coordination/pull/561)
+  hashes a local interpreter, standard-library tree and observed mapped files, but its local
+  manifest is not a protected image or independent release pin. The #550 staged exact-copy loopback
   harness exercises corrected classifier, HTTP and durable-fence paths, but an independent boundary
   review found it insufficient for the installed provider/credential path and corrected native-effect clause. Qualify the corrected
   version through an actual installed provider path or a new protected isolated native operation,
@@ -1692,7 +1694,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   is source-only and refuses before reading a credential while its reviewed public-key pin is empty;
   it has no installed signer, token release or sandbox effect. [Stacked release-contract draft #3712](https://github.com/FS-GG/.github/pull/3712)
   requires a trusted durable host claim and revoke verdict before handoff, but its authority ports
-  are uninstalled; a one-time handoff alone cannot make a GitHub App token single-use. No rehearsal
+  are uninstalled; a one-time handoff alone cannot make a GitHub App token single-use.
+  [Stacked host-claim draft #3713](https://github.com/FS-GG/.github/pull/3713) models atomic claim,
+  crash and unknown-result refusals, but its protected store pins remain empty and no native
+  revocation port is installed. No rehearsal
   dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
