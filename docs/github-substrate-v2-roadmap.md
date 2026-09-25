@@ -395,6 +395,11 @@ need owner acceptance and installed parity. Stacked
 `0a6daa906ead404b0df8f06c52b71f9142d670d2` additionally refuses bare
 `[true]`, `[42]` and `[null]` path-list values that produced red-before false greens;
 quoted strings remain valid. Ninety-nine Python and 11 matching F# syntax controls pass.
+Stacked [`.github` #3759](https://github.com/FS-GG/.github/pull/3759) at
+`e037e951c02cfab48e0087f8b3967b42a1e3034d` refuses plain or explicitly tagged
+duplicate YAML mapping keys that previously overwrote a project-naming filter and
+returned a false green; 101 Python and four matching F# duplicate-key controls pass.
+The repair stack is still draft, with owner acceptance and installed parity pending.
 
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
 
