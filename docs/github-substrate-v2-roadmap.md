@@ -223,10 +223,10 @@ draft, not an installed or admitted runner. The broader CLI has one UTEL-06D con
 failure also reproduced on #3751's base. The denied all-project route remains blocked until
 owner acceptance and installed qualification; no native turns or applied Host receipt exist.
 [Exact-board duplicate-field draft #3772](https://github.com/FS-GG/.github/pull/3772)
-stacks on #3752 at `22d2f1ede6c3705d3d135c24852972a00350338a`. A red-before
+stacks on #3752 at `065564ada8b3a7e1ac238f16cea530c0ab98b6ad`. A red-before
 complete Project 1 response with duplicate `Status` field names silently selected the
 shadow ID/options; the dormant direct route now refuses missing, blank or duplicate
-field identities before map construction. Its Release GitHub adapter suite passes
+field names/IDs before map construction. Its Release GitHub adapter suite passes
 845/845. This draft neither installs the runner mode nor admits an item; Project 2
 remains PAT-forbidden on the installed enumeration route.
 
@@ -305,6 +305,13 @@ weekly readings rose from 34% at 04:47 to 78% at 16:38, giving an approximate
 continuous-use, account-wide projection of 22:34 UTC on 2026-09-25. This ad hoc
 local scan lacks authenticated collector/account provenance and does not establish
 instrumented runner turns, an applied Host receipt or capture acceptance.
+The 16:49:27 UTC read-only refresh found 30 family sessions, 19,060 native events
+and zero component/decrease findings. Across 72 completed root-anchored periods,
+the local team mean was 30,340,884.71 total tokens/period; the latest completed
+period totaled 40,760,275. The root-session weekly reading reached 79% used;
+the conditional continuous-use account-wide projection was about 22:26 UTC.
+This local diagnostic still lacks authenticated collector/account provenance and
+does not establish end-to-end Host capture.
 [Renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) is source-only; its
 first owner repair adds explicit worker launch evidence, activity-based counts, a worker-only
 reserved count, authenticated readiness observations and linked terminal completion rows.
@@ -487,6 +494,21 @@ and installed parity remain open. [Templates FSC-05 #560](https://github.com/FS-
 at `4088d8367bbb253df0b2f76c9ae52ba4591652d1` labels the Python-16/.NET
 NFKC disagreement at U+A7F1 as Unicode drift NO_VERDICT (41 payload, 29 archive
 controls), without widening acceptance or receiver authority.
+The next disjoint drafts remain provisional:
+[Coordination GS2-09.9 #650](https://github.com/FS-GG/FS.GG.Coordination/pull/650)
+at `bf5fbaf766630af0153df8b61d38812291e5fb38` binds repository-identity
+event ID through the producer and immutable reviewer event (48 focused tests),
+with both workflows disabled and #545/#550 held;
+[Coordination GS2-09.7 #649](https://github.com/FS-GG/FS.GG.Coordination/pull/649)
+at `29ce3293d3f605c96b1add2de885e1f610da21ac` adds partial repository
+branch/tag ruleset readback (111 tests), with `SettingsAuthorityComplete=false` and
+Q5/Q6 held. [`.github` FSC-03 #3773](https://github.com/FS-GG/.github/pull/3773)
+at `b912d98fdc788c12485045bfd5917fcc67672730` returns no verdict for Python
+ProjectReference Include forms requiring MSBuild item evaluation (126 fixtures),
+without installed F# parity. [Templates FSC-05 #561](https://github.com/FS-GG/FS.GG.Templates/pull/561)
+at `5877040fb77560468aa520455b5858c70187531e` turns malformed UTF-8 ZIP
+member names into NO_VERDICT (42 payload, 29 archive controls), with served-byte,
+transaction and receiver holds unchanged.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
