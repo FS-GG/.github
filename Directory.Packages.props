@@ -29,6 +29,8 @@
     <!-- H1 receiver actor runtime. Pin the exact qualified release; no remoting/cluster packages. -->
     <PackageVersion Include="Akka" Version="1.5.71" />
     <PackageVersion Include="Akka.FSharp" Version="1.5.71" />
+    <!-- FSC-03 source-only YAML syntax pilot; no live gate or Coord runtime dependency. -->
+    <PackageVersion Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
 
   <!-- api-breaking-change-gate (.github#20, #609). The root Directory.Build.props imports the org-shared
