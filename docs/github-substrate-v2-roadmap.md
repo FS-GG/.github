@@ -299,6 +299,11 @@ remain open.
 five ordered target/state claims and terminal OperatingV1/plan-seal claim. Twenty-eight
 focused local-SDK controls pass, but the claims are fake inputs; protected native observer,
 post-restore freshness and exact sandbox/epoch provenance remain absent.
+[Coordination #627](https://github.com/FS-GG/FS.GG.Coordination/pull/627) at
+`df7190bc807f16068c3d9f2d15c6d46db712fb7f` further binds each claim to its
+receipt hash, run nonce, challenge, observer resource and native revision, with a
+final-receipt-bound terminal claim; 31 focused local-SDK controls pass. The fields remain
+self-asserted until a protected candidate-inaccessible observer and freshness witness exist.
 These drafts authorize no protected effect, merge, Authority write, receiver flip or cutover.
 Optional FSC-03 [`.github` Rule (b) #3753](https://github.com/FS-GG/.github/pull/3753)
 at `194e08a11439ef7663085f3f3947c2f765500884` keeps `*` within one path segment in
@@ -372,6 +377,10 @@ and 29 stacked controls pass. Ordinary nested assets remain accepted.
 `38f0a162d42983f377c3e62d17f8a38090ae7f7b` refuses a file/child-path collision,
 including case-variant ancestor aliases, that previously returned a payload match;
 20 payload and 29 archive controls pass. It is not served or installed custody proof.
+[Templates #552](https://github.com/FS-GG/FS.GG.Templates/pull/552) at
+`0eb690ce4a7699ae3ffe235dc32047936d2a83be` refuses a 64-hex digest with a trailing
+newline that a regex anchor had accepted; 21 payload and 29 archive controls pass.
+Producer, served-byte, transaction, installed and receiver holds remain unchanged.
 [`.github` FSC-03 #3756](https://github.com/FS-GG/.github/pull/3756) at
 `ee36fbce6784a6edd1915b0fdb216ba80ed078bd` checks PR and push path filters
 independently in the pure Rule (b) reducer, closing a red-before push-only omission;
