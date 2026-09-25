@@ -23,6 +23,11 @@ SPEC = importlib.util.spec_from_file_location("gs2_09_7_release_for_joint_seal",
 release = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(release)
 
+FLOOR_SOURCE = Path(__file__).with_name("gs2-09-7-host-head-floor.py")
+FLOOR_SPEC = importlib.util.spec_from_file_location("gs2_09_7_floor_for_joint", FLOOR_SOURCE)
+floor = importlib.util.module_from_spec(FLOOR_SPEC)
+FLOOR_SPEC.loader.exec_module(floor)
+
 AUTHORITY_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-joint-seal-authority/2"
 ENVELOPE_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-joint-seal-envelope/1"
 RECORD_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-joint-seal-record/1"
@@ -43,7 +48,7 @@ class Refused(Exception):
     pass
 
 
-class ProtectedJointSealPort(Protocol):
+class ProtectedJointSealPort(floor.ProtectedHeadFloorPort, Protocol):
     def describe_joint_seal(self) -> dict: ...
     def read_joint_seal_envelope(self, seal_id: str) -> dict: ...
     def read_joint_seal_head(self, challenge: str) -> dict: ...
@@ -237,5 +242,12 @@ def verify_joint_seal(port: ProtectedJointSealPort | None, seal: dict,
                                  _signature(envelope["signatureBase64"]))
     except release.Refused as error:
         raise Refused("joint-seal-signature") from error
+    try:
+        floor.require_monotonic(
+            port, head, PINNED_JOINT_SEAL_STORE_ID,
+            PINNED_JOINT_SEAL_SIGNER_ID, PINNED_JOINT_SEAL_POLICY_SHA256)
+    except floor.Refused as error:
+        raise Refused(str(error)) from error
     return {"sealId": seal["sealId"], "generation": head["generation"],
-            "storeResourceId": PINNED_JOINT_SEAL_STORE_ID}
+            "storeResourceId": PINNED_JOINT_SEAL_STORE_ID,
+            "floorResourceId": floor.PINNED_FLOOR_RESOURCE_ID}

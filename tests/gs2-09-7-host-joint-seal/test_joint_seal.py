@@ -53,6 +53,13 @@ class JointSealTests(unittest.TestCase):
         self.assertEqual(1, verdict["generation"])
         self.assertNotIn("signatureBase64", verdict)
 
+    def test_freshly_signed_lower_head_after_restart_refuses(self):
+        self.port.joint_generation = 2
+        self.assertEqual(2, self.verify()["generation"])
+        self.port.joint_generation = 1
+        with self.assertRaisesRegex(joint.Refused, "joint-floor-rollback"):
+            self.verify()
+
     def test_missing_pin_envelope_or_key_refuses(self):
         joint.PINNED_JOINT_SEAL_SPKI_SHA256 = ""
         with self.assertRaisesRegex(joint.Refused, "joint-seal-unconfigured"):
