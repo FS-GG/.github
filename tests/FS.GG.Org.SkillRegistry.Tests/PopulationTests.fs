@@ -9,7 +9,7 @@ module PopulationTests =
     let private row = { Id = "core"; Owner = "fs-gg-game"; Source = "FS.GG.Game/skills/core/SKILL.md"; Sha256 = digest }
     let private entry = { Id = "core"; SuppliedBy = Some "skills/core/"; Sha256 = digest }
     let private checkout = { Repo = "FS.GG.Game"; Manifest = Parsed [ entry ] }
-    let private good = { Rostered = [ "FS.GG.Game" ]; Checkouts = [ checkout ]; Rows = [ row ] }
+    let private good = { Rostered = Ok [ "FS.GG.Game" ]; Checkouts = [ checkout ]; Rows = [ row ] }
     let private codes input = Population.inspect input |> List.map (fun item -> item.Code)
     let private has code input = Assert.Contains(code, codes input)
 
@@ -19,7 +19,11 @@ module PopulationTests =
 
     [<Fact>]
     let ``missing rostered checkout refuses`` () =
-        has "roster-unreachable" { good with Rostered = [ "FS.GG.Game"; "FS.GG.Templates" ] }
+        has "roster-unreachable" { good with Rostered = Ok [ "FS.GG.Game"; "FS.GG.Templates" ] }
+
+    [<Fact>]
+    let ``unreadable roster cannot become an empty clean population`` () =
+        has "roster-unreadable" { Rostered = Error "missing file"; Checkouts = []; Rows = [] }
 
     [<Fact>]
     let ``named producer with no checkout refuses`` () =
@@ -39,7 +43,7 @@ module PopulationTests =
 
     [<Fact>]
     let ``reachable nonproducer without manifest is allowed`` () =
-        let input = { good with Rostered = "FS.GG.Audio" :: good.Rostered; Checkouts = { Repo = "FS.GG.Audio"; Manifest = Absent } :: good.Checkouts }
+        let input = { good with Rostered = Ok [ "FS.GG.Game"; "FS.GG.Audio" ]; Checkouts = { Repo = "FS.GG.Audio"; Manifest = Absent } :: good.Checkouts }
         Assert.Empty(Population.inspect input)
 
     [<Fact>]
@@ -99,13 +103,13 @@ module PopulationTests =
     let ``SDD manifest lacking supplied-by can still match a declared row`` () =
         let sddRow = { row with Owner = "fs-gg-sdd"; Source = "FS.GG.SDD/.claude/skills/core/SKILL.md" }
         let sdd = { Repo = "FS.GG.SDD"; Manifest = Parsed [ { entry with SuppliedBy = None } ] }
-        Assert.Empty(Population.inspect { Rostered = [ "FS.GG.SDD" ]; Checkouts = [ sdd ]; Rows = [ sddRow ] })
+        Assert.Empty(Population.inspect { Rostered = Ok [ "FS.GG.SDD" ]; Checkouts = [ sdd ]; Rows = [ sddRow ] })
 
     [<Fact>]
     let ``dot github owner is preserved`` () =
         let driverRow = { row with Owner = ".github"; Source = ".github/.claude/skills/core/SKILL.md" }
         let driver = { Repo = ".github"; Manifest = Parsed [ { entry with SuppliedBy = Some ".claude/skills/core" } ] }
-        Assert.Empty(Population.inspect { Rostered = [ ".github" ]; Checkouts = [ driver ]; Rows = [ driverRow ] })
+        Assert.Empty(Population.inspect { Rostered = Ok [ ".github" ]; Checkouts = [ driver ]; Rows = [ driverRow ] })
 
     [<Fact>]
     let ``shared id uses registry owner to choose authoritative declaration`` () =
