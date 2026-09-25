@@ -78,6 +78,17 @@ module ProjectReferenceXmlTests =
             + itemName + "' /></CreateItem></Target></Project>"
         refused "project-reference" "src/A/A.fsproj" xml
 
+    [<Theory>]
+    [<InlineData("$(OutputItem)")>]
+    [<InlineData("Project$(Suffix)")>]
+    let ``dynamic task Output item names require evaluation`` itemName =
+        let xml =
+            "<Project><PropertyGroup><OutputItem>ProjectReference</OutputItem><Suffix>Reference</Suffix></PropertyGroup>"
+            + "<Target Name='Inject' BeforeTargets='ResolveProjectReferences'>"
+            + "<CreateItem Include='../B/B.fsproj'><Output TaskParameter='Include' ItemName='"
+            + itemName + "' /></CreateItem></Target></Project>"
+        refused "project-reference" "src/A/A.fsproj" xml
+
     [<Fact>]
     let ``unrelated task Output leaves static references readable`` () =
         let xml =

@@ -48,6 +48,7 @@ module ProjectReferenceXml =
     /// Decode ProjectReference Include values and resolve them to normalized repo-relative paths.
     /// Explicit imports and target-time ProjectReference changes require MSBuild evaluation.
     /// Tasks may also emit ProjectReference items without an item element in these XML bytes.
+    /// Dynamic Output item names cannot be resolved from one XML file.
     /// No filesystem reads or assertions about a complete project roster occur here.
     let inspect (projectPath: string) (xml: string) : Result<string list, SyntaxDiagnostic> =
         if not (normalized projectPath) then
@@ -62,27 +63,37 @@ module ProjectReferenceXml =
                 use input = new StringReader(xml)
                 use reader = XmlReader.Create(input, settings)
                 let document = XDocument.Load(reader)
+                let inTarget (element: XElement) =
+                    element.Ancestors()
+                    |> Seq.exists (fun ancestor -> ancestor.Name.LocalName = "Target")
                 let targetReference =
                     document.Descendants()
                     |> Seq.exists (fun element ->
-                        element.Name.LocalName = "ProjectReference"
-                        && (element.Ancestors()
-                            |> Seq.exists (fun ancestor -> ancestor.Name.LocalName = "Target")))
-                let taskOutputReference =
+                        element.Name.LocalName = "ProjectReference" && inTarget element)
+                let outputItemNames =
                     document.Descendants()
-                    |> Seq.exists (fun element ->
+                    |> Seq.filter (fun element -> element.Name.LocalName = "Output" && inTarget element)
+                    |> Seq.choose (fun element ->
                         let itemName = element.Attribute(XName.Get("ItemName"))
-                        element.Name.LocalName = "Output"
-                        && not (isNull itemName)
-                        && String.Equals(itemName.Value, "ProjectReference", StringComparison.OrdinalIgnoreCase)
-                        && (element.Ancestors()
-                            |> Seq.exists (fun ancestor -> ancestor.Name.LocalName = "Target")))
+                        if isNull itemName then None else Some itemName.Value)
+                    |> Seq.toList
+                let dynamicTaskOutputName =
+                    outputItemNames
+                    |> List.exists (fun name ->
+                        [ "$("; "@("; "%(" ]
+                        |> List.exists (fun token -> name.Contains(token, StringComparison.Ordinal)))
+                let taskOutputReference =
+                    outputItemNames
+                    |> List.exists (fun name ->
+                        String.Equals(name, "ProjectReference", StringComparison.OrdinalIgnoreCase))
                 if isNull document.Root || document.Root.Name.LocalName <> "Project" then
                     error "project-xml" projectPath "project XML root must be Project"
                 elif document.Descendants() |> Seq.exists (fun element -> element.Name.LocalName = "Import") then
                     error "project-reference" projectPath "explicit MSBuild Import requires evaluation"
                 elif targetReference then
                     error "project-reference" projectPath "target-time ProjectReference changes require evaluation"
+                elif dynamicTaskOutputName then
+                    error "project-reference" projectPath "dynamic task Output ItemName requires evaluation"
                 elif taskOutputReference then
                     error "project-reference" projectPath "task Output to ProjectReference requires evaluation"
                 else
