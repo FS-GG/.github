@@ -1153,6 +1153,21 @@ pending. The five completion rows cited previously pushed roadmap head
 `a9aaf097`, which contained each draft's exact source head. The script rendered
 with zero build warnings/errors; 24 focused tests remained green.
 
+At the 18:57:12 UTC rendered checkpoint, six Sol/high lanes remained active;
+the fifth worker had moved from FSC-05 to source-only telemetry capture
+qualification, while the reserved GS2-09.9 and direct GS2-09.7 workers
+continued. The local root family had 30 sessions and 85 completed ten-minute
+periods. The latest 18:47:05–18:57:05 UTC period had 37,941,021 input tokens
+(37,612,800 cached; 328,221 noncached), 119,635 output and 38,060,656 total;
+the all-period team mean, including zero-use periods, was 31,551,863.54 total.
+Local weekly usage was 89% at 18:56:53, leaving 11%, with a conditional
+continuous-use, account-wide same-reset projection near 21:47 UTC. These
+remain **unverified local diagnostics**, not runner/Host capture. Fresh direct
+authenticated telemetry was ready/configured with a zero lossless queue;
+capture acceptance remained pending. The five completion rows cited pushed
+roadmap head `c77d72d6`, which recorded each exact draft head. The script
+rendered with zero build warnings/errors, and 24 focused tests remained green.
+
 At the 17:51 UTC source checkpoint, the newest five completed **draft
 commits** were verified against their PR heads. Their completion is source
 preparation, not an accepted V2 receipt or authorization to merge:
