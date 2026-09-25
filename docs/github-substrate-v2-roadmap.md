@@ -567,13 +567,43 @@ at `3e91858795e432995292395f5938bd541cab5528` refuses absolute Windows
 and repository-escaping `ProjectReference` targets in Python graph extraction
 (131 fixtures); the F# adapter and installed parity remain separate.
 [Coordination GS2-09.7 #656](https://github.com/FS-GG/FS.GG.Coordination/pull/656)
-at `a8f967255527aaf46abc33d3d8331030cad3eeea` adds private-fork workflow
+at `8546ca6500004c0ffb59c7d910d8fdf8954e95bb` adds private-fork workflow
 readback to a partial Q6 rollback bridge (116 focused tests), while settings
 authority, Q5/Q6 receipts, and protected native effects remain held.
 [Coordination GS2-09.9 #657](https://github.com/FS-GG/FS.GG.Coordination/pull/657)
 at `dccb70b675b7f024ffe63a2080c78b55c13942db` requires the separate
 audit to carry the same command interval as the runner probe (53 fake-port
 tests); matching supplied data does not authenticate a protected native run.
+Further bounded drafts preserve their parent gates:
+[Coordination GS2-09.9 #658](https://github.com/FS-GG/FS.GG.Coordination/pull/658)
+at `03e87db743590634d007d184ed3dbe1b84df63bd` refuses a runner actor
+equal to the release reviewer before probe reads (54 fake-port tests); actor
+claims are still unauthenticated and #545/#550 remain held.
+[Coordination GS2-09.9 #659](https://github.com/FS-GG/FS.GG.Coordination/pull/659)
+at `a526afb91eb9ed09c74a5c8815b2d37a09a37eeb` snapshots a mutable
+effective-scope metadata read to prevent a reused object from hiding credential
+drift (19 focused tests); this remains fake-port source evidence.
+[SDD FSC-04 #1028](https://github.com/FS-GG/FS.GG.SDD/pull/1028)
+at `8952bae1acac51eca771c1a8b273bd821b73c03f` characterizes a late
+duplicate candidate inserted into a previously visited directory (1,458
+Commands tests); one physical traversal is not a complete stable inventory.
+[Templates FSC-05 #565](https://github.com/FS-GG/FS.GG.Templates/pull/565)
+at `882ba0ab2ff60d51bd220b8017f959593696acf0` refuses trailing ZIP bytes
+(46 payload, 29 archive controls), and [#566](https://github.com/FS-GG/FS.GG.Templates/pull/566)
+at `a3bfd59de6934656a72e2c16e91b8da35041e134` refuses a leading overlay
+(47 payload, 29 archive controls); neither proves full ZIP closure or producer,
+served-byte, #511 CAS, installed or receiver authority.
+[`.github` FSC-03 F# #3778](https://github.com/FS-GG/.github/pull/3778)
+at `a8801357fa42e2cd29c65601f1eee069d8aad043` refuses explicit target-time
+`ProjectReference` changes (123 tests); [Python #3779](https://github.com/FS-GG/.github/pull/3779)
+at `f7da149a7b2d4db227db5e8931dfe2613e5a61b4` refuses the matching
+dynamic Include/Remove shapes (134 fixtures). Task outputs, implicit imports,
+installed parity, and receiver admission remain separate.
+[`.github` telemetry source #3780](https://github.com/FS-GG/.github/pull/3780)
+at `62d6ea212fa8ca5999aceb4d7802cbad4d67002b` refuses an unreadable
+field in the dormant exact Project 1 map after two red-before partial-map
+fixtures (848 GitHub adapter tests). The runner still enumerates all Projects;
+no genuine instrumented item or matching applied Host receipt is established.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
