@@ -104,6 +104,26 @@ module ProjectReferenceXmlTests =
             + "</ItemGroup></Target></Project>"
         refused "project-reference" "src/A/A.fsproj" xml
 
+    [<Fact>]
+    let ``project targets path override cannot certify nearest implicit source`` () =
+        let xml =
+            "<Project><PropertyGroup><DirectoryBuildTargetsPath>"
+            + "$(MSBuildProjectDirectory)/../../Alternate.targets"
+            + "</DirectoryBuildTargetsPath></PropertyGroup></Project>"
+        match ProjectReferenceXml.inspect "src/A/A.fsproj" xml with
+        | Error diagnostic ->
+            Assert.Equal("project-reference", diagnostic.Code)
+            Assert.Contains("DirectoryBuildTargetsPath", diagnostic.Message)
+        | Ok references -> failwithf "expected targets-path refusal, got %A" references
+
+    [<Fact>]
+    let ``targets path item metadata is not a property override`` () =
+        let xml =
+            "<Project><ItemGroup><Content Include='readme'>"
+            + "<DirectoryBuildTargetsPath>Alternate.targets</DirectoryBuildTargetsPath>"
+            + "</Content></ItemGroup></Project>"
+        Assert.Empty(parsed "src/A/A.fsproj" xml)
+
     [<Theory>]
     [<InlineData("Directory.Build.props")>]
     [<InlineData("src/A/Directory.Build.targets")>]
@@ -119,6 +139,18 @@ module ProjectReferenceXmlTests =
         match ProjectReferenceXml.inspectSuppliedImplicitXml "Directory.Build.targets" xml with
         | Error diagnostic -> Assert.Equal("implicit-project-reference", diagnostic.Code)
         | Ok observation -> failwithf "expected case-varied item refusal, got %A" observation
+
+    [<Fact>]
+    let ``supplied implicit props targets override refuses local observation`` () =
+        let xml =
+            "<Project><PropertyGroup><directorybuildtargetspath>"
+            + "$(MSBuildThisFileDirectory)Alternate.targets"
+            + "</directorybuildtargetspath></PropertyGroup></Project>"
+        match ProjectReferenceXml.inspectSuppliedImplicitXml "Directory.Build.props" xml with
+        | Error diagnostic ->
+            Assert.Equal("implicit-source-selection", diagnostic.Code)
+            Assert.Contains("DirectoryBuildTargetsPath", diagnostic.Message)
+        | Ok observation -> failwithf "expected targets-path refusal, got %A" observation
 
     [<Fact>]
     let ``supplied implicit XML with an Import refuses unresolved closure`` () =

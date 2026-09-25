@@ -17,6 +17,15 @@ module ProjectReferenceXml =
         // MSBuild item names are case-insensitive; XML structural names retain their case.
         String.Equals(element.Name.LocalName, "ProjectReference", StringComparison.OrdinalIgnoreCase)
 
+    let private setsTargetsOverride (document: XDocument) =
+        // A property assignment can replace nearest Directory.Build.targets selection. Metadata
+        // with the same name is not a property assignment.
+        document.Descendants()
+        |> Seq.exists (fun element ->
+            String.Equals(element.Name.LocalName, "DirectoryBuildTargetsPath", StringComparison.OrdinalIgnoreCase)
+            && not (isNull element.Parent)
+            && element.Parent.Name.LocalName = "PropertyGroup")
+
     let private normalized (path: string) =
         not (String.IsNullOrWhiteSpace path)
         && not (path.StartsWith("/", StringComparison.Ordinal))
@@ -98,6 +107,8 @@ module ProjectReferenceXml =
                         String.Equals(name, "ProjectReference", StringComparison.OrdinalIgnoreCase))
                 if isNull document.Root || document.Root.Name.LocalName <> "Project" then
                     error "project-xml" projectPath "project XML root must be Project"
+                elif setsTargetsOverride document then
+                    error "project-reference" projectPath "DirectoryBuildTargetsPath overrides implicit target selection; requires MSBuild import evaluation"
                 elif document.Descendants() |> Seq.exists (fun element -> element.Name.LocalName = "Import") then
                     error "project-reference" projectPath "explicit MSBuild Import requires evaluation"
                 elif targetReference then
@@ -151,6 +162,8 @@ module ProjectReferenceXml =
                 let document = XDocument.Load(reader)
                 if isNull document.Root || document.Root.Name.LocalName <> "Project" then
                     error "implicit-source-xml" sourcePath "implicit source XML root must be Project"
+                elif setsTargetsOverride document then
+                    error "implicit-source-selection" sourcePath "supplied implicit XML sets DirectoryBuildTargetsPath; requires MSBuild import evaluation"
                 elif document.Descendants()
                      |> Seq.exists (fun element ->
                          isProjectReference element) then
