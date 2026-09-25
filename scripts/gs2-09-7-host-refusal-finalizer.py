@@ -143,9 +143,11 @@ def check_vault(port: ProtectedFinalizerPort | None) -> None:
     descriptor = port.describe_vault()
     require(type(descriptor) is dict and descriptor == {
         "schema": VAULT_SCHEMA, "vaultId": PINNED_TOKEN_VAULT_ID,
-        "credentialScope": "protected-host-only", "candidateCanWrite": False,
+        "credentialScope": "protected-host-only",
+        "candidateCanRead": False, "candidateCanWrite": False,
         "encrypted": True, "durable": True,
-    } and descriptor["candidateCanWrite"] is False
+    } and descriptor["candidateCanRead"] is False
+      and descriptor["candidateCanWrite"] is False
       and descriptor["encrypted"] is True and descriptor["durable"] is True,
             "vault-authority")
 
@@ -271,7 +273,8 @@ def execute_with_finalizer(envelope_raw: bytes, proof_raw: bytes, token: str,
         check_port(port)
         context_sha256 = digest_context(context)
         mint_record(port, mint_id, token_sha256, context_sha256)
-        require(port.recover_token(mint_id) == token, "token-escrow")
+        escrowed = port.recover_token(mint_id)
+        require(type(escrowed) is str and escrowed == token, "token-escrow")
     except BaseException as error:
         _emergency_revoke(port, token)
         if not isinstance(error, Exception):

@@ -47,7 +47,8 @@ class FakePort:
         }
         self.vault_descriptor = {
             "schema": worker.finalizer.VAULT_SCHEMA, "vaultId": VAULT,
-            "credentialScope": "protected-host-only", "candidateCanWrite": False,
+            "credentialScope": "protected-host-only",
+            "candidateCanRead": False, "candidateCanWrite": False,
             "encrypted": True, "durable": True,
         }
         self.revoker_descriptor = {
