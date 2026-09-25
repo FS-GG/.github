@@ -90,6 +90,9 @@ type HostReceipt = {
 type QueueObservation = {
     WorkspaceId: string
     ObservedAt: DateTimeOffset
+    Authenticated: bool
+    CollectorVerified: bool
+    EvidenceId: string
     Pending: int
     PendingUnacknowledged: int
     UnacknowledgedLossy: bool
@@ -380,6 +383,8 @@ module ProgressRenderer =
             require (host.ObservedAt >= runner.ObservedAt) "Host receipt precedes runner item"
             require (later.WorkspaceId = runner.WorkspaceId) "later queue workspace does not match runner"
             requireUtc "later queue observation" later.ObservedAt
+            require (later.Authenticated && later.CollectorVerified && nonblank later.EvidenceId)
+                "capture requires authenticated collector-verified later queue evidence"
             require (later.ObservedAt > host.ObservedAt) "zero queue observation must be later than Host receipt"
             require (later.Pending = 0 && later.PendingUnacknowledged = 0
                      && not later.UnacknowledgedLossy) "capture requires a later zero, lossless queue"
