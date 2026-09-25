@@ -861,6 +861,30 @@ evaluated graph and installed parity remain open.
 at `9a102feeddf679acc08a96a82ed9721d6dbccfda` refuses reserved device
 stems in any ZIP member path (61 payload, 29 archive controls); descriptor
 support, full closure and producer/served/receiver custody remain open.
+[Coordination GS2-09.9 #686](https://github.com/FS-GG/FS.GG.Coordination/pull/686)
+at `bd35be4b914ef6b831fbd11ad760c7de74761b90` snapshots caller source
+bytes before an identity callback can restore a foreign archive (35 fake-port
+tests); [#688](https://github.com/FS-GG/FS.GG.Coordination/pull/688)
+at `748f7f7338bb013c02d6b6e63c5bfa0e355cd680` copies selected workflow
+digest before a Git callback can replace it (28 tests). Both remain without
+protected source/identity custody or native-effect authority.
+[Coordination GS2-09.7 #687](https://github.com/FS-GG/FS.GG.Coordination/pull/687)
+at `4429006ba0009962ee89f7f77ac68bf6912e48d0` refuses duplicate raw
+comment subject, body and actor members (137 focused tests); initial census,
+full typed inspect, journal/custom receipts and Q5/Q6 remain open.
+[`.github` FSC-03 Python #3792](https://github.com/FS-GG/.github/pull/3792)
+at `c389e65f90f15bd7e2f2c7aae677005b007b8029` refuses project or
+selected implicit `DirectoryBuildTargetsPath` overrides after installed
+MSBuild exposed hidden references (150 fixtures). Matching F# refusal,
+PropsPath/import switches, provider provenance and installed parity remain.
+[SDD FSC-04 #1033](https://github.com/FS-GG/FS.GG.SDD/pull/1033)
+at `c3d482fc331b05c160b3098fa874139e2db9d5b0` caps retained raw
+complete-root payload at a provisional 64 MiB (1,474 Commands tests); file
+count, repeated-copy peak memory, ABA and cross-root atomicity remain open.
+[Templates FSC-05 #576](https://github.com/FS-GG/FS.GG.Templates/pull/576)
+at `245e0ffbe955557cc63952ad74d2b4624846d5ea` applies a 255 UTF-8-byte
+per-segment bound to all ZIP member names (64 payload, 29 archive controls);
+full closure and producer/served-byte/receiver custody remain held.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
