@@ -25,6 +25,7 @@ jobs:
     timeout-minutes: 45
     environment: github-substrate-v2-sandbox
     env:
+      FSGG_PROTECTED_SHA: ${{ github.sha }}
       FSGG_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
       FSGG_SANDBOX_ACTOR: fs-gg-cross-repo-dispatch[bot]
       FSGG_SANDBOX_ACTOR_ID: '297630107'
@@ -42,10 +43,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test '${{ github.ref }}' = refs/heads/main
           [[ "$FSGG_CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
             echo 'candidate_sha must be one full lowercase 40-hex Git commit' >&2
             exit 1
           }
+
+      - name: Check out the protected mint implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: host
+
+      - name: Bind the protected mint revision
+        shell: bash
+        run: test "$(git -C host rev-parse HEAD)" = "$FSGG_PROTECTED_SHA"
 
       - name: Check out the exact product candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -65,23 +78,19 @@ jobs:
         with:
           global-json-file: coordination/global.json
 
-      - name: Mint the repository-scoped non-production App token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
-        with:
-          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
-          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
-          owner: FS-GG
-          repositories: FS.GG.GitHub.Substrate.Sandbox
-          permission-administration: write
-          permission-contents: write
-          permission-issues: write
-          permission-pull-requests: write
-          permission-organization-projects: write
+      - name: Exercise secret-free mint grant controls
+        run: python3 host/tests/gs2-09-7-mint-proof/run.py
+
+      - name: Mint and attest the exact sandbox App grant
+        id: mint
+        env:
+          FSGG_DISPATCH_APP_ID: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          FSGG_DISPATCH_APP_PRIVATE_KEY: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+        run: python3 host/scripts/gs2-09-7-mint-sandbox-token.py
 
       - name: Authoritatively bind the App and sandbox targets before writes
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.mint.outputs.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -106,12 +115,18 @@ jobs:
           test "$(jq -r .title <<<"$project")" = "$FSGG_SANDBOX_PURPOSE"
           test "$(jq -r .closed <<<"$project")" = false
           test "$(jq -r .public <<<"$project")" = false
+          proof="$FSGG_SANDBOX_EVIDENCE_DIR/mint-grants.json"
+          test -s "$proof"
+          test "$(printf '%s' "$GH_TOKEN" | sha256sum | cut -d' ' -f1)" = "$(jq -r .tokenSha256 "$proof")"
+          test "$(jq -r .repository.nodeId "$proof")" = "$FSGG_SANDBOX_REPOSITORY_NODE_ID"
+          test "$(jq -r .permissions.organization_projects "$proof")" = write
 
       - name: Execute the signed live operation plan
         id: execute
         continue-on-error: true
         env:
-          FSGG_SANDBOX_TOKEN: ${{ steps.app-token.outputs.token }}
+          FSGG_SANDBOX_TOKEN: ${{ steps.mint.outputs.token }}
+          FSGG_SANDBOX_MINT_PROOF: ${{ env.FSGG_SANDBOX_EVIDENCE_DIR }}/mint-grants.json
           FSGG_SANDBOX_PHASE: execute
         working-directory: coordination
         shell: bash
@@ -122,11 +137,19 @@ jobs:
         if: ${{ always() }}
         continue-on-error: true
         env:
-          FSGG_SANDBOX_TOKEN: ${{ steps.app-token.outputs.token }}
+          FSGG_SANDBOX_TOKEN: ${{ steps.mint.outputs.token }}
+          FSGG_SANDBOX_MINT_PROOF: ${{ env.FSGG_SANDBOX_EVIDENCE_DIR }}/mint-grants.json
           FSGG_SANDBOX_PHASE: cleanup
         working-directory: coordination
         shell: bash
         run: bash eng/qualify-github-sandbox-closure.sh .
+
+      - name: Revoke the scoped token
+        id: revoke
+        if: ${{ always() && steps.mint.outputs.token != '' }}
+        env:
+          GH_TOKEN: ${{ steps.mint.outputs.token }}
+        run: gh api --method DELETE installation/token
 
       - name: Retain exact-candidate Q4 evidence
         if: ${{ always() }}
@@ -144,5 +167,6 @@ jobs:
           set -euo pipefail
           test '${{ steps.execute.outcome }}' = success
           test '${{ steps.cleanup.outcome }}' = success
+          test '${{ steps.revoke.outcome }}' = success
           test -s "$FSGG_SANDBOX_EVIDENCE_DIR/closure.json"
           test "$(jq -r .cleanup.disposition "$FSGG_SANDBOX_EVIDENCE_DIR/closure.json")" = complete
