@@ -1022,6 +1022,7 @@ changing the protected holds:
 | [FSC-05 #587](https://github.com/FS-GG/FS.GG.Templates/pull/587) | `028e1ab32f87113acfdbba9de808a43f2d15470e` | Refuses trailing bytes after a raw-deflate end marker inside the declared compressed member size; 95 payload/29 custody controls, selected archive NO_VERDICT. |
 | [FSC-03 F# #3807](https://github.com/FS-GG/.github/pull/3807) | `1a6b278279ab6554fc1066cd1239e5a3c585e569` | Pure supplied-source handoff binds raw XML bytes to caller-supplied SHA-256 digests before exact-roster graph assembly; 182 policy tests. Digest and roster provenance remain unauthenticated. |
 | [GS2-09.9 #715](https://github.com/FS-GG/FS.GG.Coordination/pull/715) | `331d4b80c7473c92f75e324c1127b78c355125eb` | Native reader binds present repository owner and name to the selected full name; lost-response fake stays unknown after one attempted PUT, 97 focused tests. Installed provider and #550 remain held. |
+| [GS2-09.7 #716](https://github.com/FS-GG/FS.GG.Coordination/pull/716) | `f2b13c35abeb9a46114f98e75f0993b28a45b0bf` | Raw-to-typed relation binder refuses duplicate root `data` JSON members in initial and continuation pages; 136 focused tests. Hosted checks queued, initial census and Q5/Q6 held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
