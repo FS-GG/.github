@@ -1,8 +1,9 @@
 # GitHub Substrate V2 root-session work report — 2026-09-25
 
 **Observation period:** 2026-09-25 04:47:05–19:50:12 UTC, with a verified
-post-cutoff addendum through 2026-09-25 21:05:31 UTC below. The addendum's
-source-PR set was frozen at 21:04:46 UTC. Neither cutoff ends the V2 program.
+post-cutoff addendum through 2026-09-25 21:05:31 UTC and a continuity
+checkpoint through 21:26:28 UTC below. Their source-PR sets were frozen at
+21:04:46 and 21:24:30 UTC, respectively. Neither cutoff ends the V2 program.
 A draft PR, passing local test, rendered report, or ready telemetry endpoint is
 not a protected GS2 receipt, installed receiver, accepted producer, native
 effect, or production cutover.
@@ -214,3 +215,43 @@ open/blocked, and #526/#529 draft/behind. Apart from the separately disclosed
 #3690 process deviation in the base period, no further protected merge,
 sandbox mutation, immutable producer publication or receiver pin, live gate
 flip, Authority write, or cutover was performed through this addendum cutoff.
+
+## Continuity checkpoint: 21:05:31–21:26:28 UTC
+
+The second source set was frozen at **21:24:30 UTC** and pushed as the
+[immutable exact-head roadmap ledger](https://github.com/FS-GG/.github/blob/06ae99c8a23a268d80dc39b4e2fa2187bf8d259d/docs/github-substrate-v2-roadmap.md)
+at `06ae99c8a23a268d80dc39b4e2fa2187bf8d259d`. It adds bounded draft
+source for GS2-09.9, GS2-09.7, FSC-04, FSC-05 and telemetry. The latest five
+verified draft completions at that cutoff were [GS2-09.7 #833](https://github.com/FS-GG/FS.GG.Coordination/pull/833),
+[GS2-09.9 #832](https://github.com/FS-GG/FS.GG.Coordination/pull/832),
+[FSC-05 #605](https://github.com/FS-GG/FS.GG.Templates/pull/605),
+[FSC-04 #1061](https://github.com/FS-GG/FS.GG.SDD/pull/1061) and
+[telemetry #831](https://github.com/FS-GG/FS.GG.Coordination/pull/831).
+Later drafts, including [FSC-05 #606](https://github.com/FS-GG/FS.GG.Templates/pull/606),
+are excluded from this checkpoint even though the live roadmap can advance.
+These are draft PRs, not accepted GS2 receipts or installed tooling.
+
+At 21:26:28 UTC, the [F# progress renderer #3735](https://github.com/FS-GG/.github/pull/3735)
+produced a diagnostic snapshot. At that observation,
+six GPT-6-Sol/high lanes were active: the orchestrator; a reserved direct
+GS2-09.9 worker on native response/readback identity; a direct GS2-09.7
+worker on recovery identity; and separate FSC-05 provider, FSC-04 packed Git
+object, and telemetry native-usage schema workers. The local JSONL diagnostic
+for the latest completed ten-minute team period (21:07:05–21:17:05 UTC) was
+32,213,057 tokens; the all-period team mean across 99 completed periods,
+including zero-use periods, was 32,081,260.82 tokens per period. A local
+weekly-rate observation at 21:26:23 UTC reached **100% used**, but its
+account/collector scope is unverified and **no actual CLI limit failure had
+been observed at this checkpoint**. These figures do not prove runner/Host
+capture.
+
+Authenticated telemetry health and workspace status at **21:26:28 UTC** were
+ready/configured with `pending=0`, `pendingUnacknowledged=0` and
+`unacknowledgedLossy=false`. The same credential still read Coordination
+Project 1 but was denied Project 2 at the 21:17 UTC read-only recheck. A
+genuine instrumented runner item, native turn IDs and usage, matching applied
+Host receipt and later queue-zero observation therefore remain absent. The
+protected Coordination order #532 → #527 → #526 → #529, GS2-09.7 Q5/Q6,
+GS2-09.9 #545/#550 installed-provider/native-effect gate, and all cutover
+holds remain. Apart from the separately disclosed earlier #3690 process
+deviation, no further protected merge or effect occurred through this cutoff.
