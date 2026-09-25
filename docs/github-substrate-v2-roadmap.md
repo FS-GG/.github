@@ -1653,6 +1653,12 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   evidence and independent controls remain required; a source-only or historical Q4 run does not accept
   this unit. The [governing cohort contract](coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md#registered-migration-rehearsal-cohort)
   owns the target and permission boundary.
+  [Coordination draft #552](https://github.com/FS-GG/FS.GG.Coordination/pull/552) prepares a
+  candidate-side validator for the sanitized #3690 mint proof, token digest, selected target/grants,
+  expiry, and host pin before either live candidate path calls a provider. This is source-only
+  consistency evidence, not independent protected authorization, host run-binding, or Q5/Q6 acceptance.
+  The #3690 source merge was not admitted through the common OperatingV1 effect boundary; preserve that
+  observation separately from any sandbox receipt. No rehearsal dispatch is implied by the draft.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
 
