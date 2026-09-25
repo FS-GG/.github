@@ -188,6 +188,8 @@ first owner repair adds explicit worker launch evidence, activity-based counts, 
 reserved count, authenticated readiness observations and linked terminal completion rows.
 Its follow-up requires exactly one running Sol/high orchestrator with visible-profile
 evidence and running workers with explicit spawn evidence; 15 focused tests pass.
+Its later freshness repair rejects healthy telemetry observations older than five minutes;
+18 focused tests pass at exact head `f2c7721ec483e2ba63faf8d8d39f55ae290223af`.
 No live update workflow is pinned to that draft.
 
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
@@ -1927,6 +1929,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   refuses a native revoke without a pinned durable host schedule and independent joint-seal
   readback; 132 local controls pass. Protected complete enqueue, atomic schedule/claim
   ordering and pre-pending mint escalation remain uninstalled.
+  [Complete-batch recovery draft #3739](https://github.com/FS-GG/.github/pull/3739)
+  refuses a standalone committed job without a sealed full batch, binds batch ID to the
+  one-use claim, and models no-effect append/readback refusals; 139 focused local controls
+  pass. Authentic joint seal, candidate-inaccessible protected scheduler store and atomic
+  batch/claim authority remain uninstalled.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.

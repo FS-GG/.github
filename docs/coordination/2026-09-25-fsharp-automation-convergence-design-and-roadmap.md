@@ -200,7 +200,9 @@ healthy readiness, and refuses nonterminal or linkless completion rows. Its foll
 exactly one running Sol/high orchestrator with visible-profile evidence and running workers
 with explicit spawn evidence; red-before cases covered an Astra orchestrator, no orchestrator
 and user-instruction-only worker source. Fifteen focused tests pass. The pure renderer cannot
-authenticate external provenance, and its draft output is not an accepted status source.
+authenticate external provenance. A later red-before repair rejects health and workspace
+observations older than five minutes at report time, while accepting the exact boundary;
+18 focused tests pass. Its draft output is not an accepted status source.
 
 Independent review of these draft ports has already found false greens in Unicode JSON digest
 encoding, unsupported provider schemas, malformed source digests, misplaced telemetry archive
