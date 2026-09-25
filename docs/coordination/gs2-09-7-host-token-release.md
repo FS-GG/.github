@@ -2,6 +2,10 @@
 
 Status: **source-only, uninstalled**. This draft is stacked on the disabled host signer in [#3711](https://github.com/FS-GG/.github/pull/3711) and the candidate verifier scaffold in Coordination [#558](https://github.com/FS-GG/FS.GG.Coordination/pull/558). It changes no workflow, installs no key, and makes no provider call. The #3690 source merge remains an unadmitted V1 delivery observation; Q5/Q6 remain open.
 
+The independent workflow commit admission input remains empty, as recorded in
+`gs2-09-7-protected-revision-admission.md`. No installed protected release
+authority supplies it.
+
 `scripts/gs2-09-7-host-token-release.py` verifies the host-signed envelope against a pinned public-key SPKI digest and protected runner facts: workflow repository/ref/path/SHA, run ID/attempt, exact candidate SHA and derived nonce, registered sandbox repository/Project, raw proof digest, token digest and expiry. It rejects unsigned, replayed, changed-run, changed-target, changed-proof and expired claims before contacting a release port. It inherits #3711's empty trust pin, so an ordinary call has no configured signing authority and refuses.
 
 The `ProtectedReleasePort` is an **unimplemented protected host interface**, with three ordered operations:

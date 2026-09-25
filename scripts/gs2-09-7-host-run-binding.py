@@ -39,6 +39,10 @@ MAX_JSON_BYTES = 64 * 1024
 # An exact reviewed SPKI SHA-256 must be committed with the corresponding
 # Coordination public key before a protected host may issue this envelope.
 PINNED_SPKI_SHA256 = ""
+# The protected release authority must supply this independently admitted
+# commit at invocation time. It cannot be self-pinned in that same commit;
+# no installed port supplies it, so the source remains fail closed.
+PINNED_WORKFLOW_SHA = ""
 
 
 class Refused(Exception):
@@ -129,6 +133,8 @@ def build(context: dict, preflight_raw: bytes, proof_raw: bytes, token: str,
     """Build a signed envelope from protected runner facts and host readback."""
     require(type(pinned_spki_sha256) is str and HEX64.fullmatch(pinned_spki_sha256),
             "trust-anchor-unconfigured")
+    require(type(PINNED_WORKFLOW_SHA) is str and HEX40.fullmatch(PINNED_WORKFLOW_SHA),
+            "workflow-revision-unconfigured")
     require(signer_spki_sha256(private_key_pem) == pinned_spki_sha256,
             "signer-key-mismatch")
     require(type(now) is dt.datetime and now.tzinfo is not None
@@ -143,6 +149,7 @@ def build(context: dict, preflight_raw: bytes, proof_raw: bytes, token: str,
             and context["workflowRefPath"] ==
                 f"{HOST_REPOSITORY}/{WORKFLOW}@refs/heads/main"
             and type(context["workflowSha"]) is str and HEX40.fullmatch(context["workflowSha"])
+            and context["workflowSha"] == PINNED_WORKFLOW_SHA
             and context["protectedSha"] == context["workflowSha"]
             and type(context["candidateSha"]) is str and HEX40.fullmatch(context["candidateSha"])
             and type(context["runId"]) is int and context["runId"] > 0
@@ -222,7 +229,12 @@ def build(context: dict, preflight_raw: bytes, proof_raw: bytes, token: str,
 
 def main() -> int:
     try:
-        require(bool(PINNED_SPKI_SHA256), "trust-anchor-unconfigured")
+        require(type(PINNED_SPKI_SHA256) is str
+                and HEX64.fullmatch(PINNED_SPKI_SHA256),
+                "trust-anchor-unconfigured")
+        require(type(PINNED_WORKFLOW_SHA) is str
+                and HEX40.fullmatch(PINNED_WORKFLOW_SHA),
+                "workflow-revision-unconfigured")
         directory = Path(os.environ["FSGG_SANDBOX_EVIDENCE_DIR"])
         require(directory.is_dir(), "evidence-directory")
         descriptor = int(os.environ["FSGG_SANDBOX_RUN_BINDING_PRIVATE_KEY_FD"])

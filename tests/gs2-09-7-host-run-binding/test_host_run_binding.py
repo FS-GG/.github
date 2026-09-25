@@ -40,6 +40,9 @@ class HostRunBindingTests(unittest.TestCase):
         cls.temporary.cleanup()
 
     def setUp(self):
+        original_workflow_pin = host.PINNED_WORKFLOW_SHA
+        host.PINNED_WORKFLOW_SHA = "a" * 40
+        self.addCleanup(setattr, host, "PINNED_WORKFLOW_SHA", original_workflow_pin)
         self.now = dt.datetime(2026, 9, 25, 12, 0, tzinfo=dt.timezone.utc)
         self.token = "fake-sandbox-installation-token-123456789"
         self.context = {
@@ -117,6 +120,10 @@ class HostRunBindingTests(unittest.TestCase):
     def test_missing_pin_or_foreign_signer_refuses(self):
         with self.assertRaisesRegex(host.Refused, "trust-anchor-unconfigured"):
             self.build(pin="")
+        host.PINNED_WORKFLOW_SHA = ""
+        with self.assertRaisesRegex(host.Refused, "workflow-revision-unconfigured"):
+            self.build()
+        host.PINNED_WORKFLOW_SHA = self.context["workflowSha"]
         with self.assertRaisesRegex(host.Refused, "signer-key-mismatch"):
             self.build(key=self.other_key)
 
@@ -132,6 +139,12 @@ class HostRunBindingTests(unittest.TestCase):
             with self.subTest(change=change):
                 with self.assertRaises(host.Refused):
                     self.build(context={**self.context, **change})
+
+    def test_coherently_changed_workflow_revision_refuses(self):
+        changed = {**self.context, "workflowSha": "f" * 40,
+                   "protectedSha": "f" * 40}
+        with self.assertRaises(host.Refused):
+            self.build(context=changed)
 
     def test_actor_repository_and_project_native_readback_mismatch_refuse(self):
         for key, changed in (

@@ -64,8 +64,11 @@ class HostTokenReleaseTests(unittest.TestCase):
         self.public = self.fixture.public_path.read_bytes()
         self.port = FakePort()
         original_pin = release.host.PINNED_SPKI_SHA256
+        original_workflow_pin = release.host.PINNED_WORKFLOW_SHA
         release.host.PINNED_SPKI_SHA256 = self.fixture.pin
+        release.host.PINNED_WORKFLOW_SHA = self.fixture.context["workflowSha"]
         self.addCleanup(setattr, release.host, "PINNED_SPKI_SHA256", original_pin)
+        self.addCleanup(setattr, release.host, "PINNED_WORKFLOW_SHA", original_workflow_pin)
 
     def run_release(self, envelope=None, proof=None, context=None, port=None):
         return release.release_once(
@@ -107,6 +110,12 @@ class HostTokenReleaseTests(unittest.TestCase):
             self.run_release()
         self.assertEqual([], self.port.calls)
 
+    def test_missing_independent_workflow_admission_refuses_before_port(self):
+        release.host.PINNED_WORKFLOW_SHA = ""
+        with self.assertRaisesRegex(release.Refused, "workflow-revision-unconfigured"):
+            self.run_release()
+        self.assertEqual([], self.port.calls)
+
     def test_wrong_run_candidate_nonce_or_target_refuses_before_port(self):
         changes = [
             {"runId": 99999, "runNonce": f'99999-2-{"b" * 40}'},
@@ -123,6 +132,19 @@ class HostTokenReleaseTests(unittest.TestCase):
         altered["binding"]["projectNodeId"] = "PVT_foreign"
         with self.assertRaisesRegex(release.Refused, "run-or-target"):
             self.run_release(envelope=self.fixture.raw(altered))
+        self.assertEqual([], self.port.calls)
+
+    def test_valid_signature_on_unpinned_workflow_revision_refuses(self):
+        alternate = json.loads(self.envelope)
+        alternate["binding"]["workflowSha"] = "f" * 40
+        signature = host_fixture.host.sign(
+            self.fixture.key,
+            host_fixture.host.canonical_payload(alternate["binding"]))
+        alternate["signatureBase64"] = base64.b64encode(signature).decode()
+        changed = {**self.fixture.context, "workflowSha": "f" * 40,
+                   "protectedSha": "f" * 40}
+        with self.assertRaises(release.Refused):
+            self.run_release(envelope=self.fixture.raw(alternate), context=changed)
         self.assertEqual([], self.port.calls)
 
     def test_unsigned_or_tampered_claim_refuses_before_port(self):
