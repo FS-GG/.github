@@ -31,7 +31,7 @@ module GitTreeProjects =
         Error { Code = "git-object-provider"; Path = path; Message = message }
 
     let private canonicalId (oid: string) =
-        not (isNull oid) && Regex.IsMatch(oid, "^[0-9a-f]{40}$", RegexOptions.CultureInvariant)
+        not (isNull oid) && Regex.IsMatch(oid, @"\A[0-9a-f]{40}\z", RegexOptions.CultureInvariant)
 
     let private treeId (bytes: byte[]) =
         let prefix = Encoding.ASCII.GetBytes("tree " + bytes.Length.ToString(CultureInfo.InvariantCulture) + "\000")

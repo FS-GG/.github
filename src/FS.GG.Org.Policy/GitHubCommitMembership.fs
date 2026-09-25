@@ -31,7 +31,7 @@ module GitHubCommitMembership =
         Error { Code = "github-commit-membership"; Path = path; Message = message }
 
     let private canonicalSha1 (value: string) =
-        not (isNull value) && Regex.IsMatch(value, "^[0-9a-f]{40}$", RegexOptions.CultureInvariant)
+        not (isNull value) && Regex.IsMatch(value, @"\A[0-9a-f]{40}\z", RegexOptions.CultureInvariant)
 
     /// The concrete HTTP reader must not execute arbitrary GraphQL documents through this port.
     let internal isExactReadRequest (request: ExactRequest) =

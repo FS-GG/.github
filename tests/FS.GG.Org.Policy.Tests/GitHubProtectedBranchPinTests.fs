@@ -52,6 +52,10 @@ module GitHubProtectedBranchPinTests =
         refused "SHA-1" (Ok(response (branchJson.Replace(commitId, "refs/heads/main"))))
 
     [<Fact>]
+    let ``commit ID with terminal newline cannot mint protected pin`` () =
+        refused "SHA-1" (Ok(response (branchJson.Replace(commitId, commitId + "\\n"))))
+
+    [<Fact>]
     let ``duplicate protected or commit fields cannot mask rejected facts`` () =
         refused "duplicate" (Ok(response (branchJson.Replace("\"protected\":true", "\"protected\":false,\"protected\":true"))))
         refused "duplicate" (Ok(response (branchJson.Replace("\"sha\":\"" + commitId + "\"", "\"sha\":\"" + String.replicate 40 "a" + "\",\"sha\":\"" + commitId + "\""))))

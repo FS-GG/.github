@@ -53,6 +53,22 @@ module GitHubCommitMembershipTests =
         refused "tree ID" (valid.Replace(rootTreeId, String.replicate 40 "b"))
 
     [<Fact>]
+    let ``terminal newline IDs cannot establish provisional membership`` () =
+        let malformedPin = { pin with CommitId = commitId + "\n" }
+        let malformedTreeId = rootTreeId + "\n"
+        let malformedJson =
+            valid.Replace(commitId, commitId + "\\n")
+                 .Replace(rootTreeId, rootTreeId + "\\n")
+        let malformedReader =
+            { new GitHubCommitMembership.IReadOnlyGraphQlReader with
+                member _.ExecuteExact _ = Ok(Encoding.UTF8.GetBytes(malformedJson)) }
+        match GitHubCommitMembership.inspectProvisionalMembership malformedPin malformedTreeId malformedReader with
+        | Error diagnostic ->
+            Assert.Equal("github-commit-membership", diagnostic.Code)
+            Assert.Contains("exact", diagnostic.Message)
+        | Ok fact -> failwithf "noncanonical object IDs established membership: %A" fact
+
+    [<Fact>]
     let ``null and missing object prevent a membership verdict`` () =
         refused "object" (valid.Replace("\"object\":{\"__typename\"", "\"wrongField\":{\"__typename\""))
         refused "object" (valid.Replace("\"object\":{\"__typename\":\"Commit\",\"oid\":\"" + commitId + "\",\"tree\":{\"oid\":\"" + rootTreeId + "\"}}", "\"object\":null"))

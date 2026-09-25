@@ -293,3 +293,15 @@ module GitTreeProjectsTests =
     [<Fact>]
     let ``non SHA1 root identifier has no roster verdict`` () =
         refused "40 lowercase" (String.replicate 64 "a") complete
+
+    [<Fact>]
+    let ``terminal newline root cannot dispatch raw object provider`` () =
+        let mutable calls = 0
+        let provider =
+            objectReader (fun _ _ ->
+                calls <- calls + 1
+                Error ())
+        match ProjectReferenceXml.inspectReadOnlyGitObjectSnapshot (fst edgeRoot + "\n") provider with
+        | Error diagnostic -> Assert.Equal("git-object-provider", diagnostic.Code)
+        | Ok graph -> failwithf "noncanonical root produced graph: %A" graph
+        Assert.Equal(0, calls)

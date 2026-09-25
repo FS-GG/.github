@@ -87,7 +87,7 @@ module GitHubProtectedBranchPin =
                         | Some commit when commit.ValueKind = JsonValueKind.Object ->
                             match textField "<commit>" "sha" commit with
                             | Error diagnostic -> Error diagnostic
-                            | Ok oid when not (Regex.IsMatch(oid, "^[0-9a-f]{40}$", RegexOptions.CultureInvariant)) ->
+                            | Ok oid when not (Regex.IsMatch(oid, @"\A[0-9a-f]{40}\z", RegexOptions.CultureInvariant)) ->
                                 error "<commit>" "branch commit SHA-1 must be 40 lowercase hexadecimal characters"
                             | Ok oid ->
                                 Ok { RepositoryNodeId = repository.RepositoryNodeId

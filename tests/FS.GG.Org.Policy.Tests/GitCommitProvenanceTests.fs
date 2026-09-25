@@ -65,6 +65,22 @@ module GitCommitProvenanceTests =
             | Ok verified -> failwithf "invalid pin accepted: %A" verified
 
     [<Fact>]
+    let ``terminal newline IDs cannot dispatch raw commit provider`` () =
+        let mutable calls = 0
+        let countingReader =
+            { new GitCommitProvenance.IReadOnlyCommitReader with
+                member _.ReadExact _ =
+                    calls <- calls + 1
+                    Error () }
+        for candidatePin, candidateTree in
+            [ { pin with CommitId = commitId + "\n" }, rootTreeId
+              pin, rootTreeId + "\n" ] do
+            match GitCommitProvenance.inspectProvisionalRoot candidatePin candidateTree countingReader with
+            | Error diagnostic -> Assert.Equal("git-commit-provenance", diagnostic.Code)
+            | Ok verified -> failwithf "noncanonical ID certified commit: %A" verified
+        Assert.Equal(0, calls)
+
+    [<Fact>]
     let ``wrong commit claim and changed commit bytes refuse`` () =
         refused "commit ID" rootTreeId (Ok { observation with CommitId = String.replicate 40 "a" })
         let changed = Array.copy commitBytes

@@ -34,7 +34,7 @@ module GitCommitProvenance =
         Error { Code = "git-commit-provenance"; Path = path; Message = message }
 
     let private canonicalSha1 (value: string) =
-        not (isNull value) && Regex.IsMatch(value, "^[0-9a-f]{40}$", RegexOptions.CultureInvariant)
+        not (isNull value) && Regex.IsMatch(value, @"\A[0-9a-f]{40}\z", RegexOptions.CultureInvariant)
 
     let private commitId (bytes: byte[]) =
         let prefix = Encoding.ASCII.GetBytes("commit " + bytes.Length.ToString(CultureInfo.InvariantCulture) + "\000")
