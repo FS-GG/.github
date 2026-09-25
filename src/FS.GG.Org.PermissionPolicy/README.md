@@ -78,6 +78,19 @@ head.
 A disappeared file, transport failure, or unverified roster source is no
 verdict; a supplied JSON test scenario is not that evidence.
 
+`FleetInventoryContract.evaluateSupplied` now checks an independent snapshot of
+`registry/repos.yml` at the expected source ref against the supplied fleet
+roster. It requires exactly one repository head and one terminal workflow
+enumeration per registry identity, with listing paths equal to the fleet roster
+at that head. A visible empty workflow directory is represented by a terminal
+empty listing; a missing or incomplete listing refuses. The result is explicitly
+`ProvisionalFleetVerdict`. This pure contract does not authenticate the
+registry bytes, the heads, the visibility check behind an empty listing, or
+the provider's claim that an enumeration was terminal. The current fleet
+reducer also accepts only `FS-GG/*` caller identities, so the actual registry's
+non-organization rows require an explicit policy decision and installed proof
+before a live sweep can use this adapter.
+
 This source does not fetch a callee at its pinned ref, enumerate the roster or
 workflow files from GitHub, authenticate current installation grants, or
 replace the live Python gate. Those boundaries and installed parity remain separate work. The

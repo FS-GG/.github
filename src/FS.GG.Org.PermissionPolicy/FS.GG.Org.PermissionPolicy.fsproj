@@ -13,5 +13,6 @@
     <Compile Include="AppGrantComparison.fs" />
     <Compile Include="PermissionAggregate.fs" />
     <Compile Include="PermissionFleet.fs" />
+    <Compile Include="FleetInventoryContract.fs" />
   </ItemGroup>
 </Project>

@@ -615,4 +615,104 @@ expect "mismatched per-call roster refuses"
     (Error "caller-roster-binding-mismatch")
     (fleet { fleetEvidence with Calls = Some [ firstCallFact; wrongSecondCallFact ] })
 
+let partialRoster = { fleetRoster with Repositories = [ fleetRoster.Repositories.Head ] }
+let partialRosterFact = { fleetRosterFact with Repositories = [ "FS-GG/R" ] }
+let partialCallFact =
+    { firstCallFact with
+        BindingFacts = { firstCallFact.BindingFacts with Roster = Some partialRosterFact } }
+let partialEvidence =
+    { fleetEvidence with
+        Roster = Some partialRoster
+        Workflows = Some [ firstSnapshot ]
+        Calls = Some [ partialCallFact ] }
+expect "legacy supplied partial caller fleet falsely satisfies" (Ok GateSatisfied)
+    (fleet partialEvidence)
+
+let registryText = "repos:\n  - { full: FS-GG/R }\n  - { full: FS-GG/S }\n"
+let inventoryEvidence: FleetInventoryEvidence =
+    { Registry = Some { Repository = "FS-GG/.github"; Path = "registry/repos.yml"
+                        SourceRef = "source-commit"; Text = registryText }
+      Heads = Some [ { Repository = "FS-GG/R"; HeadRef = "r-head" }
+                     { Repository = "FS-GG/S"; HeadRef = "s-head" } ]
+      Enumerations =
+        Some [ { Repository = "FS-GG/R"; HeadRef = "r-head"; State = Terminal
+                 WorkflowPaths = [ ".github/workflows/caller.yml" ] }
+               { Repository = "FS-GG/S"; HeadRef = "s-head"; State = Terminal
+                 WorkflowPaths = [ ".github/workflows/caller.yml" ] } ]
+      Fleet = fleetEvidence }
+let inventory evidence = FleetInventoryContract.evaluateSupplied "source-commit" evidence
+expect "independent registry rejects omitted caller repo before verdict"
+    (Error "inventory-repository-set-mismatch")
+    (inventory { inventoryEvidence with Fleet = partialEvidence })
+expect "complete supplied inventory yields provisional finding"
+    (Ok(ProvisionalFindings [ UnderGrantFinding(
+        "FS-GG/S -> reuse.yml@main",
+        [ { Scope = "contents"; Required = Read; Granted = NoAccess } ]) ]))
+    (inventory inventoryEvidence)
+expect "missing terminal enumeration refuses"
+    (Error "inventory-enumeration-set-mismatch")
+    (inventory { inventoryEvidence with Enumerations = Some [ inventoryEvidence.Enumerations.Value.Head ] })
+expect "missing repository head refuses"
+    (Error "inventory-head-set-mismatch")
+    (inventory { inventoryEvidence with Heads = Some [ inventoryEvidence.Heads.Value.Head ] })
+expect "duplicate repository head refuses"
+    (Error "inventory-head-set-mismatch")
+    (inventory { inventoryEvidence with Heads = Some [ inventoryEvidence.Heads.Value.Head;
+                                                      inventoryEvidence.Heads.Value.Head ] })
+let nonterminalListings =
+    inventoryEvidence.Enumerations.Value
+    |> List.map (fun item ->
+        if item.Repository = "FS-GG/S" then { item with State = Incomplete } else item)
+expect "nonterminal enumeration refuses"
+    (Error "inventory-enumeration-incomplete")
+    (inventory { inventoryEvidence with Enumerations = Some nonterminalListings })
+let staleHeads =
+    inventoryEvidence.Heads.Value
+    |> List.map (fun item ->
+        if item.Repository = "FS-GG/S" then { item with HeadRef = "old" } else item)
+expect "stale repository head refuses"
+    (Error "inventory-head-ref-mismatch")
+    (inventory { inventoryEvidence with Heads = Some staleHeads })
+let partialListings =
+    inventoryEvidence.Enumerations.Value
+    |> List.map (fun item ->
+        if item.Repository = "FS-GG/S" then { item with WorkflowPaths = [] } else item)
+expect "listed but omitted workflow refuses"
+    (Error "inventory-workflow-set-mismatch")
+    (inventory { inventoryEvidence with Enumerations = Some partialListings })
+let staleListings =
+    inventoryEvidence.Enumerations.Value
+    |> List.map (fun item ->
+        if item.Repository = "FS-GG/S" then { item with HeadRef = "old" } else item)
+expect "workflow listing from wrong repository head refuses"
+    (Error "inventory-enumeration-head-mismatch")
+    (inventory { inventoryEvidence with Enumerations = Some staleListings })
+let visibleEmptyRows =
+    fleetRoster.Repositories
+    |> List.map (fun item ->
+        if item.Repository = "FS-GG/S" then { item with WorkflowPaths = [] } else item)
+let visibleEmptyRoster = { fleetRoster with Repositories = visibleEmptyRows }
+let visibleEmptyFleet =
+    { fleetEvidence with Roster = Some visibleEmptyRoster
+                         Workflows = Some [ firstSnapshot ]
+                         Calls = Some [ firstCallFact ] }
+let visibleEmptyInventory =
+    { inventoryEvidence with Fleet = visibleEmptyFleet
+                             Enumerations = Some partialListings }
+expect "terminal visible empty workflow directory is a closed fact"
+    (Ok ProvisionalSatisfied)
+    (inventory visibleEmptyInventory)
+let duplicateRegistry =
+    inventoryEvidence.Registry.Value
+    |> fun item -> { item with Text = "repos: [{ full: FS-GG/R }, { full: FS-GG/R }]" }
+expect "duplicate registry identity refuses"
+    (Error "inventory-registry-syntax:registry-repos-duplicate")
+    (inventory { inventoryEvidence with Registry = Some duplicateRegistry })
+let duplicateRegistryKey =
+    inventoryEvidence.Registry.Value
+    |> fun item -> { item with Text = "repos: [{ full: FS-GG/R, full: FS-GG/S }]" }
+expect "duplicate registry YAML key refuses"
+    (Error "inventory-registry-syntax:yaml-invalid")
+    (inventory { inventoryEvidence with Registry = Some duplicateRegistryKey })
+
 printfn "permission reducer: %d controls passed" passed
