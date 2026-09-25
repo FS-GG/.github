@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="WorkflowSyntax.fs" />
+    <Compile Include="GitTreeProjects.fs" />
     <Compile Include="ProjectReferenceXml.fs" />
     <Compile Include="RuleA.fs" />
     <Compile Include="RuleB.fs" />

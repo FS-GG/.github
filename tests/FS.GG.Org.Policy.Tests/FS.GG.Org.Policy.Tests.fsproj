@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="WorkflowSyntaxTests.fs" />
+    <Compile Include="GitTreeProjectsTests.fs" />
     <Compile Include="RuleATests.fs" />
     <Compile Include="RuleBTests.fs" />
     <Compile Include="ProjectReferenceXmlTests.fs" />
