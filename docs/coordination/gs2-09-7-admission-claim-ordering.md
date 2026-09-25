@@ -28,7 +28,10 @@ native readback under crash, retry and lost-result conditions, and keep the
 candidate and workflow from writing either state. A descriptor assertion and
 fake store cannot prove any of those properties. The host still needs a
 separate policy for a revocation committed after claim but before candidate
-invocation, plus native token revocation and finalizer readback.
+invocation, plus native token revocation and finalizer readback. The later
+source-only launcher fence is recorded in
+`gs2-09-7-handoff-revocation-fence.md`; its installed interlock remains
+unqualified.
 
 All live pins remain empty. No token release, sandbox dispatch, provider
 effect, Authority write, protected merge, receipt or cutover is authorized.

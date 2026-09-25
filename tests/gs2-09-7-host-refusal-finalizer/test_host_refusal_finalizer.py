@@ -144,6 +144,7 @@ class FakeReleasePort:
         self.invocations = 0
         self.invoke_result = "complete"
         self.on_invoke = None
+        self.decision_state = "admitted"
 
     def claim_once(self, decision_id, binding_id, token_sha256):
         if decision_id in self.claims:
@@ -151,7 +152,10 @@ class FakeReleasePort:
         self.claims.add(decision_id)
         return "granted"
 
-    def invoke_candidate_once(self, token, binding):
+    def invoke_candidate_if_admitted_once(self, decision_id, binding_id,
+                                           token_sha256, token, binding):
+        if self.decision_state != "admitted":
+            return "refused"
         self.invocations += 1
         if self.on_invoke is not None:
             self.on_invoke()
