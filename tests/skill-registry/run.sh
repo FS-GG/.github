@@ -1513,19 +1513,41 @@ echo "   ok"
 
 echo "== 66a. an empty, foreign-only or unsafe organization roster is a refusal =="
 printf 'schemaVersion: 1\nrepos: []\n' > "$RCASE/repos.yml"
-for shape in empty foreign-only empty-name escape-name; do
+for shape in empty foreign-only empty-name escape-name duplicate-name case-collision malformed-full noncanonical-owner malformed-yaml; do
   if [ "$shape" = foreign-only ]; then
     write_roster '  - { id: outside, full: Someone/Else.Repo, role: non-participant }'
   elif [ "$shape" = empty-name ]; then
     write_roster '  - { id: bad, full: FS-GG/, role: framework }'
   elif [ "$shape" = escape-name ]; then
     write_roster '  - { id: bad, full: FS-GG/../outside, role: framework }'
+  elif [ "$shape" = duplicate-name ]; then
+    write_roster '  - { id: present, full: FS-GG/FS.GG.Present, role: framework }
+  - { id: duplicate, full: FS-GG/FS.GG.Present, role: framework }'
+  elif [ "$shape" = case-collision ]; then
+    write_roster '  - { id: present, full: FS-GG/FS.GG.Present, role: framework }
+  - { id: duplicate, full: FS-GG/fs.gg.present, role: framework }'
+  elif [ "$shape" = malformed-full ]; then
+    write_roster '  - { id: present, full: FS-GG/FS.GG.Present, role: framework }
+  - { id: broken, full: FS-GG, role: framework }'
+  elif [ "$shape" = noncanonical-owner ]; then
+    write_roster '  - { id: present, full: FS-GG/FS.GG.Present, role: framework }
+  - { id: shadow, full: fs-gg/FS.GG.Quiet, role: framework }'
+  elif [ "$shape" = malformed-yaml ]; then
+    printf 'schemaVersion: 1\nrepos: [unterminated\n' > "$RCASE/repos.yml"
   fi
   out="$(run --registry "$RCASE/skills.yml" --repos-root "$RCASE/repos" || true)"
   grep -q '\[declared-completeness\] registry/repos.yml' <<<"$out" \
     || { echo "FAIL: $shape roster did not refuse its unsafe or empty FS-GG population"; echo "$out"; exit 1; }
   python3 "$TOOL" --registry "$RCASE/skills.yml" --producers >/dev/null 2>&1 \
     && { echo "FAIL: --producers accepted a $shape FS-GG population"; exit 1; }
+  if [ "$shape" = malformed-yaml ]; then
+    err="$(python3 "$TOOL" --registry "$RCASE/skills.yml" --producers 2>&1 || true)"
+    grep -q 'unreadable repository roster' <<<"$err" \
+      || { echo "FAIL: malformed YAML did not return a bounded roster diagnostic"; echo "$err"; exit 1; }
+    if grep -q 'Traceback' <<<"$err"; then
+      echo "FAIL: malformed YAML leaked a traceback"; exit 1
+    fi
+  fi
 done
 write_roster '  - { id: present, full: FS-GG/FS.GG.Present, role: framework }
   - { id: quiet,   full: FS-GG/FS.GG.Quiet,   role: framework }'
