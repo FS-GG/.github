@@ -17,12 +17,29 @@ type ReusableWorkflowCall =
         JobPermissions: PermissionBlock
     }
 
+type AppTokenStep =
+    {
+        JobId: string
+        StepIndex: int
+        AppIdentitySecret: string option
+        Requested: PermissionBlock
+    }
+
+type AppTokenScan =
+    {
+        InspectedSteps: int
+        Requests: AppTokenStep list
+    }
+
 /// A pure YAML adapter for the permission reducer. Pinned-ref and roster reads remain external.
 [<RequireQualifiedAccess>]
 module WorkflowPermissionSyntax =
     let private error code path = Error { Code = code; Path = path }
     let private callTarget =
         Regex("^FS-GG/\\.github/\\.github/workflows/([^@/]+\\.ya?ml)@(.+)$", RegexOptions.CultureInvariant)
+    let private appIdentitySecret =
+        Regex("^\\$\\{\\{\\s*secrets\\.([A-Z][A-Z0-9_]*)\\s*\\}\\}$", RegexOptions.CultureInvariant)
+    let private appTokenAction = "actions/create-github-app-token@"
 
     let private scalar (node: YamlNode) =
         match node with
@@ -203,3 +220,130 @@ module WorkflowPermissionSyntax =
 
                 declared
                 |> Result.bind (fun value -> if value then Ok(block root) else error "not-callable" path))
+
+    let private appRequest path (inputs: YamlMappingNode option) =
+        match inputs with
+        | None -> Ok(None, Absent)
+        | Some values ->
+            let client = memberValue "client-id" values
+            let legacy = memberValue "app-id" values
+            if client.IsSome && legacy.IsSome then error "app-identity-ambiguous" path
+            else
+                let identity =
+                    match client |> Option.orElse legacy with
+                    | None -> Ok None
+                    | Some value when isNull value -> error "app-identity-null" path
+                    | Some value ->
+                        match stringScalar value with
+                        | None -> error "app-identity-unsupported" path
+                        | Some literal ->
+                            let matched = appIdentitySecret.Match literal
+                            if matched.Success then Ok(Some matched.Groups[1].Value)
+                            else error "app-identity-unsupported" path
+
+                identity
+                |> Result.bind (fun selected ->
+                    let permissions =
+                        values.Children
+                        |> Seq.choose (fun item ->
+                            match stringScalar item.Key with
+                            | Some key when key.StartsWith("permission-", StringComparison.Ordinal) ->
+                                Some(key.Substring("permission-".Length).Replace('-', '_'), item.Value)
+                            | _ -> None)
+                        |> Seq.toList
+                    let scopes = permissions |> List.map fst
+                    if scopes.Length <> (scopes |> Set.ofList |> Set.count) then
+                        error "app-permission-duplicate" path
+                    else
+                        let mutable problem = None
+                        let entries =
+                            permissions
+                            |> List.choose (fun (scope, value) ->
+                                if isNull value then
+                                    problem <- Some "app-permission-null"
+                                    None
+                                else
+                                    match stringScalar value with
+                                    | None ->
+                                        problem <- Some "app-permission-shape"
+                                        None
+                                    | Some level when level.Contains "${{" ->
+                                        problem <- Some "app-permission-dynamic"
+                                        None
+                                    | Some level -> Some(scope, level))
+                        match problem with
+                        | Some code -> error code path
+                        | None -> Ok(selected, if List.isEmpty entries then Absent else Scopes entries))
+
+    /// Inspect every step in every ordinary job, then extract static App-token requests.
+    /// A valid reusable-call job has no steps; malformed job and step shapes refuse.
+    let appTokenSteps path text =
+        parse path text
+        |> Result.bind (fun root ->
+            match memberValue "jobs" root |> Option.bind mapping with
+            | None -> error "jobs-shape" path
+            | Some jobs when jobs.Children.Count = 0 -> error "jobs-empty" path
+            | Some jobs ->
+                let requests = ResizeArray<AppTokenStep>()
+                let mutable inspected = 0
+                let mutable problem = None
+                for item in jobs.Children do
+                    if problem.IsNone then
+                        let jobId = stringScalar item.Key |> Option.get
+                        match mapping item.Value with
+                        | None -> problem <- Some "job-shape"
+                        | Some job ->
+                            let uses = memberValue "uses" job
+                            let steps = memberValue "steps" job
+                            match uses, steps with
+                            | Some _, Some _ -> problem <- Some "job-call-with-steps"
+                            | Some call, None when (stringScalar call
+                                                    |> Option.filter (fun value -> not (String.IsNullOrWhiteSpace value))).IsNone ->
+                                problem <- Some "job-uses-shape"
+                            | Some _, None -> ()
+                            | None, None -> problem <- Some "steps-missing"
+                            | None, Some (:? YamlSequenceNode as sequence) when sequence.Children.Count = 0 ->
+                                problem <- Some "steps-empty"
+                            | None, Some (:? YamlSequenceNode as sequence) ->
+                                for index, node in sequence.Children |> Seq.indexed do
+                                    if problem.IsNone then
+                                        inspected <- inspected + 1
+                                        match mapping node with
+                                        | None -> problem <- Some "step-shape"
+                                        | Some step ->
+                                            match memberValue "uses" step, memberValue "run" step with
+                                            | None, None -> problem <- Some "step-command-missing"
+                                            | Some _, Some _ -> problem <- Some "step-uses-run"
+                                            | None, Some run when (stringScalar run
+                                                                   |> Option.filter (fun value -> not (String.IsNullOrWhiteSpace value))).IsNone ->
+                                                problem <- Some "step-run-shape"
+                                            | None, Some _ -> ()
+                                            | Some action, None ->
+                                                match stringScalar action with
+                                                | None -> problem <- Some "step-uses-shape"
+                                                | Some value when String.IsNullOrWhiteSpace value ->
+                                                    problem <- Some "step-uses-shape"
+                                                | Some value when value.Trim().StartsWith(appTokenAction, StringComparison.Ordinal) ->
+                                                    if value.Trim().Length = appTokenAction.Length then
+                                                        problem <- Some "app-action-ref-missing"
+                                                    else
+                                                        let inputs = memberValue "with" step
+                                                        match inputs with
+                                                        | Some value when (mapping value).IsNone ->
+                                                            problem <- Some "app-with-shape"
+                                                        | _ ->
+                                                            match appRequest path (inputs |> Option.bind mapping) with
+                                                            | Error diagnostic -> problem <- Some diagnostic.Code
+                                                            | Ok(identity, requested) ->
+                                                                requests.Add
+                                                                    {
+                                                                        JobId = jobId
+                                                                        StepIndex = index + 1
+                                                                        AppIdentitySecret = identity
+                                                                        Requested = requested
+                                                                    }
+                                                | Some _ -> ()
+                            | None, Some _ -> problem <- Some "steps-shape"
+                match problem with
+                | Some code -> error code path
+                | None -> Ok { InspectedSteps = inspected; Requests = List.ofSeq requests })

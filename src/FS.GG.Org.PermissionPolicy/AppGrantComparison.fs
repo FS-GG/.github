@@ -10,6 +10,19 @@ type AppTokenRequestFact =
         Requested: PermissionBlock
     }
 
+type AppTokenStepVerdict =
+    {
+        JobId: string
+        StepIndex: int
+        Verdict: PermissionVerdict
+    }
+
+type AppTokenWorkflowScan =
+    {
+        InspectedSteps: int
+        Requests: AppTokenStepVerdict list
+    }
+
 /// Pure comparison against an already-bound, pinned App installation inventory.
 [<RequireQualifiedAccess>]
 module AppGrantComparison =
@@ -45,3 +58,31 @@ module AppGrantComparison =
                     |> List.map (fun (scope, granted) -> scope, level granted)
                     |> Scopes
                 Permissions.compare inventory Absent (Scopes scopes)
+
+    /// Scan a supplied authority workflow and compare every observed App-token step.
+    /// The returned list is evidence, not an aggregate gate verdict.
+    let compareWorkflow (bound: BoundPermissionCall) repository path text =
+        if repository <> bound.AppGrants.Repository then
+            Error { Code = "app-workflow-repository-mismatch"; Path = path }
+        else
+            WorkflowPermissionSyntax.appTokenSteps path text
+            |> Result.map (fun scan ->
+                {
+                    InspectedSteps = scan.InspectedSteps
+                    Requests =
+                        scan.Requests
+                        |> List.map (fun step ->
+                            let request =
+                                {
+                                    Repository = repository
+                                    AppIdentity =
+                                        step.AppIdentitySecret
+                                        |> Option.defaultValue bound.AppGrants.InventoryId
+                                    Requested = step.Requested
+                                }
+                            {
+                                JobId = step.JobId
+                                StepIndex = step.StepIndex
+                                Verdict = compare bound (Some request)
+                            })
+                })
