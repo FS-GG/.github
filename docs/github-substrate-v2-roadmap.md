@@ -1062,6 +1062,10 @@ changing the protected holds:
 | [Telemetry usage #736](https://github.com/FS-GG/FS.GG.Coordination/pull/736) | `f60d2cf10ecb5aec5ea2a6747a86722c6bab80e1` | Dormant direct-session usage reducer refuses malformed but equal reservation/subscription scope keys; 152 adapter tests. Current-session authentication and completed-turn usage remain no-verdict. |
 | [GS2-09.7 #737](https://github.com/FS-GG/FS.GG.Coordination/pull/737) | `f4bc3c8cfad696497eef0addb05c7549fb5758c2` | Source-only census binder refuses captured POST, redirect and byte-substituted bodies; 727 full unit tests. Protected native HTTP/provider custody and Q5/Q6 remain held. |
 | [FSC-03 F# #3815](https://github.com/FS-GG/.github/pull/3815) | `7d5a67e3ce29970e309ae294a844b8e1044ae98a` | Pure GitHub GraphQL response adapter binds exact repository, commit and tree identity and refuses partial/foreign/duplicate JSON; 221 tests. Authenticated transport and accepted pin remain uninstalled. |
+| [GS2-09.9 #738](https://github.com/FS-GG/FS.GG.Coordination/pull/738) | `2b21d54a65b5b453538fef55792ce5ce73f9730f` | Source-only sealed-plan adapter binds attestation to a distinct exact read-seal scope, rechecks both readers for drift, and closes five fake-port false passes; 20 focused tests. Fake scopes remain non-authoritative and #550 stays held. |
+| [FSC-04 #1045](https://github.com/FS-GG/FS.GG.SDD/pull/1045) | `ff8215ec6125ffafc058b24b5cfa7439dabd31da` | Physical ABA and post-final-capture controls show four matching reads still lack a common instant; the read-only success type is explicitly `ObservedAgreement`, not authorization. 1,517 Commands tests. |
+| [Telemetry usage #739](https://github.com/FS-GG/FS.GG.Coordination/pull/739) | `35c90bfc2bcecb1ca0506fba4c55d883a4233d0f` | Dormant direct-session correlation refuses malformed reservation, transport, protocol and UTC facts; 157 adapter tests. Native completed-turn usage and Host capture remain no-verdict. |
+| [GS2-09.7 #740](https://github.com/FS-GG/FS.GG.Coordination/pull/740) | `f06b927e91fec650a3c0ffd620ecc6981fb0aeec` | Source-only census binder refuses foreign provider IDs and ambiguous headers, and includes recorded headers in its corpus digest; 729 full unit tests. Native wire custody, freshness and Q5/Q6 stay held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
@@ -1112,7 +1116,7 @@ Each typed lane now carries required `CurrentWork`; the Markdown lane table
 renders it beside the lane identity. A running lane with blank work is refused.
 The JSON adapter requires `currentWork` for every lane. Focused tests pass
 25/25; missing and blank current-work JSON fixtures each exited 2 without
-creating a report. The next ten-minute metadata rebuild must set all six
+creating a report. Every ten-minute metadata rebuild must set all six
 concrete assignments from the live roster rather than carry forward stale
 task descriptions.
 
@@ -1185,6 +1189,29 @@ authenticated telemetry was ready/configured with a zero lossless queue;
 capture acceptance remained pending. The five completion rows cited pushed
 roadmap head `c77d72d6`, which recorded each exact draft head. The script
 rendered with zero build warnings/errors, and 24 focused tests remained green.
+
+At the 19:07:53 UTC rendered checkpoint, the freshly checked roster contained
+six active GPT-6-Sol/high lanes, each with a concrete current-work cell: the
+orchestrator on roadmap/reporting; reserved GS2-09.9 on sealed-plan byte
+custody; direct GS2-09.7 on HTTP-header/provider freshness; FSC-03 on
+authenticated GitHub commit transport; FSC-04 on ABA/common-instant preview;
+and telemetry source on trusted current-session/native usage qualification.
+The local root family had 30 sessions and 86 completed ten-minute periods.
+The latest 18:57:05–19:07:05 UTC period had 38,677,177 input tokens
+(38,359,808 cached; 317,369 noncached), 113,374 output and 38,790,551
+total. The all-period **team** mean, including zero-use periods, was
+31,636,034.33 total. The local weekly diagnostic was 90% used at 19:07:26,
+leaving 10%, with a conditional continuous-use, account-wide same-reset
+projection near 21:41 UTC. These remain **unverified local diagnostics**, not
+collector/Host capture. Direct authenticated telemetry health was ready;
+`main-fsharp-dev` was configured with pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false. End-to-end runner/Host capture stayed pending.
+The five completion rows cited previously pushed roadmap head `7f0c1bd6`,
+which already recorded their exact source heads. The F# script rendered with
+zero build warnings/errors, and 25 focused tests passed. Drafts #738, #1045,
+#739 and #740 arrived after this render; none was counted as a completed row
+at that cutoff. Their workers were immediately recycled into disjoint source
+tasks, preserving six active lanes.
 
 At the 17:51 UTC source checkpoint, the newest five completed **draft
 commits** were verified against their PR heads. Their completion is source
