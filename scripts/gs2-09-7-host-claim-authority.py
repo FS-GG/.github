@@ -127,7 +127,14 @@ class HostClaimAuthority:
         except Exception:
             result = "unknown"
         if result == "committed":
-            return "granted"
+            # A positive CAS response is not proof of durable commit. Require
+            # exact native readback before the token can leave host custody.
+            try:
+                observed = self.store.read_claim(binding_id)
+            except Exception:
+                observed = "unknown"
+            return ("granted" if type(observed) is str
+                    and observed == self.token_sha256 else "unknown")
         if result == "duplicate":
             return "duplicate"
         # Readback can locate a possibly committed claim for recovery, but a
