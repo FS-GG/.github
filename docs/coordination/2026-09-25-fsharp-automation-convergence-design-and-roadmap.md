@@ -139,7 +139,10 @@ refuses duplicate roster identities hidden by Unicode case folding; 199 F#, 48 P
 refuses unsafe ZIP paths and symlink members in release readbacks; current GitHub Packages
 still has no served-byte verdict. [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
-seven new controls; tag protection, signature and stability remain unproved. These stacked
+seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)
+adds source-only ref checks at feed entry, after each download and before receipt after a
+red-before stale-tag false green; five new controls pass. ABA/post-check movement, tag
+protection and signature remain unproved. These stacked
 drafts need owner acceptance and installed evidence before receiver or release adoption.
 
 **V2-PROG-01 — deterministic progress projection.** A bounded `.github` F# source draft
