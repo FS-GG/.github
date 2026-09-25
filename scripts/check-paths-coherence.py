@@ -522,6 +522,14 @@ def project_graph(root: str) -> dict[str, list[str]]:
             root_tag = project.getroot().tag
             if not isinstance(root_tag, str) or root_tag.rsplit("}", 1)[-1] != "Project":
                 raise GateError(f"{rel}: project XML root must be Project")
+            # ProjectReference additions/removals inside a Target depend on execution order.
+            # Treating Include as unconditional or ignoring Remove yields a false graph verdict.
+            for element in project.iter():
+                if not isinstance(element.tag, str) or element.tag.rsplit("}", 1)[-1] != "Target":
+                    continue
+                if any(isinstance(child.tag, str) and child.tag.rsplit("}", 1)[-1] == "ProjectReference"
+                       for child in element.iter()):
+                    raise GateError(f"{rel}: target-time ProjectReference requires evaluation")
             refs = []
             # XML decodes character references in Include. Scanning raw attribute bytes can
             # fabricate a path which a workflow covers while missing the real referenced project.

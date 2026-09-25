@@ -680,6 +680,49 @@ wf "$RBIM/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
 expect "explicit Import cannot hide an uncovered imported ProjectReference" \
   3 "requires MSBuild import evaluation" "$RBIM"
 
+# Target-time item changes depend on execution order and cannot be declared as static graph facts.
+# The direct Include currently creates an unconditional B edge; the Remove is silently skipped.
+RBTI="$(root "$WORK/cover-target-time-reference-include")"
+proj "$RBTI" "src/A"
+proj "$RBTI" "src/B"
+cat > "$RBTI/src/A/A.fsproj" <<'XML'
+<Project><Target Name="Inject" BeforeTargets="ResolveProjectReferences">
+  <ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup>
+</Target></Project>
+XML
+wf "$RBTI/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "target-time Include refuses before inventing an unconditional reference" \
+  3 "target-time ProjectReference requires evaluation" "$RBTI"
+
+RBTR="$(root "$WORK/cover-target-time-reference-remove")"
+proj "$RBTR" "src/A"
+proj "$RBTR" "src/B"
+cat > "$RBTR/src/A/A.fsproj" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup>
+  <Target Name="Remove" BeforeTargets="ResolveProjectReferences">
+    <ItemGroup><ProjectReference Remove="../B/B.fsproj" /></ItemGroup>
+  </Target>
+</Project>
+XML
+wf "$RBTR/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/B/**"' '      - "src/A/**"
+      - "src/B/**"'
+expect "target-time Remove refuses instead of certifying a stale reference" \
+  3 "target-time ProjectReference requires evaluation" "$RBTR"
+
+RBTC="$(root "$WORK/cover-unrelated-target-item")"
+proj "$RBTC" "src/A"
+proj "$RBTC" "src/B"
+cat > "$RBTC/src/A/A.fsproj" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup>
+  <Target Name="Generate"><ItemGroup><Content Include="generated.txt" /></ItemGroup></Target>
+</Project>
+XML
+wf "$RBTC/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/B/**"' '      - "src/A/**"
+      - "src/B/**"'
+expect "unrelated target item leaves a static reference readable" 0 "ok:" "$RBTC"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
