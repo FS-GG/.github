@@ -1718,6 +1718,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   no installed queue, scheduler or authority ports. [Pending-token census draft #3716](https://github.com/FS-GG/.github/pull/3716)
   requires a sealed high-water snapshot, complete ordered pages, exact identities and independent
   digest/readback before releasing recovery subjects; its protected mint index and scheduler are absent.
+  [Adversarial boundary draft #3717](https://github.com/FS-GG/.github/pull/3717) repairs two
+  source-only false greens: a claimed `committed` CAS response without exact durable token-digest
+  readback could hand off a token, and incomplete worker/finalizer/revoker pins could release
+  census subjects. Its 77 stacked `.github` controls and 18 Coordination controls pass locally;
+  protected signer, custody, scheduler, native Q5/Q6 and installed receiver readback remain absent.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
