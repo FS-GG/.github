@@ -16,6 +16,7 @@ class RecoveryJob(TypedDict):
     schema: str
     scheduleId: str
     sealId: str
+    jointGeneration: int
     highWater: int
     sequence: int
     pendingSha256: str
@@ -42,6 +43,7 @@ class RecoveryBatch(TypedDict):
     schema: str
     batchId: str
     sealId: str
+    jointGeneration: int
     highWater: int
     pendingCount: int
     pendingSha256: str
@@ -64,6 +66,7 @@ class RecoveryClaimRecord(TypedDict):
     scheduleId: str
     batchId: str
     sealId: str
+    jointGeneration: int
     schedulerResourceId: str
     recoveryResourceId: str
     state: str
@@ -73,7 +76,8 @@ class AtomicRecoveryStorePort(Protocol):
     """One linearizable store; reads alone never authorize a fresh claim.
 
     `append_schedule_batch_once` compares the authentic sealed mint/pending
-    high-water and commits all jobs together or none. `withdraw` and `claim`
+    high-water and signed head generation, then commits all jobs together or
+    none. `withdraw` and `claim`
     share the same linearization point. A prior committed claim survives a
     later withdrawal for native observation and finalization. An exception or
     unknown response cannot be retried as a fresh mutation.
