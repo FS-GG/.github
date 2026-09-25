@@ -642,6 +642,24 @@ unaccepted. [`.github` FSC-03 F# #3782](https://github.com/FS-GG/.github/pull/37
 at `7122041148d1f99395f1220d5b5075b5bde75fbf` refuses task output into
 `ProjectReference` (126 tests), matching source-only Python #3781. Dynamic item
 names, implicit imports and installed parity remain separate.
+The 17:12 UTC read-only same-credential GraphQL probe returned exact Project 1
+`PVT_kwDOEYAWY84Bb08W` / number 1 / Coordination, while Project 2 returned
+`FORBIDDEN Resource not accessible by personal access token`. This confirms
+the installed all-project runner's access blocker; it is not an instrumented
+work item, native-turn attribution, applied Host receipt or queue-return proof.
+[Coordination GS2-09.9 #664](https://github.com/FS-GG/FS.GG.Coordination/pull/664)
+at `e6d083718a2e894482d037fb51906d4d3a70a05e` snapshots a mutable
+prestate-reader scope after a fake credential-drift false green (14 tests),
+without native permission or effect authority.
+[SDD FSC-04 #1029](https://github.com/FS-GG/FS.GG.SDD/pull/1029)
+at `6a835e74169174b9de229ec824955e83dbabcb41` repeats complete read-only
+Linux `work/` capture to catch a persistent late duplicate candidate (1,463
+Commands tests); matching passes still cannot prove atomicity, ABA or cross-root
+inventory completeness.
+[Templates FSC-05 #568](https://github.com/FS-GG/FS.GG.Templates/pull/568)
+at `57bca74b4175a70bb4719f3a0fd1f42a3c4551df` refuses local/central
+ZIP CRC and size mismatches without a data descriptor (49 payload, 29 archive
+controls); descriptor-form, complete closure and producer/receiver custody remain.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
