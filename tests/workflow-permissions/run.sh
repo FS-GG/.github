@@ -92,7 +92,7 @@ expect() {
   out="$(run "$@")" || rc=$?
   if [ "$rc" -ne "$want" ]; then
     bad "$name (exit $rc, want $want)" "$out"
-  elif [ -n "$needle" ] && ! grep -qF "$needle" <<<"$out"; then
+  elif [ -n "$needle" ] && ! grep -qF -- "$needle" <<<"$out"; then
     bad "$name (exit $want, but not for the stated reason: want '$needle')" "$out"
   else
     ok "$name"
@@ -217,16 +217,27 @@ jobs:
 YAML
 WAPP="$WORK/w-app-token"; mkdir -p "$WAPP/FS-GG__R"
 caller "$WAPP/FS-GG__R/c.yml" $'permissions:\n  contents: read\n  packages: read' "cal.yml@main"
+expect "a selected App without its own inventory refuses even when the default would undergrant" \
+  3 "no App grant inventory selects app-id secret 'DEDICATED_APP_CLIENT_ID'" "$WAPP" "$RC" \
+  --app-grants contents:read --require-app-identity-grants
+expect "a selected App without its own inventory refuses even when the default would pass" \
+  3 "no App grant inventory selects app-id secret 'DEDICATED_APP_CLIENT_ID'" "$WAPP" "$RC" \
+  --app-grants contents:read,issues:write --require-app-identity-grants
+expect "strict App identity mode requires a default inventory before scanning" \
+  3 "--require-app-identity-grants requires --app-grants" "$WAPP" "$RC" \
+  --require-app-identity-grants
 expect "an App-token request outside the pinned installation grants is caught before merge" \
   1 "issues: requests write, installation grants none" "$WAPP" "$RC" \
-  --app-grants contents:read
+  --app-grants contents:read --require-app-identity-grants \
+  --app-grants-for DEDICATED_APP_CLIENT_ID=contents:read
 expect "the same App-token request is green when the inventory grants it" \
   0 "ok:" "$WAPP" "$RC" \
-  --app-grants contents:read,issues:write
-expect "a separately custodied App selects its explicit required grant contract" \
-  0 "ok:" "$WAPP" "$RC" \
-  --app-grants contents:read \
+  --app-grants contents:read --require-app-identity-grants \
   --app-grants-for DEDICATED_APP_CLIENT_ID=contents:read,issues:write
+expect "a separately custodied App selects its explicit required grant contract" \
+  1 "issues: requests write, installation grants none" "$WAPP" "$RC" \
+  --app-grants contents:read,issues:write --require-app-identity-grants \
+  --app-grants-for DEDICATED_APP_CLIENT_ID=contents:read
 
 # GS2-08.9 retires the automatic publisher and its App-token/package request. Pin that capability
 # loss directly, then keep the auditor inversion independent of the retired production workflow.
@@ -251,8 +262,29 @@ jobs:
 YAML
 expect "INVERSION: a synthetic organisation-packages over-scope still red-lights" \
   1 "organization_packages: requests read, installation grants none" "$WAPP" "$RC" \
-  --app-grants contents:write,issues:write,packages:read,pull_requests:write
+  --app-grants contents:write,issues:write,packages:read,pull_requests:write \
+  --app-grants-for DEDICATED_APP_CLIENT_ID=contents:write,issues:write
 rm "$RC/.github/workflows/app-token-org-package-overscope.yml"
+cat > "$RC/.github/workflows/app-token-unsupported.yml" <<'YAML'
+jobs:
+  mint:
+    steps:
+      - uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.ORDINARY_APP_ID }}
+          permission-contents: read
+YAML
+expect "strict mode refuses an App identity selected from vars instead of a pinned secret" \
+  3 "App identity must be a static secrets.NAME selector" "$WAPP" "$RC" \
+  --app-grants contents:read,issues:write --require-app-identity-grants \
+  --app-grants-for DEDICATED_APP_CLIENT_ID=issues:write
+sed -i 's/app-id: \${{ vars.ORDINARY_APP_ID }}/app-id: 123/' \
+  "$RC/.github/workflows/app-token-unsupported.yml"
+expect "strict mode refuses a literal App ID that cannot bind to a pinned inventory" \
+  3 "App identity must be a static secrets.NAME selector" "$WAPP" "$RC" \
+  --app-grants contents:read,issues:write --require-app-identity-grants \
+  --app-grants-for DEDICATED_APP_CLIENT_ID=issues:write
+rm "$RC/.github/workflows/app-token-unsupported.yml"
 
 # =============================================================================================
 # 3. Fail closed. "I could not check" is never green, and never a finding either.
