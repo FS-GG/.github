@@ -217,9 +217,10 @@ OK, FINDING, NO_VERDICT_PERMANENT = 0, 1, 3
 # ` why` all sign the marker, while none of them is required for the marker to be RECOGNISED. That
 # asymmetry is deliberate. If the separator were mandatory, a marker written with a reason but no
 # dash would not match at all — so instead of "you forgot to sign this", the author would get an
-# unrelated drift finding about their paths, which is a worse answer to a smaller mistake.
+# unrelated drift finding about their paths, which is a worse answer to a smaller mistake. The
+# marker token still needs a boundary: `allow-divergenceevil` is not a signed marker.
 ALLOW_MARKER = re.compile(
-    r"^[ \t]*#[ \t]*paths-coherence:[ \t]*allow-divergence[ \t]*[—:-]?[ \t]*(?P<reason>.*)$",
+    r"^[ \t]*#[ \t]*paths-coherence:[ \t]*allow-divergence(?=$|[ \t—:-])[ \t]*[—:-]?[ \t]*(?P<reason>.*)$",
     re.MULTILINE,
 )
 
@@ -281,12 +282,14 @@ def triggers(doc: dict, what: str) -> dict:
     return {}
 
 
-def declared(on: dict, trigger: str) -> tuple[object, bool]:
-    """`(<trigger>.paths as declared or None, whether it declares paths-ignore)`.
+def declared(on: dict, trigger: str) -> tuple[object, bool, bool]:
+    """`(<trigger>.paths value, whether paths is present, whether paths-ignore is present)`.
 
     `pull_request:` with a NULL value means EVERY PR, not "no PR trigger" (`coherence.yml` is in
     that state). Either way it declares no `paths:`, so it is not half of a pair — a workflow with no
-    `paths:` on either trigger is not drift and must not be flagged.
+    `paths:` on either trigger is not drift and must not be flagged. A trigger mapping with an
+    explicit `paths: null` IS a declaration, however, and must reach validated() rather than be
+    mistaken for the absent key.
 
     THIS READS AND DOES NOT JUDGE, and that is the entire fix for a real fail-closed bug.
 
@@ -302,15 +305,15 @@ def declared(on: dict, trigger: str) -> tuple[object, bool]:
     """
     t = on.get(trigger)
     if not isinstance(t, dict):
-        return None, False
-    return (t.get("paths") if "paths" in t else None), ("paths-ignore" in t)
+        return None, False, False
+    return t.get("paths"), ("paths" in t), ("paths-ignore" in t)
 
 
 def validated(raw: object, trigger: str, what: str) -> list[str]:
     """`<trigger>.paths` as a list of patterns this gate can soundly compare.
 
-    Only ever called on a workflow that IS a pair. A one-sided workflow's patterns are never
-    compared, so refusing them would be a false alarm about a file outside the rule.
+    Only called when both events exist and at least one declares a filter. A truly one-sided
+    workflow's patterns are never compared, so refusing them would be a false alarm.
     """
     if not isinstance(raw, list) or not raw:
         raise GateError(
@@ -330,12 +333,12 @@ def validated(raw: object, trigger: str, what: str) -> list[str]:
 
 
 def block_scalar_lines(text: str) -> set[int]:
-    """The 0-based lines covered by a block scalar (`|` / `>`) value.
+    """The 0-based lines covered by opaque YAML scalar content.
 
-    A `#` inside a `run: |` block is shell TEXT, not a YAML comment, and nothing about the character
-    says which. This is the only reliable way to tell: ask the parser where the opaque regions are.
-    Without it the hatch reads a shell comment — or a heredoc line — as a signed divergence and
-    licenses real drift (exit 0 on a broken workflow), which is the fail-open this gate exists to end.
+    A `#` inside a block scalar or a multiline quoted scalar is YAML value TEXT, not a YAML
+    comment. Ask the parser for scalar spans before recognizing a standalone comment marker.
+    The whole spanned line is excluded when a scalar and a trailing comment share one line;
+    refusing an ambiguous marker is safer than licensing drift from value text.
     """
     try:
         node = yaml.compose(text)
@@ -344,10 +347,16 @@ def block_scalar_lines(text: str) -> set[int]:
         return set()
 
     covered: set[int] = set()
+    visited: set[int] = set()
 
     def walk(n: object) -> None:
+        # YAML aliases may refer back to an ancestor. The same node cannot create a new
+        # source span, so visiting it once is sufficient and keeps this scan finite.
+        if id(n) in visited:
+            return
+        visited.add(id(n))
         if isinstance(n, yaml.ScalarNode):
-            if n.style in ("|", ">"):
+            if n.style in ("|", ">") or n.start_mark.line < n.end_mark.line:
                 covered.update(range(n.start_mark.line, n.end_mark.line + 1))
         elif isinstance(n, yaml.SequenceNode):
             for child in n.value:
@@ -712,8 +721,8 @@ def main(argv: list[str]) -> int:
         doc = load_yaml(text, where)
         on = triggers(doc, where)
 
-        pr_raw, pr_ignores = declared(on, "pull_request")
-        push_raw, push_ignores = declared(on, "push")
+        pr_raw, pr_paths, pr_ignores = declared(on, "pull_request")
+        push_raw, push_paths, push_ignores = declared(on, "push")
 
         # RULE (b), AND IT RUNS BEFORE THE PAIRING RULE RETURNS.
         #
@@ -808,10 +817,9 @@ def main(argv: list[str]) -> int:
         # directions, with no way to say whether they agree. Silently skipping it is how a coherence
         # gate fails open (#266), so it is refused.
         #
-        # Note what guards this: `pr_raw is not None`. The refusal can only fire on a workflow that
-        # HAS an allow-list — i.e. one this gate was actually asked to judge. See declared() for the
-        # bug that shape exists to prevent.
-        if (pr_raw is not None and push_ignores) or (push_raw is not None and pr_ignores):
+        # Key presence, not value truthiness, establishes whether the gate was asked to judge an
+        # allow-list. An explicit null is malformed, but still present.
+        if (pr_paths and push_ignores) or (push_paths and pr_ignores):
             raise GateError(
                 f"{where}: one trigger declares `paths:` and the other declares `paths-ignore:`. "
                 f"An ignore-list INVERTS selection, so this gate cannot say whether the two agree — "
@@ -822,8 +830,16 @@ def main(argv: list[str]) -> int:
         # signed marker says why. This is distinct from a genuinely one-sided workflow: both events
         # exist, but one must report for every change while the other remains path-sensitive.
         reason = allow_divergence(text, where)
+        # Enter even without a marker: that is the finding below. Requiring a marker here would
+        # skip the split at the one-sided return and let a different clean pair make the audit green.
         if ("pull_request" in on and "push" in on
-                and ((pr_raw is None) != (push_raw is None)) and reason is not None):
+                and (pr_paths != push_paths)):
+            # A signed marker excuses the DIVERGENCE, not an invalid allow-list or a negated
+            # pattern whose order changes selection. Validate the present side before honoring it.
+            if not pr_paths:
+                validated(push_raw, "push", where)
+            else:
+                validated(pr_raw, "pull_request", where)
             pairs_seen += 1
             if reason == UNSIGNED:
                 findings.append(
@@ -842,7 +858,7 @@ def main(argv: list[str]) -> int:
 
         # One-sided is a deliberate shape (`build-config-propagate.yml` is push-only,
         # `reusable-job-id-coherence.yml` is PR-only) and is not this gate's business.
-        if pr_raw is None or push_raw is None:
+        if not pr_paths or not push_paths:
             continue
 
         pr = validated(pr_raw, "pull_request", where)

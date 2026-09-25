@@ -173,6 +173,77 @@ RN="$(root "$WORK/null-pr")"
 cp "$RS/.github/workflows/w.yml" "$RN/.github/workflows/pair.yml"
 expect "a null pull_request: (every PR, no filter) is not drift" 0 "ok:" "$RN"
 
+# Both events exist here. One is deliberately unfiltered only when a signed YAML comment explains
+# the split. Keep a clean paired sibling in each negative root: before this regression was fixed,
+# the split was skipped and that sibling made the whole audit falsely green instead of no-verdict.
+RSP="$(root "$WORK/split-pr-filtered")"
+{ echo "name: split"; echo "on:"; echo "  pull_request:"; echo "    paths: ['src/**']"
+  echo "  push: { branches: [main] }"
+  echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+  > "$RSP/.github/workflows/split.yml"
+cp "$RS/.github/workflows/w.yml" "$RSP/.github/workflows/paired.yml"
+expect "an unsigned PR-filtered/push-unfiltered split is a FINDING, not a skipped workflow" \
+  1 "one of \`pull_request\`/\`push\` is unfiltered" "$RSP"
+
+RSU="$(root "$WORK/split-push-filtered")"
+{ echo "name: split"; echo "on:"; echo "  pull_request:"
+  echo "  push: { branches: [main], paths: ['src/**'] }"
+  echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+  > "$RSU/.github/workflows/split.yml"
+cp "$RS/.github/workflows/w.yml" "$RSU/.github/workflows/paired.yml"
+expect "the reverse unfiltered/filtered split is also a FINDING" \
+  1 "one of \`pull_request\`/\`push\` is unfiltered" "$RSU"
+
+sed -i '1i # paths-coherence: allow-divergence — push intentionally runs for every change' \
+  "$RSP/.github/workflows/split.yml"
+expect "a signed unfiltered/filtered split is accepted" 0 "ok:" "$RSP"
+
+sed -i '1c # paths-coherence: allow-divergence' "$RSP/.github/workflows/split.yml"
+expect "an unsigned split marker remains a FINDING" 1 "with NO reason" "$RSP"
+
+# The marker licenses only the trigger split; it cannot make an invalid filtered side comparable.
+# Exercise both trigger directions so validation cannot accidentally apply to just one event.
+signed_split() {
+  local file="$1" side="$2" filter="$3"
+  { echo '# paths-coherence: allow-divergence — one trigger intentionally runs for every change'
+    echo 'name: split'
+    echo 'on:'
+    if [ "$side" = pr ]; then
+      echo '  pull_request:'; echo "    paths: $filter"
+      echo '  push: { branches: [main] }'
+    else
+      echo '  pull_request:'
+      echo "  push: { branches: [main], paths: $filter }"
+    fi
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } > "$file"
+}
+
+for side in pr push; do
+  for shape in empty scalar negated null; do
+    RSB="$(root "$WORK/split-bad-$side-$shape")"
+    case "$shape" in
+      empty) filter='[]'; needle='is not a non-empty list' ;;
+      scalar) filter='src/**'; needle='is not a non-empty list' ;;
+      negated) filter="['src/**', '!src/private/**']"; needle='Negation makes ORDER' ;;
+      null) filter='null'; needle='is not a non-empty list' ;;
+    esac
+    signed_split "$RSB/.github/workflows/split.yml" "$side" "$filter"
+    cp "$RS/.github/workflows/w.yml" "$RSB/.github/workflows/paired.yml"
+    expect "signed $side split refuses $shape filtered side" 3 "$needle" "$RSB"
+  done
+done
+
+# An explicit null paths key is present and malformed, even without a divergence marker. A null
+# event declaration (RN above) is different: it has no paths key and legitimately means unfiltered.
+for side in pr push; do
+  RNB="$(root "$WORK/split-null-unsigned-$side")"
+  signed_split "$RNB/.github/workflows/split.yml" "$side" 'null'
+  sed -i '1d' "$RNB/.github/workflows/split.yml"
+  cp "$RS/.github/workflows/w.yml" "$RNB/.github/workflows/paired.yml"
+  expect "unsigned $side split refuses explicit null paths key" 3 \
+    'is not a non-empty list' "$RNB"
+done
+
 # =============================================================================================
 # 4. `on:` has three legal spellings, and all three must be RECOGNISED AS LEGAL.
 #
@@ -228,6 +299,13 @@ sed -i '1i # paths-coherence: allow-divergence b/** is authored only on PRs' \
   "$RA5/.github/workflows/w.yml"
 expect "the separator is optional — a reason with no dash still signs the marker" \
   0 "diverges on purpose" "$RA5"
+
+RAB="$(root "$WORK/allow-suffix-without-boundary")"
+wf "$RAB/.github/workflows/w.yml" '      - "a/**"
+      - "b/**"' '      - "a/**"'
+sed -i '1i # paths-coherence: allow-divergenceevil' "$RAB/.github/workflows/w.yml"
+expect "a marker suffix without a boundary cannot sign drift" \
+  1 "the \`push\` copy omits 'b/**'" "$RAB"
 
 RA2="$(root "$WORK/allow-unsigned")"
 wf "$RA2/.github/workflows/w.yml" '      - "a/**"
@@ -315,6 +393,35 @@ wf "$RA10/.github/workflows/w.yml" '      - "a/**"
 sed -i '2i\      # paths-coherence: allow-divergence — an indented, real YAML comment' \
   "$RA10/.github/workflows/w.yml"
 expect "an INDENTED real YAML comment still signs the marker" 0 "diverges on purpose" "$RA10"
+
+# A multiline QUOTED scalar is opaque too. Its content line has the exact same marker spelling
+# and indentation as a standalone comment, but YAML gives that line to the run value.
+RA11="$(root "$WORK/allow-quoted-run")"
+wf "$RA11/.github/workflows/w.yml" '      - "a/**"
+      - "b/**"' '      - "a/**"'
+cat >> "$RA11/.github/workflows/w.yml" <<'YAML'
+  doc:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "echo hello
+          # paths-coherence: allow-divergence — quoted shell text"
+YAML
+expect "a marker inside a multiline quoted run value licenses NOTHING" \
+  1 "the \`push\` copy omits 'b/**'" "$RA11"
+
+RA12="$(root "$WORK/allow-quoted-run-then-comment")"
+wf "$RA12/.github/workflows/w.yml" '      - "a/**"
+      - "b/**"' '      - "a/**"'
+cat >> "$RA12/.github/workflows/w.yml" <<'YAML'
+  doc:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "echo hello
+          # paths-coherence: allow-divergence — quoted shell text"
+      # paths-coherence: allow-divergence — real YAML comment after the scalar
+YAML
+expect "a real YAML comment after a multiline quoted run still signs drift" \
+  0 "diverges on purpose" "$RA12"
 
 RA3="$(root "$WORK/allow-stale")"
 wf "$RA3/.github/workflows/w.yml" '      - "a/**"' '      - "a/**"'
