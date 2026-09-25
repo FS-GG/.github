@@ -1,10 +1,10 @@
 # GitHub Substrate V2 root-session work report — 2026-09-25
 
-**Observation period:** 2026-09-25 04:47:05–19:50:12 UTC. The end is a fixed
-source-evidence cutoff, not the end of the V2 program. This report records work
-performed during that period and the inherited conditions against which it was
-done. A draft PR, passing local test, rendered report, or ready telemetry endpoint
-is not a protected GS2 receipt, installed receiver, accepted producer, native
+**Observation period:** 2026-09-25 04:47:05–19:50:12 UTC, with a verified
+post-cutoff addendum through 2026-09-25 21:05:31 UTC below. The addendum's
+source-PR set was frozen at 21:04:46 UTC. Neither cutoff ends the V2 program.
+A draft PR, passing local test, rendered report, or ready telemetry endpoint is
+not a protected GS2 receipt, installed receiver, accepted producer, native
 effect, or production cutover.
 
 ## Coverage and evidence method
@@ -156,3 +156,61 @@ separately disclosed #3690 process deviation, this reporting lane performed
 no further protected merge, sandbox mutation, immutable producer publication
 or receiver pin, live gate flip, Authority write, or cutover. This report
 authorizes none of those actions.
+
+## Verified addendum: 19:50:12–21:05:31 UTC
+
+The source-PR set was frozen at **21:04:46 UTC** in roadmap head
+`edb2f038d6df732ed9608b5b22dfb39d88458960`; telemetry and the F#
+progress observation followed at **21:05:31 UTC**. Comparing the earlier
+129-row table with the [immutable post-cutoff ledger](https://github.com/FS-GG/.github/blob/edb2f038d6df732ed9608b5b22dfb39d88458960/docs/github-substrate-v2-roadmap.md#L1126-L1211)
+gives **86 additional distinct source-PR rows**, each with an exact head,
+tests and an explicit hold: 14 GS2-09.9, 15 GS2-09.7, 16 FSC-03, 10 FSC-04,
+8 FSC-05 and 23 telemetry. The two tables contain 215 rows in total. They
+index drafts, not accepted changes or every earlier session repair. Drafts
+verified after 21:04:46 UTC, including [Templates #601](https://github.com/FS-GG/FS.GG.Templates/pull/601)
+and [Coordination #819](https://github.com/FS-GG/FS.GG.Coordination/pull/819),
+[#820](https://github.com/FS-GG/FS.GG.Coordination/pull/820) and
+[#821](https://github.com/FS-GG/FS.GG.Coordination/pull/821), are excluded.
+
+| Stream | Verified source result through the cutoff | Remaining boundary |
+| --- | --- | --- |
+| GS2-09.9 | Fake-port no-grant, issuer and verifier custody drafts culminated in the [owner packet #806](https://github.com/FS-GG/FS.GG.Coordination/pull/806), [verifier packaging comparison #810](https://github.com/FS-GG/FS.GG.Coordination/pull/810) and [provider-response refusal #816](https://github.com/FS-GG/FS.GG.Coordination/pull/816). #816 reproduced direct classifier false greens after explicit 302/401 responses; 66 focused tests passed. | The real verifier route, approved key/revocation/nonce custody, integrated runnable artifact, installed no-grant observation and separate #550 target/App/CAS/grant decision remain owner-held. #545 is disputed; no native effect occurred. |
+| GS2-09.7 | Fake protected handoff and read-only recovery drafts added [signed snapshot verification #807](https://github.com/FS-GG/FS.GG.Coordination/pull/807), [clock identity #812](https://github.com/FS-GG/FS.GG.Coordination/pull/812), [marker readback #814](https://github.com/FS-GG/FS.GG.Coordination/pull/814) and [structural selection #817](https://github.com/FS-GG/FS.GG.Coordination/pull/817); #817 passed 763 full unit tests. | Both recovery paths remain hold-only. Protected signer/reader/store authenticity, #3690 adjudication, complete census and Q5/Q6 remain open. No sandbox run or token action occurred. |
+| FSC-03 | Dormant F# policy gained Git object, tree, alias and raw-commit controls through [#3843](https://github.com/FS-GG/.github/pull/3843); four Git-rejected identity fixtures went red before repair, and the F# suite passed 307/307. | The live Python gate remains in force; #3698, provider/evaluated graph and installed receiver parity remain open. The optional worker moved to FSC-05. |
+| FSC-04 | SDD's selected-commit preview gained object-store, pack, fanout, loose-leaf and no-lazy-fetch controls. [#1059](https://github.com/FS-GG/FS.GG.SDD/pull/1059) verified selected blob bytes against SHA-1/SHA-256 object IDs; 1,579 Commands tests passed. | Commit/tree integrity, handle custody, swap-back ABA, complete sources, common-instant proof and installed parity remain open. The preview is read-only and non-authorizing. |
+| FSC-05 | Templates F# provider source resumed from [#593](https://github.com/FS-GG/FS.GG.Templates/pull/593) through [#600](https://github.com/FS-GG/FS.GG.Templates/pull/600). The latest draft refused unquoted YAML null spellings against an independent YAML parser; exact-head checks passed 68 F#, 39 provider-tool and 34 archive custody controls. | Several F# refusals are deliberately stricter than live Python and do not establish installed parity. The selected archive remains `NO_VERDICT`; no producer publication or receiver flip occurred. |
+| Telemetry source | Dormant native event and usage parsers advanced through [#818](https://github.com/FS-GG/FS.GG.Coordination/pull/818), which bound candidate usage-frame digests to structurally replayed journal digests; 39 focused and 251 full Release tests passed. The separate direct-board drafts [#3751](https://github.com/FS-GG/.github/pull/3751), [#3752](https://github.com/FS-GG/.github/pull/3752) and [#3772](https://github.com/FS-GG/.github/pull/3772) were repaired/rebased, with local signature-doc-siting 90/90 and adapter suites 844/846. | Structural matches remain `NO_VERDICT` for trusted journal custody or completed-turn usage. Hosted checks, owner admission, installed runner wiring, a genuine item and matching applied Host receipt remain pending. |
+
+At the 21:05 checkpoint, six GPT-6-Sol/high lanes were active: the
+orchestrator, a **reserved direct GS2-09.9** worker, a direct GS2-09.7 worker,
+and separate FSC-05, FSC-04 and telemetry source workers. The
+[F# progress-renderer draft #3735](https://github.com/FS-GG/.github/pull/3735)
+rendered typed six-lane checkpoints with current tasks, frozen source heads,
+newest-five completion history and protected holds. Its latest completed
+10-minute **team** period (20:47:05–20:57:05 UTC) had 34,396,777 local
+diagnostic tokens: 34,299,946 input, including 33,962,880 cached and 337,066
+noncached input, plus 96,831 output. Across 97 completed periods since
+04:47:05 UTC, including zero-use periods, the team mean was 32,050,131.92
+tokens per period. A local weekly-rate observation at 21:04:59 UTC showed
+98% used and a continuous-use, account-wide projection of about 21:35 UTC.
+These JSONL figures lack authenticated collector/account provenance and are
+**not** runner/Host capture evidence.
+
+At **21:05:31 UTC**, authenticated telemetry health was ready and workspace
+status configured with `pending=0`, `pendingUnacknowledged=0` and
+`unacknowledgedLossy=false`. End-to-end acceptance still requires a genuine
+instrumented runner work item, native turn IDs and usage, a matching **applied
+Host receipt**, and a later authenticated zero queue. This direct interactive
+session remains outside that runner. Neither readiness nor local counters
+clear GS2-09.9's installed-provider/native-effect hold.
+
+The protected Coordination order remained
+[#532](https://github.com/FS-GG/FS.GG.Coordination/pull/532) →
+[#527](https://github.com/FS-GG/FS.GG.Coordination/pull/527) →
+[#526](https://github.com/FS-GG/FS.GG.Coordination/pull/526) →
+[#529](https://github.com/FS-GG/FS.GG.Coordination/pull/529). At the 21:02 UTC
+read-only check, #532 was open/behind without a review decision, #527
+open/blocked, and #526/#529 draft/behind. Apart from the separately disclosed
+#3690 process deviation in the base period, no further protected merge,
+sandbox mutation, immutable producer publication or receiver pin, live gate
+flip, Authority write, or cutover was performed through this addendum cutoff.
