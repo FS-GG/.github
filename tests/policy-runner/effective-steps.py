@@ -58,8 +58,12 @@ check(workflow("bash tests/alpha/run.sh\necho harmless # out=\"$(python scripts/
       False, "checker in inline shell comment", fixture_body="#!/bin/sh\necho harmless\n")
 check(workflow(direct, job_if="false"), False, "disabled job")
 check(workflow(direct, step_if="${{ false }}"), False, "disabled step")
+check(workflow(direct, step_if="${{ false && github.event_name == 'push' }}"), False,
+      "statically false dynamic step")
 check(workflow(direct, continue_on_error="true"), False, "non-gating step")
 check(workflow(direct, continue_on_error='"true"'), False, "quoted non-gating step")
+check(workflow(direct, continue_on_error="${{ github.event_name == 'push' }}"), False,
+      "dynamic non-gating step")
 check(workflow("if false; then\n  " + direct.replace("\n", "\n  ") + "\nfi"), False,
       "unreachable shell branch")
 check(workflow("cat <<'EOF'\n" + direct + "\nEOF"), False, "inert heredoc")
@@ -70,6 +74,12 @@ check(workflow("bash tests/alpha/run.sh"), False, "checker only in fixture echo"
       fixture_body="#!/bin/sh\necho 'python3 scripts/check-alpha.py'\n")
 check(workflow("bash tests/alpha/run.sh"), False, "checker variable never invoked",
       fixture_body="#!/bin/sh\nGATE=\"$ROOT/scripts/check-alpha.py\"\necho \"$GATE\"\n")
+check(workflow("bash tests/alpha/run.sh"), False, "checker variable only in dead fixture branch",
+      fixture_body="#!/bin/sh\nGATE=\"$ROOT/scripts/check-alpha.py\"\nif false; then\n  python3 \"$GATE\"\nfi\n")
+check(workflow("bash tests/alpha/run.sh"), False, "direct checker only in dead fixture branch",
+      fixture_body="#!/bin/sh\nif false; then\n  python3 scripts/check-alpha.py\nfi\n")
 check(workflow("bash tests/alpha/run.sh"), True, "checker invoked through fixture variable",
       fixture_body="#!/bin/sh\nGATE=\"$ROOT/scripts/check-alpha.py\"\npython3 \"$GATE\"\n")
+check(workflow(direct, step_if="${{ github.event_name == 'pull_request' }}"), True,
+      "event-scoped executable step")
 print("policy effective-step controls: ok")

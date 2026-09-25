@@ -77,15 +77,22 @@ def inactive_condition(value: object) -> bool:
     condition = value.strip().lower()
     if condition.startswith("${{") and condition.endswith("}}"):
         condition = condition[3:-2].strip()
-    return condition in ("false", "0")
+    return condition in ("false", "0") or condition.startswith(("false &&", "0 &&"))
 
 
 def non_gating(value: object) -> bool:
-    return value is True or (isinstance(value, str) and value.strip().lower() in ("true", "${{ true }}"))
+    if value is None or value is False:
+        return False
+    if isinstance(value, str):
+        condition = value.strip().lower()
+        if condition in ("false", "${{ false }}", "0", "${{ 0 }}"):
+            return False
+    # A dynamic continue-on-error can resolve true and cannot prove a gate.
+    return True
 
 
-def run_invokes(script: str, path: str) -> bool:
-    """Find a direct shell invocation, not a path in prose or an inert string."""
+def active_shell_lines(script: str):
+    """Yield shell code outside comments, here-documents, and literal false branches."""
     dead_branch = 0
     heredoc: str | None = None
     for line in script.splitlines():
@@ -109,8 +116,14 @@ def run_invokes(script: str, path: str) -> bool:
         declaration = re.search(r"<<-?\s*['\"]?([A-Za-z_][A-Za-z_0-9]*)['\"]?", code)
         if declaration:
             heredoc = declaration.group(1)
+        yield code
+
+
+def run_invokes(script: str, path: str) -> bool:
+    """Find a direct shell invocation, not a path in prose or an inert string."""
+    for code in active_shell_lines(script):
         try:
-            lexer = shlex.shlex(code, posix=True, punctuation_chars=";&|()")
+            lexer = shlex.shlex(code, posix=True, punctuation_chars=";&|(){}")
             lexer.whitespace_split = True
             lexer.commenters = "#"
             tokens = list(lexer)
@@ -119,12 +132,12 @@ def run_invokes(script: str, path: str) -> bool:
             tokens = []
         at_command = True
         for index, token in enumerate(tokens):
-            if token in (";", "&&", "||", "|", "(", ")"):
+            if token in (";", "&&", "||", "|", "(", ")", "{", "}"):
                 at_command = True
                 continue
             if at_command and token in ("if", "then", "!", "time", "env"):
                 continue
-            if at_command and token in ("python", "python3", "bash", "sh"):
+            if at_command and token in ("python", "python3", "bash", "sh", "$PY"):
                 if index + 1 < len(tokens) and tokens[index + 1] == path:
                     return True
             if at_command and token == path:
@@ -132,7 +145,8 @@ def run_invokes(script: str, path: str) -> bool:
             at_command = False
         # Command substitutions in assignments are executable even inside double quotes.
         # Requiring an assignment prefix avoids treating a quoted example as a command.
-        assignment = r"(?:^|[;\s])\w+=[\"']?\$\(\s*(?:python(?:3)?|bash|sh)\s+" + re.escape(path) + r"(?=\s|\))"
+        assignment = (r"(?:^|[;\s])\w+=[\"']?\$\(\s*(?:python(?:3)?|bash|sh|\"\$PY\"|\$PY)\s+[\"']?"
+                      + re.escape(path) + r"(?=\s|[\"']|\))")
         if re.search(assignment, code) and not re.search(r"\w+='\$\(", code):
             return True
     return False
@@ -172,15 +186,14 @@ def workflow_invokes(root: Path, workflow_path: str, source: str, fixture: str) 
     # Some selftest-only gates call the checker through their executed fixture.
     # Bind a source path to an interpreter call directly or through an assigned variable.
     fixture_text = (root / fixture).read_text(encoding="utf-8")
-    lines = [line.split("#", 1)[0] for line in fixture_text.splitlines()]
+    lines = list(active_shell_lines(fixture_text))
     command = r'(?:^|[;|&{(]|\$\()\s*(?:python(?:3)?|bash|sh|["\']?\$PY["\']?)\s+'
     if any(re.search(command + r'["\']?[^\s"\']*' + re.escape(source) + r'(?=\s|["\']|$)', line)
            for line in lines):
         return True
     variables = {match.group(1) for line in lines if source in line
                  if (match := re.match(r'\s*([A-Za-z_][A-Za-z_0-9]*)=', line))}
-    return any(re.search(command + r'["\']?\$' + re.escape(variable) + r'\b', line)
-               for variable in variables for line in lines)
+    return any(run_invokes(fixture_text, "$" + variable) for variable in variables)
 
 
 def inventory(root: Path, inventory_path: Path) -> list[str]:
