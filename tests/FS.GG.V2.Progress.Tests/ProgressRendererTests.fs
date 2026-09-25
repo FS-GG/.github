@@ -197,7 +197,9 @@ module ProgressRendererTests =
         refuses "observation exceeds report time" (withStatus { status with ObservedAt = at.AddSeconds(1.0) })
         refuses "weekly remaining percent" (withStatus { status with WeeklyRemainingPercent = 101 })
         refuses "weekly reset must follow report time" (withStatus { status with WeeklyResetLocal = at.AddMinutes(-1.0) })
-        refuses "local time zone and offset" (withStatus { status with WeeklyResetTimeZone = "" })
+        refuses "local time zone" (withStatus { status with WeeklyResetTimeZone = "" })
+        let utcReset = { status with WeeklyResetLocal = status.WeeklyResetLocal.ToUniversalTime(); WeeklyResetTimeZone = "Etc/UTC" }
+        Assert.Contains("2026-09-30 07:28 +00:00 (Etc/UTC)", render (withStatus utcReset))
         refuses "context occupancy must fit its capacity" (withStatus { status with ContextUsedTokens = 258001L })
 
     [<Fact>]
@@ -214,6 +216,8 @@ module ProgressRendererTests =
         let withUsage value = { baseline with PeriodUsage = NativeTurnPeriodUsage value }
         refuses "collector-verified native runner provenance" (withUsage { usage with CollectorVerified = false })
         refuses "collector-verified native runner provenance" (withUsage { usage with Runner = { runner with Origin = SyntheticOrUnknown } })
+        refuses "period runner workspace must match telemetry workspace"
+            (withUsage { usage with Runner = { runner with WorkspaceId = "other-workspace" } })
         refuses "genuine native turn IDs and usage" (withUsage { usage with Runner = { runner with NativeTurns = [] } })
         refuses "positive native turn token counts"
             (withUsage { usage with Runner = { runner with NativeTurns = [ { TurnId = "native-turn-1"; InputTokens = 0; OutputTokens = 0 } ] } })
