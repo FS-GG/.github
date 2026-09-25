@@ -300,6 +300,13 @@ sed -i '1i # paths-coherence: allow-divergence b/** is authored only on PRs' \
 expect "the separator is optional — a reason with no dash still signs the marker" \
   0 "diverges on purpose" "$RA5"
 
+RAB="$(root "$WORK/allow-suffix-without-boundary")"
+wf "$RAB/.github/workflows/w.yml" '      - "a/**"
+      - "b/**"' '      - "a/**"'
+sed -i '1i # paths-coherence: allow-divergenceevil' "$RAB/.github/workflows/w.yml"
+expect "a marker suffix without a boundary cannot sign drift" \
+  1 "the \`push\` copy omits 'b/**'" "$RAB"
+
 RA2="$(root "$WORK/allow-unsigned")"
 wf "$RA2/.github/workflows/w.yml" '      - "a/**"
       - "b/**"' '      - "a/**"'
@@ -386,6 +393,35 @@ wf "$RA10/.github/workflows/w.yml" '      - "a/**"
 sed -i '2i\      # paths-coherence: allow-divergence — an indented, real YAML comment' \
   "$RA10/.github/workflows/w.yml"
 expect "an INDENTED real YAML comment still signs the marker" 0 "diverges on purpose" "$RA10"
+
+# A multiline QUOTED scalar is opaque too. Its content line has the exact same marker spelling
+# and indentation as a standalone comment, but YAML gives that line to the run value.
+RA11="$(root "$WORK/allow-quoted-run")"
+wf "$RA11/.github/workflows/w.yml" '      - "a/**"
+      - "b/**"' '      - "a/**"'
+cat >> "$RA11/.github/workflows/w.yml" <<'YAML'
+  doc:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "echo hello
+          # paths-coherence: allow-divergence — quoted shell text"
+YAML
+expect "a marker inside a multiline quoted run value licenses NOTHING" \
+  1 "the \`push\` copy omits 'b/**'" "$RA11"
+
+RA12="$(root "$WORK/allow-quoted-run-then-comment")"
+wf "$RA12/.github/workflows/w.yml" '      - "a/**"
+      - "b/**"' '      - "a/**"'
+cat >> "$RA12/.github/workflows/w.yml" <<'YAML'
+  doc:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "echo hello
+          # paths-coherence: allow-divergence — quoted shell text"
+      # paths-coherence: allow-divergence — real YAML comment after the scalar
+YAML
+expect "a real YAML comment after a multiline quoted run still signs drift" \
+  0 "diverges on purpose" "$RA12"
 
 RA3="$(root "$WORK/allow-stale")"
 wf "$RA3/.github/workflows/w.yml" '      - "a/**"' '      - "a/**"'

@@ -217,9 +217,10 @@ OK, FINDING, NO_VERDICT_PERMANENT = 0, 1, 3
 # ` why` all sign the marker, while none of them is required for the marker to be RECOGNISED. That
 # asymmetry is deliberate. If the separator were mandatory, a marker written with a reason but no
 # dash would not match at all — so instead of "you forgot to sign this", the author would get an
-# unrelated drift finding about their paths, which is a worse answer to a smaller mistake.
+# unrelated drift finding about their paths, which is a worse answer to a smaller mistake. The
+# marker token still needs a boundary: `allow-divergenceevil` is not a signed marker.
 ALLOW_MARKER = re.compile(
-    r"^[ \t]*#[ \t]*paths-coherence:[ \t]*allow-divergence[ \t]*[—:-]?[ \t]*(?P<reason>.*)$",
+    r"^[ \t]*#[ \t]*paths-coherence:[ \t]*allow-divergence(?=$|[ \t—:-])[ \t]*[—:-]?[ \t]*(?P<reason>.*)$",
     re.MULTILINE,
 )
 
@@ -332,12 +333,12 @@ def validated(raw: object, trigger: str, what: str) -> list[str]:
 
 
 def block_scalar_lines(text: str) -> set[int]:
-    """The 0-based lines covered by a block scalar (`|` / `>`) value.
+    """The 0-based lines covered by opaque YAML scalar content.
 
-    A `#` inside a `run: |` block is shell TEXT, not a YAML comment, and nothing about the character
-    says which. This is the only reliable way to tell: ask the parser where the opaque regions are.
-    Without it the hatch reads a shell comment — or a heredoc line — as a signed divergence and
-    licenses real drift (exit 0 on a broken workflow), which is the fail-open this gate exists to end.
+    A `#` inside a block scalar or a multiline quoted scalar is YAML value TEXT, not a YAML
+    comment. Ask the parser for scalar spans before recognizing a standalone comment marker.
+    The whole spanned line is excluded when a scalar and a trailing comment share one line;
+    refusing an ambiguous marker is safer than licensing drift from value text.
     """
     try:
         node = yaml.compose(text)
@@ -346,10 +347,16 @@ def block_scalar_lines(text: str) -> set[int]:
         return set()
 
     covered: set[int] = set()
+    visited: set[int] = set()
 
     def walk(n: object) -> None:
+        # YAML aliases may refer back to an ancestor. The same node cannot create a new
+        # source span, so visiting it once is sufficient and keeps this scan finite.
+        if id(n) in visited:
+            return
+        visited.add(id(n))
         if isinstance(n, yaml.ScalarNode):
-            if n.style in ("|", ">"):
+            if n.style in ("|", ">") or n.start_mark.line < n.end_mark.line:
                 covered.update(range(n.start_mark.line, n.end_mark.line + 1))
         elif isinstance(n, yaml.SequenceNode):
             for child in n.value:
