@@ -189,6 +189,11 @@ refuses foreign provider fields that Python previously accepted while F# `grade`
 three new and 16 neighboring controls pass. A separate parameter-name probe found a
 `grade` versus workspace-selection difference, not Python/F# grade parity. Full YAML,
 foreign JSON and installed receiver parity remain open.
+[Templates parameter-name draft #536](https://github.com/FS-GG/FS.GG.Templates/pull/536)
+closes that three-reader difference for invalid lifecycle names by making F# `grade`
+run its existing provider validation and requiring the same name grammar in Python;
+four new triad controls and 29 provider-tool fixture cases pass. Full YAML, foreign
+JSON and installed receiver parity remain open.
 [SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
 refuses an observed same-length overwrite after the first held-descriptor read by
 checking descriptor metadata around two byte passes; 21 focused controls and the
