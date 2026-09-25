@@ -344,6 +344,17 @@ projects near 22:22 UTC. This local diagnostic lacks authenticated collector
 and Host receipt provenance. Authenticated health was ready; the configured
 workspace again had pending=0, pendingUnacknowledged=0 and
 unacknowledgedLossy=false.
+At the 17:39:03 UTC checkpoint, the read-only local scan covered 30 family
+sessions and 20,664 native counter events with zero findings. The 77th
+root-anchored ten-minute period (17:27:05–17:37:05 UTC) totaled 37,326,702
+tokens: 37,243,258 input (36,916,480 cached; 326,778 noncached) and 83,444
+output. The all-period team mean, including zero-use periods, was 30,814,112.14
+total tokens. Fresh root weekly usage was 83% at 17:38:56, up from 34% at
+04:47 on the same reset; the conditional continuous-use, account-wide slope
+projects near 22:06 UTC. This local diagnostic lacks authenticated collector
+and Host receipt provenance. Authenticated health was ready; the configured
+workspace again had pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false.
 At the 17:29:21 UTC checkpoint, the read-only local scan covered 30 family
 sessions and 20,346 native counter events with zero findings. The 76th
 root-anchored ten-minute period (17:17:05–17:27:05 UTC) totaled 43,753,754
@@ -833,6 +844,23 @@ peak memory, ABA and cross-root atomicity remain unbounded/unproved.
 at `cb460fc9c1a4185f7da412ee6f972deb85c14bd1` refuses dot-ended or
 ASCII-space-ended ZIP path segments (58 payload, 29 archive controls), with
 full closure, producer/served-byte, #511 CAS and receiver proof open.
+[Coordination GS2-09.9 #684](https://github.com/FS-GG/FS.GG.Coordination/pull/684)
+at `cfffc8b8d3c495646b2ce984b58297307970b7b5` snapshots the probe
+before a later audit callback can replace a foreign no-grant response (38
+fake-port tests); protected probe/audit provenance and #545/#550 remain held.
+[Coordination GS2-09.7 #685](https://github.com/FS-GG/FS.GG.Coordination/pull/685)
+at `c147efb973729eccfa4f8353ca450707543888f0` refuses duplicate raw
+issue-event fields (136 focused tests); initial cohort census, full typed
+inspect, protected journal/custom receipts and Q5/Q6 remain open.
+[`.github` FSC-03 Python #3791](https://github.com/FS-GG/.github/pull/3791)
+at `6ff69a76c8d55aafbc64e98e9d235cd5db85cb7a` refuses literal or
+dynamic task outputs in nearest supplied `Directory.Build` files that can emit
+`ProjectReference` (148 fixtures). Import closure, nearest-file provenance,
+evaluated graph and installed parity remain open.
+[Templates FSC-05 #575](https://github.com/FS-GG/FS.GG.Templates/pull/575)
+at `9a102feeddf679acc08a96a82ed9721d6dbccfda` refuses reserved device
+stems in any ZIP member path (61 payload, 29 archive controls); descriptor
+support, full closure and producer/served/receiver custody remain open.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
