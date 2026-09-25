@@ -59,6 +59,12 @@ module GitCommitProvenance =
         let digest: byte[] = SHA1.HashData(Array.append prefix bytes)
         Convert.ToHexString(digest).ToLowerInvariant()
 
+    let private validIdentity kind (line: string) =
+        Regex.IsMatch(
+            line,
+            @"\A" + kind + @" [^<>\r\n]+ <[^<>\r\n]*> -?[0-9]+ [+-][0-9]{4}\z",
+            RegexOptions.CultureInvariant)
+
     let private rootedTree (bytes: byte[]) =
         let raw = Encoding.Latin1.GetString(bytes)
         let separator = raw.IndexOf("\n\n", StringComparison.Ordinal)
@@ -69,6 +75,8 @@ module GitCommitProvenance =
         else
             let headers = raw.Substring(0, separator).Split('\n')
             let tree = Regex.Match(headers.[0], "^tree ([0-9a-f]{40})$", RegexOptions.CultureInvariant)
+            let authors = headers |> Array.filter (fun line -> line.StartsWith("author ", StringComparison.Ordinal))
+            let committers = headers |> Array.filter (fun line -> line.StartsWith("committer ", StringComparison.Ordinal))
             if not tree.Success then
                 error "<commit>" "commit tree header is malformed"
             elif headers |> Array.skip 1 |> Array.exists (fun line -> line.StartsWith("tree ", StringComparison.Ordinal)) then
@@ -79,9 +87,10 @@ module GitCommitProvenance =
                      line.StartsWith("parent ", StringComparison.Ordinal)
                      && not (Regex.IsMatch(line, @"\Aparent [0-9a-f]{40}\z", RegexOptions.CultureInvariant))) then
                 error "<commit>" "commit parent ID is malformed"
-            elif headers |> Array.filter (fun line -> line.StartsWith("author ", StringComparison.Ordinal)) |> Array.length <> 1
-                 || headers |> Array.filter (fun line -> line.StartsWith("committer ", StringComparison.Ordinal)) |> Array.length <> 1 then
+            elif authors.Length <> 1 || committers.Length <> 1 then
                 error "<commit>" "commit author or committer header is absent or duplicated"
+            elif not (validIdentity "author" authors.[0]) || not (validIdentity "committer" committers.[0]) then
+                error "<commit>" "commit author or committer identity is malformed"
             else
                 Ok tree.Groups.[1].Value
 

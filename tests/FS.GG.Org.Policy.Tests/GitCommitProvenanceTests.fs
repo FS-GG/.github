@@ -179,6 +179,38 @@ module GitCommitProvenanceTests =
             Assert.Contains("NUL", diagnostic.Message)
         | Ok root -> failwithf "NUL-bearing commit header rooted a graph: %A" root
 
+    [<Theory>]
+    [<InlineData("e7397a26e2f174b48d5f827be83177d27f4a2db8", "dHJlZSAyYjU1MmQ2YmY5ZDdiNDQ1OGEyOGZjNjU2NjNmYmMyYzdiMDIyMWRjCmF1dGhvciBGaXh0dXJlIDAgKzAwMDAKY29tbWl0dGVyIEZpeHR1cmUgPGZpeHR1cmVAZXhhbXBsZS5pbnZhbGlkPiAwICswMDAwCgpmaXhlZCBmaXh0dXJlCg==")>]
+    [<InlineData("d855c73d582340e39e8447c34abfc8a2502064cf", "dHJlZSAyYjU1MmQ2YmY5ZDdiNDQ1OGEyOGZjNjU2NjNmYmMyYzdiMDIyMWRjCmF1dGhvciBGaXh0dXJlIDxmaXh0dXJlQGV4YW1wbGUuaW52YWxpZD4gMCArMDAwMApjb21taXR0ZXIgRml4dHVyZSAwICswMDAwCgpmaXhlZCBmaXh0dXJlCg==")>]
+    [<InlineData("b772b07ae61fc6e96b2524fee4d05ea9c0f7c4ff", "dHJlZSAyYjU1MmQ2YmY5ZDdiNDQ1OGEyOGZjNjU2NjNmYmMyYzdiMDIyMWRjCmF1dGhvciBGaXh0dXJlIDxmaXh0dXJlQGV4YW1wbGUuaW52YWxpZD4KY29tbWl0dGVyIEZpeHR1cmUgPGZpeHR1cmVAZXhhbXBsZS5pbnZhbGlkPiAwICswMDAwCgpmaXhlZCBmaXh0dXJlCg==")>]
+    [<InlineData("19303b3944553890f7daa173bab804a33ed3d4cb", "dHJlZSAyYjU1MmQ2YmY5ZDdiNDQ1OGEyOGZjNjU2NjNmYmMyYzdiMDIyMWRjCmF1dGhvciBGaXh0dXJlIDxmaXh0dXJlQGV4YW1wbGUuaW52YWxpZD4gbm90YWRhdGUgKzAwMDAKY29tbWl0dGVyIEZpeHR1cmUgPGZpeHR1cmVAZXhhbXBsZS5pbnZhbGlkPiAwICswMDAwCgpmaXhlZCBmaXh0dXJlCg==")>]
+    let ``git fsck rejected author or committer identity cannot root commit`` id encoded =
+        // Fixed with git hash-object --literally; git fsck --strict reports missingEmail,
+        // missingSpaceBeforeDate, or badDate for these independently authored commit bytes.
+        let malformedPin = { pin with CommitId = id }
+        let malformed = { observation with CommitId = id; RawCommit = Convert.FromBase64String(encoded) }
+        let rawReader =
+            { new GitCommitProvenance.IReadOnlyCommitReader with
+                member _.ReadExact _ = Ok malformed }
+        match GitCommitProvenance.inspectProvisionalRoot malformedPin rootTreeId rawReader with
+        | Error diagnostic ->
+            Assert.Equal("git-commit-provenance", diagnostic.Code)
+            Assert.Contains("identity", diagnostic.Message)
+        | Ok root -> failwithf "git-fsck-rejected identity rooted a graph: %A" root
+
+    [<Fact>]
+    let ``git fsck accepted empty email retains provisional commit root`` () =
+        let id = "6dafd16f57156de921d473e4c3afac57b529d654"
+        let raw = Convert.FromBase64String("dHJlZSAyYjU1MmQ2YmY5ZDdiNDQ1OGEyOGZjNjU2NjNmYmMyYzdiMDIyMWRjCmF1dGhvciBGaXh0dXJlIDw+IDAgKzAwMDAKY29tbWl0dGVyIEZpeHR1cmUgPGZpeHR1cmVAZXhhbXBsZS5pbnZhbGlkPiAwICswMDAwCgpmaXhlZCBmaXh0dXJlCg==")
+        let acceptedPin = { pin with CommitId = id }
+        let accepted = { observation with CommitId = id; RawCommit = raw }
+        let rawReader =
+            { new GitCommitProvenance.IReadOnlyCommitReader with
+                member _.ReadExact _ = Ok accepted }
+        match GitCommitProvenance.inspectProvisionalRoot acceptedPin rootTreeId rawReader with
+        | Error diagnostic -> failwithf "git-fsck-accepted identity refused: %A" diagnostic
+        | Ok root -> Assert.Equal(rootTreeId, root.TreeId)
+
     [<Fact>]
     let ``pinned commit composes with exact blob and XML graph inspection`` () =
         let row oid encoded = oid, Convert.FromBase64String(encoded)
