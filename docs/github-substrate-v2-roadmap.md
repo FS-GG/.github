@@ -1832,6 +1832,11 @@ fake controls pass. Protected reader identity, witness custody, target continuit
   installation ID `1` in the target prestate adapter; 17 focused fake controls pass.
   Protected witness event/producer, reader identities, effective App scope and target
   continuity remain unproved.
+  [Credential-ID type guards #608](https://github.com/FS-GG/FS.GG.Coordination/pull/608)
+  refuse Python boolean or float aliases for the selected repository ID in supplied
+  App issuance, mint, response and effective-scope records; 18 focused fake controls
+  pass. Protected issuer/witness identities, effective scope and target continuity
+  remain absent.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
@@ -2061,6 +2066,11 @@ fake controls pass. Protected reader identity, witness custody, target continuit
   floor before native revoke; a head advance before the claim and a marker without a
   durable claim were red-before false greens. 189 focused local controls pass. Installed
   shared namespace, transaction ordering and native readback remain unproved.
+  [Shared namespace pin draft #3746](https://github.com/FS-GG/.github/pull/3746)
+  requires an exact blank-by-default native-attempt resource identity through finalizer
+  descriptor, marker readback and pending census; 196 focused local controls pass.
+  Installed one-key serializable store/ACL and native provider-call ordering remain
+  unproved, including emergency outage and unknown-readback double-revoke risk.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
