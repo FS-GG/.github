@@ -60,11 +60,16 @@ module WorkflowSyntax =
             elif value.Style <> ScalarStyle.Plain then Some value.Value
             else
                 let lower = value.Value.ToLowerInvariant()
+                // PyYAML's YAML 1.1 resolver types these plain values. Treat an
+                // ambiguous filter as invalid rather than equating it with its
+                // quoted spelling and silently declaring two filters equal.
                 let implicitValue =
                     lower = "" || lower = "null" || lower = "~"
                     || lower = "true" || lower = "false"
+                    || lower = "yes" || lower = "no" || lower = "on" || lower = "off"
                     || lower = ".inf" || lower = "+.inf" || lower = "-.inf" || lower = ".nan"
-                    || Regex.IsMatch(value.Value, "^[+-]?(?:0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|(?:[0-9][0-9_]*)(?:\\.[0-9_]*)?(?:[eE][+-]?[0-9]+)?)$", RegexOptions.CultureInvariant)
+                    || Regex.IsMatch(value.Value, "^[+-]?(?:0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+|(?:[0-9][0-9_]*)(?:\\.[0-9_]*)?(?:[eE][+-]?[0-9]+)?|[0-9][0-9_]*(?::[0-5]?[0-9])+)$", RegexOptions.CultureInvariant)
+                    || Regex.IsMatch(value.Value, "^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:$|[Tt \\t])", RegexOptions.CultureInvariant)
                 if implicitValue then None else Some value.Value
         | _ -> None
 
@@ -74,8 +79,14 @@ module WorkflowSyntax =
             Some (mapping.Children |> Seq.map (fun item -> item.Key, item.Value) |> Seq.toList)
         | _ -> None
 
-    let private lookup name pairs =
-        pairs |> List.tryPick (fun (key, value) -> if stringPattern key = Some name then Some value else None)
+    let private lookup name (pairs: (YamlNode * YamlNode) list) =
+        pairs |> List.tryPick (fun (key, value) ->
+            let keyName =
+                match key with
+                | :? YamlScalarNode as scalar when name = "on" && scalar.Value = "on"
+                    && scalar.Style = ScalarStyle.Plain && string scalar.Tag = "?" -> Some "on"
+                | _ -> stringPattern key
+            if keyName = Some name then Some value else None)
 
     let private noTrigger = { Declared = false; Paths = Missing; HasPathsIgnore = false }
 

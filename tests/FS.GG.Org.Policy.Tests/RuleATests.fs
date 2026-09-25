@@ -24,6 +24,17 @@ module RuleATests =
     let ``identical allow lists agree as sets`` () =
         agreement true "on: {pull_request: {paths: [a/**, b/**]}, push: {paths: [b/**, a/**]}}\n"
 
+    [<Theory>]
+    [<InlineData("on")>]
+    [<InlineData("off")>]
+    [<InlineData("yes")>]
+    [<InlineData("no")>]
+    [<InlineData("0b101")>]
+    [<InlineData("1:20")>]
+    [<InlineData("2026-01-01T00:00:00Z")>]
+    let ``implicit YAML 1 1 typed scalars cannot mimic quoted string paths`` word =
+        refusal "paths-shape" ("on: {pull_request: {paths: [" + word + "]}, push: {paths: ['" + word + "']}}\n")
+
     [<Fact>]
     let ``drift is a finding`` () =
         finding "on: {pull_request: {paths: [a/**]}, push: {paths: [b/**]}}\n"

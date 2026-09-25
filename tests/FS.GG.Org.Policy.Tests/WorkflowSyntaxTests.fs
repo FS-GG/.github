@@ -72,6 +72,13 @@ module WorkflowSyntaxTests =
     [<InlineData("true")>]
     [<InlineData("null")>]
     [<InlineData("~")>]
+    [<InlineData("on")>]
+    [<InlineData("off")>]
+    [<InlineData("yes")>]
+    [<InlineData("no")>]
+    [<InlineData("0b101")>]
+    [<InlineData("1:20")>]
+    [<InlineData("2026-01-01T00:00:00Z")>]
     let ``implicit non-string path pattern is invalid`` item =
         let value = parsed ("on: {push: {paths: [" + item + "]}}\n")
         Assert.Equal(Invalid "paths contains a non-string pattern", value.Push.Paths)
@@ -104,3 +111,9 @@ module WorkflowSyntaxTests =
     [<Fact>]
     let ``unknown on shape refuses`` () =
         refused "on-shape" "on: 3\n"
+
+    [<Theory>]
+    [<InlineData("true")>]
+    [<InlineData("false")>]
+    let ``boolean on scalar refuses`` value =
+        refused "on-shape" ("on: " + value + "\n")
