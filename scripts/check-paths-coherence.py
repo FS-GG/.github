@@ -666,6 +666,13 @@ def project_graph(root: str) -> dict[str, list[str]]:
                     raise GateError(f"{rel}: ProjectReference Include {inc!r} is outside the repository graph")
                 refs.append(os.path.relpath(target, root).replace(os.sep, "/"))
             graph[rel] = refs
+    # A referenced file with an unsupported project extension can have its own outgoing edges.
+    # Treating it as a leaf would certify an incomplete closure, even if its path is covered.
+    for source, refs in graph.items():
+        for target in refs:
+            if target not in graph and os.path.isfile(os.path.join(root_path, target)):
+                raise GateError(f"{source}: ProjectReference target {target!r} is outside "
+                                "discovered project roster; requires MSBuild project evaluation")
     return graph
 
 

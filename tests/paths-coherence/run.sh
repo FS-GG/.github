@@ -1011,6 +1011,28 @@ XML
     1 "nothing in the filter selects 'src/C'" "$RBCE"
 done
 
+# A ProjectReference can name a generic MSBuild .proj file. If that existing file is outside the
+# supported discovery roster, treating it as a graph leaf loses its own B→C edge.
+RBUP="$(root "$WORK/cover-referenced-generic-project")"
+proj "$RBUP" "src/A" "../B/B.proj"
+mkdir -p "$RBUP/src/B"
+cat > "$RBUP/src/B/B.proj" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../C/C.fsproj" /></ItemGroup></Project>
+XML
+proj "$RBUP" "src/C"
+patterns='      - "src/A/**"
+      - "src/B/**"'
+wf "$RBUP/.github/workflows/w.yml" "$patterns" "$patterns"
+expect "referenced generic MSBuild project cannot silently terminate closure" \
+  3 "ProjectReference target 'src/B/B.proj' is outside discovered project roster" "$RBUP"
+
+RBUI="$(root "$WORK/cover-unreferenced-generic-project")"
+proj "$RBUI" "src/A"
+mkdir -p "$RBUI/src/B"
+echo '<Project />' > "$RBUI/src/B/B.proj"
+wf "$RBUI/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "unreferenced generic project does not expand a declared subject" 0 "ok:" "$RBUI"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
