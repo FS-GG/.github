@@ -1007,6 +1007,7 @@ changing the protected holds:
 | [FSC-05 #584](https://github.com/FS-GG/FS.GG.Templates/pull/584) | `1fa5d682b7c864948ea9c216f04a8ea5ceba4865` | Refuses matching nonzero ZIP flags in selected local/central headers; 85 payload/29 custody controls. |
 | [GS2-09.9 #708](https://github.com/FS-GG/FS.GG.Coordination/pull/708) | `01c206a474e9f40f9369ce291a6e8e34237158e8` | Uses type-sensitive canonical JSON digest for initial/terminal protection policy comparison; 90 fake-port tests. |
 | [FSC-03 F# #3804](https://github.com/FS-GG/.github/pull/3804) | `310f702287f7db8b2565c977d61c08a82321a6c1` | Dormant pure supplied-source assembler refuses duplicate project identities, absent references and empty lists before graph construction; 163 policy tests. |
+| [GS2-09.7 #709](https://github.com/FS-GG/FS.GG.Coordination/pull/709) | `bf322d6d36fa18df67af4fc10a44908f2e4c992b` | Requires exact PR marker-number set across issue page, PR page and raw-to-typed adapter, closing same-count subject substitution; 711 full unit tests. Initial sandbox census and Q5/Q6 remain held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
