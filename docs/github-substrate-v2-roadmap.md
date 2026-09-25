@@ -344,6 +344,17 @@ projects near 22:22 UTC. This local diagnostic lacks authenticated collector
 and Host receipt provenance. Authenticated health was ready; the configured
 workspace again had pending=0, pendingUnacknowledged=0 and
 unacknowledgedLossy=false.
+At the 17:29:21 UTC checkpoint, the read-only local scan covered 30 family
+sessions and 20,346 native counter events with zero findings. The 76th
+root-anchored ten-minute period (17:17:05–17:27:05 UTC) totaled 43,753,754
+tokens: 43,668,184 input (43,410,688 cached; 257,496 noncached) and 85,570
+output. The all-period team mean, including zero-use periods, was 30,728,420.17
+total tokens. Fresh root weekly usage was 82% at 17:29:15, up from 34% at
+04:47 on the same reset; the conditional continuous-use, account-wide slope
+projects near 22:15 UTC. This local diagnostic lacks authenticated collector
+and Host receipt provenance. Authenticated health was ready; the configured
+workspace again had pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false.
 At the 17:39:03 UTC checkpoint, the read-only local scan covered 30 family
 sessions and 20,664 native counter events with zero findings. The 77th
 root-anchored ten-minute period (17:27:05–17:37:05 UTC) totaled 37,326,702
@@ -355,14 +366,14 @@ projects near 22:06 UTC. This local diagnostic lacks authenticated collector
 and Host receipt provenance. Authenticated health was ready; the configured
 workspace again had pending=0, pendingUnacknowledged=0 and
 unacknowledgedLossy=false.
-At the 17:29:21 UTC checkpoint, the read-only local scan covered 30 family
-sessions and 20,346 native counter events with zero findings. The 76th
-root-anchored ten-minute period (17:17:05–17:27:05 UTC) totaled 43,753,754
-tokens: 43,668,184 input (43,410,688 cached; 257,496 noncached) and 85,570
-output. The all-period team mean, including zero-use periods, was 30,728,420.17
-total tokens. Fresh root weekly usage was 82% at 17:29:15, up from 34% at
+At the 17:49:10 UTC checkpoint, the read-only local scan covered 30 family
+sessions and 20,978 native counter events with zero findings. The 78th
+root-anchored ten-minute period (17:37:05–17:47:05 UTC) totaled 39,562,179
+tokens: 39,482,479 input (39,266,816 cached; 215,663 noncached) and 79,700
+output. The all-period team mean, including zero-use periods, was 30,926,266.85
+total tokens. Fresh root weekly usage was 84% at 17:49:04, up from 34% at
 04:47 on the same reset; the conditional continuous-use, account-wide slope
-projects near 22:15 UTC. This local diagnostic lacks authenticated collector
+projects near 21:59 UTC. This local diagnostic lacks authenticated collector
 and Host receipt provenance. Authenticated health was ready; the configured
 workspace again had pending=0, pendingUnacknowledged=0 and
 unacknowledgedLossy=false.
@@ -898,6 +909,27 @@ at `54225a2bc4dde89b97f15f6ac4c0d3ac3efe05e9` matches the Python
 `DirectoryBuildTargetsPath` override refusal for project and supplied
 implicit XML (147 tests); nearest provenance, Import closure, evaluated graph
 and installed receiver parity remain held.
+[Coordination GS2-09.9 #691](https://github.com/FS-GG/FS.GG.Coordination/pull/691)
+at `9f5a8741eb0afcf14d8460bd0cd5148061b45591` copies selected identity
+event before a final scope callback can change the closed approval result
+(42 fake-port tests); protected identity/native effects remain held.
+[`.github` FSC-03 Python #3794](https://github.com/FS-GG/.github/pull/3794)
+at `3477f3e83391bd7f4dba756190f1519f25b210ad` refuses a nearest
+`Directory.Build.props` or `.targets` source above the supplied root after
+installed MSBuild exposed an uncovered reference (153 fixtures); external
+contents are not trusted, and symlink/global override/import closure remains.
+[Templates FSC-05 #577](https://github.com/FS-GG/FS.GG.Templates/pull/577)
+at `77d1ef9219552f2bd440eb1891a6164ed7822173` refuses full case-fold
+expansions in any ZIP member name (67 payload, 29 archive controls), with
+descriptor/full closure and producer/served/receiver proof open.
+[Coordination GS2-09.7 #692](https://github.com/FS-GG/FS.GG.Coordination/pull/692)
+at `1be3038da7d9131cbc1ffd1d2b3902ae2e12f93a` refuses duplicate raw
+initial and continuation relation JSON members (139 focused tests); initial
+cohort census, full typed inspect, journal/custom receipts and Q5/Q6 remain.
+[Coordination GS2-09.9 #693](https://github.com/FS-GG/FS.GG.Coordination/pull/693)
+at `cae277cad4bf1bcc58851921549c3812525726c5` copies selected audit
+actor before a final scope callback can change the closed readback result
+(45 fake-port tests); protected audit/native-effect custody remains held.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
