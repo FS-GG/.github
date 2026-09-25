@@ -730,7 +730,7 @@ evidence designed for this cutover:
 
 ### Registered migration rehearsal cohort
 
-Under [ADR-0088](../adr/0088-reuse-the-protected-q4-sandbox-for-migration-rehearsal.md), GS2-09.7 uses
+Under [ADR-0089](../adr/0089-reuse-the-protected-q4-sandbox-for-migration-rehearsal.md), GS2-09.7 uses
 the existing non-production Q4 sandbox instead of requesting a new repository, Project copy, or credential
 from a maintainer. The protected `.github` sandbox workflow owns the App secret and mints a
 token for `FS-GG/FS.GG.GitHub.Substrate.Sandbox` only. Its organization Projects grant is broader than the
