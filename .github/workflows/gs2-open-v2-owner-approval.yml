@@ -1,0 +1,92 @@
+name: GS2 OpenV2 owner approval receipt (inactive)
+
+on:
+  workflow_dispatch:
+    inputs:
+      coordination_revision:
+        description: Exact merged Coordination revision for the candidate
+        required: true
+        type: string
+      candidate_manifest_sha256:
+        description: SHA-256 of the accepted cutover manifest
+        required: true
+        type: string
+      decision_packet_sha256:
+        description: SHA-256 of the immutable OpenV2 decision packet
+        required: true
+        type: string
+      verified_epoch_commit:
+        description: Exact VerifiedV2 epoch commit
+        required: true
+        type: string
+      operation_id:
+        description: Exact OpenV2 operation identity
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: gs2-open-v2-owner-approval
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    # No packet producer, native verifier, confirmation capture, or installed
+    # environment is qualified yet. A later reviewed change must remove this.
+    if: ${{ false }}
+    name: gs2-open-v2-owner-approval
+    environment: fleet-cutover-owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate exact public bindings
+        env:
+          COORDINATION_REVISION: ${{ inputs.coordination_revision }}
+          MANIFEST_SHA256: ${{ inputs.candidate_manifest_sha256 }}
+          PACKET_SHA256: ${{ inputs.decision_packet_sha256 }}
+          VERIFIED_EPOCH_COMMIT: ${{ inputs.verified_epoch_commit }}
+          OPERATION_ID: ${{ inputs.operation_id }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'FS-GG/.github'
+          test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$OPERATION_ID" = 'open-v2:fs-gg-production'
+          [[ "$COORDINATION_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$PACKET_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$VERIFIED_EPOCH_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+      - name: Materialize run envelope
+        env:
+          COORDINATION_REVISION: ${{ inputs.coordination_revision }}
+          MANIFEST_SHA256: ${{ inputs.candidate_manifest_sha256 }}
+          PACKET_SHA256: ${{ inputs.decision_packet_sha256 }}
+          VERIFIED_EPOCH_COMMIT: ${{ inputs.verified_epoch_commit }}
+          OPERATION_ID: ${{ inputs.operation_id }}
+        run: |
+          set -euo pipefail
+          recorded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          jq -cn \
+            --arg operationId "$OPERATION_ID" \
+            --argjson runId "$GITHUB_RUN_ID" \
+            --argjson runAttempt "$GITHUB_RUN_ATTEMPT" \
+            --arg workflowRevision "$GITHUB_SHA" \
+            --arg coordinationRevision "$COORDINATION_REVISION" \
+            --arg candidateManifestSha256 "$MANIFEST_SHA256" \
+            --arg decisionPacketSha256 "$PACKET_SHA256" \
+            --arg verifiedEpochCommit "$VERIFIED_EPOCH_COMMIT" \
+            --arg recordedAt "$recorded_at" \
+            '{schema:"fsgg.open-v2-owner-approval-run-envelope/1",operationId:$operationId,repository:"FS-GG/.github",runId:$runId,runAttempt:$runAttempt,workflowRevision:$workflowRevision,coordinationRevision:$coordinationRevision,environment:"fleet-cutover-owner",candidateManifestSha256:$candidateManifestSha256,decisionPacketSha256:$decisionPacketSha256,verifiedEpochCommit:$verifiedEpochCommit,recordedAt:$recordedAt}' \
+            > open-v2-run-envelope.json
+          chmod 600 open-v2-run-envelope.json
+      - name: Retain run envelope
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: gs2-open-v2-owner-run-${{ github.run_id }}
+          path: open-v2-run-envelope.json
+          retention-days: 1
+          if-no-files-found: error

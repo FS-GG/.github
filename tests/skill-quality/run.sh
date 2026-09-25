@@ -71,6 +71,7 @@ python3 "$ROOT/tests/skill-quality/test-report-roadmap-health.py"
 python3 "$ROOT/tests/skill-quality/lifecycle-append-authority.py"
 python3 "$ROOT/tests/skill-quality/gs2-ledger-protected-authorization.py"
 python3 "$ROOT/tests/skill-quality/gs2-v1-admission-protected-authorization.py"
+python3 "$ROOT/tests/skill-quality/gs2-open-v2-owner-approval.py"
 python3 "$ROOT/tests/skill-quality/callable-isolated-operation-authorization.py"
 python3 "$ROOT/tests/telemetry-parity/run.py"
 
