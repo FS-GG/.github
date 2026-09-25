@@ -156,22 +156,43 @@ module WorkflowPermissionSyntax =
     let registryRepositories path text =
         parse path text
         |> Result.bind (fun root ->
-            match memberValue "repos" root with
-            | Some (:? YamlSequenceNode as repos) when repos.Children.Count > 0 ->
+            let fullName =
+                Regex("^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant)
+            let extract shapeCode duplicateCode (rows: YamlSequenceNode) =
                 let names =
-                    repos.Children
+                    rows.Children
                     |> Seq.map (fun item ->
                         mapping item |> Option.bind (memberValue "full") |> Option.bind stringScalar)
                     |> Seq.toList
                 if names |> List.exists (function
-                    | Some name -> not (Regex.IsMatch(name, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", RegexOptions.CultureInvariant))
+                    | Some name -> not (fullName.IsMatch name)
                     | None -> true) then
-                    error "registry-repos-shape" path
+                    error shapeCode path
                 else
                     let values = names |> List.choose id
-                    if values.Length <> (values |> Set.ofList |> Set.count) then
-                        error "registry-repos-duplicate" path
+                    // GitHub resolves owner/repository spellings case-insensitively. An alias
+                    // must not consume a second inventory slot with independent supplied facts.
+                    let identities = values |> List.map _.ToUpperInvariant()
+                    if identities.Length <> (identities |> Set.ofList |> Set.count) then
+                        error duplicateCode path
                     else Ok values
+            match memberValue "repos" root with
+            | Some (:? YamlSequenceNode as repos) when repos.Children.Count > 0 ->
+                extract "registry-repos-shape" "registry-repos-duplicate" repos
+                |> Result.bind (fun selected ->
+                    let outside =
+                        match memberValue "outside-fabric" root with
+                        | None -> Ok []
+                        | Some (:? YamlSequenceNode as rows) ->
+                            extract "registry-outside-shape" "registry-outside-duplicate" rows
+                        | Some _ -> error "registry-outside-shape" path
+                    outside
+                    |> Result.bind (fun excluded ->
+                        let selectedIds = selected |> List.map _.ToUpperInvariant() |> Set.ofList
+                        if excluded |> List.exists (fun name ->
+                            Set.contains (name.ToUpperInvariant()) selectedIds) then
+                            error "registry-outside-overlap" path
+                        else Ok selected))
             | _ -> error "registry-repos-shape" path)
 
     let private block (value: YamlMappingNode) =

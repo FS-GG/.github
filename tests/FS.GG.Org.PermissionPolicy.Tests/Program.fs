@@ -811,5 +811,64 @@ expect "checked-in registry selects authority, frameworks and both non-participa
           "FS-GG/FS.GG.Audio"; "FS-GG/FS.GG.Net"; "FS-GG/FS.GG.Coordination"
           "EHotwagner/S.I.R." ])
     realRegistrySelected
+let caseAlias = "fs-gg/r"
+let caseAliasRows =
+    [ selectedExternalRows.Head
+      { Repository = caseAlias; SourceRef = "alias-head"; WorkflowPaths = [] } ]
+let caseAliasRoster = { selectedExternalRoster with Repositories = caseAliasRows }
+let caseAliasRosterFact =
+    { selectedExternalRosterFact with Repositories = [ "FS-GG/R"; caseAlias ] }
+let caseAliasBindingFacts =
+    { selectedExternalCallFact.BindingFacts with Roster = Some caseAliasRosterFact }
+let caseAliasCallFact =
+    { selectedExternalCallFact with BindingFacts = caseAliasBindingFacts }
+let caseAliasFleet =
+    { selectedExternalFleet with Roster = Some caseAliasRoster;
+                                Calls = Some [ caseAliasCallFact ] }
+let caseAliasRegistryText =
+    "repos:\n  - { full: FS-GG/R, role: framework }\n" +
+    "  - { full: fs-gg/r, role: non-participant }\n"
+let caseAliasRegistry =
+    { selectedExternalEvidence.Registry.Value with Text = caseAliasRegistryText }
+let caseAliasHeads =
+    [ { Repository = "FS-GG/R"; HeadRef = "r-head" }
+      { Repository = caseAlias; HeadRef = "alias-head" } ]
+let caseAliasListings =
+    [ { Repository = "FS-GG/R"; HeadRef = "r-head"; State = Terminal
+        WorkflowPaths = [ ".github/workflows/caller.yml" ] }
+      { Repository = caseAlias; HeadRef = "alias-head"; State = Terminal
+        WorkflowPaths = [] } ]
+let caseAliasEvidence =
+    { selectedExternalEvidence with Registry = Some caseAliasRegistry;
+                                    Heads = Some caseAliasHeads;
+                                    Enumerations = Some caseAliasListings;
+                                    Fleet = caseAliasFleet }
+expect "case-aliased duplicate repository cannot yield provisional satisfaction"
+    (Error "inventory-registry-syntax:registry-repos-duplicate")
+    (inventory caseAliasEvidence)
+let outsideOverlapText = selectedExternalRegistryText.Replace("FS-GG/FsQuint", "fs-gg/r")
+let outsideOverlapRegistry =
+    { selectedExternalEvidence.Registry.Value with Text = outsideOverlapText }
+expect "outside-fabric alias of a selected repository refuses"
+    (Error "inventory-registry-syntax:registry-outside-overlap")
+    (inventory { selectedExternalEvidence with Registry = Some outsideOverlapRegistry })
+let duplicateOutsideRegistryText =
+    "repos: [{ full: FS-GG/R }]\n" +
+    "outside-fabric: [{ full: FS-GG/FsQuint }, { full: fs-gg/fsquint }]\n"
+expect "case-aliased duplicate outside-fabric entries refuse"
+    (Error "registry-outside-duplicate")
+    (WorkflowPermissionSyntax.registryRepositories "registry/repos.yml" duplicateOutsideRegistryText
+     |> Result.mapError _.Code)
+expect "role change does not remove a repos row from default sweep"
+    (Ok [ "FS-GG/.github"; "FS-GG/R"; externalRepository ])
+    (WorkflowPermissionSyntax.registryRepositories "registry/repos.yml"
+        (registryScopeText.Replace("role: non-participant", "role: framework")))
+let caseSpellingRows =
+    [ { selectedExternalRows.Head with Repository = "fs-gg/r" }; selectedExternalRows[1] ]
+let caseSpellingRoster = { selectedExternalRoster with Repositories = caseSpellingRows }
+let caseSpellingFleet = { selectedExternalFleet with Roster = Some caseSpellingRoster }
+expect "one alternate roster spelling cannot hide a selected registry identity"
+    (Error "inventory-repository-set-mismatch")
+    (inventory { selectedExternalEvidence with Fleet = caseSpellingFleet })
 
 printfn "permission reducer: %d controls passed" passed
