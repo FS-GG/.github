@@ -75,7 +75,9 @@ def write_output(path: str | None, decision: dict[str, object]) -> None:
     if not path:
         return
     reason = str(decision["reason"]).replace("\r", " ").replace("\n", " ")
-    matched = ",".join(str(item) for item in decision["matched"])
+    # Git paths may contain newlines. Keep this diagnostic on one output line so
+    # a path cannot inject a competing run/reason key into GITHUB_OUTPUT.
+    matched = json.dumps(decision["matched"], ensure_ascii=True, separators=(",", ":"))
     with open(path, "a", encoding="utf-8") as stream:
         stream.write(f"run={'true' if decision['run'] else 'false'}\n")
         stream.write(f"reason={reason}\n")
