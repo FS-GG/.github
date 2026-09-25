@@ -711,6 +711,23 @@ at `fb0b135288c8d66076c7645855c727f4976171b9` refuses a top-level
 after an installed MSBuild scratch probe. Matching F# source handling and
 installed parity remain open; the implicit Directory.Build import requires a
 broader provider decision, because a blanket import refusal blocks this tree.
+[Coordination GS2-09.9 #671](https://github.com/FS-GG/FS.GG.Coordination/pull/671)
+at `e03323d2accca14833095aa38ed6f98da7ee7eb6` snapshots a mutable
+target-reader scope (13 fake-port tests); caller-owned selected target aliasing
+and protected native custody remain separate.
+[`.github` FSC-03 F# #3786](https://github.com/FS-GG/.github/pull/3786)
+at `b114db48d1c2220b12511a4950ada6415c8cd00d` refuses a top-level
+`ProjectReference Remove` (131 tests), matching Python #3785; implicit imports
+and installed parity remain open.
+[SDD FSC-04 #1030](https://github.com/FS-GG/FS.GG.SDD/pull/1030)
+at `7b7bd46354ac6c2d2781ac0e069bd1c4f1bd3dcc` retains child directory
+handles and rechecks rosters after a transient late candidate escaped two
+passes (1,466 Commands tests). ABA, post-check changes, cross-root atomicity
+and producer/receiver effects remain held.
+[Templates FSC-05 #570](https://github.com/FS-GG/FS.GG.Templates/pull/570)
+at `7c0bcde8a253116dcc5e113a83fab0ba156cfdb0` refuses unreviewed ZIP
+extra fields (51 payload, 29 archive controls); full closure and producer,
+served-byte, #511 CAS and receiver custody remain unproven.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
