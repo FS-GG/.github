@@ -114,13 +114,22 @@ adapter and configured remote workspace association, but `store=unconfigured`,
 `hostActivation=not-assessed`, and `receiverReachability=not-checked`. A basic authenticated
 GraphQL `viewer` read succeeded while the instrumented batch board query still returned
 `Resource not accessible by personal access token`; no selected WorkItem was inferred.
+Read-only follow-up isolated the minimal current access gap: Coordination Project 1 metadata,
+fields and items are readable, but the same PAT receives HTTP 403 for unrelated organization
+Project 2 with `organization_projects=read` named in the response. The runner's current
+`Board.bootstrap` enumerates all organization Projects v2 by title before item admission;
+effective organization Projects read access to Project 2 (including any needed organization
+approval), or a separately accepted direct-Project-1 bootstrap change, is required for this
+route. No WorkItem or native turn was admitted through that failed query.
 The current direct interactive `codex --yolo` session is outside that runner. Wrapping it with
 `fdev-telemetry exec` supplies credentials but does not emit native turn records; fleet capture of
 direct fdev sessions requires a distinct session producer and its own qualification. Do not claim
 this Codex transcript was captured without event-level evidence. Neither the readiness probes nor
 an applied telemetry Host receipt clears the separate GS2-09.9 installed-provider/native-effect hold.
 [Coordination draft #557](https://github.com/FS-GG/FS.GG.Coordination/pull/557) describes the
-prospective direct-session producer and negative acceptance cases; that source-only design is not
+prospective direct-session producer and negative acceptance cases. Its source-only handoff now
+distinguishes current-thread capability/assignment, private evidence packet boundaries, and
+window-close versus native exit at head `7b08675a0f2c4eda6babed3bd2119b2cc0da0efa`; it is not
 an installed producer, a captured turn, or an applied receipt.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
