@@ -1508,12 +1508,14 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
 **Depends on:** GS2-05–GS2-08
 **Exit gates:** Q5 and Q6 over full snapshots
 
-- [x] **GS2-09.9 — Qualify callable ordinary v2 execution.** The protected Coordination delivery supplies
+- [ ] **GS2-09.9 — Qualify callable ordinary v2 execution.** The protected Coordination delivery supplies
   the installed ordinary-delivery command, durable recovery behavior, one accepted isolated native operation,
   and the exact callable-readiness handoff consumed by discovery. It performs no fleet migration, does not open
-  v2, and remains an additive prerequisite before representative rehearsal.
+  v2, and remains an additive prerequisite before representative rehearsal. The exact GS2-09.9 qualification
+  and custom acceptance receipt are pending.
 
-  [Protected callable discovery handoff](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json).
+  [Protected callable discovery handoff](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json)
+  records the packet received by discovery; it is not the GS2-09.9 acceptance receipt.
 
 - [x] **GS2-09.1 — Implement complete discovery.** Read every open and relevant closed issue, Project
   item, field, hierarchy/dependency edge, claim/event stream, review/delivery/release record, repository
