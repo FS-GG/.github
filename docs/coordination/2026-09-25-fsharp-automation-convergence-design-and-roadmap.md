@@ -184,6 +184,11 @@ foreign JSON and installed receiver parity remain open.
 refuses equal or conflicting repeated lifecycle parameter defaults that Python previously
 accepted while F# refused; four new and 27 neighboring controls pass. Full YAML/foreign
 JSON and installed receiver parity remain open.
+[Templates provider-field draft #535](https://github.com/FS-GG/FS.GG.Templates/pull/535)
+refuses foreign provider fields that Python previously accepted while F# `grade` refused;
+three new and 16 neighboring controls pass. A separate parameter-name probe found a
+`grade` versus workspace-selection difference, not Python/F# grade parity. Full YAML,
+foreign JSON and installed receiver parity remain open.
 [SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
 refuses an observed same-length overwrite after the first held-descriptor read by
 checking descriptor metadata around two byte passes; 21 focused controls and the

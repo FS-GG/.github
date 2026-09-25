@@ -169,6 +169,12 @@ adds an injected atomic append port binding exact subscription, predecessor rece
 ordinal and immutable notification bytes, with replay, foreign workspace/item, gap,
 disconnect and uncertain-write refusals; 101 adapter controls pass. It has no installed
 durable store/recovery reader, live authenticated session source or Host submission.
+[Dormant journal-recovery draft #599](https://github.com/FS-GG/FS.GG.Coordination/pull/599)
+requires a future authenticated, transactionally complete sealed snapshot and refuses
+missing tail/terminal, broken predecessor chain, foreign binding, altered bytes and
+post-gap entries; 109 adapter controls pass. It returns only provisional terminal or
+gap. Durable store, seal issuer, trusted recovery source, live subscription and Host
+submission remain absent.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
