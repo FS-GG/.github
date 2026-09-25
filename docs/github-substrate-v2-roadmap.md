@@ -1637,6 +1637,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   repairs a wrong-target source false green: Python boolean `true` previously equaled selected
   repository ID `1` in native reads and pull reconciliation. Its 23 focused offline controls
   require exact integer identities, but the provisional operator remains inactive.
+  [Protection-context draft #575](https://github.com/FS-GG/FS.GG.Coordination/pull/575)
+  repairs a second source false green after an ambiguous response: an extra required status
+  context was ignored while `ExactProtection` was returned. Its 24 focused offline controls
+  refuse foreign, duplicate or malformed contexts without activating the operator.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
@@ -1803,6 +1807,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   decision. Its 98 local controls keep definite refusal at zero exposure and treat unknown
   outcome as possibly exposed without retry; the real launch interlock and token custody
   remain unproved.
+  [Cancellation-finalizer draft #3730](https://github.com/FS-GG/.github/pull/3730)
+  repairs a cancellation path that skipped native token revocation after possible exposure.
+  Its 102 local controls attempt revoke in `finally`, retain unknown outcomes pending and
+  forbid a second launch after a consumed claim; installed recovery scheduling and native
+  readback remain unproved.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
