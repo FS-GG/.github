@@ -1700,7 +1700,9 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   are uninstalled; a one-time handoff alone cannot make a GitHub App token single-use.
   [Stacked host-claim draft #3713](https://github.com/FS-GG/.github/pull/3713) models atomic claim,
   crash and unknown-result refusals, but its protected store pins remain empty and no native
-  revocation port is installed. No rehearsal
+  revocation port is installed. [Refusal-finalizer draft #3714](https://github.com/FS-GG/.github/pull/3714)
+  attempts a separately pinned native revoke after post-handoff store failure but keeps the outcome
+  pending without durable intent, observation and receipt; all live pins remain empty. No rehearsal
   dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
