@@ -310,6 +310,16 @@ module ProjectReferenceXml =
         | Error diagnostic -> Error diagnostic
         | Ok digests -> inspectSuppliedProjectBytesAgainstDigests digests snapshots
 
+    /// Build the provisional graph from a read-only exact-object provider instead of a
+    /// caller-supplied tree/blob roster. The root still needs authenticated commit provenance.
+    let inspectReadOnlyGitObjectSnapshot
+        (rootTreeId: string)
+        (reader: GitTreeProjects.IReadOnlyObjectReader)
+        : Result<Map<string, string list>, SyntaxDiagnostic> =
+        match GitTreeProjects.materializeReadOnlySha1Snapshot rootTreeId reader with
+        | Error diagnostic -> Error diagnostic
+        | Ok(trees, sources) -> inspectSuppliedGitSnapshot rootTreeId trees sources
+
     /// Compose the exact commit/tree check with blob binding and XML inspection. This remains
     /// provisional until the reader's repository custody and pin source are authenticated.
     let inspectSuppliedPinnedGitSnapshot
@@ -353,6 +363,26 @@ module ProjectReferenceXml =
         | Error diagnostic -> Error diagnostic
         | Ok pin ->
             inspectSuppliedGitHubMembershipSnapshot pin membershipReader commitReader rootTreeId treeObjects sources
+
+    /// Compose the provisional protected pin and commit checks with exact read-only Git object
+    /// reads. Provider authentication, source acceptance and evaluated MSBuild remain external.
+    let inspectReadOnlyProtectedBranchSnapshot
+        (repository: GitHubProtectedBranchPin.ExactRepository)
+        (branchReader: GitHubProtectedBranchPin.IReadOnlyProtectedBranchReader)
+        (membershipReader: GitHubCommitMembership.IReadOnlyGraphQlReader)
+        (commitReader: GitCommitProvenance.IReadOnlyCommitReader)
+        (rootTreeId: string)
+        (objectReader: GitTreeProjects.IReadOnlyObjectReader)
+        : Result<Map<string, string list>, SyntaxDiagnostic> =
+        match GitHubProtectedBranchPin.inspectProvisionalPin repository branchReader with
+        | Error diagnostic -> Error diagnostic
+        | Ok pin ->
+            match GitHubCommitMembership.inspectProvisionalMembership pin rootTreeId membershipReader with
+            | Error diagnostic -> Error diagnostic
+            | Ok _ ->
+                match GitCommitProvenance.inspectProvisionalRoot pin rootTreeId commitReader with
+                | Error diagnostic -> Error diagnostic
+                | Ok verified -> inspectReadOnlyGitObjectSnapshot verified.TreeId objectReader
 
     /// A local observation of one caller-supplied implicit file. The result does not establish
     /// nearest-file selection, import closure, source provenance, or a Rule (b) graph verdict.

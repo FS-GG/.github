@@ -6,17 +6,29 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.RegularExpressions
 
-/// Pure SHA-1 Git tree discovery for Rule (b). The caller supplies a root tree ID and raw tree
-/// object bytes; authenticating that root to a repository commit and binding project blob bytes
-/// to the returned IDs are separate provider obligations.
+/// Pure SHA-1 Git tree discovery for Rule (b), over supplied bytes or an exact-object reader.
+/// Authenticating the root to a repository commit remains a separate provider obligation.
 module GitTreeProjects =
     type private Entry = { Mode: string; Name: string; ObjectId: string }
+
+    type ObjectKind = Tree | Blob
+
+    type ObjectObservation =
+        { ObjectId: string
+          Kind: ObjectKind
+          Bytes: byte[] }
+
+    type IReadOnlyObjectReader =
+        abstract ReadExact: ObjectKind * string -> Result<ObjectObservation, unit>
 
     let private error path message =
         Error { Code = "git-tree-roster"; Path = path; Message = message }
 
     let private blobError path message =
         Error { Code = "git-blob-source"; Path = path; Message = message }
+
+    let private providerError path message =
+        Error { Code = "git-object-provider"; Path = path; Message = message }
 
     let private canonicalId (oid: string) =
         not (isNull oid) && Regex.IsMatch(oid, "^[0-9a-f]{40}$", RegexOptions.CultureInvariant)
@@ -168,3 +180,73 @@ module GitTreeProjects =
                                     let digest = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()
                                     bind (Set.add path seen) ((path, digest) :: digests) rest
                 bind Set.empty [] sources
+
+    /// Fetch the reachable tree closure and every discovered project blob by exact SHA-1 ID.
+    /// Each read's type, returned ID and raw bytes are checked before any graph can be formed.
+    /// This port has no installed local/network reader; root commit provenance is separate.
+    let materializeReadOnlySha1Snapshot
+        (rootTreeId: string)
+        (reader: IReadOnlyObjectReader)
+        : Result<(string * byte[]) list * (string * byte[]) list, SyntaxDiagnostic> =
+        if not (canonicalId rootTreeId) then
+            providerError "<root-tree>" "root tree ID must be exact lowercase SHA-1"
+        elif isNull (box reader) then
+            providerError "<git-objects>" "read-only object reader is unavailable"
+        else
+            let readVerified kind path oid =
+                let observed =
+                    try reader.ReadExact(kind, oid)
+                    with _ -> Error ()
+                match observed with
+                | Error () -> providerError path (sprintf "requested %A object %s is absent or unavailable" kind oid)
+                | Ok value when isNull (box value) -> providerError path "object observation is absent"
+                | Ok value when value.Kind <> kind -> providerError path "returned Git object kind differs from request"
+                | Ok value when not (String.Equals(value.ObjectId, oid, StringComparison.Ordinal)) ->
+                    providerError path "returned Git object ID differs from request"
+                | Ok value when isNull value.Bytes -> providerError path "returned Git object bytes are absent"
+                | Ok value ->
+                    let bytes = Array.copy value.Bytes
+                    let actual = if kind = Tree then treeId bytes else blobId bytes
+                    if actual <> oid then providerError path "returned Git object hash differs from requested ID"
+                    else Ok bytes
+
+            let rec gatherTree path ancestors objects oid =
+                if Set.contains oid ancestors then
+                    providerError path "tree object cycle cannot certify closure"
+                elif Map.containsKey oid objects then
+                    Ok objects
+                else
+                    match readVerified Tree path oid with
+                    | Error diagnostic -> Error diagnostic
+                    | Ok bytes ->
+                        match parseTree path bytes with
+                        | Error diagnostic -> Error diagnostic
+                        | Ok entries ->
+                            let rec gatherChildren found remaining =
+                                match remaining with
+                                | [] -> Ok found
+                                | entry :: rest ->
+                                    let entryPath = if path = "" then entry.Name else path + "/" + entry.Name
+                                    match entry.Mode with
+                                    | "40000" | "040000" ->
+                                        match gatherTree entryPath (Set.add oid ancestors) found entry.ObjectId with
+                                        | Error diagnostic -> Error diagnostic
+                                        | Ok next -> gatherChildren next rest
+                                    | _ -> gatherChildren found rest
+                            gatherChildren (Map.add oid bytes objects) entries
+
+            match gatherTree "" Set.empty Map.empty rootTreeId with
+            | Error diagnostic -> Error diagnostic
+            | Ok objects ->
+                let trees = Map.toList objects
+                match inspectSha1 rootTreeId trees with
+                | Error diagnostic -> Error diagnostic
+                | Ok roster ->
+                    let rec gatherBlobs sources remaining =
+                        match remaining with
+                        | [] -> Ok(trees, List.rev sources)
+                        | (path, oid) :: rest ->
+                            match readVerified Blob path oid with
+                            | Error diagnostic -> Error diagnostic
+                            | Ok bytes -> gatherBlobs ((path, bytes) :: sources) rest
+                    gatherBlobs [] roster

@@ -43,6 +43,107 @@ module GitTreeProjectsTests =
     let private emptyBytes = Encoding.UTF8.GetBytes("<Project />")
     let private projectBytes = [ "src/A/A.fsproj", edgeBytes; "src/B/B.fsproj", emptyBytes ]
 
+    let private validRead (kind: GitTreeProjects.ObjectKind) (oid: string)
+        : Result<GitTreeProjects.ObjectObservation, unit> =
+        let entries =
+            (edgeTrees |> List.map (fun (objectId, bytes) -> objectId, GitTreeProjects.Tree, bytes))
+            @ [ "a5d0c7c8fa7ab3ad59737b2e61114310f72b917b", GitTreeProjects.Blob, edgeBytes
+                "42309161647407290fad824c9ffcd29ec4fe960e", GitTreeProjects.Blob, emptyBytes ]
+        match entries |> List.tryFind (fun (objectId, expectedKind, _) -> objectId = oid && expectedKind = kind) with
+        | None -> Error ()
+        | Some(_, _, bytes) ->
+            Ok { ObjectId = oid; Kind = kind; Bytes = bytes }
+
+    let private objectReader read =
+        { new GitTreeProjects.IReadOnlyObjectReader with
+            member _.ReadExact(kind, oid) = read kind oid }
+
+    let private refusedObject message read =
+        match ProjectReferenceXml.inspectReadOnlyGitObjectSnapshot (fst edgeRoot) (objectReader read) with
+        | Error diagnostic ->
+            Assert.Equal("git-object-provider", diagnostic.Code)
+            Assert.Contains(message, diagnostic.Message)
+        | Ok graph -> failwithf "unverified object provider produced graph: %A" graph
+
+    [<Fact>]
+    let ``read-only object closure preserves independently fixed A to B edge`` () =
+        match ProjectReferenceXml.inspectReadOnlyGitObjectSnapshot (fst edgeRoot) (objectReader validRead) with
+        | Error diagnostic -> failwithf "valid object closure refused: %A" diagnostic
+        | Ok graph -> Assert.Equal<string list>([ "src/B/B.fsproj" ], graph.["src/A/A.fsproj"])
+
+    [<Fact>]
+    let ``protected pin through read-only object closure has no supplied-byte shortcut`` () =
+        let repository: GitHubProtectedBranchPin.ExactRepository =
+            { RepositoryNodeId = "R_fixture_one"; RepositoryFullName = "FS-GG/.github" }
+        let branchReader =
+            { new GitHubProtectedBranchPin.IReadOnlyProtectedBranchReader with
+                member _.ReadExact request =
+                    Ok { StatusCode = 200; ResponseUrl = request.Url; MediaType = "application/json"
+                         Body = Encoding.UTF8.GetBytes("""{"name":"main","commit":{"sha":"539aff7e655d22b1761850cd6be868eecc2886e4"},"protected":true}""") } }
+        let membershipReader =
+            { new GitHubCommitMembership.IReadOnlyGraphQlReader with
+                member _.ExecuteExact _ =
+                    Ok(Encoding.UTF8.GetBytes("""{"data":{"repository":{"id":"R_fixture_one","nameWithOwner":"FS-GG/.github","object":{"__typename":"Commit","oid":"539aff7e655d22b1761850cd6be868eecc2886e4","tree":{"oid":"2b552d6bf9d7b4458a28fc65663fbc2c7b0221dc"}}}}}""")) }
+        let commitReader =
+            { new GitCommitProvenance.IReadOnlyCommitReader with
+                member _.ReadExact pin =
+                    Ok { RepositoryNodeId = pin.RepositoryNodeId; RepositoryFullName = pin.RepositoryFullName
+                         CommitId = pin.CommitId
+                         RawCommit = Convert.FromBase64String("dHJlZSAyYjU1MmQ2YmY5ZDdiNDQ1OGEyOGZjNjU2NjNmYmMyYzdiMDIyMWRjCmF1dGhvciBGaXh0dXJlIDxmaXh0dXJlQGV4YW1wbGUuaW52YWxpZD4gMCArMDAwMApjb21taXR0ZXIgRml4dHVyZSA8Zml4dHVyZUBleGFtcGxlLmludmFsaWQ+IDAgKzAwMDAKCmZpeGVkIEEgdG8gQiBmaXh0dXJlCg==") } }
+        let inspect read =
+            ProjectReferenceXml.inspectReadOnlyProtectedBranchSnapshot
+                repository branchReader membershipReader commitReader (fst edgeRoot) (objectReader read)
+        match inspect validRead with
+        | Error diagnostic -> failwithf "complete protected object chain refused: %A" diagnostic
+        | Ok graph -> Assert.Equal<string list>([ "src/B/B.fsproj" ], graph.["src/A/A.fsproj"])
+        match inspect (fun kind oid ->
+                if kind = GitTreeProjects.Blob && oid = "42309161647407290fad824c9ffcd29ec4fe960e" then Error ()
+                else validRead kind oid) with
+        | Error diagnostic -> Assert.Equal("git-object-provider", diagnostic.Code)
+        | Ok graph -> failwithf "missing B blob produced protected graph: %A" graph
+
+    [<Fact>]
+    let ``missing referenced project blob prevents graph despite valid supplied snapshot`` () =
+        match ProjectReferenceXml.inspectSuppliedGitSnapshot (fst edgeRoot) edgeTrees projectBytes with
+        | Error diagnostic -> failwithf "supplied counterexample changed: %A" diagnostic
+        | Ok graph -> Assert.Equal<string list>([ "src/B/B.fsproj" ], graph.["src/A/A.fsproj"])
+        refusedObject "absent" (fun kind oid ->
+            if kind = GitTreeProjects.Blob && oid = "42309161647407290fad824c9ffcd29ec4fe960e" then Error ()
+            else validRead kind oid)
+
+    [<Fact>]
+    let ``wrong object kind and identity cannot satisfy exact read`` () =
+        refusedObject "kind" (fun kind oid ->
+            match validRead kind oid with
+            | Ok observation when kind = GitTreeProjects.Tree && oid = fst edgeA ->
+                Ok { observation with Kind = GitTreeProjects.Blob }
+            | other -> other)
+        refusedObject "ID" (fun kind oid ->
+            match validRead kind oid with
+            | Ok observation when kind = GitTreeProjects.Blob && oid = "a5d0c7c8fa7ab3ad59737b2e61114310f72b917b" ->
+                Ok { observation with ObjectId = String.replicate 40 "a" }
+            | other -> other)
+
+    [<Fact>]
+    let ``tampered blob bytes and missing subtree cannot certify graph`` () =
+        refusedObject "hash" (fun kind oid ->
+            match validRead kind oid with
+            | Ok observation when kind = GitTreeProjects.Blob && oid = "a5d0c7c8fa7ab3ad59737b2e61114310f72b917b" ->
+                let changed = Array.copy observation.Bytes
+                changed.[0] <- byte 'X'
+                Ok { observation with Bytes = changed }
+            | other -> other)
+        refusedObject "absent" (fun kind oid ->
+            if kind = GitTreeProjects.Tree && oid = fst edgeA then Error ()
+            else validRead kind oid)
+
+    [<Fact>]
+    let ``absent or throwing object reader cannot certify graph`` () =
+        match ProjectReferenceXml.inspectReadOnlyGitObjectSnapshot (fst edgeRoot) Unchecked.defaultof<_> with
+        | Error diagnostic -> Assert.Equal("git-object-provider", diagnostic.Code)
+        | Ok graph -> failwithf "absent reader produced graph: %A" graph
+        refusedObject "unavailable" (fun _ _ -> failwith "private reader failure")
+
     let private refusedBlob expectedMessage sources =
         match ProjectReferenceXml.inspectSuppliedGitSnapshot (fst edgeRoot) edgeTrees sources with
         | Error diagnostic ->
