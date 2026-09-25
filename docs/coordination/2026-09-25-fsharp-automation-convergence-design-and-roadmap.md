@@ -148,7 +148,12 @@ ZIP payload projections in seven new controls; the stacked root `.nuspec` select
 refuses them on the complete served path. [Rendering cross-root draft #1340](https://github.com/FS-GG/FS.GG.Rendering/pull/1340)
 refuses persistent manifest drift after pinned product capture, with six new controls; a
 fixture proved the old plan could combine bytes never visible together. It does not prove
-an atomic cross-root snapshot, ABA safety, output rollback or installed parity. These stacked
+an atomic cross-root snapshot, ABA safety, output rollback or installed parity.
+[Game complete-receiver draft #656](https://github.com/FS-GG/FS.GG.Game/pull/656)
+binds the metadata contract to supplied exact planned manifest and skill bytes after a
+red-before metadata-only false green; 23 receiver, 42 policy and 27 physical-source
+controls pass. Trustworthy physical receiver observation and installed parity remain.
+These stacked
 drafts need owner acceptance and installed evidence before receiver or release adoption.
 
 **V2-PROG-01 — deterministic progress projection.** A bounded `.github` F# source draft
