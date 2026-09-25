@@ -10,14 +10,22 @@ module ProgressRendererTests =
     let private headB = String.replicate 40 "b"
     let private link label = { Label = label; Url = "https://github.com/FS-GG/.github/pull/123" }
 
-    let private lane id model reservation state = {
-        Id = id; Model = model; Effort = High; Reservation = reservation; State = state
+    let private explicitLaunch model = {
+        Model = model; Effort = High; Source = ExplicitOrchestratorSpawn; EvidenceId = "spawn-record-1"
+    }
+
+    let private lane id activity model reservation state launch = {
+        Id = id; Role = Worker; Activity = activity; Model = model; Effort = High
+        Reservation = reservation; State = state; Launch = launch
     }
 
     let private baseSnapshot () : ProgressSnapshot = {
         AsOf = at
         RoadmapHead = headA
-        Lanes = [ lane "B" Gpt6Sol General Pending; lane "A" Gpt6Astra DirectV2 ActiveHealthy ]
+        Lanes = [
+            lane "B" Idle Gpt6Astra General Pending None
+            lane "A" Running Gpt6Sol DirectV2 ActiveHealthy (Some(explicitLaunch Gpt6Sol))
+        ]
         DeclaredLaneCounts = {
             Total = 2; Active = 1; ReservedDirectV2 = 1; ActiveReservedDirectV2 = 1
             ByModel = [ Gpt6Astra, 1; Gpt6Sol, 1 ]
@@ -29,6 +37,15 @@ module ProgressRendererTests =
         DeclaredEvidenceCounts = { Prs = 1; Evidence = 2 }
         Telemetry = {
             WorkspaceId = "main-fsharp-dev"; Readiness = ActiveHealthy
+            HealthObservation = Some {
+                Authenticated = true; Ready = true; CollectorVerified = true
+                ObservedAt = at.AddMinutes(-2.0); EvidenceId = "health-receipt-1"
+            }
+            WorkspaceObservation = Some {
+                Configured = true; CollectorVerified = true; WorkspaceId = "main-fsharp-dev"
+                Pending = 0; PendingUnacknowledged = 0; UnacknowledgedLossy = false
+                ObservedAt = at.AddMinutes(-1.0); EvidenceId = "workspace-status-1"
+            }
             Pending = 0; PendingUnacknowledged = 0; UnacknowledgedLossy = false
             Capture = NoAcceptedCaptureClaim
         }
@@ -77,10 +94,10 @@ module ProgressRendererTests =
                 ""
                 "## Lanes"
                 ""
-                "| Lane | Model | Effort | Reservation | State |"
-                "| --- | --- | --- | --- | --- |"
-                "| A | gpt-6-astra | high | Reserved direct V2 | 🟢 Active/Healthy |"
-                "| B | gpt-6-sol | high | General | 🟡 Pending |"
+                "| Lane | Role | Activity | Model | Effort | Reservation | State | Launch settings evidence |"
+                "| --- | --- | --- | --- | --- | --- | --- | --- |"
+                "| A | Worker | Running | gpt-6-sol | high | Reserved direct V2 | 🟢 Active/Healthy | Explicit orchestrator spawn (spawn-record-1) |"
+                "| B | Worker | Idle | gpt-6-astra | high | General | 🟡 Pending | — |"
                 ""
                 "Total: 2; active: 1; reserved direct V2: 1; active reserved direct V2: 1."
                 "Models: gpt-6-astra: 1, gpt-6-sol: 1."
@@ -98,6 +115,8 @@ module ProgressRendererTests =
                 ""
                 "- Telemetry readiness: 🟢 Active/Healthy"
                 "- Workspace: `main-fsharp-dev`"
+                "- Authenticated health observation: authenticated=True, ready=True, collector verified=True, evidence=health-receipt-1"
+                "- Configured workspace observation: configured=True, collector verified=True, evidence=workspace-status-1"
                 "- Current queue: pending=0, pending unacknowledged=0, unacknowledged lossy=false"
                 "- End-to-end capture acceptance: 🟡 Pending — no end-to-end capture acceptance claimed"
                 ""
@@ -213,7 +232,83 @@ module ProgressRendererTests =
         let baseline = baseSnapshot ()
         let entry = {
             CompletedAt = at.AddMinutes(-1.0); Item = "GS2-14"; Workstream = "Core"
-            Result = CompletedInfo; Link = None; RecordedRoadmapHead = headA
+            Result = CompletedInfo; Link = Some(link "PR 123"); RecordedRoadmapHead = headA
         }
         refuses "completion time must be UTC" { baseline with CompletionHistory = [ { entry with CompletedAt = entry.CompletedAt.ToOffset(TimeSpan.FromHours(2.0)) } ] }
         refuses "completion time exceeds report time" { baseline with CompletionHistory = [ { entry with CompletedAt = at.AddMinutes(1.0) } ] }
+
+    [<Fact>]
+    let ``an Astra reserved lane cannot stand in for a Sol high direct V2 worker`` () =
+        let baseline = baseSnapshot ()
+        let astra = { baseline.Lanes.[1] with Model = Gpt6Astra; Launch = Some(explicitLaunch Gpt6Astra) }
+        refuses "active V2 worker requires explicit gpt-6-sol/high launch evidence"
+            { baseline with Lanes = [ baseline.Lanes.[0]; astra ];
+                            DeclaredLaneCounts = { baseline.DeclaredLaneCounts with ByModel = [ Gpt6Astra, 2 ] } }
+
+    [<Fact>]
+    let ``healthy telemetry without authenticated and configured observations cannot qualify`` () =
+        let baseline = baseSnapshot ()
+        refuses "healthy telemetry requires authenticated health and configured workspace observations"
+            { baseline with Telemetry = { baseline.Telemetry with HealthObservation = None; WorkspaceObservation = None } }
+
+    [<Fact>]
+    let ``completion table refuses pending and linkless rows`` () =
+        let entry = {
+            CompletedAt = at.AddMinutes(-1.0); Item = "GS2-14"; Workstream = "Core"
+            Result = Pending; Link = None; RecordedRoadmapHead = headA
+        }
+        refuses "completion requires a terminal result and evidence link"
+            { baseSnapshot () with CompletionHistory = [ entry ] }
+
+    [<Fact>]
+    let ``running is independent of semantic health and explicit launch evidence is mandatory`` () =
+        let baseline = baseSnapshot ()
+        let worker = baseline.Lanes.[1]
+        let runningPending = { worker with State = Pending }
+        let rendered = render { baseline with Lanes = [ baseline.Lanes.[0]; runningPending ] }
+        Assert.Contains("Total: 2; active: 1; reserved direct V2: 1; active reserved direct V2: 1.", rendered)
+        Assert.Contains("| A | Worker | Running | gpt-6-sol | high | Reserved direct V2 | 🟡 Pending |", rendered)
+
+        refuses "running lane requires explicit launch settings evidence"
+            { baseline with Lanes = [ baseline.Lanes.[0]; { worker with Launch = None } ] }
+        refuses "lane model/effort disagrees with explicit launch settings"
+            { baseline with Lanes = [ baseline.Lanes.[0]; { worker with Launch = Some { (explicitLaunch Gpt6Sol) with Effort = Medium } } ] }
+        refuses "runtime self-introspection is not launch settings provenance"
+            { baseline with Lanes = [ baseline.Lanes.[0]; { worker with Launch = Some { (explicitLaunch Gpt6Sol) with Source = RuntimeSelfIntrospection } } ] }
+        refuses "active reserved direct V2 worker is required"
+            { baseline with Lanes = [ baseline.Lanes.[0]; { worker with Activity = Idle } ];
+                            DeclaredLaneCounts = { baseline.DeclaredLaneCounts with Active = 0; ActiveReservedDirectV2 = 0 } }
+        refuses "direct V2 reservation requires a worker role"
+            { baseline with Lanes = [ baseline.Lanes.[0]; { worker with Role = Orchestrator } ];
+                            DeclaredLaneCounts = { baseline.DeclaredLaneCounts with ActiveReservedDirectV2 = 0 } }
+
+    [<Fact>]
+    let ``healthy telemetry needs separately verified health and configured workspace facts`` () =
+        let baseline = baseSnapshot ()
+        let health = baseline.Telemetry.HealthObservation.Value
+        let workspace = baseline.Telemetry.WorkspaceObservation.Value
+        let change telemetry = { baseline with Telemetry = telemetry }
+        refuses "healthy telemetry requires authenticated health and configured workspace observations"
+            (change { baseline.Telemetry with HealthObservation = Some { health with Authenticated = false } })
+        refuses "healthy telemetry requires authenticated health and configured workspace observations"
+            (change { baseline.Telemetry with HealthObservation = Some { health with CollectorVerified = false } })
+        refuses "healthy telemetry requires authenticated health and configured workspace observations"
+            (change { baseline.Telemetry with WorkspaceObservation = Some { workspace with Configured = false } })
+        refuses "healthy telemetry requires authenticated health and configured workspace observations"
+            (change { baseline.Telemetry with WorkspaceObservation = Some { workspace with CollectorVerified = false } })
+        refuses "workspace observation queue disagrees with telemetry queue"
+            (change { baseline.Telemetry with WorkspaceObservation = Some { workspace with Pending = 1 } })
+
+    [<Fact>]
+    let ``history accepts only terminal outcomes with evidence`` () =
+        let baseline = baseSnapshot ()
+        let entry = {
+            CompletedAt = at.AddMinutes(-1.0); Item = "GS2-14"; Workstream = "Core"
+            Result = CompletedInfo; Link = Some(link "PR 123"); RecordedRoadmapHead = headA
+        }
+        for status in [ ActiveHealthy; Pending; BlockedIncompleteEvidence; Unknown ] do
+            refuses "completion requires a terminal result and evidence link"
+                { baseline with CompletionHistory = [ { entry with Result = status } ] }
+        refuses "completion requires a terminal result and evidence link"
+            { baseline with CompletionHistory = [ { entry with Link = None } ] }
+        Assert.Contains("🔴 Failed/Unsafe", render { baseline with CompletionHistory = [ { entry with Result = FailedUnsafe } ] })
