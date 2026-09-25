@@ -439,13 +439,23 @@ exact SHA-256 and Git blob ID in producer/reviewer joins after forged-source fal
 [Coordination GS2-09.7 #642](https://github.com/FS-GG/FS.GG.Coordination/pull/642)
 at `c661b089ff073bd6de241c7de9cbe2f5bf828561` binds a two-read core-settings
 digest but marks settings authority incomplete (108 focused tests), with ten other
-settings surfaces and Q5/Q6 open. [SDD FSC-04 #1024](https://github.com/FS-GG/FS.GG.SDD/pull/1024)
+settings surfaces and Q5/Q6 open.
+The next [Coordination GS2-09.7 #644](https://github.com/FS-GG/FS.GG.Coordination/pull/644)
+at `b6cacedd1b818ea2f940e64283dde5b218f254a2` adds a final core-settings reread
+after custom-property reads to refuse mid-capture drift (109 focused tests). Settings
+authority remains explicitly incomplete with nine other surfaces unbound.
+[SDD FSC-04 #1024](https://github.com/FS-GG/FS.GG.SDD/pull/1024)
 at `901df809e74e473e329d1cc324366b72d88a815d` refuses preview capture when
 blocking model diagnostics exist (1,447 Commands tests), while command diagnostics,
 staging/rollback and installed parity remain held. [`.github` FSC-03 #3768](https://github.com/FS-GG/.github/pull/3768)
 at `a5601c55831606f2eff307271bcbac12e00b1ee6` repairs the Python pure matcher
 trailing-newline false green (116 fixtures); it does not assert end-to-end XML filename
-coverage or installed F# parity. [Templates FSC-05 #559](https://github.com/FS-GG/FS.GG.Templates/pull/559)
+coverage or installed F# parity.
+[`.github` FSC-03 #3769](https://github.com/FS-GG/.github/pull/3769) at
+`f6fcad8e686fcc7d6e8bf2a0eda192c27949b6cf` decodes XML character references
+in Python ProjectReference Include after full-gate false greens/false findings (122
+fixtures); F# XML provider and installed parity remain open.
+[Templates FSC-05 #559](https://github.com/FS-GG/FS.GG.Templates/pull/559)
 at `ca78ca177cb73fc2fec80e02717e372700066399` refuses Python Unicode 16.0 full-fold
 expansion paths in the F# payload comparator (40 payload and 29 archive controls), with
 simple-fold, Unicode-version, producer and receiver parity still open. These are draft
