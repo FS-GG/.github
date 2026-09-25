@@ -198,6 +198,10 @@ JSON and installed receiver parity remain open.
 refuses JSON object or array fragments at provider-field indentation that Python
 previously accepted while F# `grade` refused; four new and 29 provider-tool fixture
 controls pass. This does not establish full foreign JSON or installed parity.
+[Templates floor JSON-shaped line draft #538](https://github.com/FS-GG/FS.GG.Templates/pull/538)
+refuses JSON object or array fragments under `minimumFsggSdd` that Python previously
+accepted while F# `grade` refused; four new and 29 provider-tool fixture controls pass.
+Full YAML, foreign JSON, served-byte and installed receiver parity remain open.
 [SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
 refuses an observed same-length overwrite after the first held-descriptor read by
 checking descriptor metadata around two byte passes; 21 focused controls and the
@@ -220,6 +224,12 @@ uses accepted feature 115 FR-009 to classify missing or unreadable declared perf
 evidence as non-authorizing. Current producer still omits both paths, while the provisional
 bundle refuses them; 37 focused controls pass. A producer join must surface the refusal
 before output, with arbitrary-root physical closure and installed parity still open.
+[SDD selected-file characterization #1013](https://github.com/FS-GG/FS.GG.SDD/pull/1013)
+shows the closed-root reader cannot capture a valid declared performance file in a
+crowded parent without either refusing siblings or admitting them to the physical set.
+Symlink and case-alias negatives also refuse; 40 focused controls pass. A selected-file
+pinned no-follow reader is the next source prerequisite, while producer integration and
+installed parity remain open.
 [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)
