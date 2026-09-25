@@ -1097,6 +1097,9 @@ changing the protected holds:
 | [FSC-03 F# #3823](https://github.com/FS-GG/.github/pull/3823) | `55cffe84ec8c9d01e3a1d39803306c40d6195e69` | Dormant branch and GraphQL readers refuse Content-Encoding and disable automatic decompression; 259 F# tests. Accepted credential custody, durable pin and receiver parity remain held. |
 | [FSC-04 #1048](https://github.com/FS-GG/FS.GG.SDD/pull/1048) | `55ecb160c23fdfc17b85ce36c0e29daa6dd709a5` | Read-only pinned/no-follow Linux comparison refuses dirty project/sdd bytes and same-byte symlink against selected commit blobs; 1,530 Commands tests. Mode/common instant/full-source and effect proof remain open. |
 | [Telemetry usage #760](https://github.com/FS-GG/FS.GG.Coordination/pull/760) | `12c4eae599df6ed9d4af2f18a63db49323b395c7` | Private journal writer window halts on immediate or nonadjacent duplicate receipt EntryIds before reducing them; 172 Release execution tests. Durable store/sealed replay and genuine Host capture remain unproven. |
+| [FSC-03 F# #3824](https://github.com/FS-GG/.github/pull/3824) | `529f17a7ff220222dd7041b71275390d33629c0e` | Dormant branch and GraphQL readers refuse declared non-UTF-8 JSON charset while explicit UTF-8 controls pass; 261 F# tests. Credential custody, accepted pin and receiver parity remain held. |
+| [GS2-09.9 #761](https://github.com/FS-GG/FS.GG.Coordination/pull/761) | `4acd6655ce58b50c567fcd206b9b098758fc80bc` | Separate proposed v5 vault entry exits 78 for absent/untrusted grant before any protected port read; 17 focused/adjacent tests including clean-directory refusal. It is not installed and #550/#545 remain held. |
+| [GS2-09.7 #762](https://github.com/FS-GG/FS.GG.Coordination/pull/762) | `115e78a6f286af96c09f03c89824c229960a96ef` | Source-only one-use signed-attestation claim port binds exact run/target/store generation and refuses duplicate/unknown/lost CAS or forged readback; 736 full unit tests. Protected durable journal/key/clock/store head and Q5/Q6 remain held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
@@ -1281,6 +1284,24 @@ The five latest verified draft rows were #749, #748, #747, #3818 and #746.
 froze, so it was explicitly deferred to the next source report; #3819,
 #751 and #752 were committed after the cutoff. The Release render had zero
 warnings/errors, and renderer tests remained 25/25. No protected hold was
+cleared by this report.
+
+At the 19:39:48 UTC verified-source cutoff, six GPT-6-Sol/high lanes were
+active, including reserved GS2-09.9 and direct GS2-09.7. The F# report
+rendered at 19:41:44 UTC from recorded roadmap head `dc817c8c`, with all six
+concrete current-task rows. The latest complete local team period,
+19:27:05–19:37:05 UTC, had 36,239,128 input tokens (35,940,992 cached;
+298,136 noncached), 103,056 output and 36,342,184 total. Across 89
+completed periods including zero-use periods, the team mean was
+31,653,186.44 total. Local unverified weekly usage was 92% at 19:41:39,
+leaving 8%; the conditional continuous-use, account-wide projection was
+near 21:45 UTC. Authenticated health and `main-fsharp-dev` workspace status
+were ready/configured at 19:41:44 with pending=0,
+pendingUnacknowledged=0 and unacknowledgedLossy=false. This is readiness
+only; end-to-end runner/native turn/Host capture remained pending. The
+newest five frozen draft rows were #760, #1048, #3823, #759 and #758.
+Post-cutoff #3824 and #761 were excluded. The Release render had zero
+warnings/errors; renderer tests remained 25/25. No protected gate was
 cleared by this report.
 
 At the 17:51 UTC source checkpoint, the newest five completed **draft
