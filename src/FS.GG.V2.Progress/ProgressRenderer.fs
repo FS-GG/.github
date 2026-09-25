@@ -200,6 +200,7 @@ type PeriodUsage =
     | UnknownPeriodUsage
     | NativeTurnPeriodUsage of NativePeriodUsage
     | NativeCounterPeriodUsage of TeamCounterWindow
+    | LocalCounterDiagnostic of TeamCounterWindow
 
 type CounterTotals = {
     Input: decimal
@@ -362,7 +363,7 @@ module ProgressRenderer =
 
     let private zeroTotals = { Input = 0M; CachedInput = 0M; Output = 0M; Total = 0M }
 
-    let private deriveCounterWindow (asOf: DateTimeOffset) (window: TeamCounterWindow)
+    let private deriveCounterWindow (asOf: DateTimeOffset) (localDiagnostic: bool) (window: TeamCounterWindow)
         : Result<TeamCounterSummary, string list> =
         let errors = ResizeArray<string>()
         let require condition message = if not condition then errors.Add message
@@ -396,8 +397,10 @@ module ProgressRenderer =
             "native session lineage must close under the selected root"
         for session in window.Sessions do
             require (nonblank session.SessionId && nonblank session.EvidenceId
-                     && session.CollectorVerified && session.HistoryComplete)
-                "native session requires collector-verified complete-history provenance"
+                     && session.CollectorVerified <> localDiagnostic && session.HistoryComplete)
+                (if localDiagnostic then
+                     "local diagnostic requires explicitly unverified complete-history provenance"
+                 else "native session requires collector-verified complete-history provenance")
             require (utc session.StartedAt && utc session.CompleteThrough
                      && session.StartedAt >= rootStartedAt
                      && session.StartedAt <= asOf
@@ -697,7 +700,11 @@ module ProgressRenderer =
                          && int64 turn.InputTokens + int64 turn.OutputTokens > 0L)
                     "period usage requires positive native turn token counts"
         | NativeCounterPeriodUsage window ->
-            match deriveCounterWindow snapshot.AsOf window with
+            match deriveCounterWindow snapshot.AsOf false window with
+            | Ok summary -> counterSummary <- Some summary
+            | Error findings -> for finding in findings do errors.Add finding
+        | LocalCounterDiagnostic window ->
+            match deriveCounterWindow snapshot.AsOf true window with
             | Ok summary -> counterSummary <- Some summary
             | Error findings -> for finding in findings do errors.Add finding
 
@@ -796,13 +803,17 @@ module ProgressRenderer =
                 let input = usage.Runner.NativeTurns |> List.sumBy (fun turn -> int64 turn.InputTokens)
                 let output = usage.Runner.NativeTurns |> List.sumBy (fun turn -> int64 turn.OutputTokens)
                 $"🔵 Completed/Info — input={input}, output={output} native turn tokens; window {timeText usage.WindowStart} to {timeText usage.WindowEnd}; {renderLink usage.Runner.Evidence}"
-            | NativeCounterPeriodUsage _ ->
+            | NativeCounterPeriodUsage _ | LocalCounterDiagnostic _ ->
                 match progress.CounterSummary with
                 | None -> "🔘 Unknown — native counter window has not qualified"
                 | Some summary ->
                     let delta = summary.LatestPeriodDelta
                     let noncached = delta.Input - delta.CachedInput
-                    $"🔵 Completed/Info — team-wide 10-minute native token_count delta {timeText summary.WindowStart} to {timeText summary.WindowEnd}: input={integerText delta.Input}, cached input={integerText delta.CachedInput}, noncached input={integerText noncached}, output={integerText delta.Output}, total={integerText delta.Total}; sessions={summary.SessionCount}; cached input is included in input"
+                    let provenance =
+                        match snapshot.PeriodUsage with
+                        | LocalCounterDiagnostic _ -> "🟠 Blocked/Incomplete evidence — local JSONL diagnostic only; no authenticated collector or Host receipt"
+                        | _ -> "🔵 Completed/Info — collector-verified"
+                    $"{provenance}; team-wide 10-minute native token_count delta {timeText summary.WindowStart} to {timeText summary.WindowEnd}: input={integerText delta.Input}, cached input={integerText delta.CachedInput}, noncached input={integerText noncached}, output={integerText delta.Output}, total={integerText delta.Total}; sessions={summary.SessionCount}; cached input is included in input"
         let periodsText, allTotalText, meanText, nativeRateText, exhaustionText =
             match progress.CounterSummary with
             | None ->
@@ -814,23 +825,33 @@ module ProgressRenderer =
             | Some summary ->
                 let total = summary.AllPeriodsTotal
                 let mean = summary.AllPeriodMean
+                let counterState =
+                    match snapshot.PeriodUsage with
+                    | LocalCounterDiagnostic _ ->
+                        "🟠 Blocked/Incomplete evidence — local JSONL diagnostic only; account and collector scope unverified"
+                    | _ -> "🔵 Completed/Info"
                 let periodsText =
-                    $"🔵 Completed/Info — {summary.CompletedPeriodCount} completed 10-minute periods from {timeText summary.RootStartedAt} through {timeText summary.WindowEnd}; zero-use periods included"
+                    $"{counterState} — {summary.CompletedPeriodCount} completed 10-minute periods from {timeText summary.RootStartedAt} through {timeText summary.WindowEnd}; zero-use periods included"
                 let totalText =
-                    $"🔵 Completed/Info — input={integerText total.Input}, cached input={integerText total.CachedInput}, noncached input={integerText (total.Input - total.CachedInput)}, output={integerText total.Output}, total={integerText total.Total} tokens across all completed periods"
+                    $"{counterState} — input={integerText total.Input}, cached input={integerText total.CachedInput}, noncached input={integerText (total.Input - total.CachedInput)}, output={integerText total.Output}, total={integerText total.Total} tokens across all completed periods"
                 let meanText =
-                    $"🔵 Completed/Info — input={decimalText mean.Input}, cached input={decimalText mean.CachedInput}, noncached input={decimalText (mean.Input - mean.CachedInput)}, output={decimalText mean.Output}, total={decimalText mean.Total} team tokens/period"
+                    $"{counterState} — input={decimalText mean.Input}, cached input={decimalText mean.CachedInput}, noncached input={decimalText (mean.Input - mean.CachedInput)}, output={decimalText mean.Output}, total={decimalText mean.Total} team tokens/period"
                 let rateText =
                     match summary.LatestRate with
                     | None -> "🔘 Unknown — no fresh native primary.used_percent observation"
                     | Some point ->
                         let used = decimalText point.Rate.UsedPercent + "%"
                         let remaining = decimalText (100M - point.Rate.UsedPercent) + "%"
-                        $"🔵 Completed/Info — used={used}, remaining={remaining}; observed={timeText point.ObservedAt}; reset={timeText point.Rate.ResetsAt}; account scope={escape point.Rate.AccountScopeId}; limit={escape point.Rate.LimitId}; session={escape point.SessionId}; ordinal={point.Ordinal}; provenance={escape point.EvidenceId}"
+                        $"{counterState} — used={used}, remaining={remaining}; observed={timeText point.ObservedAt}; reset={timeText point.Rate.ResetsAt}; account scope={escape point.Rate.AccountScopeId}; limit={escape point.Rate.LimitId}; session={escape point.SessionId}; ordinal={point.Ordinal}; provenance={escape point.EvidenceId}"
                 let estimateText =
                     match summary.Exhaustion with
                     | NoRateSlope -> "🔘 Unknown — need a positive earliest-to-latest same-account, same-reset weekly percent slope across this root session"
-                    | EstimatedAt instant -> $"🟡 Pending — approximately {timeText instant} at the continuous-use, account-wide weekly percent slope"
+                    | EstimatedAt instant ->
+                        let qualification =
+                            match snapshot.PeriodUsage with
+                            | LocalCounterDiagnostic _ -> "; local JSONL diagnostic with unverified account scope"
+                            | _ -> ""
+                        $"🟡 Pending — approximately {timeText instant} at the continuous-use, account-wide weekly percent slope{qualification}"
                     | NotBeforeReset -> "🔵 Completed/Info — continuous-use, account-wide weekly percent slope projects no exhaustion before reset"
                     | AlreadyAtLimit -> "🔴 Failed/Unsafe — native weekly used percent reached 100%"
                 periodsText, totalText, meanText, rateText, estimateText
