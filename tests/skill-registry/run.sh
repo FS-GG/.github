@@ -26,7 +26,8 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/skill-registry-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
 ROOT="$WORK/repos"
-mkdir -p "$ROOT/Producer.One/skills/good" \
+mkdir -p "$ROOT/.github" \
+         "$ROOT/Producer.One/skills/good" \
          "$ROOT/Producer.One/skills/stale" \
          "$ROOT/Producer.Two/skills/owned"
 
@@ -47,15 +48,13 @@ WRONG="deadbeef00000000000000000000000000000000000000000000000000000000"
 # checked out, which is the exact defect that arm exists to close. Every registry this fixture builds
 # lives in $WORK, so one file serves them all.
 #
-# IT DELIBERATELY ROSTERS NO `FS-GG/` ROW. `roster_reachable` quantifies over FS-GG repositories
-# only, so an empty FS-GG set makes the arm inert for the forty-odd cases below, whose roots
-# (ROOT/DROOT/SROOT/XROOT) hold different producers and could not all satisfy one roster. The arm's
-# own firing and clearing are proved by cases 65-67, which build a registry + roster + root of their
-# own. Non-FS-GG rows are here rather than an empty `repos:` so this file also pins the FILTER: a
-# roster row that is not `FS-GG/…` must not become an expectation.
+# A readable empty FS-GG roster is now a refusal. The shared fixture names one quiet `.github`
+# checkout present under each of its roots, while cases 65-67 prove missing, empty and foreign-only
+# roster behavior separately. The foreign rows still pin the filter: they are not expectations.
 cat > "$WORK/repos.yml" <<'YAML'
 schemaVersion: 1
 repos:
+  - { id: org, full: FS-GG/.github, role: framework }
   - { id: one, full: Fixture/Producer.One, role: framework }
   - { id: two, full: Fixture/Producer.Two, role: framework }
 YAML
@@ -1215,7 +1214,7 @@ echo "== 61. a producer publishing at its TRACKED SOURCE root is FOUND (.github#
 #
 # ISOLATED --repos-root, and its own registry, so the shared fixture above is untouched.
 SROOT="$WORK/source-root-repos"
-mkdir -p "$SROOT/Producer.Src/.claude/skills/srcskill" "$SROOT/Producer.Src/skills/srcskill"
+mkdir -p "$SROOT/.github" "$SROOT/Producer.Src/.claude/skills/srcskill" "$SROOT/Producer.Src/skills/srcskill"
 printf 'source-root body\n' > "$SROOT/Producer.Src/skills/srcskill/SKILL.md"
 SRCSKILL="$(sha "$SROOT/Producer.Src/skills/srcskill/SKILL.md")"
 SREG="$WORK/source-root-skills.yml"
@@ -1510,6 +1509,50 @@ mv "$RCASE/repos.yml.bak" "$RCASE/repos.yml"
 got="$(python3 "$TOOL" --registry "$RCASE/skills.yml" --producers)"
 [ "$got" = "FS.GG.Present
 FS.GG.Quiet" ] || { echo "FAIL: --producers printed '$got'"; exit 1; }
+echo "   ok"
+
+echo "== 66a. an empty, foreign-only or unsafe organization roster is a refusal =="
+printf 'schemaVersion: 1\nrepos: []\n' > "$RCASE/repos.yml"
+for shape in empty foreign-only empty-name escape-name duplicate-name case-collision malformed-full noncanonical-owner malformed-yaml; do
+  if [ "$shape" = foreign-only ]; then
+    write_roster '  - { id: outside, full: Someone/Else.Repo, role: non-participant }'
+  elif [ "$shape" = empty-name ]; then
+    write_roster '  - { id: bad, full: FS-GG/, role: framework }'
+  elif [ "$shape" = escape-name ]; then
+    write_roster '  - { id: bad, full: FS-GG/../outside, role: framework }'
+  elif [ "$shape" = duplicate-name ]; then
+    write_roster '  - { id: present, full: FS-GG/FS.GG.Present, role: framework }
+  - { id: duplicate, full: FS-GG/FS.GG.Present, role: framework }'
+  elif [ "$shape" = case-collision ]; then
+    write_roster '  - { id: present, full: FS-GG/FS.GG.Present, role: framework }
+  - { id: duplicate, full: FS-GG/fs.gg.present, role: framework }'
+  elif [ "$shape" = malformed-full ]; then
+    write_roster '  - { id: present, full: FS-GG/FS.GG.Present, role: framework }
+  - { id: broken, full: FS-GG, role: framework }'
+  elif [ "$shape" = noncanonical-owner ]; then
+    write_roster '  - { id: present, full: FS-GG/FS.GG.Present, role: framework }
+  - { id: shadow, full: fs-gg/FS.GG.Quiet, role: framework }'
+  elif [ "$shape" = malformed-yaml ]; then
+    printf 'schemaVersion: 1\nrepos: [unterminated\n' > "$RCASE/repos.yml"
+  fi
+  out="$(run --registry "$RCASE/skills.yml" --repos-root "$RCASE/repos" || true)"
+  grep -q '\[declared-completeness\] registry/repos.yml' <<<"$out" \
+    || { echo "FAIL: $shape roster did not refuse its unsafe or empty FS-GG population"; echo "$out"; exit 1; }
+  python3 "$TOOL" --registry "$RCASE/skills.yml" --producers >/dev/null 2>&1 \
+    && { echo "FAIL: --producers accepted a $shape FS-GG population"; exit 1; }
+  if [ "$shape" = malformed-yaml ]; then
+    err="$(python3 "$TOOL" --registry "$RCASE/skills.yml" --producers 2>&1 || true)"
+    grep -q 'unreadable repository roster' <<<"$err" \
+      || { echo "FAIL: malformed YAML did not return a bounded roster diagnostic"; echo "$err"; exit 1; }
+    if grep -q 'Traceback' <<<"$err"; then
+      echo "FAIL: malformed YAML leaked a traceback"; exit 1
+    fi
+  fi
+done
+write_roster '  - { id: present, full: FS-GG/FS.GG.Present, role: framework }
+  - { id: quiet,   full: FS-GG/FS.GG.Quiet,   role: framework }'
+run --registry "$RCASE/skills.yml" --repos-root "$RCASE/repos" >/dev/null \
+  || { echo "FAIL: restoring the reachable roster did not clear the refusal"; exit 1; }
 echo "   ok"
 
 echo "== 67. a predicate over an UNDECLARED parameter is a parameter-vocabulary finding =="

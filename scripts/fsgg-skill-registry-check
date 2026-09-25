@@ -439,17 +439,35 @@ def roster(registry_path: str) -> tuple[list[str], str]:
     try:
         with open(path) as handle:
             doc = yaml.safe_load(handle)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, yaml.YAMLError) as exc:
         return [], f"unreadable repository roster {path}: {exc}"
     rows = doc.get("repos") if isinstance(doc, dict) else None
     if not isinstance(rows, list):
         return [], f"repository roster has no `repos` list: {path}"
     names = []
+    seen = set()
     for row in rows:
         full = row.get("full") if isinstance(row, dict) else None
-        if isinstance(full, str) and full.startswith("FS-GG/"):
-            names.append(full.split("/", 1)[1])
-    return sorted(set(names)), ""
+        if not isinstance(full, str) or full.count("/") != 1:
+            return [], f"repository roster contains an invalid full repository name: {path}"
+        owner, name = full.split("/", 1)
+        if (
+            not re.fullmatch(r"[A-Za-z0-9-]+", owner)
+            or name in (".", "..")
+            or not re.fullmatch(r"[A-Za-z0-9._-]+", name)
+        ):
+            return [], f"repository roster contains an unsafe repository name: {path}"
+        identity = full.casefold()
+        if identity in seen:
+            return [], f"repository roster contains a duplicate repository name: {path}"
+        seen.add(identity)
+        if owner.casefold() == "fs-gg":
+            if owner != "FS-GG":
+                return [], f"repository roster contains a noncanonical FS-GG owner: {path}"
+            names.append(name)
+    if not names:
+        return [], f"repository roster has no FS-GG entries: {path}"
+    return sorted(names), ""
 
 
 def roster_reachable(registry_path: str, repos_root: str) -> list[dict]:
