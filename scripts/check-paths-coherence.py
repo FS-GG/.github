@@ -513,7 +513,7 @@ def project_graph(root: str) -> dict[str, list[str]]:
     """
     graph: dict[str, list[str]] = {}
     root_path = os.path.abspath(root)
-    implicit_refs: dict[str, bool] = {}
+    implicit_hazards: dict[str, str | None] = {}
 
     def is_project_reference(element: ET.Element) -> bool:
         # MSBuild item names are case-insensitive; XML structural names still retain case.
@@ -545,19 +545,29 @@ def project_graph(root: str) -> dict[str, list[str]]:
                 source = nearest_implicit(path, filename)
                 if source is None:
                     continue
-                if source not in implicit_refs:
+                if source not in implicit_hazards:
                     source_rel = os.path.relpath(source, root_path).replace(os.sep, "/")
                     try:
                         imported = ET.parse(source)
                     except (OSError, ET.ParseError) as e:
                         raise GateError(f"{source_rel}: unreadable or invalid implicit MSBuild XML — {e}") from e
-                    implicit_refs[source] = any(
-                        is_project_reference(element)
-                        for element in imported.iter()
-                    )
-                if implicit_refs[source]:
-                    raise GateError(f"{rel}: implicit {filename} contains ProjectReference; "
-                                    "requires MSBuild evaluation")
+                    hazard = None
+                    for element in imported.iter():
+                        if is_project_reference(element):
+                            hazard = "contains ProjectReference; requires MSBuild evaluation"
+                            break
+                        if not isinstance(element.tag, str) or element.tag.rsplit("}", 1)[-1] != "Output":
+                            continue
+                        item_name = element.get("ItemName", "")
+                        if any(token in item_name for token in ("$(", "@(", "%(")):
+                            hazard = "dynamic task Output ItemName requires evaluation"
+                            break
+                        if item_name.casefold() == "projectreference":
+                            hazard = "task Output to ProjectReference requires evaluation"
+                            break
+                    implicit_hazards[source] = hazard
+                if implicit_hazards[source]:
+                    raise GateError(f"{rel}: implicit {filename} {implicit_hazards[source]}")
             # ProjectReference additions/removals inside a Target depend on execution order.
             # A task can also emit ProjectReference through Output without an item element.
             for element in project.iter():
