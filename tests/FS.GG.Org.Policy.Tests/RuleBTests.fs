@@ -54,6 +54,20 @@ module RuleBTests =
         Assert.Equal<(string * string) list>(
             [ "src/A/A.fsproj", "src/Missing/Missing.fsproj" ], coverage.Uncovered)
 
+    [<Fact>]
+    let ``exact pattern without final newline cannot cover a newline suffixed dependency`` () =
+        let dependency = "src/B/B.fsproj\n"
+        let source = Map.ofList [ "src/A/A.fsproj", [ dependency ] ]
+        let coverage = inspected [ "src/A/**"; "src/B/B.fsproj" ] source
+        Assert.Equal<(string * string) list>([ "src/A/A.fsproj", dependency ], coverage.Uncovered)
+
+    [<Fact>]
+    let ``exact pattern including final newline still covers the same dependency`` () =
+        let dependency = "src/B/B.fsproj\n"
+        let source = Map.ofList [ "src/A/A.fsproj", [ dependency ] ]
+        let coverage = inspected [ "src/A/**"; dependency ] source
+        Assert.Empty(coverage.Uncovered)
+
     [<Theory>]
     [<InlineData("../src/A/**")>]
     [<InlineData("/src/A/**")>]

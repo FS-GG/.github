@@ -47,7 +47,9 @@ module RuleB =
             else
                 expression.Append(Regex.Escape(string pattern.[index])) |> ignore
                 index <- index + 1
-        expression.Append('$') |> ignore
+        // `$` also matches before a final newline. A supplied dependency with that suffix must
+        // not be pronounced covered by a pattern that does not include it.
+        expression.Append("\\z") |> ignore
         Regex(expression.ToString(), RegexOptions.CultureInvariant)
 
     let private directory (path: string) =
