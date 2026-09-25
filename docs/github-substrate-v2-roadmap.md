@@ -333,6 +333,17 @@ projects near 22:31 UTC. Local JSONL lacks authenticated collector/account
 provenance and does not prove the runner/Host capture. Authenticated telemetry
 health was ready; the configured `main-fsharp-dev` workspace had pending=0,
 pendingUnacknowledged=0 and unacknowledgedLossy=false.
+At the 17:18:52 UTC checkpoint, the read-only local scan covered 30 family
+sessions and 20,014 native counter events with zero findings. The 75th
+root-anchored ten-minute period (17:07:05–17:17:05 UTC) totaled 39,291,172
+tokens: 39,199,251 input (38,915,200 cached; 284,051 noncached) and 91,921
+output. The all-period team mean, including zero-use periods, was 30,554,749.05
+total tokens. Fresh root weekly usage was 81% at 17:18:43, up from 34% at
+04:47 on the same reset; the conditional continuous-use, account-wide slope
+projects near 22:22 UTC. This local diagnostic lacks authenticated collector
+and Host receipt provenance. Authenticated health was ready; the configured
+workspace again had pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false.
 [Renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) is source-only; its
 first owner repair adds explicit worker launch evidence, activity-based counts, a worker-only
 reserved count, authenticated readiness observations and linked terminal completion rows.
@@ -687,6 +698,19 @@ installed receiver parity.
 at `3e7d7ecc3167eb263ee9a53c42c13a55b60dad4d` refuses ZIP members with
 a data-descriptor flag (50 payload, 29 archive controls); descriptor support,
 full closure and producer/receiver custody remain unproven.
+[Coordination GS2-09.9 #670](https://github.com/FS-GG/FS.GG.Coordination/pull/670)
+at `87dacd0c223fae47818d302236b821be9c93663b` snapshots a mutable
+review-reader scope (12 fake-port tests); protected review custody remains held.
+[Coordination GS2-09.7 #669](https://github.com/FS-GG/FS.GG.Coordination/pull/669)
+at `79044871d7b43ff9e7d063aae1f8b82dad519812` refuses undersized or
+misnumbered native activity pages (42 focused tests); initial census,
+raw-to-typed adapter, journal/custom receipts and Q5/Q6 are still open.
+[`.github` FSC-03 Python #3785](https://github.com/FS-GG/.github/pull/3785)
+at `fb0b135288c8d66076c7645855c727f4976171b9` refuses a top-level
+`ProjectReference Remove` that changes the evaluated graph (138 fixtures),
+after an installed MSBuild scratch probe. Matching F# source handling and
+installed parity remain open; the implicit Directory.Build import requires a
+broader provider decision, because a blanket import refusal blocks this tree.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
