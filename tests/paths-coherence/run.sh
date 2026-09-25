@@ -994,6 +994,23 @@ ln -s "../../build/source.xml" "$RBPLI/src/A/A.fsproj"
 wf "$RBPLI/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
 expect "in-root symlinked project source remains in the supplied inventory" 0 "ok:" "$RBPLI"
 
+# ProjectReference paths can name a case-varied MSBuild project extension. If discovery skips B,
+# A's closure stops at B and an uncovered B→C edge disappears from the gate verdict.
+for ext in FSPROJ CsPrOj VBPROJ; do
+  RBCE="$(root "$WORK/cover-case-varied-project-$ext")"
+  proj "$RBCE" "src/A" "../B/B.$ext"
+  mkdir -p "$RBCE/src/B"
+  cat > "$RBCE/src/B/B.$ext" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../C/C.fsproj" /></ItemGroup></Project>
+XML
+  proj "$RBCE" "src/C"
+  patterns='      - "src/A/**"
+      - "src/B/**"'
+  wf "$RBCE/.github/workflows/w.yml" "$patterns" "$patterns"
+  expect "case-varied .$ext project keeps its outgoing Rule B edge" \
+    1 "nothing in the filter selects 'src/C'" "$RBCE"
+done
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
