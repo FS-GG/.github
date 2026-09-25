@@ -1747,6 +1747,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   source-only false greens: a vault descriptor could omit candidate-read denial, and a non-string
   equality spoof of escrow readback could invoke the candidate. Its 79 stacked `.github` tests
   pass locally; host-only ACL, signer/store/vault pins and native Q5/Q6 remain unproved.
+  [Protected-revision draft #3720](https://github.com/FS-GG/.github/pull/3720) repairs a
+  source-only gap where a coherently changed workflow SHA could be signed and released. Its
+  82 local controls require an independently admitted exact workflow SHA before credential
+  access or handoff. A workflow cannot self-pin its own commit; the distinct protected
+  admission authority and its durable run/candidate facts remain unimplemented.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
