@@ -516,6 +516,12 @@ def project_graph(root: str) -> dict[str, list[str]]:
     root_real = os.path.realpath(root_path)
     implicit_hazards: dict[str, str | None] = {}
 
+    def in_real_root(path: str) -> bool:
+        try:
+            return os.path.commonpath((root_real, os.path.realpath(path))) == root_real
+        except ValueError:  # Different drives cannot share a repository source root.
+            return False
+
     def is_project_reference(element: ET.Element) -> bool:
         # MSBuild item names are case-insensitive; XML structural names still retain case.
         return (isinstance(element.tag, str)
@@ -542,11 +548,7 @@ def project_graph(root: str) -> dict[str, list[str]]:
                     project_rel = os.path.relpath(project_path, root_path).replace(os.sep, "/")
                     raise GateError(f"{project_rel}: implicit {filename} above repository root; "
                                     "requires authenticated MSBuild source inventory")
-                try:
-                    in_real_root = os.path.commonpath((root_real, os.path.realpath(candidate))) == root_real
-                except ValueError:  # Different drives cannot share a repository source root.
-                    in_real_root = False
-                if not in_real_root:
+                if not in_real_root(candidate):
                     project_rel = os.path.relpath(project_path, root_path).replace(os.sep, "/")
                     raise GateError(f"{project_rel}: implicit {filename} resolves outside repository root; "
                                     "requires authenticated MSBuild source inventory")
@@ -560,6 +562,9 @@ def project_graph(root: str) -> dict[str, list[str]]:
     for pattern in PROJECT_GLOBS:
         for path in glob.glob(os.path.join(root, "**", pattern), recursive=True):
             rel = os.path.relpath(path, root).replace(os.sep, "/")
+            if not in_real_root(path):
+                raise GateError(f"{rel}: project source resolves outside repository root; "
+                                "requires authenticated MSBuild source inventory")
             try:
                 project = ET.parse(path)
             except (OSError, ET.ParseError) as e:
