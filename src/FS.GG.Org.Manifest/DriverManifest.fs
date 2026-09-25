@@ -2,8 +2,8 @@ namespace FS.GG.Org.Manifest
 
 open System
 open System.Collections.Generic
-open System.IO
 open System.Security.Cryptography
+open System.Text
 open System.Text.Json
 
 module DriverManifest =
@@ -53,19 +53,54 @@ module DriverManifest =
             errors.Add($"{location}.{name}: missing or non-string")
             None
 
+    // The live Python producer uses json.dumps(..., ensure_ascii=False). System.Text.Json's
+    // encoder escapes non-ASCII (and its relaxed encoder still escapes non-BMP and U+2028),
+    // so its bytes would validate a different tree. This small writer mirrors Python's
+    // string escaping and rejects a lone UTF-16 surrogate rather than changing bytes.
+    let private quoted (value: string) =
+        let output = StringBuilder().Append('"')
+        let mutable index = 0
+        while index < value.Length do
+            let ch = value.[index]
+            match ch with
+            | '"' -> output.Append("\\\"") |> ignore
+            | '\\' -> output.Append("\\\\") |> ignore
+            | '\b' -> output.Append("\\b") |> ignore
+            | '\f' -> output.Append("\\f") |> ignore
+            | '\n' -> output.Append("\\n") |> ignore
+            | '\r' -> output.Append("\\r") |> ignore
+            | '\t' -> output.Append("\\t") |> ignore
+            | _ when ch < char 32 -> output.Append("\\u").Append((int ch).ToString("x4")) |> ignore
+            | _ when Char.IsHighSurrogate ch ->
+                if index + 1 >= value.Length || not (Char.IsLowSurrogate value.[index + 1]) then
+                    invalidArg (nameof value) "lone UTF-16 surrogate in manifest string"
+                output.Append(ch).Append(value.[index + 1]) |> ignore
+                index <- index + 1
+            | _ when Char.IsLowSurrogate ch -> invalidArg (nameof value) "lone UTF-16 surrogate in manifest string"
+            | _ -> output.Append(ch) |> ignore
+            index <- index + 1
+        output.Append('"').ToString()
+
+    // Python sorts strings by Unicode scalar value. UTF-8 byte order preserves that order;
+    // .NET's ordinal/F# string order compares UTF-16 units and reverses some astral/BMP pairs.
+    let private comparePython (left: string) (right: string) =
+        let a = Encoding.UTF8.GetBytes left
+        let b = Encoding.UTF8.GetBytes right
+        let mutable index = 0
+        let mutable answer = 0
+        while answer = 0 && index < min a.Length b.Length do
+            answer <- compare a.[index] b.[index]
+            index <- index + 1
+        if answer <> 0 then answer else compare a.Length b.Length
+
     let private fileBytes (files: FileEntry list) =
-        use stream = new MemoryStream()
-        use writer = new Utf8JsonWriter(stream)
-        writer.WriteStartArray()
-        for file in files |> List.sortBy _.Path do
-            writer.WriteStartObject()
-            writer.WriteString("path", file.Path)
-            writer.WriteString("sha256", file.Sha256)
-            writer.WriteBoolean("executable", file.Executable)
-            writer.WriteEndObject()
-        writer.WriteEndArray()
-        writer.Flush()
-        stream.ToArray()
+        files
+        |> List.sortWith (fun left right -> comparePython left.Path right.Path)
+        |> List.map (fun file ->
+            "{\"path\":" + quoted file.Path + ",\"sha256\":" + quoted file.Sha256
+            + ",\"executable\":" + (if file.Executable then "true" else "false") + "}")
+        |> String.concat ","
+        |> fun values -> Encoding.UTF8.GetBytes("[" + values + "]")
 
     let private digest (bytes: byte array) =
         SHA256.HashData bytes |> Convert.ToHexString |> fun value -> value.ToLowerInvariant()
@@ -173,31 +208,31 @@ module DriverManifest =
             with :? JsonException as error -> Error [ $"json: malformed ({error.Message})" ]
 
     let renderCanonical manifest =
-        use stream = new MemoryStream()
-        use writer = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = true))
-        writer.WriteStartObject()
-        writer.WriteNumber("schemaVersion", 2)
-        writer.WritePropertyName("skills")
-        writer.WriteStartArray()
-        for skill in manifest.Skills |> List.sortBy _.Id do
-            writer.WriteStartObject()
-            writer.WriteString("id", skill.Id)
-            writer.WriteString("scope", skill.Scope)
-            writer.WriteString("sha256", skill.Sha256)
-            writer.WriteString("tree-sha256", skill.TreeSha256)
-            writer.WritePropertyName("files")
-            writer.WriteStartArray()
-            for file in skill.Files |> List.sortBy _.Path do
-                writer.WriteStartObject()
-                writer.WriteString("path", file.Path)
-                writer.WriteString("sha256", file.Sha256)
-                writer.WriteBoolean("executable", file.Executable)
-                writer.WriteEndObject()
-            writer.WriteEndArray()
-            writer.WriteString("supplied-by", skill.SuppliedBy)
-            writer.WriteString("materializes-when", skill.MaterializesWhen)
-            writer.WriteEndObject()
-        writer.WriteEndArray()
-        writer.WriteEndObject()
-        writer.Flush()
-        Array.append (stream.ToArray()) [| 10uy |]
+        let lines = ResizeArray<string>()
+        lines.Add("{")
+        lines.Add("  \"schemaVersion\": 2,")
+        lines.Add("  \"skills\": [")
+        let skills = manifest.Skills |> List.sortWith (fun left right -> comparePython left.Id right.Id) |> List.toArray
+        for skillIndex in 0 .. skills.Length - 1 do
+            let skill = skills.[skillIndex]
+            lines.Add("    {")
+            lines.Add("      \"id\": " + quoted skill.Id + ",")
+            lines.Add("      \"scope\": " + quoted skill.Scope + ",")
+            lines.Add("      \"sha256\": " + quoted skill.Sha256 + ",")
+            lines.Add("      \"tree-sha256\": " + quoted skill.TreeSha256 + ",")
+            lines.Add("      \"files\": [")
+            let files = skill.Files |> List.sortWith (fun left right -> comparePython left.Path right.Path) |> List.toArray
+            for fileIndex in 0 .. files.Length - 1 do
+                let file = files.[fileIndex]
+                lines.Add("        {")
+                lines.Add("          \"path\": " + quoted file.Path + ",")
+                lines.Add("          \"sha256\": " + quoted file.Sha256 + ",")
+                lines.Add("          \"executable\": " + (if file.Executable then "true" else "false"))
+                lines.Add("        }" + (if fileIndex < files.Length - 1 then "," else ""))
+            lines.Add("      ],")
+            lines.Add("      \"supplied-by\": " + quoted skill.SuppliedBy + ",")
+            lines.Add("      \"materializes-when\": " + quoted skill.MaterializesWhen)
+            lines.Add("    }" + (if skillIndex < skills.Length - 1 then "," else ""))
+        lines.Add("  ]")
+        lines.Add("}")
+        Encoding.UTF8.GetBytes(String.Join("\n", lines) + "\n")
