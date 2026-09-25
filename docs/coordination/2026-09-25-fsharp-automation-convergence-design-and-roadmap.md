@@ -217,6 +217,11 @@ requires the exact checked-in reviewed baseline digest in its CLI after a forged
 baseline produced a false roster match; 15 focused controls pass. The digest binds source
 bytes, not producer authentication. Live mixed pins remain `NO_VERDICT`, with changing-tree,
 served-byte, transaction and installed receiver proof still open.
+[Templates held-descriptor draft #542](https://github.com/FS-GG/FS.GG.Templates/pull/542)
+holds five regular descriptor handles through reads and identity checks, refusing
+cross-file in-place or rename-and-replace swaps that previously produced a false roster
+match; 17 focused controls pass. The live selected archive remains `NO_VERDICT` and the
+reader does not prove a race-free served-byte or installed snapshot.
 [SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
 refuses an observed same-length overwrite after the first held-descriptor read by
 checking descriptor metadata around two byte passes; 21 focused controls and the
@@ -250,6 +255,12 @@ captures one explicit file through pinned no-follow directory and file handles w
 allowing unrelated siblings; link, case-alias, swap, in-place write and parent-roster
 negatives refuse. Fifty focused controls pass. Complete producer selection, absent-source
 pre-output refusal, cross-root atomicity, Windows and installed parity remain open.
+[SDD missing-performance producer repair #1015](https://github.com/FS-GG/FS.GG.SDD/pull/1015)
+blocks a generated-view `WriteFile` plan when declared performance evidence is absent,
+unreadable or truncated, with distinct diagnostics; a complete authored absent fixture
+was red before repair. All 1410 command tests and warning-free Release build pass.
+Selected-file bundle custody, cross-root atomicity, output rollback and installed parity
+remain open.
 [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)
