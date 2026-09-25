@@ -332,7 +332,7 @@ def validated(raw: object, trigger: str, what: str) -> list[str]:
     return pats
 
 
-def block_scalar_lines(text: str) -> set[int]:
+def opaque_scalar_lines(text: str) -> set[int]:
     """The 0-based lines covered by opaque YAML scalar content.
 
     A `#` inside a block scalar or a multiline quoted scalar is YAML value TEXT, not a YAML
@@ -384,7 +384,7 @@ def allow_divergence(text: str, what: str) -> str | None:
     and called the file unsigned — a confidently wrong verdict against a file that did exactly what
     the gate asked.
     """
-    opaque = block_scalar_lines(text)
+    opaque = opaque_scalar_lines(text)
     markers = [
         m for m in ALLOW_MARKER.finditer(text)
         if text.count("\n", 0, m.start()) not in opaque
@@ -670,10 +670,11 @@ def subjects(patterns: list[str], graph: dict[str, list[str]]) -> list[str]:
 def allow_uncovered(text: str) -> dict[str, str]:
     """`{path: reason}` for each signed `allow-uncovered` marker. An unsigned one maps to UNSIGNED.
 
-    Same block-scalar exclusion as allow_divergence(): a marker inside a `run: |` is shell text, and
-    honouring it would license a real omission from a line that is not a YAML comment at all.
+    Same opaque-scalar exclusion as allow_divergence(): a marker inside `run: |` or a multiline
+    quoted value is data, and honouring it would license an omission from a line that is not a
+    YAML comment at all.
     """
-    opaque = block_scalar_lines(text)
+    opaque = opaque_scalar_lines(text)
     out: dict[str, str] = {}
     for m in ALLOW_UNCOVERED.finditer(text):
         if text.count("\n", 0, m.start()) in opaque:
