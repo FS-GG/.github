@@ -18,6 +18,7 @@ if python3 "$ROOT/scripts/policy-runner.py" list --root "$WORK"; then
   echo 'duplicate policy subject unexpectedly passed' >&2; exit 1
 fi
 echo 'policy runner fixture: ok'
+python3 "$ROOT/tests/policy-runner/effective-steps.py"
 
 # The consolidated workflow must trigger when any discovered subject implementation or fixture moves.
 workflow="$ROOT/.github/workflows/policy.yml"
