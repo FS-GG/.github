@@ -31,6 +31,12 @@ operational ownership. Preserve independently authored black-box tests, fresh pr
 candidate qualification, and any machine-enforced identity contract. A reviewer agent sharing the
 operator's credentials is not a second security principal.
 
+GS2-10.8 and GS2-12.10 retain separately generated critique evidence for architecture, security,
+operations, migration and receivers, distinct from the owner's final acceptance verdict. The operator
+may orchestrate independent agent critiques or fresh evidence passes under ADR-0079, but cannot
+substitute the verdict itself for those critiques. Any explicit protected independent-human rule
+continues to require its real identity until an operation-specific amendment is accepted and qualified.
+
 Prepare a dedicated `fleet-cutover-owner` profile for this programme. Its sole required reviewer is the
 accountable human owner, GitHub user ID `1645484`; self-review is permitted, administrator bypass is
 disabled, and only exact `main` is deployable. A five-minute wait precedes execution. The existing shared

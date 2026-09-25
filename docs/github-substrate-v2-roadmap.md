@@ -1581,8 +1581,10 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
   and contraction controls in the isolated exercise; synthetic completions cannot satisfy production Q10.
 - [ ] **GS2-10.8 — Approve readiness.** Independent architecture, security, operations, migration, and
   receiver reviewers accept the exact candidate/manifest. Any source or plan change invalidates approval.
-  These disciplines may be assessed in fresh critique passes under the one accountable owner; all
-  independent controls and protected native-identity requirements remain. Readiness includes the
+  One accountable owner may orchestrate the separately generated critiques for these disciplines;
+  those critiques remain distinct from the owner's acceptance verdict. All independent controls and
+  protected native-identity requirements remain, including any explicit independent-human rule.
+  Readiness includes the
   complete installed execution inventory and the residual operator-action trace from GS2-10.7.
 - [ ] **GS2-10.9 — Close the concurrent-change gate.** Prove there is no active kernel publication,
   lifecycle-default flip, provider/registry flip, coordination receiver change, reusable-workflow change,

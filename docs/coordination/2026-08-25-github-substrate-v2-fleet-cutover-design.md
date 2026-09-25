@@ -706,9 +706,12 @@ by an open operation receive full v2 migration.
 
 One accountable operator drives preparation, qualification, execution, recovery and observation through
 agents and protected CI. [ADR-0079](../adr/0079-single-accountable-delivery-authority.md) permits the
-owner to perform fresh critique passes for the named review disciplines; independently authored tests,
-native evidence and provider readback retain their separate technical meaning. No role label or
-subagent supplies a distinct security identity when a protected verifier requires one.
+owner to orchestrate fresh critique passes for the named review disciplines. GS2-10.8 and GS2-12.10
+retain separately generated architecture, security, operations, migration and receiver critiques,
+distinct from the owner's final verdict. Independently authored tests, native evidence and provider
+readback retain their separate technical meaning. No role label or subagent supplies a distinct
+security identity when a protected verifier requires one; explicit independent-human rules remain
+binding until their own operation-specific policy amendment is accepted and qualified.
 
 Before candidate freeze, GS2-10 must prove an installed execution route for every planned effect through
 `OperatingV2`, including administrative settings, cutover journal transitions, rollback, observation and
