@@ -106,6 +106,9 @@ Record the orchestrator's visible model/effort profile and launch every worker, 
 with explicit `model=gpt-6-sol` and `reasoning_effort=high` arguments. Those explicit launch settings
 are enforceable evidence for counting worker lanes; runtime self-introspection is optional and may be
 unavailable, in which case record that limit without discounting an explicitly configured worker.
+When reusing a completed agent identity, retain its original explicit launch settings as the evidence;
+if a new identity is spawned, pass both arguments again. A follow-up task cannot change an agent's
+launch model or effort.
 Do not count a worker whose launch settings are missing or different. Preserve the reserved direct V2
 worker among compliant lanes. If the orchestrator's visible profile is missing or different, report
 the capability gap and arrange a compliant handoff before claiming compliant orchestration or
