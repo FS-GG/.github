@@ -344,6 +344,17 @@ projects near 22:22 UTC. This local diagnostic lacks authenticated collector
 and Host receipt provenance. Authenticated health was ready; the configured
 workspace again had pending=0, pendingUnacknowledged=0 and
 unacknowledgedLossy=false.
+At the 17:29:21 UTC checkpoint, the read-only local scan covered 30 family
+sessions and 20,346 native counter events with zero findings. The 76th
+root-anchored ten-minute period (17:17:05–17:27:05 UTC) totaled 43,753,754
+tokens: 43,668,184 input (43,410,688 cached; 257,496 noncached) and 85,570
+output. The all-period team mean, including zero-use periods, was 30,728,420.17
+total tokens. Fresh root weekly usage was 82% at 17:29:15, up from 34% at
+04:47 on the same reset; the conditional continuous-use, account-wide slope
+projects near 22:15 UTC. This local diagnostic lacks authenticated collector
+and Host receipt provenance. Authenticated health was ready; the configured
+workspace again had pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false.
 [Renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) is source-only; its
 first owner repair adds explicit worker launch evidence, activity-based counts, a worker-only
 reserved count, authenticated readiness observations and linked terminal completion rows.
@@ -751,6 +762,27 @@ at `5f79c3451525dc10f2d0fd6ec83f218ea210c57e` refuses case-folded
 file/child ancestor collisions across all ZIP members (52 payload, 29 archive
 controls); producer/served-byte, #511 CAS, installed/receiver and full ZIP
 closure remain held.
+[Coordination GS2-09.9 #676](https://github.com/FS-GG/FS.GG.Coordination/pull/676)
+at `64dc003ce1370d8d330110eaa3c7584ce80fc8e7` snapshots each fake
+observation before the next port can mutate its source actor or artifact bytes
+(23 tests); installed provider/native effects remain held.
+[Coordination GS2-09.7 #677](https://github.com/FS-GG/FS.GG.Coordination/pull/677)
+at `fa7af8513b2cfc5018b1561ce1fd3cec604c0b3f` refuses duplicate JSON
+members in raw issue classification (133 focused tests), without initial
+cohort census, full raw-to-typed adapter or Q5/Q6 acceptance.
+[SDD FSC-04 #1031](https://github.com/FS-GG/FS.GG.SDD/pull/1031)
+at `2a2a1e1aa97698560553927ef427f50914f2e518` caps one Linux pinned
+capture at 256 retained child directory handles (1,469 Commands tests), with
+ABA, post-check, cross-root and installed effects held.
+[Templates FSC-05 #572](https://github.com/FS-GG/FS.GG.Templates/pull/572)
+at `8a8094d503073f4489e27699709c46e3ad0f0937` refuses decomposed or
+compatibility-form member names outside the template payload (54 payload, 29
+archive controls); complete ZIP closure and producer/receiver custody remain.
+[`.github` FSC-03 F# #3788](https://github.com/FS-GG/.github/pull/3788)
+at `beabcd4db20b544d48568eae5f899ada93ab7ff7` adds a distinct local
+observation for supplied `Directory.Build` XML and refuses direct references,
+imports and relevant task outputs (140 tests). It does not authenticate nearest
+file selection, transitive imports or installed receiver parity.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
