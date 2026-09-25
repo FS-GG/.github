@@ -62,4 +62,10 @@ check(workflow("cat <<'EOF'\n" + direct + "\nEOF"), False, "inert heredoc")
 check(workflow("bash tests/alpha/run.sh"), True, "checker via executable fixture")
 check(workflow("bash tests/alpha/run.sh"), False, "checker only in fixture comment",
       fixture_body="#!/bin/sh\necho harmless # scripts/check-alpha.py\n")
+check(workflow("bash tests/alpha/run.sh"), False, "checker only in fixture echo",
+      fixture_body="#!/bin/sh\necho 'python3 scripts/check-alpha.py'\n")
+check(workflow("bash tests/alpha/run.sh"), False, "checker variable never invoked",
+      fixture_body="#!/bin/sh\nGATE=\"$ROOT/scripts/check-alpha.py\"\necho \"$GATE\"\n")
+check(workflow("bash tests/alpha/run.sh"), True, "checker invoked through fixture variable",
+      fixture_body="#!/bin/sh\nGATE=\"$ROOT/scripts/check-alpha.py\"\npython3 \"$GATE\"\n")
 print("policy effective-step controls: ok")

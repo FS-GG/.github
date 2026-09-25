@@ -169,9 +169,17 @@ def workflow_invokes(root: Path, workflow_path: str, source: str, fixture: str) 
     if source_executed:
         return True
     # Some selftest-only gates call the checker through their executed fixture.
-    # Comments alone are not a transitive checker reference.
+    # Bind a source path to an interpreter call directly or through an assigned variable.
     fixture_text = (root / fixture).read_text(encoding="utf-8")
-    return source in "\n".join(line.split("#", 1)[0] for line in fixture_text.splitlines())
+    lines = [line.split("#", 1)[0] for line in fixture_text.splitlines()]
+    command = r'(?:^|[;|&{(]|\$\()\s*(?:python(?:3)?|bash|sh|["\']?\$PY["\']?)\s+'
+    if any(re.search(command + r'["\']?[^\s"\']*' + re.escape(source) + r'(?=\s|["\']|$)', line)
+           for line in lines):
+        return True
+    variables = {match.group(1) for line in lines if source in line
+                 if (match := re.match(r'\s*([A-Za-z_][A-Za-z_0-9]*)=', line))}
+    return any(re.search(command + r'["\']?\$' + re.escape(variable) + r'\b', line)
+               for variable in variables for line in lines)
 
 
 def inventory(root: Path, inventory_path: Path) -> list[str]:
