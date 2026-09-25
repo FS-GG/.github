@@ -1,4 +1,4 @@
-# ADR-0088: Reuse the protected Q4 sandbox for migration rehearsal
+# ADR-0089: Reuse the protected Q4 sandbox for migration rehearsal
 
 - **Status:** Accepted
 - **Date:** 2026-09-25
