@@ -29,6 +29,7 @@ module ProjectReferenceXml =
     let private normalized (path: string) =
         not (String.IsNullOrWhiteSpace path)
         && not (path.StartsWith("/", StringComparison.Ordinal))
+        && not (Regex.IsMatch(path, "^[A-Za-z]:", RegexOptions.CultureInvariant))
         && not (path.Contains('\\'))
         && not (path.Contains("//", StringComparison.Ordinal))
         && (path.Split('/') |> Array.forall (fun part -> part <> "" && part <> "." && part <> ".."))

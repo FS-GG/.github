@@ -84,6 +84,8 @@ module RuleBTests =
     [<InlineData("../src/A/**")>]
     [<InlineData("/src/A/**")>]
     [<InlineData("src\\A\\**")>]
+    [<InlineData("C:/src/A/**")>]
+    [<InlineData("C:src/A/**")>]
     [<InlineData("!src/A/**")>]
     [<InlineData("")>]
     let ``untrusted pattern shape refuses before a coverage verdict`` pattern =
@@ -97,3 +99,22 @@ module RuleBTests =
         match RuleB.inspect [ "src/A/**" ] malformed with
         | Error diagnostic -> Assert.Equal("coverage-input", diagnostic.Code)
         | Ok coverage -> failwithf "unnormalized dependency must refuse: %A" coverage
+
+    [<Fact>]
+    let ``drive-prefixed project identity is not a repo-relative graph node`` () =
+        let malformed = Map.ofList [ "C:/repo/src/A/A.fsproj", [] ]
+        match RuleB.inspect [ "src/A/**" ] malformed with
+        | Error diagnostic ->
+            Assert.Equal("coverage-input", diagnostic.Code)
+            Assert.Contains("normalized repo-relative", diagnostic.Message)
+        | Ok coverage -> failwithf "drive-prefixed node must refuse: %A" coverage
+
+    [<Fact>]
+    let ``drive-prefixed reference cannot be covered as a repo dependency`` () =
+        let dependency = "C:/repo/src/B/B.fsproj"
+        let malformed = Map.ofList [ "src/A/A.fsproj", [ dependency ]; dependency, [] ]
+        match RuleB.inspect [ "src/A/**" ] malformed with
+        | Error diagnostic ->
+            Assert.Equal("coverage-input", diagnostic.Code)
+            Assert.Contains("normalized repo-relative", diagnostic.Message)
+        | Ok coverage -> failwithf "drive-prefixed dependency must refuse: %A" coverage

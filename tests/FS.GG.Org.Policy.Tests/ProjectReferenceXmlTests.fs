@@ -240,9 +240,12 @@ module ProjectReferenceXmlTests =
             + "<Project><ProjectReference Include='&target;' /></Project>"
         refused "project-xml" "src/A/A.fsproj" xml
 
-    [<Fact>]
-    let ``unnormalized project identity refuses before XML reduction`` () =
-        refused "project-path" "../A/A.fsproj" "<Project />"
+    [<Theory>]
+    [<InlineData("../A/A.fsproj")>]
+    [<InlineData("C:/repo/A/A.fsproj")>]
+    [<InlineData("C:repo/A/A.fsproj")>]
+    let ``unnormalized project identity refuses before XML reduction`` projectPath =
+        refused "project-path" projectPath "<Project />"
 
     [<Theory>]
     [<InlineData("../../../outside.fsproj")>]
