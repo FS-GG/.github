@@ -397,6 +397,24 @@ separately read artifact bundle to selected source/archive identity and refuses 
 digest-consistent symlink-mode ZIP false green; 23 focused and inherited tests pass.
 The reviewed producer workflow is not yet in integrated source, and protected producer,
 download and reviewer evidence remain absent. The closed output grants no native effect.
+Later disjoint source-only drafts advance without changing those holds:
+[Coordination GS2-09.9 #640](https://github.com/FS-GG/FS.GG.Coordination/pull/640)
+at `2bf5bf8ef50a7689b4f31f3097514e3dcbca8835` refuses mutable runner/audit credential
+scope drift (40 focused tests), while both workflows remain disabled and #545/#550 held;
+[Coordination GS2-09.7 #639](https://github.com/FS-GG/FS.GG.Coordination/pull/639)
+at `c5ef99dd93f4c543c312ec03d2f42e9c70cc58bb` binds declared receiver-pin raw reads
+but explicitly returns partial inventory (107 tests), with #3690 unadmitted and Q5/Q6 held.
+[`.github` FSC-03 #3767](https://github.com/FS-GG/.github/pull/3767) at
+`f3e5d76cb6281b7092439239f2decf92585ddf2b` refuses a trailing-newline regex
+false green in F# Rule (b) (103 tests); Python remains divergent and uninstalled.
+[SDD FSC-04 #1023](https://github.com/FS-GG/FS.GG.SDD/pull/1023) at
+`da2650c0bf404adfcd46bc2890db63393e30dd23` derives generator identity from the
+referenced assembly (1,445 Commands tests), without installed-package proof.
+[Templates FSC-05 #558](https://github.com/FS-GG/FS.GG.Templates/pull/558) at
+`d62c008c6827283952e9dda8442cd95d53ddde5d` returns NO_VERDICT for the
+`Straße`/`Strasse` casefold alias (37 payload and 29 archive controls), with full Unicode,
+producer, served-byte, transaction and receiver parity open. None of these drafts grants
+protected receipt, merge, native effect or cutover authority.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
