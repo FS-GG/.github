@@ -186,6 +186,7 @@ import os
 import re
 import sys
 import traceback
+import xml.etree.ElementTree as ET
 
 import yaml
 
@@ -513,16 +514,20 @@ def project_graph(root: str) -> dict[str, list[str]]:
         for path in glob.glob(os.path.join(root, "**", pattern), recursive=True):
             rel = os.path.relpath(path, root).replace(os.sep, "/")
             try:
-                with open(path, encoding="utf-8") as fh:
-                    text = fh.read()
-            except OSError as e:
-                raise GateError(f"{rel}: unreadable — {e}") from e
+                project = ET.parse(path)
+            except (OSError, ET.ParseError) as e:
+                raise GateError(f"{rel}: unreadable or invalid project XML — {e}") from e
             refs = []
-            # XML permits either quote delimiter around Include. Missing the single-quoted form
-            # erases an edge from the project graph and can make uncovered dependencies look safe.
-            for m in re.finditer(r"""ProjectReference\s+[^>]*Include\s*=\s*(?:"([^"]+)"|'([^']+)')""", text):
+            # XML decodes character references in Include. Scanning raw attribute bytes can
+            # fabricate a path which a workflow covers while missing the real referenced project.
+            for element in project.iter():
+                if not isinstance(element.tag, str) or element.tag.rsplit("}", 1)[-1] != "ProjectReference":
+                    continue
+                inc = element.get("Include")
+                if not inc:
+                    continue
                 # MSBuild writes Windows separators; they are legal on every platform.
-                inc = (m.group(1) or m.group(2)).replace("\\", "/")
+                inc = inc.replace("\\", "/")
                 target = os.path.normpath(os.path.join(os.path.dirname(path), inc))
                 refs.append(os.path.relpath(target, root).replace(os.sep, "/"))
             graph[rel] = refs
