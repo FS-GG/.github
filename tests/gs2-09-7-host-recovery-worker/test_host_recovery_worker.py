@@ -30,11 +30,14 @@ class FakePort:
         self.token = TOKEN
         self.token_sha256 = hashlib.sha256(TOKEN.encode()).hexdigest()
         self.claim = None
+        self.native_attempt = None
         self.receipt = None
         self.claim_response_lost = False
         self.false_claim_commit = False
         self.receipt_response_lost = False
         self.revoke_response_lost = False
+        self.native_attempt_response_lost = False
+        self.stale_native_attempt_commit = False
         self.observations = ["active", "revoked"]
         self.finalizer_descriptor = {
             "schema": worker.finalizer.FINALIZER_SCHEMA,
@@ -154,6 +157,23 @@ class FakePort:
         self.calls.append("read-claim")
         return self.claim
 
+    def claim_native_attempt_once(self, mint_id, token_sha256, attempt_id):
+        self.calls.append("claim-native-attempt")
+        if self.native_attempt is not None:
+            return "duplicate"
+        self.native_attempt = worker.finalizer.native_attempt_record(
+            mint_id, token_sha256, self.mint["contextSha256"],
+            "e" * 64 if self.stale_native_attempt_commit else attempt_id)
+        if not self.stale_native_attempt_commit and self.native_attempt["attemptId"] != attempt_id:
+            raise AssertionError("foreign native attempt")
+        if self.native_attempt_response_lost:
+            raise OSError("lost after native-attempt claim")
+        return "committed"
+
+    def read_native_attempt(self, mint_id):
+        self.calls.append("read-native-attempt")
+        return self.native_attempt
+
     def append_recovery_receipt(self, mint_id, binding_id, token_sha256):
         self.calls.append("append-receipt")
         self.receipt = {
@@ -212,6 +232,60 @@ class RecoveryWorkerTests(unittest.TestCase):
         self.assertEqual("duplicate", result["claim"])
         self.assertEqual("pending", result["revocation"])
         self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_prior_finalizer_native_attempt_blocks_recovery_revoke(self):
+        self.port.native_attempt = worker.finalizer.native_attempt_record(
+            MINT_ID, self.port.token_sha256, self.port.mint["contextSha256"],
+            "d" * 64)
+        self.port.observations = ["active"]
+        result = self.run_worker()
+        self.assertEqual("pending", result["revocation"])
+        self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_foreign_native_attempt_blocks_receipt_even_if_provider_revoked(self):
+        self.port.native_attempt = {
+            **worker.finalizer.native_attempt_record(
+                MINT_ID, self.port.token_sha256, self.port.mint["contextSha256"],
+                "d" * 64),
+            "revokerId": "foreign-revoker",
+        }
+        self.port.observations = ["revoked"]
+        result = self.run_worker()
+        self.assertEqual("pending", result["revocation"])
+        self.assertNotIn("native-revoke", self.port.calls)
+        self.assertNotIn("append-receipt", self.port.calls)
+
+    def test_lost_shared_attempt_claim_never_retries_native_effect(self):
+        self.port.native_attempt_response_lost = True
+        self.port.observations = ["active"]
+        first = self.run_worker()
+        self.assertEqual("pending", first["revocation"])
+        self.assertIsNotNone(self.port.native_attempt)
+        self.assertNotIn("native-revoke", self.port.calls)
+        self.port.native_attempt_response_lost = False
+        self.port.observations = ["active"]
+        self.port.calls.clear()
+        second = self.run_worker()
+        self.assertEqual("duplicate", second["claim"])
+        self.assertEqual("pending", second["revocation"])
+        self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_stale_committed_native_attempt_response_cannot_revoke(self):
+        self.port.stale_native_attempt_commit = True
+        self.port.observations = ["active"]
+        result = self.run_worker()
+        self.assertEqual("pending", result["revocation"])
+        self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_unavailable_shared_attempt_readback_blocks_revoke_and_receipt(self):
+        def unavailable(_mint_id):
+            raise OSError("protected native-attempt journal unavailable")
+        self.port.read_native_attempt = unavailable
+        self.port.observations = ["revoked"]
+        result = self.run_worker()
+        self.assertEqual("pending", result["revocation"])
+        self.assertNotIn("native-revoke", self.port.calls)
+        self.assertNotIn("append-receipt", self.port.calls)
 
     def test_lost_claim_response_never_authorizes_native_effect(self):
         self.port.claim_response_lost = True
