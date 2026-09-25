@@ -84,6 +84,9 @@ def verify_envelope(envelope_raw: bytes, proof_raw: bytes, token: str,
     """Authenticate the exact signed host binding against runner-owned facts."""
     require(type(pinned_spki_sha256) is str and host.HEX64.fullmatch(pinned_spki_sha256),
             "trust-anchor-unconfigured")
+    require(type(host.PINNED_WORKFLOW_SHA) is str
+            and host.HEX40.fullmatch(host.PINNED_WORKFLOW_SHA),
+            "workflow-revision-unconfigured")
     require(public_spki_sha256(public_key_pem) == pinned_spki_sha256,
             "trust-anchor")
     require(type(now) is dt.datetime and now.tzinfo is not None
@@ -98,6 +101,7 @@ def verify_envelope(envelope_raw: bytes, proof_raw: bytes, token: str,
                 f"{host.HOST_REPOSITORY}/{host.WORKFLOW}@refs/heads/main"
             and type(context["workflowSha"]) is str
             and host.HEX40.fullmatch(context["workflowSha"])
+            and context["workflowSha"] == host.PINNED_WORKFLOW_SHA
             and context["protectedSha"] == context["workflowSha"]
             and type(context["runId"]) is int and context["runId"] > 0
             and type(context["runAttempt"]) is int and context["runAttempt"] > 0

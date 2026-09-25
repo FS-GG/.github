@@ -237,15 +237,18 @@ class ReleaseCompositionTests(unittest.TestCase):
         self.store = FakeStore()
         self.revoker = FakeRevoker()
         pins = (authority.PINNED_STORE_ORIGIN, authority.PINNED_STORE_RESOURCE_ID,
-                authority.PINNED_STORE_ENDPOINT, release.host.PINNED_SPKI_SHA256)
+                authority.PINNED_STORE_ENDPOINT, release.host.PINNED_SPKI_SHA256,
+                release.host.PINNED_WORKFLOW_SHA)
         authority.PINNED_STORE_ORIGIN = ORIGIN
         authority.PINNED_STORE_RESOURCE_ID = RESOURCE
         authority.PINNED_STORE_ENDPOINT = ENDPOINT
         release.host.PINNED_SPKI_SHA256 = self.fixture.pin
+        release.host.PINNED_WORKFLOW_SHA = self.fixture.context["workflowSha"]
         self.addCleanup(setattr, authority, "PINNED_STORE_ORIGIN", pins[0])
         self.addCleanup(setattr, authority, "PINNED_STORE_RESOURCE_ID", pins[1])
         self.addCleanup(setattr, authority, "PINNED_STORE_ENDPOINT", pins[2])
         self.addCleanup(setattr, release.host, "PINNED_SPKI_SHA256", pins[3])
+        self.addCleanup(setattr, release.host, "PINNED_WORKFLOW_SHA", pins[4])
         binding = release.verify_envelope(self.envelope, self.proof, self.fixture.token,
                                           self.public, self.fixture.pin,
                                           self.fixture.context, self.fixture.now)

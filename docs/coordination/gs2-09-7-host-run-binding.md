@@ -2,6 +2,10 @@
 
 Status: **source-only, disabled**. The reviewed `.github` #3690 mint workflow is an unadmitted source-delivery observation, and Coordination [#558](https://github.com/FS-GG/FS.GG.Coordination/pull/558) is a draft verifier scaffold at `8b519bf1ba417b36fcf7941763645eee6d67ec08`. Neither supplies an admitted GS2-09.7 migration run. This branch adds no workflow step and does not receive a signing credential.
 
+The additional workflow revision admission control is recorded in
+`gs2-09-7-protected-revision-admission.md`. The source placeholder is empty;
+an independent protected authority must supply the admitted commit SHA.
+
 `scripts/gs2-09-7-host-run-binding.py` is the protected-host counterpart to #558's envelope schema. From protected runner facts it checks the repository, exact workflow path/ref/SHA, run ID and attempt, candidate SHA and derived nonce. It checks the retained native preflight for the registered App actor, private sandbox repository and Project 2; it checks the selected-repository mint proof, effective grants, expiry and token hash. It signs canonical, domain-separated JSON with RSA-PSS/SHA-256 only after its signer key's SPKI digest matches a source-pinned fingerprint. The envelope binds the raw proof digest, token digest, target IDs, workflow and run facts. It contains neither token nor key. Inputs reject duplicate JSON members and symlinks; a missing pin, key FD, proof or preflight refuses. The committed pin is empty, so the command refuses before reading any credential.
 
 ## Exact installation prerequisites
