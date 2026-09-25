@@ -109,6 +109,11 @@ authenticated zero-queue observation. Do not substitute a synthetic item, an uni
 turn, a receipt for another workspace or item, or a pre-run zero-queue reading. At the 2026-09-25
 checkpoint this acceptance is **pending**: the authenticated board query refused access, so no
 genuine admitted item, runner turns or usage, or matching applied Host receipt was established.
+At the same checkpoint, the read-only runtime capability probe reported a packaged `codex-exec`
+adapter and configured remote workspace association, but `store=unconfigured`,
+`hostActivation=not-assessed`, and `receiverReachability=not-checked`. A basic authenticated
+GraphQL `viewer` read succeeded while the instrumented batch board query still returned
+`Resource not accessible by personal access token`; no selected WorkItem was inferred.
 The current direct interactive `codex --yolo` session is outside that runner. Wrapping it with
 `fdev-telemetry exec` supplies credentials but does not emit native turn records; fleet capture of
 direct fdev sessions requires a distinct session producer and its own qualification. Do not claim
@@ -1661,6 +1666,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   placeholders with matching synthetic observations. Its 45 isolated controls pass locally;
   the workflow remains disabled with empty permissions and a refreshed exact verifier pin.
   Protected publication, independent approval, installed path and native-effect readback remain open.
+  [Historical-digest draft #568](https://github.com/FS-GG/FS.GG.Coordination/pull/568)
+  refuses both known disabled workflow digests after a red-before control showed the earlier
+  template digest could pass a later proposed selection. Its 46 isolated controls pass locally;
+  the first protected owner step is still review of integrated source and a new runnable,
+  inspect-only release with independently selected immutable runner, artifact and reviewer facts.
   The #550 staged exact-copy loopback
   harness exercises corrected classifier, HTTP and durable-fence paths, but an independent boundary
   review found it insufficient for the installed provider/credential path and corrected native-effect clause. Qualify the corrected
