@@ -50,6 +50,24 @@ module RuleBWorkflowTests =
         let observation = observed yaml
         Assert.Equal(RuleBExceptions.Uncovered, observation.Omitted.["src/B"])
 
+    [<Theory>]
+    [<InlineData("|")>]
+    [<InlineData(">")>]
+    let ``final block scalar line without newline cannot sign an omission`` style =
+        let yaml =
+            "on: {push: {paths: [src/A/**]}}\nname: " + style
+            + "\n  something\n  # paths-coherence: allow-uncovered src/B — inert data"
+        let observation = observed yaml
+        Assert.Equal(RuleBExceptions.Uncovered, observation.Omitted.["src/B"])
+
+    [<Fact>]
+    let ``dedented comment after block scalar can sign an omission`` () =
+        let yaml =
+            "on: {push: {paths: [src/A/**]}}\nname: |\n  ordinary data\njobs: {}\n"
+            + "# paths-coherence: allow-uncovered src/B — deliberate\n"
+        let observation = observed yaml
+        Assert.Equal(RuleBExceptions.Signed "deliberate", observation.Omitted.["src/B"])
+
     [<Fact>]
     let ``malformed one-sided filter refuses instead of disappearing`` () =
         match RuleBWorkflow.inspect "sample.yml" "on: {push: {paths: null}}\n" graph with

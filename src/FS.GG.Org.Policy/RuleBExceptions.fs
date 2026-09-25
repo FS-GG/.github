@@ -35,7 +35,10 @@ module RuleBExceptions =
                 | :? YamlScalarNode as scalar when
                     scalar.Style = YamlDotNet.Core.ScalarStyle.Literal
                     || scalar.Style = YamlDotNet.Core.ScalarStyle.Folded ->
-                    for line in int scalar.Start.Line - 1 .. int scalar.End.Line - 2 do
+                    // A trailing newline leaves End at column 1 of the following line. Without
+                    // one, End remains on the last content line, which is still opaque YAML data.
+                    let last = int scalar.End.Line - (if int scalar.End.Column = 1 then 2 else 1)
+                    for line in int scalar.Start.Line - 1 .. last do
                         covered.Add(line) |> ignore
                 | :? YamlScalarNode as scalar when scalar.Start.Line < scalar.End.Line ->
                     for line in int scalar.Start.Line - 1 .. int scalar.End.Line - 1 do
