@@ -322,6 +322,17 @@ zero counter findings. Across 73 completed root-anchored periods, the team mean 
 weekly reading reached 80% used, with a conditional continuous-use, account-wide
 projection near 22:16 UTC. This is a read-only diagnostic, not authenticated
 collector/account evidence or a runner/Host capture receipt.
+At the 17:09:05 UTC checkpoint, the same read-only local scan covered 30 family
+sessions and 19,689 native counter events with zero findings. The 74th completed
+root-anchored ten-minute period (16:57:05–17:07:05 UTC) totaled 30,836,139
+tokens: 30,738,426 input (30,354,560 cached; 383,866 noncached) and 97,713
+output. The all-period team mean, including zero-use periods, was 30,436,689.28
+total tokens. Fresh root weekly usage was 80% at 17:08:57, up from 34% at
+04:47 on the same reset; the conditional continuous-use, account-wide slope
+projects near 22:31 UTC. Local JSONL lacks authenticated collector/account
+provenance and does not prove the runner/Host capture. Authenticated telemetry
+health was ready; the configured `main-fsharp-dev` workspace had pending=0,
+pendingUnacknowledged=0 and unacknowledgedLossy=false.
 [Renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) is source-only; its
 first owner repair adds explicit worker launch evidence, activity-based counts, a worker-only
 reserved count, authenticated readiness observations and linked terminal completion rows.
@@ -604,6 +615,22 @@ at `62d6ea212fa8ca5999aceb4d7802cbad4d67002b` refuses an unreadable
 field in the dormant exact Project 1 map after two red-before partial-map
 fixtures (848 GitHub adapter tests). The runner still enumerates all Projects;
 no genuine instrumented item or matching applied Host receipt is established.
+The following source-only drafts do not change those holds:
+[Coordination GS2-09.9 #661](https://github.com/FS-GG/FS.GG.Coordination/pull/661)
+at `fbffb34eb449ba69c473466df06e7b8477ac43c1` snapshots the mint-reader
+scope after a mutable fake-port credential-drift false green (19 focused tests).
+[Coordination GS2-09.7 #660](https://github.com/FS-GG/FS.GG.Coordination/pull/660)
+at `e3cc09b6b34c698a3517b347d375ab5fa7ea5007` refuses duplicate native
+issue/PR node IDs in a partial Q5 census (39 focused tests); journal/adapter and
+Q5/Q6 acceptance remain open.
+[Templates FSC-05 #567](https://github.com/FS-GG/FS.GG.Templates/pull/567)
+at `e54e992cc790b670f4e26d6591b0cfdf9f78d927` refuses mismatched local
+and central ZIP flags/methods (48 payload, 29 archive controls), without full
+ZIP closure or producer/served/receiver proof.
+[`.github` FSC-03 Python #3781](https://github.com/FS-GG/.github/pull/3781)
+at `e28648547a8a2b00c4cf89ce9cb995c5f7cfa91f` refuses explicit MSBuild
+task output into `ProjectReference` (136 fixtures); matching F# handling,
+dynamic item names, implicit imports and installed parity remain open.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
