@@ -138,6 +138,12 @@ workspace/repository/item/attempt/invocation/producer correlation and refusal co
 current-session source, assignment verifier, submission and applied Host receipt; the
 checkout's pinned SDK 10.0.400 was unavailable locally. The genuine runner acceptance
 still cannot start through the denied Project 2 board bootstrap.
+[Dormant assignment gate draft #586](https://github.com/FS-GG/FS.GG.Coordination/pull/586)
+adds current-turn source and assignment-authenticator interfaces ahead of #584 and refuses
+borrowed session IDs or mismatched workspace, item, attempt, challenge and thread bindings;
+six focused controls pass after its final guard. The full adapter suite passed 67 controls
+before that last guard, so it needs an exact-head full rerun for that broader claim.
+Neither trusted implementation, challenge issuer, submission nor Host receipt exists.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
