@@ -446,15 +446,20 @@ uses a separately authorized Main-local fixed-operation executor. The service re
 response-unknown status or verified effect receipt for fresh typed readback, never a JWT, installation
 token, CLI credential value or credential artifact. The one-time genesis
 workflow, approval, signing key and JWT are not reusable authorization for a later admission.
-The service rereads the epoch, claim and journal immediately before its effect, appends through
-expected-parent CAS, and returns an admitted handle only after independent exact journal readback.
+The Main-local issuer rereads the epoch, claim and journal, compares them to the sealed plan
+immediately before its CAS append, and uses the exact expected parent. The Actions service returns
+an admitted handle only after independent exact journal readback.
 A lost response or conflicting parent is reconciled from durable state under the same operation
 identity; uncertainty never permits a second blind append. A restored `InFlight` handle is
 reconciliation-only and cannot send a provider mutation. Before every provider mutation, including
-an authorized retry or compensation, the service rereads the epoch, claim, admission, operation,
-manifest, seal, and source and target heads, then consumes a new one-shot dispatch fence for that
-attempt. A retry is authorized only after a durable `StronglyAbsent` settlement bound to the
-original request proves it cannot later apply, and uses a new attempt identity. `Applied` is
+an authorized retry or compensation, the Main-local credential-bearing executor itself rereads the
+epoch, claim, admission, operation, manifest, seal, journal parent, and source and target heads,
+compares them to the sealed plan, then durably consumes a new one-shot dispatch fence under exclusive
+send ownership immediately before the provider call. The request also carries the provider's exact
+conditional target precondition. An Actions preflight cannot replace this final check; a crash after
+fence consumption remains uncertain until reconciliation. A retry requires a durable
+`StronglyAbsent` settlement that binds the original request and proves delayed application
+impossible; it uses a new attempt identity. `Applied` is
 terminal for that effect; `Partial` and `Indeterminate` permit reconciliation or an independently
 authorized recovery plan, never a replay of the uncertain request.
 
