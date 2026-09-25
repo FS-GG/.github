@@ -532,6 +532,50 @@ for attrs in "Include='../B/B.fsproj'" "Label='dependency' Include='../B/B.fspro
     1 "nothing in the filter selects 'src/B'" "$RBS"
 done
 
+# XML character references in Include are decoded by MSBuild. Reading the raw attribute bytes
+# fabricates an encoded dependency path: a filter for that fake path looks covered while a change
+# to the real project directory cannot trigger the workflow.
+entity_case=0
+for entity in '&amp;' '&#38;'; do
+  entity_case=$((entity_case+1))
+  for disposition in encoded actual; do
+    RBE="$(root "$WORK/cover-xml-entity-$entity_case-$disposition")"
+    proj "$RBE" "src/A" "../B${entity}C/B${entity}C.fsproj"
+    proj "$RBE" "src/B&C"
+    if [ "$disposition" = encoded ]; then
+      filter="src/B${entity}C/**"
+    else
+      filter='src/B&C/**'
+    fi
+    patterns="      - \"src/A/**\"
+      - \"$filter\""
+    wf "$RBE/.github/workflows/w.yml" "$patterns" "$patterns"
+    if [ "$disposition" = encoded ]; then
+      expect "encoded XML Include $entity cannot make a fake path look covered" \
+        1 "nothing in the filter selects 'src/B&C'" "$RBE"
+    else
+      expect "decoded XML Include $entity is covered by the real directory filter" \
+        0 "ok:" "$RBE"
+    fi
+  done
+done
+
+# An XML comment is not an edge, and malformed project XML cannot supply trustworthy graph facts.
+RBC="$(root "$WORK/cover-commented-project-reference")"
+mkdir -p "$RBC/src/A"
+{ echo '<Project Sdk="Microsoft.NET.Sdk">'
+  echo '  <!-- <ProjectReference Include="../B/B.fsproj" /> -->'
+  echo '</Project>'; } > "$RBC/src/A/A.fsproj"
+proj "$RBC" "src/B"
+wf "$RBC/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "commented ProjectReference does not fabricate an uncovered dependency" 0 "ok:" "$RBC"
+
+RBX="$(root "$WORK/cover-malformed-project-xml")"
+mkdir -p "$RBX/src/A"
+echo '<Project><ItemGroup>' > "$RBX/src/A/A.fsproj"
+wf "$RBX/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "malformed project XML refuses before a graph verdict" 3 "invalid project XML" "$RBX"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
