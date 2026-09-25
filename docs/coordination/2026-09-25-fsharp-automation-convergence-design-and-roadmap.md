@@ -170,8 +170,10 @@ not issue receipts, write Authority, activate a workflow or change protected sta
 nonpackable source/test pair. Its first owner repair separates lane activity from health,
 requires explicit Sol/high settings for running workers and a worker-only direct-V2 reserve,
 requires collector-verified authenticated health and configured workspace observations for
-healthy readiness, and refuses nonterminal or linkless completion rows; 12 focused tests pass.
-An orchestrator-profile negative is still under owner review. The pure renderer cannot
+healthy readiness, and refuses nonterminal or linkless completion rows. Its follow-up requires
+exactly one running Sol/high orchestrator with visible-profile evidence and running workers
+with explicit spawn evidence; red-before cases covered an Astra orchestrator, no orchestrator
+and user-instruction-only worker source. Fifteen focused tests pass. The pure renderer cannot
 authenticate external provenance, and its draft output is not an accepted status source.
 
 Independent review of these draft ports has already found false greens in Unicode JSON digest

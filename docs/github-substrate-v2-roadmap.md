@@ -131,6 +131,13 @@ prospective direct-session producer and negative acceptance cases. Its source-on
 distinguishes current-thread capability/assignment, private evidence packet boundaries, and
 window-close versus native exit at head `7b08675a0f2c4eda6babed3bd2119b2cc0da0efa`; it is not
 an installed producer, a captured turn, or an applied receipt.
+[Dormant direct-session mapper draft #584](https://github.com/FS-GG/FS.GG.Coordination/pull/584)
+maps supplied native turn ID and usage to the existing telemetry envelope with exact
+workspace/repository/item/attempt/invocation/producer correlation and refusal controls;
+61 Codex-adapter tests pass under installed SDK 10.0.401. It lacks an authenticated
+current-session source, assignment verifier, submission and applied Host receipt; the
+checkout's pinned SDK 10.0.400 was unavailable locally. The genuine runner acceptance
+still cannot start through the denied Project 2 board bootstrap.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
@@ -168,7 +175,8 @@ receipt, merge or cutover hold.
 [Renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) is source-only; its
 first owner repair adds explicit worker launch evidence, activity-based counts, a worker-only
 reserved count, authenticated readiness observations and linked terminal completion rows.
-Twelve focused tests pass; an orchestrator-profile negative remains under owner review.
+Its follow-up requires exactly one running Sol/high orchestrator with visible-profile
+evidence and running workers with explicit spawn evidence; 15 focused tests pass.
 No live update workflow is pinned to that draft.
 
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
@@ -1885,6 +1893,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   count/digest and one exact pending or terminal revoked entry through the high-water mark;
   120 local controls pass. Authentic append-only mint index, native terminal readback and
   durable scheduler remain uninstalled.
+  [Native-terminal census draft #3737](https://github.com/FS-GG/.github/pull/3737)
+  refuses a journal-only terminal receipt that hides an active token: a fresh challenge-bound
+  native readback must match the sealed mint, token and installation identities; 124 local
+  controls pass. The protected adapter, authentic joint seal and scheduler remain uninstalled.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
