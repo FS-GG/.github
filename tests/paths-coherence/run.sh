@@ -1033,6 +1033,17 @@ echo '<Project />' > "$RBUI/src/B/B.proj"
 wf "$RBUI/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
 expect "unreferenced generic project does not expand a declared subject" 0 "ok:" "$RBUI"
 
+# A covered ProjectReference path is not proof that the project exists. If B is absent, the
+# reader cannot know B's outgoing edges and must not certify A's closure as complete.
+RBMP="$(root "$WORK/cover-missing-referenced-project")"
+proj "$RBMP" "src/A" "../B/B.fsproj"
+mkdir -p "$RBMP/src/B"
+patterns='      - "src/A/**"
+      - "src/B/**"'
+wf "$RBMP/.github/workflows/w.yml" "$patterns" "$patterns"
+expect "missing referenced project cannot certify a complete closure" \
+  3 "ProjectReference target 'src/B/B.fsproj' is absent from discovered project roster" "$RBMP"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
@@ -1364,9 +1375,23 @@ expect "a real YAML comment after a multiline quoted scalar still signs the omis
 # #930's named instance. coord-engine.yml filtered on Cli/** and Core/** and NOT GitHub/**, while
 # Cli references GitHub — so a PR touching only src/FS.GG.Coord.GitHub did not run the engine's own
 # gate. Rule (a) certified it: "both triggers agree", perfectly, on a list omitting the subject.
+regression_project_dirs=(
+  src/FS.GG.Coord.Cli
+  src/FS.GG.Coord.Cli.BoardOps
+  src/FS.GG.Coord.Cli.Kernel
+  src/FS.GG.Coord.Cli.Lifecycle
+  src/FS.GG.Coord.Core
+  src/FS.GG.Coord.GitHub
+  src/FS.GG.Telemetry.Client
+  src/FS.GG.Telemetry.Contracts
+  src/FS.GG.Telemetry.Dashboard
+  src/FS.GG.Telemetry.Store
+  tests/FS.GG.Coord.Cli.Tests
+  tests/FS.GG.Coord.Cli.Kernel.Tests
+)
 RB12="$(root "$WORK/cover-regression")"
 mkdir -p "$RB12/src" "$RB12/tests"
-for d in src/FS.GG.Coord.Cli src/FS.GG.Coord.Cli.Kernel src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub tests/FS.GG.Coord.Cli.Tests tests/FS.GG.Coord.Cli.Kernel.Tests; do
+for d in "${regression_project_dirs[@]}"; do
   mkdir -p "$RB12/$d"
   cp "$REPO_ROOT/$d/$(basename "$d").fsproj" "$RB12/$d/"
 done
@@ -1379,7 +1404,7 @@ expect "REGRESSION #930: coord-engine.yml's real coverage gap is caught" \
 # ...and the SAME tree, with the file as this PR ships it, passes. The fix is the subject of the
 # assertion, not just the bug.
 RB13="$(root "$WORK/cover-regression-fixed")"
-for d in src/FS.GG.Coord.Cli src/FS.GG.Coord.Cli.Kernel src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub tests/FS.GG.Coord.Cli.Tests tests/FS.GG.Coord.Cli.Kernel.Tests; do
+for d in "${regression_project_dirs[@]}"; do
   mkdir -p "$RB13/$d"
   cp "$REPO_ROOT/$d/$(basename "$d").fsproj" "$RB13/$d/"
 done
