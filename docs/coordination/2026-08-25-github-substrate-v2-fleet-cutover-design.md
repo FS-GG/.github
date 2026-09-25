@@ -403,28 +403,47 @@ successfully.
 
 The installed v1 admission genesis establishes a journal root, not authority for a caller to create an
 admission. While the verified epoch is `OperatingV1`, one protected service derives each new
-`MutationContext` from a fresh, complete native inventory of the bounded issue or pull request,
-current owner and claim generation where a claim is required, outstanding operation and delivery
-records, and the exact effect target. It binds those facts to the current cutover commit, the
-admission journal parent and generation, and a stable operation and idempotency identity. The
-inventory retains terminal pagination and revision proofs; unreadable, incomplete, contradictory,
-or changed facts refuse. An ordinary CLI argument, ambient user token, or previously returned
-handle cannot nominate a new admission. The CLI may only resume or inspect a handle already
-verified in the journal.
+`MutationContext` from two complete, coherent native reads of the bounded issue or pull request,
+outstanding operation and delivery records, claim journals, and the exact effect target. It admits
+only a registered caller whose immutable source, workflow, and service identity are observed;
+caller arguments are proposed lookup keys, not authority. A no-claim routine operation requires an
+explicit accepted policy classification. For a required claim, the service semantically decodes the
+current nonterminal `ClaimAuthorityRecord` and binds its canonical subject, owner, complete touch set,
+lease, operation and fence state, exact grant journal commit and generation to the requested target.
+It distinguishes grant refs from conflict-domain refs; structural journal validity or a matching
+generation alone is insufficient. The sealed context includes the current cutover
+commit, admission journal parent and generation, stable operation and idempotency identity, terminal
+pagination proofs, and source and target revisions. Unreadable, incomplete, contradictory, or changed
+facts refuse. An ordinary CLI argument, ambient user token, or previously returned handle cannot
+nominate a new admission. The CLI may only resume or inspect a handle already verified in the journal.
 
 The service seals one exact admission plan before obtaining its short-lived ordinary App credential.
-A protected issuer binds the credential handoff to that plan digest, operation, expected journal parent,
-current epoch and permitted repository; the credential enters the scoped CAS transport through an
-anonymous descriptor and is never returned as a CLI value or retained in an artifact. The one-time
-genesis workflow, approval, signing key and JWT are not reusable authorization for a later admission.
+A protected issuer verifies the registered service identity and request provenance, exact plan digest,
+operation, expected journal parent, current epoch, repository and one-shot handoff identity before
+obtaining its custody-bound App key. An App JWT is not intrinsically plan-scoped: the trusted issuer and
+consumer enforce that binding locally, observe the effective minted token scope and expiry, and refuse
+replay or a changed plan. The credential enters a fixed-operation CAS transport through a bounded
+anonymous descriptor and is never returned as a CLI value or retained in an artifact. The one-time genesis
+workflow, approval, signing key and JWT are not reusable authorization for a later admission.
 The service rereads the epoch, claim and journal immediately before its effect, appends through
 expected-parent CAS, and returns an admitted handle only after independent exact journal readback.
 A lost response or conflicting parent is reconciled from durable state under the same operation
-identity; uncertainty never permits a second blind append.
+identity; uncertainty never permits a second blind append. A restored `InFlight` handle is
+reconciliation-only. Before each first provider send, the service also rereads the epoch, claim,
+admission, operation, manifest, seal, and source and target heads, then consumes a one-shot dispatch
+fence; a retry of the same effect requires settled readback or a typed strong-exclusion proof.
 
 For a provider effect, reconciliation requires exact request and idempotency identity plus fresh
-target readback. It reports `Applied` only for a verified matching effect, `StronglyAbsent` only with
-an explicit exclusion proof, and `Indeterminate` for unreadable, partial or lost-response evidence.
+target readback. For a native pull-request merge, that identity includes the repository and PR node,
+expected head and base, merge method and resulting commit. It reports `Applied` only for a verified
+matching provider effect identity and receipt; a matching target state created by another actor is
+insufficient. It reports `StronglyAbsent` only when evidence bound to the original request proves
+delayed application impossible through an idempotency, conditional-fence, or retired-request contract.
+`Partial` retains the observed completed subset and its recovery or compensation plan, while unreadable
+or lost-response evidence remains `Indeterminate`. Neither permits blind replay. An open PR, 404, or
+missing merge commit on one read does not prove strong absence; if GitHub cannot provide it, an
+unknown merge remains pending for manual reconciliation and cannot be retried under a fresh effect
+identity.
 No direct routine merge, intake, Project write or other normal v1 mutation route is enabled until the
 installed service, issuer, journal and provider probes qualify together. Independent controls must
 refuse caller-supplied contexts, foreign or stale claims, moved source/target revisions, changed epoch,
