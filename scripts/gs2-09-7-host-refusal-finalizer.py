@@ -272,17 +272,19 @@ def execute_with_finalizer(envelope_raw: bytes, proof_raw: bytes, token: str,
         context_sha256 = digest_context(context)
         mint_record(port, mint_id, token_sha256, context_sha256)
         require(port.recover_token(mint_id) == token, "token-escrow")
-    except Exception:
+    except BaseException as error:
         _emergency_revoke(port, token)
+        if not isinstance(error, Exception):
+            raise
         return {"schema": "fsgg.github-substrate-v2.sandbox-host-finalization/1",
                 "mintId": mint_id, "release": "not-invoked",
                 "revocation": "pending", "disposition": "pending"}
-    try:
-        pending_write = port.append_pending(mint_id, token_sha256)
-    except Exception:
-        pending_write = "unknown"
     release_status = "not-invoked"
     try:
+        try:
+            pending_write = port.append_pending(mint_id, token_sha256)
+        except Exception:
+            pending_write = "unknown"
         if pending_write == "committed" and _read_state(
                 port, "read_pending", PENDING_SCHEMA, mint_id, token_sha256):
             try:
