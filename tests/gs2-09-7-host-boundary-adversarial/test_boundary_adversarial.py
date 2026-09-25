@@ -122,7 +122,7 @@ class ClaimBoundaryTests(unittest.TestCase):
         release.host.PINNED_SPKI_SHA256 = fixture.pin
         release.host.PINNED_WORKFLOW_SHA = fixture.context["workflowSha"]
         fixture_source.configure_admission(
-            self, release.host, fixture.context, fixture.pin)
+            self, release.host, fixture.context, fixture.pin, fixture.now)
         for name, value in zip(("PINNED_STORE_ORIGIN", "PINNED_STORE_RESOURCE_ID",
                                 "PINNED_STORE_ENDPOINT"), pins[:3]):
             self.addCleanup(setattr, claim_source, name, value)

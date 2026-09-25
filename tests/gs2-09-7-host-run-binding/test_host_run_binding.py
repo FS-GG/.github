@@ -23,7 +23,7 @@ POLICY_SHA = "e" * 64
 
 
 class FakeAdmissionPort:
-    def __init__(self, module, context, signer_pin):
+    def __init__(self, module, context, signer_pin, now):
         self.module = module
         self.calls = []
         self.descriptor = {
@@ -54,6 +54,9 @@ class FakeAdmissionPort:
             "projectNodeId": module.PROJECT_NODE,
             "signerSpkiSha256": signer_pin,
             "releasePolicySha256": POLICY_SHA,
+            "issuedAt": now.isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "expiresAt": (now + dt.timedelta(minutes=5)).isoformat(
+                timespec="seconds").replace("+00:00", "Z"),
             "sealed": True,
         }
 
@@ -66,7 +69,7 @@ class FakeAdmissionPort:
         return self.record
 
 
-def configure_admission(test_case, module, context, signer_pin):
+def configure_admission(test_case, module, context, signer_pin, now):
     pins = {
         "PINNED_ADMISSION_ORIGIN": ADMISSION_ORIGIN,
         "PINNED_ADMISSION_RESOURCE_ID": ADMISSION_RESOURCE,
@@ -78,7 +81,7 @@ def configure_admission(test_case, module, context, signer_pin):
         setattr(module.admission, name, value)
         test_case.addCleanup(setattr, module.admission, name, old)
     old_port = module.ADMISSION_PORT
-    port = FakeAdmissionPort(module, context, signer_pin)
+    port = FakeAdmissionPort(module, context, signer_pin, now)
     module.ADMISSION_PORT = port
     test_case.addCleanup(setattr, module, "ADMISSION_PORT", old_port)
     return port
@@ -150,7 +153,7 @@ class HostRunBindingTests(unittest.TestCase):
             "viewerResponseSha256": "d" * 64,
         }
         self.admission_port = configure_admission(
-            self, host, self.context, self.pin)
+            self, host, self.context, self.pin, self.now)
 
     @staticmethod
     def raw(value):
@@ -258,6 +261,31 @@ class HostRunBindingTests(unittest.TestCase):
         self.admission_port.read_admission = lambda *_: None
         with self.assertRaisesRegex(host.Refused, "admission-record"):
             self.build()
+
+    def test_old_decision_cannot_sign_fresh_token_for_same_run(self):
+        later = self.now + dt.timedelta(days=1)
+        fresh_proof = {**self.proof,
+                       "expiresAt": "2026-09-26T13:00:00Z"}
+        with self.assertRaisesRegex(host.Refused, "admission-expiry"):
+            host.build(self.context, self.raw(self.preflight),
+                       self.raw(fresh_proof), self.token, self.key,
+                       self.pin, later)
+
+    def test_invalid_admission_time_window_refuses(self):
+        original = self.admission_port.record
+        changes = [
+            {"issuedAt": "2026-09-25T12:01:00Z"},
+            {"expiresAt": "2026-09-25T12:11:00Z"},
+            {"expiresAt": "2026-09-25T12:00:00Z"},
+            {"issuedAt": "2026-09-25T12:00:00+00:00"},
+            {"issuedAt": 0},
+        ]
+        for change in changes:
+            with self.subTest(change=change):
+                self.admission_port.record = {**original, **change}
+                with self.assertRaisesRegex(host.Refused, "admission-expiry"):
+                    self.build()
+        self.admission_port.record = original
 
     def test_actor_repository_and_project_native_readback_mismatch_refuse(self):
         for key, changed in (

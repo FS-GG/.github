@@ -5,6 +5,7 @@ No durable authority or adapter is installed. All protected pins are empty.
 The caller must keep this port outside the candidate and workflow workspace.
 """
 
+import datetime as dt
 import re
 from typing import Protocol
 from urllib.parse import urlsplit
@@ -84,12 +85,15 @@ def check_port(port: ProtectedAdmissionPort | None) -> None:
 
 
 def require_admitted(port: ProtectedAdmissionPort | None, context: dict,
-                     signer_spki_sha256: str, target: dict) -> dict:
+                     signer_spki_sha256: str, target: dict,
+                     now: dt.datetime) -> dict:
     """Require native current readback of one exact protected decision."""
     check_port(port)
     require(type(context) is dict and type(target) is dict
             and type(signer_spki_sha256) is str
             and HEX64.fullmatch(signer_spki_sha256), "admission-input")
+    require(type(now) is dt.datetime and now.tzinfo is not None
+            and now.utcoffset() is not None, "admission-clock")
     try:
         record = port.read_admission(context["runId"], context["runAttempt"])
     except Exception as error:
@@ -99,7 +103,7 @@ def require_admitted(port: ProtectedAdmissionPort | None, context: dict,
         "workflowPath", "environment", "workflowSha", "candidateSha",
         "runId", "runAttempt", "runNonce", "sandboxRepositoryId",
         "sandboxRepositoryNodeId", "projectNodeId", "signerSpkiSha256",
-        "releasePolicySha256", "sealed",
+        "releasePolicySha256", "issuedAt", "expiresAt", "sealed",
     }, "admission-record")
     expected = {
         "schema": RECORD_SCHEMA,
@@ -119,6 +123,8 @@ def require_admitted(port: ProtectedAdmissionPort | None, context: dict,
         "projectNodeId": target["projectNodeId"],
         "signerSpkiSha256": signer_spki_sha256,
         "releasePolicySha256": PINNED_RELEASE_POLICY_SHA256,
+        "issuedAt": record["issuedAt"],
+        "expiresAt": record["expiresAt"],
         "sealed": True,
     }
     require(type(record["decisionId"]) is str
@@ -128,4 +134,19 @@ def require_admitted(port: ProtectedAdmissionPort | None, context: dict,
             and type(record["sandboxRepositoryId"]) is int
             and record["sealed"] is True
             and record == expected, "admission-binding")
+    issued_text = record["issuedAt"]
+    expiry_text = record["expiresAt"]
+    require(type(issued_text) is str and type(expiry_text) is str
+            and issued_text.endswith("Z") and expiry_text.endswith("Z"),
+            "admission-expiry")
+    try:
+        issued = dt.datetime.fromisoformat(issued_text[:-1] + "+00:00")
+        expiry = dt.datetime.fromisoformat(expiry_text[:-1] + "+00:00")
+    except (ValueError, OverflowError) as error:
+        raise Refused("admission-expiry") from error
+    require(issued.isoformat(timespec="seconds").replace("+00:00", "Z") == issued_text
+            and expiry.isoformat(timespec="seconds").replace("+00:00", "Z") == expiry_text
+            and issued <= now < expiry
+            and expiry <= issued + dt.timedelta(minutes=10),
+            "admission-expiry")
     return record
