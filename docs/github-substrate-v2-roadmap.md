@@ -1633,7 +1633,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   [stacked loopback transport draft #551](https://github.com/FS-GG/FS.GG.Coordination/pull/551)
   exercise strict offline predicates and controlled lost-response HTTP cases. The
   [v5 contract and qualification draft #550](https://github.com/FS-GG/FS.GG.Coordination/pull/550)
-  remains non-authoritative. [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
+  remains non-authoritative. [Native classifier draft #574](https://github.com/FS-GG/FS.GG.Coordination/pull/574)
+  repairs a wrong-target source false green: Python boolean `true` previously equaled selected
+  repository ID `1` in native reads and pull reconciliation. Its 23 focused offline controls
+  require exact integer identities, but the provisional operator remains inactive.
+  [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
   is a deterministic local clean-install candidate whose inspection still refuses dispatch; it is
@@ -1794,6 +1798,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   red-before revocation just before CAS that previously allowed fake handoff. Its 96 local
   controls require an atomic admitted-state claim and exact native readback; the installed
   shared transaction boundary and post-claim revocation policy remain unproved.
+  [Launch-fence draft #3728](https://github.com/FS-GG/.github/pull/3728) repairs a
+  post-claim revocation false green by requiring one same-authority candidate invocation
+  decision. Its 98 local controls keep definite refusal at zero exposure and treat unknown
+  outcome as possibly exposed without retry; the real launch interlock and token custody
+  remain unproved.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
