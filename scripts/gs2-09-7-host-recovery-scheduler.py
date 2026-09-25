@@ -107,7 +107,9 @@ def schedule_pending(port: ProtectedSchedulerPort | None) -> dict:
         }
         expected = copy.deepcopy(batch)
         if port.append_schedule_batch_once(batch, seal["sealId"],
-                                           seal["highWater"]) != "committed":
+                                           seal["highWater"],
+                                           current["generation"],
+                                           current["floorResourceId"]) != "committed":
             raise Refused("schedule-append-unknown")
         if port.read_schedule_batch(seal["sealId"]) != expected or \
                 port.read_schedule_batch(seal["sealId"]) != expected:
@@ -117,6 +119,14 @@ def schedule_pending(port: ProtectedSchedulerPort | None) -> dict:
                 raise Refused("schedule-job-readback")
         if port.read_schedule_batch(seal["sealId"]) != expected:
             raise Refused("schedule-batch-readback")
+        try:
+            after = census.joint.verify_joint_seal(
+                port, seal, census.dt.datetime.now(census.dt.timezone.utc))
+        except census.joint.Refused as error:
+            raise Refused(str(error)) from error
+        if after["generation"] != current["generation"] or \
+                after["floorResourceId"] != current["floorResourceId"]:
+            raise Refused("schedule-joint-generation-drift")
         return {"schema": "fsgg.github-substrate-v2.sandbox-host-schedule-verdict/2",
                 "batchId": expected["batchId"], "sealId": seal["sealId"],
                 "jointGeneration": result["jointGeneration"],

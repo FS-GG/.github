@@ -249,13 +249,16 @@ class FakePort:
         self.calls.append("read-binding")
         return self.binding
 
-    def claim_recovery_once(self, mint_id, binding_id, schedule_id, batch_id):
+    def claim_recovery_once(self, mint_id, binding_id, schedule_id, batch_id,
+                            expected_generation, floor_resource_id):
         self.calls.append("claim-recovery")
         if self.schedule_state != "committed" or self.batch_state != "committed" \
                 or self.scheduled is None or self.schedule_batch is None \
                 or schedule_id != self.scheduled["scheduleId"] \
                 or batch_id != self.schedule_batch["batchId"] \
-                or self.schedule_batch["jointGeneration"] != self.joint_generation:
+                or self.schedule_batch["jointGeneration"] != self.joint_generation \
+                or expected_generation != self.joint_generation \
+                or floor_resource_id != worker.joint.floor.PINNED_FLOOR_RESOURCE_ID:
             return "refused"
         if self.claim is not None:
             return "duplicate"
@@ -387,10 +390,25 @@ class RecoveryWorkerTests(unittest.TestCase):
         self.assertNotIn("claim-recovery", self.port.calls)
         self.assertNotIn("native-revoke", self.port.calls)
 
+    def test_head_advance_after_claim_blocks_native_revoke(self):
+        original = self.port.claim_recovery_once
+        def advance(mint_id, binding_id, schedule_id, batch_id, generation, floor_id):
+            result = original(mint_id, binding_id, schedule_id, batch_id,
+                              generation, floor_id)
+            self.port.joint_generation = 2
+            return result
+        self.port.claim_recovery_once = advance
+        result = self.run_worker()
+        self.assertEqual("unknown", result["claim"])
+        self.assertEqual("pending", result["revocation"])
+        self.assertNotIn("native-revoke", self.port.calls)
+
     def test_committed_claim_without_batch_and_schedule_identity_cannot_revoke(self):
         original = self.port.claim_recovery_once
-        def wrong_store_claim(mint_id, binding_id, schedule_id, batch_id):
-            result = original(mint_id, binding_id, schedule_id, batch_id)
+        def wrong_store_claim(mint_id, binding_id, schedule_id, batch_id,
+                              generation, floor_id):
+            result = original(mint_id, binding_id, schedule_id, batch_id,
+                              generation, floor_id)
             self.port.claim["scheduleId"] = "e" * 64
             self.port.claim["batchId"] = "8" * 64
             return result
@@ -405,8 +423,10 @@ class RecoveryWorkerTests(unittest.TestCase):
             with self.subTest(field=field):
                 self.port = FakePort()
                 original = self.port.claim_recovery_once
-                def foreign_claim(mint_id, binding_id, schedule_id, batch_id):
-                    result = original(mint_id, binding_id, schedule_id, batch_id)
+                def foreign_claim(mint_id, binding_id, schedule_id, batch_id,
+                                  generation, floor_id):
+                    result = original(mint_id, binding_id, schedule_id,
+                                      batch_id, generation, floor_id)
                     self.port.claim[field] = "foreign" if field.endswith("ResourceId") \
                         else "e" * 64
                     return result

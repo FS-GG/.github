@@ -47,11 +47,14 @@ class FakeDurableStore(fixture.FakeCensusPort):
     def read_census_subject(self, seal_id, mint_id):
         return self.read_subject(seal_id, mint_id)
 
-    def append_schedule_batch_once(self, batch, seal_id, high_water):
+    def append_schedule_batch_once(self, batch, seal_id, high_water,
+                                   expected_generation, floor_resource_id):
         self.calls.append("append-batch")
         if self.batch is not None or seal_id != self.seal["sealId"] \
                 or high_water != self.high_water \
-                or batch["jointGeneration"] != self.joint_generation:
+                or batch["jointGeneration"] != self.joint_generation \
+                or expected_generation != self.joint_generation \
+                or floor_resource_id != scheduler.census.joint.floor.PINNED_FLOOR_RESOURCE_ID:
             return "duplicate"
         if self.store_fault == "mutate-argument-state":
             batch["state"] = "withdrawn"
@@ -168,10 +171,21 @@ class SchedulerTests(unittest.TestCase):
             scheduler.schedule_pending(self.port)
         self.assertNotIn("append-batch", self.port.calls)
 
+    def test_head_generation_advances_after_append_refuses_success(self):
+        original = self.port.append_schedule_batch_once
+        def advance(batch, seal_id, high_water, generation, floor_id):
+            result = original(batch, seal_id, high_water, generation, floor_id)
+            self.port.joint_generation = 2
+            return result
+        self.port.append_schedule_batch_once = advance
+        with self.assertRaisesRegex(scheduler.Refused, "schedule-joint-generation-drift"):
+            scheduler.schedule_pending(self.port)
+        self.assertEqual(1, self.port.calls.count("append-batch"))
+
     def test_lost_append_response_does_not_retry_or_authorize(self):
         original = self.port.append_schedule_batch_once
-        def lost(batch, seal_id, high_water):
-            original(batch, seal_id, high_water)
+        def lost(batch, seal_id, high_water, generation, floor_id):
+            original(batch, seal_id, high_water, generation, floor_id)
             raise OSError("response lost after commit")
         self.port.append_schedule_batch_once = lost
         with self.assertRaisesRegex(scheduler.Refused, "schedule-unknown"):
