@@ -48,7 +48,8 @@ step count and App step positions. It requires exactly those workflow snapshots
 at that ref and a matching inventory snapshot for every selected App identity.
 Missing workflows or jobs, extra or duplicate steps, stale refs and missing
 inventories return no verdict. Only after completeness checks does it return a
-satisfied result or caller/App under-grant findings. The supplied roster's own
+satisfied result, caller/App under-grant findings, or an unproven caller-default
+finding when the callee declares a floor. The supplied roster's own
 completeness, workflow bytes, source ref and inventory provenance still need
 independent provider authentication; this reducer covers one bound caller pair,
 not a fleet sweep.

@@ -38,10 +38,8 @@ type AggregatePermissionEvidence =
     }
 
 type AggregatePermissionFinding =
-    {
-        Subject: string
-        UnderGrants: UnderGrant list
-    }
+    | UnderGrantFinding of Subject: string * UnderGrants: UnderGrant list
+    | UnprovenDefaultFinding of Subject: string
 
 type AggregatePermissionVerdict =
     | GateSatisfied
@@ -177,7 +175,6 @@ module PermissionAggregate =
                                                         bound.Call.JobPermissions floor
                                                 match caller with
                                                 | Refused code -> Error("caller-refused:" + code)
-                                                | UnprovenDefault -> Error "caller-default-unproven"
                                                 | _ ->
                                                     let appResults =
                                                         requests
@@ -200,14 +197,16 @@ module PermissionAggregate =
                                                             | UnprovenDefault -> Error "app-request-default-unproven"
                                                             | Satisfied -> Ok None
                                                             | UnderGranted short ->
-                                                                Ok(Some { Subject = where; UnderGrants = short }))
+                                                                Ok(Some(UnderGrantFinding(where, short))))
                                                         |> gather
                                                     appResults
                                                     |> Result.map (fun appFindings ->
                                                         let callerFindings =
                                                             match caller with
                                                             | UnderGranted short ->
-                                                                [ { Subject = subject bound; UnderGrants = short } ]
+                                                                [ UnderGrantFinding(subject bound, short) ]
+                                                            | UnprovenDefault ->
+                                                                [ UnprovenDefaultFinding(subject bound) ]
                                                             | _ -> []
                                                         let findings = callerFindings @ List.choose id appFindings
                                                         if List.isEmpty findings then GateSatisfied

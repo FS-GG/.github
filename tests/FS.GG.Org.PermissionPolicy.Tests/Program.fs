@@ -524,18 +524,21 @@ expect "separately custodied App binds its own inventory" (Ok GateSatisfied)
                    Workflows = Some [ { authorityWorkflow with Text = otherAppText } ]
                    Inventories = Some [ inventorySnapshot; { inventorySnapshot with Inventory = otherAppFact } ] })
 expect "App over-request yields an aggregate finding"
-    (Ok(GateFindings [ { Subject = ".github/workflows/one.yml [build] App-token step 1"
-                         UnderGrants = [ { Scope = "contents"; Required = Write; Granted = Read } ] } ]))
+    (Ok(GateFindings [ UnderGrantFinding(
+        ".github/workflows/one.yml [build] App-token step 1",
+        [ { Scope = "contents"; Required = Write; Granted = Read } ]) ]))
     (aggregate { aggregateEvidence with
                    Workflows = Some [ { authorityWorkflow with Text = aggregateText.Replace("permission-contents: read", "permission-contents: write") } ] })
 let narrowCaller = { bound with Call = { bound.Call with JobPermissions = Scopes [] } }
 expect "caller undergrant yields an aggregate finding"
-    (Ok(GateFindings [ { Subject = "FS-GG/FS.GG.Game -> reuse.yml@main"
-                         UnderGrants = [ { Scope = "contents"; Required = Read; Granted = NoAccess } ] } ]))
+    (Ok(GateFindings [ UnderGrantFinding(
+        "FS-GG/FS.GG.Game -> reuse.yml@main",
+        [ { Scope = "contents"; Required = Read; Granted = NoAccess } ]) ]))
     (PermissionAggregate.evaluate "source-commit" narrowCaller aggregateEvidence)
 let unprovenCaller =
     { bound with Call = { bound.Call with WorkflowPermissions = Absent; JobPermissions = Absent } }
-expect "unproven caller default refuses aggregate verdict" (Error "caller-default-unproven")
+expect "unproven caller default is a gate finding"
+    (Ok(GateFindings [ UnprovenDefaultFinding "FS-GG/FS.GG.Game -> reuse.yml@main" ]))
     (PermissionAggregate.evaluate "source-commit" unprovenCaller aggregateEvidence)
 expect "non-callable callee refuses aggregate verdict" (Error "callee-syntax:not-callable")
     (PermissionAggregate.evaluate "source-commit" { bound with CalleeText = "on: push\n" } aggregateEvidence)
