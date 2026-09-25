@@ -1040,6 +1040,7 @@ changing the protected holds:
 | [FSC-03 F# #3811](https://github.com/FS-GG/.github/pull/3811) | `979afbcc3bc26f41488caad55ec0f4f788e64d6b` | Pure supplied-graph reader refuses unverified custom SDK declarations, matching Python #3810; 191 policy tests. SDK/Import provenance and evaluated graph remain open. |
 | [GS2-09.9 #723](https://github.com/FS-GG/FS.GG.Coordination/pull/723) | `fb3df0645d60759f5bc8c056bc4f98af5e27f178` | Git-tree witness requires the exact versioned closed byte-verifier success result; 21 focused tests, witness cannot dispatch and #550 held. |
 | [FSC-05 #591](https://github.com/FS-GG/FS.GG.Templates/pull/591) | `298a18acf89cf393df0d6a17aaa14460e2661f16` | Pin/roster custody observer refuses NUL-shortened non-owner member names as NO_VERDICT; 31 custody/101 payload controls, selected archive still NO_VERDICT. |
+| [GS2-09.9 #724](https://github.com/FS-GG/FS.GG.Coordination/pull/724) | `e4fb1f90ab986ba426802fc0db5b8ef5586bb57f` | Read-only native-effect admission matrix separates the closed native-free scaffold from a future reviewed runnable revision and installed no-grant controls; 16 local links resolve. It supplies no protected selection or authority. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
