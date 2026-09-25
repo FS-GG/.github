@@ -354,7 +354,17 @@ Render current context occupancy independently as a window measurement, never as
 usage or a five-minute token delta. The current user-supplied 26% remaining, 2026-09-30 09:28
 Europe/Vienna reset and 191K/258K context occupancy are test fixtures until authenticated
 collector evidence exists. Period usage remains Unknown until genuine native turn IDs and usage
-are recorded for a bounded period. The pure renderer validates these supplied claims; it
+or complete collector-verified native `token_count` histories support a bounded period.
+Use native `session_meta.parent_thread_id` to collect the root and every transitive child.
+Validate monotonic cumulative input/cached/output/total counters and their component and
+delta arithmetic. The requested mean is **team tokens per completed ten-minute period**:
+anchor periods to the root session start, include zero-use periods, divide the cumulative
+team total through the last completed boundary by completed-period count, and report count,
+start/end, total and cached/noncached breakdown. Per-session diagnostics are separate.
+Refresh weekly used-percent allowance for each ten-minute report and estimate exhaustion
+from same-limit, same-reset percentage slope over at least ten minutes, never token totals.
+Native JSONL counts do not prove instrumented runner turns or an applied Host receipt and do
+not clear capture acceptance or GS2-09.9. The pure renderer validates these supplied claims; it
 cannot itself authenticate the CLI or instrument a direct interactive Codex session.
 [Renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) has a new
 nonpackable source/test pair. Its first owner repair separates lane activity from health,
@@ -373,6 +383,10 @@ The current source-only revision at `7e7ebdee9b502d20a438ea00916956262e3cf35a`
 adds the typed CLI status/context/native-period separation, accepts valid UTC reset offsets,
 binds native period usage to the report workspace and passes 21 focused controls.
 The weekly values above have not been authenticated by the collector.
+The next source-only revision at `2b7b9f3dcd55e95cdbac0ffc51ef0860d7041803`
+adds native JSONL cumulative team projection with 23 focused tests. It includes a
+30-session fixture with 28 idle descendants and still divides by completed root-anchored
+periods; it does not claim authenticated collection or applied Host capture.
 
 Independent review of these draft ports has already found false greens in Unicode JSON digest
 encoding, unsupported provider schemas, malformed source digests, misplaced telemetry archive

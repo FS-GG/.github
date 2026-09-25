@@ -258,7 +258,28 @@ The user-supplied example is **26% left**, reset **2026-09-30 09:28 Europe/Vienn
 **191K/258K context occupancy**. It is a fixture until an authenticated collector observation
 exists, not verified usage. Context occupancy is neither cumulative token usage nor a five-minute
 usage delta. Report period usage as **Unknown** until genuine native turn IDs and input/output
-usage are captured for a bounded period; do not subtract context readings to invent a delta.
+usage or complete collector-verified native `token_count` histories support a bounded period;
+do not subtract context readings to invent a delta.
+Give consolidated V2 progress reports every ten minutes while work is active. Refresh weekly
+allowance at each report from authenticated CLI `/status` or collector-verified native
+`rate_limits.primary.used_percent`, recording time, provenance and reset. The native JSONL
+collector must cover the root session and every transitive child linked by
+`session_meta.parent_thread_id`, with complete ordered per-session cumulative
+`token_count.info.total_token_usage` histories. Validate monotonic input, cached input,
+output and total, `cached<=input`, `total=input+output`, and cached deltas no greater than
+input deltas. Sum each session's boundary delta for the latest completed ten-minute **team**
+period. Anchor all completed periods to root-session start, count zero-use periods, and compute
+the **team mean per completed period** as cumulative team usage through the last completed
+boundary divided by the number of completed periods. Render count, root start, completed end,
+input, cached/noncached input, output and total; keep per-session diagnostics separate. Missing
+lineage, history, provenance or completed boundary yields Unknown. Estimate weekly exhaustion
+only from at least two fresh, same-limit, same-reset used-percent readings at least ten minutes
+apart; mark it approximate or Unknown, never derive it from raw token totals. Native JSONL
+counters are distinct from instrumented runner turn IDs and usage plus the matching applied
+Host receipt. They do not establish end-to-end telemetry capture or clear GS2-09.9.
+The read-only local audit at 2026-09-25 16:11:32 UTC covered this root session plus 29
+descendants and 17,938 native `token_count` events, with zero counter decreases or component
+mismatches; this is source evidence, not an authenticated Host capture receipt.
 [Renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) is source-only; its
 first owner repair adds explicit worker launch evidence, activity-based counts, a worker-only
 reserved count, authenticated readiness observations and linked terminal completion rows.
@@ -273,6 +294,13 @@ authenticated CLI status evidence, separate context occupancy and native-turn pe
 Its source/test branch passes 21 focused tests, accepts valid UTC reset offsets and binds
 native period runner usage to the report workspace; the
 user-supplied values above are not an authenticated status observation.
+The next source-only renderer revision at exact head
+`2b7b9f3dcd55e95cdbac0ffc51ef0860d7041803` adds typed native JSONL cumulative
+team counters and root-anchored ten-minute periods. Its 23 focused tests cover a zero-use
+period, 28 additional idle descendants, team rather than per-session mean, cached/noncached
+arithmetic, byte stability and fail-closed lineage, provenance and counter claims. A
+weekly exhaustion estimate derives only from same-reset percentage slope. The external
+collector has not been installed or authenticated; no direct-session Host capture follows.
 No live update workflow is pinned to that draft.
 
 **Current bounded parallel source evidence.** Reserved direct GS2-09.9
