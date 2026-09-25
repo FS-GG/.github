@@ -180,6 +180,10 @@ served-byte custody and installed receiver proof remain open.
 refuses nested default fields and unsupported seven-space parameter indentation that Python
 previously accepted while F# refused; four new and 23 neighboring controls pass. Full YAML,
 foreign JSON and installed receiver parity remain open.
+[Templates duplicate-default draft #534](https://github.com/FS-GG/FS.GG.Templates/pull/534)
+refuses equal or conflicting repeated lifecycle parameter defaults that Python previously
+accepted while F# refused; four new and 27 neighboring controls pass. Full YAML/foreign
+JSON and installed receiver parity remain open.
 [SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
 refuses an observed same-length overwrite after the first held-descriptor read by
 checking descriptor metadata around two byte passes; 21 focused controls and the

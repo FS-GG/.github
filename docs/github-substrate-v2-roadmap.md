@@ -1780,6 +1780,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   attestation port; five new and 25 upstream fake controls pass. Protected artifact
   attempt/redirect custody, actual effect artifact, App identity and execution credential
   remain absent, so the installed native-effect gate stays closed.
+  [Injected audit-event adapter #598](https://github.com/FS-GG/FS.GG.Coordination/pull/598)
+  binds a supplied workflow-approval document, actor, repository, run and time to a
+  separate immutable joint record for attempt, environment and approval-response hash;
+  five new and 30 upstream fake controls pass. Protected audit identity/permission,
+  joint-record issuer and installed effect remain absent; dispatch stays refused.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
@@ -1987,6 +1992,12 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   claim; 165 focused local controls pass. Live pins are blank. Protected signer/store
   custody, monotonic head, complete input and generation-enforcing append/claim CAS are
   absent, so Q5/Q6 and sandbox dispatch remain held.
+  [Challenge-bound head draft #3742](https://github.com/FS-GG/.github/pull/3742)
+  refuses a replayed old signed seal plus old self-reported head by requiring two distinct
+  fresh challenges and signed current-head attestations from a declared linearizable
+  store; 170 focused local controls pass. The protected signer must actually read the
+  current durable head with monotonic generation across crashes. Its custody, ACL and
+  clock evidence, live pins and Q5/Q6 remain absent.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
