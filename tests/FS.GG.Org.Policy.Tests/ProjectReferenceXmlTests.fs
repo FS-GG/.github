@@ -74,6 +74,33 @@ module ProjectReferenceXmlTests =
         Assert.Empty(parsed "src/A/A.fsproj" xml)
 
     [<Theory>]
+    [<InlineData("<Project Sdk='Injected.Graph.Sdk' />")>]
+    [<InlineData("<Project Sdk='Microsoft.NET.Sdk;Injected.Graph.Sdk' />")>]
+    [<InlineData("<Project><Sdk Name='Injected.Graph.Sdk' /></Project>")>]
+    [<InlineData("<Project><Sdk Name='Microsoft.NET.Sdk' /></Project>")>]
+    let ``unverified SDK import cannot erase a project graph edge`` xml =
+        let sources = [ "src/A/A.fsproj", xml; "src/B/B.fsproj", "<Project />" ]
+        match ProjectReferenceXml.inspectSuppliedProjectSet sources with
+        | Error diagnostic ->
+            Assert.Equal("project-reference", diagnostic.Code)
+            Assert.Contains("unverified project SDK", diagnostic.Message)
+        | Ok graph ->
+            match RuleB.inspect [ "src/A/**" ] graph with
+            | Ok coverage when List.isEmpty coverage.Uncovered ->
+                failwithf "SDK import produced a false-green graph: %A" graph
+            | result -> failwithf "SDK import needed no-verdict, got: %A" result
+
+    [<Theory>]
+    [<InlineData("Microsoft.NET.Sdk")>]
+    [<InlineData("Microsoft.NET.Sdk.Web")>]
+    let ``current-tree SDK attribute keeps direct static ProjectReference`` sdk =
+        let xml =
+            "<Project Sdk='" + sdk + "'><ItemGroup>"
+            + "<ProjectReference Include='../B/B.fsproj' />"
+            + "</ItemGroup></Project>"
+        Assert.Equal<string list>([ "src/B/B.fsproj" ], parsed "src/A/A.fsproj" xml)
+
+    [<Theory>]
     [<InlineData("<Target Name='Inject'><ItemGroup><ProjectReference Include='../B/B.fsproj' /></ItemGroup></Target>")>]
     [<InlineData("<ItemGroup><ProjectReference Include='../B/B.fsproj' /></ItemGroup><Target Name='Remove'><ItemGroup><ProjectReference Remove='../B/B.fsproj' /></ItemGroup></Target>")>]
     let ``target-time ProjectReference changes cannot become static graph facts`` inner =

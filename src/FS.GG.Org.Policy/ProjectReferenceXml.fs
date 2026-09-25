@@ -27,6 +27,15 @@ module ProjectReferenceXml =
             && not (isNull element.Parent)
             && element.Parent.Name.LocalName = "PropertyGroup")
 
+    let private hasUnverifiedSdk (root: XElement) =
+        // An SDK's implicit props/targets can add ProjectReference items outside project XML.
+        // These are the historical current-tree attribute spellings, not authenticated SDK facts.
+        let sdk = root.Attribute(XName.Get("Sdk"))
+        (not (isNull sdk)
+         && sdk.Value <> "Microsoft.NET.Sdk"
+         && sdk.Value <> "Microsoft.NET.Sdk.Web")
+        || (root.Elements() |> Seq.exists (fun element -> element.Name.LocalName = "Sdk"))
+
     let private normalized (path: string) =
         not (String.IsNullOrWhiteSpace path)
         && not (path.StartsWith("/", StringComparison.Ordinal))
@@ -73,6 +82,7 @@ module ProjectReferenceXml =
     /// Tasks may also emit ProjectReference items without an item element in these XML bytes.
     /// Dynamic Output item names cannot be resolved from one XML file.
     /// ProjectReference Remove changes the evaluated item set and is not a static edge.
+    /// Unverified SDK declarations can import references absent from project XML.
     /// No filesystem reads or assertions about a complete project roster occur here.
     let inspect (projectPath: string) (xml: string) : Result<string list, SyntaxDiagnostic> =
         if not (normalized projectPath) then
@@ -117,6 +127,8 @@ module ProjectReferenceXml =
                         String.Equals(name, "ProjectReference", StringComparison.OrdinalIgnoreCase))
                 if isNull document.Root || document.Root.Name.LocalName <> "Project" then
                     error "project-xml" projectPath "project XML root must be Project"
+                elif hasUnverifiedSdk document.Root then
+                    error "project-reference" projectPath "unverified project SDK can import ProjectReference items; requires authenticated MSBuild SDK evaluation"
                 elif setsTargetsOverride document then
                     error "project-reference" projectPath "DirectoryBuildTargetsPath overrides implicit target selection; requires MSBuild import evaluation"
                 elif document.Descendants() |> Seq.exists (fun element -> element.Name.LocalName = "Import") then
