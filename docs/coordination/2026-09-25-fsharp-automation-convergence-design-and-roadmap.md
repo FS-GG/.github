@@ -202,6 +202,11 @@ controls pass. This does not establish full foreign JSON or installed parity.
 refuses JSON object or array fragments under `minimumFsggSdd` that Python previously
 accepted while F# `grade` refused; four new and 29 provider-tool fixture controls pass.
 Full YAML, foreign JSON, served-byte and installed receiver parity remain open.
+[Templates pin-roster observer #539](https://github.com/FS-GG/FS.GG.Templates/pull/539)
+returns `NO_VERDICT` for three live `0.13.0` owner pins against the selected `0.14.0`
+native archive and ambiguous game short-name mapping, despite green floor graders;
+ten focused read-only controls pass. A synthetic exact pin match is only a roster match,
+not served-byte or installed provider authority. GitHub Packages remains 403/no-verdict.
 [SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
 refuses an observed same-length overwrite after the first held-descriptor read by
 checking descriptor metadata around two byte passes; 21 focused controls and the
