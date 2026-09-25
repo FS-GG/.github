@@ -1404,6 +1404,21 @@ let ``direct Project 1 bootstrap refuses duplicate single-select option names`` 
     | other -> failwith $"duplicate direct-project option IDs must refuse — got %A{other}"
 
 [<Theory>]
+[<InlineData("\"login\":\"FS-GG\"", "\"login\":\"Other\",\"login\":\"FS-GG\"")>]
+[<InlineData("\"number\":1", "\"number\":2,\"number\":1")>]
+[<InlineData("\"totalCount\":1", "\"totalCount\":51,\"totalCount\":1")>]
+[<InlineData("\"dataType\":\"SINGLE_SELECT\"", "\"dataType\":\"UNRECOGNIZED\",\"dataType\":\"SINGLE_SELECT\"")>]
+[<InlineData("\"id\":\"opt_ready\"", "\"id\":\"opt_foreign\",\"id\":\"opt_ready\"")>]
+let ``direct Project 1 bootstrap refuses shadowed raw JSON members`` (original: string) (replacement: string) =
+    let baseline = exactProjectResponse "FS-GG" 1 "Coordination" projectOne.Id
+    let shadowed = baseline.Replace(original, replacement)
+    Assert.True(baseline <> shadowed)
+
+    match bootstrapExactProject (serving shadowed) projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"shadowed raw direct-project member must refuse — got %A{other}"
+
+[<Theory>]
 [<InlineData("\"dataType\":\"UNRECOGNIZED\"")>]
 [<InlineData("\"dataType\":null")>]
 [<InlineData("\"dataType\":\"MULTI_SELECT\"")>]
