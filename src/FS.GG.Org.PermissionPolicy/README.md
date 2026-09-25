@@ -24,8 +24,15 @@ bound facts rather than a permission verdict. Provider code still has to obtain
 and authenticate the caller, roster, callee and App facts and enumerate App-token
 requests; these records alone do not prove those reads happened.
 
-This source does not fetch a callee at its pinned ref, enumerate the roster,
-evaluate App-token requests against installation grants, or replace the live
+`AppGrantComparison.compare` checks one supplied, static App-token request
+against the bound inventory. An observed step with no `permission-*` inputs is
+`Some { Requested = Absent }`; `None` means the request extraction fact is
+missing and refuses. Explicit null, dynamic values, duplicate scopes and wrong
+App identities refuse. Requested write above an installation's read grant is
+an under-grant finding; a narrower request passes.
+
+This source does not fetch a callee at its pinned ref, enumerate the roster or
+App-token steps, authenticate current installation grants, or replace the live
 Python gate. Those boundaries and installed parity remain separate work. The
 independent Python fixture in
 `tests/workflow-permissions/run.sh` remains the baseline.

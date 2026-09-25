@@ -285,5 +285,71 @@ expect "empty App grant inventory refuses" (Error "app-grants-invalid")
     (bind { bindingFacts with AppGrants = Some { appFact with Grants = [] } })
 expect "duplicate App grant scope refuses" (Error "app-grants-invalid")
     (bind { bindingFacts with AppGrants = Some { appFact with Grants = [ "contents", Read; "contents", Write ] } })
+expect "invalid App grant scope refuses" (Error "app-grants-invalid")
+    (bind { bindingFacts with AppGrants = Some { appFact with Grants = [ "*", Read ] } })
+
+let bound =
+    match bind bindingFacts with
+    | Ok value -> value
+    | Error code -> failwithf "fixture evidence refused: %s" code
+let appRequest: AppTokenRequestFact =
+    { Repository = "FS-GG/.github"
+      AppIdentity = "pinned-default-app"
+      Requested = Scopes [ "contents", "read" ] }
+let compareApp request = AppGrantComparison.compare bound request
+
+expect "App request equal to inventory passes" Satisfied
+    (compareApp (Some appRequest))
+expect "request above installation grant is an undergrant finding"
+    (UnderGranted [ { Scope = "contents"; Required = Write; Granted = Read } ])
+    (compareApp (Some { appRequest with Requested = Scopes [ "contents", "write" ] }))
+expect "ungranted App scope is an undergrant finding"
+    (UnderGranted [ { Scope = "issues"; Required = Read; Granted = NoAccess } ])
+    (compareApp (Some { appRequest with Requested = Scopes [ "issues", "read" ] }))
+let widerInventory =
+    match bind { bindingFacts with AppGrants = Some { appFact with Grants = [ "contents", Write ] } } with
+    | Ok value -> value
+    | Error code -> failwithf "fixture wide inventory refused: %s" code
+expect "inventory overgrant covers a narrower request" Satisfied
+    (AppGrantComparison.compare widerInventory (Some appRequest))
+expect "explicit none request needs no installation grant" Satisfied
+    (compareApp (Some { appRequest with Requested = Scopes [ "issues", "none" ] }))
+expect "observed App step with absent scope inputs passes" Satisfied
+    (compareApp (Some { appRequest with Requested = Absent }))
+expect "explicit empty request passes" Satisfied
+    (compareApp (Some { appRequest with Requested = Scopes [] }))
+expect "missing App request extraction fact refuses" (Refused "app-request-fact-missing")
+    (compareApp None)
+expect "explicit null App request refuses" (Refused "app-request-null")
+    (compareApp (Some { appRequest with Requested = Null }))
+expect "unsupported App request shape refuses" (Refused "app-request-shape-unsupported")
+    (compareApp (Some { appRequest with Requested = UnsupportedShape }))
+expect "App request shorthand refuses" (Refused "app-request-shorthand-unsupported")
+    (compareApp (Some { appRequest with Requested = Shorthand "read-all" }))
+expect "duplicate App request scope refuses" (Refused "permissions-scope-duplicate")
+    (compareApp (Some { appRequest with Requested = Scopes [ "contents", "read"; "contents", "write" ] }))
+expect "dynamic App request value refuses" (Refused "app-request-dynamic")
+    (compareApp (Some { appRequest with Requested = Scopes [ "contents", "${{ inputs.level }}" ] }))
+expect "unknown static App request level refuses" (Refused "permissions-level-unknown")
+    (compareApp (Some { appRequest with Requested = Scopes [ "contents", "admin" ] }))
+expect "null static App request level refuses" (Refused "permissions-level-unknown")
+    (compareApp (Some { appRequest with Requested = Scopes [ "contents", null ] }))
+expect "unnormalized App request scope refuses" (Refused "app-request-scope-invalid")
+    (compareApp (Some { appRequest with Requested = Scopes [ "pull-requests", "read" ] }))
+expect "wrong App identity refuses before comparison" (Refused "app-identity-mismatch")
+    (compareApp (Some { appRequest with AppIdentity = "other-app"; Requested = Scopes [] }))
+expect "wrong App request repository refuses" (Refused "app-request-repository-mismatch")
+    (compareApp (Some { appRequest with Repository = "FS-GG/Other"; Requested = Scopes [] }))
+
+let compareAppWithFacts facts request =
+    bind facts |> Result.map (fun value -> AppGrantComparison.compare value request)
+
+expect "missing roster blocks App comparison" (Error "roster-missing")
+    (compareAppWithFacts { bindingFacts with Roster = None } (Some appRequest))
+expect "missing App inventory blocks comparison" (Error "app-grants-missing")
+    (compareAppWithFacts { bindingFacts with AppGrants = None } (Some appRequest))
+expect "wrong bound App identity blocks comparison" (Error "app-grants-identity-mismatch")
+    (compareAppWithFacts { bindingFacts with AppGrants = Some { appFact with InventoryId = "other-app" } }
+        (Some appRequest))
 
 printfn "permission reducer: %d controls passed" passed
