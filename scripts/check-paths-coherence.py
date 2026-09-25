@@ -508,6 +508,7 @@ def project_graph(root: str) -> dict[str, list[str]]:
 
     Structural: a `ProjectReference`'s `Include=` is a path, in a schema, in a file — there is no
     prose to misread here, which is precisely why rule (b) is derivable and reading `run:` is not.
+    Explicit MSBuild imports can add references outside this file, so they require evaluation.
     """
     graph: dict[str, list[str]] = {}
     for pattern in PROJECT_GLOBS:
@@ -521,7 +522,15 @@ def project_graph(root: str) -> dict[str, list[str]]:
             # XML decodes character references in Include. Scanning raw attribute bytes can
             # fabricate a path which a workflow covers while missing the real referenced project.
             for element in project.iter():
-                if not isinstance(element.tag, str) or element.tag.rsplit("}", 1)[-1] != "ProjectReference":
+                if not isinstance(element.tag, str):
+                    continue
+                tag = element.tag.rsplit("}", 1)[-1]
+                if tag == "Import":
+                    raise GateError(
+                        f"{rel}: explicit MSBuild Import requires MSBuild import evaluation; "
+                        "refusing an incomplete ProjectReference graph."
+                    )
+                if tag != "ProjectReference":
                     continue
                 inc = element.get("Include")
                 if not inc:
