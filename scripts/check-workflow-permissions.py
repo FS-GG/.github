@@ -60,6 +60,11 @@ HOW A CALLEE IS RESOLVED (this decides what the gate protects)
 Usage:
   check-workflow-permissions.py [--root <dir>] [--registry <file>] [--repo <full> ...]
       [--app-grants scope:level,...] [--app-grants-for SECRET=scope:level,... ...]
+      [--require-app-identity-grants]
+  Strict App identity mode requires --app-grants and a matching --app-grants-for
+  for each selected app-id/client-id secret. An identity outside the static
+  secrets.NAME form, or a missing match, is exit 3 rather than a verdict
+  derived from another App's default inventory.
 Exit: 0 = every caller grants at least its callee; 1 = at least one caller cannot start; 2 = no
 verdict, RETRYABLE — a repo or workflow that could not be read (rate limit, auth, outage); 3 = no
 verdict, PERMANENT — an unreadable roster, an audit that examined nothing, a callee that is missing
@@ -367,7 +372,7 @@ def parse_app_grants(spec: str) -> dict[str, int]:
 APP_IDENTITY_SECRET = re.compile(r"\$\{\{\s*secrets\.([A-Z][A-Z0-9_]*)\s*\}\}")
 
 
-def app_token_requests(doc: dict, where: str) -> list[tuple[str, str | None, dict[str, int]]]:
+def app_token_requests(doc: dict, where: str) -> list[tuple[str, str | None, bool, dict[str, int]]]:
     """Read static create-github-app-token requests in one workflow.
 
     The action treats any ungranted requested scope as fatal. Dynamic permission values cannot
@@ -376,7 +381,7 @@ def app_token_requests(doc: dict, where: str) -> list[tuple[str, str | None, dic
     own reviewed grant contract instead of being conflated with the repository's default App
     installation.
     """
-    found: list[tuple[str, str | None, dict[str, int]]] = []
+    found: list[tuple[str, str | None, bool, dict[str, int]]] = []
     jobs = doc.get("jobs")
     if not isinstance(jobs, dict):
         return found
@@ -393,6 +398,7 @@ def app_token_requests(doc: dict, where: str) -> list[tuple[str, str | None, dic
                 raise GateError(f"{where} [{job_id}] App-token step {index}: `with:` is not a mapping")
             client_id = inputs.get("client-id")
             app_id = inputs.get("app-id")
+            app_identity_supplied = "client-id" in inputs or "app-id" in inputs
             if client_id is not None and app_id is not None:
                 raise GateError(
                     f"{where} [{job_id}] App-token step {index}: client-id and app-id are ambiguous"
@@ -412,7 +418,8 @@ def app_token_requests(doc: dict, where: str) -> list[tuple[str, str | None, dic
                         "none, read, or write value so the grant can be checked before merge"
                     )
                 requested[scope] = LEVELS[value]
-            found.append((f"{where} [{job_id}] App-token step {index}", app_identity_secret, requested))
+            found.append((f"{where} [{job_id}] App-token step {index}",
+                          app_identity_secret, app_identity_supplied, requested))
     return found
 
 
@@ -441,6 +448,8 @@ def main(argv: list[str]) -> int:
                     help="pinned installation grants (scope:read|write,...) to compare against App-token requests")
     ap.add_argument("--app-grants-for", action="append", default=[], metavar="SECRET=GRANTS",
                     help="required grants for a distinct App selected by its app-id secret (repeatable)")
+    ap.add_argument("--require-app-identity-grants", action="store_true",
+                    help="refuse a selected App secret without its own --app-grants-for inventory")
     args = ap.parse_args(argv)
 
     registry = args.registry or os.path.join(args.root, "registry", "repos.yml")
@@ -452,6 +461,8 @@ def main(argv: list[str]) -> int:
     try:
         app_grants = parse_app_grants(args.app_grants) if args.app_grants is not None else None
         app_grant_overrides = parse_app_grant_overrides(args.app_grants_for)
+        if args.require_app_identity_grants and app_grants is None:
+            raise GateError("--require-app-identity-grants requires --app-grants")
     except GateError as e:
         print(f"::error::check-workflow-permissions: no verdict — {e}", file=sys.stderr)
         return NO_VERDICT_PERMANENT
@@ -471,12 +482,29 @@ def main(argv: list[str]) -> int:
             except (OSError, GateError) as e:
                 print(f"::error::check-workflow-permissions: no verdict — {e}", file=sys.stderr)
                 return NO_VERDICT_PERMANENT
-            for subject, app_id_secret, requested in requests:
-                selected_grants = app_grant_overrides.get(app_id_secret, app_grants)
-                if selected_grants is None:
-                    raise GateError(
-                        f"{subject}: no App grant inventory selects app-id secret {app_id_secret!r}"
+            for subject, app_id_secret, app_identity_supplied, requested in requests:
+                if args.require_app_identity_grants and app_identity_supplied and app_id_secret is None:
+                    print(
+                        f"::error::check-workflow-permissions: no verdict — {subject}: "
+                        "App identity must be a static secrets.NAME selector",
+                        file=sys.stderr,
                     )
+                    return NO_VERDICT_PERMANENT
+                # In strict mode, a named secret selects a distinct App and
+                # must bind its own inventory. The current receiver uses the
+                # legacy default until it supplies every selected App fact.
+                selected_grants = (
+                    app_grant_overrides.get(app_id_secret)
+                    if args.require_app_identity_grants and app_id_secret is not None
+                    else app_grant_overrides.get(app_id_secret, app_grants)
+                )
+                if selected_grants is None:
+                    print(
+                        f"::error::check-workflow-permissions: no verdict — {subject}: "
+                        f"no App grant inventory selects app-id secret {app_id_secret!r}",
+                        file=sys.stderr,
+                    )
+                    return NO_VERDICT_PERMANENT
                 short = [
                     f"{scope}: requests {level_name(want)}, installation grants {level_name(granted(selected_grants, scope))}"
                     for scope, want in sorted(requested.items())
