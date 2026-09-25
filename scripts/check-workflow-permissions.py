@@ -61,10 +61,14 @@ Usage:
   check-workflow-permissions.py [--root <dir>] [--registry <file>] [--repo <full> ...]
       [--app-grants scope:level,...] [--app-grants-for SECRET=scope:level,... ...]
       [--require-app-identity-grants]
+      [--authority-workflow-roster <file> --authority-source-ref <ref>]
   Strict App identity mode requires --app-grants and a matching --app-grants-for
   for each selected app-id/client-id secret. An identity outside the static
   secrets.NAME form, or a missing match, is exit 3 rather than a verdict
   derived from another App's default inventory.
+  The optional authority roster contains an exact file, job, step count and App
+  step-position inventory for the supplied source ref. Its provenance must be
+  authenticated by the provider before this mode can serve as a gate.
 Exit: 0 = every caller grants at least its callee; 1 = at least one caller cannot start; 2 = no
 verdict, RETRYABLE — a repo or workflow that could not be read (rate limit, auth, outage); 3 = no
 verdict, PERMANENT — an unreadable roster, an audit that examined nothing, a callee that is missing
@@ -183,6 +187,94 @@ def load_yaml(text: str, what: str) -> dict:
     if not isinstance(doc, dict):
         raise GateError(f"{what}: not a YAML mapping")
     return doc
+
+
+AUTHORITY_WORKFLOW_PATH = re.compile(r"\.github/workflows/[^/]+\.ya?ml\Z")
+
+
+def authority_job_shapes(doc: dict, what: str) -> list[dict]:
+    """Summarize every job and App-token position without trusting the roster's claims."""
+    jobs = doc.get("jobs")
+    if not isinstance(jobs, dict) or not jobs:
+        raise GateError(f"authority roster job shape mismatch: {what}: no jobs mapping")
+    shapes = []
+    for job_id, job in jobs.items():
+        if not isinstance(job_id, str) or not job_id.strip() or not isinstance(job, dict):
+            raise GateError(f"authority roster job shape mismatch: {what}: invalid job")
+        reusable = "uses" in job
+        if reusable:
+            if not isinstance(job["uses"], str) or not job["uses"].strip() or "steps" in job:
+                raise GateError(f"authority roster job shape mismatch: {what} [{job_id}]")
+            steps = []
+        else:
+            steps = job.get("steps")
+            if not isinstance(steps, list) or not steps:
+                raise GateError(f"authority roster job shape mismatch: {what} [{job_id}]")
+        app_steps = []
+        for index, step in enumerate(steps, start=1):
+            if not isinstance(step, dict) or (("uses" in step) == ("run" in step)):
+                raise GateError(f"authority roster job shape mismatch: {what} [{job_id}] step {index}")
+            for key in ("uses", "run"):
+                if key in step and (not isinstance(step[key], str) or not step[key].strip()):
+                    raise GateError(f"authority roster job shape mismatch: {what} [{job_id}] step {index}")
+            if isinstance(step.get("uses"), str) and step["uses"].strip().startswith(
+                "actions/create-github-app-token@"
+            ):
+                if step["uses"].strip() == "actions/create-github-app-token@":
+                    raise GateError(f"authority roster job shape mismatch: {what} [{job_id}] step {index}")
+                app_steps.append(index)
+        shapes.append({"job_id": job_id, "reusable": reusable,
+                       "steps": len(steps), "app_steps": app_steps})
+    return sorted(shapes, key=lambda shape: shape["job_id"])
+
+
+def check_authority_roster(path: str, source_ref: str, workflows: dict[str, dict]) -> None:
+    """Require exact supplied workflow/job/App-step coverage before a gate verdict."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            roster = load_yaml(fh.read(), path)
+    except OSError as e:
+        raise GateError(f"authority roster unreadable: {e}") from e
+    if (set(roster) != {"schemaVersion", "repository", "sourceRef", "workflows"}
+            or type(roster["schemaVersion"]) is not int or roster["schemaVersion"] != 1
+            or roster["repository"] != "FS-GG/.github"
+            or roster["sourceRef"] != source_ref
+            or not isinstance(roster["workflows"], list) or not roster["workflows"]):
+        raise GateError("authority roster header invalid or stale")
+    expected: dict[str, list[dict]] = {}
+    for workflow in roster["workflows"]:
+        if (not isinstance(workflow, dict) or set(workflow) != {"path", "jobs"}
+                or not isinstance(workflow["path"], str)
+                or not AUTHORITY_WORKFLOW_PATH.fullmatch(workflow["path"])
+                or workflow["path"] in expected
+                or not isinstance(workflow["jobs"], list) or not workflow["jobs"]):
+            raise GateError("authority roster workflow entry invalid")
+        jobs: dict[str, dict] = {}
+        for job in workflow["jobs"]:
+            if not isinstance(job, dict) or set(job) != {
+                "job_id", "reusable", "steps", "app_steps"
+            }:
+                raise GateError("authority roster job entry invalid")
+            job_id, reusable, steps, app_steps = (
+                job["job_id"], job["reusable"], job["steps"], job["app_steps"]
+            )
+            if (not isinstance(job_id, str) or not job_id.strip() or job_id in jobs
+                    or type(reusable) is not bool or type(steps) is not int
+                    or not isinstance(app_steps, list)
+                    or any(type(index) is not int for index in app_steps)
+                    or app_steps != sorted(set(app_steps))
+                    or (reusable and (steps != 0 or app_steps))
+                    or (not reusable and (steps <= 0 or any(
+                        index <= 0 or index > steps for index in app_steps
+                    )))):
+                raise GateError("authority roster job entry invalid")
+            jobs[job_id] = job
+        expected[workflow["path"]] = sorted(jobs.values(), key=lambda job: job["job_id"])
+    if set(expected) != set(workflows):
+        raise GateError("authority roster workflow set mismatch")
+    for workflow_path, doc in workflows.items():
+        if expected[workflow_path] != authority_job_shapes(doc, workflow_path):
+            raise GateError(f"authority roster job shape mismatch: {workflow_path}")
 
 
 def triggers(doc: dict) -> dict:
@@ -468,6 +560,10 @@ def main(argv: list[str]) -> int:
                     help="required grants for a distinct App selected by its app-id secret (repeatable)")
     ap.add_argument("--require-app-identity-grants", action="store_true",
                     help="refuse a selected App secret without its own --app-grants-for inventory")
+    ap.add_argument("--authority-workflow-roster", default=None, metavar="FILE",
+                    help="optional independent workflow/job/App-step roster to require before any verdict")
+    ap.add_argument("--authority-source-ref", default=None, metavar="REF",
+                    help="expected source ref for --authority-workflow-roster")
     args = ap.parse_args(argv)
 
     registry = args.registry or os.path.join(args.root, "registry", "repos.yml")
@@ -481,6 +577,14 @@ def main(argv: list[str]) -> int:
         app_grant_overrides = parse_app_grant_overrides(args.app_grants_for)
         if args.require_app_identity_grants and app_grants is None:
             raise GateError("--require-app-identity-grants requires --app-grants")
+        if ((args.authority_workflow_roster is None) != (args.authority_source_ref is None)
+                or (args.authority_workflow_roster is not None and (
+                    not args.authority_workflow_roster.strip()
+                    or not args.authority_source_ref.strip()
+                ))):
+            raise GateError("--authority-workflow-roster requires --authority-source-ref")
+        if args.authority_workflow_roster is not None and not args.require_app_identity_grants:
+            raise GateError("--authority-workflow-roster requires --require-app-identity-grants")
     except GateError as e:
         print(f"::error::check-workflow-permissions: no verdict — {e}", file=sys.stderr)
         return NO_VERDICT_PERMANENT
@@ -492,12 +596,28 @@ def main(argv: list[str]) -> int:
         except OSError as e:
             print(f"::error::check-workflow-permissions: no verdict — cannot read {workflow_dir}: {e}", file=sys.stderr)
             return NO_VERDICT_PERMANENT
+        loaded_workflows: dict[str, dict] = {}
         for name in filenames:
             path = os.path.join(workflow_dir, name)
             try:
                 with open(path, encoding="utf-8") as fh:
-                    requests = app_token_requests(load_yaml(fh.read(), path), path)
+                    loaded_workflows[f".github/workflows/{name}"] = load_yaml(fh.read(), path)
             except (OSError, GateError) as e:
+                print(f"::error::check-workflow-permissions: no verdict — {e}", file=sys.stderr)
+                return NO_VERDICT_PERMANENT
+        if args.authority_workflow_roster is not None:
+            try:
+                check_authority_roster(
+                    args.authority_workflow_roster, args.authority_source_ref, loaded_workflows
+                )
+            except GateError as e:
+                print(f"::error::check-workflow-permissions: no verdict — {e}", file=sys.stderr)
+                return NO_VERDICT_PERMANENT
+        for name in filenames:
+            path = os.path.join(workflow_dir, name)
+            try:
+                requests = app_token_requests(loaded_workflows[f".github/workflows/{name}"], path)
+            except GateError as e:
                 print(f"::error::check-workflow-permissions: no verdict — {e}", file=sys.stderr)
                 return NO_VERDICT_PERMANENT
             for subject, app_id_secret, app_identity_supplied, requested in requests:

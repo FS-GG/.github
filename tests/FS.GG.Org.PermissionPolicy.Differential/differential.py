@@ -42,11 +42,14 @@ EXPECTED_PYTHON = {
     "pinned_ref_uses_fetched_callee": "OK",
     "non_org_call": "NO_VERDICT",
     "callee_not_callable": "NO_VERDICT",
-    "authority_workflow_omitted": "OK",
+    "authority_workflow_omitted": "NO_VERDICT",
+    "authority_job_omitted": "NO_VERDICT",
+    "authority_app_step_omitted": "NO_VERDICT",
+    "authority_roster_omitted_workflow": "NO_VERDICT",
+    "authority_roster_duplicate_workflow": "NO_VERDICT",
 }
 KNOWN_PAIRS = {
     "rostered_second_caller_undergrants": ("FINDING", "OK"),
-    "authority_workflow_omitted": ("OK", "NO_VERDICT"),
 }
 
 CALLEE = """on: { workflow_call: {} }
@@ -196,7 +199,19 @@ def cases():
 
     add("callee_not_callable", not_callable)
     add("authority_workflow_omitted", lambda s: s["authority_workflows"].pop(),
-        "F# requires its supplied authoritative workflow roster; Python has no separate manifest")
+        python_reason="authority roster workflow set mismatch")
+    add("authority_job_omitted", lambda s: s["authority_workflows"][1].update(
+        text=APP.replace("mint:", "other:")),
+        python_reason="authority roster job shape mismatch")
+    add("authority_app_step_omitted", lambda s: s["authority_workflows"][1].update(
+        text=APP.replace("uses: actions/create-github-app-token@v3",
+                         "run: echo no-token")),
+        python_reason="authority roster job shape mismatch")
+    add("authority_roster_omitted_workflow", lambda s: s["expected_workflows"].pop(),
+        python_reason="authority roster workflow set mismatch")
+    add("authority_roster_duplicate_workflow", lambda s: s["expected_workflows"].append(
+        copy.deepcopy(s["expected_workflows"][0])),
+        python_reason="authority roster workflow entry invalid")
     return out
 
 
@@ -248,6 +263,13 @@ def run_case(scenario, temp: Path, stub: Path):
     roster = "repos:\n" + "".join(
         f"  - {{ full: {repo} }}\n" for repo in scenario["roster_repositories"])
     write(root / "registry/repos.yml", roster)
+    authority_roster = root / "registry/authority-workflows.yml"
+    write(authority_roster, json.dumps({
+        "schemaVersion": 1,
+        "repository": AUTHORITY,
+        "sourceRef": scenario["source_ref"],
+        "workflows": scenario["expected_workflows"],
+    }))
     write(world / "FS-GG__R/caller.yml", scenario["caller_yaml"])
     for repo, workflows in scenario["additional_callers"].items():
         for index, text in enumerate(workflows, 1):
@@ -260,7 +282,9 @@ def run_case(scenario, temp: Path, stub: Path):
     default = next(item for item in scenario["inventories"] if item["id"] == "default")
     grant_arg = ",".join(f"{scope}:{level}" for scope, level in default["grants"].items())
     command = [sys.executable, str(PYTHON_GATE), "--root", str(root),
-               "--app-grants", grant_arg, "--require-app-identity-grants"]
+               "--app-grants", grant_arg, "--require-app-identity-grants",
+               "--authority-workflow-roster", str(authority_roster),
+               "--authority-source-ref", scenario["source_ref"]]
     for item in scenario["inventories"]:
         if item["id"] != "default":
             grants = ",".join(f"{scope}:{level}" for scope, level in item["grants"].items())
