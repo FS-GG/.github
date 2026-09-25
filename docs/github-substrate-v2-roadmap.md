@@ -316,6 +316,12 @@ period totaled 40,760,275. The root-session weekly reading reached 79% used;
 the conditional continuous-use account-wide projection was about 22:26 UTC.
 This local diagnostic still lacks authenticated collector/account provenance and
 does not establish end-to-end Host capture.
+The 16:58:37 UTC local refresh found 30 family sessions, 19,332 native events and
+zero counter findings. Across 73 completed root-anchored periods, the team mean was
+30,431,217.37 total tokens/period; the latest period totaled 36,935,169. The root
+weekly reading reached 80% used, with a conditional continuous-use, account-wide
+projection near 22:16 UTC. This is a read-only diagnostic, not authenticated
+collector/account evidence or a runner/Host capture receipt.
 [Renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) is source-only; its
 first owner repair adds explicit worker launch evidence, activity-based counts, a worker-only
 reserved count, authenticated readiness observations and linked terminal completion rows.
