@@ -133,6 +133,23 @@ module ProgressRendererTests =
         | Ok _ -> failwithf "unsupported claim accepted: %s" reason
         | Error errors -> Assert.Contains(reason, String.concat "; " errors)
 
+    [<Fact>]
+    let ``local JSONL counters render diagnostics without authenticated collector or Host capture`` () =
+        let local = { teamWindow () with
+                        Sessions = (teamWindow ()).Sessions
+                                   |> List.map (fun session -> { session with CollectorVerified = false }) }
+        let snapshot = { baseSnapshot () with PeriodUsage = LocalCounterDiagnostic local }
+        let actual = render snapshot
+        Assert.Contains("local JSONL diagnostic only; no authenticated collector or Host receipt", actual)
+        Assert.Contains("team-wide 10-minute native token_count delta", actual)
+        Assert.Contains("End-to-end capture acceptance: 🟡 Pending", actual)
+        Assert.Equal(actual, render snapshot)
+        let verifiedSessions =
+            local.Sessions |> List.map (fun session -> { session with CollectorVerified = true })
+        let falselyVerified = { local with Sessions = verifiedSessions }
+        refuses "explicitly unverified complete-history provenance"
+            { snapshot with PeriodUsage = LocalCounterDiagnostic falselyVerified }
+
     let private replaceWorker (baseline: ProgressSnapshot) worker =
         { baseline with Lanes = [ baseline.Lanes.[0]; worker; baseline.Lanes.[2] ] }
 
