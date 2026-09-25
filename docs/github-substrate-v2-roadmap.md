@@ -1643,6 +1643,9 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   workflow, image, runtime and independent approval packet; its observer ports are not installed.
   [Stacked workflow draft #563](https://github.com/FS-GG/FS.GG.Coordination/pull/563) adds a disabled,
   inspect-only release skeleton with empty pins and permissions; it cannot install or dispatch.
+  [Readback draft #564](https://github.com/FS-GG/FS.GG.Coordination/pull/564) binds a proposed
+  protected source/workflow/artifact/image/approval packet to later installed refusal controls, but
+  its observations and immutable coordinates have not been supplied by a protected release.
   The #550 staged exact-copy loopback
   harness exercises corrected classifier, HTTP and durable-fence paths, but an independent boundary
   review found it insufficient for the installed provider/credential path and corrected native-effect clause. Qualify the corrected
