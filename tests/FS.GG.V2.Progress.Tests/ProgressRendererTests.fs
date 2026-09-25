@@ -97,6 +97,7 @@ module ProgressRendererTests =
     let private nativeEvent minutes ordinal counters percent : NativeTokenCountEvent = {
         ObservedAt = at.AddMinutes(-minutes); Ordinal = ordinal; Counters = counters
         PrimaryRate = percent |> Option.map (fun used -> {
+            AccountScopeId = "collector-verified-account-1"
             LimitId = "codex"; WindowMinutes = 10080; UsedPercent = used
             ResetsAt = DateTimeOffset(2026, 9, 30, 7, 28, 0, TimeSpan.Zero)
         })
@@ -276,14 +277,58 @@ module ProgressRendererTests =
         Assert.Contains("- Team mean per completed period:", actual)
         Assert.DoesNotContain("tokens/session", actual)
         Assert.Contains("used=72.00%, remaining=28.00%", actual)
-        Assert.Contains("approximately 2026-09-25 14:19:00 UTC at the observed weekly percent slope", actual)
+        Assert.Contains("approximately 2026-09-25 16:39:00 UTC at the continuous-use, account-wide weekly percent slope", actual)
         Assert.Contains("End-to-end capture acceptance: 🟡 Pending", actual)
         let changedEvent = { window.Sessions.Head.Events.[2] with Counters = nativeCounters 230L 25L 50L }
         let changedRoot = { window.Sessions.Head with Events = List.updateAt 2 changedEvent window.Sessions.Head.Events }
         let changedWindow = { window with Sessions = changedRoot :: window.Sessions.Tail }
         let changed = render { baseline with PeriodUsage = NativeCounterPeriodUsage changedWindow }
         Assert.Contains("total=170; sessions=2", changed)
-        Assert.Contains("approximately 2026-09-25 14:19:00 UTC", changed)
+        Assert.Contains("approximately 2026-09-25 16:39:00 UTC", changed)
+
+        let flatRecentEvent =
+            { window.Sessions.Head.Events.[1] with
+                PrimaryRate = Some { window.Sessions.Head.Events.[1].PrimaryRate.Value with UsedPercent = 72M } }
+        let flatRecentChildEvent =
+            { window.Sessions.Tail.Head.Events.Head with
+                PrimaryRate = Some { window.Sessions.Tail.Head.Events.Head.PrimaryRate.Value with UsedPercent = 72M } }
+        let flatRecentRoot =
+            { window.Sessions.Head with
+                Events = List.updateAt 1 flatRecentEvent window.Sessions.Head.Events }
+        let flatRecentChild =
+            { window.Sessions.Tail.Head with Events = [ flatRecentChildEvent ] }
+        let flatRecentWindow = { window with Sessions = [ flatRecentRoot; flatRecentChild ] }
+        let flatRecent = render { baseline with PeriodUsage = NativeCounterPeriodUsage flatRecentWindow }
+        Assert.Contains("approximately 2026-09-25 16:39:00 UTC", flatRecent)
+
+        let allFlatFirst =
+            { window.Sessions.Head.Events.Head with
+                PrimaryRate = Some { window.Sessions.Head.Events.Head.PrimaryRate.Value with UsedPercent = 72M } }
+        let allFlatRoot =
+            { flatRecentRoot with Events = List.updateAt 0 allFlatFirst flatRecentRoot.Events }
+        let allFlatWindow = { window with Sessions = [ allFlatRoot; flatRecentChild ] }
+        let allFlat = render { baseline with PeriodUsage = NativeCounterPeriodUsage allFlatWindow }
+        Assert.Contains("Weekly exhaustion estimate: 🔘 Unknown", allFlat)
+
+        let foreignFirst =
+            { window.Sessions.Head.Events.Head with
+                PrimaryRate = Some { window.Sessions.Head.Events.Head.PrimaryRate.Value with
+                                        AccountScopeId = "foreign-account" } }
+        let foreignRoot =
+            { flatRecentRoot with Events = List.updateAt 0 foreignFirst flatRecentRoot.Events }
+        let incompatibleWindow = { window with Sessions = [ foreignRoot; flatRecentChild ] }
+        let incompatible = render { baseline with PeriodUsage = NativeCounterPeriodUsage incompatibleWindow }
+        Assert.Contains("Weekly exhaustion estimate: 🔘 Unknown", incompatible)
+
+        let foreignResetFirst =
+            { window.Sessions.Head.Events.Head with
+                PrimaryRate = Some { window.Sessions.Head.Events.Head.PrimaryRate.Value with
+                                        ResetsAt = at.AddDays(7.0) } }
+        let foreignResetRoot =
+            { flatRecentRoot with Events = List.updateAt 0 foreignResetFirst flatRecentRoot.Events }
+        let foreignResetWindow = { window with Sessions = [ foreignResetRoot; flatRecentChild ] }
+        let incompatibleReset = render { baseline with PeriodUsage = NativeCounterPeriodUsage foreignResetWindow }
+        Assert.Contains("Weekly exhaustion estimate: 🔘 Unknown", incompatibleReset)
 
         let idleDescendants =
             [ for ordinal in 1 .. 28 ->
@@ -315,6 +360,12 @@ module ProgressRendererTests =
         let badComponentsRoot = { root with Events = List.updateAt 2 badComponents root.Events }
         refuses "native token_count components disagree"
             (withWindow { window with Sessions = [ badComponentsRoot; child ] })
+        let blankAccountEvent =
+            { root.Events.[2] with
+                PrimaryRate = Some { root.Events.[2].PrimaryRate.Value with AccountScopeId = "" } }
+        let blankAccountRoot = { root with Events = List.updateAt 2 blankAccountEvent root.Events }
+        refuses "native primary weekly rate limit is invalid"
+            (withWindow { window with Sessions = [ blankAccountRoot; child ] })
         let decreased = { root.Events.[2] with Counters = nativeCounters 90L 19L 50L }
         let decreasedRoot = { root with Events = List.updateAt 2 decreased root.Events }
         refuses "native cumulative counters decreased"
