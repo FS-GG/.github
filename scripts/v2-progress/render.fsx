@@ -71,6 +71,9 @@ let readSession asOf (value: JsonElement) : NativeSessionCounters =
       Events = prop value "events" |> items |> List.map readEvent }
 let readSnapshot (root: JsonElement) : ProgressSnapshot =
     let asOf = time root "asOf"
+    let metadataAt = time root "metadataObservedAt"
+    if metadataAt > asOf || asOf - metadataAt > TimeSpan.FromMinutes 2.0 then
+        fail "lane/workstream/completion metadata is stale or future-dated; rebuild and validate it within two minutes of the report"
     let lanes = prop root "lanes" |> items |> List.map readLane
     let streams = prop root "workstreams" |> items |> List.map readWorkstream
     let telemetry = prop root "telemetry"

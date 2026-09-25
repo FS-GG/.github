@@ -18,6 +18,15 @@ CLI results. It fails if health is not ready or the workspace is not
 configured with `pending=0`, `pendingUnacknowledged=0`,
 `unacknowledgedLossy=false`.
 
+**Rebuild the metadata file before every ten-minute update.** Recheck the
+running agent roster and explicit launch settings, query current PR heads and
+UTC commit times, reconcile workstream/check/risk counts, and push the roadmap
+source evidence first. Set `metadataObservedAt` to the UTC time of that
+check. The F# adapter refuses metadata older than two minutes or dated after
+the scan. This is a freshness guard, not independent proof that a caller
+actually performed those checks; inspect the source evidence before publishing.
+The wrapper only refreshes telemetry and local counters.
+
 The counter input is always `LocalCounterDiagnostic`: the local JSONL scan has
 no authenticated collector/account scope and no orchestration-runner/Host
 receipt. The F# script always sets capture to pending. Its weekly projection
@@ -27,7 +36,7 @@ live panel has no authenticated collector provenance here. Do not publish a
 report as a protected receipt or infer GS2-09.9 native-effect acceptance.
 
 Keep metadata and generated snapshots outside the repository. A metadata file
-has these top-level fields: `roadmapHead`, `lanes`, `declaredCounts`,
+has these top-level fields: `metadataObservedAt`, `roadmapHead`, `lanes`, `declaredCounts`,
 `workstreams`, `telemetry.workspaceId`, `protectedHolds`, `checks`, `risks`,
 `nextActions`, `completions`. The F# adapter requires all fields and refuses
 mismatched declared counts. Each completion needs its UTC commit time, PR
