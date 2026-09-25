@@ -37,7 +37,9 @@ class FakeFinalizerPort:
         self.cancel_pending = False
         self.lose_revoked_response = False
         self.native_response_lost = False
-        self.native_observation = "revoked"
+        self.cancel_native_revoke = False
+        self.native_observation = "active"
+        self.observations_override = []
         self.descriptor = {
             "schema": finalizer.FINALIZER_SCHEMA,
             "origin": ORIGIN,
@@ -117,12 +119,17 @@ class FakeFinalizerPort:
 
     def revoke(self, token):
         self.calls.append("native-revoke")
+        self.native_observation = "revoked"
+        if self.cancel_native_revoke:
+            raise KeyboardInterrupt("fake crash after native revoke")
         if self.native_response_lost:
             raise OSError("native response lost")
         return "accepted"
 
     def observe(self, token):
         self.calls.append("native-observe")
+        if self.observations_override:
+            return self.observations_override.pop(0)
         return self.native_observation
 
     def append_revoked(self, mint_id, token_sha256):
@@ -265,10 +272,68 @@ class HostRefusalFinalizerTests(unittest.TestCase):
         self.assertEqual("pending", first["revocation"])
         self.assertEqual("pending", first["disposition"])
         self.assertEqual(1, self.release_port.revoke_calls)
-        self.assertIn("native-revoke", self.port.calls)
+        self.assertNotIn("native-revoke", self.port.calls)
         self.assertIsNone(self.port.revoked)
         second = self.run_finalizer()
         self.assertEqual("not-invoked", second["release"])
+        self.assertEqual(1, self.release_port.invocations)
+
+    def test_restarted_finalizer_does_not_revoke_native_revoked_token_again(self):
+        digest = hashlib.sha256(self.fixture.token.encode()).hexdigest()
+        self.assertEqual("committed", self.port.append_pending(MINT_ID, digest))
+        self.port.native_observation = "revoked"
+        self.port.calls.clear()
+        recovered = finalizer.recover_pending(self.port, MINT_ID)
+        self.assertEqual("revoked", recovered["revocation"])
+        self.assertEqual("pending", recovered["disposition"])
+        self.assertNotIn("native-revoke", self.port.calls)
+        self.assertIn("native-observe", self.port.calls)
+        self.assertIn("read-revoked", self.port.calls)
+
+    def test_unknown_native_readback_keeps_pending_without_new_revoke(self):
+        self.port.native_observation = "unknown"
+        first = self.run_finalizer()
+        self.assertEqual("pending", first["revocation"])
+        self.assertNotIn("native-revoke", self.port.calls)
+        self.assertIsNone(self.port.revoked)
+        self.port.native_observation = "revoked"
+        self.port.calls.clear()
+        second = finalizer.recover_pending(self.port, MINT_ID)
+        self.assertEqual("revoked", second["revocation"])
+        self.assertNotIn("native-revoke", self.port.calls)
+        self.assertEqual(1, self.release_port.invocations)
+
+    def test_cancellation_after_native_revoke_recovers_without_duplicate_effect_or_launch(self):
+        self.port.cancel_native_revoke = True
+        with self.assertRaises(KeyboardInterrupt):
+            self.run_finalizer()
+        self.assertIsNotNone(self.port.pending)
+        self.assertIsNone(self.port.revoked)
+        self.assertEqual(1, self.port.calls.count("native-revoke"))
+        self.assertEqual(1, self.release_port.invocations)
+        self.port.cancel_native_revoke = False
+        self.port.calls.clear()
+        recovered = finalizer.recover_pending(self.port, MINT_ID)
+        self.assertEqual("revoked", recovered["revocation"])
+        self.assertNotIn("native-revoke", self.port.calls)
+        self.assertIn("read-revoked", self.port.calls)
+        rerun = self.run_finalizer()
+        self.assertEqual("not-invoked", rerun["release"])
+        self.assertEqual(1, self.release_port.invocations)
+
+    def test_crash_with_unknown_revoke_readback_never_retries_native_effect(self):
+        self.port.observations_override = ["active", "unknown"]
+        first = self.run_finalizer()
+        self.assertEqual("pending", first["revocation"])
+        self.assertEqual(1, self.port.calls.count("native-revoke"))
+        self.assertEqual(1, self.release_port.invocations)
+        self.port.observations_override = ["active"]
+        self.port.calls.clear()
+        recovered = finalizer.recover_pending(self.port, MINT_ID)
+        self.assertEqual("pending", recovered["revocation"])
+        self.assertNotIn("native-revoke", self.port.calls)
+        rerun = self.run_finalizer()
+        self.assertEqual("not-invoked", rerun["release"])
         self.assertEqual(1, self.release_port.invocations)
 
     def test_lost_pending_response_blocks_handoff_despite_readback(self):
@@ -300,15 +365,17 @@ class HostRefusalFinalizerTests(unittest.TestCase):
         self.assertEqual("pending", result["revocation"])
         self.assertEqual(0, self.release_port.invocations)
 
-    def test_crash_after_pending_recovers_only_revocation(self):
+    def test_crash_after_pending_defers_native_mutation_to_one_use_recovery(self):
         digest = hashlib.sha256(self.fixture.token.encode()).hexdigest()
         self.assertEqual("committed", self.port.append_pending(MINT_ID, digest))
         recovered = finalizer.recover_pending(self.port, MINT_ID)
-        self.assertEqual("revoked", recovered["revocation"])
+        self.assertEqual("pending", recovered["revocation"])
         self.assertEqual("pending", recovered["disposition"])
+        self.assertNotIn("native-revoke", self.port.calls)
         self.assertEqual(0, self.release_port.invocations)
         later = self.run_finalizer()
         self.assertEqual("not-invoked", later["release"])
+        self.assertNotIn("native-revoke", self.port.calls)
 
     def test_crash_after_mint_before_pending_attempts_revoke_but_stays_pending(self):
         result = finalizer.recover_pending(self.port, MINT_ID)
@@ -316,6 +383,13 @@ class HostRefusalFinalizerTests(unittest.TestCase):
         self.assertEqual("pending", result["disposition"])
         self.assertIn("native-revoke", self.port.calls)
         self.assertNotIn("append-revoked", self.port.calls)
+        self.assertEqual(0, self.release_port.invocations)
+
+    def test_emergency_recovery_skips_native_revoke_if_already_revoked(self):
+        self.port.native_observation = "revoked"
+        recovered = finalizer.recover_pending(self.port, MINT_ID)
+        self.assertEqual("pending", recovered["revocation"])
+        self.assertNotIn("native-revoke", self.port.calls)
         self.assertEqual(0, self.release_port.invocations)
 
     def test_unknown_native_observation_or_receipt_keeps_pending(self):
@@ -405,16 +479,14 @@ class HostRefusalFinalizerTests(unittest.TestCase):
         for change in ({"candidateCanWrite": True}, {"endpoint": ORIGIN + "/workspace"},
                        {"durable": 1}):
             with self.subTest(change=change):
-                self.port.descriptor = {**FakeFinalizerPort(
-                    self.fixture.token, self.fixture.context).descriptor, **change}
-                self.port.calls.clear()
+                self.port = FakeFinalizerPort(self.fixture.token, self.fixture.context)
+                self.port.descriptor = {**self.port.descriptor, **change}
                 result = self.run_finalizer()
                 self.assertEqual("not-invoked", result["release"])
                 self.assertEqual("pending", result["revocation"])
                 self.assertIn("native-revoke", self.port.calls)
                 self.assertEqual(0, self.release_port.invocations)
-        self.port.descriptor = FakeFinalizerPort(
-            self.fixture.token, self.fixture.context).descriptor
+        self.port = FakeFinalizerPort(self.fixture.token, self.fixture.context)
         self.port.vault_descriptor["candidateCanWrite"] = True
         result = self.run_finalizer()
         self.assertEqual("not-invoked", result["release"])
