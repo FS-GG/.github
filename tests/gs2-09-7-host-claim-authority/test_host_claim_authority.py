@@ -245,7 +245,8 @@ class ReleaseCompositionTests(unittest.TestCase):
         release.host.PINNED_SPKI_SHA256 = self.fixture.pin
         release.host.PINNED_WORKFLOW_SHA = self.fixture.context["workflowSha"]
         fixture_module.configure_admission(
-            self, release.host, self.fixture.context, self.fixture.pin)
+            self, release.host, self.fixture.context, self.fixture.pin,
+            self.fixture.now)
         self.addCleanup(setattr, authority, "PINNED_STORE_ORIGIN", pins[0])
         self.addCleanup(setattr, authority, "PINNED_STORE_RESOURCE_ID", pins[1])
         self.addCleanup(setattr, authority, "PINNED_STORE_ENDPOINT", pins[2])

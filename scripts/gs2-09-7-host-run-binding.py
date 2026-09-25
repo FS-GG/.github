@@ -138,7 +138,8 @@ def sign(private_key_pem: bytes, payload: bytes) -> bytes:
                      "-sigopt", "rsa_pss_saltlen:digest"], payload)
 
 
-def require_admission(context: dict, signer_spki_sha256: str) -> None:
+def require_admission(context: dict, signer_spki_sha256: str,
+                      now: dt.datetime) -> None:
     target = {
         "workflowRepository": HOST_REPOSITORY,
         "workflowPath": WORKFLOW,
@@ -149,7 +150,7 @@ def require_admission(context: dict, signer_spki_sha256: str) -> None:
     }
     try:
         admission.require_admitted(ADMISSION_PORT, context,
-                                   signer_spki_sha256, target)
+                                   signer_spki_sha256, target, now)
     except admission.Refused as error:
         raise Refused(str(error)) from error
 
@@ -183,7 +184,7 @@ def build(context: dict, preflight_raw: bytes, proof_raw: bytes, token: str,
             "runner-context")
     nonce = f'{context["runId"]}-{context["runAttempt"]}-{context["candidateSha"]}'
     require(context["runNonce"] == nonce, "run-nonce")
-    require_admission(context, pinned_spki_sha256)
+    require_admission(context, pinned_spki_sha256, now)
     require(type(token) is str and len(token) > 20 and token.isascii()
             and not any(character.isspace() for character in token), "token")
     token_digest = hashlib.sha256(token.encode("ascii")).hexdigest()
