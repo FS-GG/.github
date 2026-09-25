@@ -310,6 +310,19 @@ module ProjectReferenceXml =
         | Error diagnostic -> Error diagnostic
         | Ok digests -> inspectSuppliedProjectBytesAgainstDigests digests snapshots
 
+    /// Compose the exact commit/tree check with blob binding and XML inspection. This remains
+    /// provisional until the reader's repository custody and pin source are authenticated.
+    let inspectSuppliedPinnedGitSnapshot
+        (pin: GitCommitProvenance.ExactCommitPin)
+        (reader: GitCommitProvenance.IReadOnlyCommitReader)
+        (rootTreeId: string)
+        (treeObjects: (string * byte[]) list)
+        (sources: (string * byte[]) list)
+        : Result<Map<string, string list>, SyntaxDiagnostic> =
+        match GitCommitProvenance.inspectProvisionalRoot pin rootTreeId reader with
+        | Error diagnostic -> Error diagnostic
+        | Ok verified -> inspectSuppliedGitSnapshot verified.TreeId treeObjects sources
+
     /// A local observation of one caller-supplied implicit file. The result does not establish
     /// nearest-file selection, import closure, source provenance, or a Rule (b) graph verdict.
     type SuppliedImplicitObservation = NoDirectReferenceInSuppliedXml
