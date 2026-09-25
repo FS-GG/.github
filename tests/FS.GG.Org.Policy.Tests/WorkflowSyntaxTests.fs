@@ -52,7 +52,29 @@ module WorkflowSyntaxTests =
     [<Fact>]
     let ``non scalar path pattern is kept invalid`` () =
         let value = parsed "on:\n  push:\n    paths: [src/**, {bad: shape}]\n"
-        Assert.Equal(Invalid "paths contains a non-scalar pattern", value.Push.Paths)
+        Assert.Equal(Invalid "paths contains a non-string pattern", value.Push.Paths)
+
+    [<Theory>]
+    [<InlineData("42")>]
+    [<InlineData("true")>]
+    [<InlineData("null")>]
+    [<InlineData("~")>]
+    let ``implicit non-string path pattern is invalid`` item =
+        let value = parsed ("on: {push: {paths: [" + item + "]}}\n")
+        Assert.Equal(Invalid "paths contains a non-string pattern", value.Push.Paths)
+
+    [<Fact>]
+    let ``quoted and explicitly tagged string paths are retained`` () =
+        let value = parsed "on: {push: {paths: ['42', !!str null]}}\n"
+        Assert.Equal(Sequence ["42"; "null"], value.Push.Paths)
+
+    [<Fact>]
+    let ``explicit string null is not a null event`` () =
+        refused "event-shape" "on: {push: !!str null}\n"
+
+    [<Fact>]
+    let ``self-referential alias refuses without a process crash`` () =
+        refused "yaml-alias" "on: push\nloop: &x [*x]\n"
 
     [<Fact>]
     let ``unknown on shape refuses`` () =

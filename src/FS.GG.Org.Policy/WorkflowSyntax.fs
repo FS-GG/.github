@@ -1,6 +1,7 @@
 namespace FS.GG.Org.Policy
 
 open System
+open System.Collections.Generic
 open System.IO
 open System.Text.RegularExpressions
 open YamlDotNet.Core
@@ -43,10 +44,29 @@ module WorkflowSyntax =
     let private isNullScalar (node: YamlNode) =
         match node with
         | :? YamlScalarNode as value ->
-            isNull value.Value || (value.Style = ScalarStyle.Plain
+            let tag = string value.Tag
+            tag = "tag:yaml.org,2002:null"
+            || (tag <> "tag:yaml.org,2002:str" && (isNull value.Value || (value.Style = ScalarStyle.Plain
                 && (value.Value = "" || value.Value = "null" || value.Value = "Null"
-                    || value.Value = "NULL" || value.Value = "~"))
+                    || value.Value = "NULL" || value.Value = "~"))))
         | _ -> false
+
+    let private stringPattern (node: YamlNode) =
+        match node with
+        | :? YamlScalarNode as value when not (isNull value.Value) ->
+            let tag = string value.Tag
+            if tag = "tag:yaml.org,2002:str" then Some value.Value
+            elif tag <> "?" then None
+            elif value.Style <> ScalarStyle.Plain then Some value.Value
+            else
+                let lower = value.Value.ToLowerInvariant()
+                let implicitValue =
+                    lower = "" || lower = "null" || lower = "~"
+                    || lower = "true" || lower = "false"
+                    || lower = ".inf" || lower = "+.inf" || lower = "-.inf" || lower = ".nan"
+                    || Regex.IsMatch(value.Value, "^[+-]?(?:0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|(?:[0-9][0-9_]*)(?:\\.[0-9_]*)?(?:[eE][+-]?[0-9]+)?)$", RegexOptions.CultureInvariant)
+                if implicitValue then None else Some value.Value
+        | _ -> None
 
     let private entries (node: YamlNode) =
         match node with
@@ -62,10 +82,10 @@ module WorkflowSyntax =
     let private pathsSyntax (node: YamlNode) =
         match node with
         | :? YamlSequenceNode as sequence ->
-            let values = sequence.Children |> Seq.map scalar |> Seq.toList
+            let values = sequence.Children |> Seq.map stringPattern |> Seq.toList
             if values |> List.forall Option.isSome then
                 Sequence (values |> List.choose id)
-            else Invalid "paths contains a non-scalar pattern"
+            else Invalid "paths contains a non-string pattern"
         | _ -> Invalid "paths is present but is not a sequence"
 
     let private triggerSyntax path name (on: (YamlNode * YamlNode) list) =
@@ -98,18 +118,35 @@ module WorkflowSyntax =
                 Ok [ (YamlScalarNode(value.Value) :> YamlNode), (YamlScalarNode() :> YamlNode) ]
             | _ -> error "on-shape" path "on must be an event name, sequence, or mapping"
 
-    let rec private runScalars (node: YamlNode) =
-        match node with
-        | :? YamlMappingNode as mapping ->
-            mapping.Children
-            |> Seq.collect (fun item ->
-                if scalar item.Key = Some "run" then
-                    scalar item.Value |> Option.toList
-                else runScalars item.Value)
-            |> Seq.toList
-        | :? YamlSequenceNode as sequence ->
-            sequence.Children |> Seq.collect runScalars |> Seq.toList
-        | _ -> []
+    let private runScalars path (root: YamlNode) =
+        // YamlDotNet resolves aliases to nodes, including cycles. Walk iteratively and
+        // refuse repeated nodes before any later syntax reader can recurse into one.
+        let visited = HashSet<YamlNode>(HashIdentity.Reference)
+        let pending = Stack<YamlNode>()
+        let runs = ResizeArray<string>()
+        pending.Push(root)
+        let mutable diagnostic = None
+        while pending.Count > 0 && diagnostic.IsNone do
+            let node = pending.Pop()
+            if not (visited.Add(node)) then
+                diagnostic <- Some { Code = "yaml-alias"; Path = path; Message = "workflow contains a repeated YAML node" }
+            elif visited.Count > 10000 then
+                diagnostic <- Some { Code = "yaml-size"; Path = path; Message = "workflow contains too many YAML nodes" }
+            else
+                match node with
+                | :? YamlMappingNode as mapping ->
+                    for item in mapping.Children |> Seq.toArray |> Array.rev do
+                        if scalar item.Key = Some "run" then
+                            match scalar item.Value with
+                            | Some value -> runs.Add(value)
+                            | None -> pending.Push(item.Value)
+                        else pending.Push(item.Value)
+                | :? YamlSequenceNode as sequence ->
+                    for child in sequence.Children |> Seq.toArray |> Array.rev do pending.Push(child)
+                | _ -> ()
+        match diagnostic with
+        | Some value -> Error value
+        | None -> Ok (runs |> Seq.toList)
 
     /// Parse one YAML document without reading files, resolving Actions expressions, or judging parity.
     let inspect path (text: string) : Result<WorkflowSyntax, SyntaxDiagnostic> =
@@ -124,16 +161,18 @@ module WorkflowSyntax =
                 match entries root with
                 | None -> error "root-shape" path "workflow root must be a mapping"
                 | Some pairs ->
-                    match lookup "on" pairs with
-                    | None -> error "on-missing" path "workflow has no on declaration"
-                    | Some on ->
-                        onEntries path on
-                        |> Result.bind (fun events ->
-                            triggerSyntax path "pull_request" events
-                            |> Result.bind (fun pullRequest ->
-                                triggerSyntax path "push" events
-                                |> Result.map (fun push ->
-                                    { PullRequest = pullRequest; Push = push; RunScalars = runScalars root })))
+                    runScalars path root
+                    |> Result.bind (fun runs ->
+                        match lookup "on" pairs with
+                        | None -> error "on-missing" path "workflow has no on declaration"
+                        | Some on ->
+                            onEntries path on
+                            |> Result.bind (fun events ->
+                                triggerSyntax path "pull_request" events
+                                |> Result.bind (fun pullRequest ->
+                                    triggerSyntax path "push" events
+                                    |> Result.map (fun push ->
+                                        { PullRequest = pullRequest; Push = push; RunScalars = runs }))))
         with
         | :? YamlException as ex -> error "yaml-invalid" path ex.Message
         | :? ArgumentException as ex -> error "yaml-invalid" path ex.Message
