@@ -37,6 +37,7 @@ type LaunchEvidence = {
 
 type Lane = {
     Id: string
+    CurrentWork: string
     Role: LaneRole
     Activity: LaneActivity
     Model: LaneModel
@@ -521,6 +522,8 @@ module ProgressRenderer =
             "active progress snapshot requires exactly one orchestrator"
         for lane in snapshot.Lanes do
             requireText "lane ID" lane.Id
+            if lane.Activity = Running then
+                requireText "running lane current work" lane.CurrentWork
             if lane.Reservation = DirectV2 then
                 require (lane.Role = Worker) "direct V2 reservation requires a worker role"
             match lane.Launch with
@@ -761,7 +764,8 @@ module ProgressRenderer =
                     lane.Launch
                     |> Option.map (fun value -> $"{launchSourceText value.Source} ({escape value.EvidenceId})")
                     |> Option.defaultValue "—"
-                $"| {escape lane.Id} | {roleText lane.Role} | {activityText lane.Activity} | {modelText lane.Model} | {effortText lane.Effort} | {reservationText lane.Reservation} | {statusText lane.State} | {launch} |")
+                let currentWork = if nonblank lane.CurrentWork then escape lane.CurrentWork else "—"
+                $"| {escape lane.Id} | {currentWork} | {roleText lane.Role} | {activityText lane.Activity} | {modelText lane.Model} | {effortText lane.Effort} | {reservationText lane.Reservation} | {statusText lane.State} | {launch} |")
         let modelSummary =
             progress.LaneCounts.ByModel
             |> List.map (fun (model, count) -> $"{modelText model}: {count}")
@@ -863,8 +867,8 @@ module ProgressRenderer =
             ""
             "## Lanes"
             ""
-            "| Lane | Role | Activity | Model | Effort | Reservation | State | Launch settings evidence |"
-            "| --- | --- | --- | --- | --- | --- | --- | --- |"
+            "| Lane | Current work | Role | Activity | Model | Effort | Reservation | State | Launch settings evidence |"
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"
             yield! laneRows
             ""
             $"Total: {progress.LaneCounts.Total}; active: {progress.LaneCounts.Active}; reserved direct V2: {progress.LaneCounts.ReservedDirectV2}; active reserved direct V2: {progress.LaneCounts.ActiveReservedDirectV2}."

@@ -36,7 +36,8 @@ let readLane (value: JsonElement) : Lane =
     let role = match string value "role" with "orchestrator" -> Orchestrator | "worker" -> Worker | _ -> fail "role"
     let reservation = match string value "reservation" with "direct-v2" -> DirectV2 | "general" -> General | _ -> fail "reservation"
     let launchSource = if role = Orchestrator then ExplicitUserInstruction else ExplicitOrchestratorSpawn
-    { Id = string value "id"; Role = role; Activity = Running; Model = Gpt6Sol; Effort = High
+    { Id = string value "id"; CurrentWork = string value "currentWork"
+      Role = role; Activity = Running; Model = Gpt6Sol; Effort = High
       Reservation = reservation; State = state (string value "state")
       Launch = Some { Model = Gpt6Sol; Effort = High; Source = launchSource
                       EvidenceId = string value "launchEvidenceId" } }

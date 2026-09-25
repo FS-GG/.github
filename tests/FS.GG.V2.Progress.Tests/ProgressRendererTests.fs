@@ -15,7 +15,8 @@ module ProgressRendererTests =
     }
 
     let private lane id activity model reservation state launch = {
-        Id = id; Role = Worker; Activity = activity; Model = model; Effort = High
+        Id = id; CurrentWork = if activity = Running then "Current task for " + id else ""
+        Role = Worker; Activity = activity; Model = model; Effort = High
         Reservation = reservation; State = state; Launch = launch
     }
 
@@ -165,11 +166,11 @@ module ProgressRendererTests =
                 ""
                 "## Lanes"
                 ""
-                "| Lane | Role | Activity | Model | Effort | Reservation | State | Launch settings evidence |"
-                "| --- | --- | --- | --- | --- | --- | --- | --- |"
-                "| A | Worker | Running | gpt-6-sol | high | Reserved direct V2 | 🟢 Active/Healthy | Explicit orchestrator spawn (spawn-record-1) |"
-                "| B | Worker | Idle | gpt-6-astra | high | General | 🟡 Pending | — |"
-                "| O | Orchestrator | Running | gpt-6-sol | high | General | 🟢 Active/Healthy | Explicit user instruction (visible-profile-1) |"
+                "| Lane | Current work | Role | Activity | Model | Effort | Reservation | State | Launch settings evidence |"
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+                "| A | Current task for A | Worker | Running | gpt-6-sol | high | Reserved direct V2 | 🟢 Active/Healthy | Explicit orchestrator spawn (spawn-record-1) |"
+                "| B | — | Worker | Idle | gpt-6-astra | high | General | 🟡 Pending | — |"
+                "| O | Current task for O | Orchestrator | Running | gpt-6-sol | high | General | 🟢 Active/Healthy | Explicit user instruction (visible-profile-1) |"
                 ""
                 "Total: 3; active: 2; reserved direct V2: 1; active reserved direct V2: 1."
                 "Models: gpt-6-astra: 1, gpt-6-sol: 2."
@@ -453,6 +454,17 @@ module ProgressRendererTests =
         refuses "declared PR/evidence counts" { baseline with DeclaredEvidenceCounts = { Prs = 2; Evidence = 2 } }
 
     [<Fact>]
+    let ``running lane requires current work and renders it as escaped text`` () =
+        let baseline = baseSnapshot ()
+        let worker = baseline.Lanes.[1]
+        refuses "running lane current work must be nonblank"
+            (replaceWorker baseline { worker with CurrentWork = "  " })
+        let described = replaceWorker baseline { worker with CurrentWork = "GS2-09.9 | held\nsource" }
+        let markdown = render described
+        Assert.Contains("| A | GS2-09.9 \\| held source | Worker | Running |", markdown)
+        Assert.Equal(markdown, render described)
+
+    [<Fact>]
     let ``capture claim requires native runner turns exact applied Host receipt and later zero queue`` () =
         let baseline = baseSnapshot ()
         let runner, host, later = acceptedClaim ()
@@ -519,7 +531,7 @@ module ProgressRendererTests =
         let runningPending = { worker with State = Pending }
         let rendered = render (replaceWorker baseline runningPending)
         Assert.Contains("Total: 3; active: 2; reserved direct V2: 1; active reserved direct V2: 1.", rendered)
-        Assert.Contains("| A | Worker | Running | gpt-6-sol | high | Reserved direct V2 | 🟡 Pending |", rendered)
+        Assert.Contains("| A | Current task for A | Worker | Running | gpt-6-sol | high | Reserved direct V2 | 🟡 Pending |", rendered)
 
         refuses "running lane requires explicit launch settings evidence"
             (replaceWorker baseline { worker with Launch = None })

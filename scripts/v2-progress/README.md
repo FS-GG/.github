@@ -30,7 +30,9 @@ The wrapper only refreshes telemetry and local counters.
 For each run, record a new evidence cutoff and verify the metadata against it:
 
 1. Read the live worker roster; count only active lanes with explicit Sol/high
-   launch evidence, including the reserved direct-V2 lane.
+   launch evidence, including the reserved direct-V2 lane. Set every lane's
+   required `currentWork` description to the concrete task it is doing at
+   this cutoff. A running lane with blank work is refused by the F# renderer.
 2. Read the current owner PR lists and exact head commit times. Rebuild the
    workstream state, declared PR/evidence counts, checks, risks, next actions,
    and newest five completions from those observations.
@@ -59,6 +61,8 @@ mismatched declared counts. Each completion needs its UTC commit time, PR
 link, result, and a `roadmapHead` that actually contains that draft's source
 evidence. Update and push the roadmap before writing that head. The report
 renders the newest five completions without padding.
+Each lane object requires `currentWork`; the Markdown lane table shows it
+beside the lane ID, including the orchestrator and reserved direct-V2 worker.
 
 The `render.fsx` entry point also accepts a saved snapshot JSON directly for
 review and deterministic replay:
