@@ -736,6 +736,21 @@ mutation from qualifying (21 tests); native protected custody stays held.
 at `ca40a0c058230a9f96cdaefe3617ba422b3ef77d` refuses duplicate native
 database IDs in typed activity records (43 tests); raw parsing, protected
 journal/custom receipts and Q5/Q6 remain open.
+[Coordination GS2-09.9 #674](https://github.com/FS-GG/FS.GG.Coordination/pull/674)
+at `dbf749c006d2180791fd22a4c497ae304fdf890a` freezes a validated
+workflow observation so caller mutation cannot turn dispatch into self-review
+(18 fake-port tests); protected identities and native custody remain held.
+[`.github` FSC-03 Python #3787](https://github.com/FS-GG/.github/pull/3787)
+at `9eddb84a5c1270069dd73967541e7f85285bf87f` refuses direct
+`ProjectReference` edges in the nearest in-repository `Directory.Build.props`
+or `.targets` (142 fixtures), after an installed MSBuild scratch probe.
+Transitive/overridden imports and installed F# receiver parity need evaluated
+provider facts; the shipped root props remains readable.
+[Templates FSC-05 #571](https://github.com/FS-GG/FS.GG.Templates/pull/571)
+at `5f79c3451525dc10f2d0fd6ec83f218ea210c57e` refuses case-folded
+file/child ancestor collisions across all ZIP members (52 payload, 29 archive
+controls); producer/served-byte, #511 CAS, installed/receiver and full ZIP
+closure remain held.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
