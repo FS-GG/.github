@@ -36,11 +36,13 @@ class ClaimStore:
         return {"schema": claim_source.STORE_SCHEMA,
                 "origin": ORIGIN, "resourceId": RESOURCE,
                 "endpoint": ENDPOINT, "durable": True,
-                "atomicCas": True, "nativeReadback": True,
+                "atomicCas": True, "atomicAdmissionClaim": True,
+                "admissionResourceId": fixture_source.ADMISSION_RESOURCE,
+                "nativeReadback": True,
                 "credentialScope": "protected-host-only",
                 "candidateCanWrite": False}
 
-    def cas_claim_once(self, decision_id, binding_id, token_sha256):
+    def cas_claim_if_admitted(self, decision_id, binding_id, token_sha256):
         self.calls.append("cas")
         if self.false_commit:
             return "committed"
@@ -49,7 +51,9 @@ class ClaimStore:
         self.records[decision_id] = {
             "schema": claim_source.CLAIM_SCHEMA,
             "decisionId": decision_id, "bindingId": binding_id,
-            "tokenSha256": token_sha256}
+            "tokenSha256": token_sha256,
+            "admissionResourceId": fixture_source.ADMISSION_RESOURCE,
+            "admissionStateAtClaim": "admitted"}
         if self.lost_response:
             raise OSError("lost after durable commit")
         return "committed"
@@ -137,7 +141,9 @@ class ClaimBoundaryTests(unittest.TestCase):
         binding_id = hashlib.sha256(release.host.canonical_payload(binding)).hexdigest()
         token_sha256 = hashlib.sha256(fixture.token.encode()).hexdigest()
         decision_id = release.host.ADMISSION_PORT.record["decisionId"]
-        self.authority = claim_source.HostClaimAuthority(decision_id,
+        self.authority = claim_source.HostClaimAuthority(
+                                                         fixture_source.ADMISSION_RESOURCE,
+                                                         decision_id,
                                                          binding_id, token_sha256,
                                                          self.store, Revoker())
         self.port = ReleasePort(self.authority)

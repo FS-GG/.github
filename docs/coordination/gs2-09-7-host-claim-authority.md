@@ -10,7 +10,7 @@ refuses every production claim and revocation.
 
 The protected host must pin an exact HTTPS store origin, resource ID, and
 endpoint in reviewed source. The endpoint must identify a durable, atomic
-create-if-absent record keyed by the derived protected admission decision ID
+conditional create-if-absent record keyed by the derived protected admission decision ID
 described in `gs2-09-7-admission-once.md`. The record binds the exact signed
 binding digest and token SHA-256 digest and survives host process
 restart and run retry. A duplicate key, including one left by a crash between
@@ -18,6 +18,11 @@ claim commit and token handoff, must refuse another handoff. A CAS timeout or
 lost response is `unknown` even when later readback finds the record: it never
 authorizes token release. Native readback exists for recovery and audit, not to
 turn an uncertain CAS result into a new grant.
+
+The conditional CAS must check that the same protected admission resource is
+still admitted at its commit point. See
+`gs2-09-7-admission-claim-ordering.md` for the source control and remaining
+installed transaction proof.
 
 The store and its credential must be owned by the protected host in a separate
 service or namespace. The candidate token and candidate-writable checkout,
