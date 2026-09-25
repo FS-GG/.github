@@ -787,6 +787,36 @@ wf "$RBRM/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
 expect "ProjectReference Remove refuses before reporting a stale graph edge" \
   3 "ProjectReference Remove requires MSBuild evaluation" "$RBRM"
 
+# SDK projects automatically import the nearest Directory.Build.props/targets. A direct B edge in
+# either file is absent from A.fsproj's XML, so the current reader lets an A-only filter pass.
+for kind in props targets; do
+  RBID="$(root "$WORK/cover-implicit-$kind-reference")"
+  proj "$RBID" "src/A"
+  proj "$RBID" "src/B"
+  cat > "$RBID/Directory.Build.$kind" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup></Project>
+XML
+  wf "$RBID/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+  expect "implicit Directory.Build.$kind cannot hide an imported ProjectReference" \
+    3 "implicit Directory.Build.$kind contains ProjectReference" "$RBID"
+done
+
+RBIP="$(root "$WORK/cover-implicit-props-without-reference")"
+proj "$RBIP" "src/A"
+echo '<Project><PropertyGroup><Version>1.0</Version></PropertyGroup></Project>' \
+  > "$RBIP/Directory.Build.props"
+wf "$RBIP/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "implicit props without ProjectReference preserves a static graph verdict" 0 "ok:" "$RBIP"
+
+RBIS="$(root "$WORK/cover-nearest-implicit-targets")"
+proj "$RBIS" "src/A"
+echo '<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup></Project>' \
+  > "$RBIS/Directory.Build.targets"
+echo '<Project><PropertyGroup><Version>1.0</Version></PropertyGroup></Project>' \
+  > "$RBIS/src/A/Directory.Build.targets"
+wf "$RBIS/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "nearest implicit targets file shadows an unimported parent" 0 "ok:" "$RBIS"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
