@@ -509,9 +509,23 @@ def project_graph(root: str) -> dict[str, list[str]]:
     Structural: a `ProjectReference`'s `Include=` is a path, in a schema, in a file — there is no
     prose to misread here, which is precisely why rule (b) is derivable and reading `run:` is not.
     Explicit MSBuild imports can add references outside this file, so they require evaluation.
+    A direct reference in the nearest implicit Directory.Build file also defeats a single-file graph.
     """
     graph: dict[str, list[str]] = {}
     root_path = os.path.abspath(root)
+    implicit_refs: dict[str, bool] = {}
+
+    def nearest_implicit(project_path: str, filename: str) -> str | None:
+        folder = os.path.dirname(os.path.abspath(project_path))
+        while os.path.commonpath((root_path, folder)) == root_path:
+            candidate = os.path.join(folder, filename)
+            if os.path.isfile(candidate):
+                return candidate
+            if folder == root_path:
+                break
+            folder = os.path.dirname(folder)
+        return None
+
     for pattern in PROJECT_GLOBS:
         for path in glob.glob(os.path.join(root, "**", pattern), recursive=True):
             rel = os.path.relpath(path, root).replace(os.sep, "/")
@@ -522,6 +536,24 @@ def project_graph(root: str) -> dict[str, list[str]]:
             root_tag = project.getroot().tag
             if not isinstance(root_tag, str) or root_tag.rsplit("}", 1)[-1] != "Project":
                 raise GateError(f"{rel}: project XML root must be Project")
+            for filename in ("Directory.Build.props", "Directory.Build.targets"):
+                source = nearest_implicit(path, filename)
+                if source is None:
+                    continue
+                if source not in implicit_refs:
+                    source_rel = os.path.relpath(source, root_path).replace(os.sep, "/")
+                    try:
+                        imported = ET.parse(source)
+                    except (OSError, ET.ParseError) as e:
+                        raise GateError(f"{source_rel}: unreadable or invalid implicit MSBuild XML — {e}") from e
+                    implicit_refs[source] = any(
+                        isinstance(element.tag, str)
+                        and element.tag.rsplit("}", 1)[-1] == "ProjectReference"
+                        for element in imported.iter()
+                    )
+                if implicit_refs[source]:
+                    raise GateError(f"{rel}: implicit {filename} contains ProjectReference; "
+                                    "requires MSBuild evaluation")
             # ProjectReference additions/removals inside a Target depend on execution order.
             # A task can also emit ProjectReference through Output without an item element.
             for element in project.iter():
