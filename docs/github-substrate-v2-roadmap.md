@@ -191,6 +191,12 @@ sealed journal and verifies continuity to terminal; 130 adapter controls pass. I
 returns correlation and usage-notification count only, because App Server last/total
 snapshots do not establish completed-turn token usage. No telemetry envelope, Host
 submission or capture acceptance follows from this draft.
+[Native-usage no-verdict draft #610](https://github.com/FS-GG/FS.GG.Coordination/pull/610)
+preserves exact workspace/item/session/thread/turn correlation but explicitly refuses
+to infer completed-turn usage from installed App Server `turn/completed` status,
+`thread/tokenUsage/updated` last/total snapshots, one upstream response or child
+`codex exec` JSONL; 137 adapter controls pass. No telemetry envelope or direct-session
+capture acceptance is emitted without a trustworthy native turn-usage source.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
@@ -1837,6 +1843,13 @@ fake controls pass. Protected reader identity, witness custody, target continuit
   App issuance, mint, response and effective-scope records; 18 focused fake controls
   pass. Protected issuer/witness identities, effective scope and target continuity
   remain absent.
+  [Protected-owner qualification packet #609](https://github.com/FS-GG/FS.GG.Coordination/pull/609)
+  pins the provisional source heads and separates inspect-only release evidence from
+  later native effect admission. It names independent producer/artifact/image/runtime,
+  review, target/App, journal/replay and native readback controls; 18 inherited focused
+  tests pass. The next source prerequisite is a distinct closed effect artifact and
+  disabled workflow with installed no-grant zero token/CAS/POST controls. No protected
+  release selection, install, grant or one-POST decision follows from this packet.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)

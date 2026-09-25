@@ -212,6 +212,11 @@ refuses an added provider descriptor omitted from the five-row reviewed roster, 
 descriptor files and a non-owner switched onto the selected package; 13 focused controls
 pass. The live mixed pins still return `NO_VERDICT`; baseline authentication, changing-tree
 snapshot, served-byte custody and installed parity remain open.
+[Templates baseline-digest draft #541](https://github.com/FS-GG/FS.GG.Templates/pull/541)
+requires the exact checked-in reviewed baseline digest in its CLI after a forged caller
+baseline produced a false roster match; 15 focused controls pass. The digest binds source
+bytes, not producer authentication. Live mixed pins remain `NO_VERDICT`, with changing-tree,
+served-byte, transaction and installed receiver proof still open.
 [SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
 refuses an observed same-length overwrite after the first held-descriptor read by
 checking descriptor metadata around two byte passes; 21 focused controls and the
