@@ -1689,6 +1689,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   actually probed. Its 53 isolated controls require matching regular-file real path, device,
   inode and exact digest before and after both probes; a protected observer must still collect
   those facts from the installed filesystem under read-only custody.
+  [Archive-metadata draft #573](https://github.com/FS-GG/FS.GG.Coordination/pull/573)
+  further requires exact size, read-only regular mode, one link, and stable modification and
+  change times; 54 isolated controls pass. Before/after metadata cannot exclude a transient
+  mutation, so protected immutable-directory custody throughout both probes is still required.
   The #550 staged exact-copy loopback
   harness exercises corrected classifier, HTTP and durable-fence paths, but an independent boundary
   review found it insufficient for the installed provider/credential path and corrected native-effect clause. Qualify the corrected
