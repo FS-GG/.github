@@ -1,3 +1,4 @@
+open System.IO
 open FS.GG.Org.PermissionPolicy
 
 let mutable passed = 0
@@ -714,5 +715,101 @@ let duplicateRegistryKey =
 expect "duplicate registry YAML key refuses"
     (Error "inventory-registry-syntax:yaml-invalid")
     (inventory { inventoryEvidence with Registry = Some duplicateRegistryKey })
+
+let externalRepository = "EHotwagner/S.I.R."
+let selectedExternalRosterFact =
+    { fleetRosterFact with Repositories = [ "FS-GG/R"; externalRepository ] }
+let selectedExternalRows =
+    [ fleetRoster.Repositories.Head
+      { Repository = externalRepository; SourceRef = "sir-head"; WorkflowPaths = [] } ]
+let selectedExternalRoster = { fleetRoster with Repositories = selectedExternalRows }
+let selectedExternalBindingFacts =
+    { firstCallFact.BindingFacts with Roster = Some selectedExternalRosterFact }
+let selectedExternalCallFact = { firstCallFact with BindingFacts = selectedExternalBindingFacts }
+let selectedExternalFleet =
+    { fleetEvidence with Roster = Some selectedExternalRoster
+                         Workflows = Some [ firstSnapshot ]
+                         Calls = Some [ selectedExternalCallFact ] }
+let selectedExternalRegistryText =
+    "repos:\n  - { full: FS-GG/R, role: framework }\n" +
+    "  - { full: EHotwagner/S.I.R., role: non-participant, receives: [] }\n" +
+    "outside-fabric:\n  - { full: FS-GG/FsQuint }\n"
+let selectedExternalEvidence =
+    { inventoryEvidence with
+        Registry = inventoryEvidence.Registry |> Option.map (fun item ->
+            { item with Text = selectedExternalRegistryText })
+        Heads = Some [ { Repository = "FS-GG/R"; HeadRef = "r-head" }
+                       { Repository = externalRepository; HeadRef = "sir-head" } ]
+        Enumerations = Some [ { Repository = "FS-GG/R"; HeadRef = "r-head"; State = Terminal
+                                WorkflowPaths = [ ".github/workflows/caller.yml" ] }
+                              { Repository = externalRepository; HeadRef = "sir-head"; State = Terminal
+                                WorkflowPaths = [] } ]
+        Fleet = selectedExternalFleet }
+expect "rostered external non-participant with visible empty workflows is selected"
+    (Ok ProvisionalSatisfied)
+    (inventory selectedExternalEvidence)
+let externalCallingRow =
+    { selectedExternalRows[1] with WorkflowPaths = [ ".github/workflows/caller.yml" ] }
+let externalCallingRoster =
+    { selectedExternalRoster with Repositories = [ selectedExternalRows.Head; externalCallingRow ] }
+let externalCallingSnapshot =
+    { secondCallerSnapshot with Repository = externalRepository; SourceRef = "sir-head" }
+let externalCallingBindingFacts =
+    { secondCallFact.BindingFacts with CallerRepository = externalRepository
+                                       Roster = Some selectedExternalRosterFact }
+let externalCallingFact =
+    { secondCallFact with Repository = externalRepository
+                          BindingFacts = externalCallingBindingFacts }
+let externalCallingFleet =
+    { selectedExternalFleet with Roster = Some externalCallingRoster;
+                                Workflows = Some [ firstSnapshot; externalCallingSnapshot ];
+                                Calls = Some [ selectedExternalCallFact; externalCallingFact ] }
+let externalCallingListings =
+    selectedExternalEvidence.Enumerations.Value
+    |> List.map (fun item ->
+        if item.Repository = externalRepository then
+            { item with WorkflowPaths = [ ".github/workflows/caller.yml" ] }
+        else item)
+let externalCallingEvidence =
+    { selectedExternalEvidence with Fleet = externalCallingFleet;
+                                    Enumerations = Some externalCallingListings }
+expect "external non-participant call contributes its undergrant"
+    (Ok(ProvisionalFindings [ UnderGrantFinding(
+        "EHotwagner/S.I.R. -> reuse.yml@main",
+        [ { Scope = "contents"; Required = Read; Granted = NoAccess } ]) ]))
+    (inventory externalCallingEvidence)
+let registryScopeText =
+    "authority: FS-GG/.github\n" +
+    "dispatches: [{ producer: Foreign/dispatch-only }]\n" +
+    "repos:\n" +
+    "  - { full: FS-GG/.github, role: authority }\n" +
+    "  - { full: FS-GG/R, role: framework, receives: [labels] }\n" +
+    "  - { full: EHotwagner/S.I.R., role: non-participant, receives: [] }\n" +
+    "outside-fabric: [{ full: FS-GG/FsQuint }]\n"
+expect "default scope takes all repos rows regardless of role or owner"
+    (Ok [ "FS-GG/.github"; "FS-GG/R"; externalRepository ])
+    (WorkflowPermissionSyntax.registryRepositories "registry/repos.yml" registryScopeText)
+expect "omitted non-participant refuses inventory closure"
+    (Error "inventory-repository-set-mismatch")
+    (inventory { selectedExternalEvidence with Fleet = partialEvidence })
+let foreignOutsideRow =
+    { Repository = "FS-GG/FsQuint"; SourceRef = "outside-head"; WorkflowPaths = [] }
+let foreignOutsideRoster =
+    { selectedExternalRoster with Repositories = selectedExternalRows @ [ foreignOutsideRow ] }
+let foreignOutsideFleet =
+    { selectedExternalFleet with Roster = Some foreignOutsideRoster }
+expect "outside-fabric identity is foreign to selected repos"
+    (Error "inventory-repository-set-mismatch")
+    (inventory { selectedExternalEvidence with Fleet = foreignOutsideFleet })
+let realRegistryPath =
+    Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "..", "..", "registry", "repos.yml"))
+let realRegistrySelected =
+    WorkflowPermissionSyntax.registryRepositories "registry/repos.yml" (File.ReadAllText realRegistryPath)
+expect "checked-in registry selects authority, frameworks and both non-participants"
+    (Ok [ "FS-GG/.github"; "FS-GG/FS.GG.SDD"; "FS-GG/FS.GG.Rendering"
+          "FS-GG/FS.GG.Governance"; "FS-GG/FS.GG.Templates"; "FS-GG/FS.GG.Game"
+          "FS-GG/FS.GG.Audio"; "FS-GG/FS.GG.Net"; "FS-GG/FS.GG.Coordination"
+          "EHotwagner/S.I.R." ])
+    realRegistrySelected
 
 printfn "permission reducer: %d controls passed" passed
