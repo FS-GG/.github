@@ -1,4 +1,5 @@
 import base64
+import datetime as dt
 import hashlib
 import importlib.util
 import json
@@ -70,7 +71,8 @@ class HostTokenReleaseTests(unittest.TestCase):
         self.addCleanup(setattr, release.host, "PINNED_SPKI_SHA256", original_pin)
         self.addCleanup(setattr, release.host, "PINNED_WORKFLOW_SHA", original_workflow_pin)
         self.admission_port = host_fixture.configure_admission(
-            self, release.host, self.fixture.context, self.fixture.pin)
+            self, release.host, self.fixture.context, self.fixture.pin,
+            self.fixture.now)
 
     def run_release(self, envelope=None, proof=None, context=None, port=None):
         return release.release_once(
@@ -130,6 +132,13 @@ class HostTokenReleaseTests(unittest.TestCase):
             **self.admission_port.record, "state": "revoked"}
         with self.assertRaisesRegex(release.Refused, "admission-binding"):
             self.run_release()
+        self.assertEqual([], self.port.calls)
+
+    def test_admission_that_aged_after_signing_refuses_release(self):
+        later = self.fixture.now + dt.timedelta(minutes=30)
+        with self.assertRaisesRegex(release.Refused, "admission-expiry"):
+            release.release_once(self.envelope, self.proof, self.fixture.token,
+                                 self.public, self.fixture.context, later, self.port)
         self.assertEqual([], self.port.calls)
 
     def test_wrong_run_candidate_nonce_or_target_refuses_before_port(self):

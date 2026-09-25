@@ -194,7 +194,8 @@ class HostRefusalFinalizerTests(unittest.TestCase):
         finalizer.release.host.PINNED_SPKI_SHA256 = self.fixture.pin
         finalizer.release.host.PINNED_WORKFLOW_SHA = self.fixture.context["workflowSha"]
         fixture_module.configure_admission(
-            self, finalizer.release.host, self.fixture.context, self.fixture.pin)
+            self, finalizer.release.host, self.fixture.context, self.fixture.pin,
+            self.fixture.now)
         for name, value in zip(("PINNED_FINALIZER_ORIGIN",
                                 "PINNED_FINALIZER_RESOURCE_ID",
                                 "PINNED_FINALIZER_ENDPOINT",

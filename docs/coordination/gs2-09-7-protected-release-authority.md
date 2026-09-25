@@ -40,3 +40,6 @@ reviewed and installed, all pins stay empty and the source refuses.
 Separate GS2-09.7 Q5/Q6 native receiver readback and protected receipt are
 still required before GS2-09.8 acceptance. This contract does not authorize
 provider effects, protected merge, receipt, or cutover.
+
+The later source-only admission freshness finding and remaining one-use
+identity decision are recorded in `gs2-09-7-admission-freshness.md`.
