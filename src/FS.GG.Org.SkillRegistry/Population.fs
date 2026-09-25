@@ -68,6 +68,7 @@ module Population =
 
         match input.Rostered with
         | Error reason -> add (finding "roster-unreadable" "registry/repos.yml" reason)
+        | Ok [] -> add (finding "roster-empty" "registry/repos.yml" "readable roster names no FS-GG repositories")
         | Ok _ -> ()
 
         for item in duplicates "roster-duplicate" rostered do add item
