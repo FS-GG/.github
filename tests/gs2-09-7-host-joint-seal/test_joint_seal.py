@@ -4,6 +4,7 @@ import datetime as dt
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -99,15 +100,81 @@ class JointSealTests(unittest.TestCase):
         with self.assertRaisesRegex(joint.Refused, "joint-seal-binding"):
             self.verify()
 
+    def test_replayed_old_head_and_envelope_together_refuses(self):
+        old_head = self.port.read_joint_seal_head("b" * 64)["record"]["head"]
+        old_envelope = self.port.read_joint_seal_envelope(self.seal["sealId"])
+        self.port.joint_generation = 2
+        self.port.joint_head_override = old_head
+        self.port.joint_replay_head = old_head
+        self.port.joint_envelope_override = old_envelope
+        with self.assertRaisesRegex(joint.Refused, "joint-seal-head-challenge"):
+            self.verify()
+
+    def test_same_attestation_replayed_for_second_nonce_refuses(self):
+        original = self.port.read_joint_seal_head
+        prior = None
+        def replay(challenge):
+            nonlocal prior
+            if prior is None:
+                prior = original(challenge)
+            return copy.deepcopy(prior)
+        self.port.read_joint_seal_head = replay
+        with self.assertRaisesRegex(joint.Refused, "joint-seal-head-challenge"):
+            self.verify()
+
+    def test_stale_or_unsigned_head_attestation_refuses(self):
+        original = self.port.read_joint_seal_head
+        def stale(challenge):
+            value = original(challenge)
+            value["record"]["observedAt"] = (
+                self.now - dt.timedelta(minutes=2)).isoformat().replace("+00:00", "Z")
+            value["signatureBase64"] = base64.b64encode(
+                signing.SIGNER.sign(joint.canonical_head(value["record"]))).decode("ascii")
+            return value
+        self.port.read_joint_seal_head = stale
+        with self.assertRaisesRegex(joint.Refused, "joint-seal-head-stale"):
+            self.verify()
+        self.port.read_joint_seal_head = lambda challenge: None
+        with self.assertRaisesRegex(joint.Refused, "joint-seal-head-attestation"):
+            self.verify()
+        self.port.read_joint_seal_head = lambda challenge: {
+            "schema": joint.HEAD_SCHEMA, "generation": 1}
+        with self.assertRaisesRegex(joint.Refused, "joint-seal-head-attestation"):
+            self.verify()
+
+    def test_foreign_head_signature_and_missing_linearizable_port_refuse(self):
+        original = self.port.read_joint_seal_head
+        def foreign(challenge):
+            value = original(challenge)
+            value["signatureBase64"] = base64.b64encode(b"foreign").decode("ascii")
+            return value
+        self.port.read_joint_seal_head = foreign
+        with self.assertRaisesRegex(joint.Refused, "joint-seal-head-signature"):
+            self.verify()
+        self.port.read_joint_seal_head = original
+        descriptor = self.port.describe_joint_seal
+        self.port.describe_joint_seal = lambda: {
+            **descriptor(), "linearizableHead": False}
+        with self.assertRaisesRegex(joint.Refused, "joint-seal-authority"):
+            self.verify()
+
+    def test_repeated_generated_challenge_refuses_before_readback(self):
+        with patch.object(joint.secrets, "token_hex", return_value="a" * 64):
+            with self.assertRaisesRegex(joint.Refused, "joint-seal-head-challenge"):
+                self.verify()
+
     def test_head_drift_within_one_readback_refuses(self):
         original = self.port.read_joint_seal_head
         reads = 0
-        def moving():
+        def moving(challenge):
             nonlocal reads
             reads += 1
-            result = original()
+            result = original(challenge)
             if reads == 2:
-                result["generation"] += 1
+                result["record"]["head"]["generation"] += 1
+                result["signatureBase64"] = base64.b64encode(
+                    signing.SIGNER.sign(
+                        joint.canonical_head(result["record"]))).decode("ascii")
             return result
         self.port.read_joint_seal_head = moving
         with self.assertRaisesRegex(joint.Refused, "joint-seal-head"):
