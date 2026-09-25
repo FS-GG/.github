@@ -421,6 +421,10 @@ The initial trusted caller form is a dedicated GitHub Actions admission service 
 workflow and source revision on protected `.github` `main`. Native provider readback must bind its
 repository, workflow path and bytes, head, run ID and attempt, actor, and branch-restricted runtime
 environment to the registered service before any plan is sealed. Dispatch inputs remain lookup hints.
+The job REST record alone does not establish its environment. The Main reader
+must complete the native deployment and status census, find exactly one deployment
+whose status URLs identify the same run and job, and verify its environment ID,
+node ID and current branch/approval rules; missing or duplicate joins refuse.
 Before activation, a protected probe must establish the provider's actual signed
 `workflow_sha` and subject semantics against native workflow bytes and run evidence.
 Main's installed service policy admits only independently qualified source and
