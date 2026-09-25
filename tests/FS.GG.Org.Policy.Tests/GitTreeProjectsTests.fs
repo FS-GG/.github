@@ -317,6 +317,27 @@ module GitTreeProjectsTests =
         | Ok roster -> Assert.Equal("git~2/A.fsproj", fst roster.Head)
 
     [<Fact>]
+    let ``Git dotgit alternate stream aliases cannot certify a project roster`` () =
+        // Fixed raw trees from git hash-object --literally; git fsck --strict reports hasDotgit.
+        [ objectRow "be206f22fe3f5c5b8d7fc89f027cfa062149b639"
+              "NDAwMDAgLmdpdDokREFUQQCc41uNK5clEiNIWKIvkXjch4zKhA=="
+          objectRow "fb63ed2f87a779eb44d5a4df6ea482e00e4c2a02"
+              "NDAwMDAgLmdpdDo6JERBVEEAnONbjSuXJRIjSFiiL5F43IeMyoQ="
+          objectRow "3178b70b3d1314a195d02d17359e4c244118e7f4"
+              "NDAwMDAgLmdpdDpmb28AnONbjSuXJRIjSFiiL5F43IeMyoQ="
+          objectRow "43a2253dbaff16d47f84feb050c6b0eaad27424b"
+              "NDAwMDAgLmdpdC46Zm9vAJzjW40rlyUSI0hYoi+ReNyHjMqE" ]
+        |> List.iter (fun reserved -> refused "reserved .git" (fst reserved) [ reserved; edgeA ])
+
+        // Git fsck accepts this different colon name; keep the check tied to .git.
+        let other =
+            objectRow "1f22da5a9538756185ea88d6f03732200e2437e1"
+                "NDAwMDAgLmdpdGh1Yjpmb28AnONbjSuXJRIjSFiiL5F43IeMyoQ="
+        match GitTreeProjects.inspectSha1 (fst other) [ other; edgeA ] with
+        | Error diagnostic -> failwithf "unrelated colon name refused: %A" diagnostic
+        | Ok roster -> Assert.Equal(".github:foo/A.fsproj", fst roster.Head)
+
+    [<Fact>]
     let ``Git tree object entries must retain canonical byte and directory order`` () =
         // git hash-object --literally fixed these objects; git fsck --strict reports treeNotSorted.
         [ objectRow "6eab66dbdf50063bb5d919ae4202e7a0bea9a4d5"
