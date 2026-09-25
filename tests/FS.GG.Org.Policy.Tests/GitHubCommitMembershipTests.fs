@@ -98,6 +98,21 @@ module GitHubCommitMembershipTests =
         Assert.False(GitHubCommitMembership.isExactReadRequest { exact with Name = exact.Name + "\n" })
 
     [<Fact>]
+    let ``repository node ID with whitespace cannot establish membership`` () =
+        let malformedPin = { pin with RepositoryNodeId = pin.RepositoryNodeId + "\n" }
+        let malformedJson = valid.Replace("R_fixture_one", "R_fixture_one\\n")
+        let mutable calls = 0
+        let unsafeReader =
+            { new GitHubCommitMembership.IReadOnlyGraphQlReader with
+                member _.ExecuteExact _ =
+                    calls <- calls + 1
+                    Ok(Encoding.UTF8.GetBytes(malformedJson)) }
+        match GitHubCommitMembership.inspectProvisionalMembership malformedPin rootTreeId unsafeReader with
+        | Error diagnostic -> Assert.Equal("github-commit-membership", diagnostic.Code)
+        | Ok fact -> failwithf "malformed node ID established membership: %A" fact
+        Assert.Equal(0, calls)
+
+    [<Fact>]
     let ``null and missing object prevent a membership verdict`` () =
         refused "object" (valid.Replace("\"object\":{\"__typename\"", "\"wrongField\":{\"__typename\""))
         refused "object" (valid.Replace("\"object\":{\"__typename\":\"Commit\",\"oid\":\"" + commitId + "\",\"tree\":{\"oid\":\"" + rootTreeId + "\"}}", "\"object\":null"))

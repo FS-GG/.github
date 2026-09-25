@@ -36,6 +36,13 @@ module GitCommitProvenance =
     let private canonicalSha1 (value: string) =
         not (isNull value) && Regex.IsMatch(value, @"\A[0-9a-f]{40}\z", RegexOptions.CultureInvariant)
 
+    /// Node IDs are opaque, but whitespace and controls cannot be exact repository identities.
+    let internal validRepositoryNodeId (value: string) =
+        not (String.IsNullOrWhiteSpace value)
+        && (value
+            |> Seq.forall (fun character ->
+                not (Char.IsWhiteSpace character || Char.IsControl character)))
+
     let private commitId (bytes: byte[]) =
         let prefix = Encoding.ASCII.GetBytes("commit " + bytes.Length.ToString(CultureInfo.InvariantCulture) + "\000")
         let digest: byte[] = SHA1.HashData(Array.append prefix bytes)
@@ -68,7 +75,7 @@ module GitCommitProvenance =
         (reader: IReadOnlyCommitReader)
         : Result<ProvisionalRoot, SyntaxDiagnostic> =
         if isNull (box pin)
-           || String.IsNullOrWhiteSpace pin.RepositoryNodeId
+           || not (validRepositoryNodeId pin.RepositoryNodeId)
            || isNull pin.RepositoryFullName
            || not (Regex.IsMatch(pin.RepositoryFullName, @"\A[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\z", RegexOptions.CultureInvariant)) then
             error "<pin>" "exact repository identity is absent or malformed"

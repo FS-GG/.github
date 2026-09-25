@@ -126,7 +126,7 @@ module GitHubCommitMembership =
         (reader: IReadOnlyGraphQlReader)
         : Result<ProvisionalMembership, SyntaxDiagnostic> =
         if isNull (box pin)
-           || String.IsNullOrWhiteSpace pin.RepositoryNodeId
+           || not (GitCommitProvenance.validRepositoryNodeId pin.RepositoryNodeId)
            || isNull pin.RepositoryFullName
            || not (Regex.IsMatch(pin.RepositoryFullName, @"\A[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\z", RegexOptions.CultureInvariant)) then
             error "<pin>" "exact repository identity is absent or malformed"

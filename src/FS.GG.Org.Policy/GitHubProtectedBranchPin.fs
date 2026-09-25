@@ -106,7 +106,7 @@ module GitHubProtectedBranchPin =
         (reader: IReadOnlyProtectedBranchReader)
         : Result<GitCommitProvenance.ExactCommitPin, SyntaxDiagnostic> =
         if isNull (box repository)
-           || String.IsNullOrWhiteSpace repository.RepositoryNodeId
+           || not (GitCommitProvenance.validRepositoryNodeId repository.RepositoryNodeId)
            || isNull repository.RepositoryFullName
            || not (Regex.IsMatch(repository.RepositoryFullName, @"\A[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\z", RegexOptions.CultureInvariant))
            || (repository.RepositoryFullName.Split('/') |> Array.exists (validSegment >> not)) then

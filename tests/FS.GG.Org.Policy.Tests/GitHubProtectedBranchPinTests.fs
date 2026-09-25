@@ -80,6 +80,20 @@ module GitHubProtectedBranchPinTests =
         Assert.False(GitHubProtectedBranchPin.isExactReadRequest malformed)
 
     [<Fact>]
+    let ``repository node ID with whitespace cannot mint protected pin`` () =
+        let malformedRepo = { repo with RepositoryNodeId = repo.RepositoryNodeId + "\n" }
+        let mutable calls = 0
+        let unsafeReader =
+            { new GitHubProtectedBranchPin.IReadOnlyProtectedBranchReader with
+                member _.ReadExact _ =
+                    calls <- calls + 1
+                    Ok(response branchJson) }
+        match GitHubProtectedBranchPin.inspectProvisionalPin malformedRepo unsafeReader with
+        | Error diagnostic -> Assert.Equal("github-protected-pin", diagnostic.Code)
+        | Ok pin -> failwithf "malformed node ID minted protected pin: %A" pin
+        Assert.Equal(0, calls)
+
+    [<Fact>]
     let ``duplicate protected or commit fields cannot mask rejected facts`` () =
         refused "duplicate" (Ok(response (branchJson.Replace("\"protected\":true", "\"protected\":false,\"protected\":true"))))
         refused "duplicate" (Ok(response (branchJson.Replace("\"sha\":\"" + commitId + "\"", "\"sha\":\"" + String.replicate 40 "a" + "\",\"sha\":\"" + commitId + "\""))))
