@@ -1757,6 +1757,12 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   82 local controls require an independently admitted exact workflow SHA before credential
   access or handoff. A workflow cannot self-pin its own commit; the distinct protected
   admission authority and its durable run/candidate facts remain unimplemented.
+  [Protected-admission draft #3722](https://github.com/FS-GG/.github/pull/3722) repairs a
+  second self-assertion false green: copying `PINNED_WORKFLOW_SHA` from the same runner context
+  previously allowed signing and fake candidate release. Its 87 local controls require a
+  separate current native decision readback at signer and release, bound to exact workflow,
+  candidate, run/attempt/nonce, target, signer and policy facts. The real durable authority,
+  authenticated adapter, ACLs and live pins have not been installed.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
