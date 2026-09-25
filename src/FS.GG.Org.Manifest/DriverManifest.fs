@@ -1,6 +1,7 @@
 namespace FS.GG.Org.Manifest
 
 open System
+open System.Collections.Generic
 open System.IO
 open System.Security.Cryptography
 open System.Text.Json
@@ -72,6 +73,23 @@ module DriverManifest =
     let private duplicate values =
         List.length values <> (values |> Set.ofList |> Set.count)
 
+    let private duplicateProperties (root: JsonElement) =
+        let errors = ResizeArray<string>()
+        let rec inspect location (element: JsonElement) =
+            match element.ValueKind with
+            | JsonValueKind.Object ->
+                let names = HashSet<string>(StringComparer.Ordinal)
+                for item in element.EnumerateObject() do
+                    let child = $"{location}.{item.Name}"
+                    if not (names.Add item.Name) then errors.Add($"{child}: duplicate property")
+                    inspect child item.Value
+            | JsonValueKind.Array ->
+                element.EnumerateArray()
+                |> Seq.iteri (fun index child -> inspect $"{location}[{index}]" child)
+            | _ -> ()
+        inspect "$" root
+        List.ofSeq errors
+
     let parse (expectedRoot: string) (json: string) =
         if not (safeRelative expectedRoot) then
             Error [ "expectedRoot: unsafe repository-relative producer root" ]
@@ -80,6 +98,7 @@ module DriverManifest =
                 use document = JsonDocument.Parse json
                 let root = document.RootElement
                 let errors = ResizeArray<string>()
+                for violation in duplicateProperties root do errors.Add violation
                 let schema = property "schemaVersion" root
                 let schemaIsTwo =
                     match schema with

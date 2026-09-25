@@ -50,6 +50,14 @@ module DriverManifestTests =
         Assert.Contains("duplicate path", errors (document (skill "work-roadmap" ".claude/skills/work-roadmap" (file + "," + file))))
 
     [<Fact>]
+    let ``refuses duplicate JSON properties at every manifest level`` () =
+        let rootDuplicate = valid.Replace("\"schemaVersion\":2", "\"schemaVersion\":0,\"schemaVersion\":2")
+        let skillDuplicate = valid.Replace("\"scope\":\"driver\"", "\"scope\":\"wrong\",\"scope\":\"driver\"")
+        let fileDuplicate = valid.Replace("\"executable\":false", "\"executable\":true,\"executable\":false")
+        for candidate in [rootDuplicate; skillDuplicate; fileDuplicate] do
+            Assert.Contains("duplicate property", errors candidate)
+
+    [<Fact>]
     let ``refuses escaping file paths and a mismatched tree digest`` () =
         Assert.Contains("unsafe relative path", errors (valid.Replace("SKILL.md", "../SKILL.md")))
         Assert.Contains("files digest mismatch", errors (valid.Replace(tree, String.replicate 64 "0")))
