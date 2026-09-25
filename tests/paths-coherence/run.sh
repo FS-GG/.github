@@ -516,6 +516,40 @@ wf "$RB2/.github/workflows/w.yml" '      - "src/A/**"
       - "src/B/**"'
 expect "...and covering it satisfies the rule" 0 "ok:" "$RB2"
 
+# GitHub's paths filters give ?, + and [] operator meanings that glob_to_regex does not
+# implement. A pattern whose literal spelling equals a dependency can still fail to select that
+# dependency on a real push. Certifying it as covered is the false-green Rule (b) must refuse.
+for shape in question plus bracket; do
+  case "$shape" in
+    question) target='Bx.fsproj'; filter='B?.fsproj' ;;
+    plus)     target='B+.fsproj'; filter='B+.fsproj' ;;
+    bracket)  target='B[1].fsproj'; filter='B[1].fsproj' ;;
+  esac
+  RBGOP="$(root "$WORK/cover-unsupported-$shape")"
+  proj "$RBGOP" "src/A" "../B/$target"
+  proj "$RBGOP" "src/B"
+  mv "$RBGOP/src/B/B.fsproj" "$RBGOP/src/B/$target"
+  patterns="      - \"src/A/**\"
+      - \"src/B/$filter\""
+  wf "$RBGOP/.github/workflows/w.yml" "$patterns" "$patterns"
+  expect "Rule (b) refuses unsupported $shape filter operator before a covered verdict" \
+    3 "unsupported GitHub paths operator" "$RBGOP"
+done
+
+# One-sided paths still feed Rule (b), so they cannot bypass the operator refusal merely because
+# Rule (a) has no paired lists to compare.
+RBGOP1="$(root "$WORK/cover-unsupported-one-sided")"
+proj "$RBGOP1" "src/A" "../B/Bx.fsproj"
+proj "$RBGOP1" "src/B"
+mv "$RBGOP1/src/B/B.fsproj" "$RBGOP1/src/B/Bx.fsproj"
+{ echo 'name: w'; echo 'on:'; echo '  push:'; echo '    branches: [main]'
+  echo '    paths:'; echo '      - "src/A/**"'; echo '      - "src/B/B?.fsproj"'
+  echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+  > "$RBGOP1/.github/workflows/w.yml"
+wf "$RBGOP1/.github/workflows/pair.yml" '      - "docs/**"' '      - "docs/**"'
+expect "one-sided Rule (b) also refuses an unsupported filter operator" \
+  3 "unsupported GitHub paths operator" "$RBGOP1"
+
 # XML allows single-quoted attribute values. The graph reader must not lose a ProjectReference
 # merely because its Include uses that spelling; an omitted dependency would make Rule (b) green.
 single_ref_case=0
