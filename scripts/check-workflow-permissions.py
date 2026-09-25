@@ -157,9 +157,27 @@ def gh_api(*args: str) -> str:
     raise Unreachable("unreachable")  # pragma: no cover — the loop always returns or raises
 
 
+class UniqueKeysLoader(yaml.SafeLoader):
+    """Keep SafeLoader's value semantics while refusing ambiguous mapping keys."""
+
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict:
+        seen: set[str] = set()
+        for key_node, _ in node.value:
+            if not isinstance(key_node, yaml.ScalarNode):
+                continue  # SafeLoader will reject an unsupported mapping key.
+            key = key_node.value
+            if key in seen:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping", node.start_mark,
+                    f"duplicate YAML mapping key {key!r}", key_node.start_mark,
+                )
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
 def load_yaml(text: str, what: str) -> dict:
     try:
-        doc = yaml.safe_load(text)
+        doc = yaml.load(text, Loader=UniqueKeysLoader)
     except yaml.YAMLError as e:
         raise GateError(f"{what}: not parsable as YAML — {e}") from e
     if not isinstance(doc, dict):
