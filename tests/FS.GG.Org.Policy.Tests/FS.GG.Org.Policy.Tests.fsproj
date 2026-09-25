@@ -8,6 +8,7 @@
     <Compile Include="WorkflowSyntaxTests.fs" />
     <Compile Include="RuleATests.fs" />
     <Compile Include="RuleBTests.fs" />
+    <Compile Include="RuleBExceptionTests.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/FS.GG.Org.Policy/FS.GG.Org.Policy.fsproj" />
