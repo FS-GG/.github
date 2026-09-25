@@ -41,6 +41,17 @@ module RuleBTests =
         let coverage = inspected [ "src/A/**"; "src/**/B.fsproj" ] source
         Assert.Empty(coverage.Uncovered)
 
+    [<Theory>]
+    [<InlineData("src/B/B?.fsproj", "src/B/Bx.fsproj")>]
+    [<InlineData("src/B/B+.fsproj", "src/B/B+.fsproj")>]
+    [<InlineData("src/B/B[1].fsproj", "src/B/B[1].fsproj")>]
+    let ``unimplemented GitHub glob operators cannot certify coverage`` pattern dependency =
+        let source =
+            Map.ofList [ "src/A/A.fsproj", [ dependency ]; dependency, [] ]
+        match RuleB.inspect [ "src/A/**"; pattern ] source with
+        | Error diagnostic -> Assert.Equal("coverage-input", diagnostic.Code)
+        | Ok coverage -> failwithf "unsupported filter %s certified coverage: %A" pattern coverage
+
     [<Fact>]
     let ``reference cycles terminate and do not cover an omitted project`` () =
         let cyclic = graph.Add("src/C/C.fsproj", [ "src/B/B.fsproj" ])

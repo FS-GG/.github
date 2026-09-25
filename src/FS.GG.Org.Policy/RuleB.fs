@@ -70,10 +70,15 @@ module RuleB =
     /// Inspect only facts supplied by a later authoritative enumerator. Every referenced project
     /// must have a supplied graph node; this does not authenticate the enumerator or its roster.
     /// A broad `src/**` or a single source-file pattern does not name a project; only a literal
-    /// prefix equal to its directory does.
+    /// prefix equal to its directory does. Refuse GitHub filter operators this matcher does not
+    /// implement instead of treating them as literal characters or a different wildcard.
     let inspect (patterns: string list) (graph: Map<string, string list>) : Result<RuleBCoverage, SyntaxDiagnostic> =
-        if List.isEmpty patterns || patterns |> List.exists (fun value -> not (normalized value) || value.StartsWith("!", StringComparison.Ordinal)) then
-            Error(diagnostic "paths patterns must be nonempty, normalized, positive repo-relative strings")
+        if List.isEmpty patterns
+           || patterns |> List.exists (fun value ->
+               not (normalized value)
+               || value.StartsWith("!", StringComparison.Ordinal)
+               || value.IndexOfAny([| '?'; '+'; '['; ']' |]) >= 0) then
+            Error(diagnostic "paths patterns must be nonempty, normalized, positive repo-relative strings using supported glob operators")
         elif graph |> Map.exists (fun project references -> not (normalized project) || references |> List.exists (normalized >> not)) then
             Error(diagnostic "project-reference paths must be normalized repo-relative strings")
         else
