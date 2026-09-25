@@ -7,8 +7,8 @@ Date: 2026-09-25. Owner: `.github`. Status: source census baseline for the paral
 The [read-only census command](../../scripts/fsc-census.py) enumerates `git ls-files -s` at each checkout, reads source shebangs and executable bits, parses tracked workflow YAML with `yaml.BaseLoader`, records every job step `run:` body and `uses:` reference, extracts existing `scripts/...` references, and reads `.config/dotnet-tools.json` pins when present. It emits the full per-file, per-step, and per-reference JSON inventory. A malformed workflow or executable with an unknown interpreter produces an `issues` entry and exit 2. The [fixture](../../tests/fsc-census/run.py) proves that an untracked file is excluded, a YAML comment is not a run step, a tracked extensionless launcher and action reference are retained, and malformed jobs are reported. The recorded source checkouts were clean at measurement; the eight sibling checkouts are local snapshots, not claims about live default branches or installed receiver bytes.
 
 ```bash
-uv run --with pyyaml python3 scripts/fsc-census.py --root . > /tmp/fsc00-dotgithub.json
-uv run --with pyyaml python3 tests/fsc-census/run.py
+uv run --with pyyaml==6.0.3 python3 scripts/fsc-census.py --root . > /tmp/fsc00-dotgithub.json
+uv run --with pyyaml==6.0.3 python3 tests/fsc-census/run.py
 # Repeat --root for each named sibling checkout; inspect .issues before using a count.
 ```
 
