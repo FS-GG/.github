@@ -184,13 +184,15 @@ class HostRefusalFinalizerTests(unittest.TestCase):
                 finalizer.PINNED_FINALIZER_ENDPOINT,
                 finalizer.PINNED_TOKEN_VAULT_ID,
                 finalizer.PINNED_REVOKER_ID,
-                finalizer.release.host.PINNED_SPKI_SHA256)
+                finalizer.release.host.PINNED_SPKI_SHA256,
+                finalizer.release.host.PINNED_WORKFLOW_SHA)
         finalizer.PINNED_FINALIZER_ORIGIN = ORIGIN
         finalizer.PINNED_FINALIZER_RESOURCE_ID = RESOURCE
         finalizer.PINNED_FINALIZER_ENDPOINT = ENDPOINT
         finalizer.PINNED_TOKEN_VAULT_ID = VAULT
         finalizer.PINNED_REVOKER_ID = REVOKER
         finalizer.release.host.PINNED_SPKI_SHA256 = self.fixture.pin
+        finalizer.release.host.PINNED_WORKFLOW_SHA = self.fixture.context["workflowSha"]
         for name, value in zip(("PINNED_FINALIZER_ORIGIN",
                                 "PINNED_FINALIZER_RESOURCE_ID",
                                 "PINNED_FINALIZER_ENDPOINT",
@@ -199,6 +201,8 @@ class HostRefusalFinalizerTests(unittest.TestCase):
             self.addCleanup(setattr, finalizer, name, value)
         self.addCleanup(setattr, finalizer.release.host,
                         "PINNED_SPKI_SHA256", pins[5])
+        self.addCleanup(setattr, finalizer.release.host,
+                        "PINNED_WORKFLOW_SHA", pins[6])
 
     def run_finalizer(self, envelope=None, proof=None):
         return finalizer.execute_with_finalizer(

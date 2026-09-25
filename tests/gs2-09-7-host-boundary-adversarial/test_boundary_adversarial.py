@@ -114,15 +114,18 @@ class ClaimBoundaryTests(unittest.TestCase):
         pins = (claim_source.PINNED_STORE_ORIGIN,
                 claim_source.PINNED_STORE_RESOURCE_ID,
                 claim_source.PINNED_STORE_ENDPOINT,
-                release.host.PINNED_SPKI_SHA256)
+                release.host.PINNED_SPKI_SHA256,
+                release.host.PINNED_WORKFLOW_SHA)
         claim_source.PINNED_STORE_ORIGIN = ORIGIN
         claim_source.PINNED_STORE_RESOURCE_ID = RESOURCE
         claim_source.PINNED_STORE_ENDPOINT = ENDPOINT
         release.host.PINNED_SPKI_SHA256 = fixture.pin
+        release.host.PINNED_WORKFLOW_SHA = fixture.context["workflowSha"]
         for name, value in zip(("PINNED_STORE_ORIGIN", "PINNED_STORE_RESOURCE_ID",
                                 "PINNED_STORE_ENDPOINT"), pins[:3]):
             self.addCleanup(setattr, claim_source, name, value)
         self.addCleanup(setattr, release.host, "PINNED_SPKI_SHA256", pins[3])
+        self.addCleanup(setattr, release.host, "PINNED_WORKFLOW_SHA", pins[4])
         binding = release.verify_envelope(self.envelope, self.proof, fixture.token,
                                           self.public, fixture.pin,
                                           fixture.context, fixture.now)
