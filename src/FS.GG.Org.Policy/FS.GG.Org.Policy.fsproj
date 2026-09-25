@@ -10,6 +10,7 @@
     <Compile Include="RuleA.fs" />
     <Compile Include="RuleB.fs" />
     <Compile Include="RuleBExceptions.fs" />
+    <Compile Include="RuleBWorkflow.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.Core" />
