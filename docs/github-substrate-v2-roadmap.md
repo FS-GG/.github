@@ -185,6 +185,12 @@ binds a supplied first `turn/started` append receipt to the prospective subscrip
 exact challenge/session, connection, canonical frame digest and time order; 124 adapter
 controls pass. Authenticated live reader/transport, durable store and Host receipt remain
 absent, so no direct-session capture is accepted.
+[Sealed correlation draft #607](https://github.com/FS-GG/FS.GG.Coordination/pull/607)
+binds a prospectively reserved first native start receipt to a supplied authenticated
+sealed journal and verifies continuity to terminal; 130 adapter controls pass. It
+returns correlation and usage-notification count only, because App Server last/total
+snapshots do not establish completed-turn token usage. No telemetry envelope, Host
+submission or capture acceptance follows from this draft.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
@@ -1821,6 +1827,11 @@ fake controls pass. Protected reader identity, witness custody, target continuit
   reader into the App-scope join, refusing reused reader identity and stale claims;
   16 focused fake controls pass. Protected immutable witness custody, authenticated
   reader, effective scope and target continuity remain absent.
+  [Witness-ID type guard #606](https://github.com/FS-GG/FS.GG.Coordination/pull/606)
+  refuses a witnessed Python boolean `true` as selected numeric repository or
+  installation ID `1` in the target prestate adapter; 17 focused fake controls pass.
+  Protected witness event/producer, reader identities, effective App scope and target
+  continuity remain unproved.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
