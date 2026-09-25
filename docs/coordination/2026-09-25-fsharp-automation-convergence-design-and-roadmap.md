@@ -145,7 +145,10 @@ validity, and current GitHub Packages still has no verdict.
 [Templates scalar-tail parity draft #524](https://github.com/FS-GG/FS.GG.Templates/pull/524)
 closes a red-before Python/F# mismatch in which the Python floor gate ignored foreign
 text after a quoted or plain version; six copied-live-descriptor parity controls pass.
-This is a narrow parser repair; a separate duplicate registry-contract mismatch remains.
+This is a narrow parser repair. [Templates repeated-pin draft #525](https://github.com/FS-GG/FS.GG.Templates/pull/525)
+refuses a duplicated selected provider minimum pin that Python previously accepted while
+F# refused; five new offline controls pass. A duplicate provider ID whose second entry
+has no floor still passes both readers, so general duplicate-ID closure remains separate.
 [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)
@@ -166,6 +169,11 @@ captures bytes/modes/uid/gid through held no-follow Linux descriptors and refuse
 characterized symlink/path-swap false green; 11 observer, 23 contract and 27 physical-source
 controls pass. Atomic snapshot, ABA/post-check changes, output effects and installed parity
 remain.
+[Audio roster-stability draft #318](https://github.com/FS-GG/FS.GG.Audio/pull/318)
+refuses a red-before undeclared late file after one-pass held-directory enumeration by
+comparing two scans and change stamps before and after child capture; 34 pinned-capture,
+13 adapter and 36 policy controls pass. Atomic snapshot, ABA/post-check changes,
+in-place content, rollback and installed parity remain open.
 These stacked
 drafts need owner acceptance and installed evidence before receiver or release adoption.
 

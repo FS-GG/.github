@@ -1731,6 +1731,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   target-scope and plan observations from supplied bytes; five observer and four candidate
   tests pass with fake ports closed to file/token/socket/SQLite effects. Protected GitHub
   authentication, installed artifact/workflow custody and one-POST authority remain absent.
+  [Injected workflow observer #589](https://github.com/FS-GG/FS.GG.Coordination/pull/589)
+  binds exact workflow run attempt and file-at-commit bytes to the candidate through a
+  read-only injected port; five adapter and five observer tests pass. Real evidence needs
+  a separately reviewed protected `.github` read-only App transport and identity
+  attestation with selected Actions/Contents/metadata scope. No effect route is added.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
