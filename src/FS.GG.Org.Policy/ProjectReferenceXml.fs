@@ -120,3 +120,51 @@ module ProjectReferenceXml =
             with
             | :? XmlException as ex -> error "project-xml" projectPath ex.Message
             | :? ArgumentException as ex -> error "project-xml" projectPath ex.Message
+
+    /// A local observation of one caller-supplied implicit file. The result does not establish
+    /// nearest-file selection, import closure, source provenance, or a Rule (b) graph verdict.
+    type SuppliedImplicitObservation = NoDirectReferenceInSuppliedXml
+
+    let inspectSuppliedImplicitXml
+        (sourcePath: string)
+        (xml: string)
+        : Result<SuppliedImplicitObservation, SyntaxDiagnostic> =
+        let fileName =
+            if isNull sourcePath then "" else sourcePath.Split('/') |> Array.last
+        if not (normalized sourcePath)
+           || Regex.IsMatch(sourcePath, "^[A-Za-z]:", RegexOptions.CultureInvariant)
+           || (fileName <> "Directory.Build.props" && fileName <> "Directory.Build.targets") then
+            error "implicit-source-path" sourcePath "expected a normalized Directory.Build.props/targets path"
+        elif isNull xml then
+            error "implicit-source-xml" sourcePath "implicit source XML is absent"
+        else
+            try
+                let settings = XmlReaderSettings()
+                settings.DtdProcessing <- DtdProcessing.Prohibit
+                settings.XmlResolver <- null
+                use input = new StringReader(xml)
+                use reader = XmlReader.Create(input, settings)
+                let document = XDocument.Load(reader)
+                if isNull document.Root || document.Root.Name.LocalName <> "Project" then
+                    error "implicit-source-xml" sourcePath "implicit source XML root must be Project"
+                elif document.Descendants()
+                     |> Seq.exists (fun element ->
+                         String.Equals(element.Name.LocalName, "ProjectReference", StringComparison.OrdinalIgnoreCase)) then
+                    error "implicit-project-reference" sourcePath "supplied implicit XML contains ProjectReference"
+                elif document.Descendants()
+                     |> Seq.exists (fun element -> element.Name.LocalName = "Import") then
+                    error "implicit-import" sourcePath "supplied implicit XML has unresolved Import closure"
+                elif document.Descendants()
+                     |> Seq.exists (fun element ->
+                         let itemName = element.Attribute(XName.Get("ItemName"))
+                         element.Name.LocalName = "Output"
+                         && not (isNull itemName)
+                         && (String.Equals(itemName.Value, "ProjectReference", StringComparison.OrdinalIgnoreCase)
+                             || ([ "$("; "@("; "%(" ]
+                                 |> List.exists (fun token -> itemName.Value.Contains(token, StringComparison.Ordinal))))) then
+                    error "implicit-task-output" sourcePath "supplied implicit XML may emit ProjectReference"
+                else
+                    Ok NoDirectReferenceInSuppliedXml
+            with
+            | :? XmlException as ex -> error "implicit-source-xml" sourcePath ex.Message
+            | :? ArgumentException as ex -> error "implicit-source-xml" sourcePath ex.Message

@@ -74,6 +74,56 @@ module ProjectReferenceXmlTests =
             + "<Content Include='generated.txt' /><Content Remove='generated.txt' /></ItemGroup></Project>"
         Assert.Equal<string list>([ "src/B/B.fsproj" ], parsed "src/A/A.fsproj" xml)
 
+    [<Theory>]
+    [<InlineData("Directory.Build.props")>]
+    [<InlineData("src/A/Directory.Build.targets")>]
+    let ``supplied implicit XML with direct reference refuses local observation`` sourcePath =
+        let xml = "<Project><ItemGroup><ProjectReference Include='../B/B.fsproj' /></ItemGroup></Project>"
+        match ProjectReferenceXml.inspectSuppliedImplicitXml sourcePath xml with
+        | Error diagnostic -> Assert.Equal("implicit-project-reference", diagnostic.Code)
+        | Ok observation -> failwithf "expected direct-reference refusal, got %A" observation
+
+    [<Fact>]
+    let ``case-varied MSBuild item name still denotes ProjectReference`` () =
+        let xml = "<Project><ItemGroup><projectreference Include='../B/B.fsproj' /></ItemGroup></Project>"
+        match ProjectReferenceXml.inspectSuppliedImplicitXml "Directory.Build.targets" xml with
+        | Error diagnostic -> Assert.Equal("implicit-project-reference", diagnostic.Code)
+        | Ok observation -> failwithf "expected case-varied item refusal, got %A" observation
+
+    [<Fact>]
+    let ``supplied implicit XML with an Import refuses unresolved closure`` () =
+        let xml = "<Project><Import Project='other.props' /></Project>"
+        match ProjectReferenceXml.inspectSuppliedImplicitXml "Directory.Build.props" xml with
+        | Error diagnostic -> Assert.Equal("implicit-import", diagnostic.Code)
+        | Ok observation -> failwithf "expected import refusal, got %A" observation
+
+    [<Fact>]
+    let ``supplied implicit XML refuses task output to ProjectReference`` () =
+        let xml =
+            "<Project><Target Name='Inject'><CreateItem Include='../B/B.fsproj'>"
+            + "<Output TaskParameter='Include' ItemName='ProjectReference' />"
+            + "</CreateItem></Target></Project>"
+        match ProjectReferenceXml.inspectSuppliedImplicitXml "Directory.Build.targets" xml with
+        | Error diagnostic -> Assert.Equal("implicit-task-output", diagnostic.Code)
+        | Ok observation -> failwithf "expected task-output refusal, got %A" observation
+
+    [<Theory>]
+    [<InlineData("build/Other.props", "<Project />", "implicit-source-path")>]
+    [<InlineData("C:/repo/Directory.Build.props", "<Project />", "implicit-source-path")>]
+    [<InlineData("Directory.Build.props", "<Project><ItemGroup>", "implicit-source-xml")>]
+    let ``supplied implicit XML rejects wrong identity or malformed bytes`` sourcePath xml code =
+        match ProjectReferenceXml.inspectSuppliedImplicitXml sourcePath xml with
+        | Error diagnostic -> Assert.Equal(code, diagnostic.Code)
+        | Ok observation -> failwithf "expected %s refusal, got %A" code observation
+
+    [<Fact>]
+    let ``supplied property-only implicit XML gives only a local no-direct-reference observation`` () =
+        let xml = "<Project><!-- <ProjectReference Include='../Fake/Fake.fsproj' /> -->"
+                  + "<PropertyGroup><Version>1.0</Version></PropertyGroup></Project>"
+        match ProjectReferenceXml.inspectSuppliedImplicitXml "Directory.Build.props" xml with
+        | Ok ProjectReferenceXml.NoDirectReferenceInSuppliedXml -> ()
+        | result -> failwithf "expected local observation, got %A" result
+
     [<Fact>]
     let ``unrelated target items do not obscure static ProjectReference`` () =
         let xml =
