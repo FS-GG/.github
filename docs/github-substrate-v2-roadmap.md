@@ -1016,6 +1016,10 @@ changing the protected holds:
 | [GS2-09.9 #712](https://github.com/FS-GG/FS.GG.Coordination/pull/712) | `826d9c1dc38b43a59f3acb8dbed35e0a91edcb33` | Strict native JSON parser refuses exponent overflow before repository readback; 94 fake-port tests, one-attempt native effect held. |
 | [FSC-05 #586](https://github.com/FS-GG/FS.GG.Templates/pull/586) | `1e80421fcec60f95824ce64508d4858fc03f962c` | Refuses invalid DOS date/time fields even when ZIP local and central values agree; 94 payload/29 custody controls, selected archive NO_VERDICT. |
 | [FSC-03 F# #3806](https://github.com/FS-GG/.github/pull/3806) | `a4ea873e96ef51628469a4a30cd9bab00e7c5289` | Dormant pure handoff requires supplied project XML identities to match a supplied expected roster; 174 policy tests, expected roster still unauthenticated. |
+| [GS2-09.9 #713](https://github.com/FS-GG/FS.GG.Coordination/pull/713) | `55ba5c9d8fee433c79a0c892b8699cd0bd01d4fb` | Refuses `.` or `..` repository path segments before injected native callbacks; 95 fake-port tests. Installed provider and one-attempt native effect remain held. |
+| [GS2-09.7 #714](https://github.com/FS-GG/FS.GG.Coordination/pull/714) | `d3c90bce8947b796a7bd34d0181f32b0a35ee6dd` | Raw-to-typed project binder refuses duplicate `hasNextPage` members in item, field and value pages; 135 focused tests. Q5/Q6 remain held. |
+| [FSC-04 #1039](https://github.com/FS-GG/FS.GG.SDD/pull/1039) | `38e48ef03bda4a52528aa5a4941e27e181ae24e8` | Fills one budget-checked private array directly from a pinned descriptor and refuses short or extra-byte reads; 1,490 Commands tests. Allocation fixture does not prove peak memory or atomicity. |
+| [FSC-05 #587](https://github.com/FS-GG/FS.GG.Templates/pull/587) | `028e1ab32f87113acfdbba9de808a43f2d15470e` | Refuses trailing bytes after a raw-deflate end marker inside the declared compressed member size; 95 payload/29 custody controls, selected archive NO_VERDICT. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
