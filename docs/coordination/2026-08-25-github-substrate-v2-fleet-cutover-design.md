@@ -363,7 +363,11 @@ shell table.
 The global epoch is a protocol state machine stored in a content-addressed Git ledger on a dedicated,
 ruleset-protected cutover ref and bound to the exact cutover manifest. Each transition is an expected-parent
 commit; a protected, non-deletable phase tag anchors the accepted commit. The GitHub App is the sole normal
-writer and its bypass is limited to the protected `fleet-cutover` environment. A dedicated cutover-control
+writer and its cutover route is bound to the accepted environment ID and policy digest for each phase
+in the exact candidate. Candidate data cannot select an arbitrary environment. The
+existing `fleet-cutover` environment remains the historical GS2-08.2 authorization target; the proposed
+one-owner cutover candidate uses a separate `fleet-cutover-owner` environment only after its policy is
+accepted, installed, and qualified. A dedicated cutover-control
 issue projects the current state, evidence, and operator guidance for humans, but it is not authority:
 
 ```text
@@ -730,6 +734,63 @@ Current live restrictions remain binding. GS2-13.2 retains genuine protected hum
 exact irreversible `OpenV2` decision. The proposed profile needs no second human, but cannot be replaced
 by unattended approval under the owner's identity.
 
+The prospective profile is a distinct `FS-GG/.github:fleet-cutover-owner` environment with sole
+required reviewer user ID `1645484`, self-review permitted, a five-minute wait, no administrator
+bypass, and only the exact `main` deployment branch. Its identity and effective rules are read back
+from GitHub and bound to the candidate; an environment name or settings plan alone is insufficient.
+Installed qualification observes the provider-enforced wait before a protected job starts and rejects
+early or absent approval, rather than inferring elapsed time from the configured value alone.
+The old `fleet-cutover` environment and accepted GS2-08.2 receipt retain their historical meaning.
+No source projection, workflow change, or administrative update may reinterpret that receipt as an
+approval under the new profile.
+
+The manifest serializes the allowed phase-to-environment ID and policy-digest mapping. An independent
+validator compares it with the accepted profile and fresh provider readback before every protected
+effect; a missing mapping, unknown ID or weaker policy refuses. GS2-10's execution inventory names
+the interpreter, workflow, credential and target for `Preparing`, `FreezeRequested`, `Frozen`,
+`SwitchedV2`, `VerifiedV2`, `OpenV2`, `ObservingV2`, `ContractingV1`, `OperatingV2`,
+`RollingBack` and `OperatingV1(recovery)`.
+Each row declares whether a fresh native approval is required, its expiry/renewal rule, expected
+prestate, durable attempt and receipt, readback, and retry or recovery route. No approval or effect
+identity carries into another phase unless that exact reuse is accepted and verified.
+
+Each protected cutover operation binds the candidate, manifest, phase, expected epoch parent,
+authorized targets and plan, stable attempt identity, expiry, and approval scope before any effect.
+The protected workflow checks its repository, manual trigger, exact `main` ref, and run attempt, while
+the Coordination verifier independently reads the actual run, approver, environment ID and effective
+policy. It refuses missing approval, a bot or wrong approver, another run or attempt, changed intent,
+stale candidate, expired receipt, and policy drift. An unknown effect result reconciles by its durable
+receipt and unchanged attempt identity. The dedicated cutover journal credential cannot stand in for
+ordinary settlement or organization administration.
+
+For `OpenV2`, a trusted preparation job publishes an immutable decision packet and its digest before
+approval. The packet contains the exact manifest/candidate, `VerifiedV2` head, Q0–Q8 roll-up,
+remaining risks, rollback boundary, workflow inputs, and intended epoch transition. The operator
+must review it and approve the pending deployment through their own interactive GitHub session,
+then separately confirm the packet digest and approval-credential custody through a direct human
+channel outside the agent's GitHub credential path. Agents must not call pending-deployment approval
+with the owner's PAT or session. Native approver user ID alone cannot prove human action. The
+environment-gated approval job has no cutover credential and can only emit a bound approval receipt;
+its automatic start after native approval cannot change the epoch or any production target.
+
+GS2-10 must establish a durable first-party capture route that issues a confirmation receipt bound
+to human identity, approval run and attempt, packet digest, expiry and credential-custody attestation.
+The receipt's origin and integrity must be checked against a trust anchor unavailable to agents;
+an agent quotation, copied chat message, or agent-supplied workflow input is insufficient. A separate
+effect run may obtain the cutover credential only after it independently verifies that confirmation
+receipt, the native approval, and exact packet/run/attempt equality. It re-reads environment policy
+and current epoch immediately before the effect. An absent or stale receipt, unavailable capture
+route, rerun, or changed packet refuses the effect and requires fresh human approval and confirmation.
+No chat or GitHub actor ID is claimed as cryptographic proof that a human held a token; the trusted
+capture route and credential custody are separate qualification obligations before `OpenV2`.
+
+This prospective design does not activate the profile. Before the GS2-10 candidate freezes, the
+governing policy amendment, independently generated architecture, security and operations critiques,
+accepted ADR-0090, cross-repository implementation, installed policy readback, native approval and
+refusal evidence, and isolated full-route rehearsal must agree. `OpenV2` still requires the human's
+fresh run-bound confirmation of the exact irreversible decision. Its production effect remains
+closed until Q0–Q8 and the protected epoch predicates pass.
+
 ### 10.0 Bootstrap qualification lane
 
 V2 is not implemented or certified through the existing coordination validation/verification lifecycle.
@@ -870,7 +931,8 @@ green head ready for the cutover window.
 
 ### F5 — request and establish freeze
 
-- Acquire the dedicated cutover operation grant through the protected `fleet-cutover` environment.
+- Acquire the dedicated cutover operation grant through the protected environment bound in the accepted
+  candidate; the prospective one-owner route requires qualified `fleet-cutover-owner` installation.
 - Commit and anchor `FreezeRequested(manifest)` in the cutover ledger.
 - Stop new claims, intake applies, board mutations, review advances, merges performed by the coordination
   client, dispatches, and releases.
@@ -909,8 +971,11 @@ Exit: every positive journey passes and every named wrong-path control refuses o
 
 ### F8 — open v2
 
-- Present the exact manifest, evidence roll-up, remaining risks, and rollback boundary for protected
-  environment approval.
+- Present the immutable decision packet and digest, exact manifest, evidence roll-up, remaining
+  risks, and rollback boundary for fresh, run-bound protected human approval in the accepted
+  candidate-bound environment; the approval job emits a receipt without a cutover credential or
+  production effect. A separate effect run verifies the independently captured human confirmation,
+  native approval and packet equality before it may obtain the cutover credential.
 - Commit and anchor `OpenV2(acceptance)`, then lift the v2 normal-write fence.
 - Prove one real bounded work item completes from intake through done under v2.
 
