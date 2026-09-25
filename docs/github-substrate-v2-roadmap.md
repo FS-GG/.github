@@ -1100,6 +1100,8 @@ changing the protected holds:
 | [FSC-03 F# #3824](https://github.com/FS-GG/.github/pull/3824) | `529f17a7ff220222dd7041b71275390d33629c0e` | Dormant branch and GraphQL readers refuse declared non-UTF-8 JSON charset while explicit UTF-8 controls pass; 261 F# tests. Credential custody, accepted pin and receiver parity remain held. |
 | [GS2-09.9 #761](https://github.com/FS-GG/FS.GG.Coordination/pull/761) | `4acd6655ce58b50c567fcd206b9b098758fc80bc` | Separate proposed v5 vault entry exits 78 for absent/untrusted grant before any protected port read; 17 focused/adjacent tests including clean-directory refusal. It is not installed and #550/#545 remain held. |
 | [GS2-09.7 #762](https://github.com/FS-GG/FS.GG.Coordination/pull/762) | `115e78a6f286af96c09f03c89824c229960a96ef` | Source-only one-use signed-attestation claim port binds exact run/target/store generation and refuses duplicate/unknown/lost CAS or forged readback; 736 full unit tests. Protected durable journal/key/clock/store head and Q5/Q6 remain held. |
+| [FSC-03 F# #3825](https://github.com/FS-GG/.github/pull/3825) | `6116fe49cb31afb5ec3d2f553d5876e7b299fcc5` | Dormant REST and GraphQL reader factories enforce RFC 6750 bearer-value grammar before handler construction; 263 F# tests. Syntax does not establish credential source/scope or installed receiver parity. |
+| [Telemetry usage #763](https://github.com/FS-GG/FS.GG.Coordination/pull/763) | `e083114886fe80935b5db89a64323a81393a03b9` | Source-only v2 turn/completed parser refuses malformed common ThreadItem identity/discriminator and null/nonobject items; 176 Release execution tests. Variant payload/native usage/Host capture remain unproven. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
@@ -1146,6 +1148,14 @@ The script README now requires a new evidence cutoff for each run, with live
 roster, explicit launch settings, exact PR heads/commit times, current counts,
 and a pushed roadmap head before assigning that head to completions. A mere
 metadata timestamp change is insufficient evidence of those checks.
+At each ten-minute deadline, freeze the **verified source set** at an explicit
+UTC cutoff and render promptly. Drafts first verified after that cutoff belong
+to the next source report even if their commit timestamp is earlier; disclose
+that case explicitly. Continue to refresh live lane tasks, authenticated
+telemetry readiness and local counter diagnostics at render time, and label
+their observation times separately from the source cutoff. Do not keep chasing
+new PRs at the expense of the report cadence. The newest-five table describes
+the frozen verified set, not all unseen repository commits.
 Each typed lane now carries required `CurrentWork`; the Markdown lane table
 renders it beside the lane identity. A running lane with blank work is refused.
 The JSON adapter requires `currentWork` for every lane. Focused tests pass
