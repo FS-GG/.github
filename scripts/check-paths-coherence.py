@@ -513,6 +513,7 @@ def project_graph(root: str) -> dict[str, list[str]]:
     """
     graph: dict[str, list[str]] = {}
     root_path = os.path.abspath(root)
+    root_real = os.path.realpath(root_path)
     implicit_hazards: dict[str, str | None] = {}
 
     def is_project_reference(element: ET.Element) -> bool:
@@ -540,6 +541,14 @@ def project_graph(root: str) -> dict[str, list[str]]:
                 if os.path.commonpath((root_path, folder)) != root_path:
                     project_rel = os.path.relpath(project_path, root_path).replace(os.sep, "/")
                     raise GateError(f"{project_rel}: implicit {filename} above repository root; "
+                                    "requires authenticated MSBuild source inventory")
+                try:
+                    in_real_root = os.path.commonpath((root_real, os.path.realpath(candidate))) == root_real
+                except ValueError:  # Different drives cannot share a repository source root.
+                    in_real_root = False
+                if not in_real_root:
+                    project_rel = os.path.relpath(project_path, root_path).replace(os.sep, "/")
+                    raise GateError(f"{project_rel}: implicit {filename} resolves outside repository root; "
                                     "requires authenticated MSBuild source inventory")
                 return candidate
             parent = os.path.dirname(folder)
