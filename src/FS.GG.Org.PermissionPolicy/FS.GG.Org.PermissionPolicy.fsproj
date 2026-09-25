@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="YamlDotNet" />
+    <Compile Include="Permissions.fs" />
+    <Compile Include="WorkflowPermissionSyntax.fs" />
+    <Compile Include="PermissionEvidenceBinding.fs" />
+    <Compile Include="AppGrantComparison.fs" />
+    <Compile Include="PermissionAggregate.fs" />
+  </ItemGroup>
+</Project>
