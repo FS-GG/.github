@@ -58,6 +58,36 @@ module GitTreeProjectsTests =
         { new GitTreeProjects.IReadOnlyObjectReader with
             member _.ReadExact(kind, oid) = read kind oid }
 
+    let private protectedRepository: GitHubProtectedBranchPin.ExactRepository =
+        { RepositoryNodeId = "R_fixture_one"; RepositoryFullName = "FS-GG/.github" }
+
+    let private protectedResponse (request: GitHubProtectedBranchPin.ExactRequest) commitId
+        : GitHubProtectedBranchPin.BranchResponse =
+        let body =
+            sprintf """{"name":"main","commit":{"sha":"%s"},"protected":true}""" commitId
+        { StatusCode = 200
+          ResponseUrl = request.Url
+          MediaType = "application/json"
+          Body = Encoding.UTF8.GetBytes(body) }
+
+    let private protectedCommit = "539aff7e655d22b1761850cd6be868eecc2886e4"
+
+    let private membershipReader =
+        { new GitHubCommitMembership.IReadOnlyGraphQlReader with
+            member _.ExecuteExact _ =
+                Ok(Encoding.UTF8.GetBytes("""{"data":{"repository":{"id":"R_fixture_one","nameWithOwner":"FS-GG/.github","object":{"__typename":"Commit","oid":"539aff7e655d22b1761850cd6be868eecc2886e4","tree":{"oid":"2b552d6bf9d7b4458a28fc65663fbc2c7b0221dc"}}}}}""")) }
+
+    let private commitReader =
+        { new GitCommitProvenance.IReadOnlyCommitReader with
+            member _.ReadExact pin =
+                Ok { RepositoryNodeId = pin.RepositoryNodeId; RepositoryFullName = pin.RepositoryFullName
+                     CommitId = pin.CommitId
+                     RawCommit = Convert.FromBase64String("dHJlZSAyYjU1MmQ2YmY5ZDdiNDQ1OGEyOGZjNjU2NjNmYmMyYzdiMDIyMWRjCmF1dGhvciBGaXh0dXJlIDxmaXh0dXJlQGV4YW1wbGUuaW52YWxpZD4gMCArMDAwMApjb21taXR0ZXIgRml4dHVyZSA8Zml4dHVyZUBleGFtcGxlLmludmFsaWQ+IDAgKzAwMDAKCmZpeGVkIEEgdG8gQiBmaXh0dXJlCg==") } }
+
+    let private inspectProtected branchReader read =
+        ProjectReferenceXml.inspectReadOnlyProtectedBranchSnapshot
+            protectedRepository branchReader membershipReader commitReader (fst edgeRoot) (objectReader read)
+
     let private refusedObject message read =
         match ProjectReferenceXml.inspectReadOnlyGitObjectSnapshot (fst edgeRoot) (objectReader read) with
         | Error diagnostic ->
@@ -73,26 +103,11 @@ module GitTreeProjectsTests =
 
     [<Fact>]
     let ``protected pin through read-only object closure has no supplied-byte shortcut`` () =
-        let repository: GitHubProtectedBranchPin.ExactRepository =
-            { RepositoryNodeId = "R_fixture_one"; RepositoryFullName = "FS-GG/.github" }
         let branchReader =
             { new GitHubProtectedBranchPin.IReadOnlyProtectedBranchReader with
                 member _.ReadExact request =
-                    Ok { StatusCode = 200; ResponseUrl = request.Url; MediaType = "application/json"
-                         Body = Encoding.UTF8.GetBytes("""{"name":"main","commit":{"sha":"539aff7e655d22b1761850cd6be868eecc2886e4"},"protected":true}""") } }
-        let membershipReader =
-            { new GitHubCommitMembership.IReadOnlyGraphQlReader with
-                member _.ExecuteExact _ =
-                    Ok(Encoding.UTF8.GetBytes("""{"data":{"repository":{"id":"R_fixture_one","nameWithOwner":"FS-GG/.github","object":{"__typename":"Commit","oid":"539aff7e655d22b1761850cd6be868eecc2886e4","tree":{"oid":"2b552d6bf9d7b4458a28fc65663fbc2c7b0221dc"}}}}}""")) }
-        let commitReader =
-            { new GitCommitProvenance.IReadOnlyCommitReader with
-                member _.ReadExact pin =
-                    Ok { RepositoryNodeId = pin.RepositoryNodeId; RepositoryFullName = pin.RepositoryFullName
-                         CommitId = pin.CommitId
-                         RawCommit = Convert.FromBase64String("dHJlZSAyYjU1MmQ2YmY5ZDdiNDQ1OGEyOGZjNjU2NjNmYmMyYzdiMDIyMWRjCmF1dGhvciBGaXh0dXJlIDxmaXh0dXJlQGV4YW1wbGUuaW52YWxpZD4gMCArMDAwMApjb21taXR0ZXIgRml4dHVyZSA8Zml4dHVyZUBleGFtcGxlLmludmFsaWQ+IDAgKzAwMDAKCmZpeGVkIEEgdG8gQiBmaXh0dXJlCg==") } }
-        let inspect read =
-            ProjectReferenceXml.inspectReadOnlyProtectedBranchSnapshot
-                repository branchReader membershipReader commitReader (fst edgeRoot) (objectReader read)
+                    Ok(protectedResponse request protectedCommit) }
+        let inspect read = inspectProtected branchReader read
         match inspect validRead with
         | Error diagnostic -> failwithf "complete protected object chain refused: %A" diagnostic
         | Ok graph -> Assert.Equal<string list>([ "src/B/B.fsproj" ], graph.["src/A/A.fsproj"])
@@ -101,6 +116,36 @@ module GitTreeProjectsTests =
                 else validRead kind oid) with
         | Error diagnostic -> Assert.Equal("git-object-provider", diagnostic.Code)
         | Ok graph -> failwithf "missing B blob produced protected graph: %A" graph
+
+    [<Fact>]
+    let ``protected tip changing during graph reads has no provisional graph`` () =
+        let mutable reads = 0
+        let branchReader =
+            { new GitHubProtectedBranchPin.IReadOnlyProtectedBranchReader with
+                member _.ReadExact request =
+                    reads <- reads + 1
+                    let commit = if reads = 1 then protectedCommit else String.replicate 40 "a"
+                    Ok(protectedResponse request commit) }
+        match inspectProtected branchReader validRead with
+        | Error diagnostic ->
+            Assert.Equal("github-protected-pin", diagnostic.Code)
+            Assert.Contains("changed", diagnostic.Message)
+        | Ok graph -> failwithf "changed protected tip produced graph: %A" graph
+        Assert.Equal(2, reads)
+
+    [<Fact>]
+    let ``unavailable final protected tip read has no provisional graph`` () =
+        let mutable reads = 0
+        let branchReader =
+            { new GitHubProtectedBranchPin.IReadOnlyProtectedBranchReader with
+                member _.ReadExact request =
+                    reads <- reads + 1
+                    if reads = 1 then Ok(protectedResponse request protectedCommit)
+                    else Error () }
+        match inspectProtected branchReader validRead with
+        | Error diagnostic -> Assert.Equal("github-protected-pin", diagnostic.Code)
+        | Ok graph -> failwithf "unavailable final pin read produced graph: %A" graph
+        Assert.Equal(2, reads)
 
     [<Fact>]
     let ``missing referenced project blob prevents graph despite valid supplied snapshot`` () =

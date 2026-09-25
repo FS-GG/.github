@@ -365,7 +365,9 @@ module ProjectReferenceXml =
             inspectSuppliedGitHubMembershipSnapshot pin membershipReader commitReader rootTreeId treeObjects sources
 
     /// Compose the provisional protected pin and commit checks with exact read-only Git object
-    /// reads. Provider authentication, source acceptance and evaluated MSBuild remain external.
+    /// reads, then reobserve the protected tip before returning a graph. This bounds the
+    /// observation window; provider authentication, source acceptance and evaluated MSBuild
+    /// remain external.
     let inspectReadOnlyProtectedBranchSnapshot
         (repository: GitHubProtectedBranchPin.ExactRepository)
         (branchReader: GitHubProtectedBranchPin.IReadOnlyProtectedBranchReader)
@@ -382,7 +384,16 @@ module ProjectReferenceXml =
             | Ok _ ->
                 match GitCommitProvenance.inspectProvisionalRoot pin rootTreeId commitReader with
                 | Error diagnostic -> Error diagnostic
-                | Ok verified -> inspectReadOnlyGitObjectSnapshot verified.TreeId objectReader
+                | Ok verified ->
+                    match inspectReadOnlyGitObjectSnapshot verified.TreeId objectReader with
+                    | Error diagnostic -> Error diagnostic
+                    | Ok graph ->
+                        match GitHubProtectedBranchPin.inspectProvisionalPin repository branchReader with
+                        | Error diagnostic -> Error diagnostic
+                        | Ok finalPin when finalPin <> pin ->
+                            error "github-protected-pin" "<branch>"
+                                "protected main commit changed during graph observation"
+                        | Ok _ -> Ok graph
 
     /// A local observation of one caller-supplied implicit file. The result does not establish
     /// nearest-file selection, import closure, source provenance, or a Rule (b) graph verdict.
