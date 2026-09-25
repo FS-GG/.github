@@ -34,7 +34,9 @@ EXPECTED_PYTHON = {
     "unsupported_vars_app_identity": "NO_VERDICT",
     "unsupported_literal_app_identity": "NO_VERDICT",
     "malformed_caller_yaml": "NO_VERDICT",
-    "duplicate_caller_key": "OK",
+    "duplicate_caller_key": "NO_VERDICT",
+    "duplicate_callee_event": "NO_VERDICT",
+    "duplicate_app_permission": "NO_VERDICT",
     "dynamic_app_request": "NO_VERDICT",
     "rostered_second_caller_undergrants": "FINDING",
     "pinned_ref_uses_fetched_callee": "OK",
@@ -43,7 +45,6 @@ EXPECTED_PYTHON = {
     "authority_workflow_omitted": "OK",
 }
 KNOWN_PAIRS = {
-    "duplicate_caller_key": ("OK", "NO_VERDICT"),
     "rostered_second_caller_undergrants": ("FINDING", "OK"),
     "authority_workflow_omitted": ("OK", "NO_VERDICT"),
 }
@@ -153,10 +154,21 @@ def cases():
                          "app-id: 123\n          permission-contents: read")),
         python_reason=unsupported_identity_reason)
     add("malformed_caller_yaml", lambda s: s.update(caller_yaml="jobs: { sync: [\n"))
+    duplicate_reason = "duplicate YAML mapping key"
     add("duplicate_caller_key", lambda s: s.update(caller_yaml=
         "permissions: { contents: none }\npermissions: { contents: read }\n"
         "jobs: { sync: { uses: 'FS-GG/.github/.github/workflows/cal.yml@main' } }\n"),
-        "F# refuses duplicate YAML keys; PyYAML keeps the last value")
+        python_reason=duplicate_reason)
+    def duplicate_callee_event(s):
+        s["callee_yaml"] = CALLEE.replace("on: { workflow_call: {} }",
+                                          "on: { workflow_call: {}, workflow_call: {} }")
+        s["authority_workflows"][0]["text"] = s["callee_yaml"]
+
+    add("duplicate_callee_event", duplicate_callee_event, python_reason=duplicate_reason)
+    add("duplicate_app_permission", lambda s: s["authority_workflows"][1].update(
+        text=APP.replace("permission-contents: read",
+                         "permission-contents: none\n          permission-contents: read")),
+        python_reason=duplicate_reason)
     add("dynamic_app_request", lambda s: s["authority_workflows"][1].update(
         text=APP.replace("permission-contents: read", "permission-contents: ${{ inputs.level }}")))
 
