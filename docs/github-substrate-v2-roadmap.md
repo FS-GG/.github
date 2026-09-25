@@ -803,6 +803,36 @@ imports and installed parity remain open.
 at `3827c9ebfda7feef59058d326b7b3fa4a8f9a84a` refuses reserved
 punctuation and ASCII controls in any ZIP member name (56 payload, 29 archive
 controls); complete ZIP closure and producer/receiver authority remain open.
+Read-only source-branch CLI integration for [`.github` #3780](https://github.com/FS-GG/.github/pull/3780)
+at `e58b5483fc51b04852c1d10e77272cecf6ec1f6e` used the current credential
+and `exact-project1` bootstrap mode to return pinned Project 1
+`PVT_kwDOEYAWY84Bb08W`, owner FS-GG, title Coordination, number 1 and 12
+editable fields from the live 24-field schema. This was not the installed
+orchestration runner and produced no native turn or applied Host receipt.
+[Coordination GS2-09.9 #681](https://github.com/FS-GG/FS.GG.Coordination/pull/681)
+at `a03ad4ee57e33543860f5db63305741783f7fa52` snapshots an inactive
+reviewer before a later event read can make it active (34 fake-port tests);
+[#683](https://github.com/FS-GG/FS.GG.Coordination/pull/683)
+at `3e737227adab498106140b6f67b293de79c5c6e9` snapshots a prestate
+transcript before metadata read can replace its hash (33 tests). Protected
+actor and native-effect custody remain held.
+[Coordination GS2-09.7 #682](https://github.com/FS-GG/FS.GG.Coordination/pull/682)
+at `87c66eb0bc1183782558277116ad418fe5ae1974` refuses duplicate raw PR
+review state, commit and actor JSON members (135 focused tests); initial census,
+full typed inspect, journal/custom receipts and Q5/Q6 are still open.
+[`.github` FSC-03 F# #3790](https://github.com/FS-GG/.github/pull/3790)
+at `175398359ba9bbe92b6d7f66bef05ab16e81a620` matches the Python
+case-varied `ProjectReference` source handling across direct, Remove and
+target-time shapes (144 tests). Implicit-file provenance, Import closure,
+evaluated graph and installed parity remain held.
+[SDD FSC-04 #1032](https://github.com/FS-GG/FS.GG.SDD/pull/1032)
+at `d2b509adc253583b1c355136833721bdef79f638` caps one pinned file at
+32 MiB on the Linux read paths (1,472 Commands tests); aggregate bytes,
+peak memory, ABA and cross-root atomicity remain unbounded/unproved.
+[Templates FSC-05 #574](https://github.com/FS-GG/FS.GG.Templates/pull/574)
+at `cb460fc9c1a4185f7da412ee6f972deb85c14bd1` refuses dot-ended or
+ASCII-space-ended ZIP path segments (58 payload, 29 archive controls), with
+full closure, producer/served-byte, #511 CAS and receiver proof open.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
