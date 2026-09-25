@@ -36,6 +36,8 @@ passed under that policy against Coordination `eabd2760d60c5e74e08a492daf946f0ef
 `cleanup.disposition=complete` and `residualCount=0`. This is installed sandbox-custody evidence, not a
 migration acceptance receipt. The App secret remains at its existing organization scope; the environment
 policy governs jobs that reference it and is not a claim of exclusive secret custody.
+The [feature-branch dispatch 36091479649](https://github.com/FS-GG/.github/actions/runs/36091479649)
+was rejected by the environment branch rule before any job step ran.
 
 ## Consequences
 
