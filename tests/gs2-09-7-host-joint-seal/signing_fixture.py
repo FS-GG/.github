@@ -7,6 +7,7 @@ import hashlib
 from pathlib import Path
 import subprocess
 import tempfile
+from threading import Lock
 
 
 ORIGIN = "https://protected.example.invalid"
@@ -14,6 +15,8 @@ ENDPOINT = ORIGIN + "/joint-seal"
 STORE_ID = "protected-joint-seal-store-test"
 SIGNER_ID = "protected-joint-seal-signer-test"
 POLICY_SHA256 = "7" * 64
+FLOOR_ID = "protected-head-floor-test"
+FLOOR_ENDPOINT = ORIGIN + "/head-floor"
 
 
 class FakeSigner:
@@ -60,6 +63,15 @@ def pin(testcase, joint):
         original = getattr(joint, name)
         setattr(joint, name, value)
         testcase.addCleanup(setattr, joint, name, original)
+    floor_pins = {
+        "PINNED_FLOOR_ORIGIN": ORIGIN,
+        "PINNED_FLOOR_ENDPOINT": FLOOR_ENDPOINT,
+        "PINNED_FLOOR_RESOURCE_ID": FLOOR_ID,
+    }
+    for name, value in floor_pins.items():
+        original = getattr(joint.floor, name)
+        setattr(joint.floor, name, value)
+        testcase.addCleanup(setattr, joint.floor, name, original)
 
 
 def attach(joint, port, seal_getter):
@@ -68,6 +80,20 @@ def attach(joint, port, seal_getter):
     port.joint_replay_head = None
     port.joint_envelope_override = None
     port.joint_key_override = None
+    port.joint_floor_lock = Lock()
+    port.joint_floor_record = {
+        "schema": joint.floor.RECORD_SCHEMA,
+        "floorResourceId": FLOOR_ID,
+        "storeResourceId": STORE_ID,
+        "signerResourceId": SIGNER_ID,
+        "policySha256": POLICY_SHA256,
+        "generation": 0, "sealId": None, "state": "committed",
+    }
+    port.joint_floor_lost_response = False
+    port.joint_floor_false_commit = False
+    port.joint_floor_reads = 0
+    port.joint_floor_stale_after = None
+    port.joint_floor_calls = []
 
     def head():
         seal = seal_getter()
@@ -127,4 +153,46 @@ def attach(joint, port, seal_getter):
     port.read_joint_seal_public_key = lambda: (
         port.joint_key_override if port.joint_key_override is not None
         else SIGNER.public)
+
+    port.describe_head_floor = lambda: {
+        "schema": joint.floor.AUTHORITY_SCHEMA,
+        "origin": ORIGIN, "endpoint": FLOOR_ENDPOINT,
+        "resourceId": FLOOR_ID,
+        "storeResourceId": STORE_ID,
+        "signerResourceId": SIGNER_ID,
+        "durable": True, "atomicMax": True, "nativeReadback": True,
+        "credentialScope": "protected-host-only",
+        "candidateCanRead": False, "candidateCanWrite": False,
+        "workflowCanWrite": False,
+    }
+
+    def read_floor():
+        with port.joint_floor_lock:
+            port.joint_floor_calls.append("read")
+            port.joint_floor_reads += 1
+            value = copy.deepcopy(port.joint_floor_record)
+            if port.joint_floor_stale_after == port.joint_floor_reads:
+                value["generation"] = max(0, value["generation"] - 1)
+                value["sealId"] = None if value["generation"] == 0 else value["sealId"]
+            return value
+
+    def advance_floor(expected, generation, seal_id):
+        with port.joint_floor_lock:
+            port.joint_floor_calls.append("advance")
+            if port.joint_floor_false_commit:
+                return "committed"
+            current = port.joint_floor_record
+            if current != expected:
+                return "duplicate" if current["generation"] == generation \
+                    and current["sealId"] == seal_id else "refused"
+            if generation <= current["generation"]:
+                return "refused"
+            port.joint_floor_record = {
+                **current, "generation": generation, "sealId": seal_id}
+            if port.joint_floor_lost_response:
+                raise OSError("response lost after durable floor commit")
+            return "committed"
+
+    port.read_head_floor = read_floor
+    port.advance_head_floor_once = advance_floor
     return envelope, head
