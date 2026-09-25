@@ -54,6 +54,30 @@ completeness, workflow bytes, source ref and inventory provenance still need
 independent provider authentication; this reducer covers one bound caller pair,
 not a fleet sweep.
 
+`WorkflowPermissionSyntax.callerCallJobs` enumerates organization calls from
+every job in one supplied caller workflow. `PermissionFleet.evaluate` requires
+an exact caller repository/workflow roster, snapshots at one source ref and one
+binding fact per enumerated call before reducing the full selected fleet. It
+refuses missing or duplicate snapshots or call facts, dynamic call targets,
+empty call sets and per-call roster mismatches. A second rostered caller's
+under-grant therefore becomes a finding instead of being hidden by a satisfied
+first caller. It reuses `PermissionAggregate.evaluate` per call, so authority
+App findings may appear once per caller in the returned list.
+
+The fleet roster is supplied data. If its provider omits a repository and its
+workflow snapshots together, pure code cannot discover the missing repo. The
+provider must authenticate the roster's provenance and completeness, enumerate
+each listed repository's workflow files, and bind those exact bytes and refs
+before this reducer can support a gate verdict.
+The provider handoff must name the exact `registry/repos.yml` source ref and a
+verified head for each caller repository, establish the complete repository set
+from that roster read, distinguish a visible
+repository with no workflows from an unreadable or invisible repository, and
+pair every listed `.yml`/`.yaml` file with bytes at its repository's verified
+head.
+A disappeared file, transport failure, or unverified roster source is no
+verdict; a supplied JSON test scenario is not that evidence.
+
 This source does not fetch a callee at its pinned ref, enumerate the roster or
 workflow files from GitHub, authenticate current installation grants, or
 replace the live Python gate. Those boundaries and installed parity remain separate work. The

@@ -30,16 +30,14 @@ while F# refused each. This follow-up supplies an independent workflow, job,
 step count and App-step roster to the Python gate. Red-before, omitted files,
 jobs and App steps each produced Python OK while F# returned NO_VERDICT. The
 opt-in roster check now refuses those shapes, a manifest that omits an observed
-workflow, and duplicate manifest entries. The corpus expects the Python refusal
-reason and reports one remaining difference:
+workflow, and duplicate manifest entries. The F# runner now supplies a caller
+fleet roster, exact workflow snapshots and per-call binding facts to
+`PermissionFleet.evaluate`. Red-before, a second rostered caller under-granted
+while the one-pair F# adapter returned OK; the fleet reducer returns FINDING.
+The corpus has zero remaining outcome differences over its supplied facts.
 
-- The F# aggregate covers one bound caller/callee pair; Python enumerates all
-  rostered caller repositories. A second caller can therefore produce a Python
-  finding outside that one F# pair.
-
-The fleet case needs authenticated caller enumeration and a fleet aggregate.
 The local fixture cannot prove provider authentication, current App installation
-grants, authoritative roster provenance or completeness, accepted scaffold
+grants, either roster's provenance or completeness, accepted scaffold
 dependencies or installed receiver parity. The live
 receiver currently supplies a default App inventory for some selected App
 secrets. It must supply explicit per-identity facts before the new mode can be

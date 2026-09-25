@@ -204,6 +204,46 @@ module WorkflowPermissionSyntax =
                             JobPermissions = block job
                         })
 
+    /// Enumerate organization reusable-workflow calls from every job in one supplied caller file.
+    /// The caller workflow roster and bytes must be authenticated by the provider separately.
+    let callerCallJobs path text =
+        parse path text
+        |> Result.bind (fun root ->
+            match memberValue "jobs" root |> Option.bind mapping with
+            | None -> error "jobs-shape" path
+            | Some jobs when jobs.Children.Count = 0 -> error "jobs-empty" path
+            | Some jobs ->
+                let calls = ResizeArray<string * ReusableWorkflowCall>()
+                let mutable problem = None
+                for item in jobs.Children do
+                    if problem.IsNone then
+                        let jobId = stringScalar item.Key |> Option.get
+                        match mapping item.Value with
+                        | None -> problem <- Some "job-shape"
+                        | Some job ->
+                            match memberValue "uses" job with
+                            | None -> ()
+                            | Some target ->
+                                match stringScalar target with
+                                | None -> problem <- Some "call-target-unsupported"
+                                | Some value when value.Contains "${{" ->
+                                    problem <- Some "call-target-dynamic"
+                                | Some value when value.Trim().StartsWith(
+                                    "FS-GG/.github/.github/workflows/", StringComparison.Ordinal) ->
+                                    let matched = callTarget.Match(value.Trim())
+                                    if not matched.Success then problem <- Some "call-target-unsupported"
+                                    else
+                                        calls.Add(
+                                            jobId,
+                                            { Callee = matched.Groups[1].Value
+                                              Ref = matched.Groups[2].Value
+                                              WorkflowPermissions = block root
+                                              JobPermissions = block job })
+                                | Some _ -> ()
+                match problem with
+                | Some code -> error code path
+                | None -> Ok(List.ofSeq calls))
+
     /// Inspect only the callee's top-level grant; this permissive entry point has no call evidence.
     let callee path text = parse path text |> Result.map block
 
