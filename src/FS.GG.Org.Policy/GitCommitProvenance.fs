@@ -43,6 +43,17 @@ module GitCommitProvenance =
             |> Seq.forall (fun character ->
                 not (Char.IsWhiteSpace character || Char.IsControl character)))
 
+    let internal validRepositorySegment (value: string) =
+        not (isNull value)
+        && value <> "." && value <> ".."
+        && Regex.IsMatch(value, @"\A[A-Za-z0-9_.-]+\z", RegexOptions.CultureInvariant)
+
+    let internal validRepositoryFullName (value: string) =
+        if isNull value then false
+        else
+            let segments = value.Split('/')
+            segments.Length = 2 && (segments |> Array.forall validRepositorySegment)
+
     let private commitId (bytes: byte[]) =
         let prefix = Encoding.ASCII.GetBytes("commit " + bytes.Length.ToString(CultureInfo.InvariantCulture) + "\000")
         let digest: byte[] = SHA1.HashData(Array.append prefix bytes)
@@ -76,8 +87,7 @@ module GitCommitProvenance =
         : Result<ProvisionalRoot, SyntaxDiagnostic> =
         if isNull (box pin)
            || not (validRepositoryNodeId pin.RepositoryNodeId)
-           || isNull pin.RepositoryFullName
-           || not (Regex.IsMatch(pin.RepositoryFullName, @"\A[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\z", RegexOptions.CultureInvariant)) then
+           || not (validRepositoryFullName pin.RepositoryFullName) then
             error "<pin>" "exact repository identity is absent or malformed"
         elif not (canonicalSha1 pin.CommitId) then
             error "<pin>" "exact commit ID must be 40 lowercase SHA-1 hexadecimal characters"

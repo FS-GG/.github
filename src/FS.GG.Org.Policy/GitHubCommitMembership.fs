@@ -37,10 +37,8 @@ module GitHubCommitMembership =
     let internal isExactReadRequest (request: ExactRequest) =
         not (isNull (box request))
         && String.Equals(request.Document, document, StringComparison.Ordinal)
-        && not (isNull request.Owner)
-        && Regex.IsMatch(request.Owner, @"\A[A-Za-z0-9_.-]+\z", RegexOptions.CultureInvariant)
-        && not (isNull request.Name)
-        && Regex.IsMatch(request.Name, @"\A[A-Za-z0-9_.-]+\z", RegexOptions.CultureInvariant)
+        && GitCommitProvenance.validRepositorySegment request.Owner
+        && GitCommitProvenance.validRepositorySegment request.Name
         && canonicalSha1 request.CommitId
 
     let rec private duplicateKey (element: JsonElement) =
@@ -127,8 +125,7 @@ module GitHubCommitMembership =
         : Result<ProvisionalMembership, SyntaxDiagnostic> =
         if isNull (box pin)
            || not (GitCommitProvenance.validRepositoryNodeId pin.RepositoryNodeId)
-           || isNull pin.RepositoryFullName
-           || not (Regex.IsMatch(pin.RepositoryFullName, @"\A[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\z", RegexOptions.CultureInvariant)) then
+           || not (GitCommitProvenance.validRepositoryFullName pin.RepositoryFullName) then
             error "<pin>" "exact repository identity is absent or malformed"
         elif not (canonicalSha1 pin.CommitId) || not (canonicalSha1 expectedTreeId) then
             error "<pin>" "commit and tree IDs must be exact lowercase SHA-1 values"

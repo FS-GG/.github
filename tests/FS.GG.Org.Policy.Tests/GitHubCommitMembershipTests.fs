@@ -113,6 +113,35 @@ module GitHubCommitMembershipTests =
         Assert.Equal(0, calls)
 
     [<Fact>]
+    let ``dot segment repository cannot establish membership`` () =
+        let malformedPin = { pin with RepositoryFullName = "FS-GG/.." }
+        let malformedJson = valid.Replace("FS-GG/.github", malformedPin.RepositoryFullName)
+        let mutable calls = 0
+        let unsafeReader =
+            { new GitHubCommitMembership.IReadOnlyGraphQlReader with
+                member _.ExecuteExact _ =
+                    calls <- calls + 1
+                    Ok(Encoding.UTF8.GetBytes(malformedJson)) }
+        match GitHubCommitMembership.inspectProvisionalMembership malformedPin rootTreeId unsafeReader with
+        | Error diagnostic -> Assert.Equal("github-commit-membership", diagnostic.Code)
+        | Ok fact -> failwithf "dot segment repository established membership: %A" fact
+        Assert.Equal(0, calls)
+
+    [<Fact>]
+    let ``dot segment request cannot reach GraphQL transport`` () =
+        let mutable captured = None
+        let capture =
+            { new GitHubCommitMembership.IReadOnlyGraphQlReader with
+                member _.ExecuteExact request =
+                    captured <- Some request
+                    Ok(Encoding.UTF8.GetBytes(valid)) }
+        match GitHubCommitMembership.inspectProvisionalMembership pin rootTreeId capture with
+        | Error diagnostic -> failwithf "valid request capture refused: %A" diagnostic
+        | Ok _ -> ()
+        let exact = captured |> Option.get
+        Assert.False(GitHubCommitMembership.isExactReadRequest { exact with Name = ".." })
+
+    [<Fact>]
     let ``null and missing object prevent a membership verdict`` () =
         refused "object" (valid.Replace("\"object\":{\"__typename\"", "\"wrongField\":{\"__typename\""))
         refused "object" (valid.Replace("\"object\":{\"__typename\":\"Commit\",\"oid\":\"" + commitId + "\",\"tree\":{\"oid\":\"" + rootTreeId + "\"}}", "\"object\":null"))

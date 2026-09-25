@@ -113,6 +113,22 @@ module GitCommitProvenanceTests =
         Assert.Equal(0, calls)
 
     [<Fact>]
+    let ``dot segment repository cannot root commit`` () =
+        let malformedPin = { pin with RepositoryFullName = "FS-GG/.." }
+        let malformedObservation =
+            { observation with RepositoryFullName = malformedPin.RepositoryFullName }
+        let mutable calls = 0
+        let unsafeReader =
+            { new GitCommitProvenance.IReadOnlyCommitReader with
+                member _.ReadExact _ =
+                    calls <- calls + 1
+                    Ok malformedObservation }
+        match GitCommitProvenance.inspectProvisionalRoot malformedPin rootTreeId unsafeReader with
+        | Error diagnostic -> Assert.Equal("git-commit-provenance", diagnostic.Code)
+        | Ok root -> failwithf "dot segment repository rooted commit: %A" root
+        Assert.Equal(0, calls)
+
+    [<Fact>]
     let ``wrong commit claim and changed commit bytes refuse`` () =
         refused "commit ID" rootTreeId (Ok { observation with CommitId = String.replicate 40 "a" })
         let changed = Array.copy commitBytes
