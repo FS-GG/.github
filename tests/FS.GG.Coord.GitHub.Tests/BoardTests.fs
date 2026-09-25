@@ -1403,6 +1403,31 @@ let ``direct Project 1 bootstrap refuses duplicate single-select option names`` 
     | Error(Malformed _) -> ()
     | other -> failwith $"duplicate direct-project option IDs must refuse — got %A{other}"
 
+[<Theory>]
+[<InlineData("\"dataType\":\"UNRECOGNIZED\"")>]
+[<InlineData("\"dataType\":null")>]
+[<InlineData("\"dataType\":\"MULTI_SELECT\"")>]
+let ``direct Project 1 bootstrap refuses a partially unreadable field map`` extraType =
+    let response =
+        $"""{{"data":{{"organization":{{"login":"FS-GG","projectV2":{{"id":"PVT_kwDOEYAWY84Bb08W","number":1,"title":"Coordination","fields":{{"totalCount":2,"nodes":[{{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{{"id":"opt_ready","name":"Ready"}}]}},{{"id":"PVTF_extra","name":"Extra",{extraType}}}]}}}}}}}}}}"""
+
+    match bootstrapExactProject (serving response) projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"an unreadable field in an otherwise usable map must refuse — got %A{other}"
+
+[<Theory>]
+[<InlineData("ASSIGNEES")>]
+[<InlineData("TITLE")>]
+[<InlineData("PARENT_ISSUE")>]
+[<InlineData("CLOSED")>]
+let ``direct Project 1 bootstrap keeps editable fields beside known omitted builtins`` builtInType =
+    let response =
+        $"""{{"data":{{"organization":{{"login":"FS-GG","projectV2":{{"id":"PVT_kwDOEYAWY84Bb08W","number":1,"title":"Coordination","fields":{{"totalCount":2,"nodes":[{{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{{"id":"opt_ready","name":"Ready"}}]}},{{"id":"PVTF_builtin","name":"Built in","dataType":"{builtInType}"}}]}}}}}}}}}}"""
+
+    match bootstrapExactProject (serving response) projectOne with
+    | Ok resolved when resolved.Fields.Count = 1 && resolved.Fields.ContainsKey "Status" -> ()
+    | other -> failwith $"a known omitted builtin must not erase the editable map — got %A{other}"
+
 [<Fact>]
 let ``direct Project 1 bootstrap propagates authorization errors without enumerating projects`` () =
     let docs = System.Collections.Generic.List<string>()

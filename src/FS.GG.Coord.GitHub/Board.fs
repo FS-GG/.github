@@ -336,6 +336,21 @@ module Board =
                                             nodes |> List.map (fun node -> readString node "name", readString node "id")
                                         let names = identities |> List.choose fst
                                         let ids = identities |> List.choose snd
+                                        // GitHub's pinned Project 1 includes built-in field kinds that this
+                                        // writable BoardMap deliberately omits. An unknown kind (including an
+                                        // unsupported writable kind) cannot be treated as another built-in.
+                                        let knownOmittedBuiltIn = function
+                                            | "ASSIGNEES" | "LINKED_PULL_REQUESTS" | "REVIEWERS"
+                                            | "LABELS" | "MILESTONE" | "REPOSITORY" | "TITLE"
+                                            | "TRACKS" | "TRACKED_BY" | "ISSUE_TYPE" | "PARENT_ISSUE"
+                                            | "SUB_ISSUES_PROGRESS" | "CREATED" | "UPDATED" | "CLOSED" -> true
+                                            | _ -> false
+                                        let knownFieldKind (node: JsonElement) =
+                                            match readString node "dataType" with
+                                            | Some dataType ->
+                                                knownOmittedBuiltIn dataType
+                                                || (fieldTypeOf dataType node |> Option.isSome)
+                                            | None -> false
                                         let optionsUnambiguous (node: JsonElement) =
                                             match readString node "dataType" with
                                             | Some "SINGLE_SELECT" ->
@@ -359,8 +374,9 @@ module Board =
                                            || List.exists String.IsNullOrWhiteSpace ids
                                            || names.Length <> (names |> List.distinct |> List.length)
                                            || ids.Length <> (ids |> List.distinct |> List.length)
+                                           || not (List.forall knownFieldKind nodes)
                                            || not (List.forall optionsUnambiguous nodes) then
-                                            Error(Malformed(subject, "the exact project field or option identities are missing or duplicated"))
+                                            Error(Malformed(subject, "the exact project field types or identities are missing, unsupported or duplicated"))
                                         else
                                             let fields =
                                                 nodes |> List.choose (fun node ->
