@@ -180,6 +180,21 @@ Before dispatching a unit, classify every adjacent row as one of:
 The Coordination board remains the visibility and dependency projection. It is not allowed to recreate the
 superseded execution plan by presenting a historical M-series row as `Ready`.
 
+### 1.5 Single-operator execution readiness
+
+The [governing execution contract](coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md#single-operator-execution)
+and [authority audit](coordination/2026-09-25-v2-single-operator-autonomy-audit.md) require one accountable
+operator to drive the remaining programme through agents and protected CI. Named review disciplines
+are fresh evidence assessments under ADR-0079; independently authored controls and native identity
+predicates remain mandatory. Reuse qualified infrastructure and automate routine handoffs.
+
+Before GS2-10 freeze, inventory and rehearse every installed execution route through retirement. Missing
+interpreters, unobserved permissions, credential relays, unreconciled approval policy and recovery gaps
+are candidate preparation work. Resolve them before closing the fleet. Current `fleet-cutover`
+self-review restrictions still apply; [proposed ADR-0090](adr/0090-single-operator-v2-cutover-execution.md)
+prepares a one-owner profile without substituting automation for protected human `OpenV2` approval.
+No acceptance checkbox or historical receipt changes from this execution requirement alone.
+
 ## 2. Non-negotiable program invariants
 
 1. The published FS.GG.SDD specification kernel is consumed as a package; no source-project shortcut or
@@ -1554,13 +1569,24 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
   archive, prepared receiver heads, settings plans, exact phase operations, and rollback plans.
 - [ ] **GS2-10.5 — Prepare receiver changes.** Create exact-head, green PRs or protected plans for pins,
   workflows, rulesets, settings, environments, and permissions; do not merge/apply switch changes yet.
+  Bind every remaining effect through retirement to its installed interpreter/workflow, target, observed
+  grant, approval scope, durable receipt, readback and recovery route. Resolve the current cutover
+  environment/conformance drift and qualify the selected approval profile before candidate freeze.
 - [ ] **GS2-10.6 — Drain backlog hazards.** Resolve or disposition obsolete Renovate PRs, coordination-tool
   adoption PRs, release candidates, conflicting settings changes, and work expected to cross the window.
 - [ ] **GS2-10.7 — Rehearse the whole cutover.** Execute freeze through rollback and freeze through
   simulated `OpenV2` in isolated fleet replicas; record durations, API budgets, operator decisions, and all
-  manual steps.
+  manual steps. Exercise the installed one-operator route, automate mechanical relays and retain exact
+  dispositions for genuine human approval or unavailable administrative authority. Include observation
+  and contraction controls in the isolated exercise; synthetic completions cannot satisfy production Q10.
 - [ ] **GS2-10.8 — Approve readiness.** Independent architecture, security, operations, migration, and
-  receiver reviewers accept the exact candidate/manifest. Any source or plan change invalidates approval.
+  receiver reviewers assess the exact candidate/manifest. Under [ADR-0079](adr/0079-single-accountable-delivery-authority.md),
+  the accountable owner accepts readiness from their separately generated critique evidence and the
+  required technical gates. Any source or plan change invalidates approval. The owner may orchestrate
+  these critiques; they remain distinct from the owner's acceptance verdict. All independent controls and
+  protected native-identity requirements remain, including any explicit independent-human rule.
+  Readiness includes the complete installed execution inventory and the residual operator-action trace
+  from GS2-10.7.
 - [ ] **GS2-10.9 — Close the concurrent-change gate.** Prove there is no active kernel publication,
   lifecycle-default flip, provider/registry flip, coordination receiver change, reusable-workflow change,
   repository-settings mutation, or release saga expected to cross the cutover window. Defer each remaining
