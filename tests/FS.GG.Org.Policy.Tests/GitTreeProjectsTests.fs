@@ -412,6 +412,15 @@ module GitTreeProjectsTests =
         refused "zero-padded" (fst padded) [ padded; edgeA ]
 
     [<Fact>]
+    let ``Git tree entries with null object IDs cannot certify project roster`` () =
+        // git hash-object --literally fixed these roots; git fsck --strict reports nullSha1.
+        [ objectRow "146210972762d9bc47fbafc7025aadf538d7232b"
+              "MTAwNjQ0IEEuZnNwcm9qAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          objectRow "028c0a969f21e7e05bfd41ebd136077c182c2016"
+              "MTAwNjQ0IEEuZnNwcm9qAKXQx8j6erOtWXN7LmERQxD3K5F7MTAwNjQ0IFJFQURNRS5tZAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==" ]
+        |> List.iter (fun row -> refused "null object ID" (fst row) [ row ])
+
+    [<Fact>]
     let ``Git directory order treats directory name as ending in slash`` () =
         let ordered =
             objectRow "9cf1687f89c5ae5916534a943585cccb3cebea73"

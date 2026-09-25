@@ -104,12 +104,16 @@ module GitTreeProjects =
                                 error path "duplicate tree entry name"
                             else
                                 let oidStart = nul + 1
-                                let oid = Convert.ToHexString(bytes.[oidStart .. oidStart + 19]).ToLowerInvariant()
-                                let entry = { Mode = mode; Name = name; ObjectId = oid }
-                                match entries with
-                                | previous :: _ when compareTreeEntries previous entry >= 0 ->
-                                    error path "noncanonical tree entry order"
-                                | _ -> parse (oidStart + 20) (Set.add name seen) (entry :: entries)
+                                let rawOid = bytes.[oidStart .. oidStart + 19]
+                                if Array.forall ((=) 0uy) rawOid then
+                                    error path "null object ID in tree entry"
+                                else
+                                    let oid = Convert.ToHexString(rawOid).ToLowerInvariant()
+                                    let entry = { Mode = mode; Name = name; ObjectId = oid }
+                                    match entries with
+                                    | previous :: _ when compareTreeEntries previous entry >= 0 ->
+                                        error path "noncanonical tree entry order"
+                                    | _ -> parse (oidStart + 20) (Set.add name seen) (entry :: entries)
                         with :? DecoderFallbackException ->
                             error path "malformed tree entry UTF-8 name"
         parse 0 Set.empty []
