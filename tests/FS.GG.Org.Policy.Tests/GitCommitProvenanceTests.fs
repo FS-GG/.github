@@ -151,6 +151,7 @@ module GitCommitProvenanceTests =
     [<Theory>]
     [<InlineData("c4c51c08f95d8d148e0e89a499fd1b9256a77012", "dHJlZSAyYjU1MmQ2YmY5ZDdiNDQ1OGEyOGZjNjU2NjNmYmMyYzdiMDIyMWRjCnRyZWUgMmI1NTJkNmJmOWQ3YjQ0NThhMjhmYzY1NjYzZmJjMmM3YjAyMjFkYwphdXRob3IgRml4dHVyZSA8Zml4dHVyZUBleGFtcGxlLmludmFsaWQ+IDAgKzAwMDAKY29tbWl0dGVyIEZpeHR1cmUgPGZpeHR1cmVAZXhhbXBsZS5pbnZhbGlkPiAwICswMDAwCgptZXNzYWdlCg==", "duplicate")>]
     [<InlineData("20f4821d35a6f3e5465404f5674b09bf1d031932", "dHJlZSBOT1QtQS1TSEExCmF1dGhvciBGaXh0dXJlIDxmaXh0dXJlQGV4YW1wbGUuaW52YWxpZD4gMCArMDAwMApjb21taXR0ZXIgRml4dHVyZSA8Zml4dHVyZUBleGFtcGxlLmludmFsaWQ+IDAgKzAwMDAKCm1lc3NhZ2UK", "tree header")>]
+    [<InlineData("7d49c876b9cded130831960eb86e50bcebd8188c", "dHJlZSAyYjU1MmQ2YmY5ZDdiNDQ1OGEyOGZjNjU2NjNmYmMyYzdiMDIyMWRjCnBhcmVudCBub3QtYS1zaGExCmF1dGhvciBGaXh0dXJlIDxmaXh0dXJlQGV4YW1wbGUuaW52YWxpZD4gMCArMDAwMApjb21taXR0ZXIgRml4dHVyZSA8Zml4dHVyZUBleGFtcGxlLmludmFsaWQ+IDAgKzAwMDAKCmZpeGVkIG1hbGZvcm1lZCBwYXJlbnQgZml4dHVyZQo=", "parent")>]
     let ``hashed malformed commit headers cannot certify root`` id encoded message =
         let malformedPin = { pin with CommitId = id }
         let malformed = { observation with CommitId = id; RawCommit = Convert.FromBase64String(encoded) }

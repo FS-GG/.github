@@ -73,6 +73,12 @@ module GitCommitProvenance =
                 error "<commit>" "commit tree header is malformed"
             elif headers |> Array.skip 1 |> Array.exists (fun line -> line.StartsWith("tree ", StringComparison.Ordinal)) then
                 error "<commit>" "duplicate commit tree header"
+            elif headers
+                 |> Array.skip 1
+                 |> Array.exists (fun line ->
+                     line.StartsWith("parent ", StringComparison.Ordinal)
+                     && not (Regex.IsMatch(line, @"\Aparent [0-9a-f]{40}\z", RegexOptions.CultureInvariant))) then
+                error "<commit>" "commit parent ID is malformed"
             elif headers |> Array.filter (fun line -> line.StartsWith("author ", StringComparison.Ordinal)) |> Array.length <> 1
                  || headers |> Array.filter (fun line -> line.StartsWith("committer ", StringComparison.Ordinal)) |> Array.length <> 1 then
                 error "<commit>" "commit author or committer header is absent or duplicated"
