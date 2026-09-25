@@ -611,9 +611,12 @@ at `f7da149a7b2d4db227db5e8931dfe2613e5a61b4` refuses the matching
 dynamic Include/Remove shapes (134 fixtures). Task outputs, implicit imports,
 installed parity, and receiver admission remain separate.
 [`.github` telemetry source #3780](https://github.com/FS-GG/.github/pull/3780)
-at `62d6ea212fa8ca5999aceb4d7802cbad4d67002b` refuses an unreadable
-field in the dormant exact Project 1 map after two red-before partial-map
-fixtures (848 GitHub adapter tests). The runner still enumerates all Projects;
+at `e58b5483fc51b04852c1d10e77272cecf6ec1f6e` refuses an unreadable
+field in the dormant exact Project 1 map. A live read-only schema probe found
+24 fields including known built-in kinds omitted from the writable map, so the
+first overstrict draft was corrected to permit those explicit kinds while
+refusing unknown, missing and unsupported writable kinds (853 GitHub adapter
+tests, with red-before partial-map and built-in controls). The runner still enumerates all Projects;
 no genuine instrumented item or matching applied Host receipt is established.
 The following source-only drafts do not change those holds:
 [Coordination GS2-09.9 #661](https://github.com/FS-GG/FS.GG.Coordination/pull/661)
@@ -660,6 +663,30 @@ inventory completeness.
 at `57bca74b4175a70bb4719f3a0fd1f42a3c4551df` refuses local/central
 ZIP CRC and size mismatches without a data descriptor (49 payload, 29 archive
 controls); descriptor-form, complete closure and producer/receiver custody remain.
+More source-only drafts retain the same gates:
+[Coordination GS2-09.9 #665](https://github.com/FS-GG/FS.GG.Coordination/pull/665)
+at `bd1b482f92e6b4f39a6058cad22e2a854c410e3e` snapshots a mutable
+review-audit scope (11 tests), and [#667](https://github.com/FS-GG/FS.GG.Coordination/pull/667)
+at `9738b4674067fa06e72b941bccb70ab7f4622fb7` snapshots a mutable
+source-release scope (16 tests); fake claims do not establish protected custody.
+[Coordination GS2-09.9 #668](https://github.com/FS-GG/FS.GG.Coordination/pull/668)
+at `bc721eafc8dd6861d4fbc7d7f9204e6e17b0f70d` snapshots a mutable
+workflow-reader scope after a false green (11 fake-port tests); protected
+workflow custody and installed native effects remain held.
+[Coordination GS2-09.7 #666](https://github.com/FS-GG/FS.GG.Coordination/pull/666)
+at `e31378905d22145aa6f0825ef5e6165af739f692` refuses foreign-repository
+native activity pages (41 focused tests), with initial census admission,
+journal/custom receipts, raw parsing and Q5/Q6 still open.
+[`.github` FSC-03 Python #3783](https://github.com/FS-GG/.github/pull/3783)
+at `cc7989dd92003be7c3e9d5c880c2b76e97b81380` refuses dynamic MSBuild
+task output item names (137 fixtures); [F# #3784](https://github.com/FS-GG/.github/pull/3784)
+at `c42697d0cf8f841fe0b717e734b52251788d6810` matches that refusal
+(128 tests). The installed MSBuild probe characterizes expansion, without
+installed receiver parity.
+[Templates FSC-05 #569](https://github.com/FS-GG/FS.GG.Templates/pull/569)
+at `3e7d7ecc3167eb263ee9a53c42c13a55b60dad4d` refuses ZIP members with
+a data-descriptor flag (50 payload, 29 archive controls); descriptor support,
+full closure and producer/receiver custody remain unproven.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
