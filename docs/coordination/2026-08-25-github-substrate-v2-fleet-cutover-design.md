@@ -399,6 +399,39 @@ the manifest identity, current epoch commit, protected environment approval, and
 operation grant. The issue projection is regenerated only after the authoritative transition re-reads
 successfully.
 
+#### OperatingV1 admission after genesis
+
+The installed v1 admission genesis establishes a journal root, not authority for a caller to create an
+admission. While the verified epoch is `OperatingV1`, one protected service derives each new
+`MutationContext` from a fresh, complete native inventory of the bounded issue or pull request,
+current owner and claim generation where a claim is required, outstanding operation and delivery
+records, and the exact effect target. It binds those facts to the current cutover commit, the
+admission journal parent and generation, and a stable operation and idempotency identity. The
+inventory retains terminal pagination and revision proofs; unreadable, incomplete, contradictory,
+or changed facts refuse. An ordinary CLI argument, ambient user token, or previously returned
+handle cannot nominate a new admission. The CLI may only resume or inspect a handle already
+verified in the journal.
+
+The service seals one exact admission plan before obtaining its short-lived ordinary App credential.
+A protected issuer binds the credential handoff to that plan digest, operation, expected journal parent,
+current epoch and permitted repository; the credential enters the scoped CAS transport through an
+anonymous descriptor and is never returned as a CLI value or retained in an artifact. The one-time
+genesis workflow, approval, signing key and JWT are not reusable authorization for a later admission.
+The service rereads the epoch, claim and journal immediately before its effect, appends through
+expected-parent CAS, and returns an admitted handle only after independent exact journal readback.
+A lost response or conflicting parent is reconciled from durable state under the same operation
+identity; uncertainty never permits a second blind append.
+
+For a provider effect, reconciliation requires exact request and idempotency identity plus fresh
+target readback. It reports `Applied` only for a verified matching effect, `StronglyAbsent` only with
+an explicit exclusion proof, and `Indeterminate` for unreadable, partial or lost-response evidence.
+No direct routine merge, intake, Project write or other normal v1 mutation route is enabled until the
+installed service, issuer, journal and provider probes qualify together. Independent controls must
+refuse caller-supplied contexts, foreign or stale claims, moved source/target revisions, changed epoch,
+wrong credential scope, CAS races, lost responses, partial effects, and old clients. The accepted
+GS2-08 bridge fence remains the outer precondition; this admission contract adds no v2 production
+writer and grants no cutover transition.
+
 ### 4.10 Sealed legacy history
 
 V2 production does not carry permanent upcasters for all v1 history. The cutover classifies v1 state as:
