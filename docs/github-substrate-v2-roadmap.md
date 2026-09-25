@@ -1032,6 +1032,8 @@ changing the protected holds:
 | [FSC-03 Python #3809](https://github.com/FS-GG/.github/pull/3809) | `94c44071bc75dd5de7b243c2b3c9c7efbf66fce5` | Live Rule B gate refuses unsupported GitHub path operators `?`, `+` and `[]` before coverage; 168 fixture controls. Stack acceptance and installed receiver proof remain open. |
 | [GS2-09.9 #719](https://github.com/FS-GG/FS.GG.Coordination/pull/719) | `371948c4e749585e0b0fc599396ad0d25cd540cc` | Closed scaffold verifier refuses a float `nativeSource.size` in a resealed manifest; 19 focused tests. Local approval digest remains caller supplied, #550 held. |
 | [GS2-09.7 #720](https://github.com/FS-GG/FS.GG.Coordination/pull/720) | `677274aac21e234bf1ec4f13c848bbf212a35f1a` | Raw-to-typed issue binder independently checks unique issue identities, unique PR markers and disjoint issue/marker numbers; 139 focused tests. Hosted checks queued, Q5/Q6 held. |
+| [FSC-03 Python #3810](https://github.com/FS-GG/.github/pull/3810) | `cd2617ca07ccdf07fbbad556bb49a1fe72201c71` | Live static graph refuses unverified custom SDK declarations that can import hidden `ProjectReference` edges; 170 fixtures after an installed MSBuild probe. Built-in resolver provenance and F# parity remain open. |
+| [GS2-09.9 #721](https://github.com/FS-GG/FS.GG.Coordination/pull/721) | `70ccbf3b0505cb90eb50035e377f4157ed660c27` | Release preflight refuses incomplete or falsely authorizing byte-verifier results; 59 focused tests. Closed archive and manifest pins unchanged, workflows disabled and #550 held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
