@@ -27,6 +27,22 @@ the scan. This is a freshness guard, not independent proof that a caller
 actually performed those checks; inspect the source evidence before publishing.
 The wrapper only refreshes telemetry and local counters.
 
+For each run, record a new evidence cutoff and verify the metadata against it:
+
+1. Read the live worker roster; count only active lanes with explicit Sol/high
+   launch evidence, including the reserved direct-V2 lane.
+2. Read the current owner PR lists and exact head commit times. Rebuild the
+   workstream state, declared PR/evidence counts, checks, risks, next actions,
+   and newest five completions from those observations.
+3. Add the cited draft heads to the roadmap, validate it, and push it. Use that
+   new roadmap head in completion rows only after the push succeeds.
+4. Set `metadataObservedAt` to the UTC verification time, run the wrapper,
+   inspect the rendered labels and holds, and publish with the cutoff stated.
+
+Do not carry forward an old `METADATA.json` with only its timestamp changed.
+If a PR lands after the cutoff, rebuild and rerun or name the earlier cutoff
+when sharing the report.
+
 The counter input is always `LocalCounterDiagnostic`: the local JSONL scan has
 no authenticated collector/account scope and no orchestration-runner/Host
 receipt. The F# script always sets capture to pending. Its weekly projection
