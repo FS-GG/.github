@@ -1107,6 +1107,7 @@ changing the protected holds:
 | [FSC-03 F# #3826](https://github.com/FS-GG/.github/pull/3826) | `05f92619ab2d280ca6a9a3162d055c8aa12014fc` | Dormant strict Git ID validators refuse terminal-newline SHA values before provisional branch facts or raw provider dispatch; 267 F# tests. Credential/accepted pin/installed receiver remain held. |
 | [FSC-04 #1049](https://github.com/FS-GG/FS.GG.SDD/pull/1049) | `d1bcc2aed975a47668c68e9ab59b7c61b80cbff1` | Read-only opened-descriptor comparison of selected Git executable mode, including mid-read chmod; seven focused and 1,537 Commands tests. Common instant, complete source and effect proof remain open. |
 | [Telemetry usage #765](https://github.com/FS-GG/FS.GG.Coordination/pull/765) | `72eb8bd83739ee57397c607e33f6401b6f354964` | Dormant v2 ThreadItem parser refuses missing or nonstring `agentMessage.text`; 14 focused and 178 full Release execution tests. Other variants and genuine runner/Host capture remain unproven. |
+| [FSC-03 F# #3827](https://github.com/FS-GG/.github/pull/3827) | `016da99fec14523e9e7313c7d85ea68f7fa923ca` | Dormant repository/request identity checks refuse terminal-newline full names before provisional pin, GraphQL membership or raw commit dispatch; 272 F# tests. Live gate, credential and installed receiver remain held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
