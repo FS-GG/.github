@@ -1,10 +1,10 @@
 # GS2-09.7 protected pending-revocation worker contract
 
-This draft adds a source-only worker for one pending minted token, stacked on
-#3714. It has no scheduler, provider adapter, credential, or workflow entry.
-Its four recovery pins, #3714's five finalizer/vault/revoker pins, and the
-inherited signer pin remain empty. No production token can be recovered or
-revoked through this source as shipped.
+This draft adds a source-only worker for one pending minted token, now stacked
+on #3737. It has no scheduler, provider adapter, credential, or workflow
+entry. Its recovery, scheduler, census queue/journal,
+finalizer/vault/revoker, and inherited signer pins remain empty. No
+production token can be recovered or revoked through this source as shipped.
 
 ## One exact protected subject
 
@@ -20,6 +20,16 @@ envelope and proof before writing it. The candidate token, checkout, sandbox
 repository, artifacts, caches, and runner workspace must be unable to write,
 delete, or impersonate any of these protected records or credentials.
 
+The worker also requires a pinned, host-owned durable scheduler descriptor and
+an exact committed schedule record for the mint, binding, token, run context,
+installation, target, queue, journal and recovery resources. It independently
+reads the joint mint/pending seal and the exact pending subject from the
+protected census journal, then reads the seal again to reject drift. A
+schedule record's own `censusComplete: true` assertion is insufficient. The
+schedule ID is passed to the one-use recovery claim; the installed atomic CAS
+must refuse a withdrawn schedule before any native effect. Missing, foreign,
+candidate-writable, stale or unknown schedule evidence blocks the claim.
+
 The recovery journal must be a pinned HTTPS resource with durable atomic CAS
 and native readback. A fresh committed recovery claim requires exact readback
 before any provider mutation. The worker observes the token natively first.
@@ -33,15 +43,20 @@ committed but the worker crashed before revocation, an active token remains
 pending for protected owner intervention. The worker never retries the
 candidate invocation or asserts that a GitHub App token is single-use.
 
-This source processes one supplied subject. It does not enumerate all pending
-tokens or prove that a protected scheduler has a complete, omission-free
-census. Installing automated recovery requires that census, a durable worker
-queue, a bounded retry/escalation policy for active tokens after unknown
-claims, a protected vault lifetime long enough for recovery, and verified
-native provider observation. A descriptor assertion and fake-port test do not
-establish service ACLs, token escrow, atomicity, durability, or a live
-revocation. Any missing journal, vault, revoker, binding, intent, or receipt
-keeps the disposition pending.
+This source processes one supplied subject. The #3736/#3737 census verifies
+complete mint/pending coverage in fake ports, but this worker cannot recompute
+the full list from one job. Installing automated recovery requires a protected
+scheduler that durably enqueues every subject from the verified joint seal,
+does not silently omit jobs, and keeps schedule admission and recovery claim
+in one authority. The owner must prove schedule revocation ordering through
+native action, a bounded retry/escalation policy for active tokens after
+unknown claims, a protected vault lifetime long enough for recovery, and
+native provider observation. Descriptor assertions and fake-port tests do
+not establish service ACLs, escrow, atomicity, durability, or a live
+revocation. Unresolved minted-before-pending tokens require separate
+protected resolution because they cannot satisfy this worker's pending-intent
+gate. Any missing schedule, journal, vault, revoker, binding, intent, or
+receipt blocks native action or leaves the token pending.
 
 The verdict's `disposition` is always `pending`, even when its fake provider
 and journal report `revocation: revoked`. GS2-09.7 Q5/Q6 still require a
