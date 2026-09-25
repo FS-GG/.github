@@ -1218,6 +1218,10 @@ changing the protected holds:
 | [GS2-09.7 #823](https://github.com/FS-GG/FS.GG.Coordination/pull/823) | `0bd33d82b402240e8b0453c008bb8cca7c3a747d` | Source-only signed snapshot verifier now requires the pinned native attempt and App scope; red-before and 766 full unit tests. Protected signer/reader custody, #3690 adjudication and Q5/Q6 remain held. |
 | [FSC-04 #1060](https://github.com/FS-GG/FS.GG.SDD/pull/1060) | `d78f403a58d3fc3b053a77fcdaf1aafd8c0312f1` | Read-only preview verifies selected commit body against Git object ID and caps it provisionally at 1 MiB; five focused and 1,584 Commands tests, zero Release warnings/errors. Earlier Git reads already rejected the tested corruption later; tree custody, handles, ABA/common instant and installed parity remain open. |
 | [Telemetry usage #824](https://github.com/FS-GG/FS.GG.Coordination/pull/824) | `7afd8d3618286540ed76de1c620c7019ebda670b` | Dormant pinned-schema guard refuses newly added ServerNotification routes exposing turn plus usage payload pending review; copied-live red-before, 14 focused and 254 full Release execution tests. This is narrow drift control, not schema-byte or native usage acceptance; runner/Host capture remains NO_VERDICT. |
+| [Telemetry usage #825](https://github.com/FS-GG/FS.GG.Coordination/pull/825) | `3050f4b59e7ec62a8833d089524df187706f30ba` | Pure prospective current-session gate refuses source observation timestamp tied with challenge issue time; copied-live red-before, eight focused and 255 full Release execution tests. Clock/issuer/native event provenance and genuine runner/applied Host capture remain NO_VERDICT. |
+| [FSC-05 F# #603](https://github.com/FS-GG/FS.GG.Templates/pull/603) | `35a699e010004eed6d18b0d30e71797f38153252` | Dormant provider reader refuses present but empty YAML `parameters:` block, which independent YamlDotNet reads as null rather than a sequence; red-before, 68 F# tests, 49 provider-tool and 34 archive custody tests. Intentionally stricter than live Python; selected archive NO_VERDICT. |
+| [GS2-09.7 #826](https://github.com/FS-GG/FS.GG.Coordination/pull/826) | `42eee0d7a8c9321bd269fac90181899370493b3a` | Source-only recovery refuses non-UTC signed-expiry markers at expected, handoff and snapshot readbacks; two red-before offset-rewrite controls and 769 full unit tests. Protected raw-byte signer/reader custody, #3690 adjudication and Q5/Q6 held. |
+| [GS2-09.9 #827](https://github.com/FS-GG/FS.GG.Coordination/pull/827) | `bb920de6f85afed06d2dce5584cf9d3a35bc2a5a` | Offline native pull reader/classifier refuses nested head/base repository owner/name/URL contradictions across listed and detail PR rows; lost-response red-before and 73 focused tests. External pins remain provisional; #545/#550 installed provider, grant and native effect held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
@@ -1235,7 +1239,7 @@ The protected Coordination sequence is
 [#527](https://github.com/FS-GG/FS.GG.Coordination/pull/527) →
 [#526](https://github.com/FS-GG/FS.GG.Coordination/pull/526) →
 [#529](https://github.com/FS-GG/FS.GG.Coordination/pull/529), under the
-Coordination owner's gate. At the 2026-09-25 18:36 UTC read-only check,
+Coordination owner's gate. At the 2026-09-25 21:15 UTC read-only check,
 #532 was behind with no review decision, #527 was blocked with cancelled
 old-head jobs, and #526/#529 were draft and behind. No protected merge
 was inferred from source-only draft checks.
