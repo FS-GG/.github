@@ -1050,6 +1050,7 @@ changing the protected holds:
 | [GS2-09.9 #728](https://github.com/FS-GG/FS.GG.Coordination/pull/728) | `82d2b4344d5a0c6767aff0c2a24a1b75344b78e3` | Source-only typed v5 port proposal maps protected roles but its only entry exits 78 without grant or port access; 10 focused tests. Closed archive and disabled workflows unchanged, #550 held. |
 | [FSC-03 F# #3813](https://github.com/FS-GG/.github/pull/3813) | `925ab69551bd412d797e4dfaa6bd588ca2ced3b1` | Pure adapter binds supplied project bytes to Git blob IDs before XML graph inspection; 203 tests. Root tree remains unauthenticated to repository/commit. |
 | [FSC-04 #1043](https://github.com/FS-GG/FS.GG.SDD/pull/1043) | `70b76458a97d0a530f7885afa406288bf45ece4f` | Read-only preview re-verifies raw byte overlap for every selected `work/` file shared by model bundle and discovered inventory; 1,510 Commands tests. Common instant/ABA still unproved. |
+| [GS2-09.9 #729](https://github.com/FS-GG/FS.GG.Coordination/pull/729) | `23130dd81e7d59cf061a53fbecd109af2adce279` | Seals the source-only closed v5 result against caller-forged authorization, dispatch, effect count, exit and schema fields; 12 focused tests. Protected role identities remain unproved, #550 held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
