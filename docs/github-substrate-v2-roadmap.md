@@ -326,6 +326,11 @@ unselected positive audit actor false green; stacked
 `13a5d55b8a0bb976302bfbee70df9a5d1151d771` now requires that actor to match an
 explicitly selected ID. Fifteen focused and inherited tests pass, but protected selection
 of that actor, runner and artifact remains absent.
+[Coordination #624](https://github.com/FS-GG/FS.GG.Coordination/pull/624) at
+`d0c2948220b204219a8d17b2c68a4bf420aabc90` adds a read-only fake Git-object
+witness binding seven scaffold source files to a selected commit/tree; 18 focused and
+inherited tests and a local object smoke check pass. Protected reader identity/object
+format, producer artifact and independent reviewer still lack authoritative proof.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
@@ -343,6 +348,15 @@ readback. The F# replacement remains unaccepted.
 NO_VERDICT for decomposed Unicode template paths instead of a false payload match;
 16 focused and 29 stacked controls pass. Producer, served-byte, transaction, installed
 and receiver custody remain open.
+[Templates #550](https://github.com/FS-GG/FS.GG.Templates/pull/550) at
+`e272ae4288a6941f46fbcfb57a9032837851cfed` also refuses an extra nested
+config-shaped template member that previously yielded a payload-only match; 18 focused
+and 29 stacked controls pass. Ordinary nested assets remain accepted.
+[`.github` FSC-03 #3756](https://github.com/FS-GG/.github/pull/3756) at
+`ee36fbce6784a6edd1915b0fdb216ba80ed078bd` checks PR and push path filters
+independently in the pure Rule (b) reducer, closing a red-before push-only omission;
+98 F# and 91 Python focused fixtures pass. Malformed one-sided `paths: null` is still
+stricter in F# than Python; installed parity remains open.
 
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
 
