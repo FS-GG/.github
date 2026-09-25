@@ -526,6 +526,14 @@ def project_graph(root: str) -> dict[str, list[str]]:
                 inc = element.get("Include")
                 if not inc:
                     continue
+                # MSBuild expands item lists, globs, %-escapes, and expressions. A literal path
+                # for any of them invents one edge and can hide the actual project closure.
+                if (any(char in inc for char in ";*?%")
+                        or any(token in inc for token in ("$(", "@("))):
+                    raise GateError(
+                        f"{rel}: ProjectReference Include {inc!r} requires MSBuild evaluation; "
+                        "refusing to invent a literal graph edge."
+                    )
                 # MSBuild writes Windows separators; they are legal on every platform.
                 inc = inc.replace("\\", "/")
                 target = os.path.normpath(os.path.join(os.path.dirname(path), inc))
