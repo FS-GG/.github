@@ -511,6 +511,7 @@ def project_graph(root: str) -> dict[str, list[str]]:
     Explicit MSBuild imports can add references outside this file, so they require evaluation.
     """
     graph: dict[str, list[str]] = {}
+    root_path = os.path.abspath(root)
     for pattern in PROJECT_GLOBS:
         for path in glob.glob(os.path.join(root, "**", pattern), recursive=True):
             rel = os.path.relpath(path, root).replace(os.sep, "/")
@@ -548,7 +549,15 @@ def project_graph(root: str) -> dict[str, list[str]]:
                     )
                 # MSBuild writes Windows separators; they are legal on every platform.
                 inc = inc.replace("\\", "/")
+                if os.path.isabs(inc) or re.match(r"^[A-Za-z]:", inc):
+                    raise GateError(f"{rel}: ProjectReference Include {inc!r} is outside the repository graph")
                 target = os.path.normpath(os.path.join(os.path.dirname(path), inc))
+                try:
+                    within_root = os.path.commonpath((root_path, os.path.abspath(target))) == root_path
+                except ValueError:  # Different drive roots on Windows cannot have a common path.
+                    within_root = False
+                if not within_root:
+                    raise GateError(f"{rel}: ProjectReference Include {inc!r} is outside the repository graph")
                 refs.append(os.path.relpath(target, root).replace(os.sep, "/"))
             graph[rel] = refs
     return graph
