@@ -1943,6 +1943,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   one-use claim, and models no-effect append/readback refusals; 139 focused local controls
   pass. Authentic joint seal, candidate-inaccessible protected scheduler store and atomic
   batch/claim authority remain uninstalled.
+  [Atomic-store contract draft #3740](https://github.com/FS-GG/.github/pull/3740)
+  binds claim readback to exact batch, schedule, seal and protected identities and defines
+  no-effect atomic append/withdraw/claim ports with race negatives; 148 focused local
+  controls pass. The authentic joint seal and installed candidate-inaccessible durable
+  authority are still required.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.

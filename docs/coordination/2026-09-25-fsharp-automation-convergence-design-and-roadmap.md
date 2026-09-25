@@ -181,6 +181,11 @@ refuses a same-length in-place overwrite after a single held-fd read by comparin
 byte passes and opened-file metadata before, between and after them; 40 pinned-capture,
 13 adapter and 36 policy controls pass. Atomic cross-root consistency, ABA/timestamp-hidden
 or post-check writes and physical manifest custody remain unproved.
+[Audio pinned-manifest draft #320](https://github.com/FS-GG/FS.GG.Audio/pull/320)
+refuses caller/physical manifest mismatch and post-product manifest drift by comparing held
+no-follow bytes and visible path identity; 52 pinned-capture, 13 adapter and 36 policy
+controls pass. Cross-root atomicity, ABA/post-check changes, rollback and installed parity
+remain open.
 These stacked
 drafts need owner acceptance and installed evidence before receiver or release adoption.
 
