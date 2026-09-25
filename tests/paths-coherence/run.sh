@@ -653,6 +653,37 @@ proj "$RB11" "src/B"
 expect "a hatch inside a \`run:\` block is SHELL TEXT and does not license anything" \
   1 "nothing in the filter selects 'src/B'" "$RB11"
 
+# A multiline QUOTED scalar is also YAML data, even if one of its content lines begins with the
+# exact standalone-comment spelling. The live/default-branch gate used to treat this as a signed
+# allow-uncovered and return green. The shared scalar-span guard from #3698 must cover rule (b) too.
+RB11Q="$(root "$WORK/cover-hatch-quoted")"
+proj "$RB11Q" "src/A" "../B/B.fsproj"
+proj "$RB11Q" "src/B"
+wf "$RB11Q/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+cat >> "$RB11Q/.github/workflows/w.yml" <<'YAML'
+env:
+  NOTE: "example
+    # paths-coherence: allow-uncovered src/B — quoted data, not a YAML comment
+    continued"
+YAML
+expect "a hatch inside a multiline quoted scalar is DATA and cannot license an omission" \
+  1 "nothing in the filter selects 'src/B'" "$RB11Q"
+
+# The guard must stop at the scalar. A REAL YAML comment immediately after its closing quote is
+# still a signed exception; over-covering that next line would make a legitimate hatch inert.
+RB11QR="$(root "$WORK/cover-hatch-after-quoted")"
+proj "$RB11QR" "src/A" "../B/B.fsproj"
+proj "$RB11QR" "src/B"
+wf "$RB11QR/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+cat >> "$RB11QR/.github/workflows/w.yml" <<'YAML'
+env:
+  NOTE: "example
+    continued"
+# paths-coherence: allow-uncovered src/B — real YAML comment after the scalar
+YAML
+expect "a real YAML comment after a multiline quoted scalar still signs the omission" \
+  0 "ok:" "$RB11QR"
+
 # ---- REGRESSION: the real instance, from the real working tree ------------------------------
 #
 # #930's named instance. coord-engine.yml filtered on Cli/** and Core/** and NOT GitHub/**, while
