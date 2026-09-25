@@ -1051,6 +1051,8 @@ changing the protected holds:
 | [FSC-03 F# #3813](https://github.com/FS-GG/.github/pull/3813) | `925ab69551bd412d797e4dfaa6bd588ca2ced3b1` | Pure adapter binds supplied project bytes to Git blob IDs before XML graph inspection; 203 tests. Root tree remains unauthenticated to repository/commit. |
 | [FSC-04 #1043](https://github.com/FS-GG/FS.GG.SDD/pull/1043) | `70b76458a97d0a530f7885afa406288bf45ece4f` | Read-only preview re-verifies raw byte overlap for every selected `work/` file shared by model bundle and discovered inventory; 1,510 Commands tests. Common instant/ABA still unproved. |
 | [GS2-09.9 #729](https://github.com/FS-GG/FS.GG.Coordination/pull/729) | `23130dd81e7d59cf061a53fbecd109af2adce279` | Seals the source-only closed v5 result against caller-forged authorization, dispatch, effect count, exit and schema fields; 12 focused tests. Protected role identities remain unproved, #550 held. |
+| [Telemetry schema #730](https://github.com/FS-GG/FS.GG.Coordination/pull/730) | `d195d603bf996b56532abf1191e4416504e4567c` | Direct-session schema probe binds `turn/completed` through the selected server notification route rather than an unused definition; 146 adapter tests. Current-session attachment and native completed-turn usage remain no-verdict. |
+| [GS2-09.9 #731](https://github.com/FS-GG/FS.GG.Coordination/pull/731) | `96b76b7d607713ad215aef9d6b0fd287d5ee825b` | Source-only design for a separate runnable revision's file/member/workflow graph; eight links resolve. Current closed archive, exit-78 entry and disabled workflows remain unchanged, #550 held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
@@ -1079,7 +1081,7 @@ lacks complete ZIP closure, producer/served-byte custody, #511 CAS and
 receiver proof. No draft authorizes a protected merge or cutover.
 
 [V2-PROG-01 renderer draft #3735](https://github.com/FS-GG/.github/pull/3735)
-at `af081d6d55d2a77c1625ae7e05484a8225e30b1e` adds a typed local JSONL
+at `48ef2d177c4d209b81ed979110d62bf8b7018f90` adds a typed local JSONL
 diagnostic path and a script workflow that obtains fresh authenticated
 telemetry readiness, scans the root session family, and renders the pure F#
 snapshot. Local counter, weekly allowance and projection rows explicitly say
@@ -1097,6 +1099,13 @@ The script README now requires a new evidence cutoff for each run, with live
 roster, explicit launch settings, exact PR heads/commit times, current counts,
 and a pushed roadmap head before assigning that head to completions. A mere
 metadata timestamp change is insufficient evidence of those checks.
+Each typed lane now carries required `CurrentWork`; the Markdown lane table
+renders it beside the lane identity. A running lane with blank work is refused.
+The JSON adapter requires `currentWork` for every lane. Focused tests pass
+25/25; missing and blank current-work JSON fixtures each exited 2 without
+creating a report. The next ten-minute metadata rebuild must set all six
+concrete assignments from the live roster rather than carry forward stale
+task descriptions.
 
 At the 18:12:37 UTC rendered checkpoint, the source-only workflow counted six
 active Sol/high lanes (one reserved GS2-09.9 and one direct GS2-09.7), 30
