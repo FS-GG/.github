@@ -28,6 +28,7 @@ class FakeAtomicStore(contract.AtomicRecoveryStorePort):
     def __init__(self, source):
         self.lock = Lock()
         self.seal = copy.deepcopy(source.census_seal)
+        self.generation = source.joint_generation
         self.batch = None
         self.claims = {}
         self.operations = []
@@ -42,6 +43,7 @@ class FakeAtomicStore(contract.AtomicRecoveryStorePort):
                     batch["highWater"] != high_water or \
                     batch["pendingSha256"] != self.seal["pendingSha256"] or \
                     batch["mintSha256"] != self.seal["mintSha256"] or \
+                    batch["jointGeneration"] != self.generation or \
                     batch["pendingCount"] != self.seal["pendingCount"] or \
                     len(batch["jobs"]) != batch["pendingCount"] or \
                     batch["state"] != "committed":
@@ -79,7 +81,8 @@ class FakeAtomicStore(contract.AtomicRecoveryStorePort):
     def claim_recovery_once(self, mint_id, binding_id, schedule_id, batch_id):
         with self.lock:
             if self.batch is None or self.batch["batchId"] != batch_id \
-                    or self.batch["state"] != "committed":
+                    or self.batch["state"] != "committed" \
+                    or self.batch["jointGeneration"] != self.generation:
                 return "refused"
             matches = [job for job in self.batch["jobs"]
                        if job["mintId"] == mint_id
@@ -97,6 +100,7 @@ class FakeAtomicStore(contract.AtomicRecoveryStorePort):
                 "workerId": self.batch["workerId"],
                 "scheduleId": schedule_id, "batchId": batch_id,
                 "sealId": self.batch["sealId"],
+                "jointGeneration": self.batch["jointGeneration"],
                 "schedulerResourceId": self.batch["schedulerResourceId"],
                 "recoveryResourceId": self.batch["recoveryResourceId"],
                 "state": "committed",
@@ -204,6 +208,12 @@ class AtomicStoreTests(unittest.TestCase):
                          self.store.read_recovery_claim(self.job["mintId"])["batchId"])
         self.assertEqual("duplicate", self.claim())
         self.assertEqual(1, self.store.operations.count("claim"))
+
+    def test_old_batch_after_protected_head_restart_cannot_claim(self):
+        self.assertEqual("committed", self.append())
+        self.store.generation += 1
+        self.assertEqual("refused", self.claim())
+        self.assertIsNone(self.store.read_recovery_claim(self.job["mintId"]))
 
 
 if __name__ == "__main__":

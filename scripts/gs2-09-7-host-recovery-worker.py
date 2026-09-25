@@ -7,6 +7,7 @@ Every production identity pin remains empty and prevents provider effects.
 
 import importlib.util
 import copy
+import datetime as dt
 import hashlib
 import json
 import secrets
@@ -25,13 +26,18 @@ STORE_SPEC = importlib.util.spec_from_file_location("gs2_09_7_recovery_store", S
 store = importlib.util.module_from_spec(STORE_SPEC)
 STORE_SPEC.loader.exec_module(store)
 
+JOINT_SOURCE = Path(__file__).with_name("gs2-09-7-host-joint-seal.py")
+JOINT_SPEC = importlib.util.spec_from_file_location("gs2_09_7_joint_for_worker", JOINT_SOURCE)
+joint = importlib.util.module_from_spec(JOINT_SPEC)
+JOINT_SPEC.loader.exec_module(joint)
+
 WORKER_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-worker/1"
 BINDING_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-binding/1"
-CLAIM_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-claim/2"
+CLAIM_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-claim/3"
 RECEIPT_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-receipt/1"
 SCHEDULER_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-scheduler/2"
-SCHEDULE_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-schedule/1"
-BATCH_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-batch/1"
+SCHEDULE_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-schedule/2"
+BATCH_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-batch/2"
 CENSUS_SEAL_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-pending-seal/1"
 CENSUS_SUBJECT_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-pending-subject/1"
 
@@ -56,7 +62,8 @@ def require(condition: bool, reason: str) -> None:
 
 
 class ProtectedRecoveryPort(finalizer.ProtectedFinalizerPort,
-                            store.AtomicRecoveryStorePort, Protocol):
+                            store.AtomicRecoveryStorePort,
+                            joint.ProtectedJointSealPort, Protocol):
     def describe_recovery(self) -> dict: ...
     def describe_scheduler(self) -> dict: ...
     def read_census_seal(self, seal_id: str) -> dict: ...
@@ -157,7 +164,7 @@ def _digest(items: list[dict]) -> str:
 
 
 def _batch_readback(port: ProtectedRecoveryPort, seal: dict,
-                    schedule: dict) -> str:
+                    schedule: dict, generation: int) -> str:
     try:
         batch = copy.deepcopy(port.read_schedule_batch(seal["sealId"]))
         after = copy.deepcopy(port.read_schedule_batch(seal["sealId"]))
@@ -165,7 +172,8 @@ def _batch_readback(port: ProtectedRecoveryPort, seal: dict,
         raise Refused("recovery-batch-unknown") from error
     require(type(batch) is dict and type(after) is dict and batch == after
             and set(batch) == {
-                "schema", "batchId", "sealId", "highWater", "pendingCount",
+                "schema", "batchId", "sealId", "jointGeneration",
+                "highWater", "pendingCount",
                 "pendingSha256", "mintSha256", "schedulerResourceId",
                 "queueResourceId", "journalResourceId", "recoveryResourceId",
                 "workerId", "jobs", "state",
@@ -174,6 +182,8 @@ def _batch_readback(port: ProtectedRecoveryPort, seal: dict,
             and type(batch["batchId"]) is str
             and finalizer.release.host.HEX64.fullmatch(batch["batchId"])
             and batch["sealId"] == seal["sealId"]
+            and type(batch["jointGeneration"]) is int
+            and batch["jointGeneration"] == generation
             and type(batch["highWater"]) is int
             and batch["highWater"] == seal["highWater"]
             and type(batch["pendingCount"]) is int
@@ -197,6 +207,8 @@ def _batch_readback(port: ProtectedRecoveryPort, seal: dict,
         require(type(job) is dict and set(job) == set(schedule)
                 and job["schema"] == SCHEDULE_SCHEMA
                 and job["sealId"] == seal["sealId"]
+                and type(job["jointGeneration"]) is int
+                and job["jointGeneration"] == generation
                 and job["highWater"] == seal["highWater"]
                 and job["pendingSha256"] == seal["pendingSha256"]
                 and job["mintSha256"] == seal["mintSha256"]
@@ -245,13 +257,14 @@ def _batch_readback(port: ProtectedRecoveryPort, seal: dict,
 
 
 def _schedule_readback(port: ProtectedRecoveryPort, mint_id: str,
-                       binding_id: str, mint: dict, token_sha256: str) -> tuple[str, str, str]:
+                       binding_id: str, mint: dict, token_sha256: str) -> tuple[str, str, str, int]:
     try:
         schedule = port.read_schedule(mint_id)
     except Exception as error:
         raise Refused("recovery-schedule-unknown") from error
     require(type(schedule) is dict and set(schedule) == {
-        "schema", "scheduleId", "sealId", "highWater", "sequence",
+        "schema", "scheduleId", "sealId", "jointGeneration",
+        "highWater", "sequence",
         "pendingSha256", "mintSha256", "mintId", "bindingId",
         "tokenSha256", "contextSha256", "sandboxRepositoryId", "appId",
         "actor", "installationId", "vaultId", "finalizerResourceId",
@@ -332,8 +345,17 @@ def _schedule_readback(port: ProtectedRecoveryPort, mint_id: str,
     } and type(subject["sequence"]) is int
       and type(subject["installationId"]) is int
       and subject["revokeRequired"] is True, "recovery-census-subject")
-    batch_id = _batch_readback(port, seal, schedule)
-    return schedule["scheduleId"], batch_id, schedule["sealId"]
+    try:
+        joint_record = joint.verify_joint_seal(
+            port, seal, dt.datetime.now(dt.timezone.utc))
+    except joint.Refused as error:
+        raise Refused(str(error)) from error
+    generation = joint_record["generation"]
+    require(type(schedule["jointGeneration"]) is int
+            and schedule["jointGeneration"] == generation,
+            "joint-generation")
+    batch_id = _batch_readback(port, seal, schedule, generation)
+    return schedule["scheduleId"], batch_id, schedule["sealId"], generation
 
 
 def _binding_record(port: ProtectedRecoveryPort, mint_id: str,
@@ -357,7 +379,8 @@ def _binding_record(port: ProtectedRecoveryPort, mint_id: str,
 
 def _claim_readback(port: ProtectedRecoveryPort, mint_id: str,
                     binding_id: str, token_sha256: str,
-                    schedule_id: str, batch_id: str, seal_id: str) -> bool:
+                    schedule_id: str, batch_id: str, seal_id: str,
+                    generation: int) -> bool:
     try:
         claim = port.read_recovery_claim(mint_id)
     except Exception:
@@ -368,6 +391,7 @@ def _claim_readback(port: ProtectedRecoveryPort, mint_id: str,
         "workerId": PINNED_RECOVERY_WORKER_ID,
         "scheduleId": schedule_id, "batchId": batch_id,
         "sealId": seal_id,
+        "jointGeneration": generation,
         "schedulerResourceId": PINNED_SCHEDULER_RESOURCE_ID,
         "recoveryResourceId": PINNED_RECOVERY_RESOURCE_ID,
         "state": "committed",
@@ -418,7 +442,7 @@ def recover_one(port: ProtectedRecoveryPort | None, mint_id: str,
     _binding_record(port, mint_id, expected_binding_id, mint, token_sha256)
     require(finalizer._read_state(port, "read_pending", finalizer.PENDING_SCHEMA,
                                   mint_id, token_sha256), "pending-intent")
-    schedule_id, batch_id, seal_id = _schedule_readback(
+    schedule_id, batch_id, seal_id, generation = _schedule_readback(
         port, mint_id, expected_binding_id, mint, token_sha256)
 
     try:
@@ -431,7 +455,7 @@ def recover_one(port: ProtectedRecoveryPort | None, mint_id: str,
     revocation = "pending"
     claim_readback = _claim_readback(port, mint_id, expected_binding_id,
                                      token_sha256, schedule_id, batch_id,
-                                     seal_id)
+                                     seal_id, generation)
     if not claim_readback:
         claim_state = "unknown"
     if claim_readback:

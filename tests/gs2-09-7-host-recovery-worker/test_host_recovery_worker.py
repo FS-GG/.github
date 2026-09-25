@@ -10,6 +10,11 @@ SPEC = importlib.util.spec_from_file_location(
     "host_recovery_worker", ROOT / "scripts/gs2-09-7-host-recovery-worker.py")
 worker = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(worker)
+JOINT_SPEC = importlib.util.spec_from_file_location(
+    "worker_joint_signing_fixture",
+    ROOT / "tests/gs2-09-7-host-joint-seal/signing_fixture.py")
+signing = importlib.util.module_from_spec(JOINT_SPEC)
+JOINT_SPEC.loader.exec_module(signing)
 
 ORIGIN = "https://protected.example.invalid"
 FINALIZER_RESOURCE = "finalizer-ledger-test"
@@ -108,7 +113,8 @@ class FakePort:
         }
         self.scheduled = {
             "schema": worker.SCHEDULE_SCHEMA, "scheduleId": "d" * 64,
-            "sealId": "f" * 64, "highWater": 3, "sequence": 1,
+            "sealId": "f" * 64, "jointGeneration": 1,
+            "highWater": 3, "sequence": 1,
             "pendingSha256": "1" * 64, "mintSha256": "2" * 64,
             "mintId": MINT_ID, "bindingId": BINDING_ID,
             "tokenSha256": self.token_sha256,
@@ -154,6 +160,7 @@ class FakePort:
         self.schedule_batch = {
             "schema": worker.BATCH_SCHEMA, "batchId": "9" * 64,
             "sealId": self.census_seal["sealId"],
+            "jointGeneration": 1,
             "highWater": self.census_seal["highWater"], "pendingCount": 1,
             "pendingSha256": self.census_seal["pendingSha256"],
             "mintSha256": self.census_seal["mintSha256"],
@@ -162,6 +169,7 @@ class FakePort:
             "recoveryResourceId": RECOVERY_RESOURCE, "workerId": WORKER_ID,
             "jobs": [self.scheduled], "state": "committed",
         }
+        signing.attach(worker.joint, self, lambda: self.census_seal)
 
     def describe(self):
         return self.finalizer_descriptor
@@ -246,7 +254,8 @@ class FakePort:
         if self.schedule_state != "committed" or self.batch_state != "committed" \
                 or self.scheduled is None or self.schedule_batch is None \
                 or schedule_id != self.scheduled["scheduleId"] \
-                or batch_id != self.schedule_batch["batchId"]:
+                or batch_id != self.schedule_batch["batchId"] \
+                or self.schedule_batch["jointGeneration"] != self.joint_generation:
             return "refused"
         if self.claim is not None:
             return "duplicate"
@@ -258,6 +267,7 @@ class FakePort:
             "workerId": WORKER_ID,
             "scheduleId": schedule_id, "batchId": batch_id,
             "sealId": self.scheduled["sealId"],
+            "jointGeneration": self.schedule_batch["jointGeneration"],
             "schedulerResourceId": SCHEDULER_ID,
             "recoveryResourceId": RECOVERY_RESOURCE,
             "state": "committed",
@@ -306,6 +316,7 @@ class FakePort:
 class RecoveryWorkerTests(unittest.TestCase):
     def setUp(self):
         self.port = FakePort()
+        signing.pin(self, worker.joint)
         pins = {
             (worker, "PINNED_RECOVERY_ORIGIN"): ORIGIN,
             (worker, "PINNED_RECOVERY_RESOURCE_ID"): RECOVERY_RESOURCE,
@@ -338,6 +349,7 @@ class RecoveryWorkerTests(unittest.TestCase):
                 "scheduleId": self.port.scheduled["scheduleId"],
                 "batchId": self.port.schedule_batch["batchId"],
                 "sealId": self.port.scheduled["sealId"],
+                "jointGeneration": self.port.schedule_batch["jointGeneration"],
                 "schedulerResourceId": SCHEDULER_ID,
                 "recoveryResourceId": RECOVERY_RESOURCE,
                 "state": "committed"}
@@ -351,6 +363,29 @@ class RecoveryWorkerTests(unittest.TestCase):
         self.assertEqual(2, self.port.calls.count("native-observe"))
         self.assertIn("read-receipt", self.port.calls)
         self.assertNotIn(TOKEN, json.dumps(result))
+
+    def test_unsigned_seal_cannot_authorize_native_recovery(self):
+        self.port.read_joint_seal_envelope = None
+        with self.assertRaisesRegex(worker.Refused, "joint-seal"):
+            self.run_worker()
+        self.assertNotIn("claim-recovery", self.port.calls)
+        self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_replayed_signed_seal_after_head_advance_cannot_claim(self):
+        old = self.port.read_joint_seal_envelope(self.port.census_seal["sealId"])
+        self.port.joint_generation = 2
+        self.port.joint_envelope_override = old
+        with self.assertRaisesRegex(worker.Refused, "joint-seal-binding"):
+            self.run_worker()
+        self.assertNotIn("claim-recovery", self.port.calls)
+        self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_old_batch_with_new_valid_signed_generation_cannot_claim(self):
+        self.port.joint_generation = 2
+        with self.assertRaisesRegex(worker.Refused, "joint-generation"):
+            self.run_worker()
+        self.assertNotIn("claim-recovery", self.port.calls)
+        self.assertNotIn("native-revoke", self.port.calls)
 
     def test_committed_claim_without_batch_and_schedule_identity_cannot_revoke(self):
         original = self.port.claim_recovery_once

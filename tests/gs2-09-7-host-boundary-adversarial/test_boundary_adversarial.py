@@ -201,6 +201,7 @@ class ClaimBoundaryTests(unittest.TestCase):
 class CensusBoundaryTests(unittest.TestCase):
     def setUp(self):
         self.port = census_fixture.FakeCensusPort()
+        census_fixture.signing.pin(self, census.joint)
         # Deliberately leave the recovery worker endpoint and the finalizer
         # revoker unconfigured; IDs alone must not advertise ready subjects.
         pins = {
