@@ -67,6 +67,28 @@ def lines_with_refs(root: Path, paths: set[str], source: str) -> list[dict]:
     return refs
 
 
+def run_targets(run: str, paths: set[str]) -> list[str]:
+    return sorted(set(
+        token.removeprefix("./").rstrip(".,;:)\"'")
+        for token in re.findall(r"(?<![\w./-])(?:\./)?scripts/[A-Za-z0-9_.+/-]+", run)
+        if token.removeprefix("./").rstrip(".,;:)\"'") in paths
+    ))
+
+
+def interpreter_hints(shell: str, run: str) -> list[str]:
+    """Lexical hints only; shell reachability and dynamic calls need owner proof."""
+    hints = set()
+    if shell == "runner-default" or shell.split()[0] in ("bash", "sh"):
+        hints.add("shell")
+    if re.search(r"(?m)(?:^|[;&|])\s*(?:python(?:3(?:\.\d+)?)?|py)\b", run):
+        hints.add("python")
+    if re.search(r"(?m)(?:^|[;&|])\s*(?:bash|sh)\b", run):
+        hints.add("shell")
+    if re.search(r"(?m)(?:^|[;&|])\s*dotnet\s+fsi\b", run):
+        hints.add("fsharp")
+    return sorted(hints)
+
+
 def workflow_steps(root: Path, paths: set[str], names: list[str]) -> tuple[list[dict], list[dict]]:
     steps = []
     action_refs = []
@@ -96,19 +118,51 @@ def workflow_steps(root: Path, paths: set[str], names: list[str]) -> tuple[list[
                 run = step.get("run")
                 uses = step.get("uses")
                 if isinstance(run, str):
-                    targets = sorted(set(
-                        token.removeprefix("./").rstrip(".,;:)\"'")
-                        for token in re.findall(r"(?<![\w./-])(?:\./)?scripts/[A-Za-z0-9_.+/-]+", run)
-                        if token.removeprefix("./").rstrip(".,;:)\"'") in paths
-                    ))
+                    targets = run_targets(run, paths)
+                    shell = step.get("shell", "runner-default")
                     steps.append({"workflow": name, "job": job_name, "step": index,
-                                  "shell": step.get("shell", "runner-default"),
+                                  "shell": shell, "interpreter_hints": interpreter_hints(shell, run),
                                   "targets": targets, "run": run})
                 if isinstance(uses, str):
                     action_refs.append({"workflow": name, "job": job_name, "step": index, "uses": uses})
             if isinstance(job.get("uses"), str):
                 action_refs.append({"workflow": name, "job": job_name, "uses": job["uses"]})
     return steps, action_refs
+
+
+def composite_action_steps(root: Path, paths: set[str], names: list[str]) -> tuple[list[dict], list[dict]]:
+    steps = []
+    refs = []
+    for name in names:
+        try:
+            data = yaml.load((root / name).read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+        except (yaml.YAMLError, UnicodeError, OSError) as error:
+            steps.append({"action": name, "error": str(error)})
+            continue
+        if not isinstance(data, dict) or not isinstance(data.get("runs"), dict):
+            steps.append({"action": name, "error": "action runs is not a mapping"})
+            continue
+        runs = data["runs"]
+        if runs.get("using") != "composite":
+            continue
+        sequence = runs.get("steps")
+        if not isinstance(sequence, list):
+            steps.append({"action": name, "error": "composite action steps is not a sequence"})
+            continue
+        for index, step in enumerate(sequence, 1):
+            if not isinstance(step, dict):
+                steps.append({"action": name, "step": index, "error": "composite action step is not a mapping"})
+                continue
+            run = step.get("run")
+            uses = step.get("uses")
+            if isinstance(run, str):
+                shell = step.get("shell", "runner-default")
+                steps.append({"action": name, "step": index, "shell": shell,
+                              "interpreter_hints": interpreter_hints(shell, run),
+                              "targets": run_targets(run, paths), "run": run})
+            if isinstance(uses, str):
+                refs.append({"action": name, "step": index, "uses": uses})
+    return steps, refs
 
 
 def census(root: Path) -> dict:
@@ -131,7 +185,10 @@ def census(root: Path) -> dict:
     paths = set(names)
     workflow_names = [name for name in names if name.startswith(".github/workflows/") and name.endswith((".yml", ".yaml"))]
     steps, action_refs = workflow_steps(root, paths, workflow_names)
+    action_names = [name for name in names if name.startswith(".github/actions/") and name.endswith(("/action.yml", "/action.yaml"))]
+    action_steps, nested_action_refs = composite_action_steps(root, paths, action_names)
     issues = [f"{item['workflow']}: {item['error']}" for item in steps if "error" in item]
+    issues.extend(f"{item['action']}: {item['error']}" for item in action_steps if "error" in item)
     issues.extend(f"{item['path']}: executable interpreter unknown" for item in scripts
                   if item["kind"] == "executable-unknown")
     for item in scripts:
@@ -153,6 +210,8 @@ def census(root: Path) -> dict:
     head = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
     return {"root": str(root), "head": head, "tracked_files": len(names), "scripts": scripts,
             "workflows": workflow_names, "workflow_steps": steps, "workflow_action_refs": action_refs,
+            "composite_actions": action_names, "action_steps": action_steps,
+            "nested_action_refs": nested_action_refs,
             "lexical_script_refs": refs, "dotnet_tool_pins": {key: value.get("version") for key, value in pins.items()},
             "issues": issues}
 
