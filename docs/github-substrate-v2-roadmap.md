@@ -229,6 +229,10 @@ unchanged; exact-head GitHub adapter 844/844 and scheduling CLI 8/8 pass. It is 
 draft, not an installed or admitted runner. The broader CLI has one UTEL-06D configuration
 failure also reproduced on #3751's base. The denied all-project route remains blocked until
 owner acceptance and installed qualification; no native turns or applied Host receipt exist.
+At 2026-09-25 20:15 UTC it was rebased onto #3751's repaired head, yielding
+exact draft head `c9ae8716dd5c969f22bc3451d6db670581b480bc`; local
+signature-doc-siting fixtures passed 90/90 and Release GitHub adapter tests
+844/844. Fresh hosted checks and owner admission are still pending.
 [Exact-board duplicate-field draft #3772](https://github.com/FS-GG/.github/pull/3772)
 stacks on #3752 at `56266f65174c492226c7a25c29a87652c38a64e9`. A red-before
 complete Project 1 response with duplicate `Status` field names silently selected the
@@ -237,6 +241,10 @@ silently selected a shadow option ID. The dormant direct route now refuses missi
 blank or duplicate field and single-select option names/IDs before map construction.
 Its Release GitHub adapter suite passes 846/846. This draft neither installs the runner
 mode nor admits an item; Project 2 remains PAT-forbidden on the installed enumeration route.
+At 2026-09-25 20:16 UTC it was rebased onto #3752's repaired source head,
+yielding exact draft head `60219828eb46a0b34d00054b2b8c7afc8bf53bc9`;
+local signature-doc-siting fixtures passed 90/90 and Release GitHub adapter
+tests 846/846. Fresh hosted checks and protected owner acceptance remain open.
 A fresh read-only Project 1 response returned pinned ID `PVT_kwDOEYAWY84Bb08W`,
 `totalCount=24`, 24 field nodes and zero duplicate field or option identities; it
 does not replace installed runner qualification.
@@ -1142,6 +1150,11 @@ changing the protected holds:
 | [FSC-04 #1052](https://github.com/FS-GG/FS.GG.SDD/pull/1052) | `cace956fa195a2f694de3a606ec7f0f3f7bec368` | Read-only selected-commit preview rechecks Git root/registration after blob reads, refusing persistent `.git` switch; three focused and 1,548 Commands tests. Swap-back ABA remains non-authorizing. |
 | [FSC-03 F# #3835](https://github.com/FS-GG/.github/pull/3835) | `8716bf1a83f9f4cfef57721a7354a295195c81c0` | Dormant raw-tree parser enforces Git byte ordering with directory virtual slash; independent `git fsck --strict` rejected two red-before trees. 295 F# tests; provider/installed receiver held. |
 | [Telemetry usage #782](https://github.com/FS-GG/FS.GG.Coordination/pull/782) | `526ef95da0fcb28657c8683f6460e9b1de02aa49` | Dormant `dynamicToolCall` parser validates required fields/status and nested content-item union; 44 focused and 208 full Release execution tests. Genuine runner/native turn/Host capture pending. |
+| [FSC-03 F# #3836](https://github.com/FS-GG/.github/pull/3836) | `7050864cbfa75612c66e810ef0ef4f13bc2c8e45` | Dormant raw-tree parser refuses zero-padded filemode rejected by independent `git fsck --strict`; 296 F# tests. Live Python/provider/installed receiver held. |
+| [GS2-09.7 #783](https://github.com/FS-GG/FS.GG.Coordination/pull/783) | `9974e66eed1518b7b72247d3cff9995bf5ea95dd` | Source-only signed clock artifact and fake installation descriptor refuse candidate-writable/non-monotonic clocks and bind reservation request; 748 full unit tests. Host clock/signer/token custody and Q5/Q6 held. |
+| [GS2-09.9 #784](https://github.com/FS-GG/FS.GG.Coordination/pull/784) | `6fecff1cc3a88cef4202b376c6c619db417bd78c` | Closed fake independent install-approval event joins selected tree/five-file source set, #764 ZIP, runner path/image/runtime and no-grant interval; 35 focused tests. No protected approval/install or #550 native effect; #545 held. |
+| [Telemetry usage #785](https://github.com/FS-GG/FS.GG.Coordination/pull/785) | `50becaacaa9719faeefd04e2b8b3c2583bfaff21` | Dormant `collabAgentToolCall` parser validates required fields, nested agent states and optional model/prompt/effort; 49 focused and 213 full Release execution tests. Genuine runner/Host capture pending. |
+| [FSC-03 F# #3837](https://github.com/FS-GG/.github/pull/3837) | `87feb26f43d54ba8a92042dd9f8d67599737d425` | Dormant raw-tree parser refuses Git's `git~1` short alias rejected by independent `git fsck --strict`; 297 F# tests. Other filesystem aliases/provider/installed parity held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
