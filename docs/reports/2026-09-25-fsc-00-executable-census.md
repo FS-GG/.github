@@ -10,6 +10,12 @@ The [read-only census command](../../scripts/fsc-census.py) enumerates `git ls-f
 uv run --with pyyaml==6.0.3 python3 scripts/fsc-census.py --root . > /tmp/fsc00-dotgithub.json
 uv run --with pyyaml==6.0.3 python3 tests/fsc-census/run.py
 # Repeat --root for each named sibling checkout; inspect .issues before using a count.
+# For a local authenticated org/roster comparison, keep the API snapshot OUT of the repository:
+umask 077
+gh api --paginate 'orgs/FS-GG/repos?per_page=100&type=all' \
+  | jq -s 'add | map({full_name, visibility, archived})' > /tmp/fsc00-org-repos.json
+uv run --with pyyaml==6.0.3 python3 scripts/fsc-census.py --root . \
+  --org-repos-json /tmp/fsc00-org-repos.json > /tmp/fsc00-org-reconciliation.json
 ```
 
 One warm local run over `.github` took 0.702 seconds and emitted 735,428 JSON bytes (Python `perf_counter`, command completion, no hosted CI cost claim). The output is intentionally generated on demand instead of committing a snapshot that could be mistaken for current receiver state.
@@ -33,7 +39,21 @@ Counts are tracked source files by interpreter family. Python includes `.py` and
 
 The `.github` inventory contains 21 extensionless scripts, including [`fsgg-coord`](../../scripts/fsgg-coord), [`skill-view`](../../scripts/skill-view), [`generate-projections`](../../scripts/generate-projections), and [`fsgg-surface-impact`](../../scripts/fsgg-surface-impact). A follow-up scan on this draft includes `.github/actions/setup-policy-python/action.yml`: its composite action has one Bash `run:` body invoking Python and one nested `uses:` reference. The original workflow-only scan omitted both. The tracked-file scan also includes template assets by path and shebang, but copying or generating them into a receiver is a separate effect that this source scan does not prove. There is no `.github/.config/dotnet-tools.json`; the manifest in receivers must be inspected at its owner. A zero `.py` count is never an absence proof for shell, `.fsx`, extensionless or generated tool paths. Source-file counts include tests, so they are not counts of production commands or F# port obligations.
 
-`registry/repos.yml` currently has 10 rows: the original nine-checkout baseline plus `EHotwagner/S.I.R.`. A later read-only scan of a clean local S.I.R. checkout added the tenth row. ¹Its `Other` count includes 34 tracked `SKILL.md`/YAML files with executable mode and no shebang; the census reported all 34 as unknown interpreter issues and exited 2. Those files need owner disposition before that row can be called clean. The broader FS-GG architecture review also names repositories outside this 10-row authority roster; no 17-repository receiver census is claimed by this report.
+`registry/repos.yml` currently has 10 rows: the original nine-checkout baseline plus `EHotwagner/S.I.R.`. A later read-only scan of a clean local S.I.R. checkout added the tenth row. ¹Its `Other` count includes 34 tracked `SKILL.md`/YAML files with executable mode and no shebang; the census reported all 34 as unknown interpreter issues and exited 2. Those files need owner disposition before that row can be called clean.
+
+## Authenticated organization and roster reconciliation
+
+An authenticated GitHub organization repositories API read on 2026-09-25 returned 17 FS-GG repositories, none archived. The same checkout's `registry/repos.yml` has nine of those in `repos:` plus external `EHotwagner/S.I.R.`; `outside-fabric:` explicitly names public [`FS-GG/FsQuint`](https://github.com/FS-GG/FsQuint). Seven organization repositories have neither a roster nor an outside-fabric entry. The four public members of that unclassified set are [`FS.GG.Coordination.Authority`](https://github.com/FS-GG/FS.GG.Coordination.Authority), [`FS.GG.Coordination.Authority.Sandbox`](https://github.com/FS-GG/FS.GG.Coordination.Authority.Sandbox), and the two public synthetic SVG workspace qualification repositories. Three additional unclassified repositories are private; their identifiers and the authenticated API snapshot are intentionally kept out of this public report. The optional `--org-repos-json` output gives an exact local mapping for a reader authorized to inspect that snapshot.
+
+| Population | Count | Census meaning |
+| --- | ---: | --- |
+| Org repositories in `repos:` | 9 | Source checkouts measured in the original baseline; membership alone does not prove an installed receiver. |
+| External repository in `repos:` | 1 | S.I.R. is user-owned, role `non-participant`, and has no org-fabric receiver declaration. Its later source scan had 34 issues. |
+| Org repositories in `outside-fabric:` | 1 | FsQuint has an explicit recorded exclusion from the coordination fabric. |
+| Org repositories with no roster disposition | 7 | Four public and three private; classify their receiver status with owner evidence before claiming closure. |
+| Archived org repositories | 0 | No archived row in this API snapshot. |
+
+The 17 organization repositories and the external S.I.R. row are distinct populations. This reconciliation identifies roster omissions and exclusions; it does not classify all seven unrostered repositories as receivers or prove installed artifacts, runtime pins, or cutover readiness.
 
 ## Owner boundaries and first port candidates
 
@@ -48,6 +68,6 @@ The `.github` inventory contains 21 extensionless scripts, including [`fsgg-coor
 
 ## Remaining proof before a port or deletion
 
-This static census inventories tracked source and parsed workflow/composite-action step bodies; it does **not** discover dynamically assembled commands, downloaded actions, non-composite action entrypoints, job condition reachability, workflow dispatch history, installed package members, generated workspaces, runtime interpreter versions, or every consumer of a published tool. Its lexical reference list can include comments and miss indirect calls. Those require each owner's clean-install, runtime and receiver evidence before any old path is removed. The current table does not grade the observed 0.90.0/0.91.4 pins as drift: compare them to each receiver's accepted contract and latest stable package first. Other FS-GG repositories from the architecture review are outside this nine-checkout baseline and remain explicitly unmeasured by this PR; the script can be run against their clean owner snapshots without changing this report's source claims.
+This static census inventories tracked source and parsed workflow/composite-action step bodies; it does **not** discover dynamically assembled commands, downloaded actions, non-composite action entrypoints, job condition reachability, workflow dispatch history, installed package members, generated workspaces, runtime interpreter versions, or every consumer of a published tool. Its lexical reference list can include comments and miss indirect calls. Those require each owner's clean-install, runtime and receiver evidence before any old path is removed. The current table does not grade the observed 0.90.0/0.91.4 pins as drift: compare them to each receiver's accepted contract and latest stable package first. The seven unclassified FS-GG repositories are outside the original nine-checkout source baseline and remain unmeasured as receivers by this PR; the script can be run against clean owner snapshots without changing this report's source claims.
 
 FSC-00 is therefore a reproducible **source/call-site baseline**, not completion of the installed receiver census or a GS2 gate. The parallel FSC-05 provider source and FSC-03 parser scaffold can use these heads as inputs, then refresh against their own accepted base and record exact old/new corpus outcomes before proposing any workflow or package flip.

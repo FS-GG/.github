@@ -2,6 +2,7 @@
 """Focused read-only census controls; run with PyYAML installed."""
 
 import importlib.util
+import json
 import subprocess
 import tempfile
 from pathlib import Path
@@ -17,6 +18,7 @@ with tempfile.TemporaryDirectory() as folder:
     (root / "scripts").mkdir()
     (root / "template/assets").mkdir(parents=True)
     (root / ".config").mkdir()
+    (root / "registry").mkdir()
     (root / ".github/workflows").mkdir(parents=True)
     (root / ".github/actions/setup").mkdir(parents=True)
     (root / "scripts/tool").write_text("#!/usr/bin/env bash\necho okay\n")
@@ -51,6 +53,23 @@ with tempfile.TemporaryDirectory() as folder:
     assert observed["action_steps"][0]["interpreter_hints"] == ["python", "shell"]
     assert observed["action_steps"][1]["targets"] == ["scripts/tool"]
     assert observed["dotnet_tool_pins"] == {"fs.gg.coord.cli": "0.91.4"}
+    (root / "registry/repos.yml").write_text(
+        "repos:\n  - {full: FS-GG/.github}\n  - {full: EHotwagner/S.I.R.}\n"
+        "outside-fabric:\n  - {full: FS-GG/FsQuint}\n")
+    org_snapshot = root / "org-repos.json"
+    org_snapshot.write_text(json.dumps([
+        {"full_name": "FS-GG/.github", "visibility": "public", "archived": False},
+        {"full_name": "FS-GG/FsQuint", "visibility": "public", "archived": False},
+        {"full_name": "FS-GG/Test.Public", "visibility": "public", "archived": False},
+        {"full_name": "FS-GG/Test.Private", "visibility": "private", "archived": True},
+    ]))
+    mapping = module.roster_reconciliation(root, org_snapshot)
+    assert (mapping["org_count"], mapping["roster_count"]) == (4, 2)
+    assert mapping["rostered_external"] == ["EHotwagner/S.I.R."]
+    assert mapping["outside_fabric_org"] == ["FS-GG/FsQuint"]
+    assert mapping["unclassified_org"] == ["FS-GG/Test.Private", "FS-GG/Test.Public"]
+    assert mapping["archived_org"] == ["FS-GG/Test.Private"]
+    assert mapping["unclassified_visibility"] == {"public": 1, "private": 1, "internal": 0}
     assert all(s["path"] != "scripts/untracked.py" for s in observed["scripts"])
     assert module.script_kind("bin/tool", "not a shebang", True) == "executable-unknown"
     (root / ".github/workflows/check.yml").write_text("jobs: [broken]\n")
@@ -63,4 +82,4 @@ with tempfile.TemporaryDirectory() as folder:
         "runs:\n  using: composite\n  steps:\n    - shell: []\n      run: python3 -V\n")
     invalid_shell = module.census(root)
     assert ".github/actions/setup/action.yml: composite action run shell is not a scalar" in invalid_shell["issues"]
-print("fsc-census controls: 13 passed")
+print("fsc-census controls: 19 passed")
