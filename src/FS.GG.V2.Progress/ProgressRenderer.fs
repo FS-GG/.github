@@ -245,6 +245,9 @@ module ProgressRenderer =
         require (sha40 snapshot.RoadmapHead) "roadmap head must be a lowercase 40-hex commit"
         let laneIds = snapshot.Lanes |> List.map _.Id
         require (laneIds.Length = (laneIds |> List.distinct).Length) "lane IDs must be unique"
+        let orchestrators = snapshot.Lanes |> List.filter (fun lane -> lane.Role = Orchestrator)
+        require (orchestrators.Length = 1 && orchestrators.Head.Activity = Running)
+            "active progress snapshot requires exactly one orchestrator"
         for lane in snapshot.Lanes do
             requireText "lane ID" lane.Id
             if lane.Reservation = DirectV2 then
@@ -264,10 +267,19 @@ module ProgressRenderer =
                          && (match lane.Launch with
                              | Some launch ->
                                  launch.Model = Gpt6Sol && launch.Effort = High
-                                 && launch.Source <> RuntimeSelfIntrospection
+                                 && launch.Source = ExplicitOrchestratorSpawn
                                  && nonblank launch.EvidenceId
                              | None -> false))
-                    "active V2 worker requires explicit gpt-6-sol/high launch evidence"
+                    "active V2 worker requires explicit gpt-6-sol/high spawn evidence"
+            if lane.Role = Orchestrator && lane.Activity = Running then
+                require (lane.Model = Gpt6Sol && lane.Effort = High
+                         && (match lane.Launch with
+                             | Some launch ->
+                                 launch.Model = Gpt6Sol && launch.Effort = High
+                                 && launch.Source = ExplicitUserInstruction
+                                 && nonblank launch.EvidenceId
+                             | None -> false))
+                    "running orchestrator requires explicit gpt-6-sol/high visible-profile evidence"
         let lanes = snapshot.Lanes |> List.sortWith (fun a b -> ordinal.Compare(a.Id, b.Id))
         let byModel =
             lanes
