@@ -142,6 +142,7 @@ class FakeReleasePort:
     def __init__(self):
         self.claims = set()
         self.invocations = 0
+        self.revoke_calls = 0
         self.invoke_result = "complete"
         self.on_invoke = None
         self.decision_state = "admitted"
@@ -162,6 +163,7 @@ class FakeReleasePort:
         return self.invoke_result
 
     def revoke(self, token):
+        self.revoke_calls += 1
         return "confirmed"
 
 
@@ -255,6 +257,20 @@ class HostRefusalFinalizerTests(unittest.TestCase):
         self.assertEqual("not-invoked", second["release"])
         self.assertEqual(1, self.release_port.invocations)
 
+    def test_unknown_launch_and_unknown_native_observation_stay_pending(self):
+        self.release_port.invoke_result = "unknown"
+        self.port.native_observation = "unknown"
+        first = self.run_finalizer()
+        self.assertEqual("pending", first["release"])
+        self.assertEqual("pending", first["revocation"])
+        self.assertEqual("pending", first["disposition"])
+        self.assertEqual(1, self.release_port.revoke_calls)
+        self.assertIn("native-revoke", self.port.calls)
+        self.assertIsNone(self.port.revoked)
+        second = self.run_finalizer()
+        self.assertEqual("not-invoked", second["release"])
+        self.assertEqual(1, self.release_port.invocations)
+
     def test_lost_pending_response_blocks_handoff_despite_readback(self):
         self.port.lose_pending_response = True
         first = self.run_finalizer()
@@ -339,6 +355,7 @@ class HostRefusalFinalizerTests(unittest.TestCase):
         with self.assertRaises(KeyboardInterrupt):
             self.run_finalizer()
         self.assertEqual(1, self.release_port.invocations)
+        self.assertEqual(1, self.release_port.revoke_calls)
         self.assertIn("native-revoke", self.port.calls)
         self.assertIn("native-observe", self.port.calls)
         self.assertIn("read-revoked", self.port.calls)

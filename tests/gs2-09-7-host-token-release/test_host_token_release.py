@@ -29,7 +29,9 @@ class FakePort:
         self.invoke_result = "complete"
         self.revoke_result = "confirmed"
         self.revoke_after_claim = False
+        self.revoke_during_launch = False
         self.decision_state = "admitted"
+        self.launch_error = None
 
     def claim_once(self, decision_id, binding_id, token_sha256):
         self.calls.append("claim")
@@ -49,6 +51,11 @@ class FakePort:
         if self.claimed.get(decision_id) != (binding_id, token_sha256):
             return "unknown"
         self.calls.append("invoke")
+        if self.revoke_during_launch:
+            self.decision_state = "revoked"
+            return "unknown"  # The launch and revocation raced after possible exposure.
+        if self.launch_error is not None:
+            raise self.launch_error
         return self.invoke_result
 
     def revoke(self, token):
@@ -257,6 +264,40 @@ class HostTokenReleaseTests(unittest.TestCase):
         self.assertEqual("candidate-unknown", result["outcome"])
         self.assertEqual(["claim", "invoke", "revoke"], self.port.calls)
         self.run_release()
+        self.assertEqual(1, self.port.calls.count("invoke"))
+
+    def test_cancellation_after_possible_exposure_attempts_native_revoke(self):
+        self.port.launch_error = KeyboardInterrupt("fake cancellation")
+        with self.assertRaises(KeyboardInterrupt):
+            self.run_release()
+        self.assertEqual(["claim", "invoke", "revoke"], self.port.calls)
+        self.port.launch_error = None
+        retry = self.run_release()
+        self.assertEqual("duplicate-refused", retry["outcome"])
+        self.assertEqual(1, self.port.calls.count("invoke"))
+
+    def test_revocation_racing_with_launch_is_pending_and_never_retries(self):
+        self.port.revoke_during_launch = True
+        result = self.run_release()
+        self.assertEqual("pending", result["disposition"])
+        self.assertEqual("candidate-unknown", result["outcome"])
+        self.assertEqual(1, result["invocationCount"])
+        self.assertEqual(["claim", "invoke", "revoke"], self.port.calls)
+        self.port.revoke_during_launch = False
+        self.port.decision_state = "admitted"
+        retry = self.run_release()
+        self.assertEqual("duplicate-refused", retry["outcome"])
+        self.assertEqual(1, self.port.calls.count("invoke"))
+
+    def test_launch_exception_after_possible_exposure_is_pending_and_never_retries(self):
+        self.port.launch_error = RuntimeError("fake lost launch result")
+        result = self.run_release()
+        self.assertEqual("pending", result["disposition"])
+        self.assertEqual("candidate-unknown", result["outcome"])
+        self.assertEqual(["claim", "invoke", "revoke"], self.port.calls)
+        self.port.launch_error = None
+        retry = self.run_release()
+        self.assertEqual("duplicate-refused", retry["outcome"])
         self.assertEqual(1, self.port.calls.count("invoke"))
 
     def test_unconfirmed_revocation_keeps_result_pending(self):
