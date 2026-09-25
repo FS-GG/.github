@@ -77,6 +77,10 @@ module RuleATests =
         finding "# paths-coherence: allow-divergence\non: {pull_request: {paths: [a/**]}, push: {paths: [b/**]}}\n"
 
     [<Fact>]
+    let ``marker suffix without a separator cannot sign drift`` () =
+        finding "# paths-coherence: allow-divergenceevil\non: {pull_request: {paths: [a/**]}, push: {paths: [b/**]}}\n"
+
+    [<Fact>]
     let ``signed comment on equal lists is stale`` () =
         finding "# paths-coherence: allow-divergence: a reason\non: {pull_request: {paths: [a/**]}, push: {paths: [a/**]}}\n"
 
@@ -118,6 +122,14 @@ module RuleATests =
     [<Fact>]
     let ``malformed YAML is no verdict`` () =
         refusal "yaml-invalid" "on: [push\n"
+
+    [<Fact>]
+    let ``tagged duplicate trigger key cannot yield a rule a verdict`` () =
+        refusal "yaml-invalid" "on:\n  pull_request: {paths: [a/**]}\n  push: {paths: [a/**]}\n  !!str push: {paths: [b/**]}\n"
+
+    [<Fact>]
+    let ``non-string tagged trigger cannot yield a rule a verdict`` () =
+        refusal "on-shape" "on: {pull_request: {paths: [a/**]}, !!int push: {paths: [a/**]}}\n"
 
     [<Fact>]
     let ``zero pair audit refuses a false green`` () =

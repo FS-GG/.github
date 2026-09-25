@@ -51,7 +51,7 @@ module RuleA =
 
     let private marker (text: string) =
         let covered = opaqueLines text
-        let regex = Regex("^[ \\t]*#[ \\t]*paths-coherence:[ \\t]*allow-divergence[ \\t]*[—:-]?[ \\t]*(?<reason>.*)$", RegexOptions.CultureInvariant)
+        let regex = Regex("^[ \\t]*#[ \\t]*paths-coherence:[ \\t]*allow-divergence(?=$|[ \\t—:-])[ \\t]*[—:-]?[ \\t]*(?<reason>.*)$", RegexOptions.CultureInvariant)
         text.Split('\n')
         |> Array.mapi (fun index line -> index, regex.Match(line.TrimEnd('\r')))
         |> Array.choose (fun (index, found) ->
