@@ -173,6 +173,43 @@ def composite_action_steps(root: Path, paths: set[str], names: list[str]) -> tup
     return steps, refs
 
 
+def roster_reconciliation(root: Path, org_snapshot: Path) -> dict:
+    """Compare an explicit org API snapshot with the authority roster; infer no receivers."""
+    registry = yaml.load((root / "registry/repos.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    org_repos = json.loads(org_snapshot.read_text(encoding="utf-8"))
+    if not isinstance(registry, dict) or not isinstance(registry.get("repos"), list) or not isinstance(org_repos, list):
+        raise ValueError("roster and organization snapshot must be readable lists")
+    roster = [row.get("full") for row in registry["repos"]]
+    outside = [row.get("full") for row in registry.get("outside-fabric", [])]
+    org = [row.get("full_name") for row in org_repos]
+    if any(not isinstance(name, str) or not name for name in roster + outside + org):
+        raise ValueError("roster or organization snapshot has an unnamed repository")
+    if any(len(set(group)) != len(group) for group in (roster, outside, org)):
+        raise ValueError("roster or organization snapshot has duplicate repositories")
+    if set(roster) & set(outside):
+        raise ValueError("a repository is both rostered and outside fabric")
+    if any(not name.startswith("FS-GG/") for name in org):
+        raise ValueError("organization snapshot contains a non-FS-GG repository")
+    org_set, roster_set, outside_set = set(org), set(roster), set(outside)
+    unclassified = org_set - roster_set - outside_set
+    archived = {row["full_name"] for row in org_repos if row.get("archived") is True}
+    visibility = {row["full_name"]: row.get("visibility") for row in org_repos}
+    return {
+        "org_count": len(org_set), "roster_count": len(roster_set),
+        "rostered_org": sorted(org_set & roster_set),
+        "rostered_external": sorted(roster_set - org_set),
+        "outside_fabric_org": sorted(org_set & outside_set),
+        "unclassified_org": sorted(unclassified),
+        "archived_org": sorted(archived),
+        "rostered_org_absent_from_snapshot": sorted(name for name in roster_set - org_set if name.startswith("FS-GG/")),
+        "unclassified_visibility": {
+            label: sum(visibility[name] == label for name in unclassified)
+            for label in ("public", "private", "internal")
+        },
+        "receiver_status": "unverified; org presence and roster membership do not prove installed receivers",
+    }
+
+
 def census(root: Path) -> dict:
     entries = tracked(root)
     names = [path for path, _ in entries]
@@ -227,8 +264,12 @@ def census(root: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path("."))
+    parser.add_argument("--org-repos-json", type=Path,
+                        help="optional JSON array from an exact GitHub organization repositories API read")
     args = parser.parse_args()
     result = census(args.root.resolve())
+    if args.org_repos_json:
+        result["org_roster_reconciliation"] = roster_reconciliation(args.root.resolve(), args.org_repos_json)
     print(json.dumps(result, indent=2, sort_keys=True))
     if result["issues"]:
         raise SystemExit(2)
