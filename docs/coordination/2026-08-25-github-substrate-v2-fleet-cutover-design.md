@@ -482,6 +482,14 @@ or lost-response evidence remains `Indeterminate`. Neither permits blind replay.
 missing merge commit on one read does not prove strong absence; if GitHub cannot provide it, an
 unknown merge without provider correlation remains pending for manual reconciliation and cannot
 be retried under a fresh effect identity.
+The admission service cannot authorize its own source installation. Installing the service, issuer,
+and provider executor in `.github` requires a separate, explicit one-time protected owner decision
+before any native source merge. That decision must name the exact qualified PR heads and ordered
+expected bases, installation workflow and artifact bytes, owner approval and credential scope,
+expiry, and independent merge and installed-source readback. A moved base, changed source or rule,
+missing approval, or uncertain merge result stops the packet for renewed qualification. This
+bootstrap installs only the named source; it grants no ordinary v1 effect or cutover transition.
+The earlier genesis approval in ADR-0087 does not authorize this installation.
 No direct routine merge, intake, Project write or other normal v1 mutation route is enabled until the
 installed service, issuer, journal and provider probes qualify together. Independent controls must
 refuse caller-supplied contexts, foreign or stale claims, moved source/target revisions, changed epoch,
