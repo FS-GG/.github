@@ -25,8 +25,12 @@ type PopulationFinding = { Code: string; Subject: string; Detail: string }
 /// Pure population, identity and source-path closure. No filesystem or registry write occurs here.
 module Population =
     let private finding code subject detail = { Code = code; Subject = subject; Detail = detail }
-    let private digest = Regex("^[0-9a-f]{64}$", RegexOptions.CultureInvariant)
-    let private repoName = Regex("^[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant)
+    let private digest = Regex(@"^[0-9a-f]{64}\z", RegexOptions.CultureInvariant)
+    let private skillId = Regex(@"^[a-z0-9_.-]+\z", RegexOptions.CultureInvariant)
+    let private repoName = Regex(@"^[A-Za-z0-9._-]+\z", RegexOptions.CultureInvariant)
+
+    let private validSkillId (value: string) =
+        not (String.IsNullOrWhiteSpace value) && skillId.IsMatch value
 
     let private validRepoName (name: string) =
         not (String.IsNullOrWhiteSpace name)
@@ -43,9 +47,10 @@ module Population =
         && not (path.StartsWith("/", StringComparison.Ordinal))
         && not (path.Contains('\\'))
         && not (path.Contains(':'))
+        && (path |> Seq.forall (Char.IsControl >> not))
         && (path.Split('/') |> Array.forall (fun part -> part <> "" && part <> "." && part <> ".."))
 
-    let private safeSuppliedBy (path: string) = safePath (path.TrimEnd('/'))
+    let private safeSuppliedBy (path: string) = not (isNull path) && safePath (path.TrimEnd('/'))
 
     let private sourceRepo (source: string) =
         if not (safePath source) then None
@@ -86,8 +91,26 @@ module Population =
             match input.Rostered with
             | Ok names -> names
             | Error _ -> []
-        let checkoutByRepo = input.Checkouts |> Seq.map (fun checkout -> checkout.Repo, checkout) |> Map.ofSeq
-        let rowById = input.Rows |> Seq.map (fun row -> row.Id, row) |> Map.ofSeq
+        // A duplicate is already a refusal. Keep it out of keyed lookups rather
+        // than allowing input order to pick a different authoritative fact.
+        let checkoutGroups = input.Checkouts |> List.groupBy (fun checkout -> checkout.Repo)
+        let checkoutByRepo =
+            checkoutGroups
+            |> List.choose (function repo, [ checkout ] -> Some (repo, checkout) | _ -> None)
+            |> Map.ofList
+        let ambiguousCheckouts =
+            checkoutGroups
+            |> List.choose (function repo, _ :: _ :: _ -> Some repo | _ -> None)
+            |> Set.ofList
+        let rowGroups = input.Rows |> List.groupBy (fun row -> row.Id)
+        let rowById =
+            rowGroups
+            |> List.choose (function skillId, [ row ] -> Some (skillId, row) | _ -> None)
+            |> Map.ofList
+        let ambiguousRows =
+            rowGroups
+            |> List.choose (function skillId, _ :: _ :: _ -> Some skillId | _ -> None)
+            |> Set.ofList
         let named = input.Rows |> List.choose (fun row -> sourceRepo row.Source) |> Set.ofList
         let roots = input.Checkouts |> List.map (fun checkout -> checkout.Repo) |> Set.ofList
         let mutable findings = []
@@ -116,7 +139,7 @@ module Population =
             if not (roots.Contains repo) then add (finding "roster-unreachable" repo "rostered repository has no checkout")
 
         for row in input.Rows do
-            if String.IsNullOrWhiteSpace row.Id then add (finding "row-id" "<empty>" "registry skill id is empty")
+            if not (validSkillId row.Id) then add (finding "row-id" (if isNull row.Id then "<null>" else row.Id) "registry skill id is unsafe or missing")
             if isNull row.Sha256 || not (digest.IsMatch row.Sha256) then add (finding "row-digest" row.Id "digest must be 64 lowercase hex characters")
             match sourceRepo row.Source with
             | None -> add (finding "source-path" row.Id "source must be a contained repo-relative file path")
@@ -127,11 +150,12 @@ module Population =
             | _ -> ()
 
         for repo in named do
-            match checkoutByRepo |> Map.tryFind repo with
-            | None -> add (finding "manifest-unreachable" repo "registry names a producer without a checkout")
-            | Some { Manifest = Absent } -> add (finding "manifest-missing" repo "named producer has no skill manifest")
-            | Some { Manifest = Unreadable reason } -> add (finding "manifest-unreadable" repo reason)
-            | Some _ -> ()
+            if not (ambiguousCheckouts.Contains repo) then
+                match checkoutByRepo |> Map.tryFind repo with
+                | None -> add (finding "manifest-unreachable" repo "registry names a producer without a checkout")
+                | Some { Manifest = Absent } -> add (finding "manifest-missing" repo "named producer has no skill manifest")
+                | Some { Manifest = Unreadable reason } -> add (finding "manifest-unreadable" repo reason)
+                | Some _ -> ()
 
         let declarations =
             input.Checkouts
@@ -147,7 +171,7 @@ module Population =
                 | _ -> [])
 
         for (repo, entry) in declarations do
-            if String.IsNullOrWhiteSpace entry.Id then add (finding "manifest-id" repo "manifest skill id is empty")
+            if not (validSkillId entry.Id) then add (finding "manifest-id" repo "manifest skill id is unsafe or missing")
             if isNull entry.Sha256 || not (digest.IsMatch entry.Sha256) then add (finding "manifest-digest" (repo + "/" + entry.Id) "digest must be 64 lowercase hex characters")
             match entry.SuppliedBy with
             | Some path when not (safeSuppliedBy path) -> add (finding "supplied-by-path" (repo + "/" + entry.Id) "supplied-by must be a contained relative directory")
@@ -155,32 +179,33 @@ module Population =
             | _ -> ()
 
         for (skillId, declarers) in declarations |> Seq.groupBy (fun (_, entry) -> entry.Id) do
-            match rowById |> Map.tryFind skillId with
-            | None ->
-                if Seq.length declarers > 1 then
-                    add (finding "missing-ambiguous" skillId "multiple producers declare an absent row; owner cannot be inferred")
-                else add (finding "missing-row" skillId "producer declares a skill absent from the registry")
-            | Some row ->
-                let owned = declarers |> Seq.filter (fun (repo, _) -> ownerOf repo = row.Owner) |> Seq.toList
-                if owned.IsEmpty then add (finding "owner-unmatched" skillId "no declaring producer matches the registry owner")
-                else
-                    for (repo, entry) in owned do
-                        if row.Sha256 <> entry.Sha256 then add (finding "manifest-digest-mismatch" skillId (repo + " declares a different digest"))
-                        match entry.SuppliedBy with
-                        | Some suppliedBy when safeSuppliedBy suppliedBy ->
-                            let expected = repo + "/" + suppliedBy.TrimEnd('/') + "/SKILL.md"
-                            if row.Source <> expected then add (finding "source-identity" skillId ("registry source differs from " + expected))
-                        | _ -> ()
+            if not (ambiguousRows.Contains skillId) then
+                match rowById |> Map.tryFind skillId with
+                | None ->
+                    if Seq.length declarers > 1 then
+                        add (finding "missing-ambiguous" skillId "multiple producers declare an absent row; owner cannot be inferred")
+                    else add (finding "missing-row" skillId "producer declares a skill absent from the registry")
+                | Some row ->
+                    let owned = declarers |> Seq.filter (fun (repo, _) -> ownerOf repo = row.Owner) |> Seq.toList
+                    if owned.IsEmpty then add (finding "owner-unmatched" skillId "no declaring producer matches the registry owner")
+                    else
+                        for (repo, entry) in owned do
+                            if row.Sha256 <> entry.Sha256 then add (finding "manifest-digest-mismatch" skillId (repo + " declares a different digest"))
+                            match entry.SuppliedBy with
+                            | Some suppliedBy when safeSuppliedBy suppliedBy ->
+                                let expected = repo + "/" + suppliedBy.TrimEnd('/') + "/SKILL.md"
+                                if row.Source <> expected then add (finding "source-identity" skillId ("registry source differs from " + expected))
+                            | _ -> ()
 
         // A named producer can publish a readable but empty manifest. Row-to-manifest closure
         // must therefore run in this direction too, or a withdrawn declaration looks clean.
         for row in input.Rows do
             match sourceRepo row.Source with
-            | Some repo ->
+            | Some repo when not (ambiguousCheckouts.Contains repo) ->
                 match checkoutByRepo |> Map.tryFind repo with
                 | Some { Manifest = Parsed entries } when entries |> List.exists (fun entry -> entry.Id = row.Id) |> not ->
                     add (finding "row-undeclared" row.Id (repo + " manifest does not declare this registry row"))
                 | _ -> ()
-            | None -> ()
+            | _ -> ()
 
         findings |> List.distinct |> List.sortBy (fun item -> item.Code, item.Subject, item.Detail)

@@ -121,6 +121,18 @@ module PopulationTests =
         Assert.Equal<PopulationFinding list>(Population.inspect input, Population.inspect reversed)
 
     [<Fact>]
+    let ``duplicate row order cannot change secondary findings`` () =
+        let stale = { row with Sha256 = String.replicate 64 "b" }
+        let input = { good with Rows = [ row; stale ] }
+        Assert.Equal<PopulationFinding list>(Population.inspect input, Population.inspect { input with Rows = List.rev input.Rows })
+
+    [<Fact>]
+    let ``duplicate checkout order cannot change secondary findings`` () =
+        let absent = { checkout with Manifest = Absent }
+        let input = { good with Checkouts = [ checkout; absent ] }
+        Assert.Equal<PopulationFinding list>(Population.inspect input, Population.inspect { input with Checkouts = List.rev input.Checkouts })
+
+    [<Fact>]
     let ``traversing supplied-by refuses`` () =
         let bad = { entry with SuppliedBy = Some "skills/../other" }
         has "supplied-by-path" { good with Checkouts = [ { checkout with Manifest = Parsed [ bad ] } ] }
@@ -136,6 +148,46 @@ module PopulationTests =
     [<Fact>]
     let ``duplicate registry identity refuses`` () =
         has "registry-duplicate" { good with Rows = [ row; row ] }
+
+    [<Fact>]
+    let ``uppercase alias id cannot qualify a matching row and manifest`` () =
+        let input = {
+            good with
+                Rows = [ { row with Id = "Core" } ]
+                Checkouts = [ { checkout with Manifest = Parsed [ { entry with Id = "Core" } ] } ]
+        }
+        has "row-id" input
+        has "manifest-id" input
+
+    [<Fact>]
+    let ``trailing newline cannot be hidden by regex end anchor`` () =
+        let input = {
+            Rostered = Ok [ "FS.GG.Game\n" ]
+            Checkouts = [ { checkout with Repo = "FS.GG.Game\n"; Manifest = Parsed [ { entry with Id = "core\n"; Sha256 = digest + "\n" } ] } ]
+            Rows = [ { row with Id = "core\n"; Source = "FS.GG.Game\n/skills/core/SKILL.md"; Sha256 = digest + "\n" } ]
+        }
+        has "roster-name" input
+        has "checkout-name" input
+        has "row-id" input
+        has "manifest-id" input
+        has "row-digest" input
+        has "manifest-digest" input
+
+    [<Fact>]
+    let ``control character in matching source paths refuses`` () =
+        let suppliedBy = "skills/\u0000core"
+        let input = {
+            good with
+                Rows = [ { row with Source = "FS.GG.Game/" + suppliedBy + "/SKILL.md" } ]
+                Checkouts = [ { checkout with Manifest = Parsed [ { entry with SuppliedBy = Some suppliedBy } ] } ]
+        }
+        has "source-path" input
+        has "supplied-by-path" input
+
+    [<Fact>]
+    let ``null supplied-by fact refuses without throwing`` () =
+        let input = { good with Checkouts = [ { checkout with Manifest = Parsed [ { entry with SuppliedBy = Some null } ] } ] }
+        has "supplied-by-path" input
 
     [<Fact>]
     let ``duplicate manifest identity refuses`` () =
