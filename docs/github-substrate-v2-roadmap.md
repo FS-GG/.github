@@ -1632,7 +1632,9 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
   is a deterministic local clean-install candidate whose inspection still refuses dispatch; it is
-  not a protected installed provider or native-effect proof. The #550 staged exact-copy loopback
+  not a protected installed provider or native-effect proof. [Stacked authority-port draft #559](https://github.com/FS-GG/FS.GG.Coordination/pull/559)
+  sketches independent issuer, observer, replay and journal CAS boundaries, but its ports are
+  unimplemented and every result remains non-dispatchable. The #550 staged exact-copy loopback
   harness exercises corrected classifier, HTTP and durable-fence paths, but an independent boundary
   review found it insufficient for the installed provider/credential path and corrected native-effect clause. Qualify the corrected
   version through an actual installed provider path or a new protected isolated native operation,
