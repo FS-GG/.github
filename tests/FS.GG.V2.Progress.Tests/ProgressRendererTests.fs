@@ -71,6 +71,7 @@ module ProgressRendererTests =
         }
         let queue = {
             WorkspaceId = "main-fsharp-dev"; ObservedAt = at.AddMinutes(-1.0)
+            Authenticated = true; CollectorVerified = true; EvidenceId = "post-host-workspace-status-1"
             Pending = 0; PendingUnacknowledged = 0; UnacknowledgedLossy = false
         }
         runner, host, queue
@@ -231,6 +232,12 @@ module ProgressRendererTests =
         refuses "later zero, lossless queue" (withClaim (AcceptedCaptureClaim(runner, host, { later with UnacknowledgedLossy = true })))
         refuses "later than Host receipt" (withClaim (AcceptedCaptureClaim(runner, host, { later with ObservedAt = host.ObservedAt })))
         refuses "later queue workspace" (withClaim (AcceptedCaptureClaim(runner, host, { later with WorkspaceId = "other" })))
+        refuses "authenticated collector-verified later queue evidence"
+            (withClaim (AcceptedCaptureClaim(runner, host, { later with Authenticated = false })))
+        refuses "authenticated collector-verified later queue evidence"
+            (withClaim (AcceptedCaptureClaim(runner, host, { later with CollectorVerified = false })))
+        refuses "authenticated collector-verified later queue evidence"
+            (withClaim (AcceptedCaptureClaim(runner, host, { later with EvidenceId = "" })))
         refuses "runner item must be an HTTPS" (withClaim (AcceptedCaptureClaim({ runner with Evidence = { runner.Evidence with Url = "http://example.com" } }, host, later)))
         refuses "runner observation must be UTC" (withClaim (AcceptedCaptureClaim({ runner with ObservedAt = runner.ObservedAt.ToOffset(TimeSpan.FromHours(2.0)) }, host, later)))
 
