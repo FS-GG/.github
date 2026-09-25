@@ -1769,6 +1769,12 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   workflow, run, review and target identities through a separate seal port; five new and
   20 upstream fake controls pass. It remains a stacked draft with no installed seal,
   protected source/release observer, credential, CAS, grant or native effect.
+  [Source/release observer #596](https://github.com/FS-GG/FS.GG.Coordination/pull/596)
+  binds a supplied Coordination commit/tree, successful producer run/attempt/actor,
+  published artifact digest and size, and three ZIP member hashes to a distinct
+  attestation port; five new and 25 upstream fake controls pass. Protected artifact
+  attempt/redirect custody, actual effect artifact, App identity and execution credential
+  remain absent, so the installed native-effect gate stays closed.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)

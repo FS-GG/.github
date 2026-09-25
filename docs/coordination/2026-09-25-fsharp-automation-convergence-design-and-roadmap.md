@@ -172,6 +172,10 @@ served-byte custody and installed parity remain open.
 refuses equal or conflicting repeated `required` fields that Python previously accepted
 while F# refused; three new and 15 neighboring parameter controls pass. Broader grammar,
 served-byte custody and installed parity remain open.
+[Templates parameter-field draft #532](https://github.com/FS-GG/FS.GG.Templates/pull/532)
+refuses foreign fields inside lifecycle parameters that Python previously accepted while
+F# refused; five new and 18 neighboring controls pass. Full YAML/foreign JSON parity,
+served-byte custody and installed receiver proof remain open.
 [SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
 refuses an observed same-length overwrite after the first held-descriptor read by
 checking descriptor metadata around two byte passes; 21 focused controls and the
