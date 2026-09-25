@@ -150,7 +150,11 @@ refuses a duplicated selected provider minimum pin that Python previously accept
 F# refused; five new offline controls pass. A duplicate provider ID whose second entry
 has no floor still passed both readers. [Templates contract-ID draft #526](https://github.com/FS-GG/FS.GG.Templates/pull/526)
 now refuses duplicate selected IDs within `contracts:` in six new controls while preserving
-the live registry's valid same-ID `coherence:` entry. Broader YAML/foreign JSON parity remains.
+the live registry's valid same-ID `coherence:` entry.
+[Templates parameters-block draft #527](https://github.com/FS-GG/FS.GG.Templates/pull/527)
+closes a Python/F# mismatch where Python accepted repeated provider `parameters:` blocks;
+four new controls pass, while the five live descriptors still grade identically. Broader
+YAML/foreign JSON and installed parity remain.
 [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)

@@ -154,6 +154,11 @@ reserves a prospective challenge before reading a session source and distinguish
 unknown store outcomes and burned gaps; an in-memory 32-caller race has one winner, and
 82 exact-head adapter controls pass. The issuer, trusted clock, authenticated current-session
 source and durable CAS implementation remain absent. No Host submission or receipt exists.
+[Dormant native-notification parser #593](https://github.com/FS-GG/FS.GG.Coordination/pull/593)
+preserves exact thread/turn IDs and separate last/cumulative usage snapshots from authored
+App Server fixtures; 87 adapter controls pass. It does not infer completed-turn usage from
+snapshots or read this private transcript. An authenticated subscription to the already-running
+thread with ordered start/usage/terminal continuity is absent, as are Host submission and receipt.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
@@ -1747,6 +1752,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   composes injected read-only approval history and membership with a distinct protected
   audit-event port; 15 relevant fake controls pass. Protected App identity/permission
   attestation and immutable approval event ID/time remain absent; dispatch is refused.
+  [Selected-target observer #592](https://github.com/FS-GG/FS.GG.Coordination/pull/592)
+  binds selected repository, installation-list and ref reads to raw-response hashes and
+  an independent protected attestation port; 20 relevant fake controls pass. Protected
+  App identity/effective scope, complete target prestate and actual execution credential
+  record remain unproved; the one-POST gate stays closed.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
