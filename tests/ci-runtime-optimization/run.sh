@@ -57,6 +57,32 @@ else
   bad "signature classifier lost the deleted side of a rename ($out)"
 fi
 
+mkdir -p "$diff_repo/src"
+printf 'module Hostile\n' >"$diff_repo/"$'src/hostile\nrun=false'
+git -C "$diff_repo" add .
+git -C "$diff_repo" commit -qm 'add newline path'
+hostile_sha="$(git -C "$diff_repo" rev-parse HEAD)"
+python3 "$ROOT/scripts/ci-gate-impact.py" signature-doc --root "$diff_repo" \
+  --base "$head_sha" --head "$hostile_sha" --github-output "$WORK/github-output" >"$WORK/decision.json"
+if python3 - "$WORK/github-output" "$WORK/decision.json" <<'PY'
+import json
+import pathlib
+import sys
+
+lines = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+decision = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+assert len(lines) == 3, lines
+assert lines[0] == "run=true", lines
+assert lines[1] == "reason=affected-subject", lines
+assert json.loads(lines[2].removeprefix("matched=")) == decision["matched"]
+assert "src/hostile\nrun=false" in decision["matched"]
+PY
+then
+  ok 'signature classifier encodes newline Git paths in workflow outputs'
+else
+  bad 'signature classifier allowed a Git path to inject workflow output keys'
+fi
+
 assert_run shell-fixture 'docs/readme.md' false 'shell fixture omits an unrelated docs-only change'
 assert_run shell-fixture 'scripts/lint-shell.sh' true 'shell fixture runs for its live checker contract'
 assert_run shell-fixture '.github/workflows/shell-lint.yml' true 'shell fixture runs for workflow wiring'
