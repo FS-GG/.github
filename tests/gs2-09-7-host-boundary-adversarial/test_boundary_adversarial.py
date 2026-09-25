@@ -28,6 +28,7 @@ ENDPOINT = ORIGIN + "/claims"
 class ClaimStore:
     def __init__(self):
         self.records = {}
+        self.decision_state = "admitted"
         self.false_commit = False
         self.lost_response = False
         self.calls = []
@@ -92,7 +93,10 @@ class ReleasePort:
     def claim_once(self, decision_id, binding_id, token_sha256):
         return self.authority.claim_once(decision_id, binding_id, token_sha256)
 
-    def invoke_candidate_once(self, token, binding):
+    def invoke_candidate_if_admitted_once(self, decision_id, binding_id,
+                                           token_sha256, token, binding):
+        if self.authority.store.decision_state != "admitted":
+            return "refused"
         self.invocations += 1
         return "complete"
 

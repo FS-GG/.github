@@ -116,11 +116,18 @@ class ReleasePort:
     def __init__(self, claim):
         self.claim = claim
         self.invocations = 0
+        self.revoke_after_claim = False
 
     def claim_once(self, decision_id, binding_id, token_sha256):
-        return self.claim.claim_once(decision_id, binding_id, token_sha256)
+        result = self.claim.claim_once(decision_id, binding_id, token_sha256)
+        if result == "granted" and self.revoke_after_claim:
+            self.claim.store.decision_state = "revoked"
+        return result
 
-    def invoke_candidate_once(self, token, binding):
+    def invoke_candidate_if_admitted_once(self, decision_id, binding_id,
+                                           token_sha256, token, binding):
+        if self.claim.store.decision_state != "admitted":
+            return "refused"
         self.invocations += 1
         return "complete"
 
@@ -347,6 +354,18 @@ class ReleaseCompositionTests(unittest.TestCase):
         self.assertEqual("claim-unknown", result["outcome"])
         self.assertEqual(0, self.port.invocations)
         self.assertNotIn(self.decision_id, self.store.claims)
+
+    def test_revocation_after_claim_before_handoff_refuses_and_consumes_claim(self):
+        self.port.revoke_after_claim = True
+        first = self.run_release()
+        self.assertEqual("handoff-refused", first["outcome"])
+        self.assertEqual(0, first["invocationCount"])
+        self.assertEqual(0, self.port.invocations)
+        self.port.revoke_after_claim = False
+        self.store.decision_state = "admitted"
+        second = self.run_release()
+        self.assertEqual("duplicate-refused", second["outcome"])
+        self.assertEqual(0, self.port.invocations)
 
     def test_revocation_between_signer_and_release_refuses_before_cas(self):
         release.host.ADMISSION_PORT.record["state"] = "revoked"

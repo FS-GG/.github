@@ -43,8 +43,16 @@ class ProtectedReleasePort(Protocol):
                    token_sha256: str) -> str:
         """Durable host-owned CAS: 'granted', 'duplicate', or 'unknown'."""
 
-    def invoke_candidate_once(self, token: str, binding: dict) -> str:
-        """Synchronous one-time handoff: 'complete' or 'unknown'."""
+    def invoke_candidate_if_admitted_once(self, decision_id: str,
+                                          binding_id: str,
+                                          token_sha256: str,
+                                          token: str,
+                                          binding: dict) -> str:
+        """Fenced one-time handoff: 'complete', 'refused', or 'unknown'.
+
+        'refused' certifies no token exposure. Unknown may have exposed it.
+        Admission revocation and launch must share a protected interlock.
+        """
 
     def revoke(self, token: str) -> str:
         """Native token revocation: 'confirmed' or 'unknown'."""
@@ -186,7 +194,8 @@ def release_once(envelope_raw: bytes, proof_raw: bytes, token: str,
     the token and must never retry an unknown candidate invocation.
     """
     require(port is not None and all(callable(getattr(port, name, None)) for name in
-                                 ("claim_once", "invoke_candidate_once", "revoke")),
+                                 ("claim_once", "invoke_candidate_if_admitted_once",
+                                  "revoke")),
             "release-port-unconfigured")
     binding, admission_record = verify_envelope(
         envelope_raw, proof_raw, token, public_key_pem,
@@ -200,12 +209,16 @@ def release_once(envelope_raw: bytes, proof_raw: bytes, token: str,
     invoked = False
     outcome = "claim-unknown"
     if claim == "granted":
-        invoked = True
         try:
-            result = port.invoke_candidate_once(token, binding)
+            result = port.invoke_candidate_if_admitted_once(
+                decision_id, binding_id, binding["tokenSha256"], token, binding)
         except Exception:
             result = "unknown"
-        outcome = "candidate-complete" if result == "complete" else "candidate-unknown"
+        if result == "refused":
+            outcome = "handoff-refused"
+        else:
+            invoked = True  # Unknown means token exposure cannot be excluded.
+            outcome = "candidate-complete" if result == "complete" else "candidate-unknown"
     elif claim == "duplicate":
         outcome = "duplicate-refused"
     try:
