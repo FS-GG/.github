@@ -341,6 +341,73 @@ module ProjectReferenceXmlTests =
         | Error diagnostic -> failwithf "case-varied project extension was refused: %A" diagnostic
         | Ok graph -> Assert.Equal<string list>([ "src/B/B.FsPrOj" ], graph.["src/A/A.fsproj"])
 
+    [<Fact>]
+    let ``expected roster refuses an omitted independent project`` () =
+        let expected = [ "src/A/A.fsproj"; "src/B/B.fsproj" ]
+        let sources = [ "src/A/A.fsproj", "<Project />" ]
+        match ProjectReferenceXml.inspectSuppliedProjectSetAgainstRoster expected sources with
+        | Error diagnostic ->
+            Assert.Equal("project-roster", diagnostic.Code)
+            Assert.Contains("src/B/B.fsproj", diagnostic.Message)
+        | Ok graph -> failwithf "omitted independent project produced a graph: %A" graph
+
+    [<Fact>]
+    let ``expected roster refuses an extra supplied project`` () =
+        let expected = [ "src/A/A.fsproj" ]
+        let sources =
+            [ "src/A/A.fsproj", "<Project />"
+              "src/B/B.fsproj", "<Project />" ]
+        match ProjectReferenceXml.inspectSuppliedProjectSetAgainstRoster expected sources with
+        | Error diagnostic ->
+            Assert.Equal("project-roster", diagnostic.Code)
+            Assert.Contains("src/B/B.fsproj", diagnostic.Message)
+        | Ok graph -> failwithf "unrostered source produced a graph: %A" graph
+
+    [<Fact>]
+    let ``duplicate expected project identity cannot certify completeness`` () =
+        let expected = [ "src/A/A.fsproj"; "src/A/A.fsproj" ]
+        let sources = [ "src/A/A.fsproj", "<Project />" ]
+        match ProjectReferenceXml.inspectSuppliedProjectSetAgainstRoster expected sources with
+        | Error diagnostic ->
+            Assert.Equal("project-roster", diagnostic.Code)
+            Assert.Contains("duplicate", diagnostic.Message)
+        | Ok graph -> failwithf "duplicate expected identity produced a graph: %A" graph
+
+    [<Theory>]
+    [<InlineData("../outside.fsproj")>]
+    [<InlineData("src/B/B.proj")>]
+    let ``unusable expected identity cannot certify completeness`` (invalid: string) =
+        let expected = [ "src/A/A.fsproj"; invalid ]
+        let sources = [ "src/A/A.fsproj", "<Project />" ]
+        match ProjectReferenceXml.inspectSuppliedProjectSetAgainstRoster expected sources with
+        | Error diagnostic -> Assert.Equal("project-roster", diagnostic.Code)
+        | Ok graph -> failwithf "unusable expected identity produced a graph: %A" graph
+
+    [<Fact>]
+    let ``matching expected roster preserves project closure`` () =
+        let expected = [ "src/B/B.FsPrOj"; "src/A/A.fsproj" ]
+        let sources =
+            [ "src/A/A.fsproj", "<Project><ProjectReference Include='../B/B.FsPrOj' /></Project>"
+              "src/B/B.FsPrOj", "<Project />" ]
+        match ProjectReferenceXml.inspectSuppliedProjectSetAgainstRoster expected sources with
+        | Error diagnostic -> failwithf "matching roster was refused: %A" diagnostic
+        | Ok graph ->
+            match RuleB.inspect [ "src/A/**" ] graph with
+            | Error diagnostic -> failwithf "unexpected coverage refusal: %A" diagnostic
+            | Ok coverage ->
+                Assert.Equal<(string * string) list>(
+                    [ "src/A/A.fsproj", "src/B/B.FsPrOj" ], coverage.Uncovered)
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let ``absent or empty expected roster has no graph verdict`` absent =
+        let expected = if absent then Unchecked.defaultof<string list> else []
+        let sources = [ "src/A/A.fsproj", "<Project />" ]
+        match ProjectReferenceXml.inspectSuppliedProjectSetAgainstRoster expected sources with
+        | Error diagnostic -> Assert.Equal("project-roster", diagnostic.Code)
+        | Ok graph -> failwithf "missing expected roster produced a graph: %A" graph
+
     [<Theory>]
     [<InlineData(false)>]
     [<InlineData(true)>]

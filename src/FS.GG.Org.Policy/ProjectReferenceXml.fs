@@ -145,7 +145,7 @@ module ProjectReferenceXml =
             | :? XmlException as ex -> error "project-xml" projectPath ex.Message
             | :? ArgumentException as ex -> error "project-xml" projectPath ex.Message
 
-    /// Assemble only caller-supplied project XML into a closed local graph. Duplicate identities
+    /// Assemble only caller-supplied project XML into a closed local graph. Duplicate identities,
     /// missing referenced sources, and identities outside the live project discovery extensions
     /// refuse before Map construction can erase evidence. This does not authenticate discovery,
     /// file bytes, implicit imports, or evaluated MSBuild items.
@@ -180,6 +180,40 @@ module ProjectReferenceXml =
                         | Ok references ->
                             collect (Set.add path seen) (Map.add path references graph) rest
             collect Set.empty Map.empty sources
+
+    /// Require an exact identity match between a separately supplied expected roster and source
+    /// rows. This closes the local handoff against omitted independent projects, but the caller
+    /// must still authenticate that the expected roster is a complete provider enumeration.
+    let inspectSuppliedProjectSetAgainstRoster
+        (expected: string list)
+        (sources: (string * string) list)
+        : Result<Map<string, string list>, SyntaxDiagnostic> =
+        if isNull (box expected) || List.isEmpty expected then
+            error "project-roster" "<projects>" "expected project roster is absent or empty"
+        else
+            let rec validate seen remaining =
+                match remaining with
+                | [] -> Ok seen
+                | path :: rest ->
+                    if not (normalized path) || not (discoverableProject path) then
+                        error "project-roster" path "expected identity must be a normalized discoverable project path"
+                    elif Set.contains path seen then
+                        error "project-roster" path "duplicate expected project identity"
+                    else
+                        validate (Set.add path seen) rest
+            match validate Set.empty expected with
+            | Error diagnostic -> Error diagnostic
+            | Ok expectedSet ->
+                match inspectSuppliedProjectSet sources with
+                | Error diagnostic -> Error diagnostic
+                | Ok graph ->
+                    let suppliedSet = graph |> Map.toSeq |> Seq.map fst |> Set.ofSeq
+                    match Set.difference expectedSet suppliedSet |> Seq.tryHead with
+                    | Some path -> error "project-roster" path (sprintf "expected project %s is absent from supplied sources" path)
+                    | None ->
+                        match Set.difference suppliedSet expectedSet |> Seq.tryHead with
+                        | Some path -> error "project-roster" path (sprintf "supplied project %s is absent from expected roster" path)
+                        | None -> Ok graph
 
     /// A local observation of one caller-supplied implicit file. The result does not establish
     /// nearest-file selection, import closure, source provenance, or a Rule (b) graph verdict.
