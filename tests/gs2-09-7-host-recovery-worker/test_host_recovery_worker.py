@@ -19,6 +19,10 @@ REVOKER = "protected-native-revoker-test"
 RECOVERY_RESOURCE = "recovery-journal-test"
 RECOVERY_ENDPOINT = ORIGIN + "/recovery"
 WORKER_ID = "protected-recovery-worker-test"
+SCHEDULER_ID = "protected-recovery-scheduler-test"
+SCHEDULER_ENDPOINT = ORIGIN + "/schedule"
+QUEUE_ID = "pending-queue-test"
+JOURNAL_ID = "pending-journal-test"
 MINT_ID = "a" * 64
 BINDING_ID = "b" * 64
 TOKEN = "fake-recovery-token-never-valid-outside-test"
@@ -31,6 +35,8 @@ class FakePort:
         self.token_sha256 = hashlib.sha256(TOKEN.encode()).hexdigest()
         self.claim = None
         self.native_attempt = None
+        self.schedule_state = "committed"
+        self.revoke_schedule_after_read = False
         self.receipt = None
         self.claim_response_lost = False
         self.false_claim_commit = False
@@ -90,6 +96,57 @@ class FakePort:
             "schema": worker.finalizer.PENDING_SCHEMA, "mintId": MINT_ID,
             "tokenSha256": self.token_sha256, "revokeRequired": True,
         }
+        self.scheduler_descriptor = {
+            "schema": worker.SCHEDULER_SCHEMA, "origin": ORIGIN,
+            "resourceId": SCHEDULER_ID, "endpoint": SCHEDULER_ENDPOINT,
+            "queueResourceId": QUEUE_ID, "journalResourceId": JOURNAL_ID,
+            "recoveryResourceId": RECOVERY_RESOURCE,
+            "durable": True, "atomicCas": True, "nativeReadback": True,
+            "credentialScope": "protected-host-only", "candidateCanWrite": False,
+        }
+        self.scheduled = {
+            "schema": worker.SCHEDULE_SCHEMA, "scheduleId": "d" * 64,
+            "sealId": "f" * 64, "highWater": 3, "sequence": 1,
+            "pendingSha256": "1" * 64, "mintSha256": "2" * 64,
+            "mintId": MINT_ID, "bindingId": BINDING_ID,
+            "tokenSha256": self.token_sha256,
+            "contextSha256": self.mint["contextSha256"],
+            "sandboxRepositoryId": worker.finalizer.release.host.SANDBOX_ID,
+            "appId": worker.finalizer.release.host.APP_ID,
+            "actor": worker.finalizer.release.host.ACTOR,
+            "installationId": self.mint["installationId"],
+            "vaultId": VAULT, "finalizerResourceId": FINALIZER_RESOURCE,
+            "recoveryResourceId": RECOVERY_RESOURCE,
+            "schedulerResourceId": SCHEDULER_ID,
+            "queueResourceId": QUEUE_ID, "journalResourceId": JOURNAL_ID,
+            "censusComplete": True, "state": "committed",
+        }
+        self.census_seal = {
+            "schema": worker.CENSUS_SEAL_SCHEMA,
+            "sealId": self.scheduled["sealId"], "highWater": 3,
+            "pendingCount": 1,
+            "pendingSha256": self.scheduled["pendingSha256"],
+            "mintCount": 3, "mintSha256": self.scheduled["mintSha256"],
+            "queueResourceId": QUEUE_ID, "journalResourceId": JOURNAL_ID,
+            "finalizerResourceId": FINALIZER_RESOURCE,
+            "vaultId": VAULT, "recoveryResourceId": RECOVERY_RESOURCE,
+            "workerId": WORKER_ID, "complete": True,
+            "snapshotIsolation": True,
+        }
+        self.census_subject = {
+            "schema": worker.CENSUS_SUBJECT_SCHEMA,
+            "sequence": 1, "mintId": MINT_ID, "bindingId": BINDING_ID,
+            "tokenSha256": self.token_sha256,
+            "contextSha256": self.mint["contextSha256"],
+            "sandboxRepositoryId": worker.finalizer.release.host.SANDBOX_ID,
+            "appId": worker.finalizer.release.host.APP_ID,
+            "actor": worker.finalizer.release.host.ACTOR,
+            "installationId": self.mint["installationId"],
+            "journalResourceId": JOURNAL_ID,
+            "finalizerResourceId": FINALIZER_RESOURCE,
+            "vaultId": VAULT, "recoveryResourceId": RECOVERY_RESOURCE,
+            "revokeRequired": True,
+        }
 
     def describe(self):
         return self.finalizer_descriptor
@@ -102,6 +159,24 @@ class FakePort:
 
     def describe_recovery(self):
         return self.recovery_descriptor
+
+    def describe_scheduler(self):
+        self.calls.append("describe-scheduler")
+        return self.scheduler_descriptor
+
+    def read_schedule(self, mint_id):
+        self.calls.append("read-schedule")
+        if self.revoke_schedule_after_read:
+            self.schedule_state = "revoked"
+        return self.scheduled
+
+    def read_census_seal(self, seal_id):
+        self.calls.append("read-census-seal")
+        return self.census_seal
+
+    def read_census_subject(self, seal_id, mint_id):
+        self.calls.append("read-census-subject")
+        return self.census_subject
 
     def load_mint(self, mint_id):
         self.calls.append("load-mint")
@@ -138,8 +213,11 @@ class FakePort:
         self.calls.append("read-binding")
         return self.binding
 
-    def claim_recovery_once(self, mint_id, binding_id):
+    def claim_recovery_once(self, mint_id, binding_id, schedule_id):
         self.calls.append("claim-recovery")
+        if self.schedule_state != "committed" or self.scheduled is None \
+                or schedule_id != self.scheduled["scheduleId"]:
+            return "refused"
         if self.claim is not None:
             return "duplicate"
         if self.false_claim_commit:
@@ -198,6 +276,11 @@ class RecoveryWorkerTests(unittest.TestCase):
             (worker, "PINNED_RECOVERY_RESOURCE_ID"): RECOVERY_RESOURCE,
             (worker, "PINNED_RECOVERY_ENDPOINT"): RECOVERY_ENDPOINT,
             (worker, "PINNED_RECOVERY_WORKER_ID"): WORKER_ID,
+            (worker, "PINNED_SCHEDULER_ORIGIN"): ORIGIN,
+            (worker, "PINNED_SCHEDULER_RESOURCE_ID"): SCHEDULER_ID,
+            (worker, "PINNED_SCHEDULER_ENDPOINT"): SCHEDULER_ENDPOINT,
+            (worker, "PINNED_CENSUS_QUEUE_RESOURCE_ID"): QUEUE_ID,
+            (worker, "PINNED_CENSUS_JOURNAL_RESOURCE_ID"): JOURNAL_ID,
             (worker.finalizer, "PINNED_FINALIZER_ORIGIN"): ORIGIN,
             (worker.finalizer, "PINNED_FINALIZER_RESOURCE_ID"): FINALIZER_RESOURCE,
             (worker.finalizer, "PINNED_FINALIZER_ENDPOINT"): FINALIZER_ENDPOINT,
@@ -221,6 +304,83 @@ class RecoveryWorkerTests(unittest.TestCase):
         self.assertEqual(2, self.port.calls.count("native-observe"))
         self.assertIn("read-receipt", self.port.calls)
         self.assertNotIn(TOKEN, json.dumps(result))
+
+    def test_unscheduled_exact_mint_cannot_invoke_recovery(self):
+        self.port.scheduled = None
+        with self.assertRaisesRegex(worker.Refused, "recovery-schedule"):
+            self.run_worker()
+        self.assertNotIn("claim-recovery", self.port.calls)
+        self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_revoked_schedule_between_readback_and_claim_blocks_native_effect(self):
+        self.port.revoke_schedule_after_read = True
+        result = self.run_worker()
+        self.assertEqual("unknown", result["claim"])
+        self.assertEqual("pending", result["revocation"])
+        self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_foreign_or_uncommitted_schedule_refuses_before_claim(self):
+        for change in ({"bindingId": "e" * 64}, {"sealId": "not-a-seal"},
+                       {"censusComplete": 1}, {"state": "revoked"},
+                       {"queueResourceId": "candidate-queue"}):
+            with self.subTest(change=change):
+                self.port = FakePort()
+                self.port.scheduled = {**self.port.scheduled, **change}
+                with self.assertRaisesRegex(worker.Refused, "recovery-schedule"):
+                    self.run_worker()
+                self.assertNotIn("claim-recovery", self.port.calls)
+                self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_unavailable_or_candidate_writable_scheduler_refuses(self):
+        def unavailable(_mint_id):
+            raise OSError("protected scheduler unavailable")
+        self.port.read_schedule = unavailable
+        with self.assertRaisesRegex(worker.Refused, "recovery-schedule-unknown"):
+            self.run_worker()
+        self.assertNotIn("claim-recovery", self.port.calls)
+        self.port = FakePort()
+        self.port.scheduler_descriptor["candidateCanWrite"] = True
+        with self.assertRaisesRegex(worker.Refused, "scheduler-authority"):
+            self.run_worker()
+        self.assertNotIn("recover-token", self.port.calls)
+
+    def test_self_asserted_complete_schedule_without_census_seal_refuses(self):
+        self.port.census_seal = None
+        with self.assertRaisesRegex(worker.Refused, "recovery-census-seal"):
+            self.run_worker()
+        self.assertNotIn("claim-recovery", self.port.calls)
+        self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_foreign_seal_or_sealed_subject_refuses_before_claim(self):
+        self.port.census_seal["pendingSha256"] = "e" * 64
+        with self.assertRaisesRegex(worker.Refused, "recovery-census-seal"):
+            self.run_worker()
+        self.assertNotIn("claim-recovery", self.port.calls)
+        self.port = FakePort()
+        self.port.census_subject["bindingId"] = "e" * 64
+        with self.assertRaisesRegex(worker.Refused, "recovery-census-subject"):
+            self.run_worker()
+        self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_seal_drift_during_schedule_readback_refuses(self):
+        reads = 0
+        def moving(_seal_id):
+            nonlocal reads
+            reads += 1
+            return {**self.port.census_seal,
+                    "pendingCount": 2 if reads == 2 else 1}
+        self.port.read_census_seal = moving
+        with self.assertRaisesRegex(worker.Refused, "recovery-census-seal"):
+            self.run_worker()
+        self.assertNotIn("claim-recovery", self.port.calls)
+
+    def test_boolean_high_water_alias_cannot_authorize_schedule(self):
+        self.port.scheduled["highWater"] = 1
+        self.port.census_seal["highWater"] = True
+        self.port.census_seal["mintCount"] = True
+        with self.assertRaisesRegex(worker.Refused, "recovery-census-seal"):
+            self.run_worker()
+        self.assertNotIn("native-revoke", self.port.calls)
 
     def test_duplicate_active_claim_never_repeats_native_effect(self):
         self.port.claim = {"schema": worker.CLAIM_SCHEMA, "mintId": MINT_ID,

@@ -21,11 +21,20 @@ WORKER_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-worker/1"
 BINDING_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-binding/1"
 CLAIM_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-claim/1"
 RECEIPT_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-receipt/1"
+SCHEDULER_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-scheduler/1"
+SCHEDULE_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-schedule/1"
+CENSUS_SEAL_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-pending-seal/1"
+CENSUS_SUBJECT_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-pending-subject/1"
 
 PINNED_RECOVERY_ORIGIN = ""
 PINNED_RECOVERY_RESOURCE_ID = ""
 PINNED_RECOVERY_ENDPOINT = ""
 PINNED_RECOVERY_WORKER_ID = ""
+PINNED_SCHEDULER_ORIGIN = ""
+PINNED_SCHEDULER_RESOURCE_ID = ""
+PINNED_SCHEDULER_ENDPOINT = ""
+PINNED_CENSUS_QUEUE_RESOURCE_ID = ""
+PINNED_CENSUS_JOURNAL_RESOURCE_ID = ""
 
 
 class Refused(Exception):
@@ -39,8 +48,13 @@ def require(condition: bool, reason: str) -> None:
 
 class ProtectedRecoveryPort(finalizer.ProtectedFinalizerPort, Protocol):
     def describe_recovery(self) -> dict: ...
+    def describe_scheduler(self) -> dict: ...
+    def read_schedule(self, mint_id: str) -> dict: ...
+    def read_census_seal(self, seal_id: str) -> dict: ...
+    def read_census_subject(self, seal_id: str, mint_id: str) -> dict: ...
     def read_binding(self, mint_id: str) -> dict: ...
-    def claim_recovery_once(self, mint_id: str, binding_id: str) -> str: ...
+    def claim_recovery_once(self, mint_id: str, binding_id: str,
+                            schedule_id: str) -> str: ...
     def read_recovery_claim(self, mint_id: str) -> dict: ...
     def append_recovery_receipt(self, mint_id: str, binding_id: str,
                                 token_sha256: str) -> str: ...
@@ -85,6 +99,136 @@ def check_worker(port: ProtectedRecoveryPort | None) -> None:
       and descriptor["atomicCas"] is True
       and descriptor["nativeReadback"] is True
       and descriptor["candidateCanWrite"] is False, "recovery-authority")
+
+
+def check_scheduler(port: ProtectedRecoveryPort | None) -> None:
+    require(all((PINNED_SCHEDULER_ORIGIN, PINNED_SCHEDULER_RESOURCE_ID,
+                 PINNED_SCHEDULER_ENDPOINT, PINNED_CENSUS_QUEUE_RESOURCE_ID,
+                 PINNED_CENSUS_JOURNAL_RESOURCE_ID)), "scheduler-unconfigured")
+    require(port is not None
+            and callable(getattr(port, "describe_scheduler", None))
+            and callable(getattr(port, "read_schedule", None))
+            and callable(getattr(port, "read_census_seal", None))
+            and callable(getattr(port, "read_census_subject", None)),
+            "scheduler-unconfigured")
+    descriptor = port.describe_scheduler()
+    require(type(descriptor) is dict and descriptor == {
+        "schema": SCHEDULER_SCHEMA, "origin": PINNED_SCHEDULER_ORIGIN,
+        "resourceId": PINNED_SCHEDULER_RESOURCE_ID,
+        "endpoint": PINNED_SCHEDULER_ENDPOINT,
+        "queueResourceId": PINNED_CENSUS_QUEUE_RESOURCE_ID,
+        "journalResourceId": PINNED_CENSUS_JOURNAL_RESOURCE_ID,
+        "recoveryResourceId": PINNED_RECOVERY_RESOURCE_ID,
+        "durable": True, "atomicCas": True, "nativeReadback": True,
+        "credentialScope": "protected-host-only", "candidateCanWrite": False,
+    } and descriptor["durable"] is True
+      and descriptor["atomicCas"] is True
+      and descriptor["nativeReadback"] is True
+      and descriptor["candidateCanWrite"] is False, "scheduler-authority")
+    endpoint = descriptor["endpoint"]
+    require(type(endpoint) is str, "scheduler-endpoint")
+    try:
+        parsed = urlsplit(endpoint)
+        parsed.port
+    except ValueError as error:
+        raise Refused("scheduler-endpoint") from error
+    require(parsed.scheme == "https" and bool(parsed.hostname)
+            and not parsed.username and not parsed.password
+            and not parsed.query and not parsed.fragment
+            and endpoint == PINNED_SCHEDULER_ENDPOINT
+            and f"{parsed.scheme}://{parsed.netloc}" == PINNED_SCHEDULER_ORIGIN,
+            "scheduler-endpoint")
+
+
+def _schedule_readback(port: ProtectedRecoveryPort, mint_id: str,
+                       binding_id: str, mint: dict, token_sha256: str) -> str:
+    try:
+        schedule = port.read_schedule(mint_id)
+    except Exception as error:
+        raise Refused("recovery-schedule-unknown") from error
+    require(type(schedule) is dict and set(schedule) == {
+        "schema", "scheduleId", "sealId", "highWater", "sequence",
+        "pendingSha256", "mintSha256", "mintId", "bindingId",
+        "tokenSha256", "contextSha256", "sandboxRepositoryId", "appId",
+        "actor", "installationId", "vaultId", "finalizerResourceId",
+        "recoveryResourceId", "schedulerResourceId", "queueResourceId",
+        "journalResourceId", "censusComplete", "state",
+    }, "recovery-schedule")
+    require(schedule["schema"] == SCHEDULE_SCHEMA
+            and all(type(schedule[name]) is str
+                    and finalizer.release.host.HEX64.fullmatch(schedule[name])
+                    for name in ("scheduleId", "sealId", "pendingSha256",
+                                 "mintSha256"))
+            and type(schedule["highWater"]) is int
+            and type(schedule["sequence"]) is int
+            and 1 <= schedule["sequence"] <= schedule["highWater"] <= 10000
+            and schedule["mintId"] == mint_id
+            and schedule["bindingId"] == binding_id
+            and schedule["tokenSha256"] == token_sha256
+            and schedule["contextSha256"] == mint["contextSha256"]
+            and type(schedule["sandboxRepositoryId"]) is int
+            and schedule["sandboxRepositoryId"] == finalizer.release.host.SANDBOX_ID
+            and type(schedule["appId"]) is int
+            and schedule["appId"] == finalizer.release.host.APP_ID
+            and schedule["actor"] == finalizer.release.host.ACTOR
+            and type(schedule["installationId"]) is int
+            and schedule["installationId"] == mint["installationId"]
+            and schedule["vaultId"] == finalizer.PINNED_TOKEN_VAULT_ID
+            and schedule["finalizerResourceId"] == finalizer.PINNED_FINALIZER_RESOURCE_ID
+            and schedule["recoveryResourceId"] == PINNED_RECOVERY_RESOURCE_ID
+            and schedule["schedulerResourceId"] == PINNED_SCHEDULER_RESOURCE_ID
+            and schedule["queueResourceId"] == PINNED_CENSUS_QUEUE_RESOURCE_ID
+            and schedule["journalResourceId"] == PINNED_CENSUS_JOURNAL_RESOURCE_ID
+            and schedule["censusComplete"] is True
+            and schedule["state"] == "committed", "recovery-schedule")
+    try:
+        seal = port.read_census_seal(schedule["sealId"])
+        subject = port.read_census_subject(schedule["sealId"], mint_id)
+        seal_after = port.read_census_seal(schedule["sealId"])
+    except Exception as error:
+        raise Refused("recovery-census-unknown") from error
+    require(type(seal) is dict and seal == {
+        "schema": CENSUS_SEAL_SCHEMA, "sealId": schedule["sealId"],
+        "highWater": schedule["highWater"],
+        "pendingCount": seal.get("pendingCount"),
+        "pendingSha256": schedule["pendingSha256"],
+        "mintCount": schedule["highWater"],
+        "mintSha256": schedule["mintSha256"],
+        "queueResourceId": PINNED_CENSUS_QUEUE_RESOURCE_ID,
+        "journalResourceId": PINNED_CENSUS_JOURNAL_RESOURCE_ID,
+        "finalizerResourceId": finalizer.PINNED_FINALIZER_RESOURCE_ID,
+        "vaultId": finalizer.PINNED_TOKEN_VAULT_ID,
+        "recoveryResourceId": PINNED_RECOVERY_RESOURCE_ID,
+        "workerId": PINNED_RECOVERY_WORKER_ID,
+        "complete": True, "snapshotIsolation": True,
+    } and type(seal["highWater"]) is int
+      and type(seal["mintCount"]) is int
+      and type(seal["pendingCount"]) is int
+      and 1 <= seal["pendingCount"] <= schedule["highWater"]
+      and seal["complete"] is True and seal["snapshotIsolation"] is True
+      and type(seal_after) is dict and seal_after == seal
+      and type(seal_after["highWater"]) is int
+      and type(seal_after["mintCount"]) is int
+      and type(seal_after["pendingCount"]) is int,
+            "recovery-census-seal")
+    require(type(subject) is dict and subject == {
+        "schema": CENSUS_SUBJECT_SCHEMA,
+        "sequence": schedule["sequence"], "mintId": mint_id,
+        "bindingId": binding_id, "tokenSha256": token_sha256,
+        "contextSha256": mint["contextSha256"],
+        "sandboxRepositoryId": finalizer.release.host.SANDBOX_ID,
+        "appId": finalizer.release.host.APP_ID,
+        "actor": finalizer.release.host.ACTOR,
+        "installationId": mint["installationId"],
+        "journalResourceId": PINNED_CENSUS_JOURNAL_RESOURCE_ID,
+        "finalizerResourceId": finalizer.PINNED_FINALIZER_RESOURCE_ID,
+        "vaultId": finalizer.PINNED_TOKEN_VAULT_ID,
+        "recoveryResourceId": PINNED_RECOVERY_RESOURCE_ID,
+        "revokeRequired": True,
+    } and type(subject["sequence"]) is int
+      and type(subject["installationId"]) is int
+      and subject["revokeRequired"] is True, "recovery-census-subject")
+    return schedule["scheduleId"]
 
 
 def _binding_record(port: ProtectedRecoveryPort, mint_id: str,
@@ -153,6 +297,7 @@ def recover_one(port: ProtectedRecoveryPort | None, mint_id: str,
             and finalizer.release.host.HEX64.fullmatch(expected_binding_id),
             "recovery-subject")
     check_worker(port)
+    check_scheduler(port)
     finalizer.check_port(port)
     finalizer.check_vault(port)
     finalizer.check_revoker(port)
@@ -162,9 +307,12 @@ def recover_one(port: ProtectedRecoveryPort | None, mint_id: str,
     _binding_record(port, mint_id, expected_binding_id, mint, token_sha256)
     require(finalizer._read_state(port, "read_pending", finalizer.PENDING_SCHEMA,
                                   mint_id, token_sha256), "pending-intent")
+    schedule_id = _schedule_readback(port, mint_id, expected_binding_id,
+                                     mint, token_sha256)
 
     try:
-        claim = port.claim_recovery_once(mint_id, expected_binding_id)
+        claim = port.claim_recovery_once(mint_id, expected_binding_id,
+                                         schedule_id)
     except Exception:
         claim = "unknown"
     claim_state = "fresh" if claim == "committed" else \
