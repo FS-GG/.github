@@ -1674,7 +1674,9 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   adding one unknown live subject or losing one page prevents qualification.
   [Coordination draft #553](https://github.com/FS-GG/FS.GG.Coordination/pull/553) adds source-only
   refusal controls for case-variant and split `Link` pagination headers that previously let a
-  migration REST reader treat an incomplete page as terminal. Its provisional tests do not accept
+  migration REST reader treat an incomplete page as terminal. It also refuses two discovered subjects
+  collapsing onto one v2 result identity and changes the manifest seal when a result identity changes.
+  Its provisional tests do not accept
   GS2-09.8; the GS2-09.7 receipt, exact live rerun, unknown-subject and no-omission Q5/Q6 proof remain.
 
 ### GS2-10 — Qualify the exact candidate and prepare the fleet
