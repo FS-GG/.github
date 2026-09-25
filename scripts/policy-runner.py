@@ -113,6 +113,10 @@ def active_shell_lines(script: str):
         if not stripped or stripped.startswith("#"):
             continue
         code = line.split("#", 1)[0]
+        # An explicit success fallback discards this line's exit verdict. Keep
+        # it out of both direct and transitive gate evidence.
+        if re.search(r"\|\|\s*(?:true|:)(?=\s|;|$)", code):
+            continue
         declaration = re.search(r"<<-?\s*['\"]?([A-Za-z_][A-Za-z_0-9]*)['\"]?", code)
         if declaration:
             heredoc = declaration.group(1)

@@ -67,6 +67,12 @@ check(workflow(direct, continue_on_error="${{ github.event_name == 'push' }}"), 
 check(workflow("if false; then\n  " + direct.replace("\n", "\n  ") + "\nfi"), False,
       "unreachable shell branch")
 check(workflow("cat <<'EOF'\n" + direct + "\nEOF"), False, "inert heredoc")
+check(workflow("python3 scripts/check-alpha.py || true\nbash tests/alpha/run.sh"), False,
+      "checker failure masked by true", fixture_body="#!/bin/sh\necho harmless\n")
+check(workflow("python3 scripts/check-alpha.py || :\nbash tests/alpha/run.sh"), False,
+      "checker failure masked by colon", fixture_body="#!/bin/sh\necho harmless\n")
+check(workflow("bash tests/alpha/run.sh || true"), False, "fixture failure masked by true")
+check(workflow("bash tests/alpha/run.sh || :"), False, "fixture failure masked by colon")
 check(workflow("bash tests/alpha/run.sh"), True, "checker via executable fixture")
 check(workflow("bash tests/alpha/run.sh"), False, "checker only in fixture comment",
       fixture_body="#!/bin/sh\necho harmless # scripts/check-alpha.py\n")
