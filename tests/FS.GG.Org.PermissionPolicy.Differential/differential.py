@@ -29,7 +29,10 @@ EXPECTED_PYTHON = {
     "callee_inherits_without_floor": "OK",
     "multi_app_override": "OK",
     "multi_app_override_undergrants": "FINDING",
-    "unselected_app_identity": "FINDING",
+    "unselected_app_identity": "NO_VERDICT",
+    "unselected_app_identity_would_pass_default": "NO_VERDICT",
+    "unsupported_vars_app_identity": "NO_VERDICT",
+    "unsupported_literal_app_identity": "NO_VERDICT",
     "malformed_caller_yaml": "NO_VERDICT",
     "duplicate_caller_key": "OK",
     "dynamic_app_request": "NO_VERDICT",
@@ -40,7 +43,6 @@ EXPECTED_PYTHON = {
     "authority_workflow_omitted": "OK",
 }
 KNOWN_PAIRS = {
-    "unselected_app_identity": ("FINDING", "NO_VERDICT"),
     "duplicate_caller_key": ("OK", "NO_VERDICT"),
     "rostered_second_caller_undergrants": ("FINDING", "OK"),
     "authority_workflow_omitted": ("OK", "NO_VERDICT"),
@@ -91,12 +93,13 @@ BASE = {
 def cases():
     out = []
 
-    def add(name, change=None, known=None):
+    def add(name, change=None, known=None, python_reason=None):
         scenario = copy.deepcopy(BASE)
         if change:
             change(scenario)
         scenario["name"] = name
         scenario["known_divergence"] = known
+        scenario["expected_python_reason"] = python_reason
         out.append(scenario)
 
     add("exact")
@@ -129,8 +132,26 @@ def cases():
         app_override(s)
         s["inventories"].pop()
 
-    add("unselected_app_identity", missing_app_override,
-        "F# refuses unknown App identity; Python falls back to default inventory")
+    missing_identity_reason = "no App grant inventory selects app-id secret 'DEDICATED_APP_CLIENT_ID'"
+    add("unselected_app_identity", missing_app_override, python_reason=missing_identity_reason)
+
+    def missing_app_override_with_broad_default(s):
+        s["authority_workflows"][1]["text"] = APP.replace(
+            "permission-contents: read",
+            "client-id: ${{ secrets.DEDICATED_APP_CLIENT_ID }}\n          permission-contents: read",
+        )
+
+    add("unselected_app_identity_would_pass_default", missing_app_override_with_broad_default,
+        python_reason=missing_identity_reason)
+    unsupported_identity_reason = "App identity must be a static secrets.NAME selector"
+    add("unsupported_vars_app_identity", lambda s: s["authority_workflows"][1].update(
+        text=APP.replace("permission-contents: read",
+                         "app-id: ${{ vars.ORDINARY_APP_ID }}\n          permission-contents: read")),
+        python_reason=unsupported_identity_reason)
+    add("unsupported_literal_app_identity", lambda s: s["authority_workflows"][1].update(
+        text=APP.replace("permission-contents: read",
+                         "app-id: 123\n          permission-contents: read")),
+        python_reason=unsupported_identity_reason)
     add("malformed_caller_yaml", lambda s: s.update(caller_yaml="jobs: { sync: [\n"))
     add("duplicate_caller_key", lambda s: s.update(caller_yaml=
         "permissions: { contents: none }\npermissions: { contents: read }\n"
@@ -227,7 +248,7 @@ def run_case(scenario, temp: Path, stub: Path):
     default = next(item for item in scenario["inventories"] if item["id"] == "default")
     grant_arg = ",".join(f"{scope}:{level}" for scope, level in default["grants"].items())
     command = [sys.executable, str(PYTHON_GATE), "--root", str(root),
-               "--app-grants", grant_arg]
+               "--app-grants", grant_arg, "--require-app-identity-grants"]
     for item in scenario["inventories"]:
         if item["id"] != "default":
             grants = ",".join(f"{scope}:{level}" for scope, level in item["grants"].items())
@@ -260,7 +281,8 @@ def main():
         for scenario in cases():
             py, fs, reason, output = run_case(scenario, temp, stub)
             name = scenario["name"]
-            if py != EXPECTED_PYTHON[name]:
+            expected_reason = scenario.get("expected_python_reason")
+            if py != EXPECTED_PYTHON[name] or (expected_reason and expected_reason not in output):
                 state = "MISMATCH"
             elif py == fs:
                 state = "MATCH"
@@ -274,7 +296,7 @@ def main():
                 print(f"         {scenario['known_divergence']}")
             elif state == "MISMATCH":
                 failures += 1
-                print(f"         Expected Python={EXPECTED_PYTHON[name]}"
+                print(f"         Expected Python={EXPECTED_PYTHON[name]} reason={expected_reason!r}"
                       f"; known pair={KNOWN_PAIRS.get(name)}")
                 print("         Python output:", output.replace("\n", " | ")[:400])
     print(f"differential corpus: {len(cases())} cases, {failures} unexpected mismatch(es), {known} known divergence(s)")
