@@ -32,11 +32,14 @@ class FakeFinalizerPort:
         self.calls = []
         self.pending = None
         self.revoked = None
+        self.native_attempt = None
         self.lose_pending_response = False
         self.false_pending_commit = False
         self.cancel_pending = False
         self.lose_revoked_response = False
         self.native_response_lost = False
+        self.native_attempt_response_lost = False
+        self.stale_native_attempt_commit = False
         self.cancel_native_revoke = False
         self.native_observation = "active"
         self.observations_override = []
@@ -143,6 +146,23 @@ class FakeFinalizerPort:
     def read_revoked(self, mint_id):
         self.calls.append("read-revoked")
         return self.revoked
+
+    def claim_native_attempt_once(self, mint_id, token_sha256, attempt_id):
+        self.calls.append("claim-native-attempt")
+        if self.native_attempt is not None:
+            return "duplicate"
+        self.native_attempt = finalizer.native_attempt_record(
+            mint_id, token_sha256, self.mint["contextSha256"],
+            "e" * 64 if self.stale_native_attempt_commit else attempt_id)
+        if not self.stale_native_attempt_commit and self.native_attempt["attemptId"] != attempt_id:
+            raise AssertionError("foreign native attempt")
+        if self.native_attempt_response_lost:
+            raise OSError("lost after native-attempt claim")
+        return "committed"
+
+    def read_native_attempt(self, mint_id):
+        self.calls.append("read-native-attempt")
+        return self.native_attempt
 
 
 class FakeReleasePort:
@@ -335,6 +355,35 @@ class HostRefusalFinalizerTests(unittest.TestCase):
         rerun = self.run_finalizer()
         self.assertEqual("not-invoked", rerun["release"])
         self.assertEqual(1, self.release_port.invocations)
+
+    def test_lost_native_attempt_claim_stays_pending_without_provider_retry(self):
+        self.port.native_attempt_response_lost = True
+        first = self.run_finalizer()
+        self.assertEqual("pending", first["revocation"])
+        self.assertIsNotNone(self.port.native_attempt)
+        self.assertNotIn("native-revoke", self.port.calls)
+        self.port.native_attempt_response_lost = False
+        self.port.calls.clear()
+        recovered = finalizer.recover_pending(self.port, MINT_ID)
+        self.assertEqual("pending", recovered["revocation"])
+        rerun = self.run_finalizer()
+        self.assertEqual("not-invoked", rerun["release"])
+        self.assertNotIn("native-revoke", self.port.calls)
+        self.assertEqual(1, self.release_port.invocations)
+
+    def test_stale_committed_native_attempt_response_cannot_revoke(self):
+        self.port.stale_native_attempt_commit = True
+        first = self.run_finalizer()
+        self.assertEqual("pending", first["revocation"])
+        self.assertNotIn("native-revoke", self.port.calls)
+        self.assertIsNotNone(self.port.native_attempt)
+
+    def test_missing_shared_attempt_port_blocks_candidate_handoff(self):
+        self.port.claim_native_attempt_once = None
+        result = self.run_finalizer()
+        self.assertEqual("not-invoked", result["release"])
+        self.assertEqual("pending", result["disposition"])
+        self.assertEqual(0, self.release_port.invocations)
 
     def test_lost_pending_response_blocks_handoff_despite_readback(self):
         self.port.lose_pending_response = True

@@ -8,6 +8,7 @@ module. All protected identity pins are empty so the model fails closed.
 import hashlib
 import importlib.util
 import json
+import secrets
 from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlsplit
@@ -24,6 +25,7 @@ PENDING_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-pending/1"
 REVOKED_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-revoked/1"
 VAULT_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-token-vault/1"
 REVOKER_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-native-revoker/1"
+NATIVE_ATTEMPT_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-native-attempt/1"
 
 # A protected source review must pin the exact independently credentialed
 # ledger and vault. Empty pins prohibit any candidate invocation here.
@@ -55,6 +57,9 @@ class ProtectedFinalizerPort(Protocol):
     def observe(self, token: str) -> str: ...
     def append_revoked(self, mint_id: str, token_sha256: str) -> str: ...
     def read_revoked(self, mint_id: str) -> dict: ...
+    def claim_native_attempt_once(self, mint_id: str, token_sha256: str,
+                                  attempt_id: str) -> str: ...
+    def read_native_attempt(self, mint_id: str) -> dict | None: ...
 
 
 def digest_token(token: str) -> str:
@@ -92,7 +97,8 @@ def check_port(port: ProtectedFinalizerPort | None) -> None:
                  PINNED_FINALIZER_ENDPOINT, PINNED_TOKEN_VAULT_ID)),
             "finalizer-unconfigured")
     methods = ("describe", "load_mint", "recover_token", "append_pending",
-               "read_pending", "revoke", "observe", "append_revoked", "read_revoked")
+               "read_pending", "revoke", "observe", "append_revoked", "read_revoked",
+               "claim_native_attempt_once", "read_native_attempt")
     require(port is not None and all(callable(getattr(port, name, None)) for name in methods),
             "finalizer-unconfigured")
     descriptor = port.describe()
@@ -208,6 +214,40 @@ def _read_state(port: ProtectedFinalizerPort, method: str, schema: str,
             and (schema != PENDING_SCHEMA or state["revokeRequired"] is True))
 
 
+def native_attempt_record(mint_id: str, token_sha256: str,
+                          context_sha256: str, attempt_id: str) -> dict:
+    require(all(type(value) is str and release.host.HEX64.fullmatch(value)
+                for value in (mint_id, token_sha256, context_sha256, attempt_id))
+            and bool(PINNED_FINALIZER_RESOURCE_ID)
+            and bool(PINNED_REVOKER_ID), "native-attempt-identity")
+    return {
+        "schema": NATIVE_ATTEMPT_SCHEMA, "mintId": mint_id,
+        "tokenSha256": token_sha256, "contextSha256": context_sha256,
+        "finalizerResourceId": PINNED_FINALIZER_RESOURCE_ID,
+        "revokerId": PINNED_REVOKER_ID,
+        "attemptId": attempt_id,
+    }
+
+
+def _read_native_attempt(port: ProtectedFinalizerPort, mint_id: str,
+                         expected: dict, exact_attempt_id: bool = False) -> str:
+    try:
+        value = port.read_native_attempt(mint_id)
+    except Exception:
+        return "unknown"
+    if value is None:
+        return "absent"
+    return ("exact" if type(value) is dict
+            and set(value) == set(expected)
+            and all(value[name] == expected[name]
+                    for name in expected if name != "attemptId")
+            and type(value["attemptId"]) is str
+            and release.host.HEX64.fullmatch(value["attemptId"])
+            and (not exact_attempt_id
+                 or value["attemptId"] == expected["attemptId"])
+            else "unknown")
+
+
 def _finalize(port: ProtectedFinalizerPort, mint_id: str, token: str,
               may_attempt_revoke: bool = False) -> str:
     """Observe on validated replay; a known duplicate skips native revoke."""
@@ -229,13 +269,26 @@ def _finalize(port: ProtectedFinalizerPort, mint_id: str, token: str,
         observed = "unknown"
     if observed == "active" and may_attempt_revoke:
         try:
-            port.revoke(token)
+            mint = mint_record(port, mint_id, token_sha256)
+            attempt = native_attempt_record(mint_id, token_sha256,
+                                            mint["contextSha256"],
+                                            secrets.token_hex(32))
+            prior = _read_native_attempt(port, mint_id, attempt)
+            if prior == "absent":
+                claimed = port.claim_native_attempt_once(
+                    mint_id, token_sha256, attempt["attemptId"])
+                if claimed == "committed" and _read_native_attempt(
+                        port, mint_id, attempt, exact_attempt_id=True) == "exact":
+                    try:
+                        port.revoke(token)
+                    except Exception:
+                        pass
+                    try:
+                        observed = port.observe(token)
+                    except Exception:
+                        observed = "unknown"
         except Exception:
             pass
-        try:
-            observed = port.observe(token)
-        except Exception:
-            observed = "unknown"
     # An unknown first observation may follow a lost prior revoke result.
     # Only a protected one-use native effect authority can safely retry it.
     if observed != "revoked" or not pending:
