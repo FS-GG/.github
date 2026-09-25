@@ -1078,6 +1078,7 @@ changing the protected holds:
 | [FSC-03 F# #3818](https://github.com/FS-GG/.github/pull/3818) | `f63ad22d9b8568635dff93c16b6eeb9356aaee03` | Dormant fixed-URL protected-branch HTTP reader refuses redirects, status/origin/media mismatch and oversized responses; 247 F# tests. No live request, accepted freshness or installed receiver. |
 | [GS2-09.7 #747](https://github.com/FS-GG/FS.GG.Coordination/pull/747) | `d496707cc0cd8a379dce7f487e8d198d3c4ef68f` | Source-only store installation descriptor pins artifact/ACL digest and role principals before reader invocation, refusing candidate read/write, mutable objects and drift; 730 full unit tests. Real IAM/native custody and Q5/Q6 remain held. |
 | [Telemetry usage #748](https://github.com/FS-GG/FS.GG.Coordination/pull/748) | `45e86f719c7a94f504ab93bfd7bb28cfa19e3db4` | Source-only reservation chronology refuses pre-reservation observation and second-clock rollback with a burned challenge gap; 165 Release execution tests. Trusted clock/current-session usage and Host receipt remain absent. |
+| [GS2-09.9 #749](https://github.com/FS-GG/FS.GG.Coordination/pull/749) | `f5b3897248078498507cc907e9dd303ce10b06fd` | Closed v5 native-request custody joins sealed plan bytes, seal-event witness, journal readback, target digest and typed POST fields, including independent generation/head pin; 18 focused/adjacent tests. Still non-authorizing under #550/#545. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
