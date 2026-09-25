@@ -895,6 +895,36 @@ wf "$RBIDY/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
 expect "implicit dynamic task Output ItemName cannot pass as a complete graph" \
   3 "implicit Directory.Build.props dynamic task Output ItemName requires evaluation" "$RBIDY"
 
+# DirectoryBuildTargetsPath replaces nearest-file discovery during MSBuild evaluation. An
+# alternate file can add B even when the nearest Directory.Build.targets has no reference.
+RBTOP="$(root "$WORK/cover-project-targets-override")"
+proj "$RBTOP" "src/A"
+proj "$RBTOP" "src/B"
+cat > "$RBTOP/src/A/A.fsproj" <<'XML'
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>
+  <DirectoryBuildTargetsPath>$(MSBuildProjectDirectory)/../../Alternate.targets</DirectoryBuildTargetsPath>
+</PropertyGroup></Project>
+XML
+echo '<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup></Project>' \
+  > "$RBTOP/Alternate.targets"
+wf "$RBTOP/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "project-local targets override cannot hide an alternate ProjectReference" \
+  3 "DirectoryBuildTargetsPath overrides implicit target selection" "$RBTOP"
+
+RBTOPI="$(root "$WORK/cover-implicit-targets-override")"
+proj "$RBTOPI" "src/A"
+proj "$RBTOPI" "src/B"
+cat > "$RBTOPI/Directory.Build.props" <<'XML'
+<Project><PropertyGroup>
+  <directorybuildtargetspath>$(MSBuildThisFileDirectory)Alternate.targets</directorybuildtargetspath>
+</PropertyGroup></Project>
+XML
+echo '<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup></Project>' \
+  > "$RBTOPI/Alternate.targets"
+wf "$RBTOPI/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "implicit props targets override cannot hide an alternate ProjectReference" \
+  3 "implicit Directory.Build.props sets DirectoryBuildTargetsPath" "$RBTOPI"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #

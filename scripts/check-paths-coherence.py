@@ -520,6 +520,18 @@ def project_graph(root: str) -> dict[str, list[str]]:
         return (isinstance(element.tag, str)
                 and element.tag.rsplit("}", 1)[-1].casefold() == "projectreference")
 
+    def sets_targets_override(document_root: ET.Element) -> bool:
+        # This property replaces nearest-file selection. A supplied XML tree cannot authenticate
+        # which alternate targets file MSBuild imports after evaluation.
+        for group in document_root.iter():
+            if not isinstance(group.tag, str) or group.tag.rsplit("}", 1)[-1] != "PropertyGroup":
+                continue
+            if any(isinstance(child.tag, str)
+                   and child.tag.rsplit("}", 1)[-1].casefold() == "directorybuildtargetspath"
+                   for child in group):
+                return True
+        return False
+
     def nearest_implicit(project_path: str, filename: str) -> str | None:
         folder = os.path.dirname(os.path.abspath(project_path))
         while os.path.commonpath((root_path, folder)) == root_path:
@@ -541,6 +553,9 @@ def project_graph(root: str) -> dict[str, list[str]]:
             root_tag = project.getroot().tag
             if not isinstance(root_tag, str) or root_tag.rsplit("}", 1)[-1] != "Project":
                 raise GateError(f"{rel}: project XML root must be Project")
+            if sets_targets_override(project.getroot()):
+                raise GateError(f"{rel}: DirectoryBuildTargetsPath overrides implicit target selection; "
+                                "requires MSBuild import evaluation")
             for filename in ("Directory.Build.props", "Directory.Build.targets"):
                 source = nearest_implicit(path, filename)
                 if source is None:
@@ -551,20 +566,22 @@ def project_graph(root: str) -> dict[str, list[str]]:
                         imported = ET.parse(source)
                     except (OSError, ET.ParseError) as e:
                         raise GateError(f"{source_rel}: unreadable or invalid implicit MSBuild XML — {e}") from e
-                    hazard = None
-                    for element in imported.iter():
-                        if is_project_reference(element):
-                            hazard = "contains ProjectReference; requires MSBuild evaluation"
-                            break
-                        if not isinstance(element.tag, str) or element.tag.rsplit("}", 1)[-1] != "Output":
-                            continue
-                        item_name = element.get("ItemName", "")
-                        if any(token in item_name for token in ("$(", "@(", "%(")):
-                            hazard = "dynamic task Output ItemName requires evaluation"
-                            break
-                        if item_name.casefold() == "projectreference":
-                            hazard = "task Output to ProjectReference requires evaluation"
-                            break
+                    hazard = ("sets DirectoryBuildTargetsPath; requires MSBuild import evaluation"
+                              if sets_targets_override(imported.getroot()) else None)
+                    if hazard is None:
+                        for element in imported.iter():
+                            if is_project_reference(element):
+                                hazard = "contains ProjectReference; requires MSBuild evaluation"
+                                break
+                            if not isinstance(element.tag, str) or element.tag.rsplit("}", 1)[-1] != "Output":
+                                continue
+                            item_name = element.get("ItemName", "")
+                            if any(token in item_name for token in ("$(", "@(", "%(")):
+                                hazard = "dynamic task Output ItemName requires evaluation"
+                                break
+                            if item_name.casefold() == "projectreference":
+                                hazard = "task Output to ProjectReference requires evaluation"
+                                break
                     implicit_hazards[source] = hazard
                 if implicit_hazards[source]:
                     raise GateError(f"{rel}: implicit {filename} {implicit_hazards[source]}")
