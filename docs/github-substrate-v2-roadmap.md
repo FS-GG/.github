@@ -1066,6 +1066,7 @@ changing the protected holds:
 | [FSC-04 #1045](https://github.com/FS-GG/FS.GG.SDD/pull/1045) | `ff8215ec6125ffafc058b24b5cfa7439dabd31da` | Physical ABA and post-final-capture controls show four matching reads still lack a common instant; the read-only success type is explicitly `ObservedAgreement`, not authorization. 1,517 Commands tests. |
 | [Telemetry usage #739](https://github.com/FS-GG/FS.GG.Coordination/pull/739) | `35c90bfc2bcecb1ca0506fba4c55d883a4233d0f` | Dormant direct-session correlation refuses malformed reservation, transport, protocol and UTC facts; 157 adapter tests. Native completed-turn usage and Host capture remain no-verdict. |
 | [GS2-09.7 #740](https://github.com/FS-GG/FS.GG.Coordination/pull/740) | `f06b927e91fec650a3c0ffd620ecc6981fb0aeec` | Source-only census binder refuses foreign provider IDs and ambiguous headers, and includes recorded headers in its corpus digest; 729 full unit tests. Native wire custody, freshness and Q5/Q6 stay held. |
+| [FSC-03 F# #3816](https://github.com/FS-GG/.github/pull/3816) | `b7920dfdf4b6d3b815d8e287954da24dfbdd2420` | Dormant GraphQL HTTP reader fixes the endpoint and refuses redirect, wrong origin/status/media, mutation and oversized/underreported body; 230 F# tests. No live credential, accepted pin or installed receiver. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
