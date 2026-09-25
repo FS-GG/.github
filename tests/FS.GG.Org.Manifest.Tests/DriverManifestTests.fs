@@ -63,6 +63,30 @@ module DriverManifestTests =
         Assert.Contains("files digest mismatch", errors (valid.Replace(tree, String.replicate 64 "0")))
 
     [<Fact>]
+    let ``refuses a NUL member path even when the tree digest agrees`` () =
+        let impossible = sprintf """{"path":"asset\u0000.txt","sha256":"%s","executable":false}""" hash
+        let files = "[" + file + "," + impossible + "]"
+        let digest = SHA256.HashData(Encoding.UTF8.GetBytes files) |> Convert.ToHexString |> fun value -> value.ToLowerInvariant()
+        let candidate = (valid.Replace(file, file + "," + impossible)).Replace(tree, digest)
+        Assert.Contains("unsafe relative path", errors candidate)
+
+    [<Fact>]
+    let ``malformed digest grammar refuses independently of tree closure`` () =
+        for malformed in [ String.replicate 63 "a"; String.replicate 64 "A"; String.replicate 63 "a" + "g" ] do
+            Assert.Contains("expected lowercase SHA-256", errors (valid.Replace(hash, malformed)))
+
+    [<Fact>]
+    let ``rendered byte arrays do not alias manifest state`` () =
+        let manifest =
+            match DriverManifest.parse root valid with
+            | Ok value -> value
+            | Error messages -> failwithf "Expected valid manifest: %A" messages
+        let first = DriverManifest.renderCanonical manifest
+        let expected = Array.copy first
+        first.[0] <- 0uy
+        Assert.Equal<byte>(expected, DriverManifest.renderCanonical manifest)
+
+    [<Fact>]
     let ``refuses a fractional schema version with a diagnostic`` () =
         Assert.Contains("schemaVersion", errors (valid.Replace("\"schemaVersion\":2", "\"schemaVersion\":2.5")))
 

@@ -30,6 +30,7 @@ module DriverManifest =
         && not (value.StartsWith("/", StringComparison.Ordinal))
         && not (value.Contains(char 92))
         && not (value.Contains(':'))
+        && not (value.Contains(char 0))
         && (value.Split('/')
             |> Array.forall (fun segment -> segment <> "" && segment <> "." && segment <> ".."))
 
