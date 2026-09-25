@@ -864,6 +864,37 @@ wf "$RBCB/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
 expect "lower-case implicit ProjectReference requires evaluation" \
   3 "implicit Directory.Build.targets contains ProjectReference" "$RBCB"
 
+# An implicitly imported target can emit ProjectReference through task Output without a
+# ProjectReference XML item. Its ItemName can also be computed by MSBuild at execution time.
+RBIO="$(root "$WORK/cover-implicit-task-output")"
+proj "$RBIO" "src/A"
+proj "$RBIO" "src/B"
+cat > "$RBIO/Directory.Build.targets" <<'XML'
+<Project><Target Name="Inject" BeforeTargets="ResolveProjectReferences">
+  <CreateItem Include="../B/B.fsproj">
+    <Output TaskParameter="Include" ItemName="ProjectReference" />
+  </CreateItem>
+</Target></Project>
+XML
+wf "$RBIO/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "implicit task Output cannot hide an emitted ProjectReference" \
+  3 "implicit Directory.Build.targets task Output to ProjectReference requires evaluation" "$RBIO"
+
+RBIDY="$(root "$WORK/cover-implicit-dynamic-output")"
+proj "$RBIDY" "src/A"
+cat > "$RBIDY/Directory.Build.props" <<'XML'
+<Project><PropertyGroup><OutputItem>ProjectReference</OutputItem></PropertyGroup>
+  <Target Name="Inject" BeforeTargets="ResolveProjectReferences">
+    <CreateItem Include="../B/B.fsproj">
+      <Output TaskParameter="Include" ItemName="$(OutputItem)" />
+    </CreateItem>
+  </Target>
+</Project>
+XML
+wf "$RBIDY/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "implicit dynamic task Output ItemName cannot pass as a complete graph" \
+  3 "implicit Directory.Build.props dynamic task Output ItemName requires evaluation" "$RBIDY"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
