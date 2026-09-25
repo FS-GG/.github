@@ -112,6 +112,8 @@ class SchedulerTests(unittest.TestCase):
             (worker.finalizer, "PINNED_FINALIZER_ENDPOINT"): fixture.ORIGIN + "/pending",
             (worker.finalizer, "PINNED_TOKEN_VAULT_ID"): fixture.VAULT_ID,
             (worker.finalizer, "PINNED_REVOKER_ID"): "protected-native-revoker-test",
+            (worker.finalizer, "PINNED_NATIVE_ATTEMPT_RESOURCE_ID"):
+                fixture.NATIVE_ATTEMPT_RESOURCE,
             (fixture.census.worker.finalizer, "PINNED_REVOKER_ID"):
                 "protected-native-revoker-test",
         }
