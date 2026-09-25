@@ -1579,10 +1579,14 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   these identity-bound Q3/Q6 refusals; its auto-merge was disabled and its receipt is disputed. Keep the
   historical packets immutable. Qualify a versioned operator with rotated contract/proposal/validator
   digests and fresh exact Q3/Q6 negative controls before issuing any GS2-09.9 acceptance receipt.
-  [Provisional operator draft #549](https://github.com/FS-GG/FS.GG.Coordination/pull/549) currently
-  proves import-only predicates offline; it does not yet exercise the production runtime boundary or
-  lost-response reconciliation required by Q3/Q6. Its planned v5 contract is non-authoritative until
-  an integrated runtime path and controlled-response qualification close that gap.
+  [Provisional operator draft #549](https://github.com/FS-GG/FS.GG.Coordination/pull/549) and
+  [stacked loopback transport draft #551](https://github.com/FS-GG/FS.GG.Coordination/pull/551)
+  exercise strict offline predicates and controlled lost-response HTTP cases. The
+  [v5 contract and qualification draft #550](https://github.com/FS-GG/FS.GG.Coordination/pull/550)
+  remains non-authoritative. A staged installed exact-artifact transport/parser proof, historical
+  archive revalidation, and reviewed Q3/Q6 equivalence or a new protected isolated native operation
+  are still required before rotating the gate/index and accepting GS2-09.9. Loopback unit tests
+  alone do not prove the production runtime boundary.
 
   [Protected callable discovery handoff](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json)
   records the packet received by discovery; it is not the GS2-09.9 acceptance receipt.
