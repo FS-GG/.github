@@ -237,8 +237,13 @@ ALLOW_UNCOVERED = re.compile(
 UNSIGNED = ""
 
 # The project files whose reference graph rule (b) reads. MSBuild's own languages; there is no
-# judgement in the list, only which extensions carry a `ProjectReference`.
-PROJECT_GLOBS = ("*.fsproj", "*.csproj", "*.vbproj")
+# judgement in the list, only which extensions carry a `ProjectReference`. MSBuild can load a
+# case-varied extension named by ProjectReference, so discovery must retain that project's edges.
+PROJECT_GLOBS = (
+    "*.[fF][sS][pP][rR][oO][jJ]",
+    "*.[cC][sS][pP][rR][oO][jJ]",
+    "*.[vV][bB][pP][rR][oO][jJ]",
+)
 
 
 class GateError(Exception):
