@@ -1005,6 +1005,8 @@ changing the protected holds:
 | [GS2-09.9 #707](https://github.com/FS-GG/FS.GG.Coordination/pull/707) | `6f7c4de6f8c892ecde9a34c392cb284834eb75ca` | Binds present branch commit URL to selected repository and SHA in both protection probes; 88 fake-port tests. |
 | [FSC-03 F# #3803](https://github.com/FS-GG/.github/pull/3803) | `9912114a5a5651ba5624486183614dac2499fff7` | Refuses surrounding whitespace in supplied ProjectReference Include that installed MSBuild trims; 158 policy tests. |
 | [FSC-05 #584](https://github.com/FS-GG/FS.GG.Templates/pull/584) | `1fa5d682b7c864948ea9c216f04a8ea5ceba4865` | Refuses matching nonzero ZIP flags in selected local/central headers; 85 payload/29 custody controls. |
+| [GS2-09.9 #708](https://github.com/FS-GG/FS.GG.Coordination/pull/708) | `01c206a474e9f40f9369ce291a6e8e34237158e8` | Uses type-sensitive canonical JSON digest for initial/terminal protection policy comparison; 90 fake-port tests. |
+| [FSC-03 F# #3804](https://github.com/FS-GG/.github/pull/3804) | `310f702287f7db8b2565c977d61c08a82321a6c1` | Dormant pure supplied-source assembler refuses duplicate project identities, absent references and empty lists before graph construction; 163 policy tests. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
