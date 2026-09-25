@@ -48,6 +48,7 @@
     {"path":".github/workflows/dispatch-sender.yml","disposition":"read-only","sinkKinds":[],"sha256":"e8dab416cd98c1286b67875875777fa3583c4112af0c4581c7c05da60992894f"},
     {"path":".github/workflows/fsgg-dispatch-broker.yml","disposition":"read-only","sinkKinds":[],"sha256":"daecbf14c8af247beec85a5c4d5f2859cf6c07d717efcb1e01187e9ef161fc6c"},
     {"path":".github/workflows/github-substrate-v2-authority-qualification.yml","disposition":"local-only","sinkKinds":[],"sha256":"78f8d2885ca4a2b7a777ecb68d4b1a50a82b33f4652b7808d7766edca2994dd9"},
+    {"path":".github/workflows/github-substrate-v2-sandbox-mint-proof.yml","disposition":"protected-admin-writer","sinkKinds":["rest-write"],"sha256":"7411eaa9f4c28abcb79406827ef73c4ebaa2d46f8a9ffcf36b898a5d9379b7a9"},
     {"path":".github/workflows/kit-materialize.yml","disposition":"read-only","sinkKinds":["dynamic-process"],"sha256":"ebb1b200f69234949be67b9c46ed40abdbc5698b81bf1c0da3102ab1544903e4","nonWriterJustification":"Receiver authorization invokes gh only for fixed read routes; the GS2-08.9 workflow has no App token, provider write method, materialize job, commit, or push."},
     {"path":".github/workflows/release-coord-engine.yml","disposition":"publish-writer","sinkKinds":["package-publish"],"sha256":"7973a57d19123afaafab7cc0cdc8e24a5cb3e891a97c00194be4fed9e1cc3ee5"},
     {"path":".github/workflows/release-drivers.yml","disposition":"publish-writer","sinkKinds":["package-publish"],"sha256":"b6e33e102ea9d7d30a8400887ab58a9953209c3dd65611eaf22a439de8b2866b"},
