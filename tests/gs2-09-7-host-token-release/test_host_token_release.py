@@ -23,11 +23,13 @@ host_fixture = load("host_binding_fixture", ROOT / "tests/gs2-09-7-host-run-bind
 
 class FakePort:
     def __init__(self):
-        self.claimed = set()
+        self.claimed = {}
         self.calls = []
         self.claim_result = None
         self.invoke_result = "complete"
         self.revoke_result = "confirmed"
+        self.revoke_after_claim = False
+        self.decision_state = "admitted"
 
     def claim_once(self, decision_id, binding_id, token_sha256):
         self.calls.append("claim")
@@ -35,10 +37,17 @@ class FakePort:
             return self.claim_result
         if decision_id in self.claimed:
             return "duplicate"
-        self.claimed.add(decision_id)
+        self.claimed[decision_id] = (binding_id, token_sha256)
+        if self.revoke_after_claim:
+            self.decision_state = "revoked"
         return "granted"
 
-    def invoke_candidate_once(self, token, binding):
+    def invoke_candidate_if_admitted_once(self, decision_id, binding_id,
+                                           token_sha256, token, binding):
+        if self.decision_state != "admitted":
+            return "refused"
+        if self.claimed.get(decision_id) != (binding_id, token_sha256):
+            return "unknown"
         self.calls.append("invoke")
         return self.invoke_result
 
@@ -119,6 +128,19 @@ class HostTokenReleaseTests(unittest.TestCase):
         self.assertEqual("candidate-complete", first["outcome"])
         self.assertEqual("duplicate-refused", second["outcome"])
         self.assertEqual(1, self.port.calls.count("invoke"))
+
+    def test_revoked_after_claim_before_handoff_refuses_without_exposure(self):
+        self.port.revoke_after_claim = True
+        result = self.run_release()
+        self.assertEqual("handoff-refused", result["outcome"])
+        self.assertEqual(0, result["invocationCount"])
+        self.assertEqual(["claim", "revoke"], self.port.calls)
+        self.port.revoke_after_claim = False
+        self.port.decision_state = "admitted"
+        retry = self.run_release()
+        self.assertEqual("duplicate-refused", retry["outcome"])
+        self.assertEqual(0, retry["invocationCount"])
+        self.assertEqual(0, self.port.calls.count("invoke"))
 
     def test_no_port_or_pin_refuses_before_claim_and_handoff(self):
         with self.assertRaisesRegex(release.Refused, "release-port-unconfigured"):
