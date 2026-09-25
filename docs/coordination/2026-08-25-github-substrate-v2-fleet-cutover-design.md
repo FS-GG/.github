@@ -429,21 +429,27 @@ The service rereads the epoch, claim and journal immediately before its effect, 
 expected-parent CAS, and returns an admitted handle only after independent exact journal readback.
 A lost response or conflicting parent is reconciled from durable state under the same operation
 identity; uncertainty never permits a second blind append. A restored `InFlight` handle is
-reconciliation-only. Before each first provider send, the service also rereads the epoch, claim,
-admission, operation, manifest, seal, and source and target heads, then consumes a one-shot dispatch
-fence; a retry of the same effect requires settled readback or a typed strong-exclusion proof.
+reconciliation-only and cannot send a provider mutation. Before every provider mutation, including
+an authorized retry or compensation, the service rereads the epoch, claim, admission, operation,
+manifest, seal, and source and target heads, then consumes a new one-shot dispatch fence for that
+attempt. A retry is authorized only after a durable `StronglyAbsent` settlement bound to the
+original request proves it cannot later apply, and uses a new attempt identity. `Applied` is
+terminal for that effect; `Partial` and `Indeterminate` permit reconciliation or an independently
+authorized recovery plan, never a replay of the uncertain request.
 
 For a provider effect, reconciliation requires exact request and idempotency identity plus fresh
-target readback. For a native pull-request merge, that identity includes the repository and PR node,
-expected head and base, merge method and resulting commit. It reports `Applied` only for a verified
-matching provider effect identity and receipt; a matching target state created by another actor is
+target readback. For a native pull-request merge, the sealed pre-send request identity includes the
+repository and PR node, expected head and base, merge method, operation, effect and idempotency
+identities; the resulting commit is a post-send observation that must match an independent provider
+readback. It reports `Applied` only for a verified matching provider effect identity and receipt;
+a matching target state created by another actor is
 insufficient. It reports `StronglyAbsent` only when evidence bound to the original request proves
 delayed application impossible through an idempotency, conditional-fence, or retired-request contract.
 `Partial` retains the observed completed subset and its recovery or compensation plan, while unreadable
 or lost-response evidence remains `Indeterminate`. Neither permits blind replay. An open PR, 404, or
 missing merge commit on one read does not prove strong absence; if GitHub cannot provide it, an
-unknown merge remains pending for manual reconciliation and cannot be retried under a fresh effect
-identity.
+unknown merge without provider correlation remains pending for manual reconciliation and cannot
+be retried under a fresh effect identity.
 No direct routine merge, intake, Project write or other normal v1 mutation route is enabled until the
 installed service, issuer, journal and provider probes qualify together. Independent controls must
 refuse caller-supplied contexts, foreign or stale claims, moved source/target revisions, changed epoch,
