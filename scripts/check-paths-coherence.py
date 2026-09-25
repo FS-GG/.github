@@ -553,6 +553,8 @@ def project_graph(root: str) -> dict[str, list[str]]:
                     )
                 if tag != "ProjectReference":
                     continue
+                if element.get("Remove") is not None:
+                    raise GateError(f"{rel}: ProjectReference Remove requires MSBuild evaluation")
                 inc = element.get("Include")
                 if not inc:
                     continue

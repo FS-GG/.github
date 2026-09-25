@@ -772,6 +772,21 @@ wf "$RBTOD/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
 expect "dynamic task Output ItemName cannot hide an emitted reference" \
   3 "dynamic task Output ItemName requires evaluation" "$RBTOD"
 
+# Item evaluation can remove a reference declared earlier. The raw XML reader currently retains
+# B and reports an uncovered dependency even though MSBuild's resulting item set has no B.
+RBRM="$(root "$WORK/cover-project-reference-remove")"
+proj "$RBRM" "src/A"
+proj "$RBRM" "src/B"
+cat > "$RBRM/src/A/A.fsproj" <<'XML'
+<Project><ItemGroup>
+  <ProjectReference Include="../B/B.fsproj" />
+  <ProjectReference Remove="../B/B.fsproj" />
+</ItemGroup></Project>
+XML
+wf "$RBRM/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "ProjectReference Remove refuses before reporting a stale graph edge" \
+  3 "ProjectReference Remove requires MSBuild evaluation" "$RBRM"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
