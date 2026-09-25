@@ -68,6 +68,24 @@ module ProjectReferenceXmlTests =
             + "<Target Name='Generate'><ItemGroup><Content Include='generated.txt' /></ItemGroup></Target></Project>"
         Assert.Equal<string list>([ "src/B/B.fsproj" ], parsed "src/A/A.fsproj" xml)
 
+    [<Theory>]
+    [<InlineData("ProjectReference")>]
+    [<InlineData("projectreference")>]
+    let ``task Output to ProjectReference cannot yield a static graph`` itemName =
+        let xml =
+            "<Project><Target Name='Inject' BeforeTargets='ResolveProjectReferences'>"
+            + "<CreateItem Include='../B/B.fsproj'><Output TaskParameter='Include' ItemName='"
+            + itemName + "' /></CreateItem></Target></Project>"
+        refused "project-reference" "src/A/A.fsproj" xml
+
+    [<Fact>]
+    let ``unrelated task Output leaves static references readable`` () =
+        let xml =
+            "<Project><ItemGroup><ProjectReference Include='../B/B.fsproj' /></ItemGroup>"
+            + "<Target Name='Generate'><CreateItem Include='generated.txt'>"
+            + "<Output TaskParameter='Include' ItemName='Content' /></CreateItem></Target></Project>"
+        Assert.Equal<string list>([ "src/B/B.fsproj" ], parsed "src/A/A.fsproj" xml)
+
     [<Fact>]
     let ``namespaced project reference is still an edge`` () =
         let xml =

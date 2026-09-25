@@ -47,6 +47,7 @@ module ProjectReferenceXml =
 
     /// Decode ProjectReference Include values and resolve them to normalized repo-relative paths.
     /// Explicit imports and target-time ProjectReference changes require MSBuild evaluation.
+    /// Tasks may also emit ProjectReference items without an item element in these XML bytes.
     /// No filesystem reads or assertions about a complete project roster occur here.
     let inspect (projectPath: string) (xml: string) : Result<string list, SyntaxDiagnostic> =
         if not (normalized projectPath) then
@@ -67,12 +68,23 @@ module ProjectReferenceXml =
                         element.Name.LocalName = "ProjectReference"
                         && (element.Ancestors()
                             |> Seq.exists (fun ancestor -> ancestor.Name.LocalName = "Target")))
+                let taskOutputReference =
+                    document.Descendants()
+                    |> Seq.exists (fun element ->
+                        let itemName = element.Attribute(XName.Get("ItemName"))
+                        element.Name.LocalName = "Output"
+                        && not (isNull itemName)
+                        && String.Equals(itemName.Value, "ProjectReference", StringComparison.OrdinalIgnoreCase)
+                        && (element.Ancestors()
+                            |> Seq.exists (fun ancestor -> ancestor.Name.LocalName = "Target")))
                 if isNull document.Root || document.Root.Name.LocalName <> "Project" then
                     error "project-xml" projectPath "project XML root must be Project"
                 elif document.Descendants() |> Seq.exists (fun element -> element.Name.LocalName = "Import") then
                     error "project-reference" projectPath "explicit MSBuild Import requires evaluation"
                 elif targetReference then
                     error "project-reference" projectPath "target-time ProjectReference changes require evaluation"
+                elif taskOutputReference then
+                    error "project-reference" projectPath "task Output to ProjectReference requires evaluation"
                 else
                     let references = ResizeArray<string>()
                     let mutable invalid = None
