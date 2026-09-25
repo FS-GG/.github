@@ -417,6 +417,20 @@ pagination proofs, and source and target revisions. Unreadable, incomplete, cont
 facts refuse. An ordinary CLI argument, ambient user token, or previously returned handle cannot
 nominate a new admission. The CLI may only resume or inspect a handle already verified in the journal.
 
+The initial trusted caller form is a dedicated GitHub Actions admission service run from a pinned
+workflow and source revision on protected `.github` `main`. Native provider readback must bind its
+repository, workflow path and bytes, head, run ID and attempt, actor, and branch-restricted runtime
+environment to the registered service before any plan is sealed. Dispatch inputs remain lookup hints.
+The runtime environment and ordinary App key custody are separate from the one-time human-reviewed
+genesis environment and from cutover approval. Until that run provenance, environment restriction,
+and key custody are installed and qualified together, the service has no admission authority.
+An in-progress run cannot prove its own origin with a completed-run artifact. Before accessing the
+key, the issuer verifies a GitHub-signed in-run OIDC token with an audience bound to the exact sealed
+plan and nonce, issuer signature and time bounds, one-shot token identity, and repository, workflow,
+source head, run, attempt, job and environment claims. It cross-checks those claims against fresh
+native run, job, workflow-source and environment reads. A caller-supplied run ID, an ambient token,
+or a matching native run lookup alone cannot authenticate the requesting job.
+
 The service seals one exact admission plan before obtaining its short-lived ordinary App credential.
 A protected issuer verifies the registered service identity and request provenance, exact plan digest,
 operation, expected journal parent, current epoch, repository and one-shot handoff identity before
