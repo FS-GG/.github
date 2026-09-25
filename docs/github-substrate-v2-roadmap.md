@@ -1638,7 +1638,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   checks local archive/source and interpreter bytes with read-only negative controls; it lacks
   protected artifact and runtime provenance or an installed effect path. [Stacked runtime-closure draft #561](https://github.com/FS-GG/FS.GG.Coordination/pull/561)
   hashes a local interpreter, standard-library tree and observed mapped files, but its local
-  manifest is not a protected image or independent release pin. The #550 staged exact-copy loopback
+  manifest is not a protected image or independent release pin. [Stacked provenance draft #562](https://github.com/FS-GG/FS.GG.Coordination/pull/562)
+  refuses the existing ordinary CLI release workflows and models the required immutable source,
+  workflow, image, runtime and independent approval packet; its observer ports are not installed.
+  The #550 staged exact-copy loopback
   harness exercises corrected classifier, HTTP and durable-fence paths, but an independent boundary
   review found it insufficient for the installed provider/credential path and corrected native-effect clause. Qualify the corrected
   version through an actual installed provider path or a new protected isolated native operation,
