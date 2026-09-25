@@ -162,6 +162,23 @@ module GitCommitProvenanceTests =
         | Ok verified -> failwithf "malformed commit accepted: %A" verified
 
     [<Fact>]
+    let ``hashed NUL in commit header cannot certify root`` () =
+        // Fixed with git hash-object -t commit --literally --stdin over header bytes containing NUL.
+        let id = "db54d9c053dcc5424179270c6f114eda147848bf"
+        let bytes = Convert.FromBase64String(
+            "dHJlZSAyYjU1MmQ2YmY5ZDdiNDQ1OGEyOGZjNjU2NjNmYmMyYzdiMDIyMWRjCmF1dGhvciBGaXh0dXJlIDxmaXh0dXJlQGV4YW1wbGUuaW52YWxpZD4gMCArMDAwMApjb21taXR0ZXIgRml4dHVyZSA8Zml4dHVyZUBleGFtcGxlLmludmFsaWQ+IDAgKzAwMDAKeC1leHRyYSBiZWZvcmUAYWZ0ZXIKCmZpeGVkIG1hbGZvcm1lZCBoZWFkZXIgZml4dHVyZQo=")
+        let malformedPin = { pin with CommitId = id }
+        let malformedObservation = { observation with CommitId = id; RawCommit = bytes }
+        let rawReader =
+            { new GitCommitProvenance.IReadOnlyCommitReader with
+                member _.ReadExact _ = Ok malformedObservation }
+        match GitCommitProvenance.inspectProvisionalRoot malformedPin rootTreeId rawReader with
+        | Error diagnostic ->
+            Assert.Equal("git-commit-provenance", diagnostic.Code)
+            Assert.Contains("NUL", diagnostic.Message)
+        | Ok root -> failwithf "NUL-bearing commit header rooted a graph: %A" root
+
+    [<Fact>]
     let ``pinned commit composes with exact blob and XML graph inspection`` () =
         let row oid encoded = oid, Convert.FromBase64String(encoded)
         let trees =

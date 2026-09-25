@@ -64,6 +64,8 @@ module GitCommitProvenance =
         let separator = raw.IndexOf("\n\n", StringComparison.Ordinal)
         if separator < 0 then
             error "<commit>" "commit header has no message separator"
+        elif raw.Substring(0, separator).Contains('\000') then
+            error "<commit>" "commit header contains NUL byte"
         else
             let headers = raw.Substring(0, separator).Split('\n')
             let tree = Regex.Match(headers.[0], "^tree ([0-9a-f]{40})$", RegexOptions.CultureInvariant)
