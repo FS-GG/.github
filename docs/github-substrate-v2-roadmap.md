@@ -230,6 +230,9 @@ silently selected a shadow option ID. The dormant direct route now refuses missi
 blank or duplicate field and single-select option names/IDs before map construction.
 Its Release GitHub adapter suite passes 846/846. This draft neither installs the runner
 mode nor admits an item; Project 2 remains PAT-forbidden on the installed enumeration route.
+A fresh read-only Project 1 response returned pinned ID `PVT_kwDOEYAWY84Bb08W`,
+`totalCount=24`, 24 field nodes and zero duplicate field or option identities; it
+does not replace installed runner qualification.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
@@ -528,6 +531,22 @@ refuse unevaluated MSBuild Import (127 fixtures), with installed parity pending.
 at `4bc07cac34d69fad7f97145c2c48e363c7982937` makes the Python archive reader
 return NO_VERDICT on an unsafe ZIP member outside template paths (43 payload, 29
 archive tests), without producer, served-byte or receiver authority.
+Further source-only follow-ups: [Coordination GS2-09.9 #653](https://github.com/FS-GG/FS.GG.Coordination/pull/653)
+at `91b4d339c1c3195a74f1b8f93795fdb3c1fb5953` refuses installed probe
+before approval or after expiry (51 fake-port tests), still lacking authenticated
+protected timestamps; [Coordination GS2-09.7 #654](https://github.com/FS-GG/FS.GG.Coordination/pull/654)
+at `a78e29240b551378189119ea5d3b29ff7e636aa2` brackets partial Actions and
+workflow readback (114 tests), without atomicity or Q5/Q6 acceptance.
+[SDD FSC-04 #1027](https://github.com/FS-GG/FS.GG.SDD/pull/1027) at
+`bbb2ba2e3d0ce802ce413a8bdf5ff3a0ec713c33` proves a supplied candidate
+inventory can omit a physical duplicate work ID (1,456 Commands tests); complete
+discovery remains open. [`.github` FSC-03 #3776](https://github.com/FS-GG/.github/pull/3776)
+at `02d82b95aafa228c3d52d81a261ebedc66e1340e` refuses a non-Project XML
+root in Python graph extraction (129 fixtures), still uninstalled.
+[Templates FSC-05 #563](https://github.com/FS-GG/FS.GG.Templates/pull/563) at
+`22cc8438eaf3f06f44a73c6ad52cbc985a61dde5` returns NO_VERDICT for a
+non-template ZIP symlink (44 payload, 29 archive controls), without producer,
+served-byte, transaction or receiver authority.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
