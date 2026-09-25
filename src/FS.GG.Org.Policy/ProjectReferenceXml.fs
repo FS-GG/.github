@@ -18,14 +18,22 @@ module ProjectReferenceXml =
         // MSBuild item names are case-insensitive; XML structural names retain their case.
         String.Equals(element.Name.LocalName, "ProjectReference", StringComparison.OrdinalIgnoreCase)
 
-    let private setsTargetsOverride (document: XDocument) =
-        // A property assignment can replace nearest Directory.Build.targets selection. Metadata
+    let private implicitImportOverride (document: XDocument) =
+        // Property assignments can replace or disable nearest Directory.Build imports. Metadata
         // with the same name is not a property assignment.
+        let names =
+            [ "DirectoryBuildPropsPath"
+              "DirectoryBuildTargetsPath"
+              "ImportDirectoryBuildProps"
+              "ImportDirectoryBuildTargets" ]
         document.Descendants()
-        |> Seq.exists (fun element ->
-            String.Equals(element.Name.LocalName, "DirectoryBuildTargetsPath", StringComparison.OrdinalIgnoreCase)
-            && not (isNull element.Parent)
-            && element.Parent.Name.LocalName = "PropertyGroup")
+        |> Seq.tryPick (fun element ->
+            if not (isNull element.Parent)
+               && element.Parent.Name.LocalName = "PropertyGroup" then
+                names
+                |> List.tryFind (fun name ->
+                    String.Equals(element.Name.LocalName, name, StringComparison.OrdinalIgnoreCase))
+            else None)
 
     let private hasUnverifiedSdk (root: XElement) =
         // An SDK's implicit props/targets can add ProjectReference items outside project XML.
@@ -97,6 +105,7 @@ module ProjectReferenceXml =
                 use input = new StringReader(xml)
                 use reader = XmlReader.Create(input, settings)
                 let document = XDocument.Load(reader)
+                let importOverride = implicitImportOverride document
                 let inTarget (element: XElement) =
                     element.Ancestors()
                     |> Seq.exists (fun ancestor -> ancestor.Name.LocalName = "Target")
@@ -129,8 +138,9 @@ module ProjectReferenceXml =
                     error "project-xml" projectPath "project XML root must be Project"
                 elif hasUnverifiedSdk document.Root then
                     error "project-reference" projectPath "unverified project SDK can import ProjectReference items; requires authenticated MSBuild SDK evaluation"
-                elif setsTargetsOverride document then
-                    error "project-reference" projectPath "DirectoryBuildTargetsPath overrides implicit target selection; requires MSBuild import evaluation"
+                elif importOverride.IsSome then
+                    error "project-reference" projectPath
+                        (sprintf "%s changes implicit import selection; requires MSBuild evaluation" importOverride.Value)
                 elif document.Descendants() |> Seq.exists (fun element -> element.Name.LocalName = "Import") then
                     error "project-reference" projectPath "explicit MSBuild Import requires evaluation"
                 elif targetReference then
@@ -428,10 +438,12 @@ module ProjectReferenceXml =
                 use input = new StringReader(xml)
                 use reader = XmlReader.Create(input, settings)
                 let document = XDocument.Load(reader)
+                let importOverride = implicitImportOverride document
                 if isNull document.Root || document.Root.Name.LocalName <> "Project" then
                     error "implicit-source-xml" sourcePath "implicit source XML root must be Project"
-                elif setsTargetsOverride document then
-                    error "implicit-source-selection" sourcePath "supplied implicit XML sets DirectoryBuildTargetsPath; requires MSBuild import evaluation"
+                elif importOverride.IsSome then
+                    error "implicit-source-selection" sourcePath
+                        (sprintf "supplied implicit XML sets %s; requires MSBuild import evaluation" importOverride.Value)
                 elif document.Descendants()
                      |> Seq.exists (fun element ->
                          isProjectReference element) then

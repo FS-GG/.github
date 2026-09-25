@@ -161,12 +161,27 @@ module ProjectReferenceXmlTests =
             Assert.Contains("DirectoryBuildTargetsPath", diagnostic.Message)
         | Ok references -> failwithf "expected targets-path refusal, got %A" references
 
-    [<Fact>]
-    let ``targets path item metadata is not a property override`` () =
+    [<Theory>]
+    [<InlineData("DirectoryBuildPropsPath", "$(MSBuildProjectDirectory)/Alternate.props")>]
+    [<InlineData("ImportDirectoryBuildProps", "false")>]
+    [<InlineData("ImportDirectoryBuildTargets", "false")>]
+    let ``project implicit import override cannot certify local graph`` property value =
+        let xml = sprintf "<Project><PropertyGroup><%s>%s</%s></PropertyGroup></Project>" property value property
+        match ProjectReferenceXml.inspect "src/A/A.fsproj" xml with
+        | Error diagnostic ->
+            Assert.Equal("project-reference", diagnostic.Code)
+            Assert.Contains(property, diagnostic.Message)
+        | Ok references -> failwithf "implicit import override emitted local graph: %A" references
+
+    [<Theory>]
+    [<InlineData("DirectoryBuildPropsPath")>]
+    [<InlineData("DirectoryBuildTargetsPath")>]
+    [<InlineData("ImportDirectoryBuildProps")>]
+    [<InlineData("ImportDirectoryBuildTargets")>]
+    let ``implicit import names in item metadata are not property overrides`` property =
         let xml =
-            "<Project><ItemGroup><Content Include='readme'>"
-            + "<DirectoryBuildTargetsPath>Alternate.targets</DirectoryBuildTargetsPath>"
-            + "</Content></ItemGroup></Project>"
+            sprintf "<Project><ItemGroup><Content Include='readme'><%s>value</%s></Content></ItemGroup></Project>"
+                property property
         Assert.Empty(parsed "src/A/A.fsproj" xml)
 
     [<Theory>]
@@ -196,6 +211,18 @@ module ProjectReferenceXmlTests =
             Assert.Equal("implicit-source-selection", diagnostic.Code)
             Assert.Contains("DirectoryBuildTargetsPath", diagnostic.Message)
         | Ok observation -> failwithf "expected targets-path refusal, got %A" observation
+
+    [<Theory>]
+    [<InlineData("DirectoryBuildPropsPath", "Alternate.props")>]
+    [<InlineData("ImportDirectoryBuildProps", "false")>]
+    [<InlineData("ImportDirectoryBuildTargets", "false")>]
+    let ``supplied implicit source override refuses local observation`` property value =
+        let xml = sprintf "<Project><PropertyGroup><%s>%s</%s></PropertyGroup></Project>" property value property
+        match ProjectReferenceXml.inspectSuppliedImplicitXml "Directory.Build.props" xml with
+        | Error diagnostic ->
+            Assert.Equal("implicit-source-selection", diagnostic.Code)
+            Assert.Contains(property, diagnostic.Message)
+        | Ok observation -> failwithf "implicit import override emitted observation: %A" observation
 
     [<Fact>]
     let ``supplied implicit XML with an Import refuses unresolved closure`` () =
