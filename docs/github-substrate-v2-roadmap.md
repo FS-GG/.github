@@ -97,8 +97,17 @@ workspace `status=configured`, `pending=0`, `pendingUnacknowledged=0`, and
 these fields without printing credentials. A missing, stale, or failing observation is a direct V2
 blocker assigned to the reserved critical-path worker; hold the affected protected receipt, merge, or
 cutover until the invariant is restored and freshly observed, while safe disjoint source work continues.
-These two probes establish endpoint and workspace readiness only. Claim that this Codex transcript was
-captured only after separate event-level capture and durable acknowledgement evidence identifies it.
+These two probes establish endpoint and workspace readiness only. Separately, accept telemetry
+**end-to-end capture** only after one genuine work item runs through the existing instrumented
+orchestration runner: record that item's native turn IDs and usage, obtain an **applied Host receipt**
+whose workspace and item identities exactly match the run, and then verify the workspace queue returns
+to `pending=0`, `pendingUnacknowledged=0`, and `unacknowledgedLossy=false`. Preserve the run/turn/receipt
+correlation as evidence; an enqueued event, a ready Host, or a zero queue alone is not capture acceptance.
+The current direct interactive `codex --yolo` session is outside that runner. Wrapping it with
+`fdev-telemetry exec` supplies credentials but does not emit native turn records; fleet capture of
+direct fdev sessions requires a distinct session producer and its own qualification. Do not claim
+this Codex transcript was captured without event-level evidence. Neither the readiness probes nor
+an applied telemetry Host receipt clears the separate GS2-09.9 installed-provider/native-effect hold.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
@@ -1610,8 +1619,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   [stacked loopback transport draft #551](https://github.com/FS-GG/FS.GG.Coordination/pull/551)
   exercise strict offline predicates and controlled lost-response HTTP cases. The
   [v5 contract and qualification draft #550](https://github.com/FS-GG/FS.GG.Coordination/pull/550)
-  remains non-authoritative. Its staged exact-copy loopback harness exercises corrected classifier,
-  HTTP and durable-fence paths, but an independent boundary review found it insufficient for the
+  remains non-authoritative. [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
+  fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
+  replay reservation or installed effect entry. The #550 staged exact-copy loopback harness exercises
+  corrected classifier, HTTP and durable-fence paths, but an independent boundary review found it insufficient for the
   installed provider/credential path and corrected native-effect clause. Qualify the corrected
   version through an actual installed provider path or a new protected isolated native operation,
   revalidate the historical archive as historical evidence, and rerun exact Q3/Q6 before rotating
@@ -1661,6 +1672,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   observation separately from any sandbox receipt. No rehearsal dispatch is implied by the draft.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
+  [Coordination draft #553](https://github.com/FS-GG/FS.GG.Coordination/pull/553) adds source-only
+  refusal controls for case-variant and split `Link` pagination headers that previously let a
+  migration REST reader treat an incomplete page as terminal. Its provisional tests do not accept
+  GS2-09.8; the GS2-09.7 receipt, exact live rerun, unknown-subject and no-omission Q5/Q6 proof remain.
 
 ### GS2-10 — Qualify the exact candidate and prepare the fleet
 
