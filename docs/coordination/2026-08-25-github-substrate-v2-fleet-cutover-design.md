@@ -456,7 +456,13 @@ an authorized retry or compensation, the Main-local credential-bearing executor 
 epoch, claim, admission, operation, manifest, seal, journal parent, and source and target heads,
 compares them to the sealed plan, then durably consumes a new one-shot dispatch fence under exclusive
 send ownership immediately before the provider call. The request also carries the provider's exact
-conditional target precondition. An Actions preflight cannot replace this final check; a crash after
+supported conditional precondition. A native pull-request merge can condition the PR head SHA but
+cannot condition the base SHA through GitHub's merge API. Before enabling that route, the protected
+executor must prove an installed provider-enforced exclusive base-writer boundary and complete
+human, App, queue, admin and bypass census, hold its durable local owner/fence, reread the exact base
+and head, send with the head condition, and verify method-specific result ancestry. If another base
+writer can act outside that boundary, native merge dispatch refuses. An Actions preflight cannot
+replace the Main-local final check; a crash after
 fence consumption remains uncertain until reconciliation. A retry requires a durable
 `StronglyAbsent` settlement that binds the original request and proves delayed application
 impossible; it uses a new attempt identity. `Applied` is
