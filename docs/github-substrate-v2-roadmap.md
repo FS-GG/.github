@@ -211,6 +211,12 @@ title, ID or incomplete fields, while leaving the ordinary runner bootstrap unch
 the pinned ID and 24 fields under the same credential that still fails unrelated
 all-project enumeration. Owner acceptance, opt-in runner wiring and qualification are
 required before a genuine work item can be admitted; no capture is claimed.
+[Opt-in runner bootstrap wiring #3752](https://github.com/FS-GG/.github/pull/3752)
+passes an exact-Project-1 mode through batch/next/take while leaving the default route
+unchanged; exact-head GitHub adapter 844/844 and scheduling CLI 8/8 pass. It is a source-only
+draft, not an installed or admitted runner. The broader CLI has one UTEL-06D configuration
+failure also reproduced on #3751's base. The denied all-project route remains blocked until
+owner acceptance and installed qualification; no native turns or applied Host receipt exist.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
@@ -245,6 +251,14 @@ collection, publication and Authority writes outside this pure draft. After owne
 the V2 status-update workflow may collect immutable facts, validate/render them, review the
 output and publish through its existing route; a rendered summary cannot clear a protected
 receipt, merge or cutover hold.
+Accept authenticated, collector-verified CLI `/status` weekly allowance evidence only with an
+observation time and provenance ID. Record remaining weekly percentage and reset as an explicit
+local offset/time zone; report current context occupancy as a separate window measurement.
+The user-supplied example is **26% left**, reset **2026-09-30 09:28 Europe/Vienna**, with
+**191K/258K context occupancy**. It is a fixture until an authenticated collector observation
+exists, not verified usage. Context occupancy is neither cumulative token usage nor a five-minute
+usage delta. Report period usage as **Unknown** until genuine native turn IDs and input/output
+usage are captured for a bounded period; do not subtract context readings to invent a delta.
 [Renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) is source-only; its
 first owner repair adds explicit worker launch evidence, activity-based counts, a worker-only
 reserved count, authenticated readiness observations and linked terminal completion rows.
@@ -254,7 +268,33 @@ Its later freshness repair rejects healthy telemetry observations older than fiv
 18 focused tests pass. A further review repair requires the post-Host zero queue observation
 to carry authenticated, collector-verified evidence; three new refusal cases keep the
 18 focused tests green at exact head `06914d60ba47d2ede36af6d48a04babfe883a0e6`.
+The renderer revision at exact head `4770090b386384566566a217548c3658f5281995` adds typed
+authenticated CLI status evidence, separate context occupancy and native-turn period usage.
+Its source/test branch passes 21 focused tests; the
+user-supplied values above are not an authenticated status observation.
 No live update workflow is pinned to that draft.
+
+**Current bounded parallel source evidence.** Reserved direct GS2-09.9
+[Coordination #618](https://github.com/FS-GG/FS.GG.Coordination/pull/618) at
+`459a260f41c103dea96cfc506a21fe8aed223518` records the independently authenticated
+integrated source/artifact, distinct reviewer and installed zero-effect readbacks required
+before a protected decision; it is stacked on #617 and carries ten inherited focused controls.
+Direct GS2-09.7 [Coordination #619](https://github.com/FS-GG/FS.GG.Coordination/pull/619)
+at `5d66e0be94ca1b71c17162319e3a6957ecc6fa52` refuses unescaped delimiter/control
+identities that previously let distinct rollback steps share a plan seal; 22 focused controls
+pass under local SDK 10.0.401, while pinned 10.0.400 hosted checks are queued.
+Neither draft authorizes a protected effect, merge, Authority write, receiver flip or cutover.
+Optional FSC-03 [`.github` Rule (b) #3753](https://github.com/FS-GG/.github/pull/3753)
+at `194e08a11439ef7663085f3f3947c2f765500884` keeps `*` within one path segment in
+the pure supplied-graph reducer; 83 Release controls and a three-case Python comparison pass.
+Accepted #3698 and installed parity remain prerequisites. FSC-04
+[SDD #1018](https://github.com/FS-GG/FS.GG.SDD/pull/1018) at
+`6d12c523bcb02cd1644fe7e4429bd1ed82818a4c` characterizes co-batched authored and
+generated writes without rollback; 1,424 tests pass, but producer verification/staging policy
+is undecided. FSC-05 [Templates #547](https://github.com/FS-GG/FS.GG.Templates/pull/547)
+at `cd0753d5f4cc7a20155b24f29eb58c6567442363` finds identical template configs can mask
+39 extra members and 33 changed bodies in retained archives; selected/retained parity remains
+NO_VERDICT, and local NuGet-shaped matching is payload-only, not served-feed custody.
 
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
 

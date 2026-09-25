@@ -348,6 +348,14 @@ a Last 5 completed table with timestamp, item/workstream, result, evidence PR/li
 roadmap head. Truncate to five without padding. Test byte stability, ordering, truncation,
 labels, and fail-closed telemetry/lane claims. This is a source-only reporting aid; it does
 not issue receipts, write Authority, activate a workflow or change protected status.
+An externally collected authenticated CLI `/status` observation may supply a weekly remaining
+percentage, local reset with explicit offset/time zone, provenance ID and observation time.
+Render current context occupancy independently as a window measurement, never as cumulative
+usage or a five-minute token delta. The current user-supplied 26% remaining, 2026-09-30 09:28
+Europe/Vienna reset and 191K/258K context occupancy are test fixtures until authenticated
+collector evidence exists. Period usage remains Unknown until genuine native turn IDs and usage
+are recorded for a bounded period. The pure renderer validates these supplied claims; it
+cannot itself authenticate the CLI or instrument a direct interactive Codex session.
 [Renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) has a new
 nonpackable source/test pair. Its first owner repair separates lane activity from health,
 requires explicit Sol/high settings for running workers and a worker-only direct-V2 reserve,
@@ -361,6 +369,9 @@ observations older than five minutes at report time, while accepting the exact b
 18 focused tests pass. A further review repair requires authenticated, collector-verified
 post-Host zero-queue evidence and refuses missing evidence IDs; 18 focused tests pass at
 head `06914d60ba47d2ede36af6d48a04babfe883a0e6`. Its draft output is not an accepted status source.
+The current source-only revision at `4770090b386384566566a217548c3658f5281995`
+adds the typed CLI status/context/native-period separation and passes 21 focused controls.
+The weekly values above have not been authenticated by the collector.
 
 Independent review of these draft ports has already found false greens in Unicode JSON digest
 encoding, unsupported provider schemas, malformed source digests, misplaced telemetry archive
