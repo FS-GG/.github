@@ -55,6 +55,19 @@ module ProjectReferenceXmlTests =
         let xml = "<Project><!-- <Import Project='../../build/Refs.props' /> --></Project>"
         Assert.Empty(parsed "src/A/A.fsproj" xml)
 
+    [<Theory>]
+    [<InlineData("<Target Name='Inject'><ItemGroup><ProjectReference Include='../B/B.fsproj' /></ItemGroup></Target>")>]
+    [<InlineData("<ItemGroup><ProjectReference Include='../B/B.fsproj' /></ItemGroup><Target Name='Remove'><ItemGroup><ProjectReference Remove='../B/B.fsproj' /></ItemGroup></Target>")>]
+    let ``target-time ProjectReference changes cannot become static graph facts`` inner =
+        refused "project-reference" "src/A/A.fsproj" ("<Project>" + inner + "</Project>")
+
+    [<Fact>]
+    let ``unrelated target items do not obscure static ProjectReference`` () =
+        let xml =
+            "<Project><ItemGroup><ProjectReference Include='../B/B.fsproj' /></ItemGroup>"
+            + "<Target Name='Generate'><ItemGroup><Content Include='generated.txt' /></ItemGroup></Target></Project>"
+        Assert.Equal<string list>([ "src/B/B.fsproj" ], parsed "src/A/A.fsproj" xml)
+
     [<Fact>]
     let ``namespaced project reference is still an edge`` () =
         let xml =
