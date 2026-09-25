@@ -109,6 +109,10 @@ def verify_envelope(envelope_raw: bytes, proof_raw: bytes, token: str,
             and host.HEX40.fullmatch(context["candidateSha"]), "runner-context")
     nonce = f'{context["runId"]}-{context["runAttempt"]}-{context["candidateSha"]}'
     require(context["runNonce"] == nonce, "run-nonce")
+    try:
+        host.require_admission(context, pinned_spki_sha256)
+    except host.Refused as error:
+        raise Refused(str(error)) from error
     require(type(token) is str and len(token) > 20 and token.isascii()
             and not any(character.isspace() for character in token), "token")
     token_digest = hashlib.sha256(token.encode("ascii")).hexdigest()

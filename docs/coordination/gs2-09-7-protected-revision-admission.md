@@ -25,6 +25,9 @@ configured here. A workflow commit cannot contain a source constant pinning
 its own SHA: adding the constant would change the SHA. An environment value
 from the same runner is also insufficient as independent admission.
 
+The subsequent source-only protected readback contract is described in
+`gs2-09-7-protected-release-authority.md`. It supplies no live authority.
+
 No local test establishes real runner variable provenance, signer FD custody,
 vault ACL, native token readback or host journal durability. #552 remains
 candidate consistency only; #558 needs a protected trust anchor and expected

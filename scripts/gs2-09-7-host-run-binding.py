@@ -8,6 +8,7 @@ intentionally unset until a protected signer and exact key are admitted.
 import base64
 import datetime as dt
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -43,6 +44,15 @@ PINNED_SPKI_SHA256 = ""
 # commit at invocation time. It cannot be self-pinned in that same commit;
 # no installed port supplies it, so the source remains fail closed.
 PINNED_WORKFLOW_SHA = ""
+
+ADMISSION_SOURCE = Path(__file__).with_name("gs2-09-7-host-release-admission.py")
+ADMISSION_SPEC = importlib.util.spec_from_file_location(
+    "gs2_09_7_host_release_admission", ADMISSION_SOURCE)
+admission = importlib.util.module_from_spec(ADMISSION_SPEC)
+ADMISSION_SPEC.loader.exec_module(admission)
+# Only a separately protected host adapter may supply this port. No adapter
+# is installed, so a self-asserted runner SHA cannot create admission.
+ADMISSION_PORT = None
 
 
 class Refused(Exception):
@@ -128,6 +138,22 @@ def sign(private_key_pem: bytes, payload: bytes) -> bytes:
                      "-sigopt", "rsa_pss_saltlen:digest"], payload)
 
 
+def require_admission(context: dict, signer_spki_sha256: str) -> None:
+    target = {
+        "workflowRepository": HOST_REPOSITORY,
+        "workflowPath": WORKFLOW,
+        "environment": ENVIRONMENT,
+        "sandboxRepositoryId": SANDBOX_ID,
+        "sandboxRepositoryNodeId": SANDBOX_NODE,
+        "projectNodeId": PROJECT_NODE,
+    }
+    try:
+        admission.require_admitted(ADMISSION_PORT, context,
+                                   signer_spki_sha256, target)
+    except admission.Refused as error:
+        raise Refused(str(error)) from error
+
+
 def build(context: dict, preflight_raw: bytes, proof_raw: bytes, token: str,
           private_key_pem: bytes, pinned_spki_sha256: str, now: dt.datetime) -> bytes:
     """Build a signed envelope from protected runner facts and host readback."""
@@ -157,6 +183,7 @@ def build(context: dict, preflight_raw: bytes, proof_raw: bytes, token: str,
             "runner-context")
     nonce = f'{context["runId"]}-{context["runAttempt"]}-{context["candidateSha"]}'
     require(context["runNonce"] == nonce, "run-nonce")
+    require_admission(context, pinned_spki_sha256)
     require(type(token) is str and len(token) > 20 and token.isascii()
             and not any(character.isspace() for character in token), "token")
     token_digest = hashlib.sha256(token.encode("ascii")).hexdigest()
@@ -235,6 +262,10 @@ def main() -> int:
         require(type(PINNED_WORKFLOW_SHA) is str
                 and HEX40.fullmatch(PINNED_WORKFLOW_SHA),
                 "workflow-revision-unconfigured")
+        try:
+            admission.check_port(ADMISSION_PORT)
+        except admission.Refused as error:
+            raise Refused(str(error)) from error
         directory = Path(os.environ["FSGG_SANDBOX_EVIDENCE_DIR"])
         require(directory.is_dir(), "evidence-directory")
         descriptor = int(os.environ["FSGG_SANDBOX_RUN_BINDING_PRIVATE_KEY_FD"])
