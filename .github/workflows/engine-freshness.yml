@@ -46,6 +46,7 @@ on:
       - "scripts/fsgg_feed.py"   # the shared feed reader + NuGet ordering (.github#263)
       - "tests/engine-freshness/**"
       - ".github/workflows/engine-freshness.yml"
+  # paths-coherence: allow-divergence — every main merge can change engine freshness, while PRs run only the fixture
   push:
     branches: [main]
     # DELIBERATELY UNFILTERED, unlike feed-coherence's push trigger. The verdict is a function of
