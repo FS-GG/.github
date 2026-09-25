@@ -1009,6 +1009,8 @@ changing the protected holds:
 | [FSC-03 F# #3804](https://github.com/FS-GG/.github/pull/3804) | `310f702287f7db8b2565c977d61c08a82321a6c1` | Dormant pure supplied-source assembler refuses duplicate project identities, absent references and empty lists before graph construction; 163 policy tests. |
 | [GS2-09.7 #709](https://github.com/FS-GG/FS.GG.Coordination/pull/709) | `bf322d6d36fa18df67af4fc10a44908f2e4c992b` | Requires exact PR marker-number set across issue page, PR page and raw-to-typed adapter, closing same-count subject substitution; 711 full unit tests. Initial sandbox census and Q5/Q6 remain held. |
 | [FSC-04 #1038](https://github.com/FS-GG/FS.GG.SDD/pull/1038) | `6ca4befec823793fcb6f585db7bfb8b48984b8ad` | Transfers only freshly completed private Linux pinned-read bytes into `CapturedFile`, preserving defensive copy for supplied arrays; 1,486 Commands tests, no peak-memory or atomicity proof. |
+| [FSC-05 #585](https://github.com/FS-GG/FS.GG.Templates/pull/585) | `519603fa4c4bb46755dc28b221005de0f251083f` | Requires selected ZIP local DOS time/date to match central record; 87 payload/29 custody controls, selected archive still NO_VERDICT. |
+| [GS2-09.9 #710](https://github.com/FS-GG/FS.GG.Coordination/pull/710) | `6ced357930e81ada8753b7305627f6dd73d4fea5` | Requires present and type-sensitive equal selected pull list/detail fields; 92 fake-port tests, native effect still held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
