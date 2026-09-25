@@ -298,6 +298,25 @@ module GitTreeProjectsTests =
         |> List.iter (fun reserved -> refused "reserved .git" (fst reserved) [ reserved; edgeA ])
 
     [<Fact>]
+    let ``Git tree object entries must retain canonical byte and directory order`` () =
+        // git hash-object --literally fixed these objects; git fsck --strict reports treeNotSorted.
+        [ objectRow "6eab66dbdf50063bb5d919ae4202e7a0bea9a4d5"
+              "MTAwNjQ0IEIuZnNwcm9qAEIwkWFkdAcpD62CTJ/80p7E/pYOMTAwNjQ0IEEuZnNwcm9qAEIwkWFkdAcpD62CTJ/80p7E/pYO"
+          objectRow "582a4d587bf03f4fe228b42c50de31e6ed9638cc"
+              "NDAwMDAgZm9vAJzjW40rlyUSI0hYoi+ReNyHjMqEMTAwNjQ0IGZvby5iYXIAQjCRYWR0BykPrYJMn/zSnsT+lg4=" ]
+        |> List.iter (fun row -> refused "tree entry order" (fst row) [ row; edgeA ])
+
+    [<Fact>]
+    let ``Git directory order treats directory name as ending in slash`` () =
+        let ordered =
+            objectRow "9cf1687f89c5ae5916534a943585cccb3cebea73"
+                "MTAwNjQ0IGZvby5iYXIAQjCRYWR0BykPrYJMn/zSnsT+lg40MDAwMCBmb28AnONbjSuXJRIjSFiiL5F43IeMyoQ="
+        match GitTreeProjects.inspectSha1 (fst ordered) [ ordered; edgeA ] with
+        | Error diagnostic -> failwithf "valid Git tree order refused: %A" diagnostic
+        | Ok roster ->
+            Assert.Equal<(string * string) list>([ "foo/A.fsproj", "a5d0c7c8fa7ab3ad59737b2e61114310f72b917b" ], roster)
+
+    [<Fact>]
     let ``empty project tree cannot certify discovery`` () =
         let row = objectRow "d25592c38ef63a211bf1d582f0d5e6c015438854"
                     "MTAwNjQ0IFJFQURNRS5tZAC2/ExiC2fZX5U6XBwSMKqrXbWhsA=="

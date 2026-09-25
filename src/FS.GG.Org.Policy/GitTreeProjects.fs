@@ -47,6 +47,19 @@ module GitTreeProjects =
         [ ".fsproj"; ".csproj"; ".vbproj" ]
         |> List.exists (fun extension -> path.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
 
+    let private compareTreeEntries (left: Entry) (right: Entry) =
+        // Git compares raw name bytes, treating a directory's terminal byte as '/'.
+        let leftName = Encoding.UTF8.GetBytes(left.Name)
+        let rightName = Encoding.UTF8.GetBytes(right.Name)
+        let terminal entry = if entry.Mode = "40000" || entry.Mode = "040000" then int '/' else 0
+        let rec compareAt index =
+            let leftByte = if index < leftName.Length then int leftName.[index] else terminal left
+            let rightByte = if index < rightName.Length then int rightName.[index] else terminal right
+            if leftByte <> rightByte then compare leftByte rightByte
+            elif index >= leftName.Length && index >= rightName.Length then 0
+            else compareAt (index + 1)
+        compareAt 0
+
     let private parseTree path (bytes: byte[]) : Result<Entry list, SyntaxDiagnostic> =
         let strictUtf8 = UTF8Encoding(false, true)
         let rec parse offset seen entries =
@@ -75,8 +88,11 @@ module GitTreeProjects =
                             else
                                 let oidStart = nul + 1
                                 let oid = Convert.ToHexString(bytes.[oidStart .. oidStart + 19]).ToLowerInvariant()
-                                parse (oidStart + 20) (Set.add name seen)
-                                    ({ Mode = mode; Name = name; ObjectId = oid } :: entries)
+                                let entry = { Mode = mode; Name = name; ObjectId = oid }
+                                match entries with
+                                | previous :: _ when compareTreeEntries previous entry >= 0 ->
+                                    error path "noncanonical tree entry order"
+                                | _ -> parse (oidStart + 20) (Set.add name seen) (entry :: entries)
                         with :? DecoderFallbackException ->
                             error path "malformed tree entry UTF-8 name"
         parse 0 Set.empty []
