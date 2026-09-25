@@ -95,6 +95,15 @@ registry's `EHotwagner/S.I.R.` row can contribute a finding instead of being
 refused solely for its owner. Installed proof is still required before a live
 sweep can use this adapter.
 
+The registry parser rejects duplicate `full` identities after ASCII case
+folding: GitHub resolves `FS-GG/R` and `fs-gg/r` to the same repository, so they
+cannot carry separate head and listing facts. It also refuses duplicate
+`outside-fabric` identities and any overlap with `repos`, including mixed-case
+aliases. Role changes do not alter selection for the live default sweep; the
+separate registry governance validator remains responsible for role and reason
+rules. One alternate roster spelling does not satisfy the exact selected
+identity, and no supplied fact is silently case-normalized into a verdict.
+
 This source does not fetch a callee at its pinned ref, enumerate the roster or
 workflow files from GitHub, authenticate current installation grants, or
 replace the live Python gate. Those boundaries and installed parity remain separate work. The
