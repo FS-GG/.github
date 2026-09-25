@@ -65,6 +65,7 @@ def pin(testcase, joint):
 def attach(joint, port, seal_getter):
     port.joint_generation = 1
     port.joint_head_override = None
+    port.joint_replay_head = None
     port.joint_envelope_override = None
     port.joint_key_override = None
 
@@ -92,17 +93,36 @@ def attach(joint, port, seal_getter):
                 "signatureBase64": base64.b64encode(
                     SIGNER.sign(joint.canonical(record))).decode("ascii")}
 
+    def attestation(challenge, observed_head=None):
+        record = {
+            "schema": joint.HEAD_RECORD_SCHEMA,
+            "head": copy.deepcopy(head() if observed_head is None else observed_head),
+            "challenge": challenge, "storeResourceId": STORE_ID,
+            "signerResourceId": SIGNER_ID, "policySha256": POLICY_SHA256,
+            "observedAt": dt.datetime.now(dt.timezone.utc).replace(
+                microsecond=0).isoformat().replace("+00:00", "Z"),
+        }
+        return {"schema": joint.HEAD_ATTESTATION_SCHEMA, "record": record,
+                "signatureBase64": base64.b64encode(
+                    SIGNER.sign(joint.canonical_head(record))).decode("ascii")}
+
+    def signed_head(challenge):
+        if port.joint_replay_head is not None:
+            return attestation("a" * 64, port.joint_replay_head)
+        return attestation(challenge, port.joint_head_override)
+
     port.describe_joint_seal = lambda: {
         "schema": joint.AUTHORITY_SCHEMA, "origin": ORIGIN,
         "endpoint": ENDPOINT, "storeResourceId": STORE_ID,
         "signerResourceId": SIGNER_ID, "durable": True,
         "appendOnly": True, "nativeReadback": True,
+        "linearizableHead": True, "challengeBoundReadback": True,
         "credentialScope": "protected-host-only",
         "candidateCanRead": False, "candidateCanWrite": False,
         "workflowCanWrite": False,
     }
-    port.read_joint_seal_head = lambda: copy.deepcopy(
-        port.joint_head_override if port.joint_head_override is not None else head())
+    port.read_joint_seal_head = signed_head
+    port.make_joint_head_attestation = attestation
     port.read_joint_seal_envelope = envelope
     port.read_joint_seal_public_key = lambda: (
         port.joint_key_override if port.joint_key_override is not None

@@ -43,3 +43,26 @@ and grants a host-only readback path with independent custody evidence. No
 key installation, workflow activation, token release, sandbox dispatch,
 provider effect, protected merge, Authority write, receipt or cutover follows
 from this draft.
+
+## Current-head challenge readback
+
+The follow-up source contract requires two distinct 256-bit host challenges.
+For each, `read_joint_seal_head(challenge)` must return a separately signed
+head attestation containing the exact challenge, current head, pinned store,
+signer and policy identities, and a canonical UTC observation time within
+60 seconds of the verifier clock. The two signed heads must match each other
+and the signed joint seal. A cached response for an earlier challenge, an
+unsigned head, or a stale observation refuses before any census subject or
+recovery claim is released. The authority descriptor now declares
+`linearizableHead: true` and `challengeBoundReadback: true` under schema v2.
+
+The protected signer must obtain the head from the durable store itself in a
+linearizable read before signing each challenge. It must not sign a head
+supplied by the caller or a runner cache. After a crash, it must read the
+persisted monotonic generation, not reconstruct it from a local process. An
+unavailable read or uncertain signing result must fail closed. Challenge
+binding prevents replay of an old signed response; it cannot prove the signer
+used the true current head if the installed signer or its store reader is
+compromised. Owner qualification therefore needs a protected signer/store
+transaction trace, ACL evidence excluding candidate and workflow writes, and
+restart tests that advance the generation and reject old seal/batch/claim IDs.
