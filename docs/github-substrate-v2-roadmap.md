@@ -197,6 +197,13 @@ to infer completed-turn usage from installed App Server `turn/completed` status,
 `thread/tokenUsage/updated` last/total snapshots, one upstream response or child
 `codex exec` JSONL; 137 adapter controls pass. No telemetry envelope or direct-session
 capture acceptance is emitted without a trustworthy native turn-usage source.
+[Installed schema probe #612](https://github.com/FS-GG/FS.GG.Coordination/pull/612)
+checks freshly generated ordinary and experimental Codex CLI 0.156.1 schemas and
+preserves the same direct-session no-verdict: `turn/completed` has no usage,
+`thread/tokenUsage/updated` gives snapshots, and a raw response is one upstream
+completion. Authenticated attachment to this direct CLI session is also unproved;
+143 adapter controls pass. The genuine instrumented runner route remains the separate
+capture acceptance path once board admission and Host receipt are available.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
@@ -1850,6 +1857,11 @@ fake controls pass. Protected reader identity, witness custody, target continuit
   tests pass. The next source prerequisite is a distinct closed effect artifact and
   disabled workflow with installed no-grant zero token/CAS/POST controls. No protected
   release selection, install, grant or one-POST decision follows from this packet.
+  [Closed effect scaffold #611](https://github.com/FS-GG/FS.GG.Coordination/pull/611)
+  adds a separate deterministic zipapp and disabled proposal workflow with unselected
+  pins and permissions. Its entry always exits 78 and the closed port performs zero
+  token, CAS and HTTP calls; eight focused controls and a local clean-install canary
+  pass. It is not a protected install, grant or executable native effect.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
@@ -2097,6 +2109,12 @@ fake controls pass. Protected reader identity, witness custody, target continuit
   It requires proved idempotency or settled exact-token native readback before retry;
   active or unknown alone holds. The focused finalizer suite passes 35 controls, while
   live pins and protected receipts remain absent.
+  [Q5/Q6 packet correction #3749](https://github.com/FS-GG/.github/pull/3749)
+  maps all nine accepted authorities in two passes, exact manifest/effects, six
+  interruption cuts, archive, five rollback domains, distinct rerun, independent
+  omissions and zero residue. It reuses the accepted Q4 sandbox/App route under
+  ADR-0089 and requests no new credential; 35 focused finalizer controls pass.
+  Installed host authority and native rehearsal evidence remain absent.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.

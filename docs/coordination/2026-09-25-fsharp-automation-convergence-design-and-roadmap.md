@@ -222,6 +222,11 @@ holds five regular descriptor handles through reads and identity checks, refusin
 cross-file in-place or rename-and-replace swaps that previously produced a false roster
 match; 17 focused controls pass. The live selected archive remains `NO_VERDICT` and the
 reader does not prove a race-free served-byte or installed snapshot.
+[Templates descriptor-digest draft #543](https://github.com/FS-GG/FS.GG.Templates/pull/543)
+requires exact bytes for all five reviewed descriptors after a parameter-only mutation
+left the prior narrow pin result unchanged; 21 focused controls pass. The live selected
+archive remains `NO_VERDICT`. Source digests do not establish producer, served-byte,
+installed or receiver authority.
 [SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
 refuses an observed same-length overwrite after the first held-descriptor read by
 checking descriptor metadata around two byte passes; 21 focused controls and the
