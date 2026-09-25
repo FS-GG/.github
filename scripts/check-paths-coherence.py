@@ -533,8 +533,12 @@ def project_graph(root: str) -> dict[str, list[str]]:
                     tag = child.tag.rsplit("}", 1)[-1]
                     if tag == "ProjectReference":
                         raise GateError(f"{rel}: target-time ProjectReference requires evaluation")
-                    if tag == "Output" and child.get("ItemName", "").casefold() == "projectreference":
-                        raise GateError(f"{rel}: task Output to ProjectReference requires evaluation")
+                    if tag == "Output":
+                        item_name = child.get("ItemName", "")
+                        if any(token in item_name for token in ("$(", "@(", "%(")):
+                            raise GateError(f"{rel}: dynamic task Output ItemName requires evaluation")
+                        if item_name.casefold() == "projectreference":
+                            raise GateError(f"{rel}: task Output to ProjectReference requires evaluation")
             refs = []
             # XML decodes character references in Include. Scanning raw attribute bytes can
             # fabricate a path which a workflow covers while missing the real referenced project.
