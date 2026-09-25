@@ -616,6 +616,26 @@ wf "$RBP/.github/workflows/w.yml" '      - "src/A/**"
 expect "property-valued Include cannot become a literal graph edge" \
   3 "requires MSBuild evaluation" "$RBP"
 
+# MSBuild inserts imported .props/.targets into the evaluated project. A direct XML scan of A
+# cannot see this reference, so the A-only filter would otherwise pass with B absent.
+RBIM="$(root "$WORK/cover-msbuild-import")"
+proj "$RBIM" "src/A"
+proj "$RBIM" "src/B"
+mkdir -p "$RBIM/build"
+cat > "$RBIM/src/A/A.fsproj" <<'XML'
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../build/Refs.props" />
+</Project>
+XML
+cat > "$RBIM/build/Refs.props" <<'XML'
+<Project>
+  <ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup>
+</Project>
+XML
+wf "$RBIM/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "explicit Import cannot hide an uncovered imported ProjectReference" \
+  3 "requires MSBuild import evaluation" "$RBIM"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
