@@ -142,8 +142,13 @@ still cannot start through the denied Project 2 board bootstrap.
 adds current-turn source and assignment-authenticator interfaces ahead of #584 and refuses
 borrowed session IDs or mismatched workspace, item, attempt, challenge and thread bindings;
 six focused controls pass after its final guard. The full adapter suite passed 67 controls
-before that last guard, so it needs an exact-head full rerun for that broader claim.
+at its exact head in a subsequent rerun.
 Neither trusted implementation, challenge issuer, submission nor Host receipt exists.
+[Prospective-window draft #588](https://github.com/FS-GG/FS.GG.Coordination/pull/588)
+adds dormant issuer/current-source interfaces and a pure one-use, UTC bounded challenge
+gate that refuses stale, replayed, foreign and source-substituted windows; 73 adapter
+controls pass. Trusted issuer, clock, authenticated session source and durable CAS replay
+custody remain absent; it performs no capture or submission.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
