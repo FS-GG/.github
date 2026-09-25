@@ -1,6 +1,7 @@
 namespace FS.GG.Org.PermissionPolicy
 
 open System
+open System.Text.RegularExpressions
 
 /// A provider-supplied read of the callee named by one reusable-workflow call.
 type CalleeOrigin = WorkingTree | ExactRefRead
@@ -21,7 +22,7 @@ type RosterFact =
         Repositories: string list
     }
 
-/// The pinned inventory is a separate fact; extracting and comparing App-token requests is later work.
+/// The pinned inventory is a separate fact; its provider read remains external.
 type AppGrantFact =
     {
         Repository: string
@@ -50,6 +51,7 @@ type BoundPermissionCall =
 module PermissionEvidenceBinding =
     let private authority = "FS-GG/.github"
     let private rosterPath = "registry/repos.yml"
+    let private scopeName = Regex("^[a-z][a-z0-9_]*$", RegexOptions.CultureInvariant)
 
     let bind (expectedCallerRepository: string) (expectedInventoryId: string)
              (call: ReusableWorkflowCall)
@@ -89,7 +91,8 @@ module PermissionEvidenceBinding =
                     | Some grants when grants.InventoryId <> expectedInventoryId ->
                         Error "app-grants-identity-mismatch"
                     | Some grants when List.isEmpty grants.Grants
-                                       || (grants.Grants |> List.exists (fun (scope, _) -> String.IsNullOrWhiteSpace scope))
+                                       || (grants.Grants |> List.exists (fun (scope, _) ->
+                                           String.IsNullOrWhiteSpace scope || not (scopeName.IsMatch scope)))
                                        || (grants.Grants |> List.map fst |> Set.ofList |> Set.count) <> grants.Grants.Length ->
                         Error "app-grants-invalid"
                     | Some grants ->
