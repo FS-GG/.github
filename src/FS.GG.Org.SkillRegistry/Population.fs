@@ -26,6 +26,13 @@ type PopulationFinding = { Code: string; Subject: string; Detail: string }
 module Population =
     let private finding code subject detail = { Code = code; Subject = subject; Detail = detail }
     let private digest = Regex("^[0-9a-f]{64}$", RegexOptions.CultureInvariant)
+    let private repoName = Regex("^[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant)
+
+    let private validRepoName (name: string) =
+        not (String.IsNullOrWhiteSpace name)
+        && name <> "."
+        && name <> ".."
+        && repoName.IsMatch name
 
     let private ownerOf repo =
         if repo = ".github" then ".github"
@@ -53,6 +60,26 @@ module Population =
         |> Seq.choose (fun (name, count) -> if count > 1 then Some (finding code name (sprintf "declared %d times" count)) else None)
         |> Seq.toList
 
+    let private caseCollisions code (items: seq<string>) =
+        items
+        |> Seq.filter validRepoName
+        |> Seq.groupBy (fun name -> name.ToUpperInvariant())
+        |> Seq.choose (fun (_, names) ->
+            let spellings = names |> Seq.distinct |> Seq.sort |> Seq.toList
+            if spellings.Length > 1 then Some (finding code (String.concat " / " spellings) "repository names differ only by case")
+            else None)
+        |> Seq.toList
+
+    let private ownerCollisions code (items: seq<string>) =
+        items
+        |> Seq.filter validRepoName
+        |> Seq.groupBy ownerOf
+        |> Seq.choose (fun (owner, names) ->
+            let repos = names |> Seq.distinct |> Seq.sort |> Seq.toList
+            if repos.Length > 1 then Some (finding code owner ("repository owner identity is shared by " + String.concat ", " repos))
+            else None)
+        |> Seq.toList
+
     /// Inspect one enumerated population. Findings are sorted for stable test and command output.
     let inspect (input: PopulationInput) : PopulationFinding list =
         let rostered =
@@ -74,6 +101,16 @@ module Population =
         for item in duplicates "roster-duplicate" rostered do add item
         for item in duplicates "checkout-duplicate" (input.Checkouts |> Seq.map (fun checkout -> checkout.Repo)) do add item
         for item in duplicates "registry-duplicate" (input.Rows |> Seq.map (fun row -> row.Id)) do add item
+        for item in caseCollisions "roster-case-collision" rostered do add item
+        for item in caseCollisions "checkout-case-collision" (input.Checkouts |> Seq.map (fun checkout -> checkout.Repo)) do add item
+        for item in ownerCollisions "roster-owner-collision" rostered do add item
+        for item in ownerCollisions "checkout-owner-collision" (input.Checkouts |> Seq.map (fun checkout -> checkout.Repo)) do add item
+
+        for repo in rostered do
+            if not (validRepoName repo) then add (finding "roster-name" repo "roster must contain an FS-GG checkout name")
+
+        for checkout in input.Checkouts do
+            if not (validRepoName checkout.Repo) then add (finding "checkout-name" checkout.Repo "checkout must have a contained repository name")
 
         for repo in rostered |> Set.ofList do
             if not (roots.Contains repo) then add (finding "roster-unreachable" repo "rostered repository has no checkout")
@@ -114,6 +151,7 @@ module Population =
             if isNull entry.Sha256 || not (digest.IsMatch entry.Sha256) then add (finding "manifest-digest" (repo + "/" + entry.Id) "digest must be 64 lowercase hex characters")
             match entry.SuppliedBy with
             | Some path when not (safeSuppliedBy path) -> add (finding "supplied-by-path" (repo + "/" + entry.Id) "supplied-by must be a contained relative directory")
+            | None when repo <> "FS.GG.SDD" -> add (finding "supplied-by-missing" (repo + "/" + entry.Id) "producer manifest cannot bind this skill to its registry source")
             | _ -> ()
 
         for (skillId, declarers) in declarations |> Seq.groupBy (fun (_, entry) -> entry.Id) do

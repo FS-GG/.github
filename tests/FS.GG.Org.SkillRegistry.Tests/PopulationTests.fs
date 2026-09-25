@@ -30,6 +30,31 @@ module PopulationTests =
         has "roster-empty" { Rostered = Ok []; Checkouts = []; Rows = [] }
 
     [<Fact>]
+    let ``case colliding roster and checkout names refuse before map reduction`` () =
+        let alias = { checkout with Repo = "fs.gg.game" }
+        let input = { good with Rostered = Ok [ "FS.GG.Game"; "fs.gg.game" ]; Checkouts = [ checkout; alias ] }
+        has "roster-case-collision" input
+        has "checkout-case-collision" input
+
+    [<Fact>]
+    let ``malformed roster name cannot qualify a matching checkout`` () =
+        let foreign = { Repo = "EHotwagner/S.I.R."; Manifest = Absent }
+        has "roster-name" { Rostered = Ok [ foreign.Repo ]; Checkouts = [ foreign ]; Rows = [] }
+
+    [<Fact>]
+    let ``malformed checkout name cannot qualify an absent manifest`` () =
+        let malformed = { Repo = "../FS.GG.Game"; Manifest = Absent }
+        has "checkout-name" { good with Checkouts = malformed :: good.Checkouts }
+
+    [<Fact>]
+    let ``distinct repositories cannot collapse to one owner with unbound manifest sources`` () =
+        let source = { checkout with Manifest = Parsed [ { entry with SuppliedBy = None } ] }
+        let alias = { Repo = "FS-GG-Game"; Manifest = Parsed [ { entry with SuppliedBy = None } ] }
+        let input = { good with Rostered = Ok [ source.Repo; alias.Repo ]; Checkouts = [ source; alias ] }
+        has "roster-owner-collision" input
+        has "checkout-owner-collision" input
+
+    [<Fact>]
     let ``named producer with no checkout refuses`` () =
         has "manifest-unreachable" { good with Checkouts = [] }
 
@@ -81,6 +106,19 @@ module PopulationTests =
     [<Fact>]
     let ``wrong contained source refuses identity`` () =
         has "source-identity" { good with Rows = [ { row with Source = "FS.GG.Game/skills/other/SKILL.md" } ] }
+
+    [<Fact>]
+    let ``non SDD manifest cannot omit source binding`` () =
+        let unbound = { entry with SuppliedBy = None }
+        let input = { good with Checkouts = [ { checkout with Manifest = Parsed [ unbound ] } ]; Rows = [ { row with Source = "FS.GG.Game/skills/other/SKILL.md" } ] }
+        has "supplied-by-missing" input
+
+    [<Fact>]
+    let ``reordering population facts does not change findings`` () =
+        let extra = { Repo = "FS.GG.Rendering"; Manifest = Parsed [ { entry with Id = "other" } ] }
+        let input = { good with Rostered = Ok [ checkout.Repo; extra.Repo ]; Checkouts = [ checkout; extra ]; Rows = [ { row with Sha256 = String.replicate 64 "b" }; { row with Id = "orphan"; Source = "FS.GG.Game/skills/orphan/SKILL.md" } ] }
+        let reversed = { input with Rostered = Ok [ extra.Repo; checkout.Repo ]; Checkouts = [ extra; checkout ]; Rows = List.rev input.Rows }
+        Assert.Equal<PopulationFinding list>(Population.inspect input, Population.inspect reversed)
 
     [<Fact>]
     let ``traversing supplied-by refuses`` () =
