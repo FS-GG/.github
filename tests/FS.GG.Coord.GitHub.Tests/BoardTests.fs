@@ -1368,13 +1368,22 @@ let ``direct Project 1 bootstrap refuses incomplete caller pin without transport
     | other -> failwith $"an incomplete caller pin must refuse before IO — got %A{other}"
 
 [<Fact>]
-let ``direct Project 1 bootstrap refuses duplicate field names instead of last-wins`` () =
+let ``direct Project 1 bootstrap refuses duplicate field names and IDs`` () =
     let duplicate =
         """{"data":{"organization":{"login":"FS-GG","projectV2":{"id":"PVT_kwDOEYAWY84Bb08W","number":1,"title":"Coordination","fields":{"totalCount":2,"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]},{"id":"PVTSSF_shadow","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_shadow","name":"Shadow"}]}]}}}}}"""
 
     match bootstrapExactProject (serving duplicate) projectOne with
     | Error(Malformed _) -> ()
     | other -> failwith $"duplicate direct-project field names must refuse — got %A{other}"
+
+    let duplicateId =
+        duplicate.Replace("\"id\":\"PVTSSF_shadow\",\"name\":\"Status\"",
+                          "\"id\":\"PVTSSF_status\",\"name\":\"Owner\"")
+    Assert.True(duplicate <> duplicateId)
+
+    match bootstrapExactProject (serving duplicateId) projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"duplicate direct-project field IDs must refuse — got %A{other}"
 
 [<Fact>]
 let ``direct Project 1 bootstrap propagates authorization errors without enumerating projects`` () =
