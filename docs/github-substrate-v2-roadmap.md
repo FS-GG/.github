@@ -1114,6 +1114,7 @@ changing the protected holds:
 | [GS2-09.7 #769](https://github.com/FS-GG/FS.GG.Coordination/pull/769) | `76988acf9f494ff998a800e87c0f80b863124c6c` | Source-only protected store-head readback refuses stale/foreign/unavailable generation before journal CAS and drift after claim; 740 full unit tests. Native linearizable custody, release interlock and Q5/Q6 held. |
 | [Telemetry usage #770](https://github.com/FS-GG/FS.GG.Coordination/pull/770) | `37da7da8b41df899197a1222e0677d0afdde7b4d` | Dormant v2 parser refuses malformed nested CommandAction variants and required fields; 22 focused and 186 full Release execution tests. Other variants and genuine Host capture remain open. |
 | [FSC-04 #1050](https://github.com/FS-GG/FS.GG.SDD/pull/1050) | `58132088a92426a036c98545c73c042e82d1fb25` | Optional selected-commit preview refuses a nested copied source borrowing its enclosing repository commit; four focused and 1,541 Commands tests. Repository/object-store authority, full-source and common-instant proof remain open. |
+| [FSC-03 F# #3829](https://github.com/FS-GG/.github/pull/3829) | `50f95a7183cb0d8f4f107433c7d4585d6d235e0f` | Dormant ProjectReference XML reducer refuses items without exact `Include`, including lowercase and Update-only forms; 284 F# tests plus local MSBuild refusal probe. Live Python gate/evaluated graph/installed parity held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still

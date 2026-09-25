@@ -27,7 +27,8 @@ The [roadmap section 1.0 source ledger](../github-substrate-v2-roadmap.md#10-qua
 is the public **exact PR/head/test/hold trail** used for the active V2 and
 FSC-03/04/05 lanes; the convergence design links the additional product-owner
 routes.
-At this cutoff its late-session table contains **129 distinct source-PR rows**:
+At this cutoff its [immutable late-session table](https://github.com/FS-GG/.github/blob/abf738ec4c2bcf101cf2ae3f147e4b83acd8cec0/docs/github-substrate-v2-roadmap.md#L982-L1110)
+contains **129 distinct source-PR rows**:
 31 GS2-09.9, 24 GS2-09.7, 30 FSC-03, 15 FSC-04, 14 FSC-05, and 15
 telemetry rows. Earlier session drafts and repairs appear in the linked prose
 immediately before that table and in the convergence design; the 129 rows are
