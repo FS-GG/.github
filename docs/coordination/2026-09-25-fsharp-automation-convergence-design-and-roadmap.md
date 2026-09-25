@@ -145,7 +145,10 @@ red-before stale-tag false green; five new controls pass. ABA/post-check movemen
 protection and signature remain unproved. [FsQuint payload-parity draft #26](https://github.com/FS-GG/FsQuint/pull/26)
 closes a narrower Python/F# disagreement for empty, signature-only or directory-only
 ZIP payload projections in seven new controls; the stacked root `.nuspec` selector already
-refuses them on the complete served path. These stacked
+refuses them on the complete served path. [Rendering cross-root draft #1340](https://github.com/FS-GG/FS.GG.Rendering/pull/1340)
+refuses persistent manifest drift after pinned product capture, with six new controls; a
+fixture proved the old plan could combine bytes never visible together. It does not prove
+an atomic cross-root snapshot, ABA safety, output rollback or installed parity. These stacked
 drafts need owner acceptance and installed evidence before receiver or release adoption.
 
 **V2-PROG-01 — deterministic progress projection.** A bounded `.github` F# source draft
@@ -163,10 +166,13 @@ a Last 5 completed table with timestamp, item/workstream, result, evidence PR/li
 roadmap head. Truncate to five without padding. Test byte stability, ordering, truncation,
 labels, and fail-closed telemetry/lane claims. This is a source-only reporting aid; it does
 not issue receipts, write Authority, activate a workflow or change protected status.
-[Initial renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) has a new
-nonpackable source/test pair and six passing focused tests. Owner repair is pending for
-explicit launch evidence, worker-only reserved capacity, authenticated readiness facts,
-and completion-only linked history; its draft output is not yet an accepted status source.
+[Renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) has a new
+nonpackable source/test pair. Its first owner repair separates lane activity from health,
+requires explicit Sol/high settings for running workers and a worker-only direct-V2 reserve,
+requires collector-verified authenticated health and configured workspace observations for
+healthy readiness, and refuses nonterminal or linkless completion rows; 12 focused tests pass.
+An orchestrator-profile negative is still under owner review. The pure renderer cannot
+authenticate external provenance, and its draft output is not an accepted status source.
 
 Independent review of these draft ports has already found false greens in Unicode JSON digest
 encoding, unsupported provider schemas, malformed source digests, misplaced telemetry archive

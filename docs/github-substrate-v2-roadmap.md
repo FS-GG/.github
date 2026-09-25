@@ -166,9 +166,10 @@ the V2 status-update workflow may collect immutable facts, validate/render them,
 output and publish through its existing route; a rendered summary cannot clear a protected
 receipt, merge or cutover hold.
 [Renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) is source-only; its
-initial six focused tests pass, and owner repair is pending for explicit Sol/high launch
-evidence, a worker-only reserved count, authenticated readiness facts and linked completed
-history. No live update workflow is pinned to that draft.
+first owner repair adds explicit worker launch evidence, activity-based counts, a worker-only
+reserved count, authenticated readiness observations and linked terminal completion rows.
+Twelve focused tests pass; an orchestrator-profile negative remains under owner review.
+No live update workflow is pinned to that draft.
 
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
 
@@ -1696,6 +1697,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   [Pagination-coherence draft #582](https://github.com/FS-GG/FS.GG.Coordination/pull/582)
   refuses contradictory first/previous page links that previously allowed `ExactPull`
   after a lost POST; 31 focused offline controls pass. It is source-only and stacked on #581.
+  [Read-only custody packet #583](https://github.com/FS-GG/FS.GG.Coordination/pull/583)
+  pins the draft source/artifact heads and hashes, records #563 disabled, and names the
+  absent producer, observer, issuer/reviewer, target, credential, CAS journal, grant and
+  native readback evidence. Its proposed negative controls are unrun; the packet is not
+  protected install or one-POST authorization.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
@@ -1874,6 +1880,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   closes a second revoke after an ambiguous finalizer attempt with a protected shared attempt
   claim and exact readback in 115 local controls. The shared CAS authority, complete mint
   census, scheduler and crash-resolution policy remain uninstalled.
+  [Sealed-mint census draft #3736](https://github.com/FS-GG/.github/pull/3736)
+  refuses an empty pending scan that omits minted tokens by requiring a sealed full mint
+  count/digest and one exact pending or terminal revoked entry through the high-water mark;
+  120 local controls pass. Authentic append-only mint index, native terminal readback and
+  durable scheduler remain uninstalled.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
