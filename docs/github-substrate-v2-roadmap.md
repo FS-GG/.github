@@ -1089,6 +1089,7 @@ changing the protected holds:
 | [FSC-03 F# #3820](https://github.com/FS-GG/.github/pull/3820) | `76402a097f51b6e4a1ab094e01192a8b82e7e76e` | Dormant composed reader rechecks the exact protected branch tip after Git object reads, refusing changed or unavailable final tip; 255 F# tests. Still an observation, not durable accepted pin or installed parity. |
 | [GS2-09.9 #755](https://github.com/FS-GG/FS.GG.Coordination/pull/755) | `6f2b0707f0e95acf71c4b2e8bed8754c7dbd265d` | Token-free fake metadata join binds closed provider request to selected App installation, repository, effective permissions, credential/mint IDs, target/prestate and expiry; 20 focused/adjacent tests. Actual token custody/App attestation and #550 remain held. |
 | [Telemetry usage #756](https://github.com/FS-GG/FS.GG.Coordination/pull/756) | `7009476d31abc7eff966ef9b3a5fdcd0764f0f86` | Standalone direct-session handoff now refuses malformed expected scope before assignment or current-turn source reads; 168 Release execution tests. Current-session transport/native usage/Host capture remain absent. |
+| [FSC-03 F# #3821](https://github.com/FS-GG/.github/pull/3821) | `028647e384e2e96ba5e7a8f70bc8233984487c77` | Supplied-snapshot branch path now rechecks protected main after membership/commit/project bytes, refusing changed or unavailable final tip; 255 F# tests. Two reads remain an observation window, not durable accepted pin. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
