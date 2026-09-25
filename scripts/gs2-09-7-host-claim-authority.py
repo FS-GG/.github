@@ -34,8 +34,8 @@ def require(condition: bool, reason: str) -> None:
 
 class ProtectedStore(Protocol):
     def describe(self) -> dict: ...
-    def cas_claim_once(self, decision_id: str, binding_id: str,
-                       token_sha256: str) -> str: ...
+    def cas_claim_if_admitted(self, decision_id: str, binding_id: str,
+                              token_sha256: str) -> str: ...
     def read_claim(self, decision_id: str) -> dict: ...
     def append_revoke_intent(self, binding_id: str, token_sha256: str) -> str: ...
     def append_revoked_receipt(self, binding_id: str, token_sha256: str) -> str: ...
@@ -47,18 +47,22 @@ class ProtectedRevoker(Protocol):
     def observe(self, token: str) -> str: ...
 
 
-def check_store(store: ProtectedStore | None) -> None:
+def check_store(store: ProtectedStore | None,
+                admission_resource_id: str) -> None:
+    require(type(admission_resource_id) is str and bool(admission_resource_id),
+            "admission-resource-unconfigured")
     require(bool(PINNED_STORE_ORIGIN) and bool(PINNED_STORE_RESOURCE_ID)
             and bool(PINNED_STORE_ENDPOINT),
             "store-unconfigured")
     require(store is not None and all(callable(getattr(store, name, None)) for name in
-                                       ("describe", "cas_claim_once", "read_claim",
+                                       ("describe", "cas_claim_if_admitted", "read_claim",
                                         "append_revoke_intent", "append_revoked_receipt")),
             "store-unconfigured")
     descriptor = store.describe()
     require(type(descriptor) is dict and set(descriptor) == {
         "schema", "origin", "resourceId", "endpoint", "durable",
-        "atomicCas", "nativeReadback", "credentialScope", "candidateCanWrite",
+        "atomicCas", "atomicAdmissionClaim", "admissionResourceId",
+        "nativeReadback", "credentialScope", "candidateCanWrite",
     }, "store-descriptor")
     endpoint = descriptor["endpoint"]
     require(type(endpoint) is str, "store-endpoint")
@@ -81,6 +85,8 @@ def check_store(store: ProtectedStore | None) -> None:
             and descriptor["resourceId"] == PINNED_STORE_RESOURCE_ID
             and descriptor["durable"] is True
             and descriptor["atomicCas"] is True
+            and descriptor["atomicAdmissionClaim"] is True
+            and descriptor["admissionResourceId"] == admission_resource_id
             and descriptor["nativeReadback"] is True
             and descriptor["credentialScope"] == "protected-host-only"
             and descriptor["candidateCanWrite"] is False, "store-authority")
@@ -107,13 +113,17 @@ class HostClaimAuthority:
     read back. Caller-owned files or self-reported metadata are not authority.
     """
 
-    def __init__(self, expected_decision_id: str, expected_binding_id: str,
+    def __init__(self, expected_admission_resource_id: str,
+                 expected_decision_id: str, expected_binding_id: str,
                  expected_token_sha256: str,
                  store: ProtectedStore | None, revoker: ProtectedRevoker | None):
-        require(type(expected_decision_id) is str and HEX64.fullmatch(expected_decision_id)
+        require(type(expected_admission_resource_id) is str
+                and bool(expected_admission_resource_id)
+                and type(expected_decision_id) is str and HEX64.fullmatch(expected_decision_id)
                 and type(expected_binding_id) is str and HEX64.fullmatch(expected_binding_id)
                 and type(expected_token_sha256) is str
                 and HEX64.fullmatch(expected_token_sha256), "binding-identity")
+        self.admission_resource_id = expected_admission_resource_id
         self.decision_id = expected_decision_id
         self.binding_id = expected_binding_id
         self.token_sha256 = expected_token_sha256
@@ -121,7 +131,7 @@ class HostClaimAuthority:
         self.revoker = revoker
 
     def _authority(self) -> None:
-        check_store(self.store)
+        check_store(self.store, self.admission_resource_id)
         check_revoker(self.revoker)
 
     def claim_once(self, decision_id: str, binding_id: str,
@@ -131,8 +141,8 @@ class HostClaimAuthority:
                 and binding_id == self.binding_id
                 and token_sha256 == self.token_sha256, "binding-identity")
         try:
-            result = self.store.cas_claim_once(decision_id, binding_id,
-                                               token_sha256)
+            result = self.store.cas_claim_if_admitted(decision_id, binding_id,
+                                                       token_sha256)
         except Exception:
             result = "unknown"
         if result == "committed":
@@ -143,7 +153,9 @@ class HostClaimAuthority:
             except Exception:
                 observed = None
             expected = {"schema": CLAIM_SCHEMA, "decisionId": decision_id,
-                        "bindingId": binding_id, "tokenSha256": token_sha256}
+                        "bindingId": binding_id, "tokenSha256": token_sha256,
+                        "admissionResourceId": self.admission_resource_id,
+                        "admissionStateAtClaim": "admitted"}
             return ("granted" if type(observed) is dict
                     and observed == expected else "unknown")
         if result == "duplicate":

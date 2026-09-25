@@ -22,6 +22,7 @@ fixture_module = load("host_binding_fixture_for_claim", ROOT / "tests/gs2-09-7-h
 ORIGIN = "https://protected.example.invalid"
 RESOURCE = "host-claim-ledger-test"
 ENDPOINT = ORIGIN + "/claims"
+ADMISSION_RESOURCE = fixture_module.ADMISSION_RESOURCE
 TOKEN = "fake-app-token-never-valid-outside-this-test"
 
 
@@ -34,6 +35,8 @@ class FakeStore:
             "endpoint": ENDPOINT,
             "durable": True,
             "atomicCas": True,
+            "atomicAdmissionClaim": True,
+            "admissionResourceId": ADMISSION_RESOURCE,
             "nativeReadback": True,
             "credentialScope": "protected-host-only",
             "candidateCanWrite": False,
@@ -44,19 +47,27 @@ class FakeStore:
         self.claim_result = None
         self.intent_result = "committed"
         self.receipt_result = "committed"
+        self.decision_state = "admitted"
+        self.revoke_before_cas = False
 
     def describe(self):
         return self.descriptor
 
-    def cas_claim_once(self, decision_id, binding_id, token_sha256):
+    def cas_claim_if_admitted(self, decision_id, binding_id, token_sha256):
         self.calls.append("cas")
+        if self.revoke_before_cas:
+            self.decision_state = "revoked"
+        if self.decision_state != "admitted":
+            return "not-admitted"
         if self.claim_result is not None:
             return self.claim_result
         if decision_id in self.claims:
             return "duplicate"
         self.claims[decision_id] = {
             "schema": authority.CLAIM_SCHEMA, "decisionId": decision_id,
-            "bindingId": binding_id, "tokenSha256": token_sha256}
+            "bindingId": binding_id, "tokenSha256": token_sha256,
+            "admissionResourceId": ADMISSION_RESOURCE,
+            "admissionStateAtClaim": "admitted"}
         if self.lose_claim_response:
             raise OSError("response lost after commit")
         return "committed"
@@ -135,7 +146,8 @@ class HostClaimAuthorityTests(unittest.TestCase):
         self.addCleanup(setattr, authority, "PINNED_STORE_ENDPOINT", original_endpoint)
 
     def claim(self):
-        return authority.HostClaimAuthority(self.decision_id, self.binding_id,
+        return authority.HostClaimAuthority(ADMISSION_RESOURCE,
+                                            self.decision_id, self.binding_id,
                                             self.token_digest,
                                             self.store, self.revoker)
 
@@ -161,6 +173,8 @@ class HostClaimAuthorityTests(unittest.TestCase):
             {"credentialScope": "candidate-token"},
             {"durable": False},
             {"atomicCas": False},
+            {"atomicAdmissionClaim": False},
+            {"admissionResourceId": "foreign-admission"},
             {"nativeReadback": False},
             {"resourceId": "candidate-owned"},
         ]
@@ -196,7 +210,8 @@ class HostClaimAuthorityTests(unittest.TestCase):
         second_binding = "b" * 64
         second_token_digest = "c" * 64
         second = authority.HostClaimAuthority(
-            self.decision_id, second_binding, second_token_digest,
+            ADMISSION_RESOURCE, self.decision_id, second_binding,
+            second_token_digest,
             self.store, self.revoker)
         self.assertEqual("duplicate", second.claim_once(
             self.decision_id, second_binding, second_token_digest))
@@ -210,6 +225,8 @@ class HostClaimAuthorityTests(unittest.TestCase):
             "decisionId": self.decision_id,
             "bindingId": "b" * 64,
             "tokenSha256": self.token_digest,
+            "admissionResourceId": ADMISSION_RESOURCE,
+            "admissionStateAtClaim": "admitted",
         }
         self.assertEqual("unknown", self.claim().claim_once(
             self.decision_id, self.binding_id, self.token_digest))
@@ -295,7 +312,7 @@ class ReleaseCompositionTests(unittest.TestCase):
         self.binding_id = hashlib.sha256(release.host.canonical_payload(binding)).hexdigest()
         self.decision_id = release.host.ADMISSION_PORT.record["decisionId"]
         self.claim = authority.HostClaimAuthority(
-            self.decision_id, self.binding_id,
+            ADMISSION_RESOURCE, self.decision_id, self.binding_id,
             hashlib.sha256(self.fixture.token.encode()).hexdigest(),
             self.store, self.revoker)
         self.port = ReleasePort(self.claim)
@@ -323,6 +340,20 @@ class ReleaseCompositionTests(unittest.TestCase):
         self.assertEqual("duplicate-refused", second["outcome"])
         self.assertEqual(0, self.port.invocations)
         self.assertNotIn(self.fixture.token, json.dumps([first, second]))
+
+    def test_revocation_after_release_readback_before_cas_refuses_handoff(self):
+        self.store.revoke_before_cas = True
+        result = self.run_release()
+        self.assertEqual("claim-unknown", result["outcome"])
+        self.assertEqual(0, self.port.invocations)
+        self.assertNotIn(self.decision_id, self.store.claims)
+
+    def test_revocation_between_signer_and_release_refuses_before_cas(self):
+        release.host.ADMISSION_PORT.record["state"] = "revoked"
+        with self.assertRaisesRegex(release.Refused, "admission-binding"):
+            self.run_release()
+        self.assertEqual([], self.store.calls)
+        self.assertEqual(0, self.port.invocations)
 
 
 if __name__ == "__main__":

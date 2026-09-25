@@ -29,6 +29,8 @@ separate protected admission decision. Admission revocation and claim
 must have a reviewed ordering or atomic rule so a decision cannot be revoked
 between release readback and claim while still granting a token. Source fake
 ports cannot prove store durability, ACL, native readback, or that ordering.
+The later source-only conditional CAS contract for this ordering is recorded
+in `gs2-09-7-admission-claim-ordering.md`; installed atomicity remains open.
 One protected host handoff does not make a GitHub App token single-use; native
 token revocation and Q5/Q6 readback remain separate gates.
 
