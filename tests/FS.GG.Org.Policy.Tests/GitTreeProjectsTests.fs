@@ -285,6 +285,19 @@ module GitTreeProjectsTests =
         |> List.iter (fun row -> refused "tree entry" (fst row) [ row ])
 
     [<Fact>]
+    let ``Git reserved dotgit tree entry cannot certify a project roster`` () =
+        // Fixed raw trees from git hash-object --literally. git fsck --strict reports hasDotgit.
+        [ objectRow "2bb4e4b14ca4b042c015dc808d7811677b796d35"
+              "NDAwMDAgLmdpdACc41uNK5clEiNIWKIvkXjch4zKhA=="
+          objectRow "e5c0b895b61feb3e4eef633c8fe60779b880e75b"
+              "NDAwMDAgLkdJVACc41uNK5clEiNIWKIvkXjch4zKhA=="
+          objectRow "fd0c9520e518b00f8550f0726cd2d5dc9c302c36"
+              "NDAwMDAgLmdpdCAAnONbjSuXJRIjSFiiL5F43IeMyoQ="
+          objectRow "7c05d8023a3d81dfa5b5655c2bfaff8eb41dcafb"
+              "NDAwMDAgLmdpdC4AnONbjSuXJRIjSFiiL5F43IeMyoQ=" ]
+        |> List.iter (fun reserved -> refused "reserved .git" (fst reserved) [ reserved; edgeA ])
+
+    [<Fact>]
     let ``empty project tree cannot certify discovery`` () =
         let row = objectRow "d25592c38ef63a211bf1d582f0d5e6c015438854"
                     "MTAwNjQ0IFJFQURNRS5tZAC2/ExiC2fZX5U6XBwSMKqrXbWhsA=="
