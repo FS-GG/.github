@@ -87,6 +87,19 @@ gate's cadence. Sparse evidence stays explicitly inconclusive, cadence changes a
 closure plus production-authority boundaries cannot be weakened. A defect first found at closure feeds the next
 cadence review instead of becoming an unpriced surprise.
 
+**Recurring telemetry-health invariant.** At each meaningful V2 checkpoint (candidate qualification,
+owner handoff, accepted-evidence review, or roadmap status report), and immediately before any protected
+receipt, merge, or cutover action, run the configured client's authenticated `fdev-telemetry health`
+probe and read the active V2 workspace with `fdev-telemetry exec fsgg-coord-engine telemetry workspace
+status --workspace <active-workspace> --repository <repository>`. Require health `status=ready` and
+workspace `status=configured`, `pending=0`, `pendingUnacknowledged=0`, and
+`unacknowledgedLossy=false`. Record the observation time, workspace/repository, command verdicts, and
+these fields without printing credentials. A missing, stale, or failing observation is a direct V2
+blocker assigned to the reserved critical-path worker; hold the affected protected receipt, merge, or
+cutover until the invariant is restored and freshly observed, while safe disjoint source work continues.
+These two probes establish endpoint and workspace readiness only. Claim that this Codex transcript was
+captured only after separate event-level capture and durable acknowledgement evidence identifies it.
+
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
 
 The README-only repository exists at the explicitly authorized inert bootstrap commit
