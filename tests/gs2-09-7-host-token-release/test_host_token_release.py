@@ -69,6 +69,8 @@ class HostTokenReleaseTests(unittest.TestCase):
         release.host.PINNED_WORKFLOW_SHA = self.fixture.context["workflowSha"]
         self.addCleanup(setattr, release.host, "PINNED_SPKI_SHA256", original_pin)
         self.addCleanup(setattr, release.host, "PINNED_WORKFLOW_SHA", original_workflow_pin)
+        self.admission_port = host_fixture.configure_admission(
+            self, release.host, self.fixture.context, self.fixture.pin)
 
     def run_release(self, envelope=None, proof=None, context=None, port=None):
         return release.release_once(
@@ -113,6 +115,20 @@ class HostTokenReleaseTests(unittest.TestCase):
     def test_missing_independent_workflow_admission_refuses_before_port(self):
         release.host.PINNED_WORKFLOW_SHA = ""
         with self.assertRaisesRegex(release.Refused, "workflow-revision-unconfigured"):
+            self.run_release()
+        self.assertEqual([], self.port.calls)
+
+    def test_self_asserted_workflow_pin_without_protected_admission_refuses(self):
+        release.host.PINNED_WORKFLOW_SHA = self.fixture.context["workflowSha"]
+        release.host.ADMISSION_PORT = None
+        with self.assertRaisesRegex(release.Refused, "admission-unconfigured"):
+            self.run_release()
+        self.assertEqual([], self.port.calls)
+
+    def test_revoked_native_admission_refuses_before_claim_or_handoff(self):
+        self.admission_port.record = {
+            **self.admission_port.record, "state": "revoked"}
+        with self.assertRaisesRegex(release.Refused, "admission-binding"):
             self.run_release()
         self.assertEqual([], self.port.calls)
 

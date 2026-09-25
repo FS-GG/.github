@@ -16,6 +16,73 @@ SPEC = importlib.util.spec_from_file_location("host_run_binding", SCRIPT)
 host = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(host)
 
+ADMISSION_ORIGIN = "https://protected.example.test"
+ADMISSION_RESOURCE = "admission-store-v1"
+ADMISSION_ENDPOINT = ADMISSION_ORIGIN + "/admission"
+POLICY_SHA = "e" * 64
+
+
+class FakeAdmissionPort:
+    def __init__(self, module, context, signer_pin):
+        self.module = module
+        self.calls = []
+        self.descriptor = {
+            "schema": module.admission.SCHEMA,
+            "origin": ADMISSION_ORIGIN,
+            "resourceId": ADMISSION_RESOURCE,
+            "endpoint": ADMISSION_ENDPOINT,
+            "durable": True, "immutable": True, "nativeReadback": True,
+            "credentialScope": "protected-host-only",
+            "candidateCanRead": False, "candidateCanWrite": False,
+            "workflowCanWrite": False,
+        }
+        self.record = {
+            "schema": module.admission.RECORD_SCHEMA,
+            "resourceId": ADMISSION_RESOURCE,
+            "decisionId": "d" * 64,
+            "state": "admitted",
+            "workflowRepository": module.HOST_REPOSITORY,
+            "workflowPath": module.WORKFLOW,
+            "environment": module.ENVIRONMENT,
+            "workflowSha": context["workflowSha"],
+            "candidateSha": context["candidateSha"],
+            "runId": context["runId"],
+            "runAttempt": context["runAttempt"],
+            "runNonce": context["runNonce"],
+            "sandboxRepositoryId": module.SANDBOX_ID,
+            "sandboxRepositoryNodeId": module.SANDBOX_NODE,
+            "projectNodeId": module.PROJECT_NODE,
+            "signerSpkiSha256": signer_pin,
+            "releasePolicySha256": POLICY_SHA,
+            "sealed": True,
+        }
+
+    def describe(self):
+        self.calls.append("describe")
+        return self.descriptor
+
+    def read_admission(self, run_id, run_attempt):
+        self.calls.append(("read", run_id, run_attempt))
+        return self.record
+
+
+def configure_admission(test_case, module, context, signer_pin):
+    pins = {
+        "PINNED_ADMISSION_ORIGIN": ADMISSION_ORIGIN,
+        "PINNED_ADMISSION_RESOURCE_ID": ADMISSION_RESOURCE,
+        "PINNED_ADMISSION_ENDPOINT": ADMISSION_ENDPOINT,
+        "PINNED_RELEASE_POLICY_SHA256": POLICY_SHA,
+    }
+    for name, value in pins.items():
+        old = getattr(module.admission, name)
+        setattr(module.admission, name, value)
+        test_case.addCleanup(setattr, module.admission, name, old)
+    old_port = module.ADMISSION_PORT
+    port = FakeAdmissionPort(module, context, signer_pin)
+    module.ADMISSION_PORT = port
+    test_case.addCleanup(setattr, module, "ADMISSION_PORT", old_port)
+    return port
+
 
 class HostRunBindingTests(unittest.TestCase):
     @classmethod
@@ -82,6 +149,8 @@ class HostRunBindingTests(unittest.TestCase):
             "mintResponseSha256": "c" * 64,
             "viewerResponseSha256": "d" * 64,
         }
+        self.admission_port = configure_admission(
+            self, host, self.context, self.pin)
 
     @staticmethod
     def raw(value):
@@ -145,6 +214,50 @@ class HostRunBindingTests(unittest.TestCase):
                    "protectedSha": "f" * 40}
         with self.assertRaises(host.Refused):
             self.build(context=changed)
+
+    def test_self_asserted_workflow_pin_without_protected_admission_refuses(self):
+        # The pin is copied from the same runner context. It has no authority.
+        host.PINNED_WORKFLOW_SHA = self.context["workflowSha"]
+        host.ADMISSION_PORT = None
+        with self.assertRaisesRegex(host.Refused, "admission-unconfigured"):
+            self.build()
+
+    def test_protected_admission_exact_binding_and_state_refuse_drift(self):
+        changes = [
+            {"workflowSha": "f" * 40}, {"candidateSha": "f" * 40},
+            {"runId": 12346}, {"runAttempt": 3},
+            {"runNonce": "stale"}, {"sandboxRepositoryId": 1},
+            {"projectNodeId": "PVT_foreign"},
+            {"signerSpkiSha256": "0" * 64},
+            {"releasePolicySha256": "0" * 64},
+            {"state": "revoked"}, {"sealed": False},
+        ]
+        original = self.admission_port.record
+        for change in changes:
+            with self.subTest(change=change):
+                self.admission_port.record = {**original, **change}
+                with self.assertRaisesRegex(host.Refused, "admission-binding"):
+                    self.build()
+        self.admission_port.record = original
+
+    def test_protected_admission_descriptor_or_readback_failure_refuses(self):
+        self.admission_port.descriptor = {
+            **self.admission_port.descriptor, "workflowCanWrite": True}
+        with self.assertRaisesRegex(host.Refused, "admission-authority"):
+            self.build()
+        self.admission_port.descriptor["workflowCanWrite"] = False
+        self.admission_port.descriptor["candidateCanRead"] = True
+        with self.assertRaisesRegex(host.Refused, "admission-authority"):
+            self.build()
+        self.admission_port.descriptor["candidateCanRead"] = False
+        self.admission_port.describe = lambda: (_ for _ in ()).throw(
+            RuntimeError("unknown descriptor"))
+        with self.assertRaisesRegex(host.Refused, "admission-descriptor-unknown"):
+            self.build()
+        self.admission_port.describe = lambda: self.admission_port.descriptor
+        self.admission_port.read_admission = lambda *_: None
+        with self.assertRaisesRegex(host.Refused, "admission-record"):
+            self.build()
 
     def test_actor_repository_and_project_native_readback_mismatch_refuse(self):
         for key, changed in (
