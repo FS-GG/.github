@@ -371,7 +371,9 @@ module Board =
                                                     | _ -> None)
                                                 |> Map.ofList
 
-                                            if Map.isEmpty fields then
+                                            if fields.Count <> nodes.Length then
+                                                Error(Malformed(subject, "the exact project has a field whose type could not be read"))
+                                            elif Map.isEmpty fields then
                                                 Error(Malformed(subject, "the exact project has no readable fields"))
                                             else
                                                 Ok
