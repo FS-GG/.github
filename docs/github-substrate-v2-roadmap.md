@@ -956,6 +956,52 @@ at `7f36e810a40cbd340f7e262dbae7437fe17a9d8f` refuses duplicate raw
 issue-type name and pagination members before typed interpretation (140
 focused tests). Initial census, full typed inspect, protected journal/custom
 receipts and Q5/Q6 remain held.
+[Coordination GS2-09.7 #696](https://github.com/FS-GG/FS.GG.Coordination/pull/696)
+at `3afbe206ba6eb6a602759ce22431712f463381b6` refuses duplicate raw
+project-item content type, repository ID and pagination members (141 focused
+tests). The same initial census, journal/custom receipt and Q5/Q6 holds apply.
+[`.github` FSC-03 Python #3796](https://github.com/FS-GG/.github/pull/3796)
+at `2572e39ea2430ee869ca02595cc830fec00e4414` refuses a project XML
+symlink that resolves outside the supplied root (158 fixtures), while an
+in-root symlink remains valid. Installed MSBuild read the external source
+through the lexical in-root path; F# provider authentication, Import closure,
+evaluated graph and receiver parity remain held.
+[`.github` exact-board capture #3797](https://github.com/FS-GG/.github/pull/3797)
+at `741a4a3f679d4db0c7fa4fd8eeba1f058af694a4`, stacked on #3780,
+recursively refuses duplicate raw JSON members in the dormant direct
+Project 1 response. Five red-before identity/count/type/option cases had
+returned `Ok`; the Release GitHub adapter suite now passes 858/858. The
+installed all-project runner and genuine item/native turn/applied Host
+receipt/queue-return proof remain absent.
+
+The subsequent source-only drafts advance independent prerequisites without
+changing the protected holds:
+
+| Workstream / draft | Exact PR head | Bounded source evidence |
+| --- | --- | --- |
+| [GS2-09.9 #697](https://github.com/FS-GG/FS.GG.Coordination/pull/697) | `73d16c27fad9d8c2b396d786405de52dc1324831` | Copies selected SHA and target before read/reservation callbacks; 71 fake-port tests. |
+| [GS2-09.7 #698](https://github.com/FS-GG/FS.GG.Coordination/pull/698) | `959c518a6fc3844ea52f34ea9206aef89a568bb9` | Refuses duplicate raw project-field/type/pagination members; 142 focused tests. |
+| [GS2-09.7 #699](https://github.com/FS-GG/FS.GG.Coordination/pull/699) | `f7715c1a93aa194f05f29fe666e30bdccba93e57` | Refuses duplicate raw project-value/option/pagination members; 143 tests. |
+| [GS2-09.9 #700](https://github.com/FS-GG/FS.GG.Coordination/pull/700) | `62e1c404f501378113d41cafe8605a31d3a5b7f2` | Freezes native reader selection before transport callbacks; 79 fake-port tests. |
+| [GS2-09.7 #701](https://github.com/FS-GG/FS.GG.Coordination/pull/701) | `69c4cabe79e3a1028f8f559f9adf53f3ed0ebc38` | Refuses duplicate raw repository identity/settings members; 144 focused tests. |
+| [GS2-09.9 #702](https://github.com/FS-GG/FS.GG.Coordination/pull/702) | `20d50cbac2037f7ea7171ba3d9d3e307fb9c4b81` | Refuses a present foreign REST URL despite matching selected repository ID/name; 80 fake-port tests. |
+| [FSC-03 #3798](https://github.com/FS-GG/.github/pull/3798) | `28673f19da4357e92718d4874beda409e6704574` | Discovers case-varied project extensions that MSBuild loads; 161 fixtures. |
+| [FSC-03 #3799](https://github.com/FS-GG/.github/pull/3799) | `c3588047db13b4e9f6ce5b84ab116738f062452f` | Refuses an existing referenced project outside the discovered roster; 163 fixtures. |
+| [FSC-03 #3800](https://github.com/FS-GG/.github/pull/3800) | `c8a772e742cbbc1539d891473c64d68e36f305d5` | Refuses a missing referenced project and completes two historical workflow inventories; 164 fixtures. |
+| [FSC-04 #1035](https://github.com/FS-GG/FS.GG.SDD/pull/1035) | `4ca06d9a6ed535110883b0ac3986c353290d841c` | Caps provisional pinned relative paths at 1,024 UTF-16 code units; 1,481 Commands tests. |
+| [FSC-04 #1036](https://github.com/FS-GG/FS.GG.SDD/pull/1036) | `ed9b4c6e88e16a4e5414580e47cafb280b077fab` | Uses fixed 80 KiB second-pass compare buffer, without peak-memory or atomicity proof; 1,482 Commands tests. |
+| [FSC-05 #579](https://github.com/FS-GG/FS.GG.Templates/pull/579) | `ab392ae799c24f2be8b6e32d63d3c3bbc762577f` | Refuses unowned bytes before ZIP central directory; 69 payload/29 custody controls. |
+| [FSC-05 #580](https://github.com/FS-GG/FS.GG.Templates/pull/580) | `840f32f4be5db240e61da0d5a4bf98fb91926f90` | Refuses nonzero multi-disk ZIP markers; 72 payload/29 custody controls. |
+| [FSC-05 #581](https://github.com/FS-GG/FS.GG.Templates/pull/581) | `8f8252a7588a0079fa7653b65614dc64010782e5` | Binds ZIP end-record entry counts to parsed members; 76 payload/29 custody controls. |
+
+These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
+provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
+lacks initial census, full typed inspect, journal/custom receipts and Q5/Q6.
+FSC-03 lacks authenticated roster/Import/evaluated-graph and installed
+receiver parity. FSC-04 lacks ABA/post-check/cross-root/Windows and effect
+proof. FSC-05 selected native versus retained release remains NO_VERDICT and
+lacks complete ZIP closure, producer/served-byte custody, #511 CAS and
+receiver proof. No draft authorizes a protected merge or cutover.
 
 At the 17:51 UTC source checkpoint, the newest five completed **draft
 commits** were verified against their PR heads. Their completion is source
