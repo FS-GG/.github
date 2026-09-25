@@ -608,6 +608,26 @@ wf "$RB7/.github/workflows/pair.yml" '      - "docs/**"' '      - "docs/**"'
 expect "a ONE-SIDED filter is out of (a)'s scope and still answerable to (b)" \
   1 "the \`push\` filter names 'src/A'" "$RB7"
 
+# A one-sided trigger with a PRESENT but malformed `paths:` value is still in rule (b)'s input
+# scope. The former coverage loops skipped `None`, scalar, and empty values before validation;
+# a separate clean pair then made the whole audit exit 0 without judging that workflow.
+for shape in null '[]' 'src/A/**'; do
+  RB7M="$(root "$WORK/cover-onesided-malformed-${shape//[^a-zA-Z0-9]/_}")"
+  { echo "name: w"; echo "on:"; echo "  push:"; echo "    paths: $shape"
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+    > "$RB7M/.github/workflows/w.yml"
+  wf "$RB7M/.github/workflows/pair.yml" '      - "docs/**"' '      - "docs/**"'
+  expect "one-sided present malformed paths $shape is NO VERDICT, not an invisible skip" \
+    3 "push.paths:\` is present but is not a non-empty list" "$RB7M"
+done
+
+RB7U="$(root "$WORK/cover-onesided-unfiltered")"
+{ echo "name: w"; echo "on:"; echo "  push:"; echo "    branches: [main]"
+  echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+  > "$RB7U/.github/workflows/w.yml"
+wf "$RB7U/.github/workflows/pair.yml" '      - "docs/**"' '      - "docs/**"'
+expect "an absent one-sided paths key remains genuinely unfiltered" 0 "ok:" "$RB7U"
+
 # ---- rule (b)'s escape hatch ---------------------------------------------------------------
 RB8="$(root "$WORK/cover-hatch")"
 proj "$RB8" "src/A" "../B/B.fsproj"

@@ -312,8 +312,8 @@ def declared(on: dict, trigger: str) -> tuple[object, bool, bool]:
 def validated(raw: object, trigger: str, what: str) -> list[str]:
     """`<trigger>.paths` as a list of patterns this gate can soundly compare.
 
-    Only called when both events exist and at least one declares a filter. A truly one-sided
-    workflow's patterns are never compared, so refusing them would be a false alarm.
+    Called for every present filter before Rule (b)/(c), including a one-sided workflow's filter.
+    Rule (a) later compares only paired events. An absent filter is not passed here.
     """
     if not isinstance(raw, list) or not raw:
         raise GateError(
@@ -725,6 +725,18 @@ def main(argv: list[str]) -> int:
         pr_raw, pr_paths, pr_ignores = declared(on, "pull_request")
         push_raw, push_paths, push_ignores = declared(on, "push")
 
+        # Rule (b)/(c) consume each declared filter independently. Presence, not a truthy value,
+        # establishes scope: `paths: null`, `paths: []`, and a scalar are malformed filters, not
+        # permission to skip a one-sided workflow. Validate once before either coverage walk.
+        filters = [
+            (trigger, validated(raw, trigger, where))
+            for trigger, raw, present in (
+                ("pull_request", pr_raw, pr_paths),
+                ("push", push_raw, push_paths),
+            )
+            if present
+        ]
+
         # RULE (b), AND IT RUNS BEFORE THE PAIRING RULE RETURNS.
         #
         # Coverage is a property of ONE filter, so it is not the pairing rule's business and must not
@@ -748,10 +760,7 @@ def main(argv: list[str]) -> int:
             trigs.add(trigger)
             verbs.add(verb)
 
-        for trigger, raw in (("pull_request", pr_raw), ("push", push_raw)):
-            if raw is None or not isinstance(raw, list) or not raw:
-                continue
-            pats = [str(p) for p in raw]
+        for trigger, pats in filters:
             subjects_seen.update((where, sub) for sub in subjects(pats, graph))
             for project, dep in uncovered(pats, graph):
                 note(os.path.dirname(dep), os.path.dirname(project), trigger, "builds")
@@ -762,10 +771,7 @@ def main(argv: list[str]) -> int:
         # the script's AST supplies the closure. Folded into the same `missing` map so one absent
         # directory is one finding however many rules reach it — a reader does not care which rule
         # noticed, only what to add.
-        for trigger, raw in (("pull_request", pr_raw), ("push", push_raw)):
-            if raw is None or not isinstance(raw, list) or not raw:
-                continue
-            pats = [str(p) for p in raw]
+        for trigger, pats in filters:
             for script in named_scripts(pats, args.root):
                 subject = declared_subject(os.path.join(args.root, script), where)
                 if subject is None:
