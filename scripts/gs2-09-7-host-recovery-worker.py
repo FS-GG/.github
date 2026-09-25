@@ -69,6 +69,11 @@ class ProtectedRecoveryPort(finalizer.ProtectedFinalizerPort,
     def read_census_seal(self, seal_id: str) -> dict: ...
     def read_census_subject(self, seal_id: str, mint_id: str) -> dict: ...
     def read_binding(self, mint_id: str) -> dict: ...
+    def claim_recovery_native_attempt_once(self, mint_id: str,
+                                           token_sha256: str,
+                                           attempt_id: str,
+                                           expected_generation: int,
+                                           floor_resource_id: str) -> str: ...
     def append_recovery_receipt(self, mint_id: str, binding_id: str,
                                 token_sha256: str) -> str: ...
     def read_recovery_receipt(self, mint_id: str) -> dict: ...
@@ -79,6 +84,7 @@ def check_worker(port: ProtectedRecoveryPort | None) -> None:
                  PINNED_RECOVERY_ENDPOINT, PINNED_RECOVERY_WORKER_ID)),
             "recovery-unconfigured")
     methods = ("describe_recovery", "read_binding", "claim_recovery_once",
+               "claim_recovery_native_attempt_once",
                "read_recovery_claim", "append_recovery_receipt",
                "read_recovery_receipt")
     require(port is not None and all(callable(getattr(port, name, None)) for name in methods),
@@ -481,8 +487,9 @@ def recover_one(port: ProtectedRecoveryPort | None, mint_id: str,
             state = _observe(port, token)
             if claim_state == "fresh" and state == "active" and prior == "absent":
                 try:
-                    claimed = port.claim_native_attempt_once(
-                        mint_id, token_sha256, attempt["attemptId"])
+                    claimed = port.claim_recovery_native_attempt_once(
+                        mint_id, token_sha256, attempt["attemptId"],
+                        generation, floor_resource_id)
                 except Exception:
                     claimed = "unknown"
                 if claimed == "committed" and finalizer._read_native_attempt(

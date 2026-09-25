@@ -296,6 +296,23 @@ class FakePort:
             raise OSError("lost after native-attempt claim")
         return "committed"
 
+    def claim_recovery_native_attempt_once(self, mint_id, token_sha256,
+                                           attempt_id, expected_generation,
+                                           floor_resource_id):
+        self.calls.append("claim-recovery-native-attempt")
+        if type(expected_generation) is not int \
+                or expected_generation != self.joint_generation \
+                or floor_resource_id != worker.joint.floor.PINNED_FLOOR_RESOURCE_ID \
+                or type(self.claim) is not dict \
+                or self.claim.get("mintId") != mint_id \
+                or self.claim.get("tokenSha256") != token_sha256 \
+                or self.claim.get("jointGeneration") != expected_generation \
+                or self.claim.get("state") != "committed" \
+                or type(self.schedule_batch) is not dict \
+                or self.claim.get("batchId") != self.schedule_batch["batchId"]:
+            return "refused"
+        return self.claim_native_attempt_once(mint_id, token_sha256, attempt_id)
+
     def read_native_attempt(self, mint_id):
         self.calls.append("read-native-attempt")
         return self.native_attempt
@@ -402,6 +419,42 @@ class RecoveryWorkerTests(unittest.TestCase):
         self.assertEqual("unknown", result["claim"])
         self.assertEqual("pending", result["revocation"])
         self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_head_advance_after_final_read_before_attempt_blocks_revoke(self):
+        original = self.port.read_native_attempt
+        def advance(mint_id):
+            result = original(mint_id)
+            self.port.joint_generation = 2
+            return result
+        self.port.read_native_attempt = advance
+        result = self.run_worker()
+        self.assertEqual("pending", result["revocation"])
+        self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_recovery_native_attempt_claim_refuses_foreign_floor_or_generation(self):
+        attempt_id = "a" * 64
+        for generation, floor_id in (
+            (2, worker.joint.floor.PINNED_FLOOR_RESOURCE_ID),
+            (1, "foreign-floor"),
+            (True, worker.joint.floor.PINNED_FLOOR_RESOURCE_ID),
+        ):
+            with self.subTest(generation=generation, floor_id=floor_id):
+                self.assertEqual("refused", self.port.claim_recovery_native_attempt_once(
+                    MINT_ID, self.port.token_sha256, attempt_id,
+                    generation, floor_id))
+                self.assertIsNone(self.port.native_attempt)
+
+    def test_native_attempt_claim_without_durable_recovery_claim_refuses(self):
+        self.assertEqual("refused", self.port.claim_recovery_native_attempt_once(
+            MINT_ID, self.port.token_sha256, "a" * 64, 1,
+            worker.joint.floor.PINNED_FLOOR_RESOURCE_ID))
+        self.assertIsNone(self.port.native_attempt)
+
+    def test_missing_recovery_native_attempt_port_refuses_before_token_load(self):
+        self.port.claim_recovery_native_attempt_once = None
+        with self.assertRaisesRegex(worker.Refused, "recovery-unconfigured"):
+            self.run_worker()
+        self.assertNotIn("recover-token", self.port.calls)
 
     def test_committed_claim_without_batch_and_schedule_identity_cannot_revoke(self):
         original = self.port.claim_recovery_once
