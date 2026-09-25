@@ -135,4 +135,79 @@ syntaxRefused "non-string mapping key refuses" "yaml-key"
 syntaxRefused "alias cycle refuses" "yaml-alias"
     (caller "jobs: { sync: {} }\ncycle: &x [*x]\n")
 
+let callerCall text = WorkflowPermissionSyntax.callerCall "caller.yml" "sync" text
+let callableCallee text = WorkflowPermissionSyntax.callableCallee "callee.yml" text
+let target = "FS-GG/.github/.github/workflows/reuse.yml@main"
+let validCaller = sprintf "permissions: { contents: read }\njobs: { sync: { uses: %s } }\n" target
+
+expect "selected uses target carries exact callee and ref"
+    (Ok { Callee = "reuse.yml"; Ref = "main"; WorkflowPermissions = Scopes [ "contents", "read" ]; JobPermissions = Absent })
+    (callerCall validCaller)
+expect "yaml extension and pinned ref are retained"
+    (Ok { Callee = "reuse.yaml"; Ref = "0123456789abcdef"; WorkflowPermissions = Absent; JobPermissions = Scopes [ "contents", "none" ] })
+    (callerCall "jobs: { sync: { uses: ' FS-GG/.github/.github/workflows/reuse.yaml@0123456789abcdef ', permissions: { contents: none } } }\n")
+syntaxRefused "missing selected uses refuses" "call-target-missing"
+    (callerCall "jobs: { sync: {} }\n")
+syntaxRefused "null selected uses refuses" "call-target-missing"
+    (callerCall "jobs: { sync: { uses: null } }\n")
+syntaxRefused "mapping selected uses refuses" "call-target-missing"
+    (callerCall "jobs: { sync: { uses: { workflow: reuse.yml } } }\n")
+syntaxRefused "foreign organization target refuses" "call-target-unsupported"
+    (callerCall "jobs: { sync: { uses: Other/.github/.github/workflows/reuse.yml@main } }\n")
+syntaxRefused "missing target ref refuses" "call-target-unsupported"
+    (callerCall "jobs: { sync: { uses: FS-GG/.github/.github/workflows/reuse.yml } }\n")
+syntaxRefused "target path traversal refuses" "call-target-unsupported"
+    (callerCall "jobs: { sync: { uses: FS-GG/.github/.github/workflows/../reuse.yml@main } }\n")
+syntaxRefused "callee name containing at sign refuses" "call-target-unsupported"
+    (callerCall "jobs: { sync: { uses: FS-GG/.github/.github/workflows/reuse@bad.yml@main } }\n")
+
+expect "mapping workflow_call grants a floor"
+    (Ok(Scopes [ "contents", "read" ]))
+    (callableCallee "on: { workflow_call: {} }\npermissions: { contents: read }\n")
+expect "scalar workflow_call is callable"
+    (Ok(Scopes [ "contents", "read" ]))
+    (callableCallee "on: workflow_call\npermissions: { contents: read }\n")
+expect "sequence workflow_call is callable"
+    (Ok(Scopes [ "contents", "read" ]))
+    (callableCallee "on: [push, workflow_call]\npermissions: { contents: read }\n")
+expect "callable callee without grant inherits caller token"
+    (Ok Absent)
+    (callableCallee "on: { workflow_call: {} }\n")
+expect "callable callee with empty grant imposes no floor"
+    (Ok(Scopes []))
+    (callableCallee "on: { workflow_call: {} }\npermissions: {}\n")
+syntaxRefused "missing on refuses before permission comparison" "on-missing"
+    (callableCallee "permissions: { contents: read }\n")
+syntaxRefused "push-only callee refuses" "not-callable"
+    (callableCallee "on: push\npermissions: { contents: read }\n")
+syntaxRefused "null on refuses" "not-callable"
+    (callableCallee "on: null\npermissions: { contents: read }\n")
+syntaxRefused "workflow_call scalar options refuse" "workflow-call-shape"
+    (callableCallee "on: { workflow_call: unsafe }\npermissions: { contents: read }\n")
+syntaxRefused "workflow_call sequence options refuse" "workflow-call-shape"
+    (callableCallee "on: { workflow_call: [unsafe] }\npermissions: { contents: read }\n")
+syntaxRefused "duplicate sequence event refuses" "on-duplicate"
+    (callableCallee "on: [workflow_call, workflow_call]\npermissions: { contents: read }\n")
+syntaxRefused "non-string sequence event refuses" "on-shape"
+    (callableCallee "on: [workflow_call, 42]\npermissions: { contents: read }\n")
+syntaxRefused "duplicate on mapping key refuses" "yaml-invalid"
+    (callableCallee "on: workflow_call\non: push\npermissions: { contents: read }\n")
+
+let compareCall callerText calleeText =
+    callerCall callerText
+    |> Result.bind (fun call ->
+        callableCallee calleeText
+        |> Result.map (fun floor ->
+            Permissions.compare call.WorkflowPermissions call.JobPermissions floor))
+
+expect "callee absence imposes no floor on absent caller grant" (Ok Satisfied)
+    (compareCall (sprintf "jobs: { sync: { uses: %s } }\n" target)
+        "on: workflow_call\n")
+expect "call job override narrows a callable callee floor"
+    (Ok(UnderGranted [ { Scope = "contents"; Required = Read; Granted = NoAccess } ]))
+    (compareCall (sprintf "permissions: { contents: read }\njobs: { sync: { uses: %s, permissions: {} } }\n" target)
+        "on: workflow_call\npermissions: { contents: read }\n")
+syntaxRefused "non-callable callee cannot yield satisfied verdict" "not-callable"
+    (compareCall validCaller "on: push\npermissions: {}\n")
+
 printfn "permission reducer: %d controls passed" passed

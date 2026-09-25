@@ -9,10 +9,20 @@ open YamlDotNet.RepresentationModel
 
 type PermissionSyntaxDiagnostic = { Code: string; Path: string }
 
+type ReusableWorkflowCall =
+    {
+        Callee: string
+        Ref: string
+        WorkflowPermissions: PermissionBlock
+        JobPermissions: PermissionBlock
+    }
+
 /// A pure YAML adapter for the permission reducer. Pinned-ref and roster reads remain external.
 [<RequireQualifiedAccess>]
 module WorkflowPermissionSyntax =
     let private error code path = Error { Code = code; Path = path }
+    let private callTarget =
+        Regex("^FS-GG/\\.github/\\.github/workflows/([^@/]+\\.ya?ml)@(.+)$", RegexOptions.CultureInvariant)
 
     let private scalar (node: YamlNode) =
         match node with
@@ -126,8 +136,7 @@ module WorkflowPermissionSyntax =
             | Some value -> Shorthand value
             | None -> UnsupportedShape
 
-    /// Inspect one caller job by exact ID; the caller/callee uses relationship is resolved elsewhere.
-    let caller path jobId text =
+    let private selectedJob path jobId text =
         if String.IsNullOrWhiteSpace jobId then error "job-id" path
         else
             parse path text
@@ -137,7 +146,60 @@ module WorkflowPermissionSyntax =
                 | Some jobs ->
                     match memberValue jobId jobs |> Option.bind mapping with
                     | None -> error "job-shape" path
-                    | Some job -> Ok(block root, block job))
+                    | Some job -> Ok(root, job))
 
-    /// Inspect the callee's top-level grant; workflow_call and pinned ref remain separate checks.
+    /// Inspect one caller job by exact ID; the caller/callee uses relationship is resolved elsewhere.
+    let caller path jobId text =
+        selectedJob path jobId text
+        |> Result.map (fun (root, job) -> block root, block job)
+
+    /// Require the selected job to call the organization's reusable workflow at a stated ref.
+    /// Reading that ref and binding the returned callee bytes remain separate provider work.
+    let callerCall path jobId text =
+        selectedJob path jobId text
+        |> Result.bind (fun (root, job) ->
+            match memberValue "uses" job |> Option.bind stringScalar with
+            | None -> error "call-target-missing" path
+            | Some value ->
+                let matched = callTarget.Match(value.Trim())
+                if not matched.Success then error "call-target-unsupported" path
+                else
+                    Ok
+                        {
+                            Callee = matched.Groups[1].Value
+                            Ref = matched.Groups[2].Value
+                            WorkflowPermissions = block root
+                            JobPermissions = block job
+                        })
+
+    /// Inspect only the callee's top-level grant; this permissive entry point has no call evidence.
     let callee path text = parse path text |> Result.map block
+
+    /// Require the callee's `workflow_call` declaration before comparing its grant.
+    /// This is syntax only: the caller's ref must still resolve to these exact bytes.
+    let callableCallee path text =
+        parse path text
+        |> Result.bind (fun root ->
+            match memberValue "on" root with
+            | None -> error "on-missing" path
+            | Some on ->
+                let declared =
+                    match on with
+                    | :? YamlMappingNode as events ->
+                        match memberValue "workflow_call" events with
+                        | None -> Ok false
+                        | Some value when isNull value || (mapping value).IsSome -> Ok true
+                        | Some _ -> error "workflow-call-shape" path
+                    | :? YamlSequenceNode as events ->
+                        let names = events.Children |> Seq.map stringScalar |> Seq.toList
+                        if names |> List.exists Option.isNone then error "on-shape" path
+                        elif names.Length <> (names |> Set.ofList |> Set.count) then error "on-duplicate" path
+                        else Ok(List.contains (Some "workflow_call") names)
+                    | _ when isNull on -> Ok false
+                    | _ ->
+                        match stringScalar on with
+                        | Some name -> Ok(name = "workflow_call")
+                        | None -> error "on-shape" path
+
+                declared
+                |> Result.bind (fun value -> if value then Ok(block root) else error "not-callable" path))
