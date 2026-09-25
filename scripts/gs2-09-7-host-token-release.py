@@ -202,29 +202,33 @@ def release_once(envelope_raw: bytes, proof_raw: bytes, token: str,
         host.PINNED_SPKI_SHA256, context, now, include_admission=True)
     binding_id = hashlib.sha256(host.canonical_payload(binding)).hexdigest()
     decision_id = admission_record["decisionId"]
-    try:
-        claim = port.claim_once(decision_id, binding_id, binding["tokenSha256"])
-    except Exception:
-        claim = "unknown"
     invoked = False
     outcome = "claim-unknown"
-    if claim == "granted":
-        try:
-            result = port.invoke_candidate_if_admitted_once(
-                decision_id, binding_id, binding["tokenSha256"], token, binding)
-        except Exception:
-            result = "unknown"
-        if result == "refused":
-            outcome = "handoff-refused"
-        else:
-            invoked = True  # Unknown means token exposure cannot be excluded.
-            outcome = "candidate-complete" if result == "complete" else "candidate-unknown"
-    elif claim == "duplicate":
-        outcome = "duplicate-refused"
+    revoked = "unknown"
     try:
-        revoked = port.revoke(token)
-    except Exception:
-        revoked = "unknown"
+        try:
+            claim = port.claim_once(decision_id, binding_id, binding["tokenSha256"])
+        except Exception:
+            claim = "unknown"
+        if claim == "granted":
+            try:
+                result = port.invoke_candidate_if_admitted_once(
+                    decision_id, binding_id, binding["tokenSha256"], token, binding)
+            except Exception:
+                result = "unknown"
+            if result == "refused":
+                outcome = "handoff-refused"
+            else:
+                invoked = True  # Unknown means token exposure cannot be excluded.
+                outcome = "candidate-complete" if result == "complete" else "candidate-unknown"
+        elif claim == "duplicate":
+            outcome = "duplicate-refused"
+    finally:
+        # A cancellation may arrive after exposure; still attempt native revoke.
+        try:
+            revoked = port.revoke(token)
+        except Exception:
+            revoked = "unknown"
     revocation = "confirmed" if revoked == "confirmed" else "unknown"
     disposition = "complete" if outcome == "candidate-complete" and revocation == "confirmed" else "pending"
     return {"schema": "fsgg.github-substrate-v2.sandbox-host-release/1",
