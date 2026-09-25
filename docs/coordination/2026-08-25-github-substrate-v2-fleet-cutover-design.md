@@ -399,6 +399,119 @@ the manifest identity, current epoch commit, protected environment approval, and
 operation grant. The issue projection is regenerated only after the authoritative transition re-reads
 successfully.
 
+#### OperatingV1 admission after genesis
+
+The installed v1 admission genesis establishes a journal root, not authority for a caller to create an
+admission. While the verified epoch is `OperatingV1`, one protected service derives each new
+`MutationContext` from two complete, coherent native reads of the bounded issue or pull request,
+outstanding operation and delivery records, claim journals, and the exact effect target. It admits
+only a registered caller whose immutable source, workflow, and service identity are observed;
+caller arguments are proposed lookup keys, not authority. A no-claim routine operation requires an
+explicit accepted policy classification. For a required claim, the service semantically decodes the
+current nonterminal `ClaimAuthorityRecord` and binds its canonical subject, owner, complete touch set,
+lease, operation and fence state, exact grant journal commit and generation to the requested target.
+It distinguishes grant refs from conflict-domain refs; structural journal validity or a matching
+generation alone is insufficient. The sealed context includes the current cutover
+commit, admission journal parent and generation, stable operation and idempotency identity, terminal
+pagination proofs, and source and target revisions. Unreadable, incomplete, contradictory, or changed
+facts refuse. An ordinary CLI argument, ambient user token, or previously returned handle cannot
+nominate a new admission. The CLI may only resume or inspect a handle already verified in the journal.
+
+The initial trusted caller form is a dedicated GitHub Actions admission service run from a pinned
+workflow and source revision on protected `.github` `main`. Native provider readback must bind its
+repository, workflow path and bytes, head, run ID and attempt, actor, and branch-restricted runtime
+environment to the registered service before any plan is sealed. Dispatch inputs remain lookup hints.
+The job REST record alone does not establish its environment. Main binds the
+exact check-run ID to GitHub-signed OIDC environment, environment node ID and
+subject claims, checks them against the installed policy and native environment
+name, ID and current branch and approval rules, and reads the run's native review
+history for every required approval. Deployment/status observations may corroborate
+this identity, but their caller-supplied target and log URLs cannot prove a
+job-to-environment link. If signed claims, native approval readback, or the
+protected probe cannot establish that binding, admission activation refuses.
+Before activation, a protected probe must establish the provider's actual signed
+`workflow_sha` and subject semantics against native workflow bytes and run evidence.
+Main's installed service policy admits only independently qualified source and
+workflow revisions with exact byte digests. When a protected `main` merge changes
+the signed revision, the service refuses until a separately governed policy
+rotation qualifies and installs the new identity and retires the old one; the
+requester cannot nominate a revision or widen the permitted set.
+The service job receives no ordinary App private key. A separate protected Main-host issuer process
+retains the dedicated ordinary App key, distinct from the one-time human-reviewed genesis key and
+cutover approval. Until the run provenance, environment restriction, issuer boundary, and key custody
+are installed and qualified together, the service has no admission authority.
+An in-progress run cannot prove its own origin with a completed-run artifact. Before accessing the
+key, the issuer verifies a GitHub-signed in-run OIDC token with an audience bound to the exact sealed
+plan and nonce, issuer signature and time bounds, one-shot token identity, and repository, workflow,
+source head, run, attempt, job and environment claims. It cross-checks those claims against fresh
+native run, job, workflow-source and environment reads, then durably consumes the plan and nonce
+before minting. An in-memory `jti` cache alone cannot prevent the job from requesting another token
+for the same plan. A caller-supplied run ID, an ambient token, or a matching native run lookup alone
+cannot authenticate the requesting job.
+
+The service seals one exact admission plan before obtaining its short-lived ordinary App credential.
+The protected issuer verifies the registered service identity and request provenance, exact plan digest,
+operation, expected journal parent, current epoch, repository and one-shot handoff identity before
+minting with its custody-bound App key. An App JWT is not intrinsically plan-scoped: the trusted issuer and
+consumer enforce that binding locally, observe the effective minted token scope and expiry, and refuse
+replay or a changed plan. The Actions service sends only the sealed public plan and signed job proof to
+Main. Main's protected issuer executes the fixed CAS transport locally, passing the JWT only to its
+local child on a bounded anonymous descriptor; any later credential-bearing provider mutation likewise
+uses a separately authorized Main-local fixed-operation executor. The service receives only a public
+response-unknown status or verified effect receipt for fresh typed readback, never a JWT, installation
+token, CLI credential value or credential artifact. The one-time genesis
+workflow, approval, signing key and JWT are not reusable authorization for a later admission.
+The Main-local issuer rereads the epoch, claim and journal, compares them to the sealed plan
+immediately before its CAS append, and uses the exact expected parent. The Actions service returns
+an admitted handle only after independent exact journal readback.
+A lost response or conflicting parent is reconciled from durable state under the same operation
+identity; uncertainty never permits a second blind append. A restored `InFlight` handle is
+reconciliation-only and cannot send a provider mutation. Before every provider mutation, including
+an authorized retry or compensation, the Main-local credential-bearing executor itself rereads the
+epoch, claim, admission, operation, manifest, seal, journal parent, and source and target heads,
+compares them to the sealed plan, then durably consumes a new one-shot dispatch fence under exclusive
+send ownership immediately before the provider call. The request also carries the provider's exact
+supported conditional precondition. A native pull-request merge can condition the PR head SHA but
+cannot condition the base SHA through GitHub's merge API. Before enabling that route, the protected
+executor must prove an installed provider-enforced exclusive base-writer boundary and complete
+human, App, queue, admin and bypass census, hold its durable local owner/fence, reread the exact base
+and head, send with the head condition, and verify method-specific result ancestry. If another base
+writer can act outside that boundary, native merge dispatch refuses. An Actions preflight cannot
+replace the Main-local final check; a crash after
+fence consumption remains uncertain until reconciliation. A retry requires a durable
+`StronglyAbsent` settlement that binds the original request and proves delayed application
+impossible; it uses a new attempt identity. `Applied` is
+terminal for that effect; `Partial` and `Indeterminate` permit reconciliation or an independently
+authorized recovery plan, never a replay of the uncertain request.
+
+For a provider effect, reconciliation requires exact request and idempotency identity plus fresh
+target readback. For a native pull-request merge, the sealed pre-send request identity includes the
+repository and PR node, expected head and base, merge method, operation, effect and idempotency
+identities; the resulting commit is a post-send observation that must match an independent provider
+readback. It reports `Applied` only for a verified matching provider effect identity and receipt;
+a matching target state created by another actor is
+insufficient. It reports `StronglyAbsent` only when evidence bound to the original request proves
+delayed application impossible through an idempotency, conditional-fence, or retired-request contract.
+`Partial` retains the observed completed subset and its recovery or compensation plan, while unreadable
+or lost-response evidence remains `Indeterminate`. Neither permits blind replay. An open PR, 404, or
+missing merge commit on one read does not prove strong absence; if GitHub cannot provide it, an
+unknown merge without provider correlation remains pending for manual reconciliation and cannot
+be retried under a fresh effect identity.
+The admission service cannot authorize its own source installation. Installing the service, issuer,
+and provider executor in `.github` requires a separate, explicit one-time protected owner decision
+before any native source merge. That decision must name the exact qualified PR heads and ordered
+expected bases, installation workflow and artifact bytes, owner approval and credential scope,
+expiry, and independent merge and installed-source readback. A moved base, changed source or rule,
+missing approval, or uncertain merge result stops the packet for renewed qualification. This
+bootstrap installs only the named source; it grants no ordinary v1 effect or cutover transition.
+The earlier genesis approval in ADR-0087 does not authorize this installation.
+No direct routine merge, intake, Project write or other normal v1 mutation route is enabled until the
+installed service, issuer, journal and provider probes qualify together. Independent controls must
+refuse caller-supplied contexts, foreign or stale claims, moved source/target revisions, changed epoch,
+wrong credential scope, CAS races, lost responses, partial effects, and old clients. The accepted
+GS2-08 bridge fence remains the outer precondition; this admission contract adds no v2 production
+writer and grants no cutover transition.
+
 ### 4.10 Sealed legacy history
 
 V2 production does not carry permanent upcasters for all v1 history. The cutover classifies v1 state as:
