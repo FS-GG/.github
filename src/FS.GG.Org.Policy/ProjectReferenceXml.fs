@@ -34,6 +34,11 @@ module ProjectReferenceXml =
         && not (path.Contains("//", StringComparison.Ordinal))
         && (path.Split('/') |> Array.forall (fun part -> part <> "" && part <> "." && part <> ".."))
 
+    let private discoverableProject (path: string) =
+        // Match the live Rule (b) project roster, including case-varied MSBuild extensions.
+        [ ".fsproj"; ".csproj"; ".vbproj" ]
+        |> List.exists (fun extension -> path.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+
     let private resolve (projectPath: string) (includePath: string) =
         let relative = includePath.Replace('\\', '/')
         if String.IsNullOrWhiteSpace relative
@@ -141,8 +146,9 @@ module ProjectReferenceXml =
             | :? ArgumentException as ex -> error "project-xml" projectPath ex.Message
 
     /// Assemble only caller-supplied project XML into a closed local graph. Duplicate identities
-    /// and missing referenced sources refuse before Map construction can erase evidence. This
-    /// does not authenticate discovery, file bytes, implicit imports, or evaluated MSBuild items.
+    /// missing referenced sources, and identities outside the live project discovery extensions
+    /// refuse before Map construction can erase evidence. This does not authenticate discovery,
+    /// file bytes, implicit imports, or evaluated MSBuild items.
     let inspectSuppliedProjectSet
         (sources: (string * string) list)
         : Result<Map<string, string list>, SyntaxDiagnostic> =
@@ -164,7 +170,9 @@ module ProjectReferenceXml =
                         error "project-roster" project (sprintf "referenced project %s is absent from supplied source set" dependency)
                     | None -> Ok graph
                 | (path, xml) :: rest ->
-                    if Set.contains path seen then
+                    if not (isNull path) && normalized path && not (discoverableProject path) then
+                        error "project-roster" path "supplied identity is outside discoverable .fsproj/.csproj/.vbproj roster"
+                    elif Set.contains path seen then
                         error "project-roster" path "duplicate supplied project identity"
                     else
                         match inspect path xml with

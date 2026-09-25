@@ -318,6 +318,30 @@ module ProjectReferenceXmlTests =
                     [ "src/A/A.fsproj", "src/B/B.fsproj" ], coverage.Uncovered)
 
     [<Theory>]
+    [<InlineData("src/B/B.proj")>]
+    [<InlineData("src/B/B.targets")>]
+    let ``supplied non-discoverable reference cannot close a project roster`` (dependency: string) =
+        let sources =
+            [ "src/A/A.fsproj", "<Project><ProjectReference Include='../B/" + System.IO.Path.GetFileName(dependency) + "' /></Project>"
+              dependency, "<Project />" ]
+        match ProjectReferenceXml.inspectSuppliedProjectSet sources with
+        | Error diagnostic -> Assert.Equal("project-roster", diagnostic.Code)
+        | Ok graph ->
+            match RuleB.inspect [ "src/A/**"; "src/B/**" ] graph with
+            | Ok coverage when List.isEmpty coverage.Uncovered ->
+                failwithf "non-discoverable project produced a false green: %A" graph
+            | result -> failwithf "non-discoverable project needs roster refusal, got: %A" result
+
+    [<Fact>]
+    let ``case-varied supported project extension remains discoverable`` () =
+        let sources =
+            [ "src/A/A.fsproj", "<Project><ProjectReference Include='../B/B.FsPrOj' /></Project>"
+              "src/B/B.FsPrOj", "<Project />" ]
+        match ProjectReferenceXml.inspectSuppliedProjectSet sources with
+        | Error diagnostic -> failwithf "case-varied project extension was refused: %A" diagnostic
+        | Ok graph -> Assert.Equal<string list>([ "src/B/B.FsPrOj" ], graph.["src/A/A.fsproj"])
+
+    [<Theory>]
     [<InlineData(false)>]
     [<InlineData(true)>]
     let ``absent or empty supplied source set has no graph verdict`` absent =
