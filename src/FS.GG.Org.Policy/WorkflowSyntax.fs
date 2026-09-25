@@ -46,7 +46,7 @@ module WorkflowSyntax =
         | :? YamlScalarNode as value ->
             let tag = string value.Tag
             tag = "tag:yaml.org,2002:null"
-            || (tag <> "tag:yaml.org,2002:str" && (isNull value.Value || (value.Style = ScalarStyle.Plain
+            || (tag = "?" && (isNull value.Value || (value.Style = ScalarStyle.Plain
                 && (value.Value = "" || value.Value = "null" || value.Value = "Null"
                     || value.Value = "NULL" || value.Value = "~"))))
         | _ -> false
@@ -75,7 +75,7 @@ module WorkflowSyntax =
         | _ -> None
 
     let private lookup name pairs =
-        pairs |> List.tryPick (fun (key, value) -> if scalar key = Some name then Some value else None)
+        pairs |> List.tryPick (fun (key, value) -> if stringPattern key = Some name then Some value else None)
 
     let private noTrigger = { Declared = false; Paths = Missing; HasPathsIgnore = false }
 
@@ -105,16 +105,16 @@ module WorkflowSyntax =
     let private onEntries path (node: YamlNode) =
         match entries node with
         | Some pairs ->
-            if pairs |> List.forall (fun (key, _) -> scalar key |> Option.exists validEventName) then Ok pairs
+            if pairs |> List.forall (fun (key, _) -> stringPattern key |> Option.exists validEventName) then Ok pairs
             else error "on-shape" path "on mapping contains an invalid event name"
         | None ->
             match node with
             | :? YamlSequenceNode as sequence ->
-                let names = sequence.Children |> Seq.map scalar |> Seq.toList
+                let names = sequence.Children |> Seq.map stringPattern |> Seq.toList
                 if names |> List.forall (Option.exists validEventName) then
                     Ok (names |> List.choose id |> List.map (fun name -> YamlScalarNode(name) :> YamlNode, YamlScalarNode() :> YamlNode))
                 else error "on-shape" path "on sequence contains a non-scalar event"
-            | :? YamlScalarNode as value when not (isNullScalar node) && validEventName value.Value ->
+            | :? YamlScalarNode as value when stringPattern node |> Option.exists validEventName ->
                 Ok [ (YamlScalarNode(value.Value) :> YamlNode), (YamlScalarNode() :> YamlNode) ]
             | _ -> error "on-shape" path "on must be an event name, sequence, or mapping"
 
@@ -135,12 +135,20 @@ module WorkflowSyntax =
             else
                 match node with
                 | :? YamlMappingNode as mapping ->
-                    for item in mapping.Children |> Seq.toArray |> Array.rev do
-                        if scalar item.Key = Some "run" then
-                            match scalar item.Value with
-                            | Some value -> runs.Add(value)
-                            | None -> pending.Push(item.Value)
-                        else pending.Push(item.Value)
+                    let repeatedKey =
+                        mapping.Children
+                        |> Seq.map (fun item -> scalar item.Key)
+                        |> Seq.countBy id
+                        |> Seq.exists (fun (_, count) -> count > 1)
+                    if repeatedKey then
+                        diagnostic <- Some { Code = "yaml-invalid"; Path = path; Message = "workflow contains duplicate mapping keys" }
+                    else
+                        for item in mapping.Children |> Seq.toArray |> Array.rev do
+                            if scalar item.Key = Some "run" then
+                                match scalar item.Value with
+                                | Some value -> runs.Add(value)
+                                | None -> pending.Push(item.Value)
+                            else pending.Push(item.Value)
                 | :? YamlSequenceNode as sequence ->
                     for child in sequence.Children |> Seq.toArray |> Array.rev do pending.Push(child)
                 | _ -> ()

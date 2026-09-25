@@ -35,6 +35,11 @@ module WorkflowSyntaxTests =
         Assert.Equal(Sequence ["src/**"; "!src/private/**"], value.PullRequest.Paths)
 
     [<Fact>]
+    let ``multiline quoted path remains one scalar`` () =
+        let value = parsed "on:\n  push:\n    paths:\n      - \"src/\n         **\"\n"
+        Assert.Equal(Sequence ["src/ **"], value.Push.Paths)
+
+    [<Fact>]
     let ``block scalar marker stays run data`` () =
         let yaml = "on: [push, pull_request]\njobs:\n  test:\n    steps:\n      - run: |\n          # paths-coherence: allow-divergence — inert shell text\n"
         let value = parsed yaml
@@ -48,6 +53,14 @@ module WorkflowSyntaxTests =
     [<Fact>]
     let ``duplicate keys refuse`` () =
         refused "yaml-invalid" "on:\n  push: null\n  push: null\n"
+
+    [<Fact>]
+    let ``duplicate on key with explicit string tag refuses`` () =
+        refused "yaml-invalid" "on: push\n!!str on: pull_request\n"
+
+    [<Fact>]
+    let ``duplicate event key with explicit string tag refuses`` () =
+        refused "yaml-invalid" "on:\n  push: null\n  !!str push: {paths: ['src/**']}\n"
 
     [<Fact>]
     let ``non scalar path pattern is kept invalid`` () =
@@ -71,6 +84,18 @@ module WorkflowSyntaxTests =
     [<Fact>]
     let ``explicit string null is not a null event`` () =
         refused "event-shape" "on: {push: !!str null}\n"
+
+    [<Fact>]
+    let ``invalid explicitly tagged null event is not inferred as null`` () =
+        refused "event-shape" "on: {push: !!int null}\n"
+
+    [<Fact>]
+    let ``invalid explicitly tagged event name is not inferred as push`` () =
+        refused "on-shape" "on: {!!int push: null}\n"
+
+    [<Fact>]
+    let ``invalid explicitly tagged scalar event is not inferred as push`` () =
+        refused "on-shape" "on: !!int push\n"
 
     [<Fact>]
     let ``self-referential alias refuses without a process crash`` () =
