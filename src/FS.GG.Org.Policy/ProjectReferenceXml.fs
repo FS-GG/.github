@@ -348,8 +348,21 @@ module ProjectReferenceXml =
         | Ok membership ->
             inspectSuppliedPinnedGitSnapshot pin commitReader membership.TreeId treeObjects sources
 
+    let private recheckProtectedPin
+        (repository: GitHubProtectedBranchPin.ExactRepository)
+        (branchReader: GitHubProtectedBranchPin.IReadOnlyProtectedBranchReader)
+        (initialPin: GitCommitProvenance.ExactCommitPin)
+        (graph: Map<string, string list>) =
+        match GitHubProtectedBranchPin.inspectProvisionalPin repository branchReader with
+        | Error diagnostic -> Error diagnostic
+        | Ok finalPin when finalPin <> initialPin ->
+            error "github-protected-pin" "<branch>"
+                "protected main commit changed during graph observation"
+        | Ok _ -> Ok graph
+
     /// Derive the provisional exact commit pin from the observed protected main branch before
-    /// repository membership, commit bytes, tree and project bytes are checked.
+    /// repository membership, commit bytes, tree and project bytes are checked, then reobserve
+    /// the tip before returning the provisional graph.
     let inspectSuppliedProtectedBranchSnapshot
         (repository: GitHubProtectedBranchPin.ExactRepository)
         (branchReader: GitHubProtectedBranchPin.IReadOnlyProtectedBranchReader)
@@ -362,7 +375,9 @@ module ProjectReferenceXml =
         match GitHubProtectedBranchPin.inspectProvisionalPin repository branchReader with
         | Error diagnostic -> Error diagnostic
         | Ok pin ->
-            inspectSuppliedGitHubMembershipSnapshot pin membershipReader commitReader rootTreeId treeObjects sources
+            match inspectSuppliedGitHubMembershipSnapshot pin membershipReader commitReader rootTreeId treeObjects sources with
+            | Error diagnostic -> Error diagnostic
+            | Ok graph -> recheckProtectedPin repository branchReader pin graph
 
     /// Compose the provisional protected pin and commit checks with exact read-only Git object
     /// reads, then reobserve the protected tip before returning a graph. This bounds the
@@ -387,13 +402,7 @@ module ProjectReferenceXml =
                 | Ok verified ->
                     match inspectReadOnlyGitObjectSnapshot verified.TreeId objectReader with
                     | Error diagnostic -> Error diagnostic
-                    | Ok graph ->
-                        match GitHubProtectedBranchPin.inspectProvisionalPin repository branchReader with
-                        | Error diagnostic -> Error diagnostic
-                        | Ok finalPin when finalPin <> pin ->
-                            error "github-protected-pin" "<branch>"
-                                "protected main commit changed during graph observation"
-                        | Ok _ -> Ok graph
+                    | Ok graph -> recheckProtectedPin repository branchReader pin graph
 
     /// A local observation of one caller-supplied implicit file. The result does not establish
     /// nearest-file selection, import closure, source provenance, or a Rule (b) graph verdict.

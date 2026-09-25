@@ -108,6 +108,33 @@ module GitHubProtectedBranchPinTests =
         match ProjectReferenceXml.inspectSuppliedProtectedBranchSnapshot repo (reader (Ok(response branchJson))) membershipReader commitReader rootTreeId trees projects with
         | Error diagnostic -> failwithf "matching protected tip refused: %A" diagnostic
         | Ok graph -> Assert.Equal<string list>([ "src/B/B.fsproj" ], graph.["src/A/A.fsproj"])
+        let mutable tipReads = 0
+        let movingTipReader =
+            { new GitHubProtectedBranchPin.IReadOnlyProtectedBranchReader with
+                member _.ReadExact request =
+                    Assert.Equal(endpoint, request.Url)
+                    tipReads <- tipReads + 1
+                    let observed =
+                        if tipReads = 1 then branchJson
+                        else branchJson.Replace(commitId, String.replicate 40 "a")
+                    Ok(response observed) }
+        match ProjectReferenceXml.inspectSuppliedProtectedBranchSnapshot repo movingTipReader membershipReader commitReader rootTreeId trees projects with
+        | Error diagnostic ->
+            Assert.Equal("github-protected-pin", diagnostic.Code)
+            Assert.Contains("changed", diagnostic.Message)
+        | Ok graph -> failwithf "changed protected tip produced supplied graph: %A" graph
+        Assert.Equal(2, tipReads)
+        let mutable unavailableReads = 0
+        let unavailableFinalReader =
+            { new GitHubProtectedBranchPin.IReadOnlyProtectedBranchReader with
+                member _.ReadExact request =
+                    Assert.Equal(endpoint, request.Url)
+                    unavailableReads <- unavailableReads + 1
+                    if unavailableReads = 1 then Ok(response branchJson) else Error () }
+        match ProjectReferenceXml.inspectSuppliedProtectedBranchSnapshot repo unavailableFinalReader membershipReader commitReader rootTreeId trees projects with
+        | Error diagnostic -> Assert.Equal("github-protected-pin", diagnostic.Code)
+        | Ok graph -> failwithf "unavailable final tip produced supplied graph: %A" graph
+        Assert.Equal(2, unavailableReads)
         let staleTip = response (branchJson.Replace(commitId, String.replicate 40 "a"))
         match ProjectReferenceXml.inspectSuppliedProtectedBranchSnapshot repo (reader (Ok staleTip)) membershipReader commitReader rootTreeId trees projects with
         | Error diagnostic -> Assert.Equal("github-commit-membership", diagnostic.Code)
