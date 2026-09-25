@@ -31,8 +31,19 @@ missing and refuses. Explicit null, dynamic values, duplicate scopes and wrong
 App identities refuse. Requested write above an installation's read grant is
 an under-grant finding; a narrower request passes.
 
+`WorkflowPermissionSyntax.appTokenSteps` walks every ordinary job step in one
+supplied workflow and records its inspected-step count and candidate
+`actions/create-github-app-token@` requests. It refuses malformed job/step
+shapes, ambiguous or dynamic App identity inputs, duplicate or dynamic
+permission inputs, and a reusable-call job with local steps. A valid
+reusable-call job has no local steps; a step with `if: false` is still inspected.
+`AppGrantComparison.compareWorkflow` binds each observed candidate to the
+selected inventory and returns per-step verdicts. A separately custodied App
+requires its matching inventory identity; a different identity refuses. The
+scan result is evidence, not an aggregate gate verdict.
+
 This source does not fetch a callee at its pinned ref, enumerate the roster or
-App-token steps, authenticate current installation grants, or replace the live
-Python gate. Those boundaries and installed parity remain separate work. The
+workflow files from GitHub, authenticate current installation grants, or
+replace the live Python gate. Those boundaries and installed parity remain separate work. The
 independent Python fixture in
 `tests/workflow-permissions/run.sh` remains the baseline.

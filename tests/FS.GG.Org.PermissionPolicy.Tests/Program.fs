@@ -352,4 +352,84 @@ expect "wrong bound App identity blocks comparison" (Error "app-grants-identity-
     (compareAppWithFacts { bindingFacts with AppGrants = Some { appFact with InventoryId = "other-app" } }
         (Some appRequest))
 
+let scanApp text = WorkflowPermissionSyntax.appTokenSteps "authority.yml" text
+let compareScanned text =
+    AppGrantComparison.compareWorkflow bound "FS-GG/.github" "authority.yml" text
+let workflowWithApp =
+    "jobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ready\n      - uses: actions/create-github-app-token@v3\n        with:\n          permission-contents: write\n      - uses: actions/checkout@v4\n"
+
+expect "scanner inspects all steps and selects the App action"
+    (Ok { InspectedSteps = 3
+          Requests = [ { JobId = "build"; StepIndex = 2; AppIdentitySecret = None; Requested = Scopes [ "contents", "write" ] } ] })
+    (scanApp workflowWithApp)
+expect "observed App request is bound to the pinned comparator"
+    (Ok ({ InspectedSteps = 3
+           Requests = [ { JobId = "build"; StepIndex = 2; Verdict = UnderGranted [ { Scope = "contents"; Required = Write; Granted = Read } ] } ] }: AppTokenWorkflowScan))
+    (compareScanned workflowWithApp)
+expect "each candidate across jobs receives its own verdict"
+    (Ok ({ InspectedSteps = 2
+           Requests = [ { JobId = "first"; StepIndex = 1; Verdict = Satisfied }
+                        { JobId = "second"; StepIndex = 1; Verdict = UnderGranted [ { Scope = "issues"; Required = Read; Granted = NoAccess } ] } ] }: AppTokenWorkflowScan))
+    (compareScanned "jobs:\n  first:\n    steps:\n      - uses: actions/create-github-app-token@v3\n        with: { permission-contents: read }\n  second:\n    steps:\n      - uses: actions/create-github-app-token@v3\n        with: { permission-issues: read }\n")
+expect "App action with no with block is observed as no scope inputs"
+    (Ok { InspectedSteps = 1
+          Requests = [ { JobId = "build"; StepIndex = 1; AppIdentitySecret = None; Requested = Absent } ] })
+    (scanApp "jobs: { build: { steps: [ { uses: 'actions/create-github-app-token@v3' } ] } }\n")
+expect "empty with block is distinct from missing extraction"
+    (Ok ({ InspectedSteps = 1
+           Requests = [ { JobId = "build"; StepIndex = 1; Verdict = Satisfied } ] }: AppTokenWorkflowScan))
+    (compareScanned "jobs: { build: { steps: [ { uses: 'actions/create-github-app-token@v3', with: {} } ] } }\n")
+expect "dead conditional App action is still inspected"
+    (Ok ({ InspectedSteps = 1
+           Requests = [ { JobId = "build"; StepIndex = 1; Verdict = UnderGranted [ { Scope = "contents"; Required = Write; Granted = Read } ] } ] }: AppTokenWorkflowScan))
+    (compareScanned "jobs:\n  build:\n    steps:\n      - if: false\n        uses: actions/create-github-app-token@v3\n        with: { permission-contents: write }\n")
+expect "ordinary non-App action is counted without inventing a request"
+    (Ok ({ InspectedSteps = 1; Requests = [] }: AppTokenWorkflowScan))
+    (compareScanned "jobs: { build: { steps: [ { uses: 'actions/checkout@v4' } ] } }\n")
+expect "valid reusable-call job has no local steps to inspect"
+    (Ok { InspectedSteps = 1; Requests = [] })
+    (scanApp "jobs:\n  call:\n    uses: FS-GG/.github/.github/workflows/reuse.yml@main\n  build:\n    steps:\n      - run: echo ready\n")
+expect "secret-selected App identity stays visible to the comparator"
+    (Ok ({ InspectedSteps = 1
+           Requests = [ { JobId = "build"; StepIndex = 1; Verdict = Refused "app-identity-mismatch" } ] }: AppTokenWorkflowScan))
+    (compareScanned "jobs:\n  build:\n    steps:\n      - uses: actions/create-github-app-token@v3\n        with:\n          client-id: ${{ secrets.OTHER_APP_CLIENT_ID }}\n          permission-contents: read\n")
+syntaxRefused "duplicate App input key refuses" "yaml-invalid"
+    (scanApp "jobs:\n  build:\n    steps:\n      - uses: actions/create-github-app-token@v3\n        with:\n          permission-contents: read\n          permission-contents: write\n")
+syntaxRefused "normalized duplicate App scope refuses" "app-permission-duplicate"
+    (scanApp "jobs:\n  build:\n    steps:\n      - uses: actions/create-github-app-token@v3\n        with:\n          permission-pull-requests: read\n          permission-pull_requests: write\n")
+syntaxRefused "missing App permission input value refuses" "app-permission-null"
+    (scanApp "jobs: { build: { steps: [ { uses: 'actions/create-github-app-token@v3', with: { permission-contents: null } } ] } }\n")
+syntaxRefused "dynamic App permission input refuses" "app-permission-dynamic"
+    (scanApp "jobs:\n  build:\n    steps:\n      - uses: actions/create-github-app-token@v3\n        with:\n          permission-contents: ${{ inputs.level }}\n")
+syntaxRefused "App with input must be a mapping" "app-with-shape"
+    (scanApp "jobs: { build: { steps: [ { uses: 'actions/create-github-app-token@v3', with: null } ] } }\n")
+syntaxRefused "both App identity inputs refuse" "app-identity-ambiguous"
+    (scanApp "jobs:\n  build:\n    steps:\n      - uses: actions/create-github-app-token@v3\n        with:\n          client-id: ${{ secrets.APP_CLIENT_ID }}\n          app-id: ${{ secrets.APP_ID }}\n")
+syntaxRefused "dynamic App identity refuses" "app-identity-unsupported"
+    (scanApp "jobs:\n  build:\n    steps:\n      - uses: actions/create-github-app-token@v3\n        with:\n          client-id: ${{ env.APP_CLIENT_ID }}\n")
+syntaxRefused "App action missing ref refuses" "app-action-ref-missing"
+    (scanApp "jobs: { build: { steps: [ { uses: 'actions/create-github-app-token@' } ] } }\n")
+syntaxRefused "reusable-call job cannot hide App steps" "job-call-with-steps"
+    (scanApp "jobs:\n  call:\n    uses: FS-GG/.github/.github/workflows/reuse.yml@main\n    steps:\n      - uses: actions/create-github-app-token@v3\n")
+syntaxRefused "missing ordinary job steps refuses" "steps-missing"
+    (scanApp "jobs: { build: { runs-on: ubuntu-latest } }\n")
+syntaxRefused "empty reusable-call target refuses" "job-uses-shape"
+    (scanApp "jobs: { call: { uses: '' } }\n")
+syntaxRefused "null ordinary job steps refuse" "steps-shape"
+    (scanApp "jobs: { build: { steps: null } }\n")
+syntaxRefused "unobserved null step refuses" "step-shape"
+    (scanApp "jobs: { build: { steps: [ null, { uses: 'actions/create-github-app-token@v3' } ] } }\n")
+syntaxRefused "step with uses and run refuses" "step-uses-run"
+    (scanApp "jobs: { build: { steps: [ { uses: 'actions/create-github-app-token@v3', run: echo skipped } ] } }\n")
+syntaxRefused "non-string uses step refuses" "step-uses-shape"
+    (scanApp "jobs: { build: { steps: [ { uses: null } ] } }\n")
+syntaxRefused "empty uses step refuses" "step-uses-shape"
+    (scanApp "jobs: { build: { steps: [ { uses: '' } ] } }\n")
+syntaxRefused "empty run step refuses" "step-run-shape"
+    (scanApp "jobs: { build: { steps: [ { run: '' } ] } }\n")
+syntaxRefused "empty job map refuses" "jobs-empty"
+    (scanApp "jobs: {}\n")
+syntaxRefused "wrong authority workflow repository refuses comparison" "app-workflow-repository-mismatch"
+    (AppGrantComparison.compareWorkflow bound "FS-GG/Other" "authority.yml" workflowWithApp)
+
 printfn "permission reducer: %d controls passed" passed
