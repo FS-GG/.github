@@ -1676,6 +1676,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   observation bound to exact selection bytes, digest, reviewer, actor and approval time. Its
   49 isolated controls pass locally, but the observer has no protected implementation and every
   fixture remains non-authorizing.
+  [Review-coordinate draft #570](https://github.com/FS-GG/FS.GG.Coordination/pull/570)
+  repairs two source-only false greens: a review event without its own origin coordinates, and
+  a review timestamp preceding installed-control observation. Its 51 isolated controls pass;
+  no protected observer or installed inspect-only release exists.
   The #550 staged exact-copy loopback
   harness exercises corrected classifier, HTTP and durable-fence paths, but an independent boundary
   review found it insufficient for the installed provider/credential path and corrected native-effect clause. Qualify the corrected
@@ -1763,6 +1767,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   separate current native decision readback at signer and release, bound to exact workflow,
   candidate, run/attempt/nonce, target, signer and policy facts. The real durable authority,
   authenticated adapter, ACLs and live pins have not been installed.
+  [Admission-freshness draft #3724](https://github.com/FS-GG/.github/pull/3724) repairs
+  stale-decision false greens at signer and release by requiring canonical UTC issuance,
+  expiry and a maximum ten-minute lifetime. Its 90 local controls pass; the fake port cannot
+  prove protected authority, clock or durable storage. One-use claim identity per admission
+  decision remains unresolved because the current source keys by signed token binding digest.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
