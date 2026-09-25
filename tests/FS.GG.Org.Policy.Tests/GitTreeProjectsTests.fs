@@ -338,6 +338,29 @@ module GitTreeProjectsTests =
         | Ok roster -> Assert.Equal(".github:foo/A.fsproj", fst roster.Head)
 
     [<Fact>]
+    let ``Git ignored Unicode inside dotgit name cannot certify a project roster`` () =
+        // Fixed raw trees from git hash-object --literally; git fsck --strict reports hasDotgit.
+        [ objectRow "ea0aba6891bfb63bbbd2330e0b5875e401d8c674"
+              "NDAwMDAgLmdpdOKAjACc41uNK5clEiNIWKIvkXjch4zKhA=="
+          objectRow "3dc2ca2b379ac4c15ba7ea70f6c1a4782e3742e0"
+              "NDAwMDAgLmfigIxpdACc41uNK5clEiNIWKIvkXjch4zKhA=="
+          objectRow "f77ab4f26a719cff99b0a03bad2ab55f3a186b02"
+              "NDAwMDAgLmdpdOKAjQCc41uNK5clEiNIWKIvkXjch4zKhA=="
+          objectRow "2b8c0f8d6990a3f3838995f3fba6aed6a4d53d13"
+              "NDAwMDAgLmdpdOKAjgCc41uNK5clEiNIWKIvkXjch4zKhA=="
+          objectRow "c2345bb12dd7c3a1bdc2980cee238073a05fe069"
+              "NDAwMDAgLmdpdO+7vwCc41uNK5clEiNIWKIvkXjch4zKhA==" ]
+        |> List.iter (fun reserved -> refused "reserved .git" (fst reserved) [ reserved; edgeA ])
+
+        // Git fsck does not classify U+200B as this alias; keep the predicate specific.
+        let other =
+            objectRow "8e0dfbf1b5993b85e3ef1111932d9f51300da21b"
+                "NDAwMDAgLmdpdOKAiwCc41uNK5clEiNIWKIvkXjch4zKhA=="
+        match GitTreeProjects.inspectSha1 (fst other) [ other; edgeA ] with
+        | Error diagnostic -> failwithf "unrelated Unicode name refused: %A" diagnostic
+        | Ok roster -> Assert.Equal(".git\u200b/A.fsproj", fst roster.Head)
+
+    [<Fact>]
     let ``Git tree object entries must retain canonical byte and directory order`` () =
         // git hash-object --literally fixed these objects; git fsck --strict reports treeNotSorted.
         [ objectRow "6eab66dbdf50063bb5d919ae4202e7a0bea9a4d5"

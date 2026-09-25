@@ -77,11 +77,15 @@ module GitTreeProjects =
                         let mode = Encoding.ASCII.GetString(bytes, offset, space - offset)
                         try
                             let name = strictUtf8.GetString(bytes, space + 1, nul - space - 1)
-                            let normalizedName = name.TrimEnd([| ' '; '.' |])
-                            let streamSeparator = name.IndexOf(':')
+                            // These observed HFS-ignored code points can conceal a .git tree name.
+                            let aliasName =
+                                name.Replace("\u200c", "").Replace("\u200d", "")
+                                    .Replace("\u200e", "").Replace("\ufeff", "")
+                            let normalizedName = aliasName.TrimEnd([| ' '; '.' |])
+                            let streamSeparator = aliasName.IndexOf(':')
                             let streamBase =
                                 if streamSeparator < 0 then normalizedName
-                                else name.Substring(0, streamSeparator).TrimEnd([| ' '; '.' |])
+                                else aliasName.Substring(0, streamSeparator).TrimEnd([| ' '; '.' |])
                             if mode.StartsWith("0", StringComparison.Ordinal) then
                                 error path "zero-padded tree entry mode"
                             elif String.IsNullOrWhiteSpace name
