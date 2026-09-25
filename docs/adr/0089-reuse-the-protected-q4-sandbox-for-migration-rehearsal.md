@@ -30,6 +30,15 @@ requirements remain: complete discovery, exact manifest, interruption and recove
 rerun, independent omission controls, and provider readback. The existing Q4 run proves that the route is
 available; it is not a GS2-09.7 receipt.
 
+On 2026-09-25 the sandbox environment was restricted to exact deployment branch `main` (environment
+`20974131908`, sole custom policy `60973171`). Fresh [Q4 run 36090885744](https://github.com/FS-GG/.github/actions/runs/36090885744)
+passed under that policy against Coordination `eabd2760d60c5e74e08a492daf946f0efd542b55`, with
+`cleanup.disposition=complete` and `residualCount=0`. This is installed sandbox-custody evidence, not a
+migration acceptance receipt. The App secret remains at its existing organization scope; the environment
+policy governs jobs that reference it and is not a claim of exclusive secret custody.
+The [feature-branch dispatch 36091479649](https://github.com/FS-GG/.github/actions/runs/36091479649)
+was rejected by the environment branch rule before any job step ran.
+
 ## Consequences
 
 The App's organization Projects write grant reaches beyond Project 2, so the workflow and interpreter must

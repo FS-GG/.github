@@ -769,6 +769,11 @@ run nonce. The existing [Q4 workflow](../../.github/workflows/github-substrate-v
 and [GS2-04.9 acceptance](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-04.9.json)
 establish this credential-owning route; each migration run must recheck the live identities and grants.
 The current workflow runs GS2-04.9 only; it does not yet run a migration rehearsal.
+The sandbox environment admits only exact branch `main` under its custom deployment policy. Its
+2026-09-25 provider readback bound environment `20974131908` to sole branch policy `60973171`;
+[Q4 run 36090885744](https://github.com/FS-GG/.github/actions/runs/36090885744) then passed from
+`main` with complete cleanup and zero residue. This policy gates jobs that reference the environment;
+it does not by itself relocate the existing organization App secret into that environment.
 
 The GS2-09.7 workflow extension must seed a bounded representative fixture from the frozen migration
 corpus into that sandbox repository and Project, record the prestate and complete item/field census, execute

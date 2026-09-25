@@ -1,0 +1,78 @@
+name: GitHub substrate v2 sandbox mint proof
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-substrate-v2-registered-sandbox
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  prove:
+    name: gs2-09-7-sandbox-mint-proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: github-substrate-v2-sandbox
+    env:
+      FSGG_SANDBOX_EVIDENCE_DIR: /tmp/fsgg-${{ github.run_id }}-${{ github.run_attempt }}-mint-proof
+    steps:
+      - name: Check out the protected workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Bind the protected revision
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test '${{ github.ref }}' = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Exercise secret-free mint grant controls
+        run: python3 tests/gs2-09-7-mint-proof/run.py
+
+      - name: Mint and attest the exact sandbox App grant
+        id: mint
+        env:
+          FSGG_DISPATCH_APP_ID: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          FSGG_DISPATCH_APP_PRIVATE_KEY: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+        run: python3 scripts/gs2-09-7-mint-sandbox-token.py
+
+      - name: Revoke the scoped token
+        id: revoke
+        if: ${{ always() && steps.mint.outputs.token != '' }}
+        env:
+          GH_TOKEN: ${{ steps.mint.outputs.token }}
+        run: gh api --method DELETE installation/token
+
+      - name: Retain the sanitized provider grant proof
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: gs2-09-7-sandbox-mint-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.FSGG_SANDBOX_EVIDENCE_DIR }}/mint-grants.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Verify the exact token proof and revocation
+        if: ${{ always() }}
+        env:
+          FSGG_SANDBOX_TOKEN: ${{ steps.mint.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test '${{ steps.mint.outcome }}' = success
+          test '${{ steps.revoke.outcome }}' = success
+          proof="$FSGG_SANDBOX_EVIDENCE_DIR/mint-grants.json"
+          test -s "$proof"
+          fingerprint="$(printf '%s' "$FSGG_SANDBOX_TOKEN" | sha256sum | cut -d' ' -f1)"
+          test "$fingerprint" = "$(jq -r .tokenSha256 "$proof")"
+          test "$(jq -r .repository.nodeId "$proof")" = R_kgDOUKXpqQ
+          test "$(jq -r .permissions.issues "$proof")" = write
+          test "$(jq -r .permissions.organization_projects "$proof")" = write
