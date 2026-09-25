@@ -70,3 +70,12 @@ module ProjectReferenceXmlTests =
     let ``unresolved or escaping Include refuses`` includePath =
         let xml = "<Project><ProjectReference Include='" + includePath + "' /></Project>"
         refused "project-reference" "src/A/A.fsproj" xml
+
+    [<Theory>]
+    [<InlineData("../B/B.fsproj;../C/C.fsproj")>]
+    [<InlineData("../B/*.fsproj")>]
+    [<InlineData("../B/B?.fsproj")>]
+    [<InlineData("../B/B%3BC.fsproj")>]
+    let ``MSBuild item expansion syntax cannot become one fabricated graph edge`` includePath =
+        let xml = "<Project><ProjectReference Include='" + includePath + "' /></Project>"
+        refused "project-reference" "src/A/A.fsproj" xml

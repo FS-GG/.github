@@ -25,7 +25,10 @@ module ProjectReferenceXml =
         if String.IsNullOrWhiteSpace relative
            || relative.StartsWith("/", StringComparison.Ordinal)
            || Regex.IsMatch(relative, "^[A-Za-z]:", RegexOptions.CultureInvariant)
-           || [ "$("; "%("; "@(" ] |> List.exists (relative.Contains) then
+           // MSBuild expands item lists, globs, and %-escaped characters. One literal graph edge
+           // for any of these would invent a path and could hide a real dependency.
+           || relative.IndexOfAny([| ';'; '*'; '?'; '%' |]) >= 0
+           || ([ "$("; "%("; "@(" ] |> List.exists (relative.Contains)) then
             None
         else
             let parts = ResizeArray<string>(projectPath.Split('/'))
