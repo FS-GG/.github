@@ -33,8 +33,13 @@ module RuleA =
             if visited.Add(node) then
                 match node with
                 | :? YamlScalarNode as scalar when scalar.Style = YamlDotNet.Core.ScalarStyle.Literal || scalar.Style = YamlDotNet.Core.ScalarStyle.Folded ->
-                    // Mark lines are one-based; End is the first line after the block scalar.
+                    // Mark lines are one-based; End is the first line after a block scalar.
                     for line in int scalar.Start.Line - 1 .. int scalar.End.Line - 2 do covered.Add(line) |> ignore
+                | :? YamlScalarNode as scalar when scalar.Start.Line < scalar.End.Line ->
+                    // A quoted (or multiline plain) scalar can contain a line that starts
+                    // with '#'. It is still data, not a standalone YAML comment. Here End
+                    // is on the closing scalar line, so include that line as well.
+                    for line in int scalar.Start.Line - 1 .. int scalar.End.Line - 1 do covered.Add(line) |> ignore
                 | :? YamlMappingNode as mapping ->
                     for pair in mapping.Children do
                         pending.Push(pair.Key)

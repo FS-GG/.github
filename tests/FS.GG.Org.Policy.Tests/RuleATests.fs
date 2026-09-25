@@ -92,6 +92,21 @@ module RuleATests =
         finding yaml
 
     [<Fact>]
+    let ``marker inside multiline quoted run scalar is inert`` () =
+        let yaml = "on: {pull_request: {paths: [a/**]}, push: {paths: [b/**]}}\njobs:\n  x:\n    steps:\n      - run: \"echo hello\n          # paths-coherence: allow-divergence — shell text\"\n"
+        finding yaml
+
+    [<Fact>]
+    let ``marker inside multiline single quoted run scalar is inert`` () =
+        let yaml = "on: {pull_request: {paths: [a/**]}, push: {paths: [b/**]}}\njobs:\n  x:\n    steps:\n      - run: 'echo hello\n          # paths-coherence: allow-divergence — shell text'\n"
+        finding yaml
+
+    [<Fact>]
+    let ``real comment after multiline quoted run scalar can sign`` () =
+        let yaml = "on: {pull_request: {paths: [a/**]}, push: {paths: [b/**]}}\njobs:\n  x:\n    steps:\n      - run: \"echo hello\n          # shell text\"\n# paths-coherence: allow-divergence — real YAML comment\n"
+        agreement true yaml
+
+    [<Fact>]
     let ``an indented YAML comment can sign a split`` () =
         agreement true "on:\n  pull_request: null\n  push:\n    # paths-coherence: allow-divergence — intentional\n    paths: [a/**]\n"
 
