@@ -163,6 +163,7 @@ type NativeTokenCounters = {
 }
 
 type NativePrimaryRate = {
+    AccountScopeId: string
     LimitId: string
     WindowMinutes: int
     UsedPercent: decimal
@@ -413,7 +414,8 @@ module ProgressRenderer =
                          && decimal c.InputTokens + decimal c.OutputTokens = decimal c.TotalTokens)
                     "native token_count components disagree"
                 event.PrimaryRate |> Option.iter (fun rate ->
-                    require (nonblank rate.LimitId && rate.WindowMinutes = 10080
+                    require (nonblank rate.AccountScopeId && nonblank rate.LimitId
+                             && rate.WindowMinutes = 10080
                              && rate.UsedPercent >= 0M && rate.UsedPercent <= 100M
                              && utc rate.ResetsAt && rate.ResetsAt > event.ObservedAt)
                         "native primary weekly rate limit is invalid")
@@ -473,14 +475,15 @@ module ProgressRenderer =
                 | None -> NoRateSlope
                 | Some current when current.Rate.UsedPercent >= 100M -> AlreadyAtLimit
                 | Some current ->
-                    let prior =
+                    let earliest =
                         ratePoints
                         |> List.filter (fun point ->
-                            point.Rate.LimitId = current.Rate.LimitId
+                            point.Rate.AccountScopeId = current.Rate.AccountScopeId
+                            && point.Rate.LimitId = current.Rate.LimitId
                             && point.Rate.ResetsAt = current.Rate.ResetsAt
                             && point.ObservedAt <= current.ObservedAt - TimeSpan.FromMinutes 10.0)
-                        |> List.tryLast
-                    match prior with
+                        |> List.tryHead
+                    match earliest with
                     | None -> NoRateSlope
                     | Some before ->
                         let rise = current.Rate.UsedPercent - before.Rate.UsedPercent
@@ -823,12 +826,12 @@ module ProgressRenderer =
                     | Some point ->
                         let used = decimalText point.Rate.UsedPercent + "%"
                         let remaining = decimalText (100M - point.Rate.UsedPercent) + "%"
-                        $"🔵 Completed/Info — used={used}, remaining={remaining}; observed={timeText point.ObservedAt}; reset={timeText point.Rate.ResetsAt}; limit={escape point.Rate.LimitId}; session={escape point.SessionId}; ordinal={point.Ordinal}; provenance={escape point.EvidenceId}"
+                        $"🔵 Completed/Info — used={used}, remaining={remaining}; observed={timeText point.ObservedAt}; reset={timeText point.Rate.ResetsAt}; account scope={escape point.Rate.AccountScopeId}; limit={escape point.Rate.LimitId}; session={escape point.SessionId}; ordinal={point.Ordinal}; provenance={escape point.EvidenceId}"
                 let estimateText =
                     match summary.Exhaustion with
-                    | NoRateSlope -> "🔘 Unknown — need two same-reset weekly percent observations at least 10 minutes apart"
-                    | EstimatedAt instant -> $"🟡 Pending — approximately {timeText instant} at the observed weekly percent slope"
-                    | NotBeforeReset -> "🔵 Completed/Info — observed weekly percent slope projects no exhaustion before reset"
+                    | NoRateSlope -> "🔘 Unknown — need a positive earliest-to-latest same-account, same-reset weekly percent slope across this root session"
+                    | EstimatedAt instant -> $"🟡 Pending — approximately {timeText instant} at the continuous-use, account-wide weekly percent slope"
+                    | NotBeforeReset -> "🔵 Completed/Info — continuous-use, account-wide weekly percent slope projects no exhaustion before reset"
                     | AlreadyAtLimit -> "🔴 Failed/Unsafe — native weekly used percent reached 100%"
                 periodsText, totalText, meanText, rateText, estimateText
         [
