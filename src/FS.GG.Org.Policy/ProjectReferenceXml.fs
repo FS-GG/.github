@@ -13,6 +13,10 @@ module ProjectReferenceXml =
     let private error code path message =
         Error { Code = code; Path = path; Message = message }
 
+    let private isProjectReference (element: XElement) =
+        // MSBuild item names are case-insensitive; XML structural names retain their case.
+        String.Equals(element.Name.LocalName, "ProjectReference", StringComparison.OrdinalIgnoreCase)
+
     let private normalized (path: string) =
         not (String.IsNullOrWhiteSpace path)
         && not (path.StartsWith("/", StringComparison.Ordinal))
@@ -70,11 +74,11 @@ module ProjectReferenceXml =
                 let targetReference =
                     document.Descendants()
                     |> Seq.exists (fun element ->
-                        element.Name.LocalName = "ProjectReference" && inTarget element)
+                        isProjectReference element && inTarget element)
                 let removedReference =
                     document.Descendants()
                     |> Seq.exists (fun element ->
-                        element.Name.LocalName = "ProjectReference"
+                        isProjectReference element
                         && not (isNull (element.Attribute(XName.Get("Remove")))))
                 let outputItemNames =
                     document.Descendants()
@@ -108,7 +112,7 @@ module ProjectReferenceXml =
                     let references = ResizeArray<string>()
                     let mutable invalid = None
                     for element in document.Descendants() do
-                        if element.Name.LocalName = "ProjectReference" && invalid.IsNone then
+                        if isProjectReference element && invalid.IsNone then
                             let includeAttribute = element.Attribute(XName.Get("Include"))
                             if not (isNull includeAttribute) then
                                 match resolve projectPath includeAttribute.Value with
@@ -149,7 +153,7 @@ module ProjectReferenceXml =
                     error "implicit-source-xml" sourcePath "implicit source XML root must be Project"
                 elif document.Descendants()
                      |> Seq.exists (fun element ->
-                         String.Equals(element.Name.LocalName, "ProjectReference", StringComparison.OrdinalIgnoreCase)) then
+                         isProjectReference element) then
                     error "implicit-project-reference" sourcePath "supplied implicit XML contains ProjectReference"
                 elif document.Descendants()
                      |> Seq.exists (fun element -> element.Name.LocalName = "Import") then

@@ -75,6 +75,36 @@ module ProjectReferenceXmlTests =
         Assert.Equal<string list>([ "src/B/B.fsproj" ], parsed "src/A/A.fsproj" xml)
 
     [<Theory>]
+    [<InlineData("projectreference")>]
+    [<InlineData("PROJECTREFERENCE")>]
+    let ``case-varied ProjectReference Include remains a Rule B edge`` itemName =
+        let xml = "<Project><ItemGroup><" + itemName
+                  + " Include='../B/B.fsproj' /></ItemGroup></Project>"
+        let references = parsed "src/A/A.fsproj" xml
+        Assert.Equal<string list>([ "src/B/B.fsproj" ], references)
+        let graph = Map.empty.Add("src/A/A.fsproj", references)
+        match RuleB.inspect [ "src/A/**" ] graph with
+        | Error diagnostic -> failwithf "unexpected coverage refusal: %A" diagnostic
+        | Ok coverage ->
+            Assert.Equal<(string * string) list>(
+                [ "src/A/A.fsproj", "src/B/B.fsproj" ], coverage.Uncovered)
+
+    [<Fact>]
+    let ``case-varied ProjectReference Remove cannot yield a stale edge`` () =
+        let xml =
+            "<Project><ItemGroup><ProjectReference Include='../B/B.fsproj' />"
+            + "<projectreference Remove='../B/B.fsproj' /></ItemGroup></Project>"
+        refused "project-reference" "src/A/A.fsproj" xml
+
+    [<Fact>]
+    let ``case-varied target-time ProjectReference requires evaluation`` () =
+        let xml =
+            "<Project><Target Name='Inject'><ItemGroup>"
+            + "<projectreference Include='../B/B.fsproj' />"
+            + "</ItemGroup></Target></Project>"
+        refused "project-reference" "src/A/A.fsproj" xml
+
+    [<Theory>]
     [<InlineData("Directory.Build.props")>]
     [<InlineData("src/A/Directory.Build.targets")>]
     let ``supplied implicit XML with direct reference refuses local observation`` sourcePath =
