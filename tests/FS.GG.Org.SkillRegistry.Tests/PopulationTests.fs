@@ -26,6 +26,10 @@ module PopulationTests =
         has "roster-unreadable" { Rostered = Error "missing file"; Checkouts = []; Rows = [] }
 
     [<Fact>]
+    let ``readable empty roster cannot qualify an empty population`` () =
+        has "roster-empty" { Rostered = Ok []; Checkouts = []; Rows = [] }
+
+    [<Fact>]
     let ``named producer with no checkout refuses`` () =
         has "manifest-unreachable" { good with Checkouts = [] }
 
