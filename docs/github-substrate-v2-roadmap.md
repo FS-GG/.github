@@ -1685,6 +1685,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   requires listed PR state, draft, title and body to be present and agree with detail before
   classifying a lost-response pull as exact; 29 focused offline controls pass. These stacked
   source drafts do not supply installed-provider custody or protected one-POST authority.
+  [Selected-ref draft #581](https://github.com/FS-GG/FS.GG.Coordination/pull/581)
+  closes a lost-response tag-object false green by requiring the selected ref URL, commit
+  object type and selected-repository commit URL; 30 focused offline controls pass. Its
+  protected installed-provider and native-effect hold is unchanged.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
@@ -1859,6 +1863,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   [Recovery-observer draft #3732](https://github.com/FS-GG/.github/pull/3732)
   repairs a duplicate native revoke after restart by observing the first revoke before any
   retry; 107 focused local controls pass. Installed recovery and native readback remain open.
+  [Native-attempt draft #3734](https://github.com/FS-GG/.github/pull/3734)
+  closes a second revoke after an ambiguous finalizer attempt with a protected shared attempt
+  claim and exact readback in 115 local controls. The shared CAS authority, complete mint
+  census, scheduler and crash-resolution policy remain uninstalled.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
