@@ -885,6 +885,19 @@ count, repeated-copy peak memory, ABA and cross-root atomicity remain open.
 at `245e0ffbe955557cc63952ad74d2b4624846d5ea` applies a 255 UTF-8-byte
 per-segment bound to all ZIP member names (64 payload, 29 archive controls);
 full closure and producer/served-byte/receiver custody remain held.
+[Coordination GS2-09.9 #690](https://github.com/FS-GG/FS.GG.Coordination/pull/690)
+at `2ef694b69a7128b112dd4868fb901db4079c75c1` copies the selected
+identity event before a scope callback can change the closed producer result
+(34 fake-port tests); protected actor/source custody and #545/#550 remain held.
+[Coordination GS2-09.7 #689](https://github.com/FS-GG/FS.GG.Coordination/pull/689)
+at `79048c55f2c32584665da27b0b49d2959ea8b3cf` refuses duplicate raw
+inline review-comment fields (138 focused tests); initial census, full typed
+inspect, protected journal/custom receipts and Q5/Q6 remain open.
+[`.github` FSC-03 F# #3793](https://github.com/FS-GG/.github/pull/3793)
+at `54225a2bc4dde89b97f15f6ac4c0d3ac3efe05e9` matches the Python
+`DirectoryBuildTargetsPath` override refusal for project and supplied
+implicit XML (147 tests); nearest provenance, Import closure, evaluated graph
+and installed receiver parity remain held.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
