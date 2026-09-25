@@ -28,6 +28,8 @@ module Board =
             Fields: Map<string, Field>
         }
 
+    type ExactProject = { Owner: string; Number: int; Title: string; Id: string }
+
     type BlockedByObservation =
         {
             Value: string option
@@ -72,6 +74,10 @@ module Board =
     [<Literal>]
     let private FieldsDoc =
         "query($owner: String!, $number: Int!) { organization(login: $owner) { projectV2(number: $number) { fields(first: 50) { totalCount nodes { ... on ProjectV2FieldCommon { id name dataType } ... on ProjectV2SingleSelectField { id name dataType options { id name } } } } } } rateLimit { cost remaining } }"
+
+    [<Literal>]
+    let private ExactProjectDoc =
+        "query($owner: String!, $number: Int!) { organization(login: $owner) { login projectV2(number: $number) { id number title fields(first: 50) { totalCount nodes { ... on ProjectV2FieldCommon { id name dataType } ... on ProjectV2SingleSelectField { id name dataType options { id name } } } } } } rateLimit { cost remaining } }"
 
     // `FieldsDoc`'s own window, as the guard must see it — the two MUST agree, and
     // `.github#2535 the connection windows in the documents agree with the guards` pins them together.
@@ -273,6 +279,77 @@ module Board =
                                         Title = title
                                         Fields = fields
                                     }
+
+    let bootstrapExactProject (transport: IGitHubTransport) (expected: ExactProject) : IoResult<BoardMap> =
+        let subject = $"the exact project %s{expected.Owner}/%d{expected.Number}"
+
+        if String.IsNullOrWhiteSpace expected.Owner
+           || String.IsNullOrWhiteSpace expected.Title
+           || String.IsNullOrWhiteSpace expected.Id
+           || expected.Number <= 0 then
+            Error(Malformed(subject, "the pinned project identity is incomplete"))
+        else
+            GraphQl.read
+                transport
+                (query
+                    ExactProjectDoc
+                    [ "owner", VString expected.Owner; "number", VNumber(double expected.Number) ]
+                    subject)
+                (fun data ->
+                    let readString (node: JsonElement) (name: string) =
+                        match node.TryGetProperty name with
+                        | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
+                        | _ -> None
+
+                    match data.TryGetProperty "organization" with
+                    | true, org when org.ValueKind = JsonValueKind.Object ->
+                        match readString org "login", org.TryGetProperty "projectV2" with
+                        | Some owner, (true, project) when project.ValueKind = JsonValueKind.Object ->
+                            let number =
+                                match project.TryGetProperty "number" with
+                                | true, value when value.ValueKind = JsonValueKind.Number ->
+                                    match value.TryGetInt32() with
+                                    | true, value -> Some value
+                                    | _ -> None
+                                | _ -> None
+
+                            match readString project "id", readString project "title", number with
+                            | Some id, Some title, Some actualNumber when
+                                String.Equals(owner, expected.Owner, StringComparison.OrdinalIgnoreCase)
+                                && id = expected.Id
+                                && title = expected.Title
+                                && actualNumber = expected.Number
+                                ->
+                                match project.TryGetProperty "fields" with
+                                | true, connection ->
+                                    match Reads.connectionComplete subject "the board's field map" FieldsWindow connection with
+                                    | Error e -> Error e
+                                    | Ok() ->
+                                        let fields =
+                                            connection.GetProperty("nodes").EnumerateArray()
+                                            |> Seq.choose (fun node ->
+                                                match readString node "name", readString node "id", readString node "dataType" with
+                                                | Some name, Some fieldId, Some dataType ->
+                                                    fieldTypeOf dataType node
+                                                    |> Option.map (fun fieldType -> name, { Id = fieldId; Type = fieldType })
+                                                | _ -> None)
+                                            |> Map.ofSeq
+
+                                        if Map.isEmpty fields then
+                                            Error(Malformed(subject, "the exact project has no readable fields"))
+                                        else
+                                            Ok
+                                                {
+                                                    Number = actualNumber
+                                                    Id = id
+                                                    Owner = owner
+                                                    Title = title
+                                                    Fields = fields
+                                                }
+                                | _ -> Error(Malformed(subject, "the exact project's field map is missing"))
+                            | _ -> Error(Malformed(subject, "the direct project response does not match the pinned owner, number, title and id"))
+                        | _ -> Error(Malformed(subject, "the direct project response has no readable organization or project"))
+                    | _ -> Error(Malformed(subject, "the direct project response has no readable organization")))
 
     // ---- the board map, serialised (#418) ----------------------------------------------------------
 

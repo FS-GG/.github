@@ -1309,6 +1309,76 @@ let private capturing (docs: System.Collections.Generic.List<string>) (responses
         else
             queue.Dequeue())
 
+let private projectOne =
+    { Owner = "FS-GG"; Number = 1; Title = "Coordination"; Id = "PVT_kwDOEYAWY84Bb08W" }
+
+let private exactProjectResponse owner number title id =
+    $"""{{"data":{{"organization":{{"login":"{owner}","projectV2":{{"id":"{id}","number":{number},"title":"{title}","fields":{{"totalCount":1,"nodes":[{{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{{"id":"opt_ready","name":"Ready"}}]}}]}}}}}}}}}}"""
+
+[<Fact>]
+let ``direct Project 1 bootstrap uses no all-project enumeration and binds exact identity`` () =
+    let docs = System.Collections.Generic.List<string>()
+    let transport = capturing docs [ ok (exactProjectResponse "FS-GG" 1 "Coordination" projectOne.Id) ]
+
+    match bootstrapExactProject transport projectOne with
+    | Ok resolved ->
+        Assert.Equal(projectOne.Id, resolved.Id)
+        Assert.Equal(projectOne.Number, resolved.Number)
+        Assert.Equal(projectOne.Owner, resolved.Owner)
+        Assert.Equal(projectOne.Title, resolved.Title)
+        Assert.True(resolved.Fields.ContainsKey "Status")
+        Assert.Single(docs) |> ignore
+        Assert.Contains("projectV2(number: $number)", docs.[0])
+        Assert.DoesNotContain("projectsV2(", docs.[0])
+    | other -> failwith $"the exact Project 1 response must resolve — got %A{other}"
+
+[<Theory>]
+[<InlineData("FS-GG", 2, "Coordination", "PVT_kwDOEYAWY84Bb08W")>]
+[<InlineData("FS-GG", 1, "Other", "PVT_kwDOEYAWY84Bb08W")>]
+[<InlineData("FS-GG", 1, "Coordination", "PVT_foreign")>]
+[<InlineData("Other", 1, "Coordination", "PVT_kwDOEYAWY84Bb08W")>]
+let ``direct Project 1 bootstrap refuses foreign owner number title or id`` owner number title id =
+    let transport = serving (exactProjectResponse owner number title id)
+
+    match bootstrapExactProject transport projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"a foreign exact-project identity must refuse — got %A{other}"
+
+[<Fact>]
+let ``direct Project 1 bootstrap refuses missing project and partial field map`` () =
+    let missing = serving """{"data":{"organization":{"login":"FS-GG","projectV2":null}}}"""
+
+    match bootstrapExactProject missing projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"a missing direct project must refuse — got %A{other}"
+
+    let partial =
+        (exactProjectResponse "FS-GG" 1 "Coordination" projectOne.Id).Replace("\"totalCount\":1", "\"totalCount\":51")
+
+    match bootstrapExactProject (serving partial) projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"a partial direct field map must refuse — got %A{other}"
+
+[<Fact>]
+let ``direct Project 1 bootstrap refuses incomplete caller pin without transport`` () =
+    let transport = Fake.Recorder(fun _ -> failwith "an incomplete pin must not query GitHub")
+
+    match bootstrapExactProject transport { projectOne with Id = "" } with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"an incomplete caller pin must refuse before IO — got %A{other}"
+
+[<Fact>]
+let ``direct Project 1 bootstrap propagates authorization errors without enumerating projects`` () =
+    let docs = System.Collections.Generic.List<string>()
+    let denied = """{"errors":[{"type":"FORBIDDEN","message":"Resource not accessible"}],"data":{"organization":null}}"""
+    let transport = capturing docs [ ok denied ]
+
+    match bootstrapExactProject transport projectOne with
+    | Error(GraphQlErrors _) ->
+        Assert.Single(docs) |> ignore
+        Assert.DoesNotContain("projectsV2(", docs.[0])
+    | other -> failwith $"authorization failure must remain a failure without fallback — got %A{other}"
+
 [<Fact>]
 let ``bootstrap resolves a USER-owned board through user(login:) (#1344)`` () =
     // A personal-account board answers to `user(login:)`, and both the project list and the field schema come

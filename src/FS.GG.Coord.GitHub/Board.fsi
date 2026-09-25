@@ -82,6 +82,9 @@ module Board =
             Fields: Map<string, Field>
         }
 
+    /// Pinned organization project identity supplied by the caller.
+    type ExactProject = { Owner: string; Number: int; Title: string; Id: string }
+
     /// A dependency-edge value bound to the Projects-v2 item revision that produced it.
     type BlockedByObservation =
         {
@@ -122,6 +125,11 @@ module Board =
     /// truncated map was cached for a day and every later write to a missing field failed with `no field
     /// named 'X' on this board. Known fields: …`, reciting the truncated list as if it were the board's own.
     val bootstrap: transport: IGitHubTransport -> owner: string -> title: string -> IoResult<BoardMap>
+
+    /// Dormant direct `organization.projectV2(number:)` lookup. Refuses any response whose owner,
+    /// number, title, or node id differs from the supplied pin, and refuses incomplete field maps.
+    /// This does not replace `bootstrapCached` or activate a runner path.
+    val bootstrapExactProject: transport: IGitHubTransport -> expected: ExactProject -> IoResult<BoardMap>
 
     /// The board map as JSON — the `board` command's machine contract, and the on-disk cache format. One
     /// codec serves both, so a board a human reads and a board `next` re-hydrates cannot drift.
