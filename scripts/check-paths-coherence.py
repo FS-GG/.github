@@ -517,9 +517,11 @@ def project_graph(root: str) -> dict[str, list[str]]:
             except OSError as e:
                 raise GateError(f"{rel}: unreadable — {e}") from e
             refs = []
-            for m in re.finditer(r'ProjectReference\s+[^>]*Include\s*=\s*"([^"]+)"', text):
+            # XML permits either quote delimiter around Include. Missing the single-quoted form
+            # erases an edge from the project graph and can make uncovered dependencies look safe.
+            for m in re.finditer(r"""ProjectReference\s+[^>]*Include\s*=\s*(?:"([^"]+)"|'([^']+)')""", text):
                 # MSBuild writes Windows separators; they are legal on every platform.
-                inc = m.group(1).replace("\\", "/")
+                inc = (m.group(1) or m.group(2)).replace("\\", "/")
                 target = os.path.normpath(os.path.join(os.path.dirname(path), inc))
                 refs.append(os.path.relpath(target, root).replace(os.sep, "/"))
             graph[rel] = refs
