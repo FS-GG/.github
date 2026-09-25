@@ -2024,6 +2024,12 @@ execution credential reconciliation remain unproved; no dispatch is enabled.
   nondecreasing full-record floor and two readbacks; 181 focused local controls pass.
   Protected owners must choose a separately durable rollback domain with pinned
   signer/store/floor identities, ACLs and transaction evidence before live use.
+  [Generation-checked append/claim draft #3744](https://github.com/FS-GG/.github/pull/3744)
+  carries the verified generation and floor identity into atomic batch append and
+  recovery claim, then rechecks signed head after durable readback; red-before fakes
+  exposed false success and native revoke after a head advance. 185 focused local
+  controls pass. Protected signer/store/floor installation, ACL and transaction proof,
+  #3690 admission and Q5/Q6 remain open.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
