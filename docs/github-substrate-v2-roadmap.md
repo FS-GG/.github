@@ -1095,6 +1095,11 @@ after those draft heads were recorded. A subsequent read-only same-credential
 GraphQL probe again resolved pinned Coordination Project 1 but returned
 `FORBIDDEN Resource not accessible by personal access token` for Project 2;
 the installed all-project runner remains unable to qualify an end-to-end item.
+At the 18:43 UTC read-only same-credential recheck, pinned Project 1 again
+resolved as `PVT_kwDOEYAWY84Bb08W` / Coordination while Project 2 again
+returned `FORBIDDEN Resource not accessible by personal access token`. The
+minimal installed-runner admission blocker is unchanged; this query produced
+no selected work item, native turn or applied Host receipt.
 
 At the 18:34:59 UTC rendered checkpoint, a newly checked roster and exact PR
 heads counted six active Sol/high lanes, including the reserved GS2-09.9 and
