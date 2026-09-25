@@ -1002,6 +1002,9 @@ changing the protected holds:
 | [FSC-03 F# #3802](https://github.com/FS-GG/.github/pull/3802) | `7418842a49da10f9944a2106d14e1d65a3401794` | Refuses Windows drive-prefixed paths in pure Rule B graph and project inputs; 154 policy tests. |
 | [FSC-04 #1037](https://github.com/FS-GG/FS.GG.SDD/pull/1037) | `4e2b5bf0aa760154b006197beea9281cd60c84e2` | Reserves checked first-pass file length to reduce test-thread allocation; 1,483 Commands tests, no peak-memory or atomicity proof. |
 | [FSC-05 #583](https://github.com/FS-GG/FS.GG.Templates/pull/583) | `6f65af89837b6da010a5a5983be247490de07b1f` | Refuses altered selected central/local ZIP header metadata; 82 payload/29 custody controls. |
+| [GS2-09.9 #707](https://github.com/FS-GG/FS.GG.Coordination/pull/707) | `6f7c4de6f8c892ecde9a34c392cb284834eb75ca` | Binds present branch commit URL to selected repository and SHA in both protection probes; 88 fake-port tests. |
+| [FSC-03 F# #3803](https://github.com/FS-GG/.github/pull/3803) | `9912114a5a5651ba5624486183614dac2499fff7` | Refuses surrounding whitespace in supplied ProjectReference Include that installed MSBuild trims; 158 policy tests. |
+| [FSC-05 #584](https://github.com/FS-GG/FS.GG.Templates/pull/584) | `1fa5d682b7c864948ea9c216f04a8ea5ceba4865` | Refuses matching nonzero ZIP flags in selected local/central headers; 85 payload/29 custody controls. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
@@ -1013,7 +1016,7 @@ lacks complete ZIP closure, producer/served-byte custody, #511 CAS and
 receiver proof. No draft authorizes a protected merge or cutover.
 
 [V2-PROG-01 renderer draft #3735](https://github.com/FS-GG/.github/pull/3735)
-at `98df3b385958aecc8224d69e7a9b3b762343d42a` adds a typed local JSONL
+at `e0b51d358aa3cdb08de17858d9c4373a4b1054ed` adds a typed local JSONL
 diagnostic path and a script workflow that obtains fresh authenticated
 telemetry readiness, scans the root session family, and renders the pure F#
 snapshot. Local counter, weekly allowance and projection rows explicitly say
@@ -1024,7 +1027,28 @@ scan, and the orchestrator must rebuild it from live roster/PR evidence before
 each ten-minute report. A fresh fixture rendered with unverified usage and
 pending capture; a three-minute-old fixture was refused. The local path passed
 24 focused renderer tests and a live read-only render. It remains a source-only
-draft pending owner acceptance.
+draft pending owner acceptance. Its later adapter refuses non-UTC report
+timestamps and any completion that postdates metadata verification; focused
+fresh/offset/postdated fixtures passed or refused as expected.
+
+At the 18:12:37 UTC rendered checkpoint, the source-only workflow counted six
+active Sol/high lanes (one reserved GS2-09.9 and one direct GS2-09.7), 30
+family sessions and 80 completed ten-minute periods from the 04:47:05 UTC root
+start. The latest completed 17:57:05–18:07:05 UTC period had 34,676,694
+input tokens (34,395,008 cached; 281,686 noncached), 98,119 output and
+34,774,813 total; the all-period team mean, including zero-use periods, was
+31,084,008.81 total. Local root weekly usage was 85% at 18:12:17, leaving
+15%; the same-reset earliest-to-latest percentage slope gives a conditional
+continuous-use, account-wide projection near 22:09 UTC. Counter and account
+scope remain **unverified local diagnostics**, not collector/Host capture.
+Fresh direct authenticated telemetry probes were ready/configured on
+`main-fsharp-dev`, pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false. The five completion rows referred to this roadmap's
+then-current head `932d3f0e0f96feb05979a19175127eb0bb453ad3`, committed
+after those draft heads were recorded. A subsequent read-only same-credential
+GraphQL probe again resolved pinned Coordination Project 1 but returned
+`FORBIDDEN Resource not accessible by personal access token` for Project 2;
+the installed all-project runner remains unable to qualify an end-to-end item.
 
 At the 17:51 UTC source checkpoint, the newest five completed **draft
 commits** were verified against their PR heads. Their completion is source
