@@ -122,8 +122,8 @@ module ProgressRendererTests =
                 ""
                 "- Telemetry readiness: 🟢 Active/Healthy"
                 "- Workspace: `main-fsharp-dev`"
-                "- Authenticated health observation: authenticated=True, ready=True, collector verified=True, evidence=health-receipt-1"
-                "- Configured workspace observation: configured=True, collector verified=True, evidence=workspace-status-1"
+                "- Authenticated health observation: authenticated=True, ready=True, collector verified=True, observed=2026-09-25 11:58:00 UTC, evidence=health-receipt-1"
+                "- Configured workspace observation: configured=True, collector verified=True, observed=2026-09-25 11:59:00 UTC, evidence=workspace-status-1"
                 "- Current queue: pending=0, pending unacknowledged=0, unacknowledged lossy=false"
                 "- End-to-end capture acceptance: 🟡 Pending — no end-to-end capture acceptance claimed"
                 ""
@@ -356,3 +356,35 @@ module ProgressRendererTests =
         let worker = baseline.Lanes.[1]
         refuses "active V2 worker requires explicit gpt-6-sol/high spawn evidence"
             (replaceWorker baseline { worker with Launch = Some { (explicitLaunch Gpt6Sol) with Source = ExplicitUserInstruction } })
+
+    [<Fact>]
+    let ``healthy readiness refuses stale authenticated health`` () =
+        let baseline = baseSnapshot ()
+        let health = baseline.Telemetry.HealthObservation.Value
+        let telemetry = { baseline.Telemetry with
+                            HealthObservation = Some { health with ObservedAt = at.AddMinutes(-6.0) } }
+        refuses "healthy telemetry requires fresh authenticated health observation"
+            { baseline with Telemetry = telemetry }
+
+    [<Fact>]
+    let ``healthy readiness refuses stale configured workspace status`` () =
+        let baseline = baseSnapshot ()
+        let workspace = baseline.Telemetry.WorkspaceObservation.Value
+        let telemetry = { baseline.Telemetry with
+                            WorkspaceObservation = Some { workspace with ObservedAt = at.AddMinutes(-6.0) } }
+        refuses "healthy telemetry requires fresh configured workspace observation"
+            { baseline with Telemetry = telemetry }
+
+    [<Fact>]
+    let ``five minute observation boundary is accepted without claiming capture`` () =
+        let baseline = baseSnapshot ()
+        let health = baseline.Telemetry.HealthObservation.Value
+        let workspace = baseline.Telemetry.WorkspaceObservation.Value
+        let telemetry = {
+            baseline.Telemetry with
+                HealthObservation = Some { health with ObservedAt = at.AddMinutes(-5.0) }
+                WorkspaceObservation = Some { workspace with ObservedAt = at.AddMinutes(-5.0) }
+        }
+        let markdown = render { baseline with Telemetry = telemetry }
+        Assert.Contains("- Telemetry readiness: 🟢 Active/Healthy", markdown)
+        Assert.Contains("- End-to-end capture acceptance: 🟡 Pending", markdown)

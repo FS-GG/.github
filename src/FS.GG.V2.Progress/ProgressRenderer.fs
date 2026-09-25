@@ -163,6 +163,8 @@ type DerivedProgress = {
 }
 
 module ProgressRenderer =
+    let private maxTelemetryObservationAge = TimeSpan.FromMinutes 5.0
+
     let statusText = function
         | ActiveHealthy -> "🟢 Active/Healthy"
         | Pending -> "🟡 Pending"
@@ -344,6 +346,12 @@ module ProgressRenderer =
                          && workspace.Configured && workspace.CollectorVerified
                      | _ -> false)
                 "healthy telemetry requires authenticated health and configured workspace observations"
+            telemetry.HealthObservation |> Option.iter (fun health ->
+                require (snapshot.AsOf - health.ObservedAt <= maxTelemetryObservationAge)
+                    "healthy telemetry requires fresh authenticated health observation")
+            telemetry.WorkspaceObservation |> Option.iter (fun workspace ->
+                require (snapshot.AsOf - workspace.ObservedAt <= maxTelemetryObservationAge)
+                    "healthy telemetry requires fresh configured workspace observation")
             require (telemetry.Pending = 0 && telemetry.PendingUnacknowledged = 0
                      && not telemetry.UnacknowledgedLossy)
                 "healthy telemetry readiness conflicts with queue status"
@@ -448,12 +456,12 @@ module ProgressRenderer =
         let healthText =
             snapshot.Telemetry.HealthObservation
             |> Option.map (fun value ->
-                $"authenticated={value.Authenticated}, ready={value.Ready}, collector verified={value.CollectorVerified}, evidence={escape value.EvidenceId}")
+                $"authenticated={value.Authenticated}, ready={value.Ready}, collector verified={value.CollectorVerified}, observed={timeText value.ObservedAt}, evidence={escape value.EvidenceId}")
             |> Option.defaultValue "none supplied"
         let workspaceText =
             snapshot.Telemetry.WorkspaceObservation
             |> Option.map (fun value ->
-                $"configured={value.Configured}, collector verified={value.CollectorVerified}, evidence={escape value.EvidenceId}")
+                $"configured={value.Configured}, collector verified={value.CollectorVerified}, observed={timeText value.ObservedAt}, evidence={escape value.EvidenceId}")
             |> Option.defaultValue "none supplied"
         [
             "# V2 progress update"
