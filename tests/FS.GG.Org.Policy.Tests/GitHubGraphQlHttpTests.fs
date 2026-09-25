@@ -60,7 +60,9 @@ module GitHubGraphQlHttpTests =
                 Assert.Equal("FS-GG", variables.GetProperty("owner").GetString())
                 Assert.Equal(".github", variables.GetProperty("name").GetString())
                 Assert.Equal(pin.CommitId, variables.GetProperty("commit").GetString())
-                response 200 "application/json" valid request)
+                let result = response 200 "application/json" valid request
+                result.Content.Headers.ContentType.CharSet <- "utf-8"
+                result)
         match GitHubCommitMembership.inspectProvisionalMembership pin rootTreeId reader with
         | Error diagnostic -> failwithf "exact HTTP fixture refused: %A" diagnostic
         | Ok fact -> Assert.Equal(rootTreeId, fact.TreeId)
@@ -118,6 +120,13 @@ module GitHubGraphQlHttpTests =
         refused (fun request ->
             let result = response 200 "application/json" valid request
             result.Content.Headers.ContentEncoding.Add("gzip")
+            result)
+
+    [<Fact>]
+    let ``foreign declared charset over valid membership JSON cannot bind commit`` () =
+        refused (fun request ->
+            let result = response 200 "application/json" valid request
+            result.Content.Headers.ContentType.CharSet <- "iso-8859-1"
             result)
 
     [<Fact>]

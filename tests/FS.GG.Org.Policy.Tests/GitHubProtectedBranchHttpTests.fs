@@ -50,7 +50,9 @@ module GitHubProtectedBranchHttpTests =
                 Assert.Equal("Bearer", request.Headers.Authorization.Scheme)
                 Assert.Equal("fixture_token", request.Headers.Authorization.Parameter)
                 Assert.Contains("2026-03-10", request.Headers.GetValues("X-GitHub-Api-Version"))
-                response 200 "application/json" branchJson request)
+                let result = response 200 "application/json" branchJson request
+                result.Content.Headers.ContentType.CharSet <- "utf-8"
+                result)
         match GitHubProtectedBranchPin.inspectProvisionalPin repo reader with
         | Error diagnostic -> failwithf "protected fixture refused: %A" diagnostic
         | Ok pin -> Assert.Equal("539aff7e655d22b1761850cd6be868eecc2886e4", pin.CommitId)
@@ -101,6 +103,13 @@ module GitHubProtectedBranchHttpTests =
         refused (fun request ->
             let result = response 200 "application/json" branchJson request
             result.Content.Headers.ContentEncoding.Add("gzip")
+            result)
+
+    [<Fact>]
+    let ``foreign declared charset over valid protected JSON cannot mint pin`` () =
+        refused (fun request ->
+            let result = response 200 "application/json" branchJson request
+            result.Content.Headers.ContentType.CharSet <- "iso-8859-1"
             result)
 
     [<Fact>]

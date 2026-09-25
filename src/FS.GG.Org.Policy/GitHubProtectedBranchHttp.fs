@@ -18,6 +18,11 @@ module GitHubProtectedBranchHttp =
         String.Equals(media, "application/json", StringComparison.OrdinalIgnoreCase)
         || String.Equals(media, "application/vnd.github+json", StringComparison.OrdinalIgnoreCase)
 
+    let private utf8Charset (charset: string) =
+        String.IsNullOrEmpty charset
+        || String.Equals(charset, "utf-8", StringComparison.OrdinalIgnoreCase)
+        || String.Equals(charset, "\"utf-8\"", StringComparison.OrdinalIgnoreCase)
+
     type Reader private (token: string, handler: HttpMessageHandler) =
         let client = new HttpClient(handler, true)
 
@@ -47,6 +52,7 @@ module GitHubProtectedBranchHttp =
                        || isNull response.Content.Headers.ContentType
                        || response.Content.Headers.ContentEncoding.Count <> 0
                        || not (jsonMediaType response.Content.Headers.ContentType.MediaType)
+                       || not (utf8Charset response.Content.Headers.ContentType.CharSet)
                        || (response.Content.Headers.ContentLength.HasValue
                            && response.Content.Headers.ContentLength.Value > int64 maximumBytes) then
                         Error ()
