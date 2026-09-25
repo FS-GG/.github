@@ -1026,6 +1026,7 @@ changing the protected holds:
 | [FSC-05 #588](https://github.com/FS-GG/FS.GG.Templates/pull/588) | `f3692ddbbabd11ec089826f360bc0429fc208b18` | Refuses nonzero DOS external-attribute bits even when a ZIP member has Unix regular-file mode; 97 payload/29 custody controls, selected archive NO_VERDICT. |
 | [FSC-03 F# #3808](https://github.com/FS-GG/.github/pull/3808) | `5d1c0254da01d868c3b057eeee21ff44c43df968` | Pure Rule B refuses unsupported GitHub glob `?`, `+` and `[]` operators instead of false-green coverage; 185 tests. Matching live Python repair is pending. |
 | [GS2-09.7 #717](https://github.com/FS-GG/FS.GG.Coordination/pull/717) | `f33214b088db881cc7603006ef452310e57f0af9` | Raw-to-typed issue binder refuses duplicate repository identity members in captured responses; 137 focused tests. Hosted checks queued, initial census and Q5/Q6 held. |
+| [GS2-09.9 #718](https://github.com/FS-GG/FS.GG.Coordination/pull/718) | `6d1e5d86c502a270851ed7196b018d158d7900d9` | Pure closed-candidate check compares canonical selected bytes with packet bytes, refusing Python boolean/float aliases for integer facts; 80 focused tests, candidate remains non-authorizing. Closed archive pin changed to `d665e9b66f42aa3df8b270b792d5958aec6c4bd2bd136010cd146b5e237dcd19`; #550 held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
