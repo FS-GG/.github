@@ -24,7 +24,9 @@ workflow bodies, generated receivers, and installed pins were separately
 identified. Private qualification repository identities are omitted here.
 
 The [roadmap section 1.0 source ledger](../github-substrate-v2-roadmap.md#10-qualification-strength-at-child-and-parent-boundaries)
-is the exhaustive public **exact PR/head/test/hold trail** used for this report.
+is the public **exact PR/head/test/hold trail** used for the active V2 and
+FSC-03/04/05 lanes; the convergence design links the additional product-owner
+routes.
 At this cutoff its late-session table contains **129 distinct source-PR rows**:
 31 GS2-09.9, 24 GS2-09.7, 30 FSC-03, 15 FSC-04, 14 FSC-05, and 15
 telemetry rows. Earlier session drafts and repairs appear in the linked prose
@@ -42,8 +44,8 @@ Before 04:47 UTC, the protected roadmap had already accepted GS2-00/01,
 GS2-02–07, and GS2-08.1–08.9; [V2-CI-I1](../github-substrate-v2-roadmap.md#v2-ci-i1--unattended-credential-execution-interlude)
 was qualified on 2026-09-24. Those are **baseline**, not accomplishments of
 this root session. The [GS2-08.2 accepted ledger-protection receipt](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/accepted/GS2-08.2.json)
-is likewise prior evidence. An earlier trust-anchor mismatch may still require
-its own protected reconciliation; this session neither changed keys nor
+is likewise prior evidence. The earlier trust-anchor mismatch remains
+unresolved inherited context; this session neither changed keys nor
 requalified GS2-08.2. Production authority remained **v1** throughout the
 period. No `OpenV2` transition or cutover was authorized or performed.
 
@@ -148,7 +150,8 @@ by protected identity, grant, one-attempt native effect and readback under
 store/journal/attestation custody before Q5/Q6 and any isolated rehearsal.
 Telemetry end-to-end capture remains a separate runner/Host proof. F# ports
 need accepted source repairs, exact producer artifacts, clean installed
-receivers and owner qualification before any live replacement. No protected
-merge, sandbox mutation, immutable producer publication or receiver pin,
-live gate flip, Authority write, or cutover was performed or authorized by
-this report.
+receivers and owner qualification before any live replacement. Apart from the
+separately disclosed #3690 process deviation, this reporting lane performed
+no further protected merge, sandbox mutation, immutable producer publication
+or receiver pin, live gate flip, Authority write, or cutover. This report
+authorizes none of those actions.
