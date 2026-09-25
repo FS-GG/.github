@@ -534,13 +534,18 @@ def project_graph(root: str) -> dict[str, list[str]]:
 
     def nearest_implicit(project_path: str, filename: str) -> str | None:
         folder = os.path.dirname(os.path.abspath(project_path))
-        while os.path.commonpath((root_path, folder)) == root_path:
+        while True:
             candidate = os.path.join(folder, filename)
             if os.path.isfile(candidate):
+                if os.path.commonpath((root_path, folder)) != root_path:
+                    project_rel = os.path.relpath(project_path, root_path).replace(os.sep, "/")
+                    raise GateError(f"{project_rel}: implicit {filename} above repository root; "
+                                    "requires authenticated MSBuild source inventory")
                 return candidate
-            if folder == root_path:
+            parent = os.path.dirname(folder)
+            if parent == folder:
                 break
-            folder = os.path.dirname(folder)
+            folder = parent
         return None
 
     for pattern in PROJECT_GLOBS:
