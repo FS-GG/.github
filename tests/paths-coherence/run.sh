@@ -648,6 +648,22 @@ RB7TQ="$(root "$WORK/cover-onesided-quoted-string")"
 wf "$RB7TQ/.github/workflows/pair.yml" '      - "docs/**"' '      - "docs/**"'
 expect "quoted string path items remain valid filters" 0 "ok:" "$RB7TQ"
 
+# PyYAML's default mapping constructor keeps the LAST duplicate key. A second harmless `paths:`
+# can overwrite a project-naming filter and make Rule (b) answer green over the wrong declaration.
+# The explicit !!str spelling must not bypass the same duplicate-key refusal.
+for second in paths '!!str paths'; do
+  RBD="$(root "$WORK/cover-duplicate-${second//[^a-zA-Z0-9]/_}")"
+  proj "$RBD" "src/A" "../B/B.fsproj"
+  proj "$RBD" "src/B"
+  { echo "name: w"; echo "on:"; echo "  pull_request:"
+    echo "    paths: [docs/**]"; echo "  push:"
+    echo "    paths: [src/A/**]"; echo "    $second: [docs/**]"
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+    > "$RBD/.github/workflows/w.yml"
+  expect "duplicate $second cannot overwrite the project-naming path filter" \
+    3 "duplicate mapping key" "$RBD"
+done
+
 # ---- rule (b)'s escape hatch ---------------------------------------------------------------
 RB8="$(root "$WORK/cover-hatch")"
 proj "$RB8" "src/A" "../B/B.fsproj"
