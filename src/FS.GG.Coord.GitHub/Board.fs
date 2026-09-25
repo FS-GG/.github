@@ -453,7 +453,7 @@ module Board =
     // This is the whole budget win: `bootstrap` is two GraphQL points, and it sits under EVERY worker
     // command. Uncached, five workers looping `take` re-paid it every invocation — the exact drain #418
     // is written about. A warm map costs zero, and the ids do not change under it.
-    let bootstrapCached (transport: IGitHubTransport) (owner: string) (title: string) : IoResult<BoardMap> =
+    let private bootstrapCachedByTitle (transport: IGitHubTransport) (owner: string) (title: string) : IoResult<BoardMap> =
         let resolveAndStore () =
             match bootstrap transport owner title with
             | Ok board ->
@@ -467,6 +467,25 @@ module Board =
             | Some board -> Ok board
             | None -> resolveAndStore ()
         | None -> resolveAndStore ()
+
+    // The direct route is intentionally a single, pinned organization board. It bypasses the day-cache
+    // so an older title-resolved cache cannot stand in for a fresh direct Project 1 identity read.
+    let private projectOne =
+        { Owner = "FS-GG"; Number = 1; Title = "Coordination"; Id = "PVT_kwDOEYAWY84Bb08W" }
+
+    let bootstrapCached (transport: IGitHubTransport) (owner: string) (title: string) : IoResult<BoardMap> =
+        match Environment.GetEnvironmentVariable "FSGG_COORD_BOOTSTRAP_MODE" with
+        | null
+        | "" -> bootstrapCachedByTitle transport owner title
+        | "exact-project1" ->
+            if not (String.Equals(owner, projectOne.Owner, StringComparison.OrdinalIgnoreCase))
+               || title <> projectOne.Title
+               || OwnerKind.fromEnv () <> OwnerKind.Org then
+                Error(Malformed("the exact Project 1 bootstrap", "owner kind, owner or title differs from the pinned FS-GG Coordination board"))
+            else
+                bootstrapExactProject transport projectOne
+        | _ ->
+            Error(Malformed("the board bootstrap", "unknown FSGG_COORD_BOOTSTRAP_MODE; refusing to fall back to project enumeration"))
 
     // ---- the item id -------------------------------------------------------------------------------
 
