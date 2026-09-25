@@ -22,9 +22,12 @@ WRITER_DISPOSITIONS = {
     "protected-admin-writer",
     "publish-writer",
 }
+# Scoped token mint/revoke is a provider effect, but it is outside the v1 data-writer
+# population protected by the accepted GS2-08.6 external-route oracle.
 NON_WRITER_DISPOSITIONS = {
     "local-only",
     "read-only",
+    "credential-lifecycle",
     "declaration-only",
     "build-only",
     "guard-only",
