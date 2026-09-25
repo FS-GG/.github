@@ -200,6 +200,12 @@ and candidate digests; a red-before case showed one-root `.fsgg` acceptance desp
 changed `work/<id>` file. Thirty focused controls pass. Producer-owned complete source
 selection/physical closure, performance-artifact path policy, cross-root atomicity and
 installed parity remain separate gates.
+[SDD declared-performance draft #1011](https://github.com/FS-GG/FS.GG.SDD/pull/1011)
+derives allowed performance paths from captured `evidence.yml` and refuses a declared
+artifact omitted from selected, captured and candidate sets; default-branch producer
+also allows contained paths outside `readiness/<id>`. Thirty-four focused controls pass.
+Current producer omission of absent/unreadable declared artifacts still needs a policy
+decision before adoption; arbitrary-root physical closure and installed parity remain.
 [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)

@@ -1791,6 +1791,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   separate immutable joint record for attempt, environment and approval-response hash;
   five new and 30 upstream fake controls pass. Protected audit identity/permission,
   joint-record issuer and installed effect remain absent; dispatch stays refused.
+  [Credential-scope observer #600](https://github.com/FS-GG/FS.GG.Coordination/pull/600)
+  compares supplied token-free App mint metadata with an independent effective-scope
+  witness, binding repository, App/installation IDs, exact permissions, target response
+  hashes and expiry; five new and 35 upstream fake controls pass. Protected issuer
+  custody, real effective-token scope and complete target prestate remain unproved.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
