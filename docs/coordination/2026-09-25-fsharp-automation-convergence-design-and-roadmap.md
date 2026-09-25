@@ -163,6 +163,16 @@ YAML/foreign JSON parity.
 refuses an invalid quoted or plain parameter `required` scalar that Python previously
 accepted; four new and 24 prior focused controls pass. Missing/repeated `required` and
 other parameter grammar remain separate.
+[Templates missing-required draft #530](https://github.com/FS-GG/FS.GG.Templates/pull/530)
+refuses missing `required` in both early and final parameters where Python previously
+accepted and F# refused; four new and 28 prior focused controls pass, and both local
+readers grade five live descriptors. Repeated `required`, foreign JSON/full YAML,
+served-byte custody and installed parity remain open.
+[SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
+refuses an observed same-length overwrite after the first held-descriptor read by
+checking descriptor metadata around two byte passes; 21 focused controls and the
+warning-free Release build pass. Multi-root selection and transformation, atomicity,
+hidden ABA and installed parity remain unproved.
 [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)

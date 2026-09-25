@@ -1757,6 +1757,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   an independent protected attestation port; 20 relevant fake controls pass. Protected
   App identity/effective scope, complete target prestate and actual execution credential
   record remain unproved; the one-POST gate stays closed.
+  [Injected plan reader #594](https://github.com/FS-GG/FS.GG.Coordination/pull/594)
+  binds canonical operation request bytes, the current native PR marker, and exact source,
+  workflow, run, review and target identities through a separate seal port; five new and
+  20 upstream fake controls pass. It remains a stacked draft with no installed seal,
+  protected source/release observer, credential, CAS, grant or native effect.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
