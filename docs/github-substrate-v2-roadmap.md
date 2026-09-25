@@ -1710,7 +1710,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   pending without durable intent, observation and receipt; all live pins remain empty.
   [Recovery-worker draft #3715](https://github.com/FS-GG/.github/pull/3715) handles one sealed pending
   token with exact journal/vault/binding identity and no repeat revoke after uncertain claim, but has
-  no installed queue, scheduler or authority ports. No rehearsal dispatch is implied by these drafts.
+  no installed queue, scheduler or authority ports. [Pending-token census draft #3716](https://github.com/FS-GG/.github/pull/3716)
+  requires a sealed high-water snapshot, complete ordered pages, exact identities and independent
+  digest/readback before releasing recovery subjects; its protected mint index and scheduler are absent.
+  No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
   [Coordination draft #553](https://github.com/FS-GG/FS.GG.Coordination/pull/553) adds source-only
