@@ -159,6 +159,11 @@ preserves exact thread/turn IDs and separate last/cumulative usage snapshots fro
 App Server fixtures; 87 adapter controls pass. It does not infer completed-turn usage from
 snapshots or read this private transcript. An authenticated subscription to the already-running
 thread with ordered start/usage/terminal continuity is absent, as are Host submission and receipt.
+[Dormant subscription-continuity draft #595](https://github.com/FS-GG/FS.GG.Coordination/pull/595)
+reduces supplied authenticated App Server scope and locally ordered start, usage and
+terminal events while refusing gaps, replay, changed source, malformed frames and usage
+regression; 94 adapter controls pass. Its local ordinal is not a native cursor. No private
+thread access, trusted current-session source, durable journal or applied Host receipt exists.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
@@ -199,7 +204,9 @@ reserved count, authenticated readiness observations and linked terminal complet
 Its follow-up requires exactly one running Sol/high orchestrator with visible-profile
 evidence and running workers with explicit spawn evidence; 15 focused tests pass.
 Its later freshness repair rejects healthy telemetry observations older than five minutes;
-18 focused tests pass at exact head `f2c7721ec483e2ba63faf8d8d39f55ae290223af`.
+18 focused tests pass. A further review repair requires the post-Host zero queue observation
+to carry authenticated, collector-verified evidence; three new refusal cases keep the
+18 focused tests green at exact head `06914d60ba47d2ede36af6d48a04babfe883a0e6`.
 No live update workflow is pinned to that draft.
 
 ### 1.1 Before active `FS.GG.Coordination` bootstrap

@@ -168,6 +168,10 @@ refuses missing `required` in both early and final parameters where Python previ
 accepted and F# refused; four new and 28 prior focused controls pass, and both local
 readers grade five live descriptors. Repeated `required`, foreign JSON/full YAML,
 served-byte custody and installed parity remain open.
+[Templates repeated-required draft #531](https://github.com/FS-GG/FS.GG.Templates/pull/531)
+refuses equal or conflicting repeated `required` fields that Python previously accepted
+while F# refused; three new and 15 neighboring parameter controls pass. Broader grammar,
+served-byte custody and installed parity remain open.
 [SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
 refuses an observed same-length overwrite after the first held-descriptor read by
 checking descriptor metadata around two byte passes; 21 focused controls and the
@@ -240,7 +244,9 @@ with explicit spawn evidence; red-before cases covered an Astra orchestrator, no
 and user-instruction-only worker source. Fifteen focused tests pass. The pure renderer cannot
 authenticate external provenance. A later red-before repair rejects health and workspace
 observations older than five minutes at report time, while accepting the exact boundary;
-18 focused tests pass. Its draft output is not an accepted status source.
+18 focused tests pass. A further review repair requires authenticated, collector-verified
+post-Host zero-queue evidence and refuses missing evidence IDs; 18 focused tests pass at
+head `06914d60ba47d2ede36af6d48a04babfe883a0e6`. Its draft output is not an accepted status source.
 
 Independent review of these draft ports has already found false greens in Unicode JSON digest
 encoding, unsupported provider schemas, malformed source digests, misplaced telemetry archive
