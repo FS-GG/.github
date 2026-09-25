@@ -1583,6 +1583,110 @@ let ``bootstrapCached serves the day-cache on the second call - zero GraphQL (#4
         | other -> failwith $"the re-hydrated Status must be a single-select — got %A{other}"
     | other -> failwith $"warm bootstrapCached must serve the cache — got %A{other}"
 
+let private withBootstrapMode mode (action: unit -> unit) =
+    let prior = Environment.GetEnvironmentVariable "FSGG_COORD_BOOTSTRAP_MODE"
+    let priorOwnerKind = Environment.GetEnvironmentVariable "FSGG_COORD_OWNER_TYPE"
+
+    try
+        Environment.SetEnvironmentVariable("FSGG_COORD_BOOTSTRAP_MODE", mode)
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", null)
+        action ()
+    finally
+        Environment.SetEnvironmentVariable("FSGG_COORD_BOOTSTRAP_MODE", prior)
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", priorOwnerKind)
+
+[<Fact>]
+let ``unset bootstrap mode keeps the ordinary project enumeration path`` () =
+    use _sandbox = new Sandbox()
+
+    withBootstrapMode null (fun () ->
+        let docs = System.Collections.Generic.List<string>()
+        let transport =
+            capturing
+                docs
+                [ ok """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
+                  ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}}}}""" ]
+
+        match bootstrapCached transport "FS-GG" "Coordination" with
+        | Ok resolved ->
+            Assert.Equal(12, resolved.Number)
+            Assert.Equal(2, docs.Count)
+            Assert.Contains("projectsV2(", docs.[0])
+        | other -> failwith $"the unset mode must retain title enumeration — got %A{other}")
+
+[<Fact>]
+let ``opt-in bootstrap bypasses an old title cache and selects exact Project 1 once`` () =
+    use _sandbox = new Sandbox()
+    Assert.True(Cache.putBoardMap "FS-GG" "Coordination" (boardToJson board))
+
+    withBootstrapMode "exact-project1" (fun () ->
+        let docs = System.Collections.Generic.List<string>()
+        let transport = capturing docs [ ok (exactProjectResponse "FS-GG" 1 "Coordination" projectOne.Id) ]
+
+        match bootstrapCached transport "FS-GG" "Coordination" with
+        | Ok resolved ->
+            Assert.Equal(1, resolved.Number)
+            Assert.Equal(projectOne.Id, resolved.Id)
+            Assert.Single(docs) |> ignore
+            Assert.Contains("projectV2(number: $number)", docs.[0])
+            Assert.DoesNotContain("projectsV2(", docs.[0])
+        | other -> failwith $"the opt-in route must resolve the pinned project — got %A{other}")
+
+[<Fact>]
+let ``opt-in bootstrap refuses a wrong project id with no enumeration fallback`` () =
+    withBootstrapMode "exact-project1" (fun () ->
+        let docs = System.Collections.Generic.List<string>()
+        let transport = capturing docs [ ok (exactProjectResponse "FS-GG" 1 "Coordination" "PVT_foreign") ]
+
+        match bootstrapCached transport "FS-GG" "Coordination" with
+        | Error(Malformed _) ->
+            Assert.Single(docs) |> ignore
+            Assert.DoesNotContain("projectsV2(", docs.[0])
+        | other -> failwith $"a wrong project pin must refuse without fallback — got %A{other}")
+
+[<Fact>]
+let ``opt-in bootstrap refuses wrong owner title or owner kind before IO`` () =
+    withBootstrapMode "exact-project1" (fun () ->
+        let transport = Fake.Recorder(fun _ -> failwith "the wrong board must not be queried")
+
+        for owner, title in [ "Elsewhere", "Coordination"; "FS-GG", "Other" ] do
+            match bootstrapCached transport owner title with
+            | Error(Malformed _) -> ()
+            | other -> failwith $"wrong owner or title must refuse — got %A{other}"
+
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", "user")
+
+        match bootstrapCached transport "FS-GG" "Coordination" with
+        | Error(Malformed _) -> ()
+        | other -> failwith $"wrong owner kind must refuse — got %A{other}")
+
+[<Fact>]
+let ``opt-in bootstrap refuses partial fields and denied direct read without fallback`` () =
+    withBootstrapMode "exact-project1" (fun () ->
+        let partial =
+            (exactProjectResponse "FS-GG" 1 "Coordination" projectOne.Id).Replace("\"totalCount\":1", "\"totalCount\":51")
+
+        for response in
+            [ partial
+              """{"errors":[{"type":"FORBIDDEN","message":"Resource not accessible"}],"data":{"organization":null}}""" ] do
+            let docs = System.Collections.Generic.List<string>()
+            let transport = capturing docs [ ok response ]
+
+            match bootstrapCached transport "FS-GG" "Coordination" with
+            | Error _ ->
+                Assert.Single(docs) |> ignore
+                Assert.DoesNotContain("projectsV2(", docs.[0])
+            | other -> failwith $"an incomplete or denied direct read must refuse — got %A{other}")
+
+[<Fact>]
+let ``unknown bootstrap mode refuses instead of silently enumerating`` () =
+    withBootstrapMode "direct-project1-typo" (fun () ->
+        let transport = Fake.Recorder(fun _ -> failwith "unknown mode must not query GitHub")
+
+        match bootstrapCached transport "FS-GG" "Coordination" with
+        | Error(Malformed _) -> ()
+        | other -> failwith $"unknown mode must refuse — got %A{other}")
+
 [<Fact>]
 let ``itemIdCached serves the forever-cache on the second lookup - one GraphQL, then zero`` () =
     use _sandbox = new Sandbox()

@@ -135,9 +135,10 @@ module Board =
     /// codec serves both, so a board a human reads and a board `next` re-hydrates cannot drift.
     val boardToJson: board: BoardMap -> string
 
-    /// `bootstrap`, served from the day-cache (`Cache.getBoardMap`) when it is warm; resolves and stores it
-    /// on a miss. The budget win of #418 — two GraphQL points under every worker command, paid once a day
-    /// instead of once an invocation. A cached document we cannot parse is a miss, never a failure.
+    /// By default, `bootstrap` is served from the day-cache (`Cache.getBoardMap`) when it is warm and
+    /// resolves/stores on a miss. Explicit `FSGG_COORD_BOOTSTRAP_MODE=exact-project1` instead reads the
+    /// pinned FS-GG Coordination Project 1 directly on every call, bypassing title-cache and enumeration.
+    /// A wrong owner kind, owner, title, project identity, field map or unknown mode refuses with no fallback.
     val bootstrapCached: transport: IGitHubTransport -> owner: string -> title: string -> IoResult<BoardMap>
 
     /// The board item id for an issue. Issues owned outside the board owner are resolved from the
