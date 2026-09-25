@@ -15,8 +15,17 @@ malformed event declarations and preserves an absent grant as inheritance.
 The older `caller` and `callee` entry points parse permission blocks without
 providing call evidence.
 
-This source does not fetch a callee at its pinned ref, bind returned bytes to
-that ref and filename, enumerate the roster, evaluate App installation grants,
-or replace the live Python gate. Those boundaries and installed parity remain
-separate work. The independent Python fixture in
+`PermissionEvidenceBinding.bind` checks supplied identities before later policy
+work: the caller's observed repository must equal the expected repository and
+appear in the authority roster; the callee read must name the exact workflow
+path and ref from `uses:`; only `@main` may use a working-tree read. A pinned App
+grant inventory must be present under the expected identity. The binder returns
+bound facts rather than a permission verdict. Provider code still has to obtain
+and authenticate the caller, roster, callee and App facts and enumerate App-token
+requests; these records alone do not prove those reads happened.
+
+This source does not fetch a callee at its pinned ref, enumerate the roster,
+evaluate App-token requests against installation grants, or replace the live
+Python gate. Those boundaries and installed parity remain separate work. The
+independent Python fixture in
 `tests/workflow-permissions/run.sh` remains the baseline.

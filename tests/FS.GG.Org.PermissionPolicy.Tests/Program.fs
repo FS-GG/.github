@@ -210,4 +210,80 @@ expect "call job override narrows a callable callee floor"
 syntaxRefused "non-callable callee cannot yield satisfied verdict" "not-callable"
     (compareCall validCaller "on: push\npermissions: {}\n")
 
+let call =
+    match callerCall validCaller with
+    | Ok value -> value
+    | Error diagnostic -> failwithf "fixture call refused: %A" diagnostic
+
+let roster: RosterFact =
+    { Repository = "FS-GG/.github"; Path = "registry/repos.yml"; Repositories = [ "FS-GG/FS.GG.Game" ] }
+let calleeFact: CalleeContentFact =
+    { Repository = "FS-GG/.github"
+      WorkflowPath = ".github/workflows/reuse.yml"
+      Ref = "main"
+      Origin = WorkingTree
+      Text = "on: workflow_call\npermissions: { contents: read }\n" }
+let appFact: AppGrantFact =
+    { Repository = "FS-GG/.github"
+      InventoryId = "pinned-default-app"
+      Grants = [ "contents", Read ] }
+let bindingFacts: PermissionBindingFacts =
+    { CallerRepository = "FS-GG/FS.GG.Game"
+      Roster = Some roster
+      Callee = Some calleeFact
+      AppGrants = Some appFact }
+let bind facts = PermissionEvidenceBinding.bind "FS-GG/FS.GG.Game" "pinned-default-app" call facts
+
+expect "exact roster, ref, callee path and App inventory bind"
+    (Ok { CallerRepository = "FS-GG/FS.GG.Game"; Call = call; CalleeText = calleeFact.Text; AppGrants = appFact })
+    (bind bindingFacts)
+expect "missing roster fact refuses" (Error "roster-missing")
+    (bind { bindingFacts with Roster = None })
+expect "roster from another repository refuses" (Error "roster-source-mismatch")
+    (bind { bindingFacts with Roster = Some { roster with Repository = "FS-GG/alias" } })
+expect "roster from another path refuses" (Error "roster-source-mismatch")
+    (bind { bindingFacts with Roster = Some { roster with Path = "other/repos.yml" } })
+expect "unrostered caller refuses" (Error "caller-not-rostered")
+    (bind { bindingFacts with Roster = Some { roster with Repositories = [ "FS-GG/Other" ] } })
+expect "duplicate roster identity refuses" (Error "roster-invalid")
+    (bind { bindingFacts with Roster = Some { roster with Repositories = [ "FS-GG/FS.GG.Game"; "FS-GG/FS.GG.Game" ] } })
+expect "caller repository alias refuses" (Error "caller-repository-mismatch")
+    (bind { bindingFacts with CallerRepository = "fs-gg/FS.GG.Game" })
+expect "missing callee read refuses" (Error "callee-fact-missing")
+    (bind { bindingFacts with Callee = None })
+expect "callee repository alias refuses" (Error "callee-repository-mismatch")
+    (bind { bindingFacts with Callee = Some { calleeFact with Repository = "fs-gg/.github" } })
+expect "callee filename substitution refuses" (Error "callee-path-mismatch")
+    (bind { bindingFacts with Callee = Some { calleeFact with WorkflowPath = ".github/workflows/other.yml" } })
+expect "wrong fetched ref refuses" (Error "callee-ref-mismatch")
+    (bind { bindingFacts with Callee = Some { calleeFact with Ref = "v1" } })
+expect "main ref cannot use remote read" (Error "callee-origin-mismatch")
+    (bind { bindingFacts with Callee = Some { calleeFact with Origin = ExactRefRead } })
+let pinnedCall =
+    match callerCall "jobs: { sync: { uses: FS-GG/.github/.github/workflows/reuse.yml@v1 } }\n" with
+    | Ok value -> value
+    | Error diagnostic -> failwithf "fixture pinned call refused: %A" diagnostic
+expect "non-main ref cannot borrow working tree"
+    (Error "callee-origin-mismatch")
+    (PermissionEvidenceBinding.bind "FS-GG/FS.GG.Game" "pinned-default-app" pinnedCall
+        { bindingFacts with Callee = Some { calleeFact with Ref = "v1" } })
+expect "non-main exact-ref read binds"
+    (Ok { CallerRepository = "FS-GG/FS.GG.Game"; Call = pinnedCall; CalleeText = calleeFact.Text; AppGrants = appFact })
+    (PermissionEvidenceBinding.bind "FS-GG/FS.GG.Game" "pinned-default-app" pinnedCall
+        { bindingFacts with Callee = Some { calleeFact with Ref = "v1"; Origin = ExactRefRead } })
+expect "empty callee read refuses" (Error "callee-text-missing")
+    (bind { bindingFacts with Callee = Some { calleeFact with Text = " " } })
+expect "missing App grant fact refuses" (Error "app-grants-missing")
+    (bind { bindingFacts with AppGrants = None })
+expect "App inventory alias refuses" (Error "app-grants-source-mismatch")
+    (bind { bindingFacts with AppGrants = Some { appFact with Repository = "fs-gg/.github" } })
+expect "unidentified App inventory refuses" (Error "app-grants-identity-mismatch")
+    (bind { bindingFacts with AppGrants = Some { appFact with InventoryId = "" } })
+expect "wrong App inventory identity refuses" (Error "app-grants-identity-mismatch")
+    (bind { bindingFacts with AppGrants = Some { appFact with InventoryId = "other-app" } })
+expect "empty App grant inventory refuses" (Error "app-grants-invalid")
+    (bind { bindingFacts with AppGrants = Some { appFact with Grants = [] } })
+expect "duplicate App grant scope refuses" (Error "app-grants-invalid")
+    (bind { bindingFacts with AppGrants = Some { appFact with Grants = [ "contents", Read; "contents", Write ] } })
+
 printfn "permission reducer: %d controls passed" passed
