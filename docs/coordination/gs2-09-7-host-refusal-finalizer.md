@@ -19,9 +19,11 @@ ID and token escrow must not come from the candidate checkout or proof. A
 separate protected review must pin the exact HTTPS ledger origin, resource ID,
 endpoint, vault ID, and native revoker identity. The ledger and vault must be
 durable and separately credentialed; the candidate token, sandbox repository,
-runner workspace, caches, and artifacts must have no write or delete path to
-them. Adapter descriptors in this draft are assertions, not evidence of real
-ACLs, atomicity, or isolation.
+runner workspace, caches, and artifacts must have no read path to token escrow
+and no write or delete path to the vault or journal. The vault must return the
+exact string token to the protected host before handoff; an equality-like
+proxy is insufficient. Adapter descriptors in this draft are assertions, not
+evidence of real ACLs, atomicity, or isolation.
 
 Before invoking #3712, the host writes an atomic, durable pending revoke
 intent for the mint ID with `revokeRequired: true` and confirms the token is
