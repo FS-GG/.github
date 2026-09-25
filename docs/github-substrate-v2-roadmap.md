@@ -164,6 +164,11 @@ reduces supplied authenticated App Server scope and locally ordered start, usage
 terminal events while refusing gaps, replay, changed source, malformed frames and usage
 regression; 94 adapter controls pass. Its local ordinal is not a native cursor. No private
 thread access, trusted current-session source, durable journal or applied Host receipt exists.
+[Dormant continuity-journal draft #597](https://github.com/FS-GG/FS.GG.Coordination/pull/597)
+adds an injected atomic append port binding exact subscription, predecessor receipt,
+ordinal and immutable notification bytes, with replay, foreign workspace/item, gap,
+disconnect and uncertain-write refusals; 101 adapter controls pass. It has no installed
+durable store/recovery reader, live authenticated session source or Host submission.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.

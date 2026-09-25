@@ -185,6 +185,12 @@ refuses an observed same-length overwrite after the first held-descriptor read b
 checking descriptor metadata around two byte passes; 21 focused controls and the
 warning-free Release build pass. Multi-root selection and transformation, atomicity,
 hidden ABA and installed parity remain unproved.
+[SDD multi-root bundle draft #1010](https://github.com/FS-GG/FS.GG.SDD/pull/1010)
+binds a producer-selected work-model source path/text set to separately captured bytes
+and candidate digests; a red-before case showed one-root `.fsgg` acceptance despite a
+changed `work/<id>` file. Thirty focused controls pass. Producer-owned complete source
+selection/physical closure, performance-artifact path policy, cross-root atomicity and
+installed parity remain separate gates.
 [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)
