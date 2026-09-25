@@ -155,6 +155,10 @@ the live registry's valid same-ID `coherence:` entry.
 closes a Python/F# mismatch where Python accepted repeated provider `parameters:` blocks;
 four new controls pass, while the five live descriptors still grade identically. Broader
 YAML/foreign JSON and installed parity remain.
+[Templates parameter-key draft #528](https://github.com/FS-GG/FS.GG.Templates/pull/528)
+refuses plain or quoted duplicate scalar parameter keys that Python previously accepted
+while F# refused; three new and 21 prior focused controls pass. It does not establish full
+YAML/foreign JSON parity.
 [FsQuint local-tag draft #24](https://github.com/FS-GG/FsQuint/pull/24)
 closes a caller-supplied commit false green by selecting local tag commit evidence, with
 seven new controls. [FsQuint tag-stability draft #25](https://github.com/FS-GG/FsQuint/pull/25)
@@ -190,6 +194,10 @@ refuses caller/physical manifest mismatch and post-product manifest drift by com
 no-follow bytes and visible path identity; 52 pinned-capture, 13 adapter and 36 policy
 controls pass. Cross-root atomicity, ABA/post-check changes, rollback and installed parity
 remain open.
+[SDD roster-stability draft #1008](https://github.com/FS-GG/FS.GG.SDD/pull/1008)
+refuses a red-before late file after its one-pass pinned directory scan by comparing held
+rosters and change stamps; 19 focused generation-source tests pass. The one-root contract
+still needs the work-model multi-root transform decision and installed producer proof.
 These stacked
 drafts need owner acceptance and installed evidence before receiver or release adoption.
 
