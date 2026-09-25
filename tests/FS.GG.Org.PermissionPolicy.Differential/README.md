@@ -1,9 +1,9 @@
 # Offline FSC-03 differential corpus
 
-`differential.py` runs the Python workflow-permissions gate source in its
-proposed `--require-app-identity-grants` mode and the pure F# aggregate over
-the same caller, callee and authority workflow YAML bytes. A
-local `gh` fixture supplies repository listings and pinned-ref callee reads;
+`differential.py` runs the Python workflow-permissions gate source with its
+proposed strict App identity and authority roster options, alongside the pure
+F# aggregate over the same caller, callee and authority workflow YAML bytes.
+A local `gh` fixture supplies repository listings and pinned-ref callee reads;
 the F# runner receives declared provider facts. It normalizes each result to
 OK, FINDING or NO_VERDICT and prints differences.
 
@@ -26,21 +26,25 @@ same fallback also produced green for a `vars.*` identity and a literal App ID;
 strict mode now refuses both unsupported forms. This follow-up also rejects
 repeated YAML mapping keys at every nesting level: red-before, Python returned
 green for duplicate caller permissions, callee events and App permission inputs
-while F# refused each. The corpus expects the Python refusal reason and reports
-two remaining differences:
+while F# refused each. This follow-up supplies an independent workflow, job,
+step count and App-step roster to the Python gate. Red-before, omitted files,
+jobs and App steps each produced Python OK while F# returned NO_VERDICT. The
+opt-in roster check now refuses those shapes, a manifest that omits an observed
+workflow, and duplicate manifest entries. The corpus expects the Python refusal
+reason and reports one remaining difference:
 
 - The F# aggregate covers one bound caller/callee pair; Python enumerates all
   rostered caller repositories. A second caller can therefore produce a Python
   finding outside that one F# pair.
-- F# requires every workflow in its supplied authority roster. Python scans
-  the authority directory without a separate expected manifest.
 
-The authority-roster difference is a conservative refusal.
 The fleet case needs authenticated caller enumeration and a fleet aggregate.
 The local fixture cannot prove provider authentication, current App installation
-grants, accepted scaffold dependencies or installed receiver parity. The live
+grants, authoritative roster provenance or completeness, accepted scaffold
+dependencies or installed receiver parity. The live
 receiver currently supplies a default App inventory for some selected App
 secrets. It must supply explicit per-identity facts before the new mode can be
 enabled, and unsupported `vars.*` or literal identities need an authenticated
-binding design or source migration. Strict App identity mode remains opt-in;
-duplicate-key refusal applies to every YAML read in the proposed Python source.
+binding design or source migration. The authority roster also remains opt-in;
+its source ref is checked for equality but cannot be authenticated by this
+offline fixture. Duplicate-key refusal applies to every YAML read in the
+proposed Python source.

@@ -323,6 +323,74 @@ expect "strict mode refuses a literal App ID that cannot bind to a pinned invent
   --app-grants-for DEDICATED_APP_CLIENT_ID=issues:write
 rm "$RC/.github/workflows/app-token-unsupported.yml"
 
+# The optional authority roster is independent of the directory scan. Without
+# it, deleting or replacing an App-token workflow can make the scan vacuously
+# green; with it, every expected file, job and App step must remain present.
+RAUTH="$WORK/r-authority-roster"; mkdir -p "$RAUTH/.github/workflows" "$RAUTH/registry"
+cat > "$RAUTH/.github/workflows/cal.yml" <<'YAML'
+on: { workflow_call: {} }
+permissions: { contents: read }
+jobs: { x: { steps: [{ run: echo ready }] } }
+YAML
+cat > "$RAUTH/.github/workflows/app.yml" <<'YAML'
+jobs:
+  mint:
+    steps:
+      - uses: actions/create-github-app-token@v3
+        with: { permission-contents: read }
+YAML
+roster "$RAUTH/registry/repos.yml" FS-GG/R
+WAUTH="$WORK/w-authority-roster"; mkdir -p "$WAUTH/FS-GG__R"
+caller "$WAUTH/FS-GG__R/c.yml" "permissions: { contents: read }" "cal.yml@main"
+AUTH_ROSTER="$WORK/authority-workflows.json"
+cat > "$AUTH_ROSTER" <<'JSON'
+{
+  "schemaVersion": 1,
+  "repository": "FS-GG/.github",
+  "sourceRef": "fixture-head",
+  "workflows": [
+    {"path": ".github/workflows/cal.yml", "jobs": [
+      {"job_id": "x", "reusable": false, "steps": 1, "app_steps": []}]},
+    {"path": ".github/workflows/app.yml", "jobs": [
+      {"job_id": "mint", "reusable": false, "steps": 1, "app_steps": [1]}]}
+  ]
+}
+JSON
+authority_args=(--app-grants contents:read --require-app-identity-grants \
+  --authority-workflow-roster "$AUTH_ROSTER" --authority-source-ref fixture-head)
+expect "authority roster mode refuses a missing source ref" \
+  3 "--authority-workflow-roster requires --authority-source-ref" "$WAUTH" "$RAUTH" \
+  --app-grants contents:read --require-app-identity-grants \
+  --authority-workflow-roster "$AUTH_ROSTER"
+expect "authority roster mode requires strict App inventory selection" \
+  3 "--authority-workflow-roster requires --require-app-identity-grants" "$WAUTH" "$RAUTH" \
+  --app-grants contents:read --authority-workflow-roster "$AUTH_ROSTER" \
+  --authority-source-ref fixture-head
+expect "an explicitly empty authority roster path cannot disable the requested check" \
+  3 "--authority-workflow-roster requires --authority-source-ref" "$WAUTH" "$RAUTH" \
+  --app-grants contents:read --require-app-identity-grants \
+  --authority-workflow-roster "" --authority-source-ref fixture-head
+expect "complete independent authority workflow roster passes" \
+  0 "ok:" "$WAUTH" "$RAUTH" "${authority_args[@]}"
+mv "$RAUTH/.github/workflows/app.yml" "$WORK/app-roster-saved.yml"
+expect "a missing authority workflow refuses before a vacuous App scan" \
+  3 "authority roster workflow set mismatch" "$WAUTH" "$RAUTH" "${authority_args[@]}"
+mv "$WORK/app-roster-saved.yml" "$RAUTH/.github/workflows/app.yml"
+sed -i 's/  mint:/  other:/' "$RAUTH/.github/workflows/app.yml"
+expect "a replaced authority job refuses before a gate verdict" \
+  3 "authority roster job shape mismatch" "$WAUTH" "$RAUTH" "${authority_args[@]}"
+sed -i 's/  other:/  mint:/' "$RAUTH/.github/workflows/app.yml"
+sed -i 's/uses: actions\/create-github-app-token@v3/run: echo no-token/' \
+  "$RAUTH/.github/workflows/app.yml"
+expect "an unobserved App-token step refuses before a gate verdict" \
+  3 "authority roster job shape mismatch" "$WAUTH" "$RAUTH" "${authority_args[@]}"
+sed -i 's/run: echo no-token/uses: actions\/create-github-app-token@v3/' \
+  "$RAUTH/.github/workflows/app.yml"
+expect "a stale authority roster source ref refuses" \
+  3 "authority roster header invalid or stale" "$WAUTH" "$RAUTH" \
+  --app-grants contents:read --require-app-identity-grants \
+  --authority-workflow-roster "$AUTH_ROSTER" --authority-source-ref other-head
+
 # =============================================================================================
 # 3. Fail closed. "I could not check" is never green, and never a finding either.
 # =============================================================================================
