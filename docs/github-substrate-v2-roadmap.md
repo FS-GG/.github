@@ -1656,6 +1656,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   producer run/artifact IDs passed the proposed installed control. Its 44 isolated controls now
   require exact identities; a matching local draft packet remains non-authorizing without
   independent protected source readback and selected digest approval.
+  [Nonzero-pin draft #567](https://github.com/FS-GG/FS.GG.Coordination/pull/567) repairs a
+  source-only verifier gap that accepted nine all-zero source, workflow, image and runtime
+  placeholders with matching synthetic observations. Its 45 isolated controls pass locally;
+  the workflow remains disabled with empty permissions and a refreshed exact verifier pin.
+  Protected publication, independent approval, installed path and native-effect readback remain open.
   The #550 staged exact-copy loopback
   harness exercises corrected classifier, HTTP and durable-fence paths, but an independent boundary
   review found it insufficient for the installed provider/credential path and corrected native-effect clause. Qualify the corrected
@@ -1728,6 +1733,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   readback could hand off a token, and incomplete worker/finalizer/revoker pins could release
   census subjects. Its 77 stacked `.github` controls and 18 Coordination controls pass locally;
   protected signer, custody, scheduler, native Q5/Q6 and installed receiver readback remain absent.
+  [Signer-custody draft #3718](https://github.com/FS-GG/.github/pull/3718) repairs two more
+  source-only false greens: a vault descriptor could omit candidate-read denial, and a non-string
+  equality spoof of escrow readback could invoke the candidate. Its 79 stacked `.github` tests
+  pass locally; host-only ACL, signer/store/vault pins and native Q5/Q6 remain unproved.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
