@@ -105,6 +105,15 @@ module GitHubGraphQlHttpTests =
         refused (response 200 "application/json" "")
 
     [<Fact>]
+    let ``valid membership JSON with false declared length cannot bind commit`` () =
+        let actualLength = int64 (Encoding.UTF8.GetByteCount(valid))
+        for declaredLength in [ actualLength - 1L; actualLength + 1L ] do
+            refused (fun request ->
+                let result = response 200 "application/json" valid request
+                result.Content.Headers.ContentLength <- Nullable declaredLength
+                result)
+
+    [<Fact>]
     let ``blank credential and mutation document cannot reach HTTP handler`` () =
         match GitHubGraphQlHttp.Reader.ForFixture("", new FixtureHandler(response 200 "application/json" valid)) with
         | Error () -> ()

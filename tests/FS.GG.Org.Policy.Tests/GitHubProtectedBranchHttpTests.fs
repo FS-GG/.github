@@ -88,6 +88,15 @@ module GitHubProtectedBranchHttpTests =
             result)
 
     [<Fact>]
+    let ``valid protected JSON with false declared length cannot mint pin`` () =
+        let actualLength = int64 (Encoding.UTF8.GetByteCount(branchJson))
+        for declaredLength in [ actualLength - 1L; actualLength + 1L ] do
+            refused (fun request ->
+                let result = response 200 "application/json" branchJson request
+                result.Content.Headers.ContentLength <- Nullable declaredLength
+                result)
+
+    [<Fact>]
     let ``blank credential and foreign request URL never send`` () =
         match GitHubProtectedBranchHttp.Reader.ForFixture("", new FixtureHandler(response 200 "application/json" branchJson)) with
         | Error () -> ()

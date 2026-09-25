@@ -65,7 +65,10 @@ module GitHubGraphQlHttp =
                             let count = stream.Read(buffer, used, buffer.Length - used)
                             if count = 0 then ended <- true
                             else used <- used + count
-                        if not ended || used = 0 then Error ()
+                        if not ended || used = 0
+                           || (response.Content.Headers.ContentLength.HasValue
+                               && int64 used <> response.Content.Headers.ContentLength.Value) then
+                            Error ()
                         else Ok buffer.[0 .. used - 1]
                 with _ ->
                     // Never return a response body, request, or credential in an error.
