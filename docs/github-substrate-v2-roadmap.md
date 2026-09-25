@@ -1680,6 +1680,10 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   repairs two source-only false greens: a review event without its own origin coordinates, and
   a review timestamp preceding installed-control observation. Its 51 isolated controls pass;
   no protected observer or installed inspect-only release exists.
+  [Probe-invocation draft #571](https://github.com/FS-GG/FS.GG.Coordination/pull/571)
+  repairs a refusal-record false green that omitted the pinned interpreter and archive. Its
+  52 isolated controls require the exact interpreter, `-I -S`, canonical installed archive path
+  and subcommand for both proposed probes; no protected installation or native effect follows.
   The #550 staged exact-copy loopback
   harness exercises corrected classifier, HTTP and durable-fence paths, but an independent boundary
   review found it insufficient for the installed provider/credential path and corrected native-effect clause. Qualify the corrected
