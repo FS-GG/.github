@@ -11,5 +11,6 @@
     <Compile Include="WorkflowPermissionSyntax.fs" />
     <Compile Include="PermissionEvidenceBinding.fs" />
     <Compile Include="AppGrantComparison.fs" />
+    <Compile Include="PermissionAggregate.fs" />
   </ItemGroup>
 </Project>

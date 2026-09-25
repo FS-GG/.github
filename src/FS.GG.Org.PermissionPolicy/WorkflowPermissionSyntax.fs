@@ -31,6 +31,21 @@ type AppTokenScan =
         Requests: AppTokenStep list
     }
 
+type WorkflowJobShape =
+    {
+        JobId: string
+        IsReusableCall: bool
+        StepCount: int
+        AppStepIndices: int list
+    }
+
+type AppTokenDetailedScan =
+    {
+        InspectedSteps: int
+        Jobs: WorkflowJobShape list
+        Requests: AppTokenStep list
+    }
+
 /// A pure YAML adapter for the permission reducer. Pinned-ref and roster reads remain external.
 [<RequireQualifiedAccess>]
 module WorkflowPermissionSyntax =
@@ -277,7 +292,7 @@ module WorkflowPermissionSyntax =
 
     /// Inspect every step in every ordinary job, then extract static App-token requests.
     /// A valid reusable-call job has no steps; malformed job and step shapes refuse.
-    let appTokenSteps path text =
+    let private scanAppTokenSteps path text =
         parse path text
         |> Result.bind (fun root ->
             match memberValue "jobs" root |> Option.bind mapping with
@@ -285,6 +300,7 @@ module WorkflowPermissionSyntax =
             | Some jobs when jobs.Children.Count = 0 -> error "jobs-empty" path
             | Some jobs ->
                 let requests = ResizeArray<AppTokenStep>()
+                let observedJobs = ResizeArray<WorkflowJobShape>()
                 let mutable inspected = 0
                 let mutable problem = None
                 for item in jobs.Children do
@@ -300,11 +316,14 @@ module WorkflowPermissionSyntax =
                             | Some call, None when (stringScalar call
                                                     |> Option.filter (fun value -> not (String.IsNullOrWhiteSpace value))).IsNone ->
                                 problem <- Some "job-uses-shape"
-                            | Some _, None -> ()
+                            | Some _, None ->
+                                observedJobs.Add
+                                    { JobId = jobId; IsReusableCall = true; StepCount = 0; AppStepIndices = [] }
                             | None, None -> problem <- Some "steps-missing"
                             | None, Some (:? YamlSequenceNode as sequence) when sequence.Children.Count = 0 ->
                                 problem <- Some "steps-empty"
                             | None, Some (:? YamlSequenceNode as sequence) ->
+                                let appIndices = ResizeArray<int>()
                                 for index, node in sequence.Children |> Seq.indexed do
                                     if problem.IsNone then
                                         inspected <- inspected + 1
@@ -335,6 +354,7 @@ module WorkflowPermissionSyntax =
                                                             match appRequest path (inputs |> Option.bind mapping) with
                                                             | Error diagnostic -> problem <- Some diagnostic.Code
                                                             | Ok(identity, requested) ->
+                                                                appIndices.Add(index + 1)
                                                                 requests.Add
                                                                     {
                                                                         JobId = jobId
@@ -343,7 +363,28 @@ module WorkflowPermissionSyntax =
                                                                         Requested = requested
                                                                     }
                                                 | Some _ -> ()
+                                if problem.IsNone then
+                                    observedJobs.Add
+                                        {
+                                            JobId = jobId
+                                            IsReusableCall = false
+                                            StepCount = sequence.Children.Count
+                                            AppStepIndices = List.ofSeq appIndices
+                                        }
                             | None, Some _ -> problem <- Some "steps-shape"
                 match problem with
                 | Some code -> error code path
-                | None -> Ok { InspectedSteps = inspected; Requests = List.ofSeq requests })
+                | None ->
+                    Ok
+                        {
+                            InspectedSteps = inspected
+                            Jobs = List.ofSeq observedJobs
+                            Requests = List.ofSeq requests
+                        })
+
+    let appTokenStepsDetailed path text = scanAppTokenSteps path text
+
+    let appTokenSteps path text =
+        scanAppTokenSteps path text
+        |> Result.map (fun scan ->
+            { InspectedSteps = scan.InspectedSteps; Requests = scan.Requests })

@@ -53,6 +53,17 @@ module PermissionEvidenceBinding =
     let private rosterPath = "registry/repos.yml"
     let private scopeName = Regex("^[a-z][a-z0-9_]*$", RegexOptions.CultureInvariant)
 
+    let validateAppGrant expectedInventoryId (grants: AppGrantFact) =
+        if String.IsNullOrWhiteSpace expectedInventoryId then Error "app-grants-identity-missing"
+        elif grants.Repository <> authority then Error "app-grants-source-mismatch"
+        elif grants.InventoryId <> expectedInventoryId then Error "app-grants-identity-mismatch"
+        elif List.isEmpty grants.Grants
+             || (grants.Grants |> List.exists (fun (scope, _) ->
+                 String.IsNullOrWhiteSpace scope || not (scopeName.IsMatch scope)))
+             || (grants.Grants |> List.map fst |> Set.ofList |> Set.count) <> grants.Grants.Length then
+            Error "app-grants-invalid"
+        else Ok grants
+
     let bind (expectedCallerRepository: string) (expectedInventoryId: string)
              (call: ReusableWorkflowCall)
              (facts: PermissionBindingFacts) : Result<BoundPermissionCall, string> =
@@ -87,19 +98,12 @@ module PermissionEvidenceBinding =
                 | Some callee ->
                     match facts.AppGrants with
                     | None -> Error "app-grants-missing"
-                    | Some grants when grants.Repository <> authority -> Error "app-grants-source-mismatch"
-                    | Some grants when grants.InventoryId <> expectedInventoryId ->
-                        Error "app-grants-identity-mismatch"
-                    | Some grants when List.isEmpty grants.Grants
-                                       || (grants.Grants |> List.exists (fun (scope, _) ->
-                                           String.IsNullOrWhiteSpace scope || not (scopeName.IsMatch scope)))
-                                       || (grants.Grants |> List.map fst |> Set.ofList |> Set.count) <> grants.Grants.Length ->
-                        Error "app-grants-invalid"
                     | Some grants ->
-                        Ok
+                        validateAppGrant expectedInventoryId grants
+                        |> Result.map (fun valid ->
                             {
                                 CallerRepository = expectedCallerRepository
                                 Call = call
                                 CalleeText = callee.Text
-                                AppGrants = grants
-                            }
+                                AppGrants = valid
+                            })

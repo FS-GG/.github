@@ -42,6 +42,17 @@ selected inventory and returns per-step verdicts. A separately custodied App
 requires its matching inventory identity; a different identity refuses. The
 scan result is evidence, not an aggregate gate verdict.
 
+`PermissionAggregate.evaluate` accepts one bound caller/callee pair, an expected
+source ref, and a supplied authority workflow roster with each selected job's
+step count and App step positions. It requires exactly those workflow snapshots
+at that ref and a matching inventory snapshot for every selected App identity.
+Missing workflows or jobs, extra or duplicate steps, stale refs and missing
+inventories return no verdict. Only after completeness checks does it return a
+satisfied result or caller/App under-grant findings. The supplied roster's own
+completeness, workflow bytes, source ref and inventory provenance still need
+independent provider authentication; this reducer covers one bound caller pair,
+not a fleet sweep.
+
 This source does not fetch a callee at its pinned ref, enumerate the roster or
 workflow files from GitHub, authenticate current installation grants, or
 replace the live Python gate. Those boundaries and installed parity remain separate work. The
