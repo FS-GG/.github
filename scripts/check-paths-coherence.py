@@ -394,6 +394,13 @@ def validated(raw: object, trigger: str, what: str) -> list[str]:
                 f"as SETS and different as FILTERS. This gate's equality test would call that "
                 f"coherent, which is the confident-wrong-answer it exists to prevent (#266)."
             )
+        if any(operator in p for operator in "?+[]"):
+            raise GateError(
+                f"{what}: `{trigger}.paths:` pattern {p!r} uses an unsupported GitHub paths "
+                "operator (?, +, or []). Rule (b)'s matcher only implements * and **; treating "
+                "another operator as a literal or a different wildcard could certify an "
+                "uncovered ProjectReference dependency."
+            )
     return pats
 
 
@@ -466,10 +473,9 @@ def allow_divergence(text: str, what: str) -> str | None:
 def glob_to_regex(pattern: str) -> re.Pattern[str]:
     """A GitHub `paths:` pattern as a regex over repo-relative paths.
 
-    Actions' globbing, not fnmatch's: `**` crosses `/`, `*` and `?` do not. fnmatch would translate
-    `*` to `.*` and quietly decide `src/*` matches `src/a/b.fs` — a filter that selects more than it
-    does, which for rule (b) means silently reporting a dependency as covered when a push to it would
-    not trigger the workflow. Wrong in the fail-OPEN direction, so it is spelled out here.
+    The validated subset is `*` and `**`. `**` crosses `/`, while `*` does not. fnmatch would
+    translate `*` to `.*` and quietly decide `src/*` matches `src/a/b.fs` — a filter that selects
+    more than it does and could falsely report a dependency covered.
     """
     i, out = 0, ["^"]
     while i < len(pattern):
@@ -482,9 +488,6 @@ def glob_to_regex(pattern: str) -> re.Pattern[str]:
             i += 2
         elif pattern[i] == "*":
             out.append("[^/]*")
-            i += 1
-        elif pattern[i] == "?":
-            out.append("[^/]")
             i += 1
         else:
             out.append(re.escape(pattern[i]))
