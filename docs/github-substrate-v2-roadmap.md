@@ -728,6 +728,14 @@ and producer/receiver effects remain held.
 at `7c0bcde8a253116dcc5e113a83fab0ba156cfdb0` refuses unreviewed ZIP
 extra fields (51 payload, 29 archive controls); full closure and producer,
 served-byte, #511 CAS and receiver custody remain unproven.
+[Coordination GS2-09.9 #673](https://github.com/FS-GG/FS.GG.Coordination/pull/673)
+at `1bf0a5f8f2d8abd97bd063863b806b6566a59591` copies a validated
+caller-owned selected target before fake attestation, preventing later digest
+mutation from qualifying (21 tests); native protected custody stays held.
+[Coordination GS2-09.7 #672](https://github.com/FS-GG/FS.GG.Coordination/pull/672)
+at `ca40a0c058230a9f96cdaefe3617ba422b3ef77d` refuses duplicate native
+database IDs in typed activity records (43 tests); raw parsing, protected
+journal/custom receipts and Q5/Q6 remain open.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
