@@ -97,10 +97,8 @@ module GitTreeProjects =
                                || name = "." || name = ".."
                                || name.Contains('/') || name.Contains('\\') then
                                 error path "malformed tree entry name"
-                            elif String.Equals(normalizedName, ".git", StringComparison.OrdinalIgnoreCase)
-                                 || (streamSeparator >= 0
-                                     && String.Equals(streamBase, ".git", StringComparison.OrdinalIgnoreCase))
-                                 || String.Equals(normalizedName, "git~1", StringComparison.OrdinalIgnoreCase) then
+                            elif String.Equals(streamBase, ".git", StringComparison.OrdinalIgnoreCase)
+                                 || String.Equals(streamBase, "git~1", StringComparison.OrdinalIgnoreCase) then
                                 error path "reserved .git tree entry name"
                             elif Set.contains name seen then
                                 error path "duplicate tree entry name"

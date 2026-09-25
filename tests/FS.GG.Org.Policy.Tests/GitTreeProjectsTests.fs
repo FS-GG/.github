@@ -376,6 +376,25 @@ module GitTreeProjectsTests =
         |> List.iter (fun reserved -> refused "reserved .git" (fst reserved) [ reserved; edgeA ])
 
     [<Fact>]
+    let ``Git short dotgit alias with alternate stream cannot certify roster`` () =
+        // Fixed raw trees from git hash-object --literally; git fsck --strict reports hasDotgit.
+        [ objectRow "f9790c76abfebb5258478e5141904dcceea0d16d"
+              "NDAwMDAgZ2l0fjE6Zm9vAJzjW40rlyUSI0hYoi+ReNyHjMqE"
+          objectRow "f318376e345849cb5858358c8e4415d5ef59b494"
+              "NDAwMDAgR0lUfjE6OiREQVRBAJzjW40rlyUSI0hYoi+ReNyHjMqE"
+          objectRow "a8b4ea08ffe5c9f8e67d1c89bf1f856156ce198e"
+              "NDAwMDAgZ2l0fjEuOmJhcgCc41uNK5clEiNIWKIvkXjch4zKhA==" ]
+        |> List.iter (fun reserved -> refused "reserved .git" (fst reserved) [ reserved; edgeA ])
+
+        // Git fsck accepts a distinct short name with the same stream syntax.
+        let other =
+            objectRow "4705fa14163cf8f0b9ab52e6ad128266c90672a8"
+                "NDAwMDAgZ2l0fjI6Zm9vAJzjW40rlyUSI0hYoi+ReNyHjMqE"
+        match GitTreeProjects.inspectSha1 (fst other) [ other; edgeA ] with
+        | Error diagnostic -> failwithf "unrelated short stream name refused: %A" diagnostic
+        | Ok roster -> Assert.Equal("git~2:foo/A.fsproj", fst roster.Head)
+
+    [<Fact>]
     let ``Git tree object entries must retain canonical byte and directory order`` () =
         // git hash-object --literally fixed these objects; git fsck --strict reports treeNotSorted.
         [ objectRow "6eab66dbdf50063bb5d919ae4202e7a0bea9a4d5"
