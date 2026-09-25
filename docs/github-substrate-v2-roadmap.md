@@ -1970,6 +1970,12 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   no-effect atomic append/withdraw/claim ports with race negatives; 148 focused local
   controls pass. The authentic joint seal and installed candidate-inaccessible durable
   authority are still required.
+  [Signed joint-seal draft #3741](https://github.com/FS-GG/.github/pull/3741)
+  requires a pinned RSA-PSS signer key, exact signed mint/pending envelope and current
+  protected head/generation readback across census, scheduler batch, job and recovery
+  claim; 165 focused local controls pass. Live pins are blank. Protected signer/store
+  custody, monotonic head, complete input and generation-enforcing append/claim CAS are
+  absent, so Q5/Q6 and sandbox dispatch remain held.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
