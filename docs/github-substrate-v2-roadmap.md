@@ -1580,12 +1580,13 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
   dispositions for genuine human approval or unavailable administrative authority. Include observation
   and contraction controls in the isolated exercise; synthetic completions cannot satisfy production Q10.
 - [ ] **GS2-10.8 — Approve readiness.** Independent architecture, security, operations, migration, and
-  receiver reviewers accept the exact candidate/manifest. Any source or plan change invalidates approval.
-  One accountable owner may orchestrate the separately generated critiques for these disciplines;
-  those critiques remain distinct from the owner's acceptance verdict. All independent controls and
+  receiver reviewers assess the exact candidate/manifest. Under [ADR-0079](adr/0079-single-accountable-delivery-authority.md),
+  the accountable owner accepts readiness from their separately generated critique evidence and the
+  required technical gates. Any source or plan change invalidates approval. The owner may orchestrate
+  these critiques; they remain distinct from the owner's acceptance verdict. All independent controls and
   protected native-identity requirements remain, including any explicit independent-human rule.
-  Readiness includes the
-  complete installed execution inventory and the residual operator-action trace from GS2-10.7.
+  Readiness includes the complete installed execution inventory and the residual operator-action trace
+  from GS2-10.7.
 - [ ] **GS2-10.9 — Close the concurrent-change gate.** Prove there is no active kernel publication,
   lifecycle-default flip, provider/registry flip, coordination receiver change, reusable-workflow change,
   repository-settings mutation, or release saga expected to cross the cutover window. Defer each remaining
