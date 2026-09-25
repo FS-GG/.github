@@ -925,6 +925,31 @@ wf "$RBTOPI/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
 expect "implicit props targets override cannot hide an alternate ProjectReference" \
   3 "implicit Directory.Build.props sets DirectoryBuildTargetsPath" "$RBTOPI"
 
+# MSBuild searches parent directories beyond a checkout root. A nearest implicit source above
+# --root is outside the gate's supplied graph inventory and must not become an OK verdict.
+for kind in props targets; do
+  RBAP_PARENT="$WORK/cover-above-root-$kind"
+  RBAP="$(root "$RBAP_PARENT/repo")"
+  proj "$RBAP" "src/A"
+  proj "$RBAP" "src/B"
+  cat > "$RBAP_PARENT/Directory.Build.$kind" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup></Project>
+XML
+  wf "$RBAP/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+  expect "above-root Directory.Build.$kind cannot hide an imported ProjectReference" \
+    3 "implicit Directory.Build.$kind above repository root" "$RBAP"
+done
+
+RBAPS_PARENT="$WORK/cover-above-root-shadowed"
+RBAPS="$(root "$RBAPS_PARENT/repo")"
+proj "$RBAPS" "src/A"
+echo '<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup></Project>' \
+  > "$RBAPS_PARENT/Directory.Build.targets"
+echo '<Project><PropertyGroup><Version>1.0</Version></PropertyGroup></Project>' \
+  > "$RBAPS/Directory.Build.targets"
+wf "$RBAPS/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "in-root nearest targets file shadows an above-root source" 0 "ok:" "$RBAPS"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
