@@ -9,5 +9,6 @@
     <PackageReference Include="YamlDotNet" />
     <Compile Include="Permissions.fs" />
     <Compile Include="WorkflowPermissionSyntax.fs" />
+    <Compile Include="PermissionEvidenceBinding.fs" />
   </ItemGroup>
 </Project>
