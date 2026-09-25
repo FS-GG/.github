@@ -422,8 +422,8 @@ module ProgressRenderer =
             require (status.ObservedAt <= snapshot.AsOf) "CLI /status observation exceeds report time"
             require (status.WeeklyRemainingPercent >= 0 && status.WeeklyRemainingPercent <= 100)
                 "CLI /status weekly remaining percent must be between 0 and 100"
-            require (nonblank status.WeeklyResetTimeZone && status.WeeklyResetLocal.Offset <> TimeSpan.Zero)
-                "CLI /status weekly reset requires a local time zone and offset"
+            require (nonblank status.WeeklyResetTimeZone)
+                "CLI /status weekly reset requires a local time zone"
             require (status.WeeklyResetLocal > snapshot.AsOf)
                 "CLI /status weekly reset must follow report time"
             require (status.ContextCapacityTokens > 0L && status.ContextUsedTokens >= 0L
@@ -444,6 +444,8 @@ module ProgressRenderer =
             requireUtc "period runner observation" usage.Runner.ObservedAt
             requireLink "period runner item" usage.Runner.Evidence
             requireText "period runner workspace" usage.Runner.WorkspaceId
+            require (usage.Runner.WorkspaceId = telemetry.WorkspaceId)
+                "period runner workspace must match telemetry workspace"
             requireText "period runner item" usage.Runner.ItemId
             require (not usage.Runner.NativeTurns.IsEmpty)
                 "period usage requires genuine native turn IDs and usage"
