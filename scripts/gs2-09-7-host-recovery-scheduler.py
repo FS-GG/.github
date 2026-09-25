@@ -60,8 +60,10 @@ def schedule_pending(port: ProtectedSchedulerPort | None) -> dict:
                 raise Refused("schedule-subject-drift")
             job = {
                 "schema": worker.SCHEDULE_SCHEMA,
-                "scheduleId": _id([seal["sealId"], item]),
-                "sealId": seal["sealId"], "highWater": seal["highWater"],
+                "scheduleId": _id([seal["sealId"], result["jointGeneration"], item]),
+                "sealId": seal["sealId"],
+                "jointGeneration": result["jointGeneration"],
+                "highWater": seal["highWater"],
                 "sequence": subject["sequence"],
                 "pendingSha256": seal["pendingSha256"],
                 "mintSha256": seal["mintSha256"],
@@ -78,11 +80,21 @@ def schedule_pending(port: ProtectedSchedulerPort | None) -> dict:
         if census._digest([port.read_subject(seal["sealId"], job["mintId"])
                            for job in jobs]) != seal["pendingSha256"]:
             raise Refused("schedule-census-drift")
+        try:
+            current = census.joint.verify_joint_seal(
+                port, seal, census.dt.datetime.now(census.dt.timezone.utc))
+        except census.joint.Refused as error:
+            raise Refused(str(error)) from error
+        if current["generation"] != result["jointGeneration"]:
+            raise Refused("schedule-joint-generation-drift")
         batch = {
             "schema": worker.BATCH_SCHEMA,
-            "batchId": _id([seal["sealId"], seal["pendingSha256"],
+            "batchId": _id([seal["sealId"], result["jointGeneration"],
+                            seal["pendingSha256"],
                             seal["mintSha256"], worker.PINNED_SCHEDULER_RESOURCE_ID]),
-            "sealId": seal["sealId"], "highWater": seal["highWater"],
+            "sealId": seal["sealId"],
+            "jointGeneration": result["jointGeneration"],
+            "highWater": seal["highWater"],
             "pendingCount": seal["pendingCount"],
             "pendingSha256": seal["pendingSha256"],
             "mintSha256": seal["mintSha256"],
@@ -105,8 +117,9 @@ def schedule_pending(port: ProtectedSchedulerPort | None) -> dict:
                 raise Refused("schedule-job-readback")
         if port.read_schedule_batch(seal["sealId"]) != expected:
             raise Refused("schedule-batch-readback")
-        return {"schema": "fsgg.github-substrate-v2.sandbox-host-schedule-verdict/1",
+        return {"schema": "fsgg.github-substrate-v2.sandbox-host-schedule-verdict/2",
                 "batchId": expected["batchId"], "sealId": seal["sealId"],
+                "jointGeneration": result["jointGeneration"],
                 "jobCount": len(jobs), "disposition": "pending"}
     except (Refused, worker.Refused, census.Refused):
         raise

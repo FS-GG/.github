@@ -50,7 +50,8 @@ class FakeDurableStore(fixture.FakeCensusPort):
     def append_schedule_batch_once(self, batch, seal_id, high_water):
         self.calls.append("append-batch")
         if self.batch is not None or seal_id != self.seal["sealId"] \
-                or high_water != self.high_water:
+                or high_water != self.high_water \
+                or batch["jointGeneration"] != self.joint_generation:
             return "duplicate"
         if self.store_fault == "mutate-argument-state":
             batch["state"] = "withdrawn"
@@ -86,6 +87,7 @@ class SchedulerTests(unittest.TestCase):
         self.port = FakeDurableStore()
         census = scheduler.census
         worker = scheduler.worker
+        fixture.signing.pin(self, census.joint)
         pins = {
             (census, "PINNED_QUEUE_ORIGIN"): fixture.ORIGIN,
             (census, "PINNED_QUEUE_RESOURCE_ID"): fixture.QUEUE_ID,
@@ -122,6 +124,16 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(1, self.port.calls.count("append-batch"))
         self.assertEqual(3, len(self.port.batch["jobs"]))
 
+    def test_new_joint_generation_cannot_reuse_old_batch_or_job_ids(self):
+        scheduler.schedule_pending(self.port)
+        first_batch = self.port.batch["batchId"]
+        first_job = self.port.batch["jobs"][0]["scheduleId"]
+        self.port = FakeDurableStore()
+        self.port.joint_generation = 2
+        scheduler.schedule_pending(self.port)
+        self.assertNotEqual(first_batch, self.port.batch["batchId"])
+        self.assertNotEqual(first_job, self.port.batch["jobs"][0]["scheduleId"])
+
     def test_store_omission_duplicate_or_withdrawal_refuses(self):
         for fault in ("omit", "duplicate", "withdraw", "mutate-argument-state"):
             with self.subTest(fault=fault):
@@ -139,6 +151,20 @@ class SchedulerTests(unittest.TestCase):
                                  "cursor": "0", "items": [],
                                  "nextCursor": None}}
         with self.assertRaisesRegex(scheduler.census.Refused, "mint-unaccounted"):
+            scheduler.schedule_pending(self.port)
+        self.assertNotIn("append-batch", self.port.calls)
+
+    def test_head_generation_advances_after_census_before_append(self):
+        original = self.port.read_subject
+        reads = 0
+        def advanced(seal_id, mint_id):
+            nonlocal reads
+            reads += 1
+            if reads == 4:
+                self.port.joint_generation = 2
+            return original(seal_id, mint_id)
+        self.port.read_subject = advanced
+        with self.assertRaisesRegex(scheduler.Refused, "schedule-joint-generation-drift"):
             scheduler.schedule_pending(self.port)
         self.assertNotIn("append-batch", self.port.calls)
 

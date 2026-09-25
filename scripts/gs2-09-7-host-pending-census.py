@@ -6,6 +6,7 @@ make every production scan refuse before it can return recovery subjects.
 """
 
 import hashlib
+import datetime as dt
 import importlib.util
 import json
 import secrets
@@ -18,6 +19,7 @@ WORKER_SOURCE = Path(__file__).with_name("gs2-09-7-host-recovery-worker.py")
 SPEC = importlib.util.spec_from_file_location("gs2_09_7_worker_for_census", WORKER_SOURCE)
 worker = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(worker)
+joint = worker.joint
 
 QUEUE_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-pending-queue/1"
 JOURNAL_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-census-journal/1"
@@ -49,7 +51,7 @@ def require(condition: bool, reason: str) -> None:
         raise Refused(reason)
 
 
-class ProtectedCensusPort(Protocol):
+class ProtectedCensusPort(joint.ProtectedJointSealPort, Protocol):
     def describe_queue(self) -> dict: ...
     def describe_journal(self) -> dict: ...
     def seal_snapshot(self) -> dict: ...
@@ -326,6 +328,11 @@ def census_pending(port: ProtectedCensusPort | None) -> dict:
     try:
         seal = _seal(port.seal_snapshot())
         require(_seal(port.read_seal(seal["sealId"])) == seal, "seal-readback")
+        try:
+            joint_before = joint.verify_joint_seal(
+                port, seal, dt.datetime.now(dt.timezone.utc))
+        except joint.Refused as error:
+            raise Refused(str(error)) from error
         _watermark(port, seal["highWater"])
         cursor = "0"
         items = []
@@ -374,12 +381,19 @@ def census_pending(port: ProtectedCensusPort | None) -> dict:
         _mint_coverage(port, seal, items)
         require(_seal(port.read_seal(seal["sealId"])) == seal, "seal-drift")
         _watermark(port, seal["highWater"])
+        try:
+            joint_after = joint.verify_joint_seal(
+                port, seal, dt.datetime.now(dt.timezone.utc))
+        except joint.Refused as error:
+            raise Refused(str(error)) from error
+        require(joint_after == joint_before, "joint-seal-drift")
     except Refused:
         raise
     except Exception as error:
         raise Refused("census-unknown") from error
-    return {"schema": "fsgg.github-substrate-v2.sandbox-host-pending-census/1",
+    return {"schema": "fsgg.github-substrate-v2.sandbox-host-pending-census/2",
             "sealId": seal["sealId"], "highWater": seal["highWater"],
+            "jointGeneration": joint_before["generation"],
             "subjectCount": len(items),
             "subjects": [{"sequence": item["sequence"],
                           "mintId": item["mintId"],

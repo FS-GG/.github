@@ -10,6 +10,11 @@ SPEC = importlib.util.spec_from_file_location(
     "host_pending_census", ROOT / "scripts/gs2-09-7-host-pending-census.py")
 census = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(census)
+JOINT_SPEC = importlib.util.spec_from_file_location(
+    "census_joint_signing_fixture",
+    ROOT / "tests/gs2-09-7-host-joint-seal/signing_fixture.py")
+signing = importlib.util.module_from_spec(JOINT_SPEC)
+JOINT_SPEC.loader.exec_module(signing)
 
 ORIGIN = "https://protected.example.invalid"
 QUEUE_ID = "pending-queue-test"
@@ -124,6 +129,7 @@ class FakeCensusPort:
             "atomicSeal": True, "nativeReadback": True,
             "credentialScope": "protected-host-only", "candidateCanWrite": False,
         }
+        signing.attach(census.joint, self, lambda: self.seal)
 
     def describe_queue(self):
         self.calls.append("describe-queue")
@@ -199,6 +205,7 @@ class FakeCensusPort:
 class PendingCensusTests(unittest.TestCase):
     def setUp(self):
         self.port = FakeCensusPort()
+        signing.pin(self, census.joint)
         pins = {
             (census, "PINNED_QUEUE_ORIGIN"): ORIGIN,
             (census, "PINNED_QUEUE_RESOURCE_ID"): QUEUE_ID,
@@ -237,6 +244,29 @@ class PendingCensusTests(unittest.TestCase):
         self.assertEqual(2, self.port.calls.count("read-seal"))
         self.assertEqual(2, self.port.calls.count("read-high-water"))
         self.assertNotIn("tokenSha256", json.dumps(result))
+
+    def test_unsigned_complete_seal_cannot_return_subjects(self):
+        self.port.read_joint_seal_envelope = None
+        with self.assertRaisesRegex(census.Refused, "joint-seal"):
+            self.scan()
+
+    def test_replayed_signed_seal_after_head_advance_returns_no_subjects(self):
+        old = self.port.read_joint_seal_envelope(SEAL_ID)
+        self.port.joint_generation = 2
+        self.port.joint_envelope_override = old
+        with self.assertRaisesRegex(census.Refused, "joint-seal-binding"):
+            self.scan()
+        self.assertNotIn("read-page:0", self.port.calls)
+
+    def test_head_advance_during_complete_scan_refuses_all_subjects(self):
+        original = self.port.read_page
+        def advance(seal_id, cursor):
+            result = original(seal_id, cursor)
+            self.port.joint_generation = 2
+            return result
+        self.port.read_page = advance
+        with self.assertRaisesRegex(census.Refused, "joint-seal-drift"):
+            self.scan()
 
     def test_complete_empty_pending_set_with_nonzero_high_water(self):
         self.port.seal["pendingCount"] = 0
