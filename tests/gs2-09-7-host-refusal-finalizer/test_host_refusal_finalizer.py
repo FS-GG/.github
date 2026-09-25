@@ -55,7 +55,8 @@ class FakeFinalizerPort:
         }
         self.vault_descriptor = {
             "schema": finalizer.VAULT_SCHEMA, "vaultId": VAULT,
-            "credentialScope": "protected-host-only", "candidateCanWrite": False,
+            "credentialScope": "protected-host-only",
+            "candidateCanRead": False, "candidateCanWrite": False,
             "encrypted": True, "durable": True,
         }
         self.revoker_descriptor = {
@@ -389,6 +390,26 @@ class HostRefusalFinalizerTests(unittest.TestCase):
         self.port.vault_descriptor["candidateCanWrite"] = True
         result = self.run_finalizer()
         self.assertEqual("not-invoked", result["release"])
+        self.assertIn("native-revoke", self.port.calls)
+
+    def test_vault_without_explicit_candidate_read_denial_refuses_custody(self):
+        self.port.vault_descriptor.pop("candidateCanRead")
+        with self.assertRaisesRegex(finalizer.Refused, "vault-authority"):
+            finalizer.check_vault(self.port)
+        self.port.vault_descriptor["candidateCanRead"] = True
+        with self.assertRaisesRegex(finalizer.Refused, "vault-authority"):
+            finalizer.check_vault(self.port)
+
+    def test_equal_but_non_string_escrow_cannot_authorize_handoff(self):
+        class EqualToAnyToken:
+            def __eq__(self, _other):
+                return True
+
+        self.port.token = EqualToAnyToken()
+        result = self.run_finalizer()
+        self.assertEqual("not-invoked", result["release"])
+        self.assertEqual("pending", result["revocation"])
+        self.assertEqual(0, self.release_port.invocations)
         self.assertIn("native-revoke", self.port.calls)
 
     def test_foreign_mint_or_missing_escrow_blocks_release_and_attempts_revoke(self):
