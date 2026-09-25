@@ -43,10 +43,24 @@ def subject(sequence):
     }
 
 
+def terminal_receipt(entry):
+    return {
+        "schema": census.TERMINAL_SCHEMA,
+        "sequence": entry["sequence"], "mintId": entry["mintId"],
+        "bindingId": entry["bindingId"],
+        "journalResourceId": JOURNAL_ID, "vaultId": VAULT_ID,
+        "state": "revoked", "nativeObserved": True,
+    }
+
+
 class FakeCensusPort:
     def __init__(self):
         self.calls = []
         self.items = [subject(1), subject(2), subject(3)]
+        self.mints = [{"sequence": item["sequence"], "mintId": item["mintId"],
+                       "bindingId": item["bindingId"]} for item in self.items]
+        self.mint_subjects = {item["mintId"]: item for item in self.mints}
+        self.terminal_receipts = {}
         self.pages = {
             "0": {"schema": census.PAGE_SCHEMA, "sealId": SEAL_ID,
                   "highWater": 3, "cursor": "0", "items": self.items[:2],
@@ -59,6 +73,7 @@ class FakeCensusPort:
             "schema": census.SEAL_SCHEMA, "sealId": SEAL_ID,
             "highWater": 3, "pendingCount": 3,
             "pendingSha256": census._digest(self.items),
+            "mintCount": 3, "mintSha256": census._digest(self.mints),
             "queueResourceId": QUEUE_ID, "journalResourceId": JOURNAL_ID,
             "finalizerResourceId": FINALIZER_ID, "vaultId": VAULT_ID,
             "recoveryResourceId": RECOVERY_ID, "workerId": WORKER_ID,
@@ -144,6 +159,21 @@ class FakeCensusPort:
         self.calls.append("read-binding")
         return copy.deepcopy(self.bindings[mint_id])
 
+    def read_mint_index(self, seal_id):
+        self.calls.append("read-mint-index")
+        return {"schema": census.MINT_INDEX_SCHEMA, "sealId": SEAL_ID,
+                "highWater": 3, "journalResourceId": JOURNAL_ID,
+                "complete": True, "mintSha256": census._digest(self.mints),
+                "items": copy.deepcopy(self.mints)}
+
+    def read_mint_subject(self, seal_id, mint_id):
+        self.calls.append("read-mint-subject")
+        return copy.deepcopy(self.mint_subjects[mint_id])
+
+    def read_terminal_receipt(self, mint_id):
+        self.calls.append("read-terminal-receipt")
+        return copy.deepcopy(self.terminal_receipts.get(mint_id))
+
 
 class PendingCensusTests(unittest.TestCase):
     def setUp(self):
@@ -194,9 +224,61 @@ class PendingCensusTests(unittest.TestCase):
                                  "sealId": SEAL_ID, "highWater": 3,
                                  "cursor": "0", "items": [],
                                  "nextCursor": None}}
+        self.port.terminal_receipts = {
+            item["mintId"]: terminal_receipt(item) for item in self.port.mints}
         result = self.scan()
         self.assertEqual(0, result["subjectCount"])
         self.assertEqual([], result["subjects"])
+
+    def test_minted_before_pending_cannot_disappear_from_empty_pending_scan(self):
+        self.port.seal["pendingCount"] = 0
+        self.port.seal["pendingSha256"] = census._digest([])
+        self.port.pages = {"0": {"schema": census.PAGE_SCHEMA,
+                                 "sealId": SEAL_ID, "highWater": 3,
+                                 "cursor": "0", "items": [],
+                                 "nextCursor": None}}
+        with self.assertRaisesRegex(census.Refused, "mint-unaccounted"):
+            self.scan()
+
+    def test_omitted_or_unavailable_mint_index_refuses_entire_scan(self):
+        self.port.mints.pop()
+        with self.assertRaisesRegex(census.Refused, "mint-index"):
+            self.scan()
+        self.port = FakeCensusPort()
+        def unavailable(_seal_id):
+            raise OSError("protected mint index unavailable")
+        self.port.read_mint_index = unavailable
+        with self.assertRaisesRegex(census.Refused, "census-unknown"):
+            self.scan()
+
+    def test_self_consistent_mint_index_drift_refuses_pending_binding(self):
+        self.port.mints[1] = {**self.port.mints[1], "mintId": "e" * 64}
+        self.port.seal["mintSha256"] = census._digest(self.port.mints)
+        self.port.mint_subjects = {
+            item["mintId"]: item for item in self.port.mints}
+        with self.assertRaisesRegex(census.Refused, "mint-pending-binding"):
+            self.scan()
+
+    def test_false_terminal_native_readback_cannot_hide_mint(self):
+        self.port.seal["pendingCount"] = 0
+        self.port.seal["pendingSha256"] = census._digest([])
+        self.port.pages = {"0": {"schema": census.PAGE_SCHEMA,
+                                 "sealId": SEAL_ID, "highWater": 3,
+                                 "cursor": "0", "items": [],
+                                 "nextCursor": None}}
+        self.port.terminal_receipts = {
+            item["mintId"]: terminal_receipt(item) for item in self.port.mints}
+        self.port.terminal_receipts[self.port.mints[1]["mintId"]][
+            "nativeObserved"] = 1
+        with self.assertRaisesRegex(census.Refused, "mint-unaccounted"):
+            self.scan()
+
+    def test_boolean_sequence_in_independent_mint_readback_refuses(self):
+        first = self.port.mints[0]
+        self.port.mint_subjects[first["mintId"]] = {
+            **first, "sequence": True}
+        with self.assertRaisesRegex(census.Refused, "mint-readback"):
+            self.scan()
 
     def test_omitted_last_page_or_wrong_digest_refuses_all_subjects(self):
         self.port.pages["0"]["nextCursor"] = None

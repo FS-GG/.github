@@ -24,6 +24,8 @@ SEAL_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-pending-seal/1"
 WATERMARK_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-high-water/1"
 PAGE_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-pending-page/1"
 SUBJECT_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-pending-subject/1"
+MINT_INDEX_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-mint-index/1"
+TERMINAL_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-terminal-receipt/1"
 
 PINNED_QUEUE_ORIGIN = ""
 PINNED_QUEUE_RESOURCE_ID = ""
@@ -54,6 +56,9 @@ class ProtectedCensusPort(Protocol):
     def read_page(self, seal_id: str, cursor: str) -> dict: ...
     def read_subject(self, seal_id: str, mint_id: str) -> dict: ...
     def read_binding(self, mint_id: str) -> dict: ...
+    def read_mint_index(self, seal_id: str) -> dict: ...
+    def read_mint_subject(self, seal_id: str, mint_id: str) -> dict: ...
+    def read_terminal_receipt(self, mint_id: str) -> dict | None: ...
 
 
 def _endpoint(value: str, pinned: str, origin: str) -> bool:
@@ -87,7 +92,8 @@ def check_port(port: ProtectedCensusPort | None) -> None:
             "census-unconfigured")
     methods = ("describe_queue", "describe_journal", "seal_snapshot",
                "read_seal", "read_high_water", "read_page", "read_subject",
-               "read_binding")
+               "read_binding", "read_mint_index", "read_mint_subject",
+               "read_terminal_receipt")
     require(port is not None and all(callable(getattr(port, name, None)) for name in methods),
             "census-unconfigured")
     queue = port.describe_queue()
@@ -131,6 +137,7 @@ def check_port(port: ProtectedCensusPort | None) -> None:
 def _seal(value: dict) -> dict:
     require(type(value) is dict and set(value) == {
         "schema", "sealId", "highWater", "pendingCount", "pendingSha256",
+        "mintCount", "mintSha256",
         "queueResourceId", "journalResourceId", "finalizerResourceId",
         "vaultId", "recoveryResourceId", "workerId", "complete",
         "snapshotIsolation",
@@ -139,6 +146,11 @@ def _seal(value: dict) -> dict:
             and type(value["sealId"]) is str
             and worker.finalizer.release.host.HEX64.fullmatch(value["sealId"])
             and type(value["highWater"]) is int and value["highWater"] >= 0
+            and value["highWater"] <= MAX_SUBJECTS
+            and type(value["mintCount"]) is int
+            and value["mintCount"] == value["highWater"]
+            and type(value["mintSha256"]) is str
+            and worker.finalizer.release.host.HEX64.fullmatch(value["mintSha256"])
             and type(value["pendingCount"]) is int
             and 0 <= value["pendingCount"] <= min(value["highWater"], MAX_SUBJECTS)
             and type(value["pendingSha256"]) is str
@@ -219,6 +231,63 @@ def _binding_readback(port: ProtectedCensusPort, subject: dict) -> None:
     } and record["verifiedAtCommit"] is True, "binding-readback")
 
 
+def _mint_coverage(port: ProtectedCensusPort, seal: dict,
+                   pending: list[dict]) -> None:
+    index = port.read_mint_index(seal["sealId"])
+    require(type(index) is dict and set(index) == {
+        "schema", "sealId", "highWater", "journalResourceId", "complete",
+        "mintSha256", "items",
+    } and index["schema"] == MINT_INDEX_SCHEMA
+      and index["sealId"] == seal["sealId"]
+      and type(index["highWater"]) is int
+      and index["highWater"] == seal["highWater"]
+      and index["journalResourceId"] == PINNED_JOURNAL_RESOURCE_ID
+      and index["complete"] is True
+      and index["mintSha256"] == seal["mintSha256"]
+      and type(index["items"]) is list
+      and len(index["items"]) == seal["mintCount"]
+      and _digest(index["items"]) == seal["mintSha256"], "mint-index")
+    pending_by_sequence = {item["sequence"]: item for item in pending}
+    seen_mints = set()
+    seen_bindings = set()
+    for sequence, entry in enumerate(index["items"], 1):
+        require(type(entry) is dict and set(entry) == {
+            "sequence", "mintId", "bindingId",
+        } and type(entry["sequence"]) is int
+          and entry["sequence"] == sequence
+          and type(entry["mintId"]) is str
+          and worker.finalizer.release.host.HEX64.fullmatch(entry["mintId"])
+          and (entry["bindingId"] is None
+               or (type(entry["bindingId"]) is str
+                   and worker.finalizer.release.host.HEX64.fullmatch(
+                       entry["bindingId"])))
+          and entry["mintId"] not in seen_mints
+          and (entry["bindingId"] is None
+               or entry["bindingId"] not in seen_bindings), "mint-index-identity")
+        native = port.read_mint_subject(seal["sealId"], entry["mintId"])
+        require(type(native) is dict and set(native) == set(entry)
+                and type(native["sequence"]) is int and native == entry,
+                "mint-readback")
+        seen_mints.add(entry["mintId"])
+        if entry["bindingId"] is not None:
+            seen_bindings.add(entry["bindingId"])
+        if sequence in pending_by_sequence:
+            subject = pending_by_sequence[sequence]
+            require(entry["mintId"] == subject["mintId"]
+                    and entry["bindingId"] == subject["bindingId"],
+                    "mint-pending-binding")
+        else:
+            receipt = port.read_terminal_receipt(entry["mintId"])
+            require(type(receipt) is dict and receipt == {
+                "schema": TERMINAL_SCHEMA, "sequence": sequence,
+                "mintId": entry["mintId"],
+                "bindingId": entry["bindingId"],
+                "journalResourceId": PINNED_JOURNAL_RESOURCE_ID,
+                "vaultId": worker.finalizer.PINNED_TOKEN_VAULT_ID,
+                "state": "revoked", "nativeObserved": True,
+            } and receipt["nativeObserved"] is True, "mint-unaccounted")
+
+
 def census_pending(port: ProtectedCensusPort | None) -> dict:
     """Return subjects only after the entire sealed snapshot is verified."""
     check_port(port)
@@ -270,6 +339,7 @@ def census_pending(port: ProtectedCensusPort | None) -> dict:
             raise Refused("page-limit")
         require(len(items) == seal["pendingCount"]
                 and _digest(items) == seal["pendingSha256"], "census-omission")
+        _mint_coverage(port, seal, items)
         require(_seal(port.read_seal(seal["sealId"])) == seal, "seal-drift")
         _watermark(port, seal["highWater"])
     except Refused:
