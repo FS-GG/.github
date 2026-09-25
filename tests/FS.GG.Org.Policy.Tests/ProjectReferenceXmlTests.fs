@@ -23,7 +23,7 @@ module ProjectReferenceXmlTests =
             + "C/B" + entity + "C.fsproj' /></ItemGroup></Project>"
         let references = parsed "src/A/A.fsproj" xml
         Assert.Equal<string list>([ "src/B&C/B&C.fsproj" ], references)
-        let graph = Map.empty.Add("src/A/A.fsproj", references)
+        let graph = Map.ofList [ "src/A/A.fsproj", references; "src/B&C/B&C.fsproj", [] ]
         match RuleB.inspect [ "src/A/**"; "src/B" + entity + "C/**" ] graph with
         | Error diagnostic -> failwithf "unexpected coverage refusal: %A" diagnostic
         | Ok coverage ->
@@ -82,7 +82,7 @@ module ProjectReferenceXmlTests =
                   + " Include='../B/B.fsproj' /></ItemGroup></Project>"
         let references = parsed "src/A/A.fsproj" xml
         Assert.Equal<string list>([ "src/B/B.fsproj" ], references)
-        let graph = Map.empty.Add("src/A/A.fsproj", references)
+        let graph = Map.ofList [ "src/A/A.fsproj", references; "src/B/B.fsproj", [] ]
         match RuleB.inspect [ "src/A/**" ] graph with
         | Error diagnostic -> failwithf "unexpected coverage refusal: %A" diagnostic
         | Ok coverage ->

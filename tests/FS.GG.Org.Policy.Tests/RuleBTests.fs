@@ -48,23 +48,35 @@ module RuleBTests =
         Assert.Equal(2, coverage.Uncovered.Length)
 
     [<Fact>]
-    let ``unknown referenced project remains a visible uncovered dependency`` () =
+    let ``uncovered missing graph node still refuses incomplete closure`` () =
         let source = Map.ofList [ "src/A/A.fsproj", [ "src/Missing/Missing.fsproj" ] ]
-        let coverage = inspected [ "src/A/**" ] source
-        Assert.Equal<(string * string) list>(
-            [ "src/A/A.fsproj", "src/Missing/Missing.fsproj" ], coverage.Uncovered)
+        match RuleB.inspect [ "src/A/**" ] source with
+        | Error diagnostic ->
+            Assert.Equal("coverage-input", diagnostic.Code)
+            Assert.Contains("src/Missing/Missing.fsproj", diagnostic.Message)
+        | Ok coverage -> failwithf "missing graph node cannot certify closure: %A" coverage
+
+    [<Fact>]
+    let ``covered missing graph node cannot certify a complete project closure`` () =
+        let source = Map.ofList [ "src/A/A.fsproj", [ "src/B/B.fsproj" ] ]
+        match RuleB.inspect [ "src/A/**"; "src/B/**" ] source with
+        | Error diagnostic ->
+            Assert.Equal("coverage-input", diagnostic.Code)
+            Assert.Contains("absent from supplied project graph", diagnostic.Message)
+            Assert.Contains("src/B/B.fsproj", diagnostic.Message)
+        | Ok coverage -> failwithf "missing B cannot certify closure: %A" coverage
 
     [<Fact>]
     let ``exact pattern without final newline cannot cover a newline suffixed dependency`` () =
         let dependency = "src/B/B.fsproj\n"
-        let source = Map.ofList [ "src/A/A.fsproj", [ dependency ] ]
+        let source = Map.ofList [ "src/A/A.fsproj", [ dependency ]; dependency, [] ]
         let coverage = inspected [ "src/A/**"; "src/B/B.fsproj" ] source
         Assert.Equal<(string * string) list>([ "src/A/A.fsproj", dependency ], coverage.Uncovered)
 
     [<Fact>]
     let ``exact pattern including final newline still covers the same dependency`` () =
         let dependency = "src/B/B.fsproj\n"
-        let source = Map.ofList [ "src/A/A.fsproj", [ dependency ] ]
+        let source = Map.ofList [ "src/A/A.fsproj", [ dependency ]; dependency, [] ]
         let coverage = inspected [ "src/A/**"; dependency ] source
         Assert.Empty(coverage.Uncovered)
 

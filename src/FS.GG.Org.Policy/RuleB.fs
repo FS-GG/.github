@@ -66,26 +66,39 @@ module RuleB =
                     pending.Push transitive
         found |> Seq.sort |> Seq.toList
 
-    /// Inspect only facts supplied by a later authoritative enumerator. A broad `src/**` or a single
-    /// source-file pattern does not name a project; only a literal prefix equal to its directory does.
+    /// Inspect only facts supplied by a later authoritative enumerator. Every referenced project
+    /// must have a supplied graph node; this does not authenticate the enumerator or its roster.
+    /// A broad `src/**` or a single source-file pattern does not name a project; only a literal
+    /// prefix equal to its directory does.
     let inspect (patterns: string list) (graph: Map<string, string list>) : Result<RuleBCoverage, SyntaxDiagnostic> =
         if List.isEmpty patterns || patterns |> List.exists (fun value -> not (normalized value) || value.StartsWith("!", StringComparison.Ordinal)) then
             Error(diagnostic "paths patterns must be nonempty, normalized, positive repo-relative strings")
         elif graph |> Map.exists (fun project references -> not (normalized project) || references |> List.exists (normalized >> not)) then
             Error(diagnostic "project-reference paths must be normalized repo-relative strings")
         else
-            let prefixes = patterns |> List.map literalPrefix |> Set.ofList
-            let matchers = patterns |> List.map patternRegex
-            let selects (path: string) = matchers |> List.exists (fun pattern -> pattern.IsMatch path)
-            let subjects =
+            let missingReference =
                 graph
-                |> Map.toList
-                |> List.map fst
-                |> List.filter (fun project -> prefixes.Contains(directory project))
-            let uncovered =
-                subjects
-                |> List.collect (fun project ->
-                    closure graph project
-                    |> List.filter (selects >> not)
-                    |> List.map (fun dependency -> project, dependency))
-            Ok { Subjects = subjects; Uncovered = uncovered }
+                |> Map.toSeq
+                |> Seq.tryPick (fun (project, references) ->
+                    references
+                    |> List.tryFind (fun dependency -> not (graph.ContainsKey dependency))
+                    |> Option.map (fun dependency -> project, dependency))
+            match missingReference with
+            | Some(project, dependency) ->
+                Error(diagnostic (sprintf "%s references %s, absent from supplied project graph" project dependency))
+            | None ->
+                let prefixes = patterns |> List.map literalPrefix |> Set.ofList
+                let matchers = patterns |> List.map patternRegex
+                let selects (path: string) = matchers |> List.exists (fun pattern -> pattern.IsMatch path)
+                let subjects =
+                    graph
+                    |> Map.toList
+                    |> List.map fst
+                    |> List.filter (fun project -> prefixes.Contains(directory project))
+                let uncovered =
+                    subjects
+                    |> List.collect (fun project ->
+                        closure graph project
+                        |> List.filter (selects >> not)
+                        |> List.map (fun dependency -> project, dependency))
+                Ok { Subjects = subjects; Uncovered = uncovered }
