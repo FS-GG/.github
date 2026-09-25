@@ -6,6 +6,7 @@ Every production identity pin remains empty and prevents provider effects.
 """
 
 import importlib.util
+import secrets
 from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlsplit
@@ -174,22 +175,35 @@ def recover_one(port: ProtectedRecoveryPort | None, mint_id: str,
     if not claim_readback:
         claim_state = "unknown"
     if claim_readback:
-        state = _observe(port, token)
-        if claim_state == "fresh" and state == "active":
-            try:
-                port.revoke(token)
-            except Exception:
-                pass
+        attempt = finalizer.native_attempt_record(
+            mint_id, token_sha256, mint["contextSha256"],
+            secrets.token_hex(32))
+        prior = finalizer._read_native_attempt(port, mint_id, attempt)
+        if prior != "unknown":
             state = _observe(port, token)
-        if state == "revoked":
-            try:
-                port.append_recovery_receipt(mint_id, expected_binding_id,
-                                             token_sha256)
-            except Exception:
-                pass
-            if _receipt_readback(port, mint_id, expected_binding_id,
-                                 token_sha256):
-                revocation = "revoked"
+            if claim_state == "fresh" and state == "active" and prior == "absent":
+                try:
+                    claimed = port.claim_native_attempt_once(
+                        mint_id, token_sha256, attempt["attemptId"])
+                except Exception:
+                    claimed = "unknown"
+                if claimed == "committed" and finalizer._read_native_attempt(
+                        port, mint_id, attempt,
+                        exact_attempt_id=True) == "exact":
+                    try:
+                        port.revoke(token)
+                    except Exception:
+                        pass
+                    state = _observe(port, token)
+            if state == "revoked":
+                try:
+                    port.append_recovery_receipt(mint_id, expected_binding_id,
+                                                 token_sha256)
+                except Exception:
+                    pass
+                if _receipt_readback(port, mint_id, expected_binding_id,
+                                     token_sha256):
+                    revocation = "revoked"
     return {"schema": "fsgg.github-substrate-v2.sandbox-host-recovery-verdict/1",
             "mintId": mint_id, "bindingId": expected_binding_id,
             "claim": claim_state, "revocation": revocation,
