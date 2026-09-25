@@ -61,4 +61,78 @@ expect "callee global shorthand requires global caller grant"
     (UnderGranted [ { Scope = "*"; Required = Read; Granted = NoAccess } ])
     (Permissions.compare exact Absent (Shorthand "read-all"))
 
+let caller text = WorkflowPermissionSyntax.caller "caller.yml" "sync" text
+let callee text = WorkflowPermissionSyntax.callee "callee.yml" text
+
+let syntaxRefused name code actual =
+    match actual with
+    | Error diagnostic when diagnostic.Code = code ->
+        passed <- passed + 1
+        printfn "PASS %s" name
+    | _ -> failwithf "%s: expected %s, got %A" name code actual
+
+expect "YAML absent differs from explicit empty"
+    (Ok(Absent, Absent))
+    (caller "jobs: { sync: { uses: example } }\n")
+expect "YAML empty mapping grants nothing"
+    (Ok(Scopes [], Absent))
+    (caller "permissions: {}\njobs: { sync: { uses: example } }\n")
+expect "YAML top-level null stays null"
+    (Ok(Null, Absent))
+    (caller "permissions: null\njobs: { sync: { uses: example } }\n")
+expect "YAML job null overrides top-level grant"
+    (Ok(Scopes [ "contents", "read" ], Null))
+    (caller "permissions: { contents: read }\njobs: { sync: { permissions: null } }\n")
+expect "quoted null is a string, not null"
+    (Ok(Shorthand "null", Absent))
+    (caller "permissions: 'null'\njobs: { sync: {} }\n")
+expect "explicit string-tag null is a string"
+    (Ok(Shorthand "null", Absent))
+    (caller "permissions: !!str null\njobs: { sync: {} }\n")
+expect "YAML scalar grant reaches pure comparison"
+    (Ok(Scopes [ "contents", "read" ], Scopes [ "contents", "none" ]))
+    (caller "permissions: { contents: read }\njobs: { sync: { permissions: { contents: none } } }\n")
+expect "callee top-level grant parses without a caller"
+    (Ok(Scopes [ "contents", "read" ]))
+    (callee "on: { workflow_call: {} }\npermissions: { contents: read }\n")
+expect "callee absent grant stays absent" (Ok Absent)
+    (callee "on: { workflow_call: {} }\n")
+expect "numeric permission level stays unsupported"
+    (Ok(UnsupportedShape, Absent))
+    (caller "permissions: { contents: 42 }\njobs: { sync: {} }\n")
+
+let compared text =
+    caller text
+    |> Result.map (fun (workflow, job) ->
+        Permissions.compare workflow job (Scopes [ "contents", "read" ]))
+
+expect "YAML absent caller grant cannot prove startup" (Ok UnprovenDefault)
+    (compared "jobs: { sync: {} }\n")
+expect "YAML explicit null refuses instead of becoming absence" (Ok(Refused "permissions-null"))
+    (compared "permissions: null\njobs: { sync: {} }\n")
+expect "YAML quoted null refuses as an unknown shorthand" (Ok(Refused "permissions-shorthand-unknown"))
+    (compared "permissions: 'null'\njobs: { sync: {} }\n")
+expect "YAML job override can narrow a valid top-level grant"
+    (Ok(UnderGranted [ { Scope = "contents"; Required = Read; Granted = NoAccess } ]))
+    (compared "permissions: { contents: read }\njobs: { sync: { permissions: {} } }\n")
+expect "YAML absent job block inherits the workflow grant" (Ok Satisfied)
+    (compared "permissions: { contents: read }\njobs: { sync: {} }\n")
+
+syntaxRefused "duplicate top-level permissions refuses" "yaml-invalid"
+    (caller "permissions: { contents: read }\npermissions: {}\njobs: { sync: {} }\n")
+syntaxRefused "duplicate nested permission scope refuses" "yaml-invalid"
+    (caller "permissions: { contents: read, contents: write }\njobs: { sync: {} }\n")
+syntaxRefused "tagged duplicate key refuses" "yaml-invalid"
+    (caller "permissions: {}\n!!str permissions: {}\njobs: { sync: {} }\n")
+syntaxRefused "duplicate jobs refuse before selection" "yaml-invalid"
+    (caller "jobs: { sync: {}, sync: {} }\n")
+syntaxRefused "multi-document workflow refuses" "document-count"
+    (caller "jobs: { sync: {} }\n---\njobs: { sync: {} }\n")
+syntaxRefused "missing jobs refuses" "jobs-shape" (caller "permissions: {}\n")
+syntaxRefused "missing selected job refuses" "job-shape" (caller "jobs: { other: {} }\n")
+syntaxRefused "non-string mapping key refuses" "yaml-key"
+    (caller "!!int permissions: {}\njobs: { sync: {} }\n")
+syntaxRefused "alias cycle refuses" "yaml-alias"
+    (caller "jobs: { sync: {} }\ncycle: &x [*x]\n")
+
 printfn "permission reducer: %d controls passed" passed
