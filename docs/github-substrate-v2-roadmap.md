@@ -204,6 +204,13 @@ preserves the same direct-session no-verdict: `turn/completed` has no usage,
 completion. Authenticated attachment to this direct CLI session is also unproved;
 143 adapter controls pass. The genuine instrumented runner route remains the separate
 capture acceptance path once board admission and Host receipt are available.
+[Dormant exact-board bootstrap #3751](https://github.com/FS-GG/.github/pull/3751)
+queries the pinned Coordination Project 1 directly and refuses wrong owner, number,
+title, ID or incomplete fields, while leaving the ordinary runner bootstrap unchanged;
+838 exact-head GitHub adapter controls pass. A read-only direct Project 1 probe returned
+the pinned ID and 24 fields under the same credential that still fails unrelated
+all-project enumeration. Owner acceptance, opt-in runner wiring and qualification are
+required before a genuine work item can be admitted; no capture is claimed.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
@@ -1868,6 +1875,11 @@ fake controls pass. Protected reader identity, witness custody, target continuit
   pass. Its approved manifest digest remains caller-supplied without protected
   independent approval. Both proposal workflows stay disabled, and no installed
   effect authority follows.
+  [Native-free closed scaffold #614](https://github.com/FS-GG/FS.GG.Coordination/pull/614)
+  removes extractable provisional native bytes from the closed archive and requires
+  separate builder/native source inputs for its pure verifier; 11 focused controls pass.
+  Independent integrated revision, approved manifest digest, artifact/runtime custody
+  and a separately authorized runnable effect remain absent. Both workflows stay disabled.
   [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
   fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
   replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)

@@ -232,6 +232,11 @@ requires one direct nuspec repository URL/type and commit matching the selected 
 baseline after a wrong commit yielded a false narrow roster match; 25 focused controls
 pass. The live archive remains `NO_VERDICT`. Nuspec metadata alone does not authenticate
 the producer, served bytes, installed provider or receiver.
+[Templates ZIP-member draft #545](https://github.com/FS-GG/FS.GG.Templates/pull/545)
+streams every bounded regular archive member and refuses CRC-corrupt or FIFO entries
+that the narrow observer previously accepted; 27 focused controls pass. The live
+selected archive remains `NO_VERDICT`, with producer, served-byte and installed proof
+still absent.
 [SDD in-place source draft #1009](https://github.com/FS-GG/FS.GG.SDD/pull/1009)
 refuses an observed same-length overwrite after the first held-descriptor read by
 checking descriptor metadata around two byte passes; 21 focused controls and the
