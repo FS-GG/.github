@@ -643,6 +643,23 @@ wf "$RBP/.github/workflows/w.yml" '      - "src/A/**"
 expect "property-valued Include cannot become a literal graph edge" \
   3 "requires MSBuild evaluation" "$RBP"
 
+# A Windows drive path is absolute to MSBuild, but POSIX os.path.join treats C:/ as relative.
+# That fabricates an edge under src/A, so an A-only filter appears to cover an external project.
+RBAD="$(root "$WORK/cover-absolute-drive-reference")"
+proj "$RBAD" "src/A"
+cat > "$RBAD/src/A/A.fsproj" <<'XML'
+<Project><ItemGroup><ProjectReference Include="C:\External\B.fsproj" /></ItemGroup></Project>
+XML
+wf "$RBAD/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "drive-absolute ProjectReference cannot become a covered relative edge" \
+  3 "outside the repository graph" "$RBAD"
+
+RBAE="$(root "$WORK/cover-escaping-reference")"
+proj "$RBAE" "src/A" "../../../outside/B.fsproj"
+wf "$RBAE/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "escaping ProjectReference refuses instead of issuing a partial graph verdict" \
+  3 "outside the repository graph" "$RBAE"
+
 # MSBuild inserts imported .props/.targets into the evaluated project. A direct XML scan of A
 # cannot see this reference, so the A-only filter would otherwise pass with B absent.
 RBIM="$(root "$WORK/cover-msbuild-import")"
