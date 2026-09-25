@@ -149,6 +149,11 @@ adds dormant issuer/current-source interfaces and a pure one-use, UTC bounded ch
 gate that refuses stale, replayed, foreign and source-substituted windows; 73 adapter
 controls pass. Trusted issuer, clock, authenticated session source and durable CAS replay
 custody remain absent; it performs no capture or submission.
+[Dormant challenge-CAS port #590](https://github.com/FS-GG/FS.GG.Coordination/pull/590)
+reserves a prospective challenge before reading a session source and distinguishes replay,
+unknown store outcomes and burned gaps; an in-memory 32-caller race has one winner, and
+82 exact-head adapter controls pass. The issuer, trusted clock, authenticated current-session
+source and durable CAS implementation remain absent. No Host submission or receipt exists.
 
 **Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
 with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
