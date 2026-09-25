@@ -324,7 +324,7 @@ def triggers(doc: dict, what: str) -> dict:
                 f"{what}: `on:` is {type(got).__name__}, not a string, list, or mapping — this gate "
                 f"cannot tell what triggers the workflow, and guessing would silently skip it (#266)."
             )
-    return {}
+    raise GateError(f"{what}: missing `on:` declaration; refusing to skip an unreadable workflow.")
 
 
 def declared(on: dict, trigger: str, what: str) -> tuple[object, bool, bool]:

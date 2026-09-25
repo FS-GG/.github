@@ -729,6 +729,18 @@ for entry in 'push: 42' 'pull_request: [src/A/**]' 'push: !!str null'; do
     3 "must be a mapping or null" "$REV"
 done
 
+# A workflow file with no `on` declaration has no inspectable trigger. Returning an empty event
+# map skips it; a clean sibling then makes the audit green despite the unreadable workflow.
+RMO="$(root "$WORK/cover-missing-on")"
+proj "$RMO" "src/A" "../B/B.fsproj"
+proj "$RMO" "src/B"
+{ echo "name: w"
+  echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+  > "$RMO/.github/workflows/w.yml"
+cp "$RS/.github/workflows/w.yml" "$RMO/.github/workflows/pair.yml"
+expect "missing on declaration cannot disappear behind a clean workflow" \
+  3 'missing `on:` declaration' "$RMO"
+
 # ---- rule (b)'s escape hatch ---------------------------------------------------------------
 RB8="$(root "$WORK/cover-hatch")"
 proj "$RB8" "src/A" "../B/B.fsproj"
