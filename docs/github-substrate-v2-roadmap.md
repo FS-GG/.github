@@ -1035,6 +1035,8 @@ changing the protected holds:
 | [FSC-03 Python #3810](https://github.com/FS-GG/.github/pull/3810) | `cd2617ca07ccdf07fbbad556bb49a1fe72201c71` | Live static graph refuses unverified custom SDK declarations that can import hidden `ProjectReference` edges; 170 fixtures after an installed MSBuild probe. Built-in resolver provenance and F# parity remain open. |
 | [GS2-09.9 #721](https://github.com/FS-GG/FS.GG.Coordination/pull/721) | `70ccbf3b0505cb90eb50035e377f4157ed660c27` | Release preflight refuses incomplete or falsely authorizing byte-verifier results; 59 focused tests. Closed archive and manifest pins unchanged, workflows disabled and #550 held. |
 | [FSC-05 #590](https://github.com/FS-GG/FS.GG.Templates/pull/590) | `a6b25cf6f7bfb0448cd01491be7aa1224faf2fb2` | Read-only ZIP reader refuses embedded NUL filenames that `zipfile` silently shortens; 101 payload/29 custody controls, selected archive NO_VERDICT. |
+| [FSC-04 #1041](https://github.com/FS-GG/FS.GG.SDD/pull/1041) | `2079be649681c496629b5af11c3760026ae7486b` | Pinned closed-root selection refuses Unicode/case aliases, including a late alias during capture; 1,500 Commands tests. ABA, Windows and cross-root proof remain open. |
+| [GS2-09.7 #722](https://github.com/FS-GG/FS.GG.Coordination/pull/722) | `08ecebc9fa2b407ae1a76f3b3f575c7f1113b938` | Raw-to-typed project binder refuses duplicate or blank item IDs across captured rows; 140 focused tests. Hosted checks queued, initial census and Q5/Q6 held. |
 
 These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
 provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
