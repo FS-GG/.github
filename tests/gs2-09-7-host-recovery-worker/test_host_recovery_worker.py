@@ -102,7 +102,8 @@ class FakePort:
             "resourceId": SCHEDULER_ID, "endpoint": SCHEDULER_ENDPOINT,
             "queueResourceId": QUEUE_ID, "journalResourceId": JOURNAL_ID,
             "recoveryResourceId": RECOVERY_RESOURCE,
-            "durable": True, "atomicCas": True, "nativeReadback": True,
+            "durable": True, "atomicCas": True,
+            "atomicWithdrawClaim": True, "nativeReadback": True,
             "credentialScope": "protected-host-only", "candidateCanWrite": False,
         }
         self.scheduled = {
@@ -196,6 +197,15 @@ class FakePort:
         self.calls.append("read-schedule-batch")
         return self.schedule_batch
 
+    def withdraw_schedule_batch_once(self, batch_id, seal_id, reason):
+        self.calls.append("withdraw-batch")
+        if batch_id != self.schedule_batch["batchId"] or \
+                seal_id != self.schedule_batch["sealId"]:
+            return "refused"
+        self.batch_state = "withdrawn"
+        self.schedule_batch["state"] = "withdrawn"
+        return "committed"
+
     def load_mint(self, mint_id):
         self.calls.append("load-mint")
         return self.mint
@@ -246,6 +256,11 @@ class FakePort:
             "schema": worker.CLAIM_SCHEMA, "mintId": mint_id,
             "bindingId": binding_id, "tokenSha256": self.token_sha256,
             "workerId": WORKER_ID,
+            "scheduleId": schedule_id, "batchId": batch_id,
+            "sealId": self.scheduled["sealId"],
+            "schedulerResourceId": SCHEDULER_ID,
+            "recoveryResourceId": RECOVERY_RESOURCE,
+            "state": "committed",
         }
         if self.claim_response_lost:
             raise OSError("response lost after recovery claim")
@@ -315,6 +330,18 @@ class RecoveryWorkerTests(unittest.TestCase):
     def run_worker(self):
         return worker.recover_one(self.port, MINT_ID, BINDING_ID)
 
+    def exact_claim(self):
+        return {"schema": worker.CLAIM_SCHEMA, "mintId": MINT_ID,
+                "bindingId": BINDING_ID,
+                "tokenSha256": self.port.token_sha256,
+                "workerId": WORKER_ID,
+                "scheduleId": self.port.scheduled["scheduleId"],
+                "batchId": self.port.schedule_batch["batchId"],
+                "sealId": self.port.scheduled["sealId"],
+                "schedulerResourceId": SCHEDULER_ID,
+                "recoveryResourceId": RECOVERY_RESOURCE,
+                "state": "committed"}
+
     def test_fresh_exact_claim_revokes_once_and_requires_native_and_receipt_readback(self):
         result = self.run_worker()
         self.assertEqual("fresh", result["claim"])
@@ -324,6 +351,35 @@ class RecoveryWorkerTests(unittest.TestCase):
         self.assertEqual(2, self.port.calls.count("native-observe"))
         self.assertIn("read-receipt", self.port.calls)
         self.assertNotIn(TOKEN, json.dumps(result))
+
+    def test_committed_claim_without_batch_and_schedule_identity_cannot_revoke(self):
+        original = self.port.claim_recovery_once
+        def wrong_store_claim(mint_id, binding_id, schedule_id, batch_id):
+            result = original(mint_id, binding_id, schedule_id, batch_id)
+            self.port.claim["scheduleId"] = "e" * 64
+            self.port.claim["batchId"] = "8" * 64
+            return result
+        self.port.claim_recovery_once = wrong_store_claim
+        result = self.run_worker()
+        self.assertEqual("unknown", result["claim"])
+        self.assertEqual("pending", result["revocation"])
+        self.assertNotIn("native-revoke", self.port.calls)
+
+    def test_foreign_claim_batch_schedule_or_seal_readback_blocks_native_effect(self):
+        for field in ("batchId", "scheduleId", "sealId", "schedulerResourceId"):
+            with self.subTest(field=field):
+                self.port = FakePort()
+                original = self.port.claim_recovery_once
+                def foreign_claim(mint_id, binding_id, schedule_id, batch_id):
+                    result = original(mint_id, binding_id, schedule_id, batch_id)
+                    self.port.claim[field] = "foreign" if field.endswith("ResourceId") \
+                        else "e" * 64
+                    return result
+                self.port.claim_recovery_once = foreign_claim
+                result = self.run_worker()
+                self.assertEqual("unknown", result["claim"])
+                self.assertEqual("pending", result["revocation"])
+                self.assertNotIn("native-revoke", self.port.calls)
 
     def test_unscheduled_exact_mint_cannot_invoke_recovery(self):
         self.port.scheduled = None
@@ -397,6 +453,17 @@ class RecoveryWorkerTests(unittest.TestCase):
             self.run_worker()
         self.assertNotIn("recover-token", self.port.calls)
 
+    def test_scheduler_without_atomic_withdraw_claim_port_refuses(self):
+        self.port.scheduler_descriptor["atomicWithdrawClaim"] = False
+        with self.assertRaisesRegex(worker.Refused, "scheduler-authority"):
+            self.run_worker()
+        self.assertNotIn("recover-token", self.port.calls)
+        self.port = FakePort()
+        self.port.withdraw_schedule_batch_once = None
+        with self.assertRaisesRegex(worker.Refused, "scheduler-unconfigured"):
+            self.run_worker()
+        self.assertNotIn("recover-token", self.port.calls)
+
     def test_self_asserted_complete_schedule_without_census_seal_refuses(self):
         self.port.census_seal = None
         with self.assertRaisesRegex(worker.Refused, "recovery-census-seal"):
@@ -436,10 +503,7 @@ class RecoveryWorkerTests(unittest.TestCase):
         self.assertNotIn("native-revoke", self.port.calls)
 
     def test_duplicate_active_claim_never_repeats_native_effect(self):
-        self.port.claim = {"schema": worker.CLAIM_SCHEMA, "mintId": MINT_ID,
-                           "bindingId": BINDING_ID,
-                           "tokenSha256": self.port.token_sha256,
-                           "workerId": WORKER_ID}
+        self.port.claim = self.exact_claim()
         self.port.observations = ["active"]
         result = self.run_worker()
         self.assertEqual("duplicate", result["claim"])
@@ -518,10 +582,7 @@ class RecoveryWorkerTests(unittest.TestCase):
         self.assertNotIn("native-observe", self.port.calls)
 
     def test_duplicate_revoked_claim_can_finish_receipt_without_new_effect(self):
-        self.port.claim = {"schema": worker.CLAIM_SCHEMA, "mintId": MINT_ID,
-                           "bindingId": BINDING_ID,
-                           "tokenSha256": self.port.token_sha256,
-                           "workerId": WORKER_ID}
+        self.port.claim = self.exact_claim()
         self.port.observations = ["revoked"]
         result = self.run_worker()
         self.assertEqual("revoked", result["revocation"])

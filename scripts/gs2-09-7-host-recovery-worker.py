@@ -20,11 +20,16 @@ SPEC = importlib.util.spec_from_file_location("gs2_09_7_finalizer_for_recovery",
 finalizer = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(finalizer)
 
+STORE_SOURCE = Path(__file__).with_name("gs2-09-7-host-recovery-store.py")
+STORE_SPEC = importlib.util.spec_from_file_location("gs2_09_7_recovery_store", STORE_SOURCE)
+store = importlib.util.module_from_spec(STORE_SPEC)
+STORE_SPEC.loader.exec_module(store)
+
 WORKER_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-worker/1"
 BINDING_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-binding/1"
-CLAIM_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-claim/1"
+CLAIM_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-claim/2"
 RECEIPT_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-receipt/1"
-SCHEDULER_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-scheduler/1"
+SCHEDULER_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-scheduler/2"
 SCHEDULE_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-schedule/1"
 BATCH_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-recovery-batch/1"
 CENSUS_SEAL_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-pending-seal/1"
@@ -50,17 +55,13 @@ def require(condition: bool, reason: str) -> None:
         raise Refused(reason)
 
 
-class ProtectedRecoveryPort(finalizer.ProtectedFinalizerPort, Protocol):
+class ProtectedRecoveryPort(finalizer.ProtectedFinalizerPort,
+                            store.AtomicRecoveryStorePort, Protocol):
     def describe_recovery(self) -> dict: ...
     def describe_scheduler(self) -> dict: ...
-    def read_schedule(self, mint_id: str) -> dict: ...
-    def read_schedule_batch(self, seal_id: str) -> dict: ...
     def read_census_seal(self, seal_id: str) -> dict: ...
     def read_census_subject(self, seal_id: str, mint_id: str) -> dict: ...
     def read_binding(self, mint_id: str) -> dict: ...
-    def claim_recovery_once(self, mint_id: str, binding_id: str,
-                            schedule_id: str, batch_id: str) -> str: ...
-    def read_recovery_claim(self, mint_id: str) -> dict: ...
     def append_recovery_receipt(self, mint_id: str, binding_id: str,
                                 token_sha256: str) -> str: ...
     def read_recovery_receipt(self, mint_id: str) -> dict: ...
@@ -114,6 +115,7 @@ def check_scheduler(port: ProtectedRecoveryPort | None) -> None:
             and callable(getattr(port, "describe_scheduler", None))
             and callable(getattr(port, "read_schedule", None))
             and callable(getattr(port, "read_schedule_batch", None))
+            and callable(getattr(port, "withdraw_schedule_batch_once", None))
             and callable(getattr(port, "read_census_seal", None))
             and callable(getattr(port, "read_census_subject", None)),
             "scheduler-unconfigured")
@@ -125,10 +127,12 @@ def check_scheduler(port: ProtectedRecoveryPort | None) -> None:
         "queueResourceId": PINNED_CENSUS_QUEUE_RESOURCE_ID,
         "journalResourceId": PINNED_CENSUS_JOURNAL_RESOURCE_ID,
         "recoveryResourceId": PINNED_RECOVERY_RESOURCE_ID,
-        "durable": True, "atomicCas": True, "nativeReadback": True,
+        "durable": True, "atomicCas": True,
+        "atomicWithdrawClaim": True, "nativeReadback": True,
         "credentialScope": "protected-host-only", "candidateCanWrite": False,
     } and descriptor["durable"] is True
       and descriptor["atomicCas"] is True
+      and descriptor["atomicWithdrawClaim"] is True
       and descriptor["nativeReadback"] is True
       and descriptor["candidateCanWrite"] is False, "scheduler-authority")
     endpoint = descriptor["endpoint"]
@@ -241,7 +245,7 @@ def _batch_readback(port: ProtectedRecoveryPort, seal: dict,
 
 
 def _schedule_readback(port: ProtectedRecoveryPort, mint_id: str,
-                       binding_id: str, mint: dict, token_sha256: str) -> tuple[str, str]:
+                       binding_id: str, mint: dict, token_sha256: str) -> tuple[str, str, str]:
     try:
         schedule = port.read_schedule(mint_id)
     except Exception as error:
@@ -329,7 +333,7 @@ def _schedule_readback(port: ProtectedRecoveryPort, mint_id: str,
       and type(subject["installationId"]) is int
       and subject["revokeRequired"] is True, "recovery-census-subject")
     batch_id = _batch_readback(port, seal, schedule)
-    return schedule["scheduleId"], batch_id
+    return schedule["scheduleId"], batch_id, schedule["sealId"]
 
 
 def _binding_record(port: ProtectedRecoveryPort, mint_id: str,
@@ -352,7 +356,8 @@ def _binding_record(port: ProtectedRecoveryPort, mint_id: str,
 
 
 def _claim_readback(port: ProtectedRecoveryPort, mint_id: str,
-                    binding_id: str, token_sha256: str) -> bool:
+                    binding_id: str, token_sha256: str,
+                    schedule_id: str, batch_id: str, seal_id: str) -> bool:
     try:
         claim = port.read_recovery_claim(mint_id)
     except Exception:
@@ -361,6 +366,11 @@ def _claim_readback(port: ProtectedRecoveryPort, mint_id: str,
         "schema": CLAIM_SCHEMA, "mintId": mint_id,
         "bindingId": binding_id, "tokenSha256": token_sha256,
         "workerId": PINNED_RECOVERY_WORKER_ID,
+        "scheduleId": schedule_id, "batchId": batch_id,
+        "sealId": seal_id,
+        "schedulerResourceId": PINNED_SCHEDULER_RESOURCE_ID,
+        "recoveryResourceId": PINNED_RECOVERY_RESOURCE_ID,
+        "state": "committed",
     }
 
 
@@ -408,7 +418,7 @@ def recover_one(port: ProtectedRecoveryPort | None, mint_id: str,
     _binding_record(port, mint_id, expected_binding_id, mint, token_sha256)
     require(finalizer._read_state(port, "read_pending", finalizer.PENDING_SCHEMA,
                                   mint_id, token_sha256), "pending-intent")
-    schedule_id, batch_id = _schedule_readback(
+    schedule_id, batch_id, seal_id = _schedule_readback(
         port, mint_id, expected_binding_id, mint, token_sha256)
 
     try:
@@ -420,7 +430,8 @@ def recover_one(port: ProtectedRecoveryPort | None, mint_id: str,
                   "duplicate" if claim == "duplicate" else "unknown"
     revocation = "pending"
     claim_readback = _claim_readback(port, mint_id, expected_binding_id,
-                                     token_sha256)
+                                     token_sha256, schedule_id, batch_id,
+                                     seal_id)
     if not claim_readback:
         claim_state = "unknown"
     if claim_readback:

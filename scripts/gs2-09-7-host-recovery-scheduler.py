@@ -24,12 +24,9 @@ class Refused(Exception):
     pass
 
 
-class ProtectedSchedulerPort(census.ProtectedCensusPort, Protocol):
+class ProtectedSchedulerPort(census.ProtectedCensusPort,
+                             worker.store.AtomicRecoveryStorePort, Protocol):
     def describe_scheduler(self) -> dict: ...
-    def append_schedule_batch_once(self, batch: dict, seal_id: str,
-                                   high_water: int) -> str: ...
-    def read_schedule_batch(self, seal_id: str) -> dict: ...
-    def read_schedule(self, mint_id: str) -> dict: ...
 
 
 def _id(value: object) -> str:

@@ -32,7 +32,8 @@ class FakeDurableStore(fixture.FakeCensusPort):
             "queueResourceId": fixture.QUEUE_ID,
             "journalResourceId": fixture.JOURNAL_ID,
             "recoveryResourceId": fixture.RECOVERY_ID,
-            "durable": True, "atomicCas": True, "nativeReadback": True,
+            "durable": True, "atomicCas": True,
+            "atomicWithdrawClaim": True, "nativeReadback": True,
             "credentialScope": "protected-host-only", "candidateCanWrite": False,
         }
 
@@ -70,6 +71,14 @@ class FakeDurableStore(fixture.FakeCensusPort):
     def read_schedule(self, mint_id):
         self.calls.append("read-schedule")
         return copy.deepcopy(self.jobs.get(mint_id))
+
+    def withdraw_schedule_batch_once(self, batch_id, seal_id, reason):
+        self.calls.append("withdraw-batch")
+        if self.batch is None or batch_id != self.batch["batchId"] \
+                or seal_id != self.batch["sealId"]:
+            return "refused"
+        self.batch["state"] = "withdrawn"
+        return "committed"
 
 
 class SchedulerTests(unittest.TestCase):
