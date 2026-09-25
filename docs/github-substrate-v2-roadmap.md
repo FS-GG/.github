@@ -2009,6 +2009,11 @@ only with exact installed evidence and an explicit prefreeze candidate-input dis
   store; 170 focused local controls pass. The protected signer must actually read the
   current durable head with monotonic generation across crashes. Its custody, ACL and
   clock evidence, live pins and Q5/Q6 remain absent.
+  [Durable generation-floor draft #3743](https://github.com/FS-GG/.github/pull/3743)
+  refuses a freshly signed lower head after restart through an injected atomic
+  nondecreasing full-record floor and two readbacks; 181 focused local controls pass.
+  Protected owners must choose a separately durable rollback domain with pinned
+  signer/store/floor identities, ACLs and transaction evidence before live use.
   No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
