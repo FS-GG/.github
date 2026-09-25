@@ -151,7 +151,7 @@
     },
     {
       "path": "tools/routine-delivery.py",
-      "sha256": "03adc237c89fc4fd05d29c7fe9191d0d2ab701c3ff8de54c24eacb2e77d0b429",
+      "sha256": "a316db72b9c321de58fdc494135aa5327293d5c82042e0288b66db7d2fa184c4",
       "status": "current-revision-retired",
       "gs2089": "unresolved",
       "reason": "Current source returns a refused delivery with zero mutation attempts before invoking gh. Published and materialized historical Drivers copies remain pending runtime retirement."
