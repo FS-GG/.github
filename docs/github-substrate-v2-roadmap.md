@@ -553,6 +553,27 @@ root in Python graph extraction (129 fixtures), still uninstalled.
 `22cc8438eaf3f06f44a73c6ad52cbc985a61dde5` returns NO_VERDICT for a
 non-template ZIP symlink (44 payload, 29 archive controls), without producer,
 served-byte, transaction or receiver authority.
+The next direct and Templates source-only drafts retain those limits:
+[Coordination GS2-09.9 #655](https://github.com/FS-GG/FS.GG.Coordination/pull/655)
+at `9b5cced3e2dd35f79153f086c9e0bca866b3f1ea` requires claimed no-grant
+command start/completion times inside the approval/audit window (52 fake-port tests);
+those timestamps are not independently authenticated and #545/#550 remain held.
+[Templates FSC-05 #564](https://github.com/FS-GG/FS.GG.Templates/pull/564)
+at `db3c80c5167deb28e093b6e9dffc774f1a18248c` consumes every ZIP member
+under bounds so a corrupt non-template member returns NO_VERDICT (45 payload, 29
+archive controls), without producer, served-byte, transaction or receiver proof.
+[`.github` FSC-03 #3777](https://github.com/FS-GG/.github/pull/3777)
+at `3e91858795e432995292395f5938bd541cab5528` refuses absolute Windows
+and repository-escaping `ProjectReference` targets in Python graph extraction
+(131 fixtures); the F# adapter and installed parity remain separate.
+[Coordination GS2-09.7 #656](https://github.com/FS-GG/FS.GG.Coordination/pull/656)
+at `a8f967255527aaf46abc33d3d8331030cad3eeea` adds private-fork workflow
+readback to a partial Q6 rollback bridge (116 focused tests), while settings
+authority, Q5/Q6 receipts, and protected native effects remain held.
+[Coordination GS2-09.9 #657](https://github.com/FS-GG/FS.GG.Coordination/pull/657)
+at `dccb70b675b7f024ffe63a2080c78b55c13942db` requires the separate
+audit to carry the same command interval as the runner probe (53 fake-port
+tests); matching supplied data does not authenticate a protected native run.
 [`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
 `238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
 excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
@@ -2337,8 +2358,11 @@ fake controls pass. Protected reader identity, witness custody, target continuit
   candidate-side validator for the sanitized #3690 mint proof, token digest, selected target/grants,
   expiry, and host pin before either live candidate path calls a provider. This is source-only
   consistency evidence, not independent protected authorization, host run-binding, or Q5/Q6 acceptance.
-  The #3690 source merge was not admitted through the common OperatingV1 effect boundary; preserve that
-  observation separately from any sandbox receipt. [Coordination draft #556](https://github.com/FS-GG/FS.GG.Coordination/pull/556)
+  [`.github` #3690](https://github.com/FS-GG/.github/pull/3690) merged as
+  `ff425734d277fa54c3d71601da90fe7b22619c15` on 2026-09-25 05:35 UTC
+  without common OperatingV1 effect admission. Record that process violation
+  separately from any sandbox receipt; the merge does not accept Q5/Q6 or authorize
+  a sandbox run. [Coordination draft #556](https://github.com/FS-GG/FS.GG.Coordination/pull/556)
   records the protected-rehearsal decision packet and its hold on authenticated run/candidate/nonce
   binding, installed command, and native Q5/Q6 evidence. [Stacked verifier draft #558](https://github.com/FS-GG/FS.GG.Coordination/pull/558)
   checks a proposed signed run envelope with offline refusal tests, but #3690 has no protected signer,
