@@ -8,6 +8,7 @@ make every production scan refuse before it can return recovery subjects.
 import hashlib
 import importlib.util
 import json
+import secrets
 from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlsplit
@@ -26,6 +27,7 @@ PAGE_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-pending-page/1"
 SUBJECT_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-pending-subject/1"
 MINT_INDEX_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-mint-index/1"
 TERMINAL_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-terminal-receipt/1"
+NATIVE_TERMINAL_SCHEMA = "fsgg.github-substrate-v2.sandbox-host-native-terminal/1"
 
 PINNED_QUEUE_ORIGIN = ""
 PINNED_QUEUE_RESOURCE_ID = ""
@@ -59,6 +61,8 @@ class ProtectedCensusPort(Protocol):
     def read_mint_index(self, seal_id: str) -> dict: ...
     def read_mint_subject(self, seal_id: str, mint_id: str) -> dict: ...
     def read_terminal_receipt(self, mint_id: str) -> dict | None: ...
+    def read_native_terminal(self, seal_id: str, mint_id: str,
+                             challenge: str) -> dict: ...
 
 
 def _endpoint(value: str, pinned: str, origin: str) -> bool:
@@ -93,7 +97,7 @@ def check_port(port: ProtectedCensusPort | None) -> None:
     methods = ("describe_queue", "describe_journal", "seal_snapshot",
                "read_seal", "read_high_water", "read_page", "read_subject",
                "read_binding", "read_mint_index", "read_mint_subject",
-               "read_terminal_receipt")
+               "read_terminal_receipt", "read_native_terminal")
     require(port is not None and all(callable(getattr(port, name, None)) for name in methods),
             "census-unconfigured")
     queue = port.describe_queue()
@@ -252,11 +256,17 @@ def _mint_coverage(port: ProtectedCensusPort, seal: dict,
     seen_bindings = set()
     for sequence, entry in enumerate(index["items"], 1):
         require(type(entry) is dict and set(entry) == {
-            "sequence", "mintId", "bindingId",
+            "sequence", "mintId", "bindingId", "tokenSha256",
+            "installationId",
         } and type(entry["sequence"]) is int
           and entry["sequence"] == sequence
           and type(entry["mintId"]) is str
           and worker.finalizer.release.host.HEX64.fullmatch(entry["mintId"])
+          and type(entry["tokenSha256"]) is str
+          and worker.finalizer.release.host.HEX64.fullmatch(
+              entry["tokenSha256"])
+          and type(entry["installationId"]) is int
+          and entry["installationId"] > 0
           and (entry["bindingId"] is None
                or (type(entry["bindingId"]) is str
                    and worker.finalizer.release.host.HEX64.fullmatch(
@@ -274,7 +284,9 @@ def _mint_coverage(port: ProtectedCensusPort, seal: dict,
         if sequence in pending_by_sequence:
             subject = pending_by_sequence[sequence]
             require(entry["mintId"] == subject["mintId"]
-                    and entry["bindingId"] == subject["bindingId"],
+                    and entry["bindingId"] == subject["bindingId"]
+                    and entry["tokenSha256"] == subject["tokenSha256"]
+                    and entry["installationId"] == subject["installationId"],
                     "mint-pending-binding")
         else:
             receipt = port.read_terminal_receipt(entry["mintId"])
@@ -282,10 +294,30 @@ def _mint_coverage(port: ProtectedCensusPort, seal: dict,
                 "schema": TERMINAL_SCHEMA, "sequence": sequence,
                 "mintId": entry["mintId"],
                 "bindingId": entry["bindingId"],
+                "tokenSha256": entry["tokenSha256"],
+                "installationId": entry["installationId"],
                 "journalResourceId": PINNED_JOURNAL_RESOURCE_ID,
                 "vaultId": worker.finalizer.PINNED_TOKEN_VAULT_ID,
                 "state": "revoked", "nativeObserved": True,
             } and receipt["nativeObserved"] is True, "mint-unaccounted")
+            challenge = secrets.token_hex(32)
+            observation = port.read_native_terminal(
+                seal["sealId"], entry["mintId"], challenge)
+            require(type(observation) is dict and observation == {
+                "schema": NATIVE_TERMINAL_SCHEMA,
+                "sealId": seal["sealId"], "mintId": entry["mintId"],
+                "tokenSha256": entry["tokenSha256"],
+                "installationId": entry["installationId"],
+                "sandboxRepositoryId": worker.finalizer.release.host.SANDBOX_ID,
+                "appId": worker.finalizer.release.host.APP_ID,
+                "actor": worker.finalizer.release.host.ACTOR,
+                "revokerId": worker.finalizer.PINNED_REVOKER_ID,
+                "challenge": challenge, "state": "revoked",
+            } and type(observation["installationId"]) is int
+              and type(observation["sandboxRepositoryId"]) is int
+              and type(observation["appId"]) is int
+              and type(observation["challenge"]) is str,
+                    "native-terminal")
 
 
 def census_pending(port: ProtectedCensusPort | None) -> dict:
