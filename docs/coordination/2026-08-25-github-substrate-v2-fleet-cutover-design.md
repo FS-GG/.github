@@ -439,8 +439,12 @@ The protected issuer verifies the registered service identity and request proven
 operation, expected journal parent, current epoch, repository and one-shot handoff identity before
 minting with its custody-bound App key. An App JWT is not intrinsically plan-scoped: the trusted issuer and
 consumer enforce that binding locally, observe the effective minted token scope and expiry, and refuse
-replay or a changed plan. The credential enters a fixed-operation CAS transport through a bounded
-anonymous descriptor and is never returned as a CLI value or retained in an artifact. The one-time genesis
+replay or a changed plan. The Actions service sends only the sealed public plan and signed job proof to
+Main. Main's protected issuer executes the fixed CAS transport locally, passing the JWT only to its
+local child on a bounded anonymous descriptor; any later credential-bearing provider mutation likewise
+uses a separately authorized Main-local fixed-operation executor. The service receives only a public
+response-unknown status or verified effect receipt for fresh typed readback, never a JWT, installation
+token, CLI credential value or credential artifact. The one-time genesis
 workflow, approval, signing key and JWT are not reusable authorization for a later admission.
 The service rereads the epoch, claim and journal immediately before its effect, appends through
 expected-parent CAS, and returns an admitted handle only after independent exact journal readback.
