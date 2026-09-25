@@ -48,6 +48,8 @@ def terminal_receipt(entry):
         "schema": census.TERMINAL_SCHEMA,
         "sequence": entry["sequence"], "mintId": entry["mintId"],
         "bindingId": entry["bindingId"],
+        "tokenSha256": entry["tokenSha256"],
+        "installationId": entry["installationId"],
         "journalResourceId": JOURNAL_ID, "vaultId": VAULT_ID,
         "state": "revoked", "nativeObserved": True,
     }
@@ -58,9 +60,14 @@ class FakeCensusPort:
         self.calls = []
         self.items = [subject(1), subject(2), subject(3)]
         self.mints = [{"sequence": item["sequence"], "mintId": item["mintId"],
-                       "bindingId": item["bindingId"]} for item in self.items]
+                       "bindingId": item["bindingId"],
+                       "tokenSha256": item["tokenSha256"],
+                       "installationId": item["installationId"]}
+                      for item in self.items]
         self.mint_subjects = {item["mintId"]: item for item in self.mints}
         self.terminal_receipts = {}
+        self.native_terminal_states = {
+            item["mintId"]: "revoked" for item in self.mints}
         self.pages = {
             "0": {"schema": census.PAGE_SCHEMA, "sealId": SEAL_ID,
                   "highWater": 3, "cursor": "0", "items": self.items[:2],
@@ -174,6 +181,20 @@ class FakeCensusPort:
         self.calls.append("read-terminal-receipt")
         return copy.deepcopy(self.terminal_receipts.get(mint_id))
 
+    def read_native_terminal(self, seal_id, mint_id, challenge):
+        self.calls.append("read-native-terminal")
+        entry = self.mint_subjects[mint_id]
+        return {"schema": census.NATIVE_TERMINAL_SCHEMA,
+                "sealId": seal_id, "mintId": mint_id,
+                "tokenSha256": entry["tokenSha256"],
+                "installationId": entry["installationId"],
+                "sandboxRepositoryId": census.worker.finalizer.release.host.SANDBOX_ID,
+                "appId": census.worker.finalizer.release.host.APP_ID,
+                "actor": census.worker.finalizer.release.host.ACTOR,
+                "revokerId": census.worker.finalizer.PINNED_REVOKER_ID,
+                "challenge": challenge,
+                "state": self.native_terminal_states[mint_id]}
+
 
 class PendingCensusTests(unittest.TestCase):
     def setUp(self):
@@ -271,6 +292,67 @@ class PendingCensusTests(unittest.TestCase):
         self.port.terminal_receipts[self.port.mints[1]["mintId"]][
             "nativeObserved"] = 1
         with self.assertRaisesRegex(census.Refused, "mint-unaccounted"):
+            self.scan()
+
+    def test_journal_terminal_receipt_cannot_hide_active_native_token(self):
+        self.port.seal["pendingCount"] = 0
+        self.port.seal["pendingSha256"] = census._digest([])
+        self.port.pages = {"0": {"schema": census.PAGE_SCHEMA,
+                                 "sealId": SEAL_ID, "highWater": 3,
+                                 "cursor": "0", "items": [],
+                                 "nextCursor": None}}
+        self.port.terminal_receipts = {
+            item["mintId"]: terminal_receipt(item) for item in self.port.mints}
+        self.port.native_terminal_states = {
+            item["mintId"]: "revoked" for item in self.port.mints}
+        self.port.native_terminal_states[self.port.mints[1]["mintId"]] = "active"
+        with self.assertRaisesRegex(census.Refused, "native-terminal"):
+            self.scan()
+
+    def test_stale_or_foreign_native_terminal_readback_refuses(self):
+        self.port.seal["pendingCount"] = 0
+        self.port.seal["pendingSha256"] = census._digest([])
+        self.port.pages = {"0": {"schema": census.PAGE_SCHEMA,
+                                 "sealId": SEAL_ID, "highWater": 3,
+                                 "cursor": "0", "items": [],
+                                 "nextCursor": None}}
+        self.port.terminal_receipts = {
+            item["mintId"]: terminal_receipt(item) for item in self.port.mints}
+        original = self.port.read_native_terminal
+        def stale(seal_id, mint_id, challenge):
+            return {**original(seal_id, mint_id, challenge),
+                    "challenge": "0" * 64}
+        self.port.read_native_terminal = stale
+        with self.assertRaisesRegex(census.Refused, "native-terminal"):
+            self.scan()
+        def foreign(seal_id, mint_id, challenge):
+            return {**original(seal_id, mint_id, challenge),
+                    "tokenSha256": "e" * 64}
+        self.port.read_native_terminal = foreign
+        with self.assertRaisesRegex(census.Refused, "native-terminal"):
+            self.scan()
+
+    def test_unknown_native_terminal_readback_refuses_all_subjects(self):
+        self.port.seal["pendingCount"] = 0
+        self.port.seal["pendingSha256"] = census._digest([])
+        self.port.pages = {"0": {"schema": census.PAGE_SCHEMA,
+                                 "sealId": SEAL_ID, "highWater": 3,
+                                 "cursor": "0", "items": [],
+                                 "nextCursor": None}}
+        self.port.terminal_receipts = {
+            item["mintId"]: terminal_receipt(item) for item in self.port.mints}
+        def unavailable(_seal_id, _mint_id, _challenge):
+            raise OSError("native provider readback unavailable")
+        self.port.read_native_terminal = unavailable
+        with self.assertRaisesRegex(census.Refused, "census-unknown"):
+            self.scan()
+
+    def test_pending_mint_token_digest_drift_refuses_joint_seal(self):
+        self.port.mints[1] = {**self.port.mints[1], "tokenSha256": "e" * 64}
+        self.port.seal["mintSha256"] = census._digest(self.port.mints)
+        self.port.mint_subjects = {
+            item["mintId"]: item for item in self.port.mints}
+        with self.assertRaisesRegex(census.Refused, "mint-pending-binding"):
             self.scan()
 
     def test_boolean_sequence_in_independent_mint_readback_refuses(self):
