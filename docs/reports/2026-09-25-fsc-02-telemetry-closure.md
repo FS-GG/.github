@@ -14,7 +14,7 @@ python3 scripts/check-fsc02-telemetry-closure.py --root . \
   --package /tmp/fsc02-telemetry-pack/FS.GG.Telemetry.Host.0.1.7.nupkg
 ```
 
-At this source base the 11 fixture assertions passed, locked-mode Release pack succeeded, and the checker returned no issues over the resulting 5,034,724-byte package (`sha256 ca359399aea638371e904118e2cf409099a59ed6b76832fa6e9adf524985b374`, 54 archive members, 24 `.deps.json` libraries). These are local candidate bytes, not an installed or published Host observation.
+At this source base the initial 11-assertion fixture passed, locked-mode Release pack succeeded, and the checker returned no issues over the resulting 5,034,724-byte package (`sha256 ca359399aea638371e904118e2cf409099a59ed6b76832fa6e9adf524985b374`, 54 archive members, 24 `.deps.json` libraries). Those measurements were recorded on 2026-09-25. The final replayed fixture now exercises 23 independent assertions, including the added runtime-path, dependency-manifest, duplicate-member, and allowlist refusal cases. The package measurements remain the dated historical result; they are local candidate bytes, not an installed or published Host observation.
 
 ## Measured dependency and symbol split
 
