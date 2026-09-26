@@ -63,7 +63,7 @@
     {"path":"global.json","disposition":"build-only","sinkKinds":[],"sha256":"abb754e4de3e434515ec3362db26346bb65de9d1eaf47850b75aceb298af6a8f"},
     {"path":"registry/dependencies.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"632f3d4b3e0718fa7c7995fd0b0d8cfc809915f2ee0e18de90d54f034ed67aaf"},
     {"path":"registry/repos.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"03ab14d6d414a6ef2555e06068341f97f8d256fd58ce18b02a1a62c929711ac3"},
-    {"path":"registry/skills.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"74be8da9c256de7fa67768e19b42df492f4cbd0297b6748e25d384667e6d4215"},
+    {"path":"registry/skills.yml","disposition":"declaration-only","sinkKinds":[],"sha256":"704b67554344d3e9d0dd6d5ad5b25b33e7f933ea9a7cc7673a326602ab6a2acf"},
     {"path":"scripts/NewSddWorkspace/Program.fs","disposition":"read-only","sinkKinds":["graphql-mutation"],"sha256":"b3e3ebe3b88f67b56ea7d85be4865c6f401ae4e94d9cf451c8bae957c15cea3f","nonWriterJustification":"Only explicit GraphQL query operations reach gh; repository and Project administration return pending before mutation."},
     {"path":"scripts/check-claim-fence.py","disposition":"guard-only","sinkKinds":["dynamic-process"],"sha256":"bf5a7f5e078a3bf84b6635a8ff05474ccc60edf426fdc7dc0dc1bd77a976106e","nonWriterJustification":"Read-only checker with embedded refusal fixture; it does not dispatch a production write."},
     {"path":"scripts/check-claim-generation.py","disposition":"guard-only","sinkKinds":["dynamic-process","gh-pr-merge","rest-write"],"sha256":"7995b5331f2d9564313f6d317f733f53174781aeb3bd50ecfa28755c036553c2","nonWriterJustification":"Read-only checker with embedded refusal fixture; it does not dispatch a production write."},
