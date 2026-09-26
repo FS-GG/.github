@@ -6,7 +6,7 @@
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="FSharp.Core" Version="10.1.302" />
+    <PackageReference Include="FSharp.Core" Version="10.1.401" />
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
     <ProjectReference Include="../../src/FS.GG.ProjectionPolicy/FS.GG.ProjectionPolicy.fsproj" />
     <Compile Include="Program.fs" />
