@@ -1,0 +1,49 @@
+# FSC-03 permission policy source checks. Both suites are executable projects, so their
+# scripts run the assertions directly; `dotnet test` would not execute them.
+name: org-permission-policy
+
+on:
+  pull_request:
+    paths:
+      - "src/FS.GG.Org.PermissionPolicy/**"
+      - "tests/FS.GG.Org.PermissionPolicy.Tests/**"
+      - "tests/FS.GG.Org.PermissionPolicy.Differential/**"
+      - "scripts/check-workflow-permissions.py"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/org-permission-policy.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/FS.GG.Org.PermissionPolicy/**"
+      - "tests/FS.GG.Org.PermissionPolicy.Tests/**"
+      - "tests/FS.GG.Org.PermissionPolicy.Differential/**"
+      - "scripts/check-workflow-permissions.py"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/org-permission-policy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  focused-permission-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run permission reducer controls
+        run: bash tests/FS.GG.Org.PermissionPolicy.Tests/run.sh
+      - name: Compare F# and Python permission verdicts
+        run: bash tests/FS.GG.Org.PermissionPolicy.Differential/run.sh
