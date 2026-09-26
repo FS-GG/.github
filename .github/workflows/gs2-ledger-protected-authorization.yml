@@ -38,6 +38,10 @@ jobs:
           OPERATION_ID: ${{ inputs.operation_id }}
         run: |
           set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'FS-GG/.github'
+          test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_RUN_ATTEMPT" = 1
           [[ "$COORDINATION_REVISION" =~ ^[0-9a-f]{40}$ ]]
           [[ "$INPUT_SHA256" =~ ^[0-9a-f]{64}$ ]]
           [[ "$OPERATION_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$ ]]
