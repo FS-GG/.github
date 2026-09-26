@@ -81,19 +81,32 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
         self.assertEqual(1, len(calls))
         self.assertIn("--paginate", calls[0]["arguments"])
 
-    def test_refuses_third_managed_pr_in_campaign(self):
+    def test_refuses_third_managed_pr_across_different_campaigns_in_repo(self):
         state = {
             "head_sha": EXPECTED_SHA,
             "open_pages": [[
-                {"number": 8, "html_url": "https://example.test/pull/8", "body": managed_body("campaign-7", "chain-1")},
-                {"number": 9, "html_url": "https://example.test/pull/9", "body": managed_body("campaign-7", "chain-2")},
+                {"number": 8, "html_url": "https://example.test/pull/8", "body": managed_body("campaign-1", "chain-1")},
+                {"number": 9, "html_url": "https://example.test/pull/9", "body": managed_body("campaign-2", "chain-2")},
             ]],
         }
         completed, result, calls = self.invoke(state)
         self.assertEqual(3, completed.returncode, completed.stderr)
-        self.assertEqual("campaign-open-pr-cap", result["reason"])
+        self.assertEqual("repository-open-pr-cap", result["reason"])
         self.assertEqual(2, result["openManagedPullRequestCount"])
         self.assertEqual(1, len(calls))
+
+    def test_same_chain_id_in_a_different_campaign_does_not_collide(self):
+        state = {
+            "head_sha": EXPECTED_SHA,
+            "open_pages": [[
+                {"number": 10, "html_url": "https://example.test/pull/10", "body": managed_body("campaign-6", "chain-3")},
+            ]],
+        }
+        completed, result, calls = self.invoke(state)
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual("created", result["action"])
+        self.assertEqual(1, result["openManagedPullRequestCount"])
+        self.assertEqual("POST", calls[-1]["arguments"][2])
 
     def test_refuses_when_head_moved_and_does_not_post(self):
         state = {"head_sha": "b" * 40, "open_pages": [[]]}

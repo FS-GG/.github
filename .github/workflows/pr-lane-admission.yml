@@ -1,0 +1,32 @@
+name: pr-lane-admission
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/pr-lane-admission.yml'
+      - 'tools/pr-lane-admission.py'
+      - 'tests/pr-lane-admission/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/pr-lane-admission.yml'
+      - 'tools/pr-lane-admission.py'
+      - 'tests/pr-lane-admission/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-lane-admission-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Exercise PR lane admission with an offline gh fixture
+        run: bash tests/pr-lane-admission/run.sh

@@ -133,27 +133,27 @@ def pull_summary(pull: dict[str, Any]) -> dict[str, Any]:
 def enforce_lane(
     pulls: list[dict[str, Any]], campaign_id: str, chain_id: str
 ) -> int:
-    managed_in_campaign: list[dict[str, Any]] = []
+    managed_in_repo: list[dict[str, Any]] = []
     same_chain: list[dict[str, Any]] = []
     for pull in pulls:
         parsed = marker_from_body(pull.get("body"))
-        if parsed is None or parsed[0] != campaign_id:
+        if parsed is None:
             continue
-        managed_in_campaign.append(pull)
-        if parsed[1] == chain_id:
+        managed_in_repo.append(pull)
+        if parsed == (campaign_id, chain_id):
             same_chain.append(pull)
     if same_chain:
         raise Refusal(
             "same-chain-open",
             matchingPullRequests=[pull_summary(pull) for pull in same_chain],
         )
-    if len(managed_in_campaign) >= 2:
+    if len(managed_in_repo) >= 2:
         raise Refusal(
-            "campaign-open-pr-cap",
-            openManagedPullRequestCount=len(managed_in_campaign),
-            matchingPullRequests=[pull_summary(pull) for pull in managed_in_campaign],
+            "repository-open-pr-cap",
+            openManagedPullRequestCount=len(managed_in_repo),
+            matchingPullRequests=[pull_summary(pull) for pull in managed_in_repo],
         )
-    return len(managed_in_campaign)
+    return len(managed_in_repo)
 
 
 def lock_root() -> pathlib.Path:
