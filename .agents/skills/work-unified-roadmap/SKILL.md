@@ -1,6 +1,6 @@
 ---
 name: work-unified-roadmap
-description: "Advance the FS-GG Unified Development Roadmap one feature at a time: resume active work, plan new features with Astra high, and execute their subroadmaps with Sol medium."
+description: "Advance the FS-GG Unified Development Roadmap through dependency-ready parallel lanes: plan each new major feature with Astra high and execute disjoint subroadmap work with Sol medium."
 ---
 
 # Work Unified Roadmap
@@ -28,8 +28,16 @@ the feature-planning/implementation loop merely because the audit edits its road
 Identify an active feature from the user's request, current work/PR and existing feature-roadmap links.
 Resume it with its original identity and cost lineage. If multiple active features are genuinely ambiguous,
 ask which one to advance while continuing independent read-only inspection. Do not invent a new registry.
-Respect request scope: a named feature stays that feature; programme-wide advancement may select the next
-dependency-ready feature after completing the current one.
+Respect request scope: a named feature stays that feature. Programme-wide advancement may schedule
+independent dependency-ready parts concurrently while each dependent chain remains ordered.
+
+For programme-wide advancement, make a scheduling pass over the actual dependency graph and active
+subroadmaps. Fill a stated bounded programme/feature capacity with independently ready named parts and
+disjoint implementation lanes, accounting for available workers, integrators and hosted CI throughput.
+Do not open more PR lanes when the existing PR/check queue is the bottleneck; review, repair and integrate
+the active set, then refill capacity as lanes join or stop. An active feature, review, CI wait or protected
+effect does not idle another ready lane when capacity remains. Keep the user's named-feature boundary when
+the request is narrower than programme-wide work.
 
 Use section 9.8's named parts as the default Astra assignment boundaries, not one assignment per stage,
 PR or repair. Follow the linked plan before creating another; check the owner when no plan is linked.
@@ -48,19 +56,20 @@ not block earlier read-only research or otherwise authorized qualification.
 | Role | Model | Effort | Lifetime |
 |---|---|---|---|
 | Feature planner | `gpt-6-astra` | `high` | Fresh at each new major feature; reuse for bounded horizon expansion while its context remains useful |
-| Subroadmap implementation worker | `gpt-5.6-sol` | `medium` | Reuse through the active feature's routine milestones and repairs |
+| Subroadmap implementation worker | `gpt-5.6-sol` | `medium` | One accountable worker per disjoint lane; reuse through that lane's routine milestones and repairs |
 
 Use explicit overrides when spawning: `model`, `reasoning_effort`, and `fork_turns: "none"`. Supply the
 bounded packet below rather than the entire conversation. If those exact selections are unavailable,
-report the capability gap; do not silently substitute models. The parent coordinates scope and results;
-it does not redo the planner's analysis or implement a parallel copy of the worker's task.
+report the capability gap; do not silently substitute models. The parent schedules lanes, coordinates
+joins and integrates results; it does not redo a planner's analysis or implement a duplicate worker task.
 
 For a new feature, read [feature-planning.md](references/feature-planning.md) and give the Astra planner
 the real request, named part, relevant unified sections, current repository/evidence locations, original
 design links, constraints and existing authorization. Its job is read-only analysis and one proposed feature subroadmap,
 not starting implementation, publishing or changing policy. Online research answers concrete unknowns.
 
-For active, still-valid work, skip a new planning pass. Expand the near-term horizon only when its ready
+For active, still-valid work, skip a new planning pass. A new major feature gets its own fresh Astra-high
+planner; independently ready major features may be planned concurrently. Expand the near-term horizon only when its ready
 milestones are exhausted while the feature outcome remains incomplete. Replan for a material assumption,
 dependency, scope or architectural change, not an ordinary test failure, source-head change or CI wait.
 A fresh feature planner is not a mandatory reviewer of every milestone.
@@ -72,16 +81,27 @@ Locate the owning repository's installed `work-roadmap` skill. In this repositor
 Pass that exact path to the Sol-medium worker. If it is missing, locate the canonical skill instead of
 inventing its behavior.
 
-The worker packet contains the feature subroadmap/path, ready milestone window, owning repository,
+Each worker packet contains one feature/item/lane identity, the feature subroadmap/path, ready milestone window, owning repository,
 existing implementation branch/PR where applicable, source/evidence references, applicable route and
 current authority, acceptance examples, and a clear stop condition. Later follow-ups reuse the same worker
-for routine work. Only a recorded explicit human instruction may require heavyweight process for named
+for work in that lane. Keep feature, original-item, item, attempt and cost lineage stable across its repairs
+and follow-ups. Only a recorded explicit human instruction may require heavyweight process for named
 scope; honor it while keeping the implementation worker model Sol medium.
 
+Before dispatch, give every concurrent lane an explicit, non-overlapping touch-set, isolated worktree and
+one accountable owner/PR. Name one integrator for each shared surface and route shared-file edits or API
+joins through that integrator rather than letting workers race. Useful parallel lanes include independently
+ready named parts, disjoint implementation slices, focused test or CI repairs, bounded code-review fixes,
+and conversions of tools to F# when those conversions have their own acceptance and touch-set. Do not split
+one tightly coupled change merely to increase worker count. Join lanes only at a real source, contract,
+acceptance or protected-effect dependency, and stop or rescope a lane when its touch-set begins to overlap.
+
 Invoke `work-roadmap` against the small subroadmap, not against the entire unified document. Use its
-admitted routine route for routine work: one accountable owner, focused technical verification, same-PR
+admitted routine route for routine work: one accountable owner per lane/PR, focused technical verification, same-PR
 repair, native required checks and merged-state readback. Its routine exclusions apply to routine work;
 do not import the strict route's phase logs, receipt cycles or critic choreography into that branch.
+Parallel routine lanes use the same native safety gates and do not acquire issue, claim or operator-authorization
+ceremony from the heavyweight route. Concurrency itself is not a process-route selector.
 Keep normally bounded repairs and optional review within the installed route. For registered GS2 units,
 keep the existing ledger as substantive evidence and update its projection asynchronously; registration alone
 does not replace the routine process route.
@@ -125,7 +145,8 @@ After every Unified Roadmap item reaches authoritative `Closed` or `Done`, updat
 report**, in the canonical Unified Roadmap. Include that projection in the same PR when the owning change is in
 `.github`. For a cross-repository merge, native acceptance or live operation, land the progress-only update as the
 immediate asynchronous follow-up after authoritative readback. It does not block the owning delivery, but do not
-select the next roadmap item until the closed item appears in the report. Record source delivery, native
+select the next roadmap item on that same dependency chain until the closed item appears in the report. Continue selecting
+and dispatching independent ready lanes while that projection catches up. Record source delivery, native
 acceptance, installed operation and observed behavior separately. CI ticks, waiting and intermediate checkpoints
 do not require a roadmap edit.
 

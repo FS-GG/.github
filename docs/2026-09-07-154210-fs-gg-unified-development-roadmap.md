@@ -58,6 +58,7 @@ This report was reconciled against protected repository revisions on **2026-09-2
 [code audit](reports/2026-09-24-v2-roadmap-code-audit.md) records exact revisions, implementation boundaries,
 limitations and corrections. The [dependency graph and parallel lanes](#91-dependencies-and-parallelism)
 identify executable work; the [feature index](#98-feature-parts-and-subroadmap-index) links its owners.
+The I1 closure projection below uses its later protected [installed qualification](operations/v2-ci-i1-installed-qualification.md).
 
 Native accepted receipts, merged source, immutable publication, installed adoption and live operation are
 different evidence classes. Each claim below retains that distinction. Earlier progress narratives and
@@ -68,7 +69,8 @@ They are historical observations, not another current task list.
 **Mandatory closure update:** every Unified Roadmap item that reaches authoritative **Closed** or **Done** must
 update this report after native readback. Include same-repository updates in the owning PR; cross-repository
 projection follows asynchronously without delaying its delivery. The programme driver must not select the
-next item while the completed item is absent here. Update the relevant current row and its evidence link;
+next item on that item's dependency chain while the completed item is absent here. Independent ready lanes
+may continue while the projection lands. Update the relevant current row and its evidence link;
 retain detailed milestone history in the owning plan. CI ticks and intermediate checkpoints need no edit.
 
 ### 0.1 Stage progress
@@ -77,6 +79,7 @@ retain detailed milestone history in the owning plan. CI ticks and intermediate 
 |---|---|---|
 | **V0 — Simplified baseline and v2 binding** | Routine is the adopted source-delivery default. Governance routing/reuse primitives and telemetry sources exist; their presence does not prove the complete installed routine-v2 profile or efficiency. | `.github`, Coordination, Governance and receivers bind the effective routine obligations and R5 receiving population before candidate freeze. R2/R4/R5 measurement gaps remain separately attributed. |
 | **V1 — Events, queue and incumbent fence** | GS2-07.1–.8 and GS2-08.1–.9 retain accepted native evidence. The exact 0.90.0 bridge and residual-writer retirement are reusable inputs. | Preserve the accepted fence and census through new source and receiver changes. Do not reopen completed units or infer Q4. |
+| **I1 — Unattended CI credential interlude** | Milestones 01–06 are complete: source policy and Coordination 0.1.2 were delivered, the two-job path passed isolated hosted refusal, recovery and readback, and its exact receiver profile was selected for GS2-10. [Installed qualification](operations/v2-ci-i1-installed-qualification.md) records the evidence and bounded timing. | Production credential execution remains inactive at `OperatingV1`; GS2-10 candidate qualification and a separate protected `OpenV2` decision precede activation. The measured cohort does not establish a production bureaucracy percentage. |
 | **V2 — Callable path and migration rehearsal** | V2-CALL-01.1–.5 complete at their bounded callable boundary. Package 0.1.1, native isolated effect/recovery, cleanup and discovery handoff are evidenced. GS2-09.1–.6 accept pure migration contracts. Protected OperatingV1 admission genesis is installed with exact typed readback. | Coordination completes provider capture, migration execution, isolated representative rehearsal (.7), then independent omission/idempotency proof and parent closure (.8). Post-genesis append and copy-specific effect authority remain separate joins. |
 | **V3 — Exact candidate and receivers** | Not accepted. Existing publication, provider, tool and receiver evidence can support preparation. | GS2-10 freezes exact inputs, qualifies the complete candidate and clean/retained receivers, rehearses the cutover, and closes concurrent changes. |
 | **V4 — Closed switch** | Not entered by this audit. | GS2-11–12: authorized freeze/drain, exact switch, verification, and executable rollback while still closed. |
@@ -1122,9 +1125,11 @@ existing source/effect separation and does not authorize a current protected wri
 | **Telemetry / measurement — `.github` producer, installed operator** | Repair attributed observation gaps and qualify prospective published/installed changes under their own authority. | No general migration dependency. R5 needs its actual ordinary-v2 cohort; missing efficiency evidence cannot manufacture or veto unrelated operational acceptance. |
 | **Optional/product work — owning repositories** | Authorized independent research/source work, reused O3/Choreo/FsQuint foundations, and unrelated product fixes. | Candidate-affecting changes join the same freeze disposition. Release D.5 and production canaries keep their specific `OperatingV2` gates. |
 
-These are concurrency opportunities, not an instruction to spawn workers or assume staffing. Use one
-integrator for shared Coordination surfaces and exact candidate assembly. Pause only the dependent effect
-when an authority input is missing; state which independent source work remains useful.
+For programme-wide advancement, dispatch independently ready lanes in parallel within actual worker,
+integrator and hosted-CI capacity; a named-feature request stays within that feature. Give concurrent
+workers isolated worktrees and disjoint touch-sets. Use one integrator for shared Coordination surfaces
+and exact candidate assembly. Pause only the dependent effect when an authority input is missing;
+state which independent source work remains useful.
 
 [ADR-0084](adr/0084-semantic-reuse-never-cancels-coherent-validation.md) still governs CI concurrency:
 validated exact-head `reused` evidence may overlap native delivery with coherent closure; `current` or
@@ -1309,11 +1314,11 @@ That source supplies protocol depth; this unified roadmap owns the feature's pla
 
 ### 9.8 Feature parts and subroadmap index
 
-These are the default **parts for Astra planning**, named by deliverable. Select the next dependency-ready
-part when programme advancement is requested; use a fresh Astra-high planner when that part needs its
-first plan. A valid active subroadmap continues with its existing identity. Within a part, detail only
-the next useful window and retain later outcomes as an outline. Source changes, routine repairs and
-individual PRs do not create new parts or require fresh planning.
+These are the default **parts for Astra planning**, named by deliverable. Select independent
+dependency-ready parts concurrently when programme advancement is requested; use a fresh Astra-high
+planner when each part needs its first plan. A valid active subroadmap continues with its existing
+identity. Within a part, detail only the next useful window and retain later outcomes as an outline.
+Source changes, routine repairs and individual PRs do not create new parts or require fresh planning.
 
 A part can span stages where one outcome crosses an operating boundary, and one stage can contain
 independently useful parts. The entries below are planning scopes, not a second GS2 queue or completion
@@ -1328,9 +1333,9 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Event and queue qualification** | V1, GS2-07.6–07.7: qualify the queue and measure narrow reconciliation, coalescing and audit repair | Coordination; preserve accepted native units and resume only unfinished scope | [GS2-07.7 event-benefit subroadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-07-7-event-benefit.md), scoped to 07.7; native acceptance is recorded in [PR #329](https://github.com/FS-GG/FS.GG.Coordination/pull/329) |
 | **Runtime operations qualification** | V1 / GS2-07.8: accepted selected no-host operation/audit scope | Coordination; preserve the accepted disposition, qualify only newly included runtime behavior | [GS2-07.8 owning plan](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/docs/roadmaps/gs2-07-8-runtime-operations.md) and its accepted receipt |
 | **Universal bridge and receiver fencing** | V1, GS2-08: protected epoch ledger, complete current-writer coverage, published bridge, receiver adoption and old-client refusal | `.github` bridge owner, with Coordination and receiver owners; GS2-08.1–08.9 are accepted, active installed bypasses are retired and Q4 remains unclaimed | [GS2-08.8 receiver adoption horizon](roadmaps/gs2-08-universal-v1-bridge.md#gs2-088-receiver-adoption--window-a), [receiver acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/417) and [residual-writer acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/419) |
-| **Unattended CI credential execution** | I1: next bounded interlude for trusted post-merge secret use, one-attempt installation, reviewer checklist and measured CI/bureaucracy cost | `.github` policy/secret owner with Coordination installer and selected receiver; source slices run beside GS2-09, installed adoption joins GS2-10 only if qualified | [V2-CI-I1 subroadmap](roadmaps/v2-ci-i1-unattended-credential-execution.md), [design](coordination/2026-09-24-v2-unattended-ci-credential-interlude.md) and [ADR-0088](adr/0088-ci-owned-unattended-credential-execution.md); milestone 01 source policy is complete, with no current v1/OpenV2 human gate or live credential route changed |
+| **Unattended CI credential execution** | I1: trusted post-merge secret use, one-attempt installation, reviewer checklist and bounded CI cost observation qualified in an isolated hosted receiver | `.github` policy/secret owner with Coordination installer and selected receiver; 01–06 complete, exact profile selected for GS2-10, production activation pending its candidate and `OpenV2` gates | [V2-CI-I1 subroadmap](roadmaps/v2-ci-i1-unattended-credential-execution.md), [installed qualification](operations/v2-ci-i1-installed-qualification.md), [design](coordination/2026-09-24-v2-unattended-ci-credential-interlude.md) and [ADR-0088](adr/0088-ci-owned-unattended-credential-execution.md) |
 | **Callable ordinary v2 execution** | V2 / GS2-09.9: bounded installed source-delivery composition, native isolated recovery and discovery handoff complete | Coordination; preserve exact 0.1.1 artifact, receiver and permission ceiling; no fleet production or migration authority | [Completed V2-CALL-01 plan](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/docs/roadmaps/callable-ordinary-v2-execution.md), [readiness](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/gs2-09-9/callable-readiness.json) and [handoff](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json). Historical 0.1.0 bytes remain unchanged; 0.1.1 is the accepted repair identity |
-| **Migration tooling and representative rehearsal** | V2 / GS2-09: .1–.6 contracts accepted; .7 provider execution/rehearsal and .8 omission/parent closure remain | Coordination with receiver and protected-operation owners; source lanes and effect join are separated in §9.1 | [Exact GS2 sequence](github-substrate-v2-roadmap.md#gs2-09--build-migration-archive-and-rollback-tooling), [current implementation window](#93-v1v2-make-v2-usable-before-freezing-it) and [audit](reports/2026-09-24-v2-roadmap-code-audit.md). Existing local .7 plan/source at `82b4772d…` must be reconciled and published before replacing this draft locator with a durable owner link |
+| **Migration tooling and representative rehearsal** | V2 / GS2-09: .1–.6 contracts accepted; .7 provider execution/rehearsal and .8 omission/parent closure remain | Coordination with receiver and protected-operation owners; source lanes and effect join are separated in §9.1 | [GS2-09.7 owner plan](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-09-7-representative-rehearsal.md), [exact GS2 sequence](github-substrate-v2-roadmap.md#gs2-09--build-migration-archive-and-rollback-tooling), [current implementation window](#93-v1v2-make-v2-usable-before-freezing-it) and [audit](reports/2026-09-24-v2-roadmap-code-audit.md). The published plan retains source work and records the remaining provider/operation gaps; GS2-09.7 is not yet accepted |
 | **Coherent candidate and new-workspace qualification** | V3, GS2-10: bind published tools, template/provider pins, guidance, clean/upgrade receiver cases and the rehearsed cutover window | `.github` cutover owner, with Coordination, SDD and Templates; completed candidate inputs | No subroadmap linked yet |
 | **Controlled cutover and first ordinary use** | V4–V5, GS2-11–13: freeze and drain, switch while closed, verify rollback, then separately authorize OpenV2 and observe real journeys | `.github` cutover owner with Coordination and receiver owners; qualified candidate and staffed operation window | No subroadmap linked yet; one plan retains the closed-switch and irreversible-open boundaries |
 | **Observation, receiver carryover and v1 retirement** | V6, GS2-14/R5: immediate baseline and 15 distinct completed-work readings, contraction, clean-install/upgrade proof and separately qualified routine efficiency | `.github` migration owner with Coordination and receivers; OpenV2 and the actual receiving populations | No subroadmap linked yet |
