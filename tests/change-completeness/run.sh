@@ -29,9 +29,6 @@ for path in 'scripts/ci-gate-impact.py' 'tests/ci-runtime-optimization/run.sh'; 
   grep -qx 'engine_changed=false' "$WORK/focused-ci.out" \
     && ok "$path does not schedule the full engine job" \
     || bad "$path was misclassified"
-  grep -Eq '^ci-runtime-optimization: [1-9][0-9]* passed, 0 failed$' "$WORK/focused-ci.log" \
-    && ok "$path executes a non-vacuous focused selector fixture" \
-    || bad "$path omitted or vacuously passed the focused selector fixture"
 done
 
 GITHUB_OUT="$WORK/engine.out" "$ROOT/scripts/change-completeness" \
@@ -83,7 +80,6 @@ for label in \
   'v1 writer census structural closure' \
   'v1 receiver source census offline closure' \
   'GS2-08.6 independent producer fence attacks' \
-  'focused CI selector and non-vacuity contract' \
   'command catalogue, parser, render, write-ness, contract, and help closure' \
   'v1 writer census candidate-built metadata' \
   'handler ownership and production registration' \
@@ -141,16 +137,27 @@ grep -Fq 'timeout-minutes: 5' "$ROOT/.github/workflows/coord-engine.yml" \
   && ok 'workflow encodes the five-minute target' \
   || bad 'five-minute target is not encoded'
 
-focused_fixture_calls="$(grep -Fc 'bash "$ROOT/tests/ci-runtime-optimization/run.sh"' "$ROOT/scripts/change-completeness" || true)"
+focused_fixture_calls="$(awk '
+  /^  change-completeness:/ { inside=1; next }
+  /^  engine:/ { inside=0 }
+  inside && /run: bash tests\/ci-runtime-optimization\/run.sh/ { count++ }
+  END { print count+0 }
+' "$ROOT/.github/workflows/coord-engine.yml")"
 if [ "$focused_fixture_calls" = 1 ]; then
-  ok 'required predecessor owns exactly one focused CI selector fixture invocation'
+  ok 'required predecessor directly owns exactly one focused CI selector fixture invocation'
 else
   bad "required predecessor has $focused_fixture_calls focused CI selector fixture invocations"
 fi
-if grep -Fq 'run: bash tests/ci-runtime-optimization/run.sh' "$ROOT/.github/workflows/coord-engine.yml"; then
-  bad 'full engine job still repeats the focused CI selector fixture'
-else
+full_engine_fixture_calls="$(awk '
+  /^  engine:/ { inside=1; next }
+  inside && /^  [A-Za-z][A-Za-z0-9_-]*:/ { inside=0 }
+  inside && /run: bash tests\/ci-runtime-optimization\/run.sh/ { count++ }
+  END { print count+0 }
+' "$ROOT/.github/workflows/coord-engine.yml")"
+if [ "$full_engine_fixture_calls" = 0 ]; then
   ok 'full engine job does not repeat the focused CI selector fixture'
+else
+  bad 'full engine job still repeats the focused CI selector fixture'
 fi
 grep -Fq "if: github.event_name == 'workflow_dispatch' || needs.change-completeness.outputs.engine_changed == 'true'" \
   "$ROOT/.github/workflows/coord-engine.yml" \

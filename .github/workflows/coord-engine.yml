@@ -127,6 +127,9 @@ jobs:
           fi
           scripts/change-completeness --base "$base" --head "$EVENT_HEAD" \
             --github-output "$GITHUB_OUTPUT" "${body_arg[@]}"
+      # Keep this as a direct workflow invocation so the suite wiring inventory can prove it runs.
+      - name: Assert optimized CI scheduling remains fail-closed and non-vacuous
+        run: bash tests/ci-runtime-optimization/run.sh
       - name: Prove the gate wiring and named structural families
         run: bash tests/change-completeness/run.sh
       - name: Prove every authority slice retains parity and an effective inversion
