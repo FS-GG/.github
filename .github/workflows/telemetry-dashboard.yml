@@ -175,4 +175,4 @@ jobs:
       - name: Deploy exact built artifact
         if: steps.latest.outputs.deploy == 'true'
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
