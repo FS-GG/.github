@@ -209,6 +209,57 @@ YAML
 expect "duplicate caller permissions refuse before the second key can mask an undergrant" \
   3 "duplicate YAML mapping key 'permissions'" "$WDUP" "$RC"
 
+# PyYAML follows YAML 1.1 scalar construction: bare `on` and `true` both become the boolean True,
+# and True compares equal to integer 1. Duplicate detection must therefore compare constructed
+# keys rather than their source spelling. Quoted "1" remains a string and is a distinct key.
+WBOOL="$WORK/w-constructed-bool-collision"; mkdir -p "$WBOOL/FS-GG__R"
+cat > "$WBOOL/FS-GG__R/c.yml" <<'YAML'
+on: { pull_request: {} }
+true: { push: {} }
+permissions: { contents: read, packages: read }
+jobs:
+  sync:
+    uses: FS-GG/.github/.github/workflows/cal.yml@main
+YAML
+expect "constructed YAML keys refuse on plus true before one boolean key masks the other" \
+  3 "duplicate YAML mapping key True" "$WBOOL" "$RC"
+
+WINTBOOL="$WORK/w-constructed-int-bool-collision"; mkdir -p "$WINTBOOL/FS-GG__R"
+cat > "$WINTBOOL/FS-GG__R/c.yml" <<'YAML'
+1: first
+true: second
+permissions: { contents: read, packages: read }
+jobs:
+  sync:
+    uses: FS-GG/.github/.github/workflows/cal.yml@main
+YAML
+expect "constructed YAML keys refuse integer one plus boolean true" \
+  3 "duplicate YAML mapping key True" "$WINTBOOL" "$RC"
+
+WINTSTRING="$WORK/w-constructed-int-string-distinct"; mkdir -p "$WINTSTRING/FS-GG__R"
+cat > "$WINTSTRING/FS-GG__R/c.yml" <<'YAML'
+1: integer
+"1": string
+permissions: { contents: read, packages: read }
+jobs:
+  sync:
+    uses: FS-GG/.github/.github/workflows/cal.yml@main
+YAML
+expect "constructed integer one and quoted string one remain distinct" \
+  0 "ok:" "$WINTSTRING" "$RC"
+
+WUNHASHABLE="$WORK/w-unhashable-key"; mkdir -p "$WUNHASHABLE/FS-GG__R"
+cat > "$WUNHASHABLE/FS-GG__R/c.yml" <<'YAML'
+? [one, two]
+: value
+permissions: { contents: read, packages: read }
+jobs:
+  sync:
+    uses: FS-GG/.github/.github/workflows/cal.yml@main
+YAML
+expect "constructed unhashable YAML keys refuse safely" \
+  3 "found unhashable key" "$WUNHASHABLE" "$RC"
+
 RDUP="$WORK/r-duplicate-callee"; mkdir -p "$RDUP/.github/workflows" "$RDUP/registry"
 cat > "$RDUP/.github/workflows/cal.yml" <<'YAML'
 on: { workflow_call: {}, workflow_call: {} }
