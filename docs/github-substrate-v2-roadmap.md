@@ -280,6 +280,18 @@ Qualification GitHub IO       |
 be developed in parallel with v2, but it cannot publish until the epoch wire contract is frozen. No fleet
 preparation begins from an unqualified candidate.
 
+At the current GS2-09 frontier, the pending GS2-09.9 callable qualification and disjoint GS2-09.7
+provider, recovery and protected-cohort preparation can advance concurrently. The representative
+GS2-09.7 rehearsal joins the accepted callable handoff, fresh copy-specific inputs and protected effect
+route; GS2-09.8 omission controls may be prepared in parallel but their acceptance follows the completed
+rehearsal. [CI portfolio follow-on](#126-ci-portfolio-follow-on-and-parallel-execution) in separate
+repositories and independent telemetry preparation can also proceed during GS2-09. Only changes selected
+as GS2-10 candidate inputs join its exact source/receiver/settings inventory and full qualification.
+Selected receiver PRs and settings plans can be prepared by repository in parallel after that candidate
+is identified; their exact heads join the single GS2-10 manifest, full matrix and readiness decision.
+Unselected changes are explicitly deferred rather than allowed to cross the GS2-10.9 concurrent-change
+gate or the GS2-11 freeze.
+
 ## 4. Qualification gates
 
 These gates replace the existing coordination validation/verification process for v2.
@@ -1990,3 +2002,56 @@ catalog digest with current-main bytes. Adoption therefore requires the normal p
 unit-contract change additionally needs its own contract/evidence disposition. This amendment does not by
 itself update a receiver pin, force an active worker to restart, enable a v2 writer or claim the profile has
 passed candidate qualification.
+
+### 12.6 CI portfolio follow-on and parallel execution
+
+The [2026-09-26 CI portfolio audit](reports/2026-09-26-160800-ci-test-portfolio-audit.md#changes-to-land-first)
+measured duplicate jobs and repeated work across the fleet. Its first wave has source-landed: FsQuint's
+feature push/PR duplication, Game/Rendering/SDD/Templates receiver no-op calls, Net's repeat Debug build,
+and `.github`'s second projection-fixture invocation ([FsQuint #27](https://github.com/FS-GG/FsQuint/pull/27),
+[Game #658](https://github.com/FS-GG/FS.GG.Game/pull/658), [Rendering #1341](https://github.com/FS-GG/FS.GG.Rendering/pull/1341),
+[SDD #1063](https://github.com/FS-GG/FS.GG.SDD/pull/1063), [Templates #608](https://github.com/FS-GG/FS.GG.Templates/pull/608),
+[Net #93](https://github.com/FS-GG/FS.GG.Net/pull/93), [.github #3858](https://github.com/FS-GG/.github/pull/3858)).
+The [offline formal pilot](https://github.com/FS-GG/FS.GG.Coordination/pull/841) landed separately.
+These merges do not qualify any GS2 cutover unit or authorize broader evidence reuse.
+The following are **remaining proposed changes**, owned by their repositories; the audit's measured
+durations are opportunities, not promised savings. The sampled Game gate materialized 27 jobs and used
+13.87 runner minutes; its 326.90-minute elapsed time shows why job count and queue delay matter separately.
+Governance's standalone Debug build and reference guard used 4.03 and 2.03 minutes in one sample; their
+overlap is a validation question, not a sum of guaranteed savings.
+
+| Independent repository lane | Bounded next work | Acceptance and serialized join |
+|---|---|---|
+| Game | Share one restore/build per OS across the build, full suite and targeted invariant checks; batch the seven small hermetic fixture jobs into a few compatible jobs. | One Game gate integrator owns the shared `gate.yml` and required-context migration. Keep Linux/Windows, the Windows floating-point exclusion, nonzero test-match controls and individual step diagnostics. Replacement contexts must report on a candidate before protection changes; re-read the resulting rules. |
+| Governance | Reuse one Debug build for full Debug tests and reference-gate assertions; retain independent Release qualification. Retire the no-op receiver context only through the same repository's context migration. | One Governance integrator owns the gate and its classic/ruleset requirements. Prove reference test membership, pack/version assertions and cold-build behavior before removing duplicate execution or a required context. |
+| SDD | Run the identical receiver-project argument-rejection fixture once in required `skill-view-check`. | Keep main-gate view generation, idempotence, materializer tests, package acceptance and tree-clean checks. Verify both required producers on one candidate. |
+| Net | Retire the remaining no-op `contract-coherence / coherence` receiver call after its required-context migration. | Confirm the existing checks cover actual receiver obligations, remove the compatibility requirement with protected-settings readback, then delete the call. |
+| `.github` | Pilot batching cheap shell/Python checks whose triggers, permissions and authority subjects match. | Preserve all negative controls and distinct diagnostics. Compare job count, setup/queue time and failure localization; retain required status names or migrate them explicitly. |
+
+These repository lanes may prepare and test concurrently in separate branches/worktrees; SDD, Game,
+Governance, Net and `.github` have distinct source owners. Game's two changes both touch its gate, and
+Governance's build reuse and context retirement both touch its gate and settings: each pair needs one
+integrator rather than competing PRs or independently changed required names. A context migration is
+ordered **replacement producer on a real candidate → required-context/settings update and readback →
+retirement of the old producer** for a consolidated test. For a no-op compatibility call, verify the
+existing receiver checks, retire its requirement with readback, then remove its caller; do not invent a
+replacement job for an assertion that never ran. Coordination's offline formal shard, bootstrap, aggregate and signed
+evidence join have different consumers; further setup or shard-balance work needs its own measured,
+content-bound preflight. Rendering package sharing and Templates tool preparation are likewise measured
+investigations, not approved test deletions. Pre-existing release-tag and engine-pin failures remain
+release-custody repairs, not CI-savings candidates.
+
+Parallel source work does not require simultaneous hosted fanout. Run independent compilation and hermetic
+fixtures locally where their inputs and toolchain are pinned, then admit online candidate heads against
+**materialized job-level occupancy**, oldest eligible wait and the 20-job organization limit observed in
+the [CI machinery analysis](reports/2026-09-26-143434-ci-machinery-analysis.md#prioritized-actions-and-acceptance-evidence).
+Batch compatible small checks without hiding their failures. Preserve [ADR-0084](adr/0084-semantic-reuse-never-cancels-coherent-validation.md):
+semantic reuse never cancels coherent validation already accepted for a candidate. Distinct-subject work
+and effect-bearing operations are not coalesced as queue hints.
+
+GS2-09.7/09.8 and the repository lanes need no mutual source dependency. A CI change selected for v2
+adoption becomes a `candidate-input-change` under §1.4: finish its native PR and required-context
+readback, include its workflow/receiver/settings identity in GS2-10.1/10.5, run the full GS2-10.2
+candidate matrix, then close GS2-10.9 with no such change in flight. Otherwise record it as
+`cutover-deferred` and resume after `OperatingV2`. This planning section changes no accepted GS2 unit,
+old receipt, current roadmap pin, production epoch or protected-operation authority.
