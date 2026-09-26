@@ -67,7 +67,7 @@ jobs:
 
   # Projection gate (#128 / review H4). The registry ↔ docs/registry/compatibility.md coherence
   # is a .github-INTERNAL invariant (both files live here), so it runs in this self-gate rather
-  # than the reusable contract-coherence.yml that the four product repos call. It converts the
+  # than the reusable contract-coherence.yml. It converts the
   # recurring "coherence id shipped but never projected" / "contract row went stale" drift class
   # into a red check. Pure-stdlib + PyYAML; no network, no feed token.
   projection:
