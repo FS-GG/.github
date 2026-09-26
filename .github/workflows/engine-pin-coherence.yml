@@ -35,6 +35,7 @@ on:
       - "scripts/fsgg_feed.py"   # the shared feed reader + NuGet ordering (.github#263)
       - "tests/engine-pin/**"
       - ".github/workflows/engine-pin-coherence.yml"
+  # paths-coherence: allow-divergence — every main merge can change pin freshness, while PRs run only the fixture
   push:
     branches: [main]
     # DELIBERATELY UNFILTERED, like engine-freshness. The verdict is a function of main's pin AND the

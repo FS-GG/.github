@@ -186,6 +186,7 @@ import os
 import re
 import sys
 import traceback
+import xml.etree.ElementTree as ET
 
 import yaml
 
@@ -217,9 +218,10 @@ OK, FINDING, NO_VERDICT_PERMANENT = 0, 1, 3
 # ` why` all sign the marker, while none of them is required for the marker to be RECOGNISED. That
 # asymmetry is deliberate. If the separator were mandatory, a marker written with a reason but no
 # dash would not match at all — so instead of "you forgot to sign this", the author would get an
-# unrelated drift finding about their paths, which is a worse answer to a smaller mistake.
+# unrelated drift finding about their paths, which is a worse answer to a smaller mistake. The
+# marker token still needs a boundary: `allow-divergenceevil` is not a signed marker.
 ALLOW_MARKER = re.compile(
-    r"^[ \t]*#[ \t]*paths-coherence:[ \t]*allow-divergence[ \t]*[—:-]?[ \t]*(?P<reason>.*)$",
+    r"^[ \t]*#[ \t]*paths-coherence:[ \t]*allow-divergence(?=$|[ \t—:-])[ \t]*[—:-]?[ \t]*(?P<reason>.*)$",
     re.MULTILINE,
 )
 
@@ -235,17 +237,53 @@ ALLOW_UNCOVERED = re.compile(
 UNSIGNED = ""
 
 # The project files whose reference graph rule (b) reads. MSBuild's own languages; there is no
-# judgement in the list, only which extensions carry a `ProjectReference`.
-PROJECT_GLOBS = ("*.fsproj", "*.csproj", "*.vbproj")
+# judgement in the list, only which extensions carry a `ProjectReference`. MSBuild can load a
+# case-varied extension named by ProjectReference, so discovery must retain that project's edges.
+PROJECT_GLOBS = (
+    "*.[fF][sS][pP][rR][oO][jJ]",
+    "*.[cC][sS][pP][rR][oO][jJ]",
+    "*.[vV][bB][pP][rR][oO][jJ]",
+)
 
 
 class GateError(Exception):
     """A condition under which the gate must fail rather than skip. Maps to exit 3."""
 
 
+class UniqueKeySafeLoader(yaml.SafeLoader):
+    """SafeLoader semantics with a refusal before a repeated mapping key overwrites evidence."""
+
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict:
+        self.flatten_mapping(node)
+        mapping: dict = {}
+        spellings: set[str] = set()
+        for key_node, value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            # YAML 1.1 types bare `on` as True, while quoted/!!str `on` is a string. Their
+            # constructed keys differ, but Actions sees two spellings of the same workflow field.
+            # Refuse both constructed-key and scalar-spelling duplicates before either can mask it.
+            spelling = key_node.value if isinstance(key_node, yaml.ScalarNode) else None
+            try:
+                duplicate = key in mapping or (spelling is not None and spelling in spellings)
+            except TypeError as e:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping", node.start_mark,
+                    "unhashable mapping key", key_node.start_mark,
+                ) from e
+            if duplicate:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping", node.start_mark,
+                    f"duplicate mapping key {key!r}", key_node.start_mark,
+                )
+            mapping[key] = self.construct_object(value_node, deep=deep)
+            if spelling is not None:
+                spellings.add(spelling)
+        return mapping
+
+
 def load_yaml(text: str, what: str) -> dict:
     try:
-        doc = yaml.safe_load(text)
+        doc = yaml.load(text, Loader=UniqueKeySafeLoader)
     except yaml.YAMLError as e:
         raise GateError(f"{what}: not parsable as YAML — {e}") from e
     if not isinstance(doc, dict):
@@ -265,28 +303,45 @@ def triggers(doc: dict, what: str) -> dict:
     which here would mean skipping it. scripts/test made exactly that mistake (#879); do not repeat
     it. Anything that is none of the three spellings is refused, not guessed.
     """
+    def event_name(value: object) -> str:
+        # An invalid mapping key or scalar is not an event. Accepting it can silently remove a
+        # workflow from Rule (b)'s coverage audit while a clean sibling keeps the run green.
+        if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", value):
+            raise GateError(f"{what}: `on:` contains invalid event name {value!r}.")
+        return value
+
     for key in ("on", True):
         if key in doc:
             got = doc[key]
             if isinstance(got, dict):
+                for event in got:
+                    event_name(event)
                 return got
             if isinstance(got, list):
-                return {str(k): None for k in got}
+                if any(not isinstance(k, str) for k in got):
+                    raise GateError(
+                        f"{what}: `on:` sequence contains a non-string event; refusing to invent "
+                        "an event name from a YAML mapping, boolean, number, or null."
+                    )
+                return {event_name(k): None for k in got}
             if isinstance(got, str):
-                return {got: None}
+                return {event_name(got): None}
             raise GateError(
                 f"{what}: `on:` is {type(got).__name__}, not a string, list, or mapping — this gate "
                 f"cannot tell what triggers the workflow, and guessing would silently skip it (#266)."
             )
-    return {}
+    raise GateError(f"{what}: missing `on:` declaration; refusing to skip an unreadable workflow.")
 
 
-def declared(on: dict, trigger: str) -> tuple[object, bool]:
-    """`(<trigger>.paths as declared or None, whether it declares paths-ignore)`.
+def declared(on: dict, trigger: str, what: str) -> tuple[object, bool, bool]:
+    """`(<trigger>.paths value, whether paths is present, whether paths-ignore is present)`.
 
     `pull_request:` with a NULL value means EVERY PR, not "no PR trigger" (`coherence.yml` is in
     that state). Either way it declares no `paths:`, so it is not half of a pair — a workflow with no
-    `paths:` on either trigger is not drift and must not be flagged.
+    `paths:` on either trigger is not drift and must not be flagged. A trigger mapping with an
+    explicit `paths: null` IS a declaration, however, and must reach validated() rather than be
+    mistaken for the absent key. A present event with a non-null, non-mapping value is malformed:
+    treating it as unfiltered would let an unreadable filter disappear from Rule (b)'s audit.
 
     THIS READS AND DOES NOT JUDGE, and that is the entire fix for a real fail-closed bug.
 
@@ -300,24 +355,37 @@ def declared(on: dict, trigger: str) -> tuple[object, bool]:
     A gate may only refuse what it was actually asked to judge. Reading is not judging, so the read
     happens here and every refusal happens in main(), after scope is established.
     """
-    t = on.get(trigger)
+    if trigger not in on:
+        return None, False, False
+    t = on[trigger]
+    if t is None:
+        return None, False, False
     if not isinstance(t, dict):
-        return None, False
-    return (t.get("paths") if "paths" in t else None), ("paths-ignore" in t)
+        raise GateError(f"{what}: `{trigger}:` must be a mapping or null, got {type(t).__name__}.")
+    return t.get("paths"), ("paths" in t), ("paths-ignore" in t)
 
 
 def validated(raw: object, trigger: str, what: str) -> list[str]:
     """`<trigger>.paths` as a list of patterns this gate can soundly compare.
 
-    Only ever called on a workflow that IS a pair. A one-sided workflow's patterns are never
-    compared, so refusing them would be a false alarm about a file outside the rule.
+    Called for every present filter before Rule (b)/(c), including a one-sided workflow's filter.
+    Rule (a) later compares only paired events. An absent filter is not passed here.
     """
     if not isinstance(raw, list) or not raw:
         raise GateError(
             f"{what}: `{trigger}.paths:` is present but is not a non-empty list ({raw!r})."
         )
 
-    pats = [str(p) for p in raw]
+    # PyYAML resolves bare YAML 1.1 scalars such as `true`, `42`, and `null` to bool/int/None.
+    # Stringifying them invents a path filter Actions did not receive and can turn an uncovered
+    # one-sided workflow into a clean audit. A quoted spelling is still a real string and passes.
+    for p in raw:
+        if not isinstance(p, str):
+            raise GateError(
+                f"{what}: `{trigger}.paths:` contains a non-string pattern "
+                f"({p!r}, {type(p).__name__}); refusing to guess its Actions spelling."
+            )
+    pats = raw
     for p in pats:
         if p.startswith("!"):
             raise GateError(
@@ -326,16 +394,23 @@ def validated(raw: object, trigger: str, what: str) -> list[str]:
                 f"as SETS and different as FILTERS. This gate's equality test would call that "
                 f"coherent, which is the confident-wrong-answer it exists to prevent (#266)."
             )
+        if any(operator in p for operator in "?+[]"):
+            raise GateError(
+                f"{what}: `{trigger}.paths:` pattern {p!r} uses an unsupported GitHub paths "
+                "operator (?, +, or []). Rule (b)'s matcher only implements * and **; treating "
+                "another operator as a literal or a different wildcard could certify an "
+                "uncovered ProjectReference dependency."
+            )
     return pats
 
 
-def block_scalar_lines(text: str) -> set[int]:
-    """The 0-based lines covered by a block scalar (`|` / `>`) value.
+def opaque_scalar_lines(text: str) -> set[int]:
+    """The 0-based lines covered by opaque YAML scalar content.
 
-    A `#` inside a `run: |` block is shell TEXT, not a YAML comment, and nothing about the character
-    says which. This is the only reliable way to tell: ask the parser where the opaque regions are.
-    Without it the hatch reads a shell comment — or a heredoc line — as a signed divergence and
-    licenses real drift (exit 0 on a broken workflow), which is the fail-open this gate exists to end.
+    A `#` inside a block scalar or a multiline quoted scalar is YAML value TEXT, not a YAML
+    comment. Ask the parser for scalar spans before recognizing a standalone comment marker.
+    The whole spanned line is excluded when a scalar and a trailing comment share one line;
+    refusing an ambiguous marker is safer than licensing drift from value text.
     """
     try:
         node = yaml.compose(text)
@@ -344,10 +419,16 @@ def block_scalar_lines(text: str) -> set[int]:
         return set()
 
     covered: set[int] = set()
+    visited: set[int] = set()
 
     def walk(n: object) -> None:
+        # YAML aliases may refer back to an ancestor. The same node cannot create a new
+        # source span, so visiting it once is sufficient and keeps this scan finite.
+        if id(n) in visited:
+            return
+        visited.add(id(n))
         if isinstance(n, yaml.ScalarNode):
-            if n.style in ("|", ">"):
+            if n.style in ("|", ">") or n.start_mark.line < n.end_mark.line:
                 covered.update(range(n.start_mark.line, n.end_mark.line + 1))
         elif isinstance(n, yaml.SequenceNode):
             for child in n.value:
@@ -375,7 +456,7 @@ def allow_divergence(text: str, what: str) -> str | None:
     and called the file unsigned — a confidently wrong verdict against a file that did exactly what
     the gate asked.
     """
-    opaque = block_scalar_lines(text)
+    opaque = opaque_scalar_lines(text)
     markers = [
         m for m in ALLOW_MARKER.finditer(text)
         if text.count("\n", 0, m.start()) not in opaque
@@ -392,10 +473,9 @@ def allow_divergence(text: str, what: str) -> str | None:
 def glob_to_regex(pattern: str) -> re.Pattern[str]:
     """A GitHub `paths:` pattern as a regex over repo-relative paths.
 
-    Actions' globbing, not fnmatch's: `**` crosses `/`, `*` and `?` do not. fnmatch would translate
-    `*` to `.*` and quietly decide `src/*` matches `src/a/b.fs` — a filter that selects more than it
-    does, which for rule (b) means silently reporting a dependency as covered when a push to it would
-    not trigger the workflow. Wrong in the fail-OPEN direction, so it is spelled out here.
+    The validated subset is `*` and `**`. `**` crosses `/`, while `*` does not. fnmatch would
+    translate `*` to `.*` and quietly decide `src/*` matches `src/a/b.fs` — a filter that selects
+    more than it does and could falsely report a dependency covered.
     """
     i, out = 0, ["^"]
     while i < len(pattern):
@@ -409,13 +489,11 @@ def glob_to_regex(pattern: str) -> re.Pattern[str]:
         elif pattern[i] == "*":
             out.append("[^/]*")
             i += 1
-        elif pattern[i] == "?":
-            out.append("[^/]")
-            i += 1
         else:
             out.append(re.escape(pattern[i]))
             i += 1
-    out.append("$")
+    # `$` also matches just before a final newline; only the absolute end is a covered path.
+    out.append(r"\Z")
     return re.compile("".join(out))
 
 
@@ -438,23 +516,181 @@ def project_graph(root: str) -> dict[str, list[str]]:
 
     Structural: a `ProjectReference`'s `Include=` is a path, in a schema, in a file — there is no
     prose to misread here, which is precisely why rule (b) is derivable and reading `run:` is not.
+    Explicit MSBuild imports can add references outside this file, so they require evaluation.
+    A direct reference in the nearest implicit Directory.Build file also defeats a single-file graph.
     """
     graph: dict[str, list[str]] = {}
+    root_path = os.path.abspath(root)
+    root_real = os.path.realpath(root_path)
+    implicit_hazards: dict[str, str | None] = {}
+
+    def in_real_root(path: str) -> bool:
+        try:
+            return os.path.commonpath((root_real, os.path.realpath(path))) == root_real
+        except ValueError:  # Different drives cannot share a repository source root.
+            return False
+
+    def is_project_reference(element: ET.Element) -> bool:
+        # MSBuild item names are case-insensitive; XML structural names still retain case.
+        return (isinstance(element.tag, str)
+                and element.tag.rsplit("}", 1)[-1].casefold() == "projectreference")
+
+    def sets_targets_override(document_root: ET.Element) -> bool:
+        # This property replaces nearest-file selection. A supplied XML tree cannot authenticate
+        # which alternate targets file MSBuild imports after evaluation.
+        for group in document_root.iter():
+            if not isinstance(group.tag, str) or group.tag.rsplit("}", 1)[-1] != "PropertyGroup":
+                continue
+            if any(isinstance(child.tag, str)
+                   and child.tag.rsplit("}", 1)[-1].casefold() == "directorybuildtargetspath"
+                   for child in group):
+                return True
+        return False
+
+    def nearest_implicit(project_path: str, filename: str) -> str | None:
+        folder = os.path.dirname(os.path.abspath(project_path))
+        while True:
+            candidate = os.path.join(folder, filename)
+            if os.path.isfile(candidate):
+                if os.path.commonpath((root_path, folder)) != root_path:
+                    project_rel = os.path.relpath(project_path, root_path).replace(os.sep, "/")
+                    raise GateError(f"{project_rel}: implicit {filename} above repository root; "
+                                    "requires authenticated MSBuild source inventory")
+                if not in_real_root(candidate):
+                    project_rel = os.path.relpath(project_path, root_path).replace(os.sep, "/")
+                    raise GateError(f"{project_rel}: implicit {filename} resolves outside repository root; "
+                                    "requires authenticated MSBuild source inventory")
+                return candidate
+            parent = os.path.dirname(folder)
+            if parent == folder:
+                break
+            folder = parent
+        return None
+
     for pattern in PROJECT_GLOBS:
         for path in glob.glob(os.path.join(root, "**", pattern), recursive=True):
             rel = os.path.relpath(path, root).replace(os.sep, "/")
+            if not in_real_root(path):
+                raise GateError(f"{rel}: project source resolves outside repository root; "
+                                "requires authenticated MSBuild source inventory")
             try:
-                with open(path, encoding="utf-8") as fh:
-                    text = fh.read()
-            except OSError as e:
-                raise GateError(f"{rel}: unreadable — {e}") from e
+                project = ET.parse(path)
+            except (OSError, ET.ParseError) as e:
+                raise GateError(f"{rel}: unreadable or invalid project XML — {e}") from e
+            root_tag = project.getroot().tag
+            if not isinstance(root_tag, str) or root_tag.rsplit("}", 1)[-1] != "Project":
+                raise GateError(f"{rel}: project XML root must be Project")
+            # SDK props/targets are implicit imports. A custom SDK can add ProjectReference items
+            # absent from these project bytes; a static no-edge verdict would then be false green.
+            # Only the two attribute spellings used by this tree remain in the historical static
+            # subset. This is not proof of their resolved SDK contents or global resolver inputs.
+            sdk = project.getroot().get("Sdk")
+            if sdk is not None and sdk not in ("Microsoft.NET.Sdk", "Microsoft.NET.Sdk.Web"):
+                raise GateError(f"{rel}: unverified project SDK {sdk!r} can import ProjectReference "
+                                "items; requires authenticated MSBuild SDK evaluation")
+            if any(isinstance(child.tag, str) and child.tag.rsplit("}", 1)[-1] == "Sdk"
+                   for child in project.getroot()):
+                raise GateError(f"{rel}: unverified project SDK child element can import "
+                                "ProjectReference items; requires authenticated MSBuild SDK evaluation")
+            if sets_targets_override(project.getroot()):
+                raise GateError(f"{rel}: DirectoryBuildTargetsPath overrides implicit target selection; "
+                                "requires MSBuild import evaluation")
+            for filename in ("Directory.Build.props", "Directory.Build.targets"):
+                source = nearest_implicit(path, filename)
+                if source is None:
+                    continue
+                if source not in implicit_hazards:
+                    source_rel = os.path.relpath(source, root_path).replace(os.sep, "/")
+                    try:
+                        imported = ET.parse(source)
+                    except (OSError, ET.ParseError) as e:
+                        raise GateError(f"{source_rel}: unreadable or invalid implicit MSBuild XML — {e}") from e
+                    hazard = ("sets DirectoryBuildTargetsPath; requires MSBuild import evaluation"
+                              if sets_targets_override(imported.getroot()) else None)
+                    if hazard is None:
+                        for element in imported.iter():
+                            if is_project_reference(element):
+                                hazard = "contains ProjectReference; requires MSBuild evaluation"
+                                break
+                            if not isinstance(element.tag, str) or element.tag.rsplit("}", 1)[-1] != "Output":
+                                continue
+                            item_name = element.get("ItemName", "")
+                            if any(token in item_name for token in ("$(", "@(", "%(")):
+                                hazard = "dynamic task Output ItemName requires evaluation"
+                                break
+                            if item_name.casefold() == "projectreference":
+                                hazard = "task Output to ProjectReference requires evaluation"
+                                break
+                    implicit_hazards[source] = hazard
+                if implicit_hazards[source]:
+                    raise GateError(f"{rel}: implicit {filename} {implicit_hazards[source]}")
+            # ProjectReference additions/removals inside a Target depend on execution order.
+            # A task can also emit ProjectReference through Output without an item element.
+            for element in project.iter():
+                if not isinstance(element.tag, str) or element.tag.rsplit("}", 1)[-1] != "Target":
+                    continue
+                for child in element.iter():
+                    if not isinstance(child.tag, str):
+                        continue
+                    tag = child.tag.rsplit("}", 1)[-1]
+                    if is_project_reference(child):
+                        raise GateError(f"{rel}: target-time ProjectReference requires evaluation")
+                    if tag == "Output":
+                        item_name = child.get("ItemName", "")
+                        if any(token in item_name for token in ("$(", "@(", "%(")):
+                            raise GateError(f"{rel}: dynamic task Output ItemName requires evaluation")
+                        if item_name.casefold() == "projectreference":
+                            raise GateError(f"{rel}: task Output to ProjectReference requires evaluation")
             refs = []
-            for m in re.finditer(r'ProjectReference\s+[^>]*Include\s*=\s*"([^"]+)"', text):
+            # XML decodes character references in Include. Scanning raw attribute bytes can
+            # fabricate a path which a workflow covers while missing the real referenced project.
+            for element in project.iter():
+                if not isinstance(element.tag, str):
+                    continue
+                tag = element.tag.rsplit("}", 1)[-1]
+                if tag == "Import":
+                    raise GateError(
+                        f"{rel}: explicit MSBuild Import requires MSBuild import evaluation; "
+                        "refusing an incomplete ProjectReference graph."
+                    )
+                if not is_project_reference(element):
+                    continue
+                if element.get("Remove") is not None:
+                    raise GateError(f"{rel}: ProjectReference Remove requires MSBuild evaluation")
+                inc = element.get("Include")
+                if not inc:
+                    continue
+                # MSBuild expands item lists, globs, %-escapes, and expressions. A literal path
+                # for any of them invents one edge and can hide the actual project closure.
+                if (any(char in inc for char in ";*?%")
+                        or any(token in inc for token in ("$(", "@("))):
+                    raise GateError(
+                        f"{rel}: ProjectReference Include {inc!r} requires MSBuild evaluation; "
+                        "refusing to invent a literal graph edge."
+                    )
                 # MSBuild writes Windows separators; they are legal on every platform.
-                inc = m.group(1).replace("\\", "/")
+                inc = inc.replace("\\", "/")
+                if os.path.isabs(inc) or re.match(r"^[A-Za-z]:", inc):
+                    raise GateError(f"{rel}: ProjectReference Include {inc!r} is outside the repository graph")
                 target = os.path.normpath(os.path.join(os.path.dirname(path), inc))
+                try:
+                    within_root = os.path.commonpath((root_path, os.path.abspath(target))) == root_path
+                except ValueError:  # Different drive roots on Windows cannot have a common path.
+                    within_root = False
+                if not within_root:
+                    raise GateError(f"{rel}: ProjectReference Include {inc!r} is outside the repository graph")
                 refs.append(os.path.relpath(target, root).replace(os.sep, "/"))
             graph[rel] = refs
+    # A referenced file with an unsupported project extension can have its own outgoing edges.
+    # Treating it as a leaf would certify an incomplete closure, even if its path is covered.
+    for source, refs in graph.items():
+        for target in refs:
+            if target not in graph:
+                if os.path.isfile(os.path.join(root_path, target)):
+                    raise GateError(f"{source}: ProjectReference target {target!r} is outside "
+                                    "discovered project roster; requires MSBuild project evaluation")
+                raise GateError(f"{source}: ProjectReference target {target!r} is absent from "
+                                "discovered project roster; cannot certify its dependency closure")
     return graph
 
 
@@ -661,10 +897,11 @@ def subjects(patterns: list[str], graph: dict[str, list[str]]) -> list[str]:
 def allow_uncovered(text: str) -> dict[str, str]:
     """`{path: reason}` for each signed `allow-uncovered` marker. An unsigned one maps to UNSIGNED.
 
-    Same block-scalar exclusion as allow_divergence(): a marker inside a `run: |` is shell text, and
-    honouring it would license a real omission from a line that is not a YAML comment at all.
+    Same opaque-scalar exclusion as allow_divergence(): a marker inside `run: |` or a multiline
+    quoted value is data, and honouring it would license an omission from a line that is not a
+    YAML comment at all.
     """
-    opaque = block_scalar_lines(text)
+    opaque = opaque_scalar_lines(text)
     out: dict[str, str] = {}
     for m in ALLOW_UNCOVERED.finditer(text):
         if text.count("\n", 0, m.start()) in opaque:
@@ -712,8 +949,20 @@ def main(argv: list[str]) -> int:
         doc = load_yaml(text, where)
         on = triggers(doc, where)
 
-        pr_raw, pr_ignores = declared(on, "pull_request")
-        push_raw, push_ignores = declared(on, "push")
+        pr_raw, pr_paths, pr_ignores = declared(on, "pull_request", where)
+        push_raw, push_paths, push_ignores = declared(on, "push", where)
+
+        # Rule (b)/(c) consume each declared filter independently. Presence, not a truthy value,
+        # establishes scope: `paths: null`, `paths: []`, and a scalar are malformed filters, not
+        # permission to skip a one-sided workflow. Validate once before either coverage walk.
+        filters = [
+            (trigger, validated(raw, trigger, where))
+            for trigger, raw, present in (
+                ("pull_request", pr_raw, pr_paths),
+                ("push", push_raw, push_paths),
+            )
+            if present
+        ]
 
         # RULE (b), AND IT RUNS BEFORE THE PAIRING RULE RETURNS.
         #
@@ -738,10 +987,7 @@ def main(argv: list[str]) -> int:
             trigs.add(trigger)
             verbs.add(verb)
 
-        for trigger, raw in (("pull_request", pr_raw), ("push", push_raw)):
-            if raw is None or not isinstance(raw, list) or not raw:
-                continue
-            pats = [str(p) for p in raw]
+        for trigger, pats in filters:
             subjects_seen.update((where, sub) for sub in subjects(pats, graph))
             for project, dep in uncovered(pats, graph):
                 note(os.path.dirname(dep), os.path.dirname(project), trigger, "builds")
@@ -752,10 +998,7 @@ def main(argv: list[str]) -> int:
         # the script's AST supplies the closure. Folded into the same `missing` map so one absent
         # directory is one finding however many rules reach it — a reader does not care which rule
         # noticed, only what to add.
-        for trigger, raw in (("pull_request", pr_raw), ("push", push_raw)):
-            if raw is None or not isinstance(raw, list) or not raw:
-                continue
-            pats = [str(p) for p in raw]
+        for trigger, pats in filters:
             for script in named_scripts(pats, args.root):
                 subject = declared_subject(os.path.join(args.root, script), where)
                 if subject is None:
@@ -808,10 +1051,9 @@ def main(argv: list[str]) -> int:
         # directions, with no way to say whether they agree. Silently skipping it is how a coherence
         # gate fails open (#266), so it is refused.
         #
-        # Note what guards this: `pr_raw is not None`. The refusal can only fire on a workflow that
-        # HAS an allow-list — i.e. one this gate was actually asked to judge. See declared() for the
-        # bug that shape exists to prevent.
-        if (pr_raw is not None and push_ignores) or (push_raw is not None and pr_ignores):
+        # Key presence, not value truthiness, establishes whether the gate was asked to judge an
+        # allow-list. An explicit null is malformed, but still present.
+        if (pr_paths and push_ignores) or (push_paths and pr_ignores):
             raise GateError(
                 f"{where}: one trigger declares `paths:` and the other declares `paths-ignore:`. "
                 f"An ignore-list INVERTS selection, so this gate cannot say whether the two agree — "
@@ -822,8 +1064,16 @@ def main(argv: list[str]) -> int:
         # signed marker says why. This is distinct from a genuinely one-sided workflow: both events
         # exist, but one must report for every change while the other remains path-sensitive.
         reason = allow_divergence(text, where)
+        # Enter even without a marker: that is the finding below. Requiring a marker here would
+        # skip the split at the one-sided return and let a different clean pair make the audit green.
         if ("pull_request" in on and "push" in on
-                and ((pr_raw is None) != (push_raw is None)) and reason is not None):
+                and (pr_paths != push_paths)):
+            # A signed marker excuses the DIVERGENCE, not an invalid allow-list or a negated
+            # pattern whose order changes selection. Validate the present side before honoring it.
+            if not pr_paths:
+                validated(push_raw, "push", where)
+            else:
+                validated(pr_raw, "pull_request", where)
             pairs_seen += 1
             if reason == UNSIGNED:
                 findings.append(
@@ -842,7 +1092,7 @@ def main(argv: list[str]) -> int:
 
         # One-sided is a deliberate shape (`build-config-propagate.yml` is push-only,
         # `reusable-job-id-coherence.yml` is PR-only) and is not this gate's business.
-        if pr_raw is None or push_raw is None:
+        if not pr_paths or not push_paths:
             continue
 
         pr = validated(pr_raw, "pull_request", where)

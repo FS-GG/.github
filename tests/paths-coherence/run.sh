@@ -173,6 +173,77 @@ RN="$(root "$WORK/null-pr")"
 cp "$RS/.github/workflows/w.yml" "$RN/.github/workflows/pair.yml"
 expect "a null pull_request: (every PR, no filter) is not drift" 0 "ok:" "$RN"
 
+# Both events exist here. One is deliberately unfiltered only when a signed YAML comment explains
+# the split. Keep a clean paired sibling in each negative root: before this regression was fixed,
+# the split was skipped and that sibling made the whole audit falsely green instead of no-verdict.
+RSP="$(root "$WORK/split-pr-filtered")"
+{ echo "name: split"; echo "on:"; echo "  pull_request:"; echo "    paths: ['src/**']"
+  echo "  push: { branches: [main] }"
+  echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+  > "$RSP/.github/workflows/split.yml"
+cp "$RS/.github/workflows/w.yml" "$RSP/.github/workflows/paired.yml"
+expect "an unsigned PR-filtered/push-unfiltered split is a FINDING, not a skipped workflow" \
+  1 "one of \`pull_request\`/\`push\` is unfiltered" "$RSP"
+
+RSU="$(root "$WORK/split-push-filtered")"
+{ echo "name: split"; echo "on:"; echo "  pull_request:"
+  echo "  push: { branches: [main], paths: ['src/**'] }"
+  echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+  > "$RSU/.github/workflows/split.yml"
+cp "$RS/.github/workflows/w.yml" "$RSU/.github/workflows/paired.yml"
+expect "the reverse unfiltered/filtered split is also a FINDING" \
+  1 "one of \`pull_request\`/\`push\` is unfiltered" "$RSU"
+
+sed -i '1i # paths-coherence: allow-divergence — push intentionally runs for every change' \
+  "$RSP/.github/workflows/split.yml"
+expect "a signed unfiltered/filtered split is accepted" 0 "ok:" "$RSP"
+
+sed -i '1c # paths-coherence: allow-divergence' "$RSP/.github/workflows/split.yml"
+expect "an unsigned split marker remains a FINDING" 1 "with NO reason" "$RSP"
+
+# The marker licenses only the trigger split; it cannot make an invalid filtered side comparable.
+# Exercise both trigger directions so validation cannot accidentally apply to just one event.
+signed_split() {
+  local file="$1" side="$2" filter="$3"
+  { echo '# paths-coherence: allow-divergence — one trigger intentionally runs for every change'
+    echo 'name: split'
+    echo 'on:'
+    if [ "$side" = pr ]; then
+      echo '  pull_request:'; echo "    paths: $filter"
+      echo '  push: { branches: [main] }'
+    else
+      echo '  pull_request:'
+      echo "  push: { branches: [main], paths: $filter }"
+    fi
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } > "$file"
+}
+
+for side in pr push; do
+  for shape in empty scalar negated null; do
+    RSB="$(root "$WORK/split-bad-$side-$shape")"
+    case "$shape" in
+      empty) filter='[]'; needle='is not a non-empty list' ;;
+      scalar) filter='src/**'; needle='is not a non-empty list' ;;
+      negated) filter="['src/**', '!src/private/**']"; needle='Negation makes ORDER' ;;
+      null) filter='null'; needle='is not a non-empty list' ;;
+    esac
+    signed_split "$RSB/.github/workflows/split.yml" "$side" "$filter"
+    cp "$RS/.github/workflows/w.yml" "$RSB/.github/workflows/paired.yml"
+    expect "signed $side split refuses $shape filtered side" 3 "$needle" "$RSB"
+  done
+done
+
+# An explicit null paths key is present and malformed, even without a divergence marker. A null
+# event declaration (RN above) is different: it has no paths key and legitimately means unfiltered.
+for side in pr push; do
+  RNB="$(root "$WORK/split-null-unsigned-$side")"
+  signed_split "$RNB/.github/workflows/split.yml" "$side" 'null'
+  sed -i '1d' "$RNB/.github/workflows/split.yml"
+  cp "$RS/.github/workflows/w.yml" "$RNB/.github/workflows/paired.yml"
+  expect "unsigned $side split refuses explicit null paths key" 3 \
+    'is not a non-empty list' "$RNB"
+done
+
 # =============================================================================================
 # 4. `on:` has three legal spellings, and all three must be RECOGNISED AS LEGAL.
 #
@@ -228,6 +299,13 @@ sed -i '1i # paths-coherence: allow-divergence b/** is authored only on PRs' \
   "$RA5/.github/workflows/w.yml"
 expect "the separator is optional — a reason with no dash still signs the marker" \
   0 "diverges on purpose" "$RA5"
+
+RAB="$(root "$WORK/allow-suffix-without-boundary")"
+wf "$RAB/.github/workflows/w.yml" '      - "a/**"
+      - "b/**"' '      - "a/**"'
+sed -i '1i # paths-coherence: allow-divergenceevil' "$RAB/.github/workflows/w.yml"
+expect "a marker suffix without a boundary cannot sign drift" \
+  1 "the \`push\` copy omits 'b/**'" "$RAB"
 
 RA2="$(root "$WORK/allow-unsigned")"
 wf "$RA2/.github/workflows/w.yml" '      - "a/**"
@@ -315,6 +393,35 @@ wf "$RA10/.github/workflows/w.yml" '      - "a/**"
 sed -i '2i\      # paths-coherence: allow-divergence — an indented, real YAML comment' \
   "$RA10/.github/workflows/w.yml"
 expect "an INDENTED real YAML comment still signs the marker" 0 "diverges on purpose" "$RA10"
+
+# A multiline QUOTED scalar is opaque too. Its content line has the exact same marker spelling
+# and indentation as a standalone comment, but YAML gives that line to the run value.
+RA11="$(root "$WORK/allow-quoted-run")"
+wf "$RA11/.github/workflows/w.yml" '      - "a/**"
+      - "b/**"' '      - "a/**"'
+cat >> "$RA11/.github/workflows/w.yml" <<'YAML'
+  doc:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "echo hello
+          # paths-coherence: allow-divergence — quoted shell text"
+YAML
+expect "a marker inside a multiline quoted run value licenses NOTHING" \
+  1 "the \`push\` copy omits 'b/**'" "$RA11"
+
+RA12="$(root "$WORK/allow-quoted-run-then-comment")"
+wf "$RA12/.github/workflows/w.yml" '      - "a/**"
+      - "b/**"' '      - "a/**"'
+cat >> "$RA12/.github/workflows/w.yml" <<'YAML'
+  doc:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "echo hello
+          # paths-coherence: allow-divergence — quoted shell text"
+      # paths-coherence: allow-divergence — real YAML comment after the scalar
+YAML
+expect "a real YAML comment after a multiline quoted run still signs drift" \
+  0 "diverges on purpose" "$RA12"
 
 RA3="$(root "$WORK/allow-stale")"
 wf "$RA3/.github/workflows/w.yml" '      - "a/**"' '      - "a/**"'
@@ -409,6 +516,590 @@ wf "$RB2/.github/workflows/w.yml" '      - "src/A/**"
       - "src/B/**"'
 expect "...and covering it satisfies the rule" 0 "ok:" "$RB2"
 
+# MSBuild implicitly imports an SDK's props and targets. Both SDK spellings below can add a
+# ProjectReference outside the project's own XML; treating either as a no-reference leaf is green
+# while a push to B would skip this workflow. The custom SDK source is present in the fixture to
+# make the hidden edge concrete, though this pure gate must refuse before trying to evaluate it.
+for sdk_shape in attribute child; do
+  RSDK="$(root "$WORK/cover-custom-sdk-$sdk_shape")"
+  mkdir -p "$RSDK/src/A" "$RSDK/sdk/Injected.Graph.Sdk/Sdk"
+  cat > "$RSDK/sdk/Injected.Graph.Sdk/Sdk/Sdk.props" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup></Project>
+XML
+  printf '<Project />\n' > "$RSDK/sdk/Injected.Graph.Sdk/Sdk/Sdk.targets"
+  if [ "$sdk_shape" = attribute ]; then
+    printf '<Project Sdk="Injected.Graph.Sdk" />\n' > "$RSDK/src/A/A.fsproj"
+  else
+    printf '<Project><Sdk Name="Injected.Graph.Sdk" /></Project>\n' > "$RSDK/src/A/A.fsproj"
+  fi
+  proj "$RSDK" "src/B"
+  wf "$RSDK/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+  expect "Rule (b) refuses $sdk_shape custom SDK imports before a graph verdict" \
+    3 "unverified project SDK" "$RSDK"
+done
+
+# GitHub's paths filters give ?, + and [] operator meanings that glob_to_regex does not
+# implement. A pattern whose literal spelling equals a dependency can still fail to select that
+# dependency on a real push. Certifying it as covered is the false-green Rule (b) must refuse.
+for shape in question plus bracket; do
+  case "$shape" in
+    question) target='Bx.fsproj'; filter='B?.fsproj' ;;
+    plus)     target='B+.fsproj'; filter='B+.fsproj' ;;
+    bracket)  target='B[1].fsproj'; filter='B[1].fsproj' ;;
+  esac
+  RBGOP="$(root "$WORK/cover-unsupported-$shape")"
+  proj "$RBGOP" "src/A" "../B/$target"
+  proj "$RBGOP" "src/B"
+  mv "$RBGOP/src/B/B.fsproj" "$RBGOP/src/B/$target"
+  patterns="      - \"src/A/**\"
+      - \"src/B/$filter\""
+  wf "$RBGOP/.github/workflows/w.yml" "$patterns" "$patterns"
+  expect "Rule (b) refuses unsupported $shape filter operator before a covered verdict" \
+    3 "unsupported GitHub paths operator" "$RBGOP"
+done
+
+# One-sided paths still feed Rule (b), so they cannot bypass the operator refusal merely because
+# Rule (a) has no paired lists to compare.
+RBGOP1="$(root "$WORK/cover-unsupported-one-sided")"
+proj "$RBGOP1" "src/A" "../B/Bx.fsproj"
+proj "$RBGOP1" "src/B"
+mv "$RBGOP1/src/B/B.fsproj" "$RBGOP1/src/B/Bx.fsproj"
+{ echo 'name: w'; echo 'on:'; echo '  push:'; echo '    branches: [main]'
+  echo '    paths:'; echo '      - "src/A/**"'; echo '      - "src/B/B?.fsproj"'
+  echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+  > "$RBGOP1/.github/workflows/w.yml"
+wf "$RBGOP1/.github/workflows/pair.yml" '      - "docs/**"' '      - "docs/**"'
+expect "one-sided Rule (b) also refuses an unsupported filter operator" \
+  3 "unsupported GitHub paths operator" "$RBGOP1"
+
+# XML allows single-quoted attribute values. The graph reader must not lose a ProjectReference
+# merely because its Include uses that spelling; an omitted dependency would make Rule (b) green.
+single_ref_case=0
+for attrs in "Include='../B/B.fsproj'" "Label='dependency' Include='../B/B.fsproj'"; do
+  single_ref_case=$((single_ref_case+1))
+  RBS="$(root "$WORK/cover-single-quoted-ref-$single_ref_case")"
+  mkdir -p "$RBS/src/A"
+  { echo '<Project Sdk="Microsoft.NET.Sdk">'; echo '  <ItemGroup>'
+    echo "    <ProjectReference $attrs />"
+    echo '  </ItemGroup>'; echo '</Project>'; } > "$RBS/src/A/A.fsproj"
+  proj "$RBS" "src/B"
+  wf "$RBS/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+  expect "single-quoted ProjectReference $attrs still requires dependency coverage" \
+    1 "nothing in the filter selects 'src/B'" "$RBS"
+done
+
+# XML character references in Include are decoded by MSBuild. Reading the raw attribute bytes
+# fabricates an encoded dependency path: a filter for that fake path looks covered while a change
+# to the real project directory cannot trigger the workflow.
+entity_case=0
+for entity in '&amp;' '&#38;'; do
+  entity_case=$((entity_case+1))
+  for disposition in encoded actual; do
+    RBE="$(root "$WORK/cover-xml-entity-$entity_case-$disposition")"
+    proj "$RBE" "src/A" "../B${entity}C/B${entity}C.fsproj"
+    proj "$RBE" "src/B&C"
+    if [ "$disposition" = encoded ]; then
+      filter="src/B${entity}C/**"
+    else
+      filter='src/B&C/**'
+    fi
+    patterns="      - \"src/A/**\"
+      - \"$filter\""
+    wf "$RBE/.github/workflows/w.yml" "$patterns" "$patterns"
+    if [ "$disposition" = encoded ]; then
+      expect "encoded XML Include $entity cannot make a fake path look covered" \
+        1 "nothing in the filter selects 'src/B&C'" "$RBE"
+    else
+      expect "decoded XML Include $entity is covered by the real directory filter" \
+        0 "ok:" "$RBE"
+    fi
+  done
+done
+
+# An XML comment is not an edge, and malformed project XML cannot supply trustworthy graph facts.
+RBC="$(root "$WORK/cover-commented-project-reference")"
+mkdir -p "$RBC/src/A"
+{ echo '<Project Sdk="Microsoft.NET.Sdk">'
+  echo '  <!-- <ProjectReference Include="../B/B.fsproj" /> -->'
+  echo '</Project>'; } > "$RBC/src/A/A.fsproj"
+proj "$RBC" "src/B"
+wf "$RBC/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "commented ProjectReference does not fabricate an uncovered dependency" 0 "ok:" "$RBC"
+
+RBX="$(root "$WORK/cover-malformed-project-xml")"
+mkdir -p "$RBX/src/A"
+echo '<Project><ItemGroup>' > "$RBX/src/A/A.fsproj"
+wf "$RBX/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "malformed project XML refuses before a graph verdict" 3 "invalid project XML" "$RBX"
+
+# Well-formed XML is not necessarily an MSBuild project. A ProjectReference-looking child under
+# another root cannot supply an evaluated project graph, even when both apparent paths are covered.
+RBR="$(root "$WORK/cover-invalid-project-root")"
+proj "$RBR" "src/A"
+proj "$RBR" "src/B"
+cat > "$RBR/src/A/A.fsproj" <<'XML'
+<NotProject><ProjectReference Include="../B/B.fsproj" /></NotProject>
+XML
+wf "$RBR/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/B/**"' '      - "src/A/**"
+      - "src/B/**"'
+expect "well-formed XML with a non-Project root refuses graph facts" \
+  3 "project XML root must be Project" "$RBR"
+
+RBN="$(root "$WORK/cover-legacy-msbuild-namespace")"
+proj "$RBN" "src/A" "../B/B.fsproj"
+proj "$RBN" "src/B"
+cat > "$RBN/src/A/A.fsproj" <<'XML'
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup>
+</Project>
+XML
+wf "$RBN/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/B/**"' '      - "src/A/**"
+      - "src/B/**"'
+expect "legacy-namespaced Project root still supplies its reference graph" 0 "ok:" "$RBN"
+
+# MSBuild expands semicolon item lists, globs, percent escapes, and properties before the build.
+# Treating the raw Include as one path lets a filter cover that fabricated edge while omitting an
+# actual referenced project or its transitive closure.
+RBI="$(root "$WORK/cover-msbuild-item-list")"
+proj "$RBI" "src/A" "../B/B.fsproj;../C/C.fsproj"
+proj "$RBI" "src/B"
+proj "$RBI" "src/C"
+wf "$RBI/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/B/B.fsproj;../C/C.fsproj"' '      - "src/A/**"
+      - "src/B/B.fsproj;../C/C.fsproj"'
+expect "semicolon Include cannot become one covered fake project edge" \
+  3 "requires MSBuild evaluation" "$RBI"
+
+RBW="$(root "$WORK/cover-msbuild-wildcard")"
+proj "$RBW" "src/A" "../B/*.fsproj"
+proj "$RBW" "src/B" "../C/C.fsproj"
+proj "$RBW" "src/C"
+wf "$RBW/.github/workflows/w.yml" '      - "src/A/**"
+      - "**/B/*.fsproj"' '      - "src/A/**"
+      - "**/B/*.fsproj"'
+expect "wildcard Include cannot hide a referenced project's transitive dependency" \
+  3 "requires MSBuild evaluation" "$RBW"
+
+RBE="$(root "$WORK/cover-msbuild-escaped-semicolon")"
+proj "$RBE" "src/A" "../B%3BC/B%3BC.fsproj"
+proj "$RBE" "src/B;C"
+wf "$RBE/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/B%3BC/**"' '      - "src/A/**"
+      - "src/B%3BC/**"'
+expect "percent-escaped Include cannot become one covered fake path" \
+  3 "requires MSBuild evaluation" "$RBE"
+
+RBP="$(root "$WORK/cover-msbuild-property")"
+proj "$RBP" "src/A" '../$(Target)/B.fsproj'
+wf "$RBP/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/$(Target)/**"' '      - "src/A/**"
+      - "src/$(Target)/**"'
+expect "property-valued Include cannot become a literal graph edge" \
+  3 "requires MSBuild evaluation" "$RBP"
+
+# A Windows drive path is absolute to MSBuild, but POSIX os.path.join treats C:/ as relative.
+# That fabricates an edge under src/A, so an A-only filter appears to cover an external project.
+RBAD="$(root "$WORK/cover-absolute-drive-reference")"
+proj "$RBAD" "src/A"
+cat > "$RBAD/src/A/A.fsproj" <<'XML'
+<Project><ItemGroup><ProjectReference Include="C:\External\B.fsproj" /></ItemGroup></Project>
+XML
+wf "$RBAD/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "drive-absolute ProjectReference cannot become a covered relative edge" \
+  3 "outside the repository graph" "$RBAD"
+
+RBAE="$(root "$WORK/cover-escaping-reference")"
+proj "$RBAE" "src/A" "../../../outside/B.fsproj"
+wf "$RBAE/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "escaping ProjectReference refuses instead of issuing a partial graph verdict" \
+  3 "outside the repository graph" "$RBAE"
+
+# MSBuild inserts imported .props/.targets into the evaluated project. A direct XML scan of A
+# cannot see this reference, so the A-only filter would otherwise pass with B absent.
+RBIM="$(root "$WORK/cover-msbuild-import")"
+proj "$RBIM" "src/A"
+proj "$RBIM" "src/B"
+mkdir -p "$RBIM/build"
+cat > "$RBIM/src/A/A.fsproj" <<'XML'
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../build/Refs.props" />
+</Project>
+XML
+cat > "$RBIM/build/Refs.props" <<'XML'
+<Project>
+  <ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup>
+</Project>
+XML
+wf "$RBIM/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "explicit Import cannot hide an uncovered imported ProjectReference" \
+  3 "requires MSBuild import evaluation" "$RBIM"
+
+# Target-time item changes depend on execution order and cannot be declared as static graph facts.
+# The direct Include currently creates an unconditional B edge; the Remove is silently skipped.
+RBTI="$(root "$WORK/cover-target-time-reference-include")"
+proj "$RBTI" "src/A"
+proj "$RBTI" "src/B"
+cat > "$RBTI/src/A/A.fsproj" <<'XML'
+<Project><Target Name="Inject" BeforeTargets="ResolveProjectReferences">
+  <ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup>
+</Target></Project>
+XML
+wf "$RBTI/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "target-time Include refuses before inventing an unconditional reference" \
+  3 "target-time ProjectReference requires evaluation" "$RBTI"
+
+RBTR="$(root "$WORK/cover-target-time-reference-remove")"
+proj "$RBTR" "src/A"
+proj "$RBTR" "src/B"
+cat > "$RBTR/src/A/A.fsproj" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup>
+  <Target Name="Remove" BeforeTargets="ResolveProjectReferences">
+    <ItemGroup><ProjectReference Remove="../B/B.fsproj" /></ItemGroup>
+  </Target>
+</Project>
+XML
+wf "$RBTR/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/B/**"' '      - "src/A/**"
+      - "src/B/**"'
+expect "target-time Remove refuses instead of certifying a stale reference" \
+  3 "target-time ProjectReference requires evaluation" "$RBTR"
+
+RBTC="$(root "$WORK/cover-unrelated-target-item")"
+proj "$RBTC" "src/A"
+proj "$RBTC" "src/B"
+cat > "$RBTC/src/A/A.fsproj" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup>
+  <Target Name="Generate"><ItemGroup><Content Include="generated.txt" /></ItemGroup></Target>
+</Project>
+XML
+wf "$RBTC/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/B/**"' '      - "src/A/**"
+      - "src/B/**"'
+expect "unrelated target item leaves a static reference readable" 0 "ok:" "$RBTC"
+
+# A task can emit an item directly into ProjectReference during target execution. There is no
+# ProjectReference XML element for the reader to notice, so an A-only filter otherwise looks clean.
+RBTO="$(root "$WORK/cover-task-output-reference")"
+proj "$RBTO" "src/A"
+proj "$RBTO" "src/B"
+cat > "$RBTO/src/A/A.fsproj" <<'XML'
+<Project><Target Name="Inject" BeforeTargets="ResolveProjectReferences">
+  <CreateItem Include="../B/B.fsproj">
+    <Output TaskParameter="Include" ItemName="ProjectReference" />
+  </CreateItem>
+</Target></Project>
+XML
+wf "$RBTO/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "task Output cannot hide a target-time ProjectReference" \
+  3 "task Output to ProjectReference requires evaluation" "$RBTO"
+
+RBTOC="$(root "$WORK/cover-unrelated-task-output")"
+proj "$RBTOC" "src/A" "../B/B.fsproj"
+proj "$RBTOC" "src/B"
+cat > "$RBTOC/src/A/A.fsproj" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup>
+  <Target Name="Generate"><CreateItem Include="generated.txt">
+    <Output TaskParameter="Include" ItemName="Content" />
+  </CreateItem></Target>
+</Project>
+XML
+wf "$RBTOC/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/B/**"' '      - "src/A/**"
+      - "src/B/**"'
+expect "unrelated task Output leaves a static reference readable" 0 "ok:" "$RBTOC"
+
+# MSBuild expands Output ItemName expressions at target execution. This property currently names
+# ProjectReference, so the static reader's literal-name check silently misses a real B edge.
+RBTOD="$(root "$WORK/cover-dynamic-task-output-name")"
+proj "$RBTOD" "src/A"
+proj "$RBTOD" "src/B"
+cat > "$RBTOD/src/A/A.fsproj" <<'XML'
+<Project><PropertyGroup><OutputItem>ProjectReference</OutputItem></PropertyGroup>
+  <Target Name="Inject" BeforeTargets="ResolveProjectReferences">
+    <CreateItem Include="../B/B.fsproj">
+      <Output TaskParameter="Include" ItemName="$(OutputItem)" />
+    </CreateItem>
+  </Target>
+</Project>
+XML
+wf "$RBTOD/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "dynamic task Output ItemName cannot hide an emitted reference" \
+  3 "dynamic task Output ItemName requires evaluation" "$RBTOD"
+
+# Item evaluation can remove a reference declared earlier. The raw XML reader currently retains
+# B and reports an uncovered dependency even though MSBuild's resulting item set has no B.
+RBRM="$(root "$WORK/cover-project-reference-remove")"
+proj "$RBRM" "src/A"
+proj "$RBRM" "src/B"
+cat > "$RBRM/src/A/A.fsproj" <<'XML'
+<Project><ItemGroup>
+  <ProjectReference Include="../B/B.fsproj" />
+  <ProjectReference Remove="../B/B.fsproj" />
+</ItemGroup></Project>
+XML
+wf "$RBRM/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "ProjectReference Remove refuses before reporting a stale graph edge" \
+  3 "ProjectReference Remove requires MSBuild evaluation" "$RBRM"
+
+# SDK projects automatically import the nearest Directory.Build.props/targets. A direct B edge in
+# either file is absent from A.fsproj's XML, so the current reader lets an A-only filter pass.
+for kind in props targets; do
+  RBID="$(root "$WORK/cover-implicit-$kind-reference")"
+  proj "$RBID" "src/A"
+  proj "$RBID" "src/B"
+  cat > "$RBID/Directory.Build.$kind" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup></Project>
+XML
+  wf "$RBID/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+  expect "implicit Directory.Build.$kind cannot hide an imported ProjectReference" \
+    3 "implicit Directory.Build.$kind contains ProjectReference" "$RBID"
+done
+
+RBIP="$(root "$WORK/cover-implicit-props-without-reference")"
+proj "$RBIP" "src/A"
+echo '<Project><PropertyGroup><Version>1.0</Version></PropertyGroup></Project>' \
+  > "$RBIP/Directory.Build.props"
+wf "$RBIP/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "implicit props without ProjectReference preserves a static graph verdict" 0 "ok:" "$RBIP"
+
+RBIS="$(root "$WORK/cover-nearest-implicit-targets")"
+proj "$RBIS" "src/A"
+echo '<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup></Project>' \
+  > "$RBIS/Directory.Build.targets"
+echo '<Project><PropertyGroup><Version>1.0</Version></PropertyGroup></Project>' \
+  > "$RBIS/src/A/Directory.Build.targets"
+wf "$RBIS/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "nearest implicit targets file shadows an unimported parent" 0 "ok:" "$RBIS"
+
+# MSBuild item names are case-insensitive even though XML element names are case-sensitive. A
+# lower-case ProjectReference must be treated as the same item in every graph-reader position.
+RBCI="$(root "$WORK/cover-casefold-include")"
+proj "$RBCI" "src/A"
+proj "$RBCI" "src/B"
+cat > "$RBCI/src/A/A.fsproj" <<'XML'
+<Project><ItemGroup><projectreference Include="../B/B.fsproj" /></ItemGroup></Project>
+XML
+wf "$RBCI/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "lower-case ProjectReference Include cannot hide an uncovered project" \
+  1 "nothing in the filter selects 'src/B'" "$RBCI"
+
+RBCR="$(root "$WORK/cover-casefold-remove")"
+proj "$RBCR" "src/A"
+proj "$RBCR" "src/B"
+cat > "$RBCR/src/A/A.fsproj" <<'XML'
+<Project><ItemGroup>
+  <ProjectReference Include="../B/B.fsproj" />
+  <projectreference Remove="../B/B.fsproj" />
+</ItemGroup></Project>
+XML
+wf "$RBCR/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "lower-case ProjectReference Remove requires evaluation" \
+  3 "ProjectReference Remove requires MSBuild evaluation" "$RBCR"
+
+RBCT="$(root "$WORK/cover-casefold-target")"
+proj "$RBCT" "src/A"
+proj "$RBCT" "src/B"
+cat > "$RBCT/src/A/A.fsproj" <<'XML'
+<Project><Target Name="Inject" BeforeTargets="ResolveProjectReferences">
+  <ItemGroup><projectreference Include="../B/B.fsproj" /></ItemGroup>
+</Target></Project>
+XML
+wf "$RBCT/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "lower-case target-time ProjectReference requires evaluation" \
+  3 "target-time ProjectReference requires evaluation" "$RBCT"
+
+RBCB="$(root "$WORK/cover-casefold-implicit")"
+proj "$RBCB" "src/A"
+proj "$RBCB" "src/B"
+cat > "$RBCB/Directory.Build.targets" <<'XML'
+<Project><ItemGroup><projectreference Include="../B/B.fsproj" /></ItemGroup></Project>
+XML
+wf "$RBCB/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "lower-case implicit ProjectReference requires evaluation" \
+  3 "implicit Directory.Build.targets contains ProjectReference" "$RBCB"
+
+# An implicitly imported target can emit ProjectReference through task Output without a
+# ProjectReference XML item. Its ItemName can also be computed by MSBuild at execution time.
+RBIO="$(root "$WORK/cover-implicit-task-output")"
+proj "$RBIO" "src/A"
+proj "$RBIO" "src/B"
+cat > "$RBIO/Directory.Build.targets" <<'XML'
+<Project><Target Name="Inject" BeforeTargets="ResolveProjectReferences">
+  <CreateItem Include="../B/B.fsproj">
+    <Output TaskParameter="Include" ItemName="ProjectReference" />
+  </CreateItem>
+</Target></Project>
+XML
+wf "$RBIO/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "implicit task Output cannot hide an emitted ProjectReference" \
+  3 "implicit Directory.Build.targets task Output to ProjectReference requires evaluation" "$RBIO"
+
+RBIDY="$(root "$WORK/cover-implicit-dynamic-output")"
+proj "$RBIDY" "src/A"
+cat > "$RBIDY/Directory.Build.props" <<'XML'
+<Project><PropertyGroup><OutputItem>ProjectReference</OutputItem></PropertyGroup>
+  <Target Name="Inject" BeforeTargets="ResolveProjectReferences">
+    <CreateItem Include="../B/B.fsproj">
+      <Output TaskParameter="Include" ItemName="$(OutputItem)" />
+    </CreateItem>
+  </Target>
+</Project>
+XML
+wf "$RBIDY/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "implicit dynamic task Output ItemName cannot pass as a complete graph" \
+  3 "implicit Directory.Build.props dynamic task Output ItemName requires evaluation" "$RBIDY"
+
+# DirectoryBuildTargetsPath replaces nearest-file discovery during MSBuild evaluation. An
+# alternate file can add B even when the nearest Directory.Build.targets has no reference.
+RBTOP="$(root "$WORK/cover-project-targets-override")"
+proj "$RBTOP" "src/A"
+proj "$RBTOP" "src/B"
+cat > "$RBTOP/src/A/A.fsproj" <<'XML'
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>
+  <DirectoryBuildTargetsPath>$(MSBuildProjectDirectory)/../../Alternate.targets</DirectoryBuildTargetsPath>
+</PropertyGroup></Project>
+XML
+echo '<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup></Project>' \
+  > "$RBTOP/Alternate.targets"
+wf "$RBTOP/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "project-local targets override cannot hide an alternate ProjectReference" \
+  3 "DirectoryBuildTargetsPath overrides implicit target selection" "$RBTOP"
+
+RBTOPI="$(root "$WORK/cover-implicit-targets-override")"
+proj "$RBTOPI" "src/A"
+proj "$RBTOPI" "src/B"
+cat > "$RBTOPI/Directory.Build.props" <<'XML'
+<Project><PropertyGroup>
+  <directorybuildtargetspath>$(MSBuildThisFileDirectory)Alternate.targets</directorybuildtargetspath>
+</PropertyGroup></Project>
+XML
+echo '<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup></Project>' \
+  > "$RBTOPI/Alternate.targets"
+wf "$RBTOPI/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "implicit props targets override cannot hide an alternate ProjectReference" \
+  3 "implicit Directory.Build.props sets DirectoryBuildTargetsPath" "$RBTOPI"
+
+# MSBuild searches parent directories beyond a checkout root. A nearest implicit source above
+# --root is outside the gate's supplied graph inventory and must not become an OK verdict.
+for kind in props targets; do
+  RBAP_PARENT="$WORK/cover-above-root-$kind"
+  RBAP="$(root "$RBAP_PARENT/repo")"
+  proj "$RBAP" "src/A"
+  proj "$RBAP" "src/B"
+  cat > "$RBAP_PARENT/Directory.Build.$kind" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup></Project>
+XML
+  wf "$RBAP/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+  expect "above-root Directory.Build.$kind cannot hide an imported ProjectReference" \
+    3 "implicit Directory.Build.$kind above repository root" "$RBAP"
+done
+
+RBAPS_PARENT="$WORK/cover-above-root-shadowed"
+RBAPS="$(root "$RBAPS_PARENT/repo")"
+proj "$RBAPS" "src/A"
+echo '<Project><ItemGroup><ProjectReference Include="../B/B.fsproj" /></ItemGroup></Project>' \
+  > "$RBAPS_PARENT/Directory.Build.targets"
+echo '<Project><PropertyGroup><Version>1.0</Version></PropertyGroup></Project>' \
+  > "$RBAPS/Directory.Build.targets"
+wf "$RBAPS/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "in-root nearest targets file shadows an above-root source" 0 "ok:" "$RBAPS"
+
+# The nearest path may be in --root while a symlink supplies XML bytes from outside it. That
+# external source is not in the authenticated repository graph, even when its current XML is benign.
+for kind in props targets; do
+  RBLS_PARENT="$WORK/cover-implicit-symlink-$kind"
+  RBLS="$(root "$RBLS_PARENT/repo")"
+  proj "$RBLS" "src/A"
+  mkdir -p "$RBLS_PARENT/outside"
+  echo '<Project><PropertyGroup><Version>1.0</Version></PropertyGroup></Project>' \
+    > "$RBLS_PARENT/outside/Directory.Build.$kind"
+  ln -s "../outside/Directory.Build.$kind" "$RBLS/Directory.Build.$kind"
+  wf "$RBLS/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+  expect "symlinked implicit Directory.Build.$kind cannot certify an external source" \
+    3 "implicit Directory.Build.$kind resolves outside repository root" "$RBLS"
+done
+
+RBLIN="$(root "$WORK/cover-implicit-symlink-inside")"
+proj "$RBLIN" "src/A"
+mkdir -p "$RBLIN/build"
+echo '<Project><PropertyGroup><Version>1.0</Version></PropertyGroup></Project>' \
+  > "$RBLIN/build/local.targets"
+ln -s "build/local.targets" "$RBLIN/Directory.Build.targets"
+wf "$RBLIN/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "in-root symlinked implicit source preserves local provenance" 0 "ok:" "$RBLIN"
+
+# A project path itself may be a symlink. Its XML bytes are outside the supplied source inventory
+# when the target escapes --root, even though the path matched the in-root project glob.
+RBPS_PARENT="$WORK/cover-project-source-symlink"
+RBPS="$(root "$RBPS_PARENT/repo")"
+mkdir -p "$RBPS/src/A" "$RBPS_PARENT/outside"
+echo '<Project><PropertyGroup><ExternalSource>true</ExternalSource></PropertyGroup></Project>' \
+  > "$RBPS_PARENT/outside/A.fsproj"
+ln -s "../../../outside/A.fsproj" "$RBPS/src/A/A.fsproj"
+wf "$RBPS/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "external symlinked project source cannot certify a repo graph" \
+  3 "project source resolves outside repository root" "$RBPS"
+
+RBPLI="$(root "$WORK/cover-project-source-symlink-inside")"
+mkdir -p "$RBPLI/src/A" "$RBPLI/build"
+echo '<Project><PropertyGroup><Version>1.0</Version></PropertyGroup></Project>' \
+  > "$RBPLI/build/source.xml"
+ln -s "../../build/source.xml" "$RBPLI/src/A/A.fsproj"
+wf "$RBPLI/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "in-root symlinked project source remains in the supplied inventory" 0 "ok:" "$RBPLI"
+
+# ProjectReference paths can name a case-varied MSBuild project extension. If discovery skips B,
+# A's closure stops at B and an uncovered B→C edge disappears from the gate verdict.
+for ext in FSPROJ CsPrOj VBPROJ; do
+  RBCE="$(root "$WORK/cover-case-varied-project-$ext")"
+  proj "$RBCE" "src/A" "../B/B.$ext"
+  mkdir -p "$RBCE/src/B"
+  cat > "$RBCE/src/B/B.$ext" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../C/C.fsproj" /></ItemGroup></Project>
+XML
+  proj "$RBCE" "src/C"
+  patterns='      - "src/A/**"
+      - "src/B/**"'
+  wf "$RBCE/.github/workflows/w.yml" "$patterns" "$patterns"
+  expect "case-varied .$ext project keeps its outgoing Rule B edge" \
+    1 "nothing in the filter selects 'src/C'" "$RBCE"
+done
+
+# A ProjectReference can name a generic MSBuild .proj file. If that existing file is outside the
+# supported discovery roster, treating it as a graph leaf loses its own B→C edge.
+RBUP="$(root "$WORK/cover-referenced-generic-project")"
+proj "$RBUP" "src/A" "../B/B.proj"
+mkdir -p "$RBUP/src/B"
+cat > "$RBUP/src/B/B.proj" <<'XML'
+<Project><ItemGroup><ProjectReference Include="../C/C.fsproj" /></ItemGroup></Project>
+XML
+proj "$RBUP" "src/C"
+patterns='      - "src/A/**"
+      - "src/B/**"'
+wf "$RBUP/.github/workflows/w.yml" "$patterns" "$patterns"
+expect "referenced generic MSBuild project cannot silently terminate closure" \
+  3 "ProjectReference target 'src/B/B.proj' is outside discovered project roster" "$RBUP"
+
+RBUI="$(root "$WORK/cover-unreferenced-generic-project")"
+proj "$RBUI" "src/A"
+mkdir -p "$RBUI/src/B"
+echo '<Project />' > "$RBUI/src/B/B.proj"
+wf "$RBUI/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "unreferenced generic project does not expand a declared subject" 0 "ok:" "$RBUI"
+
+# A covered ProjectReference path is not proof that the project exists. If B is absent, the
+# reader cannot know B's outgoing edges and must not certify A's closure as complete.
+RBMP="$(root "$WORK/cover-missing-referenced-project")"
+proj "$RBMP" "src/A" "../B/B.fsproj"
+mkdir -p "$RBMP/src/B"
+patterns='      - "src/A/**"
+      - "src/B/**"'
+wf "$RBMP/.github/workflows/w.yml" "$patterns" "$patterns"
+expect "missing referenced project cannot certify a complete closure" \
+  3 "ProjectReference target 'src/B/B.fsproj' is absent from discovered project roster" "$RBMP"
+
 # CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
 # out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
 #
@@ -453,6 +1144,31 @@ wf "$RBG2/.github/workflows/w.yml" '      - "src/A/**"
       - "src/nested/**"'
 expect "\`**\` DOES cross \`/\` — \`src/nested/**\` covers a project nested below it" \
   0 "ok:" "$RBG2"
+
+# Python's `$` regex anchor matches before a final newline. The pure matcher must require the
+# entire supplied path, including that final byte; this edge cannot be exercised through the
+# current XML ProjectReference reader, which does not decode character references into filenames.
+mapfile -t matcher_edge < <(python3 - "$TOOL" <<'PY'
+import importlib.util
+import sys
+spec = importlib.util.spec_from_file_location("paths_coherence", sys.argv[1])
+gate = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gate)
+path = "src/B/B.fsproj\n"
+print(gate.selects(path, ["src/B/B.fsproj"]))
+print(gate.selects(path, [path]))
+PY
+)
+if [ "${matcher_edge[0]:-}" = False ]; then
+  ok "exact path pattern without final newline cannot cover a newline-suffixed path"
+else
+  bad "exact pattern falsely covers newline-suffixed path" "matcher returned ${matcher_edge[0]:-<none>}"
+fi
+if [ "${matcher_edge[1]:-}" = True ]; then
+  ok "exact pattern including final newline still covers that path"
+else
+  bad "exact pattern including newline stopped covering its path" "matcher returned ${matcher_edge[1]:-<none>}"
+fi
 
 # ---- the three false positives the rule's narrowness is measured to prevent -----------------
 #
@@ -501,6 +1217,139 @@ wf "$RB7/.github/workflows/pair.yml" '      - "docs/**"' '      - "docs/**"'
 expect "a ONE-SIDED filter is out of (a)'s scope and still answerable to (b)" \
   1 "the \`push\` filter names 'src/A'" "$RB7"
 
+# A one-sided trigger with a PRESENT but malformed `paths:` value is still in rule (b)'s input
+# scope. The former coverage loops skipped `None`, scalar, and empty values before validation;
+# a separate clean pair then made the whole audit exit 0 without judging that workflow.
+for shape in null '[]' 'src/A/**'; do
+  RB7M="$(root "$WORK/cover-onesided-malformed-${shape//[^a-zA-Z0-9]/_}")"
+  { echo "name: w"; echo "on:"; echo "  push:"; echo "    paths: $shape"
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+    > "$RB7M/.github/workflows/w.yml"
+  wf "$RB7M/.github/workflows/pair.yml" '      - "docs/**"' '      - "docs/**"'
+  expect "one-sided present malformed paths $shape is NO VERDICT, not an invisible skip" \
+    3 "push.paths:\` is present but is not a non-empty list" "$RB7M"
+done
+
+RB7U="$(root "$WORK/cover-onesided-unfiltered")"
+{ echo "name: w"; echo "on:"; echo "  push:"; echo "    branches: [main]"
+  echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+  > "$RB7U/.github/workflows/w.yml"
+wf "$RB7U/.github/workflows/pair.yml" '      - "docs/**"' '      - "docs/**"'
+expect "an absent one-sided paths key remains genuinely unfiltered" 0 "ok:" "$RB7U"
+
+# PyYAML resolves bare YAML 1.1 booleans, numbers and nulls to non-string values. Turning each
+# back into text with `str()` gives Rule (b) a filter Actions did not receive, so a one-sided
+# workflow can silently become green alongside an unrelated clean pair.
+for item in true 42 null; do
+  RB7T="$(root "$WORK/cover-onesided-typed-$item")"
+  { echo "name: w"; echo "on:"; echo "  push:"; echo "    paths: [$item]"
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+    > "$RB7T/.github/workflows/w.yml"
+  wf "$RB7T/.github/workflows/pair.yml" '      - "docs/**"' '      - "docs/**"'
+  expect "a bare non-string path item $item is NO VERDICT, not a stringified filter" \
+    3 "push.paths:\` contains a non-string pattern" "$RB7T"
+done
+
+RB7TQ="$(root "$WORK/cover-onesided-quoted-string")"
+{ echo "name: w"; echo "on:"; echo "  push:"; echo "    paths: ['true', '42', 'null']"
+  echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+  > "$RB7TQ/.github/workflows/w.yml"
+wf "$RB7TQ/.github/workflows/pair.yml" '      - "docs/**"' '      - "docs/**"'
+expect "quoted string path items remain valid filters" 0 "ok:" "$RB7TQ"
+
+# PyYAML's default mapping constructor keeps the LAST duplicate key. A second harmless `paths:`
+# can overwrite a project-naming filter and make Rule (b) answer green over the wrong declaration.
+# The explicit !!str spelling must not bypass the same duplicate-key refusal.
+for second in paths '!!str paths'; do
+  RBD="$(root "$WORK/cover-duplicate-${second//[^a-zA-Z0-9]/_}")"
+  proj "$RBD" "src/A" "../B/B.fsproj"
+  proj "$RBD" "src/B"
+  { echo "name: w"; echo "on:"; echo "  pull_request:"
+    echo "    paths: [docs/**]"; echo "  push:"
+    echo "    paths: [src/A/**]"; echo "    $second: [docs/**]"
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+    > "$RBD/.github/workflows/w.yml"
+  expect "duplicate $second cannot overwrite the project-naming path filter" \
+    3 "duplicate mapping key" "$RBD"
+done
+
+# PyYAML gives bare `on` a boolean key but quoted or !!str `on` a string key. Constructed-key
+# uniqueness therefore misses the duplicate spelling, and triggers() reads only the string key.
+# The malformed copy can hide a project-naming push filter behind an unfiltered second value.
+for second in "'on'" '!!str on'; do
+  RBT="$(root "$WORK/cover-tagged-on-${second//[^a-zA-Z0-9]/_}")"
+  proj "$RBT" "src/A" "../B/B.fsproj"
+  proj "$RBT" "src/B"
+  { echo "name: w"; echo "on:"; echo "  push: {paths: [src/A/**]}"
+    echo "$second: push"
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+    > "$RBT/.github/workflows/w.yml"
+  cp "$RS/.github/workflows/w.yml" "$RBT/.github/workflows/pair.yml"
+  expect "tagged duplicate $second cannot mask a project filter" \
+    3 "duplicate mapping key" "$RBT"
+done
+
+# An `on:` sequence is a list of event NAMES. Stringifying a mapping or YAML boolean fabricates
+# an event name, so a workflow's apparent push.paths can disappear while a clean sibling keeps the
+# audit at exit 0. The parser must refuse the malformed item before coverage is considered.
+for item in '{push: {paths: [src/A/**]}}' true; do
+  RES="$(root "$WORK/cover-event-sequence-${item//[^a-zA-Z0-9]/_}")"
+  proj "$RES" "src/A" "../B/B.fsproj"
+  proj "$RES" "src/B"
+  { echo "name: w"; echo "on: [$item]"
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+    > "$RES/.github/workflows/w.yml"
+  cp "$RS/.github/workflows/w.yml" "$RES/.github/workflows/pair.yml"
+  expect "non-string on sequence item $item cannot hide workflow selection" \
+    3 "sequence contains a non-string event" "$RES"
+done
+
+# The other `on:` forms must also reject event names the parser cannot bind. A numeric mapping
+# key, or a string with event-name punctuation, is not an Actions event. A clean sibling makes a
+# skipped malformed workflow look like a successful Rule (b) audit unless this is refused.
+event_case=0
+for value in '{42: {paths: [src/A/**]}}' "'push/evil'" "['push/evil']"; do
+  event_case=$((event_case+1))
+  REN="$(root "$WORK/cover-event-name-$event_case")"
+  proj "$REN" "src/A" "../B/B.fsproj"
+  proj "$REN" "src/B"
+  { echo "name: w"; echo "on: $value"
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+    > "$REN/.github/workflows/w.yml"
+  cp "$RS/.github/workflows/w.yml" "$REN/.github/workflows/pair.yml"
+  expect "invalid on event name $value cannot disappear from the audit" \
+    3 "invalid event name" "$REN"
+done
+
+# An event entry can be null (unfiltered) or a mapping (possibly with paths). A non-null scalar
+# or sequence is neither. Treating it as an unfiltered event silently discards a malformed filter;
+# the clean sibling below makes that omission look like a successful Rule (b) audit.
+event_value_case=0
+for entry in 'push: 42' 'pull_request: [src/A/**]' 'push: !!str null'; do
+  event_value_case=$((event_value_case+1))
+  REV="$(root "$WORK/cover-event-value-$event_value_case")"
+  proj "$REV" "src/A" "../B/B.fsproj"
+  proj "$REV" "src/B"
+  { echo "name: w"; echo "on:"; echo "  $entry"
+    echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+    > "$REV/.github/workflows/w.yml"
+  cp "$RS/.github/workflows/w.yml" "$REV/.github/workflows/pair.yml"
+  expect "non-null event value $entry cannot hide the workflow" \
+    3 "must be a mapping or null" "$REV"
+done
+
+# A workflow file with no `on` declaration has no inspectable trigger. Returning an empty event
+# map skips it; a clean sibling then makes the audit green despite the unreadable workflow.
+RMO="$(root "$WORK/cover-missing-on")"
+proj "$RMO" "src/A" "../B/B.fsproj"
+proj "$RMO" "src/B"
+{ echo "name: w"
+  echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+  > "$RMO/.github/workflows/w.yml"
+cp "$RS/.github/workflows/w.yml" "$RMO/.github/workflows/pair.yml"
+expect "missing on declaration cannot disappear behind a clean workflow" \
+  3 'missing `on:` declaration' "$RMO"
+
 # ---- rule (b)'s escape hatch ---------------------------------------------------------------
 RB8="$(root "$WORK/cover-hatch")"
 proj "$RB8" "src/A" "../B/B.fsproj"
@@ -546,14 +1395,59 @@ proj "$RB11" "src/B"
 expect "a hatch inside a \`run:\` block is SHELL TEXT and does not license anything" \
   1 "nothing in the filter selects 'src/B'" "$RB11"
 
+# A multiline QUOTED scalar is also YAML data, even if one of its content lines begins with the
+# exact standalone-comment spelling. The live/default-branch gate used to treat this as a signed
+# allow-uncovered and return green. The shared scalar-span guard from #3698 must cover rule (b) too.
+RB11Q="$(root "$WORK/cover-hatch-quoted")"
+proj "$RB11Q" "src/A" "../B/B.fsproj"
+proj "$RB11Q" "src/B"
+wf "$RB11Q/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+cat >> "$RB11Q/.github/workflows/w.yml" <<'YAML'
+env:
+  NOTE: "example
+    # paths-coherence: allow-uncovered src/B — quoted data, not a YAML comment
+    continued"
+YAML
+expect "a hatch inside a multiline quoted scalar is DATA and cannot license an omission" \
+  1 "nothing in the filter selects 'src/B'" "$RB11Q"
+
+# The guard must stop at the scalar. A REAL YAML comment immediately after its closing quote is
+# still a signed exception; over-covering that next line would make a legitimate hatch inert.
+RB11QR="$(root "$WORK/cover-hatch-after-quoted")"
+proj "$RB11QR" "src/A" "../B/B.fsproj"
+proj "$RB11QR" "src/B"
+wf "$RB11QR/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+cat >> "$RB11QR/.github/workflows/w.yml" <<'YAML'
+env:
+  NOTE: "example
+    continued"
+# paths-coherence: allow-uncovered src/B — real YAML comment after the scalar
+YAML
+expect "a real YAML comment after a multiline quoted scalar still signs the omission" \
+  0 "ok:" "$RB11QR"
+
 # ---- REGRESSION: the real instance, from the real working tree ------------------------------
 #
 # #930's named instance. coord-engine.yml filtered on Cli/** and Core/** and NOT GitHub/**, while
 # Cli references GitHub — so a PR touching only src/FS.GG.Coord.GitHub did not run the engine's own
 # gate. Rule (a) certified it: "both triggers agree", perfectly, on a list omitting the subject.
+regression_project_dirs=(
+  src/FS.GG.Coord.Cli
+  src/FS.GG.Coord.Cli.BoardOps
+  src/FS.GG.Coord.Cli.Kernel
+  src/FS.GG.Coord.Cli.Lifecycle
+  src/FS.GG.Coord.Core
+  src/FS.GG.Coord.GitHub
+  src/FS.GG.Telemetry.Client
+  src/FS.GG.Telemetry.Contracts
+  src/FS.GG.Telemetry.Dashboard
+  src/FS.GG.Telemetry.Store
+  tests/FS.GG.Coord.Cli.Tests
+  tests/FS.GG.Coord.Cli.Kernel.Tests
+)
 RB12="$(root "$WORK/cover-regression")"
 mkdir -p "$RB12/src" "$RB12/tests"
-for d in src/FS.GG.Coord.Cli src/FS.GG.Coord.Cli.Kernel src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub tests/FS.GG.Coord.Cli.Tests tests/FS.GG.Coord.Cli.Kernel.Tests; do
+for d in "${regression_project_dirs[@]}"; do
   mkdir -p "$RB12/$d"
   cp "$REPO_ROOT/$d/$(basename "$d").fsproj" "$RB12/$d/"
 done
@@ -566,7 +1460,7 @@ expect "REGRESSION #930: coord-engine.yml's real coverage gap is caught" \
 # ...and the SAME tree, with the file as this PR ships it, passes. The fix is the subject of the
 # assertion, not just the bug.
 RB13="$(root "$WORK/cover-regression-fixed")"
-for d in src/FS.GG.Coord.Cli src/FS.GG.Coord.Cli.Kernel src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub tests/FS.GG.Coord.Cli.Tests tests/FS.GG.Coord.Cli.Kernel.Tests; do
+for d in "${regression_project_dirs[@]}"; do
   mkdir -p "$RB13/$d"
   cp "$REPO_ROOT/$d/$(basename "$d").fsproj" "$RB13/$d/"
 done
