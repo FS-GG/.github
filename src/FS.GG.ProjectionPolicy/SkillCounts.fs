@@ -13,8 +13,6 @@ module SkillCounts =
             || (letter >= '0' && letter <= '9')
             || letter = '-' || letter = '.' || letter = '_')
 
-    /// Pure dynamic body for generate-projections' skill-registry-counts region.
-    /// Parsing, catalog completeness, and publication remain with their owners.
     let render (rows: SkillRow list) : Result<string, string> =
         if List.isEmpty rows then Error "skill catalog is empty"
         elif rows |> List.exists (fun row -> not (safeToken row.Id) || not (safeToken row.Owner) || not (scopes.Contains row.Scope)) then

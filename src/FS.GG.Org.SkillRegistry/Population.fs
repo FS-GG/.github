@@ -3,26 +3,18 @@ namespace FS.GG.Org.SkillRegistry
 open System
 open System.Text.RegularExpressions
 
-/// One row in the organization catalog, after syntax parsing by a future adapter.
 type RegistryRow = { Id: string; Owner: string; Source: string; Sha256: string }
 
-/// One declared skill from a producer's already parsed manifest.
 type ManifestEntry = { Id: string; SuppliedBy: string option; Sha256: string }
 
-/// A manifest is present and parsed, unreadable, or absent at the producer's known roots.
 type ManifestState = Parsed of ManifestEntry list | Unreadable of string | Absent
 
-/// One producer checkout. A rostered repository may legitimately have no skill manifest.
 type Checkout = { Repo: string; Manifest: ManifestState }
 
-/// Inputs whose roster and reachable population were independently enumerated by the caller.
-/// A missing or unreadable roster must be carried as Error, never converted to an empty set.
 type PopulationInput = { Rostered: Result<string list, string>; Checkouts: Checkout list; Rows: RegistryRow list }
 
-/// A deterministic refusal; no input is silently dropped from the population check.
 type PopulationFinding = { Code: string; Subject: string; Detail: string }
 
-/// Pure population, identity and source-path closure. No filesystem or registry write occurs here.
 module Population =
     let private finding code subject detail = { Code = code; Subject = subject; Detail = detail }
     let private digest = Regex(@"^[0-9a-f]{64}\z", RegexOptions.CultureInvariant)
@@ -85,7 +77,6 @@ module Population =
             else None)
         |> Seq.toList
 
-    /// Inspect one enumerated population. Findings are sorted for stable test and command output.
     let inspect (input: PopulationInput) : PopulationFinding list =
         let rostered =
             match input.Rostered with
