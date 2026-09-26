@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="WorkflowSyntaxTests.fs" />
+    <Compile Include="GitTreeProjectsTests.fs" />
+    <Compile Include="GitCommitProvenanceTests.fs" />
+    <Compile Include="GitHubCommitMembershipTests.fs" />
+    <Compile Include="GitHubGraphQlHttpTests.fs" />
+    <Compile Include="GitHubProtectedBranchPinTests.fs" />
+    <Compile Include="GitHubProtectedBranchHttpTests.fs" />
+    <Compile Include="RuleATests.fs" />
+    <Compile Include="RuleBTests.fs" />
+    <Compile Include="ProjectReferenceXmlTests.fs" />
+    <Compile Include="RuleBExceptionTests.fs" />
+    <Compile Include="RuleBWorkflowTests.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/FS.GG.Org.Policy/FS.GG.Org.Policy.fsproj" />
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+</Project>
