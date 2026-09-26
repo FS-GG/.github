@@ -1,0 +1,38 @@
+{
+  "schema": "fsgg.learn.synthetic-corpus/v1",
+  "contractId": "learn-01-current-focused-v1",
+  "analysisUnit": "original-item",
+  "items": [
+    {"itemId": "I-001", "originalItemId": "I-001", "parentItemId": null, "assignedArm": "current", "assignmentSource": "persisted-pre-treatment-assignment", "assignmentOrdinal": 1, "firstTreatmentWorkOrdinal": 2, "outcome": "accepted", "assignedAt": "2026-01-01T00:00:00Z", "acceptedAt": "2026-01-02T00:00:00Z", "materialRepairAt": null, "cutoffAt": "2026-02-02T00:00:00Z", "scenarios": []},
+    {"itemId": "I-002", "originalItemId": "I-002", "parentItemId": null, "assignedArm": "focused", "assignmentSource": "persisted-pre-treatment-assignment", "assignmentOrdinal": 1, "firstTreatmentWorkOrdinal": 2, "outcome": "failed", "assignedAt": "2026-01-01T00:00:00Z", "acceptedAt": null, "materialRepairAt": null, "cutoffAt": "2026-02-02T00:00:00Z", "scenarios": ["failure"]},
+    {"itemId": "I-003", "originalItemId": "I-003", "parentItemId": null, "assignedArm": "current", "assignmentSource": "persisted-pre-treatment-assignment", "assignmentOrdinal": 1, "firstTreatmentWorkOrdinal": 2, "outcome": "cancelled", "assignedAt": "2026-01-01T00:00:00Z", "acceptedAt": null, "materialRepairAt": null, "cutoffAt": "2026-02-02T00:00:00Z", "scenarios": ["cancellation"]},
+    {"itemId": "I-004", "originalItemId": "I-004", "parentItemId": null, "assignedArm": "focused", "assignmentSource": "persisted-pre-treatment-assignment", "assignmentOrdinal": 1, "firstTreatmentWorkOrdinal": 2, "outcome": "open", "assignedAt": "2026-01-01T00:00:00Z", "acceptedAt": null, "materialRepairAt": null, "cutoffAt": "2026-01-11T00:00:00Z", "scenarios": ["open"]},
+    {"itemId": "I-005", "originalItemId": "I-005", "parentItemId": null, "assignedArm": "current", "assignmentSource": "persisted-pre-treatment-assignment", "assignmentOrdinal": 1, "firstTreatmentWorkOrdinal": 2, "outcome": "accepted", "assignedAt": "2026-01-01T00:00:00Z", "acceptedAt": "2026-01-03T00:00:00Z", "materialRepairAt": null, "cutoffAt": "2026-02-05T00:00:00Z", "scenarios": ["rescue"]},
+    {"itemId": "I-005-child", "originalItemId": "I-005", "parentItemId": "I-005", "assignedArm": "current", "assignmentSource": "inherited-original-assignment", "assignmentOrdinal": 1, "firstTreatmentWorkOrdinal": 3, "outcome": "accepted", "scenarios": []},
+    {"itemId": "I-006", "originalItemId": "I-006", "parentItemId": null, "assignedArm": "focused", "assignmentSource": "persisted-pre-treatment-assignment", "assignmentOrdinal": 1, "firstTreatmentWorkOrdinal": 2, "outcome": "accepted", "assignedAt": "2026-01-01T00:00:00Z", "acceptedAt": "2026-01-02T00:00:00Z", "materialRepairAt": "2026-01-25T00:00:00Z", "cutoffAt": "2026-02-05T00:00:00Z", "scenarios": ["delayed-repair"]}
+  ],
+  "expectedInvocations": [
+    {"invocationId": "inv-root-001", "itemId": "I-001", "originalItemId": "I-001", "kind": "root", "expectedTurnIds": ["turn-root-001"], "terminal": true},
+    {"invocationId": "inv-root-002", "itemId": "I-002", "originalItemId": "I-002", "kind": "root", "expectedTurnIds": ["turn-root-002"], "terminal": true},
+    {"invocationId": "inv-root-003", "itemId": "I-003", "originalItemId": "I-003", "kind": "root", "expectedTurnIds": ["turn-root-003"], "terminal": true},
+    {"invocationId": "inv-root-004", "itemId": "I-004", "originalItemId": "I-004", "kind": "root", "expectedTurnIds": ["turn-root-004"], "terminal": false},
+    {"invocationId": "inv-root-005", "itemId": "I-005", "originalItemId": "I-005", "kind": "root", "expectedTurnIds": ["turn-root-005"], "terminal": true},
+    {"invocationId": "inv-rescue-005", "itemId": "I-005-child", "originalItemId": "I-005", "kind": "rescue", "expectedTurnIds": ["turn-rescue-005"], "terminal": true},
+    {"invocationId": "inv-root-006", "itemId": "I-006", "originalItemId": "I-006", "kind": "root", "expectedTurnIds": ["turn-root-006"], "terminal": true},
+    {"invocationId": "inv-repair-006", "itemId": "I-006", "originalItemId": "I-006", "kind": "repair", "expectedTurnIds": ["turn-repair-006"], "terminal": true}
+  ],
+  "expectedSharedCosts": [
+    {"costId": "shared-plan-001-002", "allocations": [{"originalItemId": "I-001", "fraction": 0.5}, {"originalItemId": "I-002", "fraction": 0.5}]}
+  ],
+  "costs": [
+    {"costId": "usage-root-001", "kind": "invocation", "invocationId": "inv-root-001", "turnId": "turn-root-001", "completeness": "complete", "providerTotalTokens": 1000, "allocations": [{"originalItemId": "I-001", "fraction": 1.0}]},
+    {"costId": "usage-root-002", "kind": "invocation", "invocationId": "inv-root-002", "turnId": "turn-root-002", "completeness": "complete", "providerTotalTokens": 800, "allocations": [{"originalItemId": "I-002", "fraction": 1.0}]},
+    {"costId": "usage-root-003", "kind": "invocation", "invocationId": "inv-root-003", "turnId": "turn-root-003", "completeness": "complete", "providerTotalTokens": 400, "allocations": [{"originalItemId": "I-003", "fraction": 1.0}]},
+    {"costId": "usage-root-004", "kind": "invocation", "invocationId": "inv-root-004", "turnId": "turn-root-004", "completeness": "unknown-unbounded", "providerTotalTokens": null, "allocations": [{"originalItemId": "I-004", "fraction": 1.0}]},
+    {"costId": "usage-root-005", "kind": "invocation", "invocationId": "inv-root-005", "turnId": "turn-root-005", "completeness": "complete", "providerTotalTokens": 700, "allocations": [{"originalItemId": "I-005", "fraction": 1.0}]},
+    {"costId": "usage-rescue-005", "kind": "invocation", "invocationId": "inv-rescue-005", "turnId": "turn-rescue-005", "completeness": "complete", "providerTotalTokens": 500, "allocations": [{"originalItemId": "I-005", "fraction": 1.0}]},
+    {"costId": "usage-root-006", "kind": "invocation", "invocationId": "inv-root-006", "turnId": "turn-root-006", "completeness": "complete", "providerTotalTokens": 600, "allocations": [{"originalItemId": "I-006", "fraction": 1.0}]},
+    {"costId": "usage-repair-006", "kind": "invocation", "invocationId": "inv-repair-006", "turnId": "turn-repair-006", "completeness": "complete", "providerTotalTokens": 300, "allocations": [{"originalItemId": "I-006", "fraction": 1.0}]},
+    {"costId": "shared-plan-001-002", "kind": "shared", "completeness": "complete", "providerTotalTokens": 200, "allocations": [{"originalItemId": "I-001", "fraction": 0.5}, {"originalItemId": "I-002", "fraction": 0.5}]}
+  ]
+}

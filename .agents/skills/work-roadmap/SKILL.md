@@ -28,7 +28,8 @@ For routine delivery:
    concise evidence land in that PR.
 2. Do **not** create or require an issue, claim, SDD artifact family, phase lifecycle ledger,
    independent critic, feedback report, telemetry/receipt cycle, roadmap cycle envelope, receipt-only
-   or projection PR, or metadata-`Done` write. Independent review is optional or sampled and never a
+   or projection PR except the mandatory Unified section 0 closure follow-up in step 5, or metadata-`Done`
+   write. Independent review is optional or sampled and never a
    second authority. Best-effort telemetry is asynchronous and cannot block valid delivery.
 3. Run the smallest relevant automated technical checks. Before opening the PR, run the routine
    eligibility and operation-boundary fixtures. Put exactly one
@@ -50,7 +51,10 @@ For routine delivery:
    for the exact head, merge through GitHub's native merge boundary and read back the PR's merged state
    and merge commit. Report code delivery separately from any protected publication still pending.
 5. Re-read the roadmap from default branch and continue. Keep projection asynchronous; do not launch a
-   model turn or PR merely to copy already-merged facts.
+   model turn or PR merely to copy already-merged facts. The sole exception is the mandatory Unified
+   Roadmap section 0 closure projection after authoritative cross-repository readback: land its immediate
+   progress-only follow-up under `work-unified-roadmap`. This exception does not apply to CI ticks, waits,
+   intermediate checkpoints or any other status copy, and does not create a PR per checkpoint.
 
 Apply the permanent qualification-selection doctrine in
 ADR-0084 (`https://github.com/FS-GG/.github/blob/main/docs/adr/0084-semantic-reuse-never-cancels-coherent-validation.md`). Run the cheap

@@ -1,0 +1,175 @@
+{
+  "schema": "fsgg.learn.context-experiment/v1",
+  "contractId": "learn-01-current-focused-v1",
+  "status": "source-contract-not-enrolled",
+  "sourceSnapshot": {
+    "repository": "FS-GG/.github",
+    "revision": "2e553e41e58ee2f5e27aedcffc7403ce50e7cdd4",
+    "artifacts": [
+      {"path": "AGENTS.md", "sha256": "ca45ccab446565ab84fb64c17fcd9276425a6085883352a29bf05874d5dd2525"},
+      {"path": ".fsgg/routine-development.json", "sha256": "631b83bd0b2204016679497917411dc90fa53e4e88c625b043942c0a82c0070d"},
+      {"path": ".agents/skills/work-roadmap/SKILL.md", "sha256": "8d0c263863de26582e24287b83973b8f6bd75491746264c06e801ab4cb49c033"},
+      {"path": ".agents/skills/work-unified-roadmap/SKILL.md", "sha256": "6af6d90ecd4927967c305f7cba7f11d2946d9508959044ef0cb8f863fd5f2e2d"},
+      {"path": "docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md", "sha256": "44ff8c059dc21578966f7b44b2ebefd7e54d9fc71a2b2658373274be3d7a5085"},
+      {"path": "docs/roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md", "sha256": "e4ffdd69730efbbb742fdd782e2714472d1a4b64d3a789b6470cafa9c72d9cad"}
+    ]
+  },
+  "workClass": {
+    "id": "github-routine-source-with-valid-plan-v1",
+    "rubricVersion": "1",
+    "eligibleBeforeAssignment": [
+      "owningRepositoryIsFSGGDotGitHub",
+      "acceptedImplementationPlanExists",
+      "oneDependencyReadyRoutineSourceMilestone",
+      "noLiveExperimentEnrollment",
+      "noProtectedOperation",
+      "completeNativeUsageSupportedForRootAndEveryDescendant"
+    ],
+    "prospectiveExclusions": [
+      "freshFeaturePlanningRequired",
+      "providerOrInstalledCapabilityUnavailable",
+      "usageUnboundedForAnyExpectedInvocation",
+      "operationChangesEnrollmentPublicationDeploymentCredentialsDefaultsOrExternalAuthority"
+    ],
+    "currentSupport": {
+      "usage": "not-configured",
+      "enrollment": "ineligible",
+      "smallestPrerequisite": "Configure and qualify the existing private native-usage join for the selected repository so every expected root, child, retry, review, rescue and repair invocation has a terminal provider-native total or an explicit unbounded gap."
+    }
+  },
+  "fixedExecutionProfile": {
+    "planner": "none-valid-plan-reused",
+    "workerModel": "gpt-5.6-sol",
+    "workerEffort": "medium",
+    "process": "routine",
+    "decompositionPolicy": "fixed-existing-plan",
+    "toolsAndPermissions": "identical-between-arms",
+    "sessionUnit": "isolated-original-item",
+    "retryRule": "inherit-original-assignment",
+    "rescueRule": "inherit-original-assignment-and-charge-all-cost"
+  },
+  "fieldMapping": [
+    {"concept": "feature and item identity", "existingFact": "item", "existingFields": ["featureId", "itemId", "originalItemId"], "disposition": "reuse"},
+    {"concept": "invocation lineage", "existingFact": "dispatch-expected and dispatch-started", "existingFields": ["attemptId", "parentAttemptId", "invocationId", "parentInvocationId", "rootInvocationId", "relation"], "disposition": "reuse"},
+    {"concept": "requested execution profile", "existingFact": "runtime-invocation", "existingFields": ["requestedModel", "requestedEffort", "backend"], "disposition": "reuse"},
+    {"concept": "observed execution profile and usage", "existingFact": "runtime-turn-usage", "existingFields": ["provider", "observedModel", "observedEffort", "input", "cachedInput", "output", "reasoning", "total"], "disposition": "reuse-when-complete"},
+    {"concept": "terminal native outcome", "existingFact": "dispatch-terminal", "existingFields": ["outcome", "exitCode"], "disposition": "reuse"},
+    {"concept": "pre-dispatch task rubric snapshot", "existingFact": null, "existingFields": [], "disposition": "LEARN-01.2-additive-contract-required"},
+    {"concept": "context recipe and manifest identity", "existingFact": null, "existingFields": [], "disposition": "LEARN-01.2-additive-contract-required"},
+    {"concept": "persisted experiment window and assignment", "existingFact": null, "existingFields": [], "disposition": "LEARN-01.2-additive-contract-required"},
+    {"concept": "late repair link", "existingFact": "parent-child and native item lineage", "existingFields": ["originalItemId", "parentId", "childId"], "disposition": "reuse-lineage-add-repair-classification-in-LEARN-01.2"}
+  ],
+  "arms": [
+    {
+      "id": "current",
+      "recipe": "unified-roadmap-bounded-handoff-v1",
+      "manifest": [
+        "governing-system-and-repository-instructions",
+        "complete-work-roadmap-skill",
+        "feature-subroadmap-and-ready-milestone",
+        "owning-repository-and-existing-branch-or-pr",
+        "source-and-evidence-references",
+        "route-current-authority-and-operation-boundary",
+        "acceptance-examples-and-stop-condition"
+      ],
+      "assembly": "The current repository-owned bounded handoff; referenced documents may be supplied in full when selected by the owner."
+    },
+    {
+      "id": "focused",
+      "recipe": "unified-roadmap-focused-manifest-v1",
+      "manifest": [
+        "governing-system-and-repository-instructions",
+        "complete-work-roadmap-skill",
+        "exact-feature-milestone-block",
+        "exact-applicable-unified-sections",
+        "owning-repository-and-existing-branch-or-pr",
+        "exact-source-and-evidence-identities",
+        "route-current-authority-and-operation-boundary",
+        "acceptance-examples-and-stop-condition"
+      ],
+      "assembly": "Send the exact relevant excerpts and identities initially; keep the same bounded repository retrieval available on demand and charge every retrieval or summary invocation to the original item."
+    }
+  ],
+  "assignment": {
+    "unit": "original-item",
+    "algorithm": "sha256-blocked-coin-v1",
+    "algorithmVersion": "1",
+    "seedReference": "private-window-seed-digest-required-before-enrollment",
+    "canonicalInput": "UTF-8 seed reference digest, NUL, repository, NUL, work class, NUL, calendar admission block, NUL, original item identity",
+    "draw": "Interpret the first eight SHA-256 digest bytes as an unsigned big-endian integer; focused when below 2^63, otherwise current.",
+    "allocationProbabilityFocused": 0.5,
+    "blockFields": ["repository", "workClassId", "calendarAdmissionBlock"],
+    "persistBeforeTreatmentWork": true,
+    "descendantsIndependentSamples": false,
+    "primaryAnalysis": "assigned-treatment",
+    "outcomeDerivedLabelsForbidden": true
+  },
+  "accounting": {
+    "unit": "original-item",
+    "includedInvocations": ["root", "child", "retry", "review", "integration", "rescue", "repair"],
+    "providerTotalIsAtomic": true,
+    "cacheAndReasoningAreNotAddedToProviderTotal": true,
+    "sharedCostRule": "Each unique cost identity is allocated once; fractions across original items must sum to one.",
+    "missingUsage": "unknown-unbounded",
+    "zeroImputationForbidden": true,
+    "expectedInventory": "Freeze every root, child, retry, review, integration, rescue and repair invocation plus its expected native turn identities independently of observed usage.",
+    "completeTokenComparisonRequires": "Every expected invocation is terminal, every expected native turn and shared cost has exactly one deduplicated provider-native total, and no unexpected usage is present."
+  },
+  "window": {
+    "minimumEnrollmentDays": 28,
+    "maximumEnrollmentDays": 84,
+    "analysisLocksEveryDays": 28,
+    "outcomeDeadlineDaysFromAssignment": 14,
+    "repairObservationDaysFromAcceptance": 30,
+    "maximumFollowupDaysFromAssignment": 60,
+    "interimInference": "none-before-final-lock",
+    "buildAndAnalysisBudget": {"maximumEngineeringDays": 5, "scopeCheckDay": 2}
+  },
+  "decision": {
+    "confidenceLevel": 0.95,
+    "power": 0.8,
+    "primary": {
+      "endpoint": "arithmetic-mean-provider-total-tokens-per-assigned-original-item",
+      "estimand": "one-minus-focused-arithmetic-mean-divided-by-current-arithmetic-mean",
+      "interval": "95-percent blocked randomization interval for the arithmetic-mean ratio, inverted over multiplicative effects with the frozen assignment algorithm",
+      "zeroHandling": "Legal zero-token original-item totals remain in the arithmetic mean; missing or unbounded totals remain unknown and are never zero. If the control-arm arithmetic mean is zero, the ratio is undefined and the result is insufficient data.",
+      "practicalReduction": 0.10,
+      "planningCoefficientOfVariation": 2.0,
+      "planningDesignEffect": 1.1,
+      "planningFormula": "ceil(2 * (z_0.975 + z_0.8)^2 * coefficientOfVariation^2 * designEffect / practicalReduction^2)",
+      "minimumIndependentOriginalItemsPerArm": 6908
+    },
+    "secondary": [
+      {"endpoint": "median-provider-total-tokens-per-original-item", "claim": "descriptive-secondary"},
+      {"endpoint": "geometric-mean-provider-total-tokens-per-original-item", "claim": "descriptive-secondary-positive-totals-only", "zeroRule": "Report zero mass separately; geometric mean is undefined when an arm includes legal zero totals."}
+    ],
+    "guardrails": [
+      {"endpoint": "fixed-14-day-completion-rate", "nonInferiorityMarginAbsolute": 0.10},
+      {"endpoint": "median-assignment-to-acceptance-latency", "nonInferiorityRatio": 1.25},
+      {"endpoint": "30-day-material-repair-rate", "nonInferiorityMarginAbsolute": 0.10}
+    ],
+    "jointRule": "The primary 95% interval's least-favorable bound must show a reduction of at least 10%; every guardrail must meet its non-inferiority margin. Otherwise retain current or report insufficient data.",
+    "driftAndInterruption": "A material model, provider, recipe, process, measurement or tool-permission change ends the versioned window as interrupted. Preserve its population and start no replacement window without a new contract version.",
+    "stopping": [
+      "stop-enrollment-on-authority-or-integrity-failure",
+      "stop-enrollment-on-confirmed-unacceptable-quality-harm",
+      "stop-enrollment-when-assignment-or-settlement-cannot-be-preserved",
+      "at-sample-or-day-cap-return-insufficient-data-unless-joint-rule-passes"
+    ]
+  },
+  "analysis": {
+    "version": "learn-01-synthetic-analysis-v1",
+    "executable": "tools/learn-01-analysis.py",
+    "fixture": "tests/learn-01-analysis/fixtures/synthetic.json",
+    "claimBoundary": "synthetic-fixture-only-no-efficiency-result"
+  },
+  "claims": {
+    "sourceDelivered": false,
+    "published": false,
+    "installed": false,
+    "activated": false,
+    "observedOrQualified": false,
+    "readyWindowComplete": false,
+    "featureExitMet": false
+  }
+}
