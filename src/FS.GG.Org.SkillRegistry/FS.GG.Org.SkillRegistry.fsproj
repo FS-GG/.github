@@ -6,6 +6,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Population.fsi" />
     <Compile Include="Population.fs" />
   </ItemGroup>
   <ItemGroup>

@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.Core" />
+    <Compile Include="SkillCounts.fsi" />
     <Compile Include="SkillCounts.fs" />
   </ItemGroup>
 </Project>

@@ -58,6 +58,8 @@ on:
       # measured when `generate-driver-manifest --check`'s inputs were absent from this filter.
       - "registry/skills.delivery-channels.yml"
       - "scripts/fsgg-skill-registry-check"
+      - "src/FS.GG.Org.SkillRegistry/**"
+      - "tests/FS.GG.Org.SkillRegistry.Tests/**"
       - "tests/skill-registry/**"
       - ".github/workflows/skill-registry-coherence.yml"
       # `generate-driver-manifest --check`'s inputs …
@@ -78,6 +80,8 @@ on:
       # measured when `generate-driver-manifest --check`'s inputs were absent from this filter.
       - "registry/skills.delivery-channels.yml"
       - "scripts/fsgg-skill-registry-check"
+      - "src/FS.GG.Org.SkillRegistry/**"
+      - "tests/FS.GG.Org.SkillRegistry.Tests/**"
       - "tests/skill-registry/**"
       - ".github/workflows/skill-registry-coherence.yml"
       # `generate-driver-manifest --check`'s inputs …
@@ -120,6 +124,11 @@ jobs:
           dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
 
       - uses: ./.github/actions/setup-policy-python
+
+      - name: Test skill registry population policy
+        run: |
+          dotnet restore tests/FS.GG.Org.SkillRegistry.Tests/FS.GG.Org.SkillRegistry.Tests.fsproj --locked-mode
+          dotnet test tests/FS.GG.Org.SkillRegistry.Tests/FS.GG.Org.SkillRegistry.Tests.fsproj --configuration Release --no-restore
 
       # The producer repos, at `main` — the bodies whose digests the registry declares. Public, so
       # the default GITHUB_TOKEN suffices.
