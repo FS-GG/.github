@@ -1,0 +1,72 @@
+# Focused source-only qualification for the FSC baselines and local V2 progress renderer.
+# Direct suite invocations are intentional: scripts/test derives CI wiring from these commands.
+name: fsc-progress-evidence
+
+on:
+  pull_request:
+    paths:
+      - "docs/reports/2026-09-25-fsc-00-executable-census.md"
+      - "docs/reports/2026-09-25-fsc-02-telemetry-closure.md"
+      - "scripts/check-fsc02-telemetry-closure.py"
+      - "scripts/fsc-census.py"
+      - "scripts/v2-progress/**"
+      - "src/FS.GG.V2.Progress/**"
+      - "tests/FS.GG.V2.Progress.Tests/**"
+      - "tests/fsc-census/**"
+      - "tests/fsc02-telemetry-closure/**"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/fsc-progress-evidence.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/reports/2026-09-25-fsc-00-executable-census.md"
+      - "docs/reports/2026-09-25-fsc-02-telemetry-closure.md"
+      - "scripts/check-fsc02-telemetry-closure.py"
+      - "scripts/fsc-census.py"
+      - "scripts/v2-progress/**"
+      - "src/FS.GG.V2.Progress/**"
+      - "tests/FS.GG.V2.Progress.Tests/**"
+      - "tests/fsc-census/**"
+      - "tests/fsc02-telemetry-closure/**"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/fsc-progress-evidence.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+
+      - uses: ./.github/actions/setup-policy-python
+
+      - name: Restore the renderer tests from committed locks
+        run: dotnet restore tests/FS.GG.V2.Progress.Tests/FS.GG.V2.Progress.Tests.fsproj --locked-mode
+
+      - name: Build the renderer tests
+        run: dotnet build tests/FS.GG.V2.Progress.Tests/FS.GG.V2.Progress.Tests.fsproj --configuration Release --no-restore
+
+      - name: Exercise the renderer contract
+        run: dotnet test tests/FS.GG.V2.Progress.Tests/FS.GG.V2.Progress.Tests.fsproj --configuration Release --no-build --logger "console;verbosity=normal"
+
+      - name: Exercise the FSC-00 census controls
+        run: python3 tests/fsc-census/run.py
+
+      - name: Exercise the FSC-02 telemetry closure controls
+        run: python3 tests/fsc02-telemetry-closure/run.py
