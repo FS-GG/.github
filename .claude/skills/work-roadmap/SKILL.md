@@ -23,9 +23,14 @@ operation pending; it does not add an issue/claim/SDD/critic/receipt lifecycle t
 
 For routine delivery:
 
-1. Keep one accountable owner in the current implementation session. Create one fresh
-   `routine/<milestone-slug>` branch from current default branch and one PR. The roadmap checkbox and
-   concise evidence land in that PR.
+1. Keep one accountable owner in the current implementation session. Create a fresh
+   `routine/<outcome-slug>` branch from current default branch. Complete adjacent dependent micro-steps
+   as tested commits on that branch, then open one PR for a coherent, reviewable outcome. Do not open a
+   draft PR for each checkpoint or test. The relevant roadmap checkbox updates and concise evidence land
+   in the same PR, and completion is recorded only after its native merge readback. Under
+   `work-unified-roadmap`, the parent integrator admits that PR within its live queue capacity; workers
+   keep branches local until admitted, and the integrator uses the canonical `.github`
+   `tools/pr-lane-admission.py` helper for new PR creation.
 2. Do **not** create or require an issue, claim, SDD artifact family, phase lifecycle ledger,
    independent critic, feedback report, telemetry/receipt cycle, roadmap cycle envelope, receipt-only
    or projection PR except the mandatory Unified section 0 closure follow-up in step 5, or metadata-`Done`
