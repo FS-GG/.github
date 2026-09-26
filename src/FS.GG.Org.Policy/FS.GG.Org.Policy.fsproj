@@ -6,11 +6,17 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="WorkflowSyntax.fsi" />
     <Compile Include="WorkflowSyntax.fs" />
+    <Compile Include="ProjectReferenceXml.fsi" />
     <Compile Include="ProjectReferenceXml.fs" />
+    <Compile Include="RuleA.fsi" />
     <Compile Include="RuleA.fs" />
+    <Compile Include="RuleB.fsi" />
     <Compile Include="RuleB.fs" />
+    <Compile Include="RuleBExceptions.fsi" />
     <Compile Include="RuleBExceptions.fs" />
+    <Compile Include="RuleBWorkflow.fsi" />
     <Compile Include="RuleBWorkflow.fs" />
   </ItemGroup>
   <ItemGroup>
