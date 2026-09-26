@@ -87,6 +87,1429 @@ gate's cadence. Sparse evidence stays explicitly inconclusive, cadence changes a
 closure plus production-authority boundaries cannot be weakened. A defect first found at closure feeds the next
 cadence review instead of becoming an unpriced surprise.
 
+**Recurring telemetry-health invariant.** At each meaningful V2 checkpoint (candidate qualification,
+owner handoff, accepted-evidence review, or roadmap status report), and immediately before any protected
+receipt, merge, or cutover action, run the configured client's authenticated `fdev-telemetry health`
+probe and read the active V2 workspace with `fdev-telemetry exec fsgg-coord-engine telemetry workspace
+status --workspace <active-workspace> --repository <repository>`. Require health `status=ready` and
+workspace `status=configured`, `pending=0`, `pendingUnacknowledged=0`, and
+`unacknowledgedLossy=false`. Record the observation time, workspace/repository, command verdicts, and
+these fields without printing credentials. A missing, stale, or failing observation is a direct V2
+blocker assigned to the reserved critical-path worker; hold the affected protected receipt, merge, or
+cutover until the invariant is restored and freshly observed, while safe disjoint source work continues.
+These two probes establish endpoint and workspace readiness only. Separately, accept telemetry
+**end-to-end capture** only after one genuine work item runs through the existing instrumented
+orchestration runner: record that item's native turn IDs and usage, obtain an **applied Host receipt**
+whose workspace and item identities exactly match the run, and then verify the workspace queue returns
+to `pending=0`, `pendingUnacknowledged=0`, and `unacknowledgedLossy=false`. Preserve the run/turn/receipt
+correlation as evidence; an enqueued event, a ready Host, or a zero queue alone is not capture acceptance.
+The acceptance record must bind the runner invocation and genuine work-item identity to the native
+turn IDs and usage, the Host receipt's applied state and exact workspace/item pair, and a later
+authenticated zero-queue observation. Do not substitute a synthetic item, an uninstrumented CLI
+turn, a receipt for another workspace or item, or a pre-run zero-queue reading. At the 2026-09-25
+checkpoint this acceptance is **pending**: the authenticated board query refused access, so no
+genuine admitted item, runner turns or usage, or matching applied Host receipt was established.
+At the same checkpoint, the read-only runtime capability probe reported a packaged `codex-exec`
+adapter and configured remote workspace association, but `store=unconfigured`,
+`hostActivation=not-assessed`, and `receiverReachability=not-checked`. A basic authenticated
+GraphQL `viewer` read succeeded while the instrumented batch board query still returned
+`Resource not accessible by personal access token`; no selected WorkItem was inferred.
+Read-only follow-up isolated the minimal current access gap: Coordination Project 1 metadata,
+fields and items are readable, but the same PAT receives HTTP 403 for unrelated organization
+Project 2 with `organization_projects=read` named in the response. The runner's current
+`Board.bootstrap` enumerates all organization Projects v2 by title before item admission;
+effective organization Projects read access to Project 2 (including any needed organization
+approval), or a separately accepted direct-Project-1 bootstrap change, is required for this
+route. No WorkItem or native turn was admitted through that failed query.
+At the 2026-09-25 21:17 UTC recheck, the current credential again read the exact
+Coordination Project 1 (`PVT_kwDOEYAWY84Bb08W`) and again received
+`Resource not accessible by personal access token` for Project 2. The direct Project 1
+bootstrap drafts remain unaccepted and uninstalled, so this does not admit a runner item
+or clear end-to-end capture acceptance.
+The current direct interactive `codex --yolo` session is outside that runner. Wrapping it with
+`fdev-telemetry exec` supplies credentials but does not emit native turn records; fleet capture of
+direct fdev sessions requires a distinct session producer and its own qualification. Do not claim
+this Codex transcript was captured without event-level evidence. Neither the readiness probes nor
+an applied telemetry Host receipt clears the separate GS2-09.9 installed-provider/native-effect hold.
+[Coordination draft #557](https://github.com/FS-GG/FS.GG.Coordination/pull/557) describes the
+prospective direct-session producer and negative acceptance cases. Its source-only handoff now
+distinguishes current-thread capability/assignment, private evidence packet boundaries, and
+window-close versus native exit at head `7b08675a0f2c4eda6babed3bd2119b2cc0da0efa`; it is not
+an installed producer, a captured turn, or an applied receipt.
+[Dormant direct-session mapper draft #584](https://github.com/FS-GG/FS.GG.Coordination/pull/584)
+maps supplied native turn ID and usage to the existing telemetry envelope with exact
+workspace/repository/item/attempt/invocation/producer correlation and refusal controls;
+61 Codex-adapter tests pass under installed SDK 10.0.401. It lacks an authenticated
+current-session source, assignment verifier, submission and applied Host receipt; the
+checkout's pinned SDK 10.0.400 was unavailable locally. The genuine runner acceptance
+still cannot start through the denied Project 2 board bootstrap.
+[Dormant assignment gate draft #586](https://github.com/FS-GG/FS.GG.Coordination/pull/586)
+adds current-turn source and assignment-authenticator interfaces ahead of #584 and refuses
+borrowed session IDs or mismatched workspace, item, attempt, challenge and thread bindings;
+six focused controls pass after its final guard. The full adapter suite passed 67 controls
+at its exact head in a subsequent rerun.
+Neither trusted implementation, challenge issuer, submission nor Host receipt exists.
+[Prospective-window draft #588](https://github.com/FS-GG/FS.GG.Coordination/pull/588)
+adds dormant issuer/current-source interfaces and a pure one-use, UTC bounded challenge
+gate that refuses stale, replayed, foreign and source-substituted windows; 73 adapter
+controls pass. Trusted issuer, clock, authenticated session source and durable CAS replay
+custody remain absent; it performs no capture or submission.
+[Dormant challenge-CAS port #590](https://github.com/FS-GG/FS.GG.Coordination/pull/590)
+reserves a prospective challenge before reading a session source and distinguishes replay,
+unknown store outcomes and burned gaps; an in-memory 32-caller race has one winner, and
+82 exact-head adapter controls pass. The issuer, trusted clock, authenticated current-session
+source and durable CAS implementation remain absent. No Host submission or receipt exists.
+[Dormant native-notification parser #593](https://github.com/FS-GG/FS.GG.Coordination/pull/593)
+preserves exact thread/turn IDs and separate last/cumulative usage snapshots from authored
+App Server fixtures; 87 adapter controls pass. It does not infer completed-turn usage from
+snapshots or read this private transcript. An authenticated subscription to the already-running
+thread with ordered start/usage/terminal continuity is absent, as are Host submission and receipt.
+[Dormant subscription-continuity draft #595](https://github.com/FS-GG/FS.GG.Coordination/pull/595)
+reduces supplied authenticated App Server scope and locally ordered start, usage and
+terminal events while refusing gaps, replay, changed source, malformed frames and usage
+regression; 94 adapter controls pass. Its local ordinal is not a native cursor. No private
+thread access, trusted current-session source, durable journal or applied Host receipt exists.
+[Dormant continuity-journal draft #597](https://github.com/FS-GG/FS.GG.Coordination/pull/597)
+adds an injected atomic append port binding exact subscription, predecessor receipt,
+ordinal and immutable notification bytes, with replay, foreign workspace/item, gap,
+disconnect and uncertain-write refusals; 101 adapter controls pass. It has no installed
+durable store/recovery reader, live authenticated session source or Host submission.
+[Dormant journal-recovery draft #599](https://github.com/FS-GG/FS.GG.Coordination/pull/599)
+requires a future authenticated, transactionally complete sealed snapshot and refuses
+missing tail/terminal, broken predecessor chain, foreign binding, altered bytes and
+post-gap entries; 109 adapter controls pass. It returns only provisional terminal or
+gap. Durable store, seal issuer, trusted recovery source, live subscription and Host
+submission remain absent.
+[Prospective subscription gate #601](https://github.com/FS-GG/FS.GG.Coordination/pull/601)
+reserves an issued challenge before a future authenticated current-session source and
+checks workspace/item, native session, thread, transport, protocol and time bindings;
+117 adapter controls pass. The trusted live source, subscribed `turn/started` journal
+receipt and Host route are absent, so capture remains unaccepted.
+[First native-start receipt draft #603](https://github.com/FS-GG/FS.GG.Coordination/pull/603)
+binds a supplied first `turn/started` append receipt to the prospective subscription,
+exact challenge/session, connection, canonical frame digest and time order; 124 adapter
+controls pass. Authenticated live reader/transport, durable store and Host receipt remain
+absent, so no direct-session capture is accepted.
+[Sealed correlation draft #607](https://github.com/FS-GG/FS.GG.Coordination/pull/607)
+binds a prospectively reserved first native start receipt to a supplied authenticated
+sealed journal and verifies continuity to terminal; 130 adapter controls pass. It
+returns correlation and usage-notification count only, because App Server last/total
+snapshots do not establish completed-turn token usage. No telemetry envelope, Host
+submission or capture acceptance follows from this draft.
+[Native-usage no-verdict draft #610](https://github.com/FS-GG/FS.GG.Coordination/pull/610)
+preserves exact workspace/item/session/thread/turn correlation but explicitly refuses
+to infer completed-turn usage from installed App Server `turn/completed` status,
+`thread/tokenUsage/updated` last/total snapshots, one upstream response or child
+`codex exec` JSONL; 137 adapter controls pass. No telemetry envelope or direct-session
+capture acceptance is emitted without a trustworthy native turn-usage source.
+[Installed schema probe #612](https://github.com/FS-GG/FS.GG.Coordination/pull/612)
+checks freshly generated ordinary and experimental Codex CLI 0.156.1 schemas and
+preserves the same direct-session no-verdict: `turn/completed` has no usage,
+`thread/tokenUsage/updated` gives snapshots, and a raw response is one upstream
+completion. Authenticated attachment to this direct CLI session is also unproved;
+143 adapter controls pass. The genuine instrumented runner route remains the separate
+capture acceptance path once board admission and Host receipt are available.
+[Dormant exact-board bootstrap #3751](https://github.com/FS-GG/.github/pull/3751)
+queries the pinned Coordination Project 1 directly and refuses wrong owner, number,
+title, ID or incomplete fields, while leaving the ordinary runner bootstrap unchanged;
+838 exact-head GitHub adapter controls pass. A read-only direct Project 1 probe returned
+the pinned ID and 24 fields under the same credential that still fails unrelated
+all-project enumeration. Owner acceptance, opt-in runner wiring and qualification are
+required before a genuine work item can be admitted; no capture is claimed.
+At 2026-09-25 20:04 UTC, the draft was repaired at exact head
+`a3557baeb47f7221dda8399b1556e4232d447ef8`: three duplicate XML doc comments
+in `Board.fs` were removed because their public API descriptions already live in
+`Board.fsi`. This follows the signature-doc gate's no-new-baseline rule and repairs
+the hosted red from the prior head; local signature-doc-siting fixtures passed
+90/90, and the Release GitHub project built with zero warnings/errors. Fresh
+hosted checks and owner acceptance are still required; no runner item was admitted.
+[Opt-in runner bootstrap wiring #3752](https://github.com/FS-GG/.github/pull/3752)
+passes an exact-Project-1 mode through batch/next/take while leaving the default route
+unchanged; exact-head GitHub adapter 844/844 and scheduling CLI 8/8 pass. It is a source-only
+draft, not an installed or admitted runner. The broader CLI has one UTEL-06D configuration
+failure also reproduced on #3751's base. The denied all-project route remains blocked until
+owner acceptance and installed qualification; no native turns or applied Host receipt exist.
+At 2026-09-25 20:15 UTC it was rebased onto #3751's repaired head, yielding
+exact draft head `c9ae8716dd5c969f22bc3451d6db670581b480bc`; local
+signature-doc-siting fixtures passed 90/90 and Release GitHub adapter tests
+844/844. Fresh hosted checks and owner admission are still pending.
+[Exact-board duplicate-field draft #3772](https://github.com/FS-GG/.github/pull/3772)
+stacks on #3752 at `56266f65174c492226c7a25c29a87652c38a64e9`. A red-before
+complete Project 1 response with duplicate `Status` field names silently selected the
+shadow ID/options; another complete response with duplicate `Ready` option names
+silently selected a shadow option ID. The dormant direct route now refuses missing,
+blank or duplicate field and single-select option names/IDs before map construction.
+Its Release GitHub adapter suite passes 846/846. This draft neither installs the runner
+mode nor admits an item; Project 2 remains PAT-forbidden on the installed enumeration route.
+At 2026-09-25 20:16 UTC it was rebased onto #3752's repaired source head,
+yielding exact draft head `60219828eb46a0b34d00054b2b8c7afc8bf53bc9`;
+local signature-doc-siting fixtures passed 90/90 and Release GitHub adapter
+tests 846/846. Fresh hosted checks and protected owner acceptance remain open.
+A fresh read-only Project 1 response returned pinned ID `PVT_kwDOEYAWY84Bb08W`,
+`totalCount=24`, 24 field nodes and zero duplicate field or option identities; it
+does not replace installed runner qualification.
+
+**Agent-runtime invariant.** Every V2 orchestrator and worker must run the newest available Sol model
+with high reasoning effort; the required target in this environment is `gpt-6-sol` / `high`.
+Record the orchestrator's visible model/effort profile and launch every worker, including replacements,
+with explicit `model=gpt-6-sol` and `reasoning_effort=high` arguments. Those explicit launch settings
+are enforceable evidence for counting worker lanes; runtime self-introspection is optional and may be
+unavailable, in which case record that limit without discounting an explicitly configured worker.
+When reusing a completed agent identity, retain its original explicit launch settings as the evidence;
+if a new identity is spawned, pass both arguments again. A follow-up task cannot change an agent's
+launch model or effort.
+Do not count a worker whose launch settings are missing or different. Preserve the reserved direct V2
+worker among compliant lanes. If the orchestrator's visible profile is missing or different, report
+the capability gap and arrange a compliant handoff before claiming compliant orchestration or
+advancing protected actions. Model-family descriptions and task text alone are not launch evidence.
+
+**Deterministic progress-update projection.** Prepare a source-only `.github`-owned F# renderer
+for V2 checkpoints. An external collector supplies a typed `ProgressSnapshot`; the renderer
+performs pure validation and derivation, then emits byte-stable Markdown. The snapshot records
+each active lane's model, effort, owner and reserved-direct-V2 state; workstream status;
+PR/evidence counts; telemetry readiness and separate end-to-end capture acceptance; protected
+holds; checks, risks and next actions. Reject inconsistent lane counts or a claimed Sol/high
+or reserved lane without explicit launch evidence. Capture may render `Accepted` only with a
+genuine instrumented runner item, native turn IDs and usage, an applied Host receipt matching
+the exact workspace and item, and a later authenticated zero-queue observation. Readiness alone
+must render as readiness, never as capture. Render semantic markers with text labels in plain
+GitHub Markdown: 🟢 Active/Healthy, 🟡 Pending, 🟠 Blocked/Incomplete evidence, 🔴 Failed/Unsafe,
+🔵 Completed/Info, and 🔘 Unknown; do not depend on CSS. Completion history stores UTC
+`DateTimeOffset` values and renders a deterministic newest-first **Last 5 completed** table
+with time, item/workstream, result, evidence link and recorded roadmap head. Show at most five
+real completions, exactly five when at least five exist, with no fabricated padding. Keep
+collection, publication and Authority writes outside this pure draft. After owner acceptance,
+the V2 status-update workflow may collect immutable facts, validate/render them, review the
+output and publish through its existing route; a rendered summary cannot clear a protected
+receipt, merge or cutover hold.
+Accept authenticated, collector-verified CLI `/status` weekly allowance evidence only with an
+observation time and provenance ID. Record remaining weekly percentage and reset as an explicit
+local offset/time zone; report current context occupancy as a separate window measurement.
+The live `/status` panel monitor observed **26% left**, reset **2026-09-30 09:28 Europe/Vienna**,
+with **191K/258K context occupancy**. These observations lack authenticated collector
+provenance and remain non-authoritative renderer fixtures until verified; context occupancy
+is neither cumulative token usage nor a five-minute usage delta. Report period usage as
+**Unknown** until genuine native turn IDs and input/output
+usage or complete collector-verified native `token_count` histories support a bounded period;
+do not subtract context readings to invent a delta.
+Give consolidated V2 progress reports every ten minutes while work is active. Refresh weekly
+allowance at each report from authenticated CLI `/status` or collector-verified native
+`rate_limits.primary.used_percent`, recording time, provenance and reset. The native JSONL
+collector must cover the root session and every transitive child linked by
+`session_meta.parent_thread_id`, with complete ordered per-session cumulative
+`token_count.info.total_token_usage` histories. Validate monotonic input, cached input,
+output and total, `cached<=input`, `total=input+output`, and cached deltas no greater than
+input deltas. Sum each session's boundary delta for the latest completed ten-minute **team**
+period. Anchor all completed periods to root-session start, count zero-use periods, and compute
+the **team mean per completed period** as cumulative team usage through the last completed
+boundary divided by the number of completed periods. Render count, root start, completed end,
+input, cached/noncached input, output and total; keep per-session diagnostics separate. Missing
+lineage, history, provenance or completed boundary yields Unknown. Estimate weekly exhaustion
+from the earliest and latest compatible used-percent readings across the root session,
+bound to the same collector-verified account scope, limit and reset and at least ten
+minutes apart. A flat rounded latest ten-minute pair must not suppress an all-session
+rise, such as the locally observed 34% at 04:47 to 77% at 16:28 on 2026-09-25.
+Label the projection approximate, continuous-use and account-wide; preserve Unknown when
+all-session points are flat or incompatible. Never derive it from raw token totals. Native JSONL
+counters are distinct from instrumented runner turn IDs and usage plus the matching applied
+Host receipt. They do not establish end-to-end telemetry capture or clear GS2-09.9.
+The read-only local audit at 2026-09-25 16:11:32 UTC covered this root session plus 29
+descendants and 17,938 native `token_count` events, with zero counter decreases or component
+mismatches; this is source evidence, not an authenticated Host capture receipt.
+The 16:38:26 UTC read-only refresh found the same 30-session root family, 18,719
+`token_count` events and zero counter-component or decrease findings. Across 71
+completed root-anchored periods, the local diagnostic team mean was 30,194,132.73
+total tokens/period; the latest completed period totaled 38,369,280 tokens. Root-session
+weekly readings rose from 34% at 04:47 to 78% at 16:38, giving an approximate
+continuous-use, account-wide projection of 22:34 UTC on 2026-09-25. This ad hoc
+local scan lacks authenticated collector/account provenance and does not establish
+instrumented runner turns, an applied Host receipt or capture acceptance.
+The 16:49:27 UTC read-only refresh found 30 family sessions, 19,060 native events
+and zero component/decrease findings. Across 72 completed root-anchored periods,
+the local team mean was 30,340,884.71 total tokens/period; the latest completed
+period totaled 40,760,275. The root-session weekly reading reached 79% used;
+the conditional continuous-use account-wide projection was about 22:26 UTC.
+This local diagnostic still lacks authenticated collector/account provenance and
+does not establish end-to-end Host capture.
+The 16:58:37 UTC local refresh found 30 family sessions, 19,332 native events and
+zero counter findings. Across 73 completed root-anchored periods, the team mean was
+30,431,217.37 total tokens/period; the latest period totaled 36,935,169. The root
+weekly reading reached 80% used, with a conditional continuous-use, account-wide
+projection near 22:16 UTC. This is a read-only diagnostic, not authenticated
+collector/account evidence or a runner/Host capture receipt.
+At the 17:09:05 UTC checkpoint, the same read-only local scan covered 30 family
+sessions and 19,689 native counter events with zero findings. The 74th completed
+root-anchored ten-minute period (16:57:05–17:07:05 UTC) totaled 30,836,139
+tokens: 30,738,426 input (30,354,560 cached; 383,866 noncached) and 97,713
+output. The all-period team mean, including zero-use periods, was 30,436,689.28
+total tokens. Fresh root weekly usage was 80% at 17:08:57, up from 34% at
+04:47 on the same reset; the conditional continuous-use, account-wide slope
+projects near 22:31 UTC. Local JSONL lacks authenticated collector/account
+provenance and does not prove the runner/Host capture. Authenticated telemetry
+health was ready; the configured `main-fsharp-dev` workspace had pending=0,
+pendingUnacknowledged=0 and unacknowledgedLossy=false.
+At the 17:18:52 UTC checkpoint, the read-only local scan covered 30 family
+sessions and 20,014 native counter events with zero findings. The 75th
+root-anchored ten-minute period (17:07:05–17:17:05 UTC) totaled 39,291,172
+tokens: 39,199,251 input (38,915,200 cached; 284,051 noncached) and 91,921
+output. The all-period team mean, including zero-use periods, was 30,554,749.05
+total tokens. Fresh root weekly usage was 81% at 17:18:43, up from 34% at
+04:47 on the same reset; the conditional continuous-use, account-wide slope
+projects near 22:22 UTC. This local diagnostic lacks authenticated collector
+and Host receipt provenance. Authenticated health was ready; the configured
+workspace again had pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false.
+At the 17:29:21 UTC checkpoint, the read-only local scan covered 30 family
+sessions and 20,346 native counter events with zero findings. The 76th
+root-anchored ten-minute period (17:17:05–17:27:05 UTC) totaled 43,753,754
+tokens: 43,668,184 input (43,410,688 cached; 257,496 noncached) and 85,570
+output. The all-period team mean, including zero-use periods, was 30,728,420.17
+total tokens. Fresh root weekly usage was 82% at 17:29:15, up from 34% at
+04:47 on the same reset; the conditional continuous-use, account-wide slope
+projects near 22:15 UTC. This local diagnostic lacks authenticated collector
+and Host receipt provenance. Authenticated health was ready; the configured
+workspace again had pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false.
+At the 17:39:03 UTC checkpoint, the read-only local scan covered 30 family
+sessions and 20,664 native counter events with zero findings. The 77th
+root-anchored ten-minute period (17:27:05–17:37:05 UTC) totaled 37,326,702
+tokens: 37,243,258 input (36,916,480 cached; 326,778 noncached) and 83,444
+output. The all-period team mean, including zero-use periods, was 30,814,112.14
+total tokens. Fresh root weekly usage was 83% at 17:38:56, up from 34% at
+04:47 on the same reset; the conditional continuous-use, account-wide slope
+projects near 22:06 UTC. This local diagnostic lacks authenticated collector
+and Host receipt provenance. Authenticated health was ready; the configured
+workspace again had pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false.
+At the 17:49:10 UTC checkpoint, the read-only local scan covered 30 family
+sessions and 20,978 native counter events with zero findings. The 78th
+root-anchored ten-minute period (17:37:05–17:47:05 UTC) totaled 39,562,179
+tokens: 39,482,479 input (39,266,816 cached; 215,663 noncached) and 79,700
+output. The all-period team mean, including zero-use periods, was 30,926,266.85
+total tokens. Fresh root weekly usage was 84% at 17:49:04, up from 34% at
+04:47 on the same reset; the conditional continuous-use, account-wide slope
+projects near 21:59 UTC. This local diagnostic lacks authenticated collector
+and Host receipt provenance. Authenticated health was ready; the configured
+workspace again had pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false.
+[Renderer draft #3735](https://github.com/FS-GG/.github/pull/3735) is source-only; its
+first owner repair adds explicit worker launch evidence, activity-based counts, a worker-only
+reserved count, authenticated readiness observations and linked terminal completion rows.
+Its follow-up requires exactly one running Sol/high orchestrator with visible-profile
+evidence and running workers with explicit spawn evidence; 15 focused tests pass.
+Its later freshness repair rejects healthy telemetry observations older than five minutes;
+18 focused tests pass. A further review repair requires the post-Host zero queue observation
+to carry authenticated, collector-verified evidence; three new refusal cases keep the
+18 focused tests green at exact head `06914d60ba47d2ede36af6d48a04babfe883a0e6`.
+The renderer revision at exact head `7e7ebdee9b502d20a438ea00916956262e3cf35a` adds typed
+authenticated CLI status evidence, separate context occupancy and native-turn period usage.
+Its source/test branch passes 21 focused tests, accepts valid UTC reset offsets and binds
+native period runner usage to the report workspace; the
+monitor-observed values above are not authenticated collector status evidence.
+The next source-only renderer revision at exact head
+`2b7b9f3dcd55e95cdbac0ffc51ef0860d7041803` adds typed native JSONL cumulative
+team counters and root-anchored ten-minute periods. Its 23 focused tests cover a zero-use
+period, 28 additional idle descendants, team rather than per-session mean, cached/noncached
+arithmetic, byte stability and fail-closed lineage, provenance and counter claims. A
+weekly exhaustion estimate derives only from same-reset percentage slope. The external
+collector has not been installed or authenticated; no direct-session Host capture follows.
+The follow-up source-only head `005c64d6ffadbf38b8748b23208656fc7f6aad90`
+requires collector-verified account scope for weekly rates and uses the earliest compatible
+same-account, same-limit, same-reset rate point with the latest fresh point. A flat rounded
+last-ten-minute pair no longer hides a positive all-session slope; all-session flat or
+incompatible points still render Unknown. The estimate says continuous-use and account-wide;
+23 focused tests pass, including those refusal cases.
+No live update workflow is pinned to that draft.
+
+**Current bounded parallel source evidence.** Reserved direct GS2-09.9
+[Coordination #618](https://github.com/FS-GG/FS.GG.Coordination/pull/618) at
+`459a260f41c103dea96cfc506a21fe8aed223518` records the independently authenticated
+integrated source/artifact, distinct reviewer and installed zero-effect readbacks required
+before a protected decision; it is stacked on #617 and carries ten inherited focused controls.
+Direct GS2-09.7 [Coordination #619](https://github.com/FS-GG/FS.GG.Coordination/pull/619)
+at `5d66e0be94ca1b71c17162319e3a6957ecc6fa52` refuses unescaped delimiter/control
+identities that previously let distinct rollback steps share a plan seal; 22 focused controls
+pass under local SDK 10.0.401, while pinned 10.0.400 hosted checks are queued.
+[Coordination #620](https://github.com/FS-GG/FS.GG.Coordination/pull/620) at
+`67b92631f68eb69993c46c4c22ff9e4a7070913d` additionally refuses two rollback domains
+sharing one target identity, a red-before map-collapse false green; 23 focused controls pass
+under the local SDK, while pinned hosted checks and native target readback remain open.
+[Coordination #623](https://github.com/FS-GG/FS.GG.Coordination/pull/623) at
+`51d10bc41e166bb18d7505b5fa4da9f64e4a0ece` adds a separately pinned-seal Q6 resume
+entry after a red-before validly resealed substitute passed the legacy self-pinned helper.
+The accepted GS2-09.6 command bytes are unchanged; 24 focused local-SDK controls pass.
+Protected expected-seal provenance, installed native five-domain readback and Q5/Q6 receipt
+remain open.
+[Coordination #625](https://github.com/FS-GG/FS.GG.Coordination/pull/625) at
+`d5808778fa8439fd5aa034ed16f82e71e1f80ddb` checks a complete receipt prefix,
+five ordered target/state claims and terminal OperatingV1/plan-seal claim. Twenty-eight
+focused local-SDK controls pass, but the claims are fake inputs; protected native observer,
+post-restore freshness and exact sandbox/epoch provenance remain absent.
+[Coordination #627](https://github.com/FS-GG/FS.GG.Coordination/pull/627) at
+`df7190bc807f16068c3d9f2d15c6d46db712fb7f` further binds each claim to its
+receipt hash, run nonce, challenge, observer resource and native revision, with a
+final-receipt-bound terminal claim; 31 focused local-SDK controls pass. The fields remain
+self-asserted until a protected candidate-inaccessible observer and freshness witness exist.
+These drafts authorize no protected effect, merge, Authority write, receiver flip or cutover.
+Optional FSC-03 [`.github` Rule (b) #3753](https://github.com/FS-GG/.github/pull/3753)
+at `194e08a11439ef7663085f3f3947c2f765500884` keeps `*` within one path segment in
+the pure supplied-graph reducer; 83 Release controls and a three-case Python comparison pass.
+Accepted #3698 and installed parity remain prerequisites. FSC-04
+[SDD #1018](https://github.com/FS-GG/FS.GG.SDD/pull/1018) at
+`6d12c523bcb02cd1644fe7e4429bd1ed82818a4c` characterizes co-batched authored and
+generated writes without rollback; 1,424 tests pass, but producer verification/staging policy
+is undecided. Stacked [SDD #1019](https://github.com/FS-GG/FS.GG.SDD/pull/1019) at
+`773a91d1c3be1026e86c36300c7adc58b5b61b5d` adds a pure typed preview binding
+proposed work-model JSON root, generated-view source, identity, output path and physical
+capture to one v2 candidate; 1,429 Commands tests pass. The separate verification wave
+and authored-file staging or rollback decision remain required. Independent review found
+#1019 accepted duplicate JSON keys and a changed model version with intact source rows;
+stacked [SDD #1020](https://github.com/FS-GG/FS.GG.SDD/pull/1020) at
+`7e7582a28ecf5d465f24a1ba94161343c6b0b5fa` recursively refuses duplicate/case-aliased
+properties and requires exact deterministic regeneration. All 1,435 Commands tests pass;
+strict #1020 preview, physical custody and producer effect policy are still needed before
+adoption. FSC-05
+[Templates #547](https://github.com/FS-GG/FS.GG.Templates/pull/547)
+at `cd0753d5f4cc7a20155b24f29eb58c6567442363` finds identical template configs can mask
+39 extra members and 33 changed bodies in retained archives; selected/retained parity remains
+NO_VERDICT, and local NuGet-shaped matching is payload-only, not served-feed custody.
+Stacked [Templates #548](https://github.com/FS-GG/FS.GG.Templates/pull/548) at
+`030cf73b572e2c3760beb648b72769b9d84cae0e` moves the pure template-payload comparison
+to F# behind a bounded Python physical ZIP reader and refuses config-free, duplicate, aliased,
+foreign-field and malformed payload maps; 14 new and 29 stacked controls pass. Its local
+payload verdict does not establish selected, served or installed archive custody.
+[Coordination GS2-09.9 #621](https://github.com/FS-GG/FS.GG.Coordination/pull/621)
+at `cafbb64fb080cee43d924733db1e2883ce7fb1b5` adds a closed fake-port join of
+installed refusal and independent zero-effect audit observations; 14 focused and inherited
+tests pass. Its injected ports cannot authenticate a protected runner/auditor or prove
+transient ABA absence, so it confers no effect authority. An independent review exposed an
+unselected positive audit actor false green; stacked
+[Coordination #622](https://github.com/FS-GG/FS.GG.Coordination/pull/622) at
+`13a5d55b8a0bb976302bfbee70df9a5d1151d771` now requires that actor to match an
+explicitly selected ID. Fifteen focused and inherited tests pass, but protected selection
+of that actor, runner and artifact remains absent.
+[Coordination #624](https://github.com/FS-GG/FS.GG.Coordination/pull/624) at
+`d0c2948220b204219a8d17b2c68a4bf420aabc90` adds a read-only fake Git-object
+witness binding seven scaffold source files to a selected commit/tree; 18 focused and
+inherited tests and a local object smoke check pass. Protected reader identity/object
+format, producer artifact and independent reviewer still lack authoritative proof.
+[Coordination #626](https://github.com/FS-GG/FS.GG.Coordination/pull/626) at
+`b433c86456f6ab241749e6dba58a5bd99dafe928` requires a separate read-only
+repository-identity/object-format claim and distinct reader custody for that witness;
+19 focused and inherited tests pass. Protected event, reader, artifact and reviewer
+authentication remain open, with both workflows disabled and #550 held.
+[Coordination #628](https://github.com/FS-GG/FS.GG.Coordination/pull/628) at
+`0a28a6e7e12c8e2e0dd2ef686aad9db46ef309b7` binds a fake producer run and
+separately read artifact bundle to selected source/archive identity and refuses a
+digest-consistent symlink-mode ZIP false green; 23 focused and inherited tests pass.
+The reviewed producer workflow is not yet in integrated source, and protected producer,
+download and reviewer evidence remain absent. The closed output grants no native effect.
+Later disjoint source-only drafts advance without changing those holds:
+[Coordination GS2-09.9 #640](https://github.com/FS-GG/FS.GG.Coordination/pull/640)
+at `2bf5bf8ef50a7689b4f31f3097514e3dcbca8835` refuses mutable runner/audit credential
+scope drift (40 focused tests), while both workflows remain disabled and #545/#550 held;
+[Coordination GS2-09.7 #639](https://github.com/FS-GG/FS.GG.Coordination/pull/639)
+at `c5ef99dd93f4c543c312ec03d2f42e9c70cc58bb` binds declared receiver-pin raw reads
+but explicitly returns partial inventory (107 tests), with #3690 unadmitted and Q5/Q6 held.
+[`.github` FSC-03 #3767](https://github.com/FS-GG/.github/pull/3767) at
+`f3e5d76cb6281b7092439239f2decf92585ddf2b` refuses a trailing-newline regex
+false green in F# Rule (b) (103 tests); Python remains divergent and uninstalled.
+[SDD FSC-04 #1023](https://github.com/FS-GG/FS.GG.SDD/pull/1023) at
+`da2650c0bf404adfcd46bc2890db63393e30dd23` derives generator identity from the
+referenced assembly (1,445 Commands tests), without installed-package proof.
+[Templates FSC-05 #558](https://github.com/FS-GG/FS.GG.Templates/pull/558) at
+`d62c008c6827283952e9dda8442cd95d53ddde5d` returns NO_VERDICT for the
+`Straße`/`Strasse` casefold alias (37 payload and 29 archive controls), with full Unicode,
+producer, served-byte, transaction and receiver parity open. None of these drafts grants
+protected receipt, merge, native effect or cutover authority.
+Subsequent source-only follow-ups preserve the same boundaries:
+[Coordination GS2-09.9 #641](https://github.com/FS-GG/FS.GG.Coordination/pull/641)
+at `5e8b87a8756adeeeda34afeff8a2cc80a90d86b2` refuses mutable protected
+source/approval credential drift (41 focused tests), with both workflows disabled;
+[Coordination GS2-09.9 #643](https://github.com/FS-GG/FS.GG.Coordination/pull/643)
+at `dadfeb79470321c1cd1457adddeca6abd3e203d7` pins the disabled workflow's
+exact SHA-256 and Git blob ID in producer/reviewer joins after forged-source false greens
+(43 focused tests), without protected approval or effect;
+[Coordination GS2-09.7 #642](https://github.com/FS-GG/FS.GG.Coordination/pull/642)
+at `c661b089ff073bd6de241c7de9cbe2f5bf828561` binds a two-read core-settings
+digest but marks settings authority incomplete (108 focused tests), with ten other
+settings surfaces and Q5/Q6 open.
+The next [Coordination GS2-09.7 #644](https://github.com/FS-GG/FS.GG.Coordination/pull/644)
+at `b6cacedd1b818ea2f940e64283dde5b218f254a2` adds a final core-settings reread
+after custom-property reads to refuse mid-capture drift (109 focused tests). Settings
+authority remains explicitly incomplete with nine other surfaces unbound.
+[SDD FSC-04 #1024](https://github.com/FS-GG/FS.GG.SDD/pull/1024)
+at `901df809e74e473e329d1cc324366b72d88a815d` refuses preview capture when
+blocking model diagnostics exist (1,447 Commands tests), while command diagnostics,
+staging/rollback and installed parity remain held. [`.github` FSC-03 #3768](https://github.com/FS-GG/.github/pull/3768)
+at `a5601c55831606f2eff307271bcbac12e00b1ee6` repairs the Python pure matcher
+trailing-newline false green (116 fixtures); it does not assert end-to-end XML filename
+coverage or installed F# parity.
+[`.github` FSC-03 #3769](https://github.com/FS-GG/.github/pull/3769) at
+`f6fcad8e686fcc7d6e8bf2a0eda192c27949b6cf` decodes XML character references
+in Python ProjectReference Include after full-gate false greens/false findings (122
+fixtures); F# XML provider and installed parity remain open.
+[Templates FSC-05 #559](https://github.com/FS-GG/FS.GG.Templates/pull/559)
+at `ca78ca177cb73fc2fec80e02717e372700066399` refuses Python Unicode 16.0 full-fold
+expansion paths in the F# payload comparator (40 payload and 29 archive controls), with
+simple-fold, Unicode-version, producer and receiver parity still open. These are draft
+source facts, not protected receipts.
+Further parallel source-only evidence: [Coordination GS2-09.9 #647](https://github.com/FS-GG/FS.GG.Coordination/pull/647)
+at `6460807b9af2be5e611c551210d2cfd166611e1c` binds producer actor and source
+record through reviewer joins (46 tests), with workflows disabled and #545/#550 held;
+[Coordination GS2-09.9 #648](https://github.com/FS-GG/FS.GG.Coordination/pull/648)
+at `dc8348369b230a6a18bad0e1122ebba98e1c15aa` also binds the checked
+repository ID to the reviewer join after a foreign-repository witness false green
+(47 tests), with the same protected holds;
+[Coordination GS2-09.7 #646](https://github.com/FS-GG/FS.GG.Coordination/pull/646)
+at `926e110f8daf37bb3ee0fbbe054e7648fc800b1f` adds partial Actions-policy
+readback bracketed by core reread (110 tests), with Q5/Q6 and settings closure held.
+[SDD FSC-04 #1025](https://github.com/FS-GG/FS.GG.SDD/pull/1025) at
+`2cee1a8a71f75751bd878be72b8c8eee0bfec051` characterizes duplicate-work-ID
+diagnostics outside the selected-source preview (1,448 Commands tests); a complete
+pinned work inventory and effect decision remain absent. [`.github` FSC-03 #3771](https://github.com/FS-GG/.github/pull/3771)
+at `629a5309daf027cd42cad6021dde77f14eb8ee9f` makes the pure F# XML adapter
+refuse MSBuild Include expansion without an evaluated provider (117 tests); Python
+and installed parity remain open. [Templates FSC-05 #560](https://github.com/FS-GG/FS.GG.Templates/pull/560)
+at `4088d8367bbb253df0b2f76c9ae52ba4591652d1` labels the Python-16/.NET
+NFKC disagreement at U+A7F1 as Unicode drift NO_VERDICT (41 payload, 29 archive
+controls), without widening acceptance or receiver authority.
+The next disjoint drafts remain provisional:
+[Coordination GS2-09.9 #650](https://github.com/FS-GG/FS.GG.Coordination/pull/650)
+at `bf5fbaf766630af0153df8b61d38812291e5fb38` binds repository-identity
+event ID through the producer and immutable reviewer event (48 focused tests),
+with both workflows disabled and #545/#550 held;
+[Coordination GS2-09.7 #649](https://github.com/FS-GG/FS.GG.Coordination/pull/649)
+at `29ce3293d3f605c96b1add2de885e1f610da21ac` adds partial repository
+branch/tag ruleset readback (111 tests), with `SettingsAuthorityComplete=false` and
+Q5/Q6 held. [`.github` FSC-03 #3773](https://github.com/FS-GG/.github/pull/3773)
+at `b912d98fdc788c12485045bfd5917fcc67672730` returns no verdict for Python
+ProjectReference Include forms requiring MSBuild item evaluation (126 fixtures),
+without installed F# parity. [Templates FSC-05 #561](https://github.com/FS-GG/FS.GG.Templates/pull/561)
+at `5877040fb77560468aa520455b5858c70187531e` turns malformed UTF-8 ZIP
+member names into NO_VERDICT (42 payload, 29 archive controls), with served-byte,
+transaction and receiver holds unchanged.
+Later draft source evidence remains distinct from protected acceptance:
+[Coordination GS2-09.9 #652](https://github.com/FS-GG/FS.GG.Coordination/pull/652)
+at `4c4615f6e4761e39051d1f94ea867a9ff71b14b3` requires the immutable
+reviewer witness before fake installed no-grant runner/audit readback (50 tests),
+with both workflows disabled and #545/#550 held;
+[Coordination GS2-09.7 #651](https://github.com/FS-GG/FS.GG.Coordination/pull/651)
+at `b1b119f2b57a954e2e7a7c78792bb4b90e3e134d` adds partial workflow-permissions
+readback (113 tests), with settings authority incomplete and Q5/Q6 held.
+[SDD FSC-04 #1026](https://github.com/FS-GG/FS.GG.SDD/pull/1026) at
+`cf92c80f45580f6ed818a5a058417b8fa6a0cb94` checks separately supplied
+work-candidate rows but cannot prove physical inventory completeness (1,453
+Commands tests). [`.github` FSC-03 #3774](https://github.com/FS-GG/.github/pull/3774)
+at `286a2e4aa836002313f316d953cc10b7efd86e5e` makes the Python graph gate
+refuse unevaluated MSBuild Import (127 fixtures), with installed parity pending.
+[Templates FSC-05 #562](https://github.com/FS-GG/FS.GG.Templates/pull/562)
+at `4bc07cac34d69fad7f97145c2c48e363c7982937` makes the Python archive reader
+return NO_VERDICT on an unsafe ZIP member outside template paths (43 payload, 29
+archive tests), without producer, served-byte or receiver authority.
+Further source-only follow-ups: [Coordination GS2-09.9 #653](https://github.com/FS-GG/FS.GG.Coordination/pull/653)
+at `91b4d339c1c3195a74f1b8f93795fdb3c1fb5953` refuses installed probe
+before approval or after expiry (51 fake-port tests), still lacking authenticated
+protected timestamps; [Coordination GS2-09.7 #654](https://github.com/FS-GG/FS.GG.Coordination/pull/654)
+at `a78e29240b551378189119ea5d3b29ff7e636aa2` brackets partial Actions and
+workflow readback (114 tests), without atomicity or Q5/Q6 acceptance.
+[SDD FSC-04 #1027](https://github.com/FS-GG/FS.GG.SDD/pull/1027) at
+`bbb2ba2e3d0ce802ce413a8bdf5ff3a0ec713c33` proves a supplied candidate
+inventory can omit a physical duplicate work ID (1,456 Commands tests); complete
+discovery remains open. [`.github` FSC-03 #3776](https://github.com/FS-GG/.github/pull/3776)
+at `02d82b95aafa228c3d52d81a261ebedc66e1340e` refuses a non-Project XML
+root in Python graph extraction (129 fixtures), still uninstalled.
+[Templates FSC-05 #563](https://github.com/FS-GG/FS.GG.Templates/pull/563) at
+`22cc8438eaf3f06f44a73c6ad52cbc985a61dde5` returns NO_VERDICT for a
+non-template ZIP symlink (44 payload, 29 archive controls), without producer,
+served-byte, transaction or receiver authority.
+The next direct and Templates source-only drafts retain those limits:
+[Coordination GS2-09.9 #655](https://github.com/FS-GG/FS.GG.Coordination/pull/655)
+at `9b5cced3e2dd35f79153f086c9e0bca866b3f1ea` requires claimed no-grant
+command start/completion times inside the approval/audit window (52 fake-port tests);
+those timestamps are not independently authenticated and #545/#550 remain held.
+[Templates FSC-05 #564](https://github.com/FS-GG/FS.GG.Templates/pull/564)
+at `db3c80c5167deb28e093b6e9dffc774f1a18248c` consumes every ZIP member
+under bounds so a corrupt non-template member returns NO_VERDICT (45 payload, 29
+archive controls), without producer, served-byte, transaction or receiver proof.
+[`.github` FSC-03 #3777](https://github.com/FS-GG/.github/pull/3777)
+at `3e91858795e432995292395f5938bd541cab5528` refuses absolute Windows
+and repository-escaping `ProjectReference` targets in Python graph extraction
+(131 fixtures); the F# adapter and installed parity remain separate.
+[Coordination GS2-09.7 #656](https://github.com/FS-GG/FS.GG.Coordination/pull/656)
+at `8546ca6500004c0ffb59c7d910d8fdf8954e95bb` adds private-fork workflow
+readback to a partial Q6 rollback bridge (116 focused tests), while settings
+authority, Q5/Q6 receipts, and protected native effects remain held.
+[Coordination GS2-09.9 #657](https://github.com/FS-GG/FS.GG.Coordination/pull/657)
+at `dccb70b675b7f024ffe63a2080c78b55c13942db` requires the separate
+audit to carry the same command interval as the runner probe (53 fake-port
+tests); matching supplied data does not authenticate a protected native run.
+Further bounded drafts preserve their parent gates:
+[Coordination GS2-09.9 #658](https://github.com/FS-GG/FS.GG.Coordination/pull/658)
+at `03e87db743590634d007d184ed3dbe1b84df63bd` refuses a runner actor
+equal to the release reviewer before probe reads (54 fake-port tests); actor
+claims are still unauthenticated and #545/#550 remain held.
+[Coordination GS2-09.9 #659](https://github.com/FS-GG/FS.GG.Coordination/pull/659)
+at `a526afb91eb9ed09c74a5c8815b2d37a09a37eeb` snapshots a mutable
+effective-scope metadata read to prevent a reused object from hiding credential
+drift (19 focused tests); this remains fake-port source evidence.
+[SDD FSC-04 #1028](https://github.com/FS-GG/FS.GG.SDD/pull/1028)
+at `8952bae1acac51eca771c1a8b273bd821b73c03f` characterizes a late
+duplicate candidate inserted into a previously visited directory (1,458
+Commands tests); one physical traversal is not a complete stable inventory.
+[Templates FSC-05 #565](https://github.com/FS-GG/FS.GG.Templates/pull/565)
+at `882ba0ab2ff60d51bd220b8017f959593696acf0` refuses trailing ZIP bytes
+(46 payload, 29 archive controls), and [#566](https://github.com/FS-GG/FS.GG.Templates/pull/566)
+at `a3bfd59de6934656a72e2c16e91b8da35041e134` refuses a leading overlay
+(47 payload, 29 archive controls); neither proves full ZIP closure or producer,
+served-byte, #511 CAS, installed or receiver authority.
+[`.github` FSC-03 F# #3778](https://github.com/FS-GG/.github/pull/3778)
+at `a8801357fa42e2cd29c65601f1eee069d8aad043` refuses explicit target-time
+`ProjectReference` changes (123 tests); [Python #3779](https://github.com/FS-GG/.github/pull/3779)
+at `f7da149a7b2d4db227db5e8931dfe2613e5a61b4` refuses the matching
+dynamic Include/Remove shapes (134 fixtures). Task outputs, implicit imports,
+installed parity, and receiver admission remain separate.
+[`.github` telemetry source #3780](https://github.com/FS-GG/.github/pull/3780)
+at `e58b5483fc51b04852c1d10e77272cecf6ec1f6e` refuses an unreadable
+field in the dormant exact Project 1 map. A live read-only schema probe found
+24 fields including known built-in kinds omitted from the writable map, so the
+first overstrict draft was corrected to permit those explicit kinds while
+refusing unknown, missing and unsupported writable kinds (853 GitHub adapter
+tests, with red-before partial-map and built-in controls). The runner still enumerates all Projects;
+no genuine instrumented item or matching applied Host receipt is established.
+The following source-only drafts do not change those holds:
+[Coordination GS2-09.9 #661](https://github.com/FS-GG/FS.GG.Coordination/pull/661)
+at `fbffb34eb449ba69c473466df06e7b8477ac43c1` snapshots the mint-reader
+scope after a mutable fake-port credential-drift false green (19 focused tests).
+[Coordination GS2-09.7 #660](https://github.com/FS-GG/FS.GG.Coordination/pull/660)
+at `e3cc09b6b34c698a3517b347d375ab5fa7ea5007` refuses duplicate native
+issue/PR node IDs in a partial Q5 census (39 focused tests); journal/adapter and
+Q5/Q6 acceptance remain open.
+[Templates FSC-05 #567](https://github.com/FS-GG/FS.GG.Templates/pull/567)
+at `e54e992cc790b670f4e26d6591b0cfdf9f78d927` refuses mismatched local
+and central ZIP flags/methods (48 payload, 29 archive controls), without full
+ZIP closure or producer/served/receiver proof.
+[`.github` FSC-03 Python #3781](https://github.com/FS-GG/.github/pull/3781)
+at `e28648547a8a2b00c4cf89ce9cb995c5f7cfa91f` refuses explicit MSBuild
+task output into `ProjectReference` (136 fixtures); matching F# handling,
+dynamic item names, implicit imports and installed parity remain open.
+[Coordination GS2-09.9 #663](https://github.com/FS-GG/FS.GG.Coordination/pull/663)
+at `021a1275a4631ced671c047979714779920d526e` snapshots a mutable
+operation-plan reader scope after a fake credential-drift false green (15 tests);
+protected plan/seal custody and native admission remain held.
+[Coordination GS2-09.7 #662](https://github.com/FS-GG/FS.GG.Coordination/pull/662)
+at `9c839d0aeda2a30b3656ec33847eb2cd467f25bf` refuses a census node ID
+reused as an activity ID (40 focused tests); journal/adapter and Q5/Q6 remain
+unaccepted. [`.github` FSC-03 F# #3782](https://github.com/FS-GG/.github/pull/3782)
+at `7122041148d1f99395f1220d5b5075b5bde75fbf` refuses task output into
+`ProjectReference` (126 tests), matching source-only Python #3781. Dynamic item
+names, implicit imports and installed parity remain separate.
+The 17:12 UTC read-only same-credential GraphQL probe returned exact Project 1
+`PVT_kwDOEYAWY84Bb08W` / number 1 / Coordination, while Project 2 returned
+`FORBIDDEN Resource not accessible by personal access token`. This confirms
+the installed all-project runner's access blocker; it is not an instrumented
+work item, native-turn attribution, applied Host receipt or queue-return proof.
+[Coordination GS2-09.9 #664](https://github.com/FS-GG/FS.GG.Coordination/pull/664)
+at `e6d083718a2e894482d037fb51906d4d3a70a05e` snapshots a mutable
+prestate-reader scope after a fake credential-drift false green (14 tests),
+without native permission or effect authority.
+[SDD FSC-04 #1029](https://github.com/FS-GG/FS.GG.SDD/pull/1029)
+at `6a835e74169174b9de229ec824955e83dbabcb41` repeats complete read-only
+Linux `work/` capture to catch a persistent late duplicate candidate (1,463
+Commands tests); matching passes still cannot prove atomicity, ABA or cross-root
+inventory completeness.
+[Templates FSC-05 #568](https://github.com/FS-GG/FS.GG.Templates/pull/568)
+at `57bca74b4175a70bb4719f3a0fd1f42a3c4551df` refuses local/central
+ZIP CRC and size mismatches without a data descriptor (49 payload, 29 archive
+controls); descriptor-form, complete closure and producer/receiver custody remain.
+More source-only drafts retain the same gates:
+[Coordination GS2-09.9 #665](https://github.com/FS-GG/FS.GG.Coordination/pull/665)
+at `bd1b482f92e6b4f39a6058cad22e2a854c410e3e` snapshots a mutable
+review-audit scope (11 tests), and [#667](https://github.com/FS-GG/FS.GG.Coordination/pull/667)
+at `9738b4674067fa06e72b941bccb70ab7f4622fb7` snapshots a mutable
+source-release scope (16 tests); fake claims do not establish protected custody.
+[Coordination GS2-09.9 #668](https://github.com/FS-GG/FS.GG.Coordination/pull/668)
+at `bc721eafc8dd6861d4fbc7d7f9204e6e17b0f70d` snapshots a mutable
+workflow-reader scope after a false green (11 fake-port tests); protected
+workflow custody and installed native effects remain held.
+[Coordination GS2-09.7 #666](https://github.com/FS-GG/FS.GG.Coordination/pull/666)
+at `e31378905d22145aa6f0825ef5e6165af739f692` refuses foreign-repository
+native activity pages (41 focused tests), with initial census admission,
+journal/custom receipts, raw parsing and Q5/Q6 still open.
+[`.github` FSC-03 Python #3783](https://github.com/FS-GG/.github/pull/3783)
+at `cc7989dd92003be7c3e9d5c880c2b76e97b81380` refuses dynamic MSBuild
+task output item names (137 fixtures); [F# #3784](https://github.com/FS-GG/.github/pull/3784)
+at `c42697d0cf8f841fe0b717e734b52251788d6810` matches that refusal
+(128 tests). The installed MSBuild probe characterizes expansion, without
+installed receiver parity.
+[Templates FSC-05 #569](https://github.com/FS-GG/FS.GG.Templates/pull/569)
+at `3e7d7ecc3167eb263ee9a53c42c13a55b60dad4d` refuses ZIP members with
+a data-descriptor flag (50 payload, 29 archive controls); descriptor support,
+full closure and producer/receiver custody remain unproven.
+[Coordination GS2-09.9 #670](https://github.com/FS-GG/FS.GG.Coordination/pull/670)
+at `87dacd0c223fae47818d302236b821be9c93663b` snapshots a mutable
+review-reader scope (12 fake-port tests); protected review custody remains held.
+[Coordination GS2-09.7 #669](https://github.com/FS-GG/FS.GG.Coordination/pull/669)
+at `79044871d7b43ff9e7d063aae1f8b82dad519812` refuses undersized or
+misnumbered native activity pages (42 focused tests); initial census,
+raw-to-typed adapter, journal/custom receipts and Q5/Q6 are still open.
+[`.github` FSC-03 Python #3785](https://github.com/FS-GG/.github/pull/3785)
+at `fb0b135288c8d66076c7645855c727f4976171b9` refuses a top-level
+`ProjectReference Remove` that changes the evaluated graph (138 fixtures),
+after an installed MSBuild scratch probe. Matching F# source handling and
+installed parity remain open; the implicit Directory.Build import requires a
+broader provider decision, because a blanket import refusal blocks this tree.
+[Coordination GS2-09.9 #671](https://github.com/FS-GG/FS.GG.Coordination/pull/671)
+at `e03323d2accca14833095aa38ed6f98da7ee7eb6` snapshots a mutable
+target-reader scope (13 fake-port tests); caller-owned selected target aliasing
+and protected native custody remain separate.
+[`.github` FSC-03 F# #3786](https://github.com/FS-GG/.github/pull/3786)
+at `b114db48d1c2220b12511a4950ada6415c8cd00d` refuses a top-level
+`ProjectReference Remove` (131 tests), matching Python #3785; implicit imports
+and installed parity remain open.
+[SDD FSC-04 #1030](https://github.com/FS-GG/FS.GG.SDD/pull/1030)
+at `7b7bd46354ac6c2d2781ac0e069bd1c4f1bd3dcc` retains child directory
+handles and rechecks rosters after a transient late candidate escaped two
+passes (1,466 Commands tests). ABA, post-check changes, cross-root atomicity
+and producer/receiver effects remain held.
+[Templates FSC-05 #570](https://github.com/FS-GG/FS.GG.Templates/pull/570)
+at `7c0bcde8a253116dcc5e113a83fab0ba156cfdb0` refuses unreviewed ZIP
+extra fields (51 payload, 29 archive controls); full closure and producer,
+served-byte, #511 CAS and receiver custody remain unproven.
+[Coordination GS2-09.9 #673](https://github.com/FS-GG/FS.GG.Coordination/pull/673)
+at `1bf0a5f8f2d8abd97bd063863b806b6566a59591` copies a validated
+caller-owned selected target before fake attestation, preventing later digest
+mutation from qualifying (21 tests); native protected custody stays held.
+[Coordination GS2-09.7 #672](https://github.com/FS-GG/FS.GG.Coordination/pull/672)
+at `ca40a0c058230a9f96cdaefe3617ba422b3ef77d` refuses duplicate native
+database IDs in typed activity records (43 tests); raw parsing, protected
+journal/custom receipts and Q5/Q6 remain open.
+[Coordination GS2-09.9 #674](https://github.com/FS-GG/FS.GG.Coordination/pull/674)
+at `dbf749c006d2180791fd22a4c497ae304fdf890a` freezes a validated
+workflow observation so caller mutation cannot turn dispatch into self-review
+(18 fake-port tests); protected identities and native custody remain held.
+[`.github` FSC-03 Python #3787](https://github.com/FS-GG/.github/pull/3787)
+at `9eddb84a5c1270069dd73967541e7f85285bf87f` refuses direct
+`ProjectReference` edges in the nearest in-repository `Directory.Build.props`
+or `.targets` (142 fixtures), after an installed MSBuild scratch probe.
+Transitive/overridden imports and installed F# receiver parity need evaluated
+provider facts; the shipped root props remains readable.
+[Templates FSC-05 #571](https://github.com/FS-GG/FS.GG.Templates/pull/571)
+at `5f79c3451525dc10f2d0fd6ec83f218ea210c57e` refuses case-folded
+file/child ancestor collisions across all ZIP members (52 payload, 29 archive
+controls); producer/served-byte, #511 CAS, installed/receiver and full ZIP
+closure remain held.
+[Coordination GS2-09.9 #676](https://github.com/FS-GG/FS.GG.Coordination/pull/676)
+at `64dc003ce1370d8d330110eaa3c7584ce80fc8e7` snapshots each fake
+observation before the next port can mutate its source actor or artifact bytes
+(23 tests); installed provider/native effects remain held.
+[Coordination GS2-09.7 #677](https://github.com/FS-GG/FS.GG.Coordination/pull/677)
+at `fa7af8513b2cfc5018b1561ce1fd3cec604c0b3f` refuses duplicate JSON
+members in raw issue classification (133 focused tests), without initial
+cohort census, full raw-to-typed adapter or Q5/Q6 acceptance.
+[SDD FSC-04 #1031](https://github.com/FS-GG/FS.GG.SDD/pull/1031)
+at `2a2a1e1aa97698560553927ef427f50914f2e518` caps one Linux pinned
+capture at 256 retained child directory handles (1,469 Commands tests), with
+ABA, post-check, cross-root and installed effects held.
+[Templates FSC-05 #572](https://github.com/FS-GG/FS.GG.Templates/pull/572)
+at `8a8094d503073f4489e27699709c46e3ad0f0937` refuses decomposed or
+compatibility-form member names outside the template payload (54 payload, 29
+archive controls); complete ZIP closure and producer/receiver custody remain.
+[`.github` FSC-03 F# #3788](https://github.com/FS-GG/.github/pull/3788)
+at `beabcd4db20b544d48568eae5f899ada93ab7ff7` adds a distinct local
+observation for supplied `Directory.Build` XML and refuses direct references,
+imports and relevant task outputs (140 tests). It does not authenticate nearest
+file selection, transitive imports or installed receiver parity.
+[Coordination GS2-09.9 #678](https://github.com/FS-GG/FS.GG.Coordination/pull/678)
+at `3a5ba5d2cd6bddeee0557c84a0901a19c7474c64` snapshots an integrated
+source result before a later approval port can replace its archive bytes (24
+fake-port tests); [#679](https://github.com/FS-GG/FS.GG.Coordination/pull/679)
+at `c09782e6eb9268dfddfd90fb98c06f7efea6e1d4` snapshots earlier producer
+and artifact results before later reads can rewrite actor or digest (27 tests).
+Neither supplies protected native custody or clears #545/#550.
+[Coordination GS2-09.7 #680](https://github.com/FS-GG/FS.GG.Coordination/pull/680)
+at `81dd56f7d59a68b4120b8cc5c207a6f4a5723b81` refuses duplicate raw
+PR identity/revision JSON members (134 focused tests), while initial census,
+full raw-to-typed inspection, journal/custom receipts and Q5/Q6 remain held.
+[`.github` FSC-03 Python #3789](https://github.com/FS-GG/.github/pull/3789)
+at `a2b1398f4d75a4d443d21c7939a195b6de156b7a` recognizes case-varied
+MSBuild `ProjectReference` item names across direct, Remove, target-time and
+implicit-file paths (146 fixtures). Matching F# main graph handling, evaluated
+imports and installed parity remain open.
+[Templates FSC-05 #573](https://github.com/FS-GG/FS.GG.Templates/pull/573)
+at `3827c9ebfda7feef59058d326b7b3fa4a8f9a84a` refuses reserved
+punctuation and ASCII controls in any ZIP member name (56 payload, 29 archive
+controls); complete ZIP closure and producer/receiver authority remain open.
+Read-only source-branch CLI integration for [`.github` #3780](https://github.com/FS-GG/.github/pull/3780)
+at `e58b5483fc51b04852c1d10e77272cecf6ec1f6e` used the current credential
+and `exact-project1` bootstrap mode to return pinned Project 1
+`PVT_kwDOEYAWY84Bb08W`, owner FS-GG, title Coordination, number 1 and 12
+editable fields from the live 24-field schema. This was not the installed
+orchestration runner and produced no native turn or applied Host receipt.
+[Coordination GS2-09.9 #681](https://github.com/FS-GG/FS.GG.Coordination/pull/681)
+at `a03ad4ee57e33543860f5db63305741783f7fa52` snapshots an inactive
+reviewer before a later event read can make it active (34 fake-port tests);
+[#683](https://github.com/FS-GG/FS.GG.Coordination/pull/683)
+at `3e737227adab498106140b6f67b293de79c5c6e9` snapshots a prestate
+transcript before metadata read can replace its hash (33 tests). Protected
+actor and native-effect custody remain held.
+[Coordination GS2-09.7 #682](https://github.com/FS-GG/FS.GG.Coordination/pull/682)
+at `87c66eb0bc1183782558277116ad418fe5ae1974` refuses duplicate raw PR
+review state, commit and actor JSON members (135 focused tests); initial census,
+full typed inspect, journal/custom receipts and Q5/Q6 are still open.
+[`.github` FSC-03 F# #3790](https://github.com/FS-GG/.github/pull/3790)
+at `175398359ba9bbe92b6d7f66bef05ab16e81a620` matches the Python
+case-varied `ProjectReference` source handling across direct, Remove and
+target-time shapes (144 tests). Implicit-file provenance, Import closure,
+evaluated graph and installed parity remain held.
+[SDD FSC-04 #1032](https://github.com/FS-GG/FS.GG.SDD/pull/1032)
+at `d2b509adc253583b1c355136833721bdef79f638` caps one pinned file at
+32 MiB on the Linux read paths (1,472 Commands tests); aggregate bytes,
+peak memory, ABA and cross-root atomicity remain unbounded/unproved.
+[Templates FSC-05 #574](https://github.com/FS-GG/FS.GG.Templates/pull/574)
+at `cb460fc9c1a4185f7da412ee6f972deb85c14bd1` refuses dot-ended or
+ASCII-space-ended ZIP path segments (58 payload, 29 archive controls), with
+full closure, producer/served-byte, #511 CAS and receiver proof open.
+[Coordination GS2-09.9 #684](https://github.com/FS-GG/FS.GG.Coordination/pull/684)
+at `cfffc8b8d3c495646b2ce984b58297307970b7b5` snapshots the probe
+before a later audit callback can replace a foreign no-grant response (38
+fake-port tests); protected probe/audit provenance and #545/#550 remain held.
+[Coordination GS2-09.7 #685](https://github.com/FS-GG/FS.GG.Coordination/pull/685)
+at `c147efb973729eccfa4f8353ca450707543888f0` refuses duplicate raw
+issue-event fields (136 focused tests); initial cohort census, full typed
+inspect, protected journal/custom receipts and Q5/Q6 remain open.
+[`.github` FSC-03 Python #3791](https://github.com/FS-GG/.github/pull/3791)
+at `6ff69a76c8d55aafbc64e98e9d235cd5db85cb7a` refuses literal or
+dynamic task outputs in nearest supplied `Directory.Build` files that can emit
+`ProjectReference` (148 fixtures). Import closure, nearest-file provenance,
+evaluated graph and installed parity remain open.
+[Templates FSC-05 #575](https://github.com/FS-GG/FS.GG.Templates/pull/575)
+at `9a102feeddf679acc08a96a82ed9721d6dbccfda` refuses reserved device
+stems in any ZIP member path (61 payload, 29 archive controls); descriptor
+support, full closure and producer/served/receiver custody remain open.
+[Coordination GS2-09.9 #686](https://github.com/FS-GG/FS.GG.Coordination/pull/686)
+at `bd35be4b914ef6b831fbd11ad760c7de74761b90` snapshots caller source
+bytes before an identity callback can restore a foreign archive (35 fake-port
+tests); [#688](https://github.com/FS-GG/FS.GG.Coordination/pull/688)
+at `748f7f7338bb013c02d6b6e63c5bfa0e355cd680` copies selected workflow
+digest before a Git callback can replace it (28 tests). Both remain without
+protected source/identity custody or native-effect authority.
+[Coordination GS2-09.7 #687](https://github.com/FS-GG/FS.GG.Coordination/pull/687)
+at `4429006ba0009962ee89f7f77ac68bf6912e48d0` refuses duplicate raw
+comment subject, body and actor members (137 focused tests); initial census,
+full typed inspect, journal/custom receipts and Q5/Q6 remain open.
+[`.github` FSC-03 Python #3792](https://github.com/FS-GG/.github/pull/3792)
+at `c389e65f90f15bd7e2f2c7aae677005b007b8029` refuses project or
+selected implicit `DirectoryBuildTargetsPath` overrides after installed
+MSBuild exposed hidden references (150 fixtures). Matching F# refusal,
+PropsPath/import switches, provider provenance and installed parity remain.
+[SDD FSC-04 #1033](https://github.com/FS-GG/FS.GG.SDD/pull/1033)
+at `c3d482fc331b05c160b3098fa874139e2db9d5b0` caps retained raw
+complete-root payload at a provisional 64 MiB (1,474 Commands tests); file
+count, repeated-copy peak memory, ABA and cross-root atomicity remain open.
+[Templates FSC-05 #576](https://github.com/FS-GG/FS.GG.Templates/pull/576)
+at `245e0ffbe955557cc63952ad74d2b4624846d5ea` applies a 255 UTF-8-byte
+per-segment bound to all ZIP member names (64 payload, 29 archive controls);
+full closure and producer/served-byte/receiver custody remain held.
+[Coordination GS2-09.9 #690](https://github.com/FS-GG/FS.GG.Coordination/pull/690)
+at `2ef694b69a7128b112dd4868fb901db4079c75c1` copies the selected
+identity event before a scope callback can change the closed producer result
+(34 fake-port tests); protected actor/source custody and #545/#550 remain held.
+[Coordination GS2-09.7 #689](https://github.com/FS-GG/FS.GG.Coordination/pull/689)
+at `79048c55f2c32584665da27b0b49d2959ea8b3cf` refuses duplicate raw
+inline review-comment fields (138 focused tests); initial census, full typed
+inspect, protected journal/custom receipts and Q5/Q6 remain open.
+[`.github` FSC-03 F# #3793](https://github.com/FS-GG/.github/pull/3793)
+at `54225a2bc4dde89b97f15f6ac4c0d3ac3efe05e9` matches the Python
+`DirectoryBuildTargetsPath` override refusal for project and supplied
+implicit XML (147 tests); nearest provenance, Import closure, evaluated graph
+and installed receiver parity remain held.
+[Coordination GS2-09.9 #691](https://github.com/FS-GG/FS.GG.Coordination/pull/691)
+at `9f5a8741eb0afcf14d8460bd0cd5148061b45591` copies selected identity
+event before a final scope callback can change the closed approval result
+(42 fake-port tests); protected identity/native effects remain held.
+[`.github` FSC-03 Python #3794](https://github.com/FS-GG/.github/pull/3794)
+at `3477f3e83391bd7f4dba756190f1519f25b210ad` refuses a nearest
+`Directory.Build.props` or `.targets` source above the supplied root after
+installed MSBuild exposed an uncovered reference (153 fixtures); external
+contents are not trusted, and symlink/global override/import closure remains.
+[Templates FSC-05 #577](https://github.com/FS-GG/FS.GG.Templates/pull/577)
+at `77d1ef9219552f2bd440eb1891a6164ed7822173` refuses full case-fold
+expansions in any ZIP member name (67 payload, 29 archive controls), with
+descriptor/full closure and producer/served/receiver proof open.
+[Coordination GS2-09.7 #692](https://github.com/FS-GG/FS.GG.Coordination/pull/692)
+at `1be3038da7d9131cbc1ffd1d2b3902ae2e12f93a` refuses duplicate raw
+initial and continuation relation JSON members (139 focused tests); initial
+cohort census, full typed inspect, journal/custom receipts and Q5/Q6 remain.
+[Coordination GS2-09.9 #693](https://github.com/FS-GG/FS.GG.Coordination/pull/693)
+at `cae277cad4bf1bcc58851921549c3812525726c5` copies selected audit
+actor before a final scope callback can change the closed readback result
+(45 fake-port tests); protected audit/native-effect custody remains held.
+[SDD FSC-04 #1034](https://github.com/FS-GG/FS.GG.SDD/pull/1034)
+at `03c196a8f90a0c1a68c65a3d196aebe433a25b1b` caps provisional Linux
+pinned complete-root capture at 4,096 files (1,477 Commands tests). ABA,
+post-check, cross-root and Windows/effect parity remain open.
+[Templates FSC-05 #578](https://github.com/FS-GG/FS.GG.Templates/pull/578)
+at `9e29cd0573d3cde787a20e9cb44b190a2d9bc4b1` refuses ZIP readback when
+the runtime Unicode data version differs from the F# comparator's pinned
+16.0.0 data; 68 payload and 29 archive controls pass. Selected native versus
+retained release remains NO_VERDICT; producer/served-byte, #511 CAS,
+installed parity and receiver adoption remain held.
+[Coordination GS2-09.9 #694](https://github.com/FS-GG/FS.GG.Coordination/pull/694)
+at `95e53a9ec72d12514730c42eff6ff99b453ca4f7` copies selected identity
+event before a final scope callback can alter a Git-tree witness (38 focused
+fake-port tests); installed native effects and protected identity custody
+remain held.
+[`.github` FSC-03 Python #3795](https://github.com/FS-GG/.github/pull/3795)
+at `475dc96c41ac8a5dbc4eecffc7cc60f428c98709` refuses external
+symlinked nearest `Directory.Build.props` and `.targets` sources while
+accepting an in-root symlink (156 fixtures). Installed MSBuild can read the
+external target through the lexical in-root link; project-file provenance,
+Import closure, evaluated graph and installed parity remain open.
+[Coordination GS2-09.7 #695](https://github.com/FS-GG/FS.GG.Coordination/pull/695)
+at `7f36e810a40cbd340f7e262dbae7437fe17a9d8f` refuses duplicate raw
+issue-type name and pagination members before typed interpretation (140
+focused tests). Initial census, full typed inspect, protected journal/custom
+receipts and Q5/Q6 remain held.
+[Coordination GS2-09.7 #696](https://github.com/FS-GG/FS.GG.Coordination/pull/696)
+at `3afbe206ba6eb6a602759ce22431712f463381b6` refuses duplicate raw
+project-item content type, repository ID and pagination members (141 focused
+tests). The same initial census, journal/custom receipt and Q5/Q6 holds apply.
+[`.github` FSC-03 Python #3796](https://github.com/FS-GG/.github/pull/3796)
+at `2572e39ea2430ee869ca02595cc830fec00e4414` refuses a project XML
+symlink that resolves outside the supplied root (158 fixtures), while an
+in-root symlink remains valid. Installed MSBuild read the external source
+through the lexical in-root path; F# provider authentication, Import closure,
+evaluated graph and receiver parity remain held.
+[`.github` exact-board capture #3797](https://github.com/FS-GG/.github/pull/3797)
+at `741a4a3f679d4db0c7fa4fd8eeba1f058af694a4`, stacked on #3780,
+recursively refuses duplicate raw JSON members in the dormant direct
+Project 1 response. Five red-before identity/count/type/option cases had
+returned `Ok`; the Release GitHub adapter suite now passes 858/858. The
+installed all-project runner and genuine item/native turn/applied Host
+receipt/queue-return proof remain absent.
+
+The subsequent source-only drafts advance independent prerequisites without
+changing the protected holds:
+
+| Workstream / draft | Exact PR head | Bounded source evidence |
+| --- | --- | --- |
+| [GS2-09.9 #697](https://github.com/FS-GG/FS.GG.Coordination/pull/697) | `73d16c27fad9d8c2b396d786405de52dc1324831` | Copies selected SHA and target before read/reservation callbacks; 71 fake-port tests. |
+| [GS2-09.7 #698](https://github.com/FS-GG/FS.GG.Coordination/pull/698) | `959c518a6fc3844ea52f34ea9206aef89a568bb9` | Refuses duplicate raw project-field/type/pagination members; 142 focused tests. |
+| [GS2-09.7 #699](https://github.com/FS-GG/FS.GG.Coordination/pull/699) | `f7715c1a93aa194f05f29fe666e30bdccba93e57` | Refuses duplicate raw project-value/option/pagination members; 143 tests. |
+| [GS2-09.9 #700](https://github.com/FS-GG/FS.GG.Coordination/pull/700) | `62e1c404f501378113d41cafe8605a31d3a5b7f2` | Freezes native reader selection before transport callbacks; 79 fake-port tests. |
+| [GS2-09.7 #701](https://github.com/FS-GG/FS.GG.Coordination/pull/701) | `69c4cabe79e3a1028f8f559f9adf53f3ed0ebc38` | Refuses duplicate raw repository identity/settings members; 144 focused tests. |
+| [GS2-09.9 #702](https://github.com/FS-GG/FS.GG.Coordination/pull/702) | `20d50cbac2037f7ea7171ba3d9d3e307fb9c4b81` | Refuses a present foreign REST URL despite matching selected repository ID/name; 80 fake-port tests. |
+| [FSC-03 #3798](https://github.com/FS-GG/.github/pull/3798) | `28673f19da4357e92718d4874beda409e6704574` | Discovers case-varied project extensions that MSBuild loads; 161 fixtures. |
+| [FSC-03 #3799](https://github.com/FS-GG/.github/pull/3799) | `c3588047db13b4e9f6ce5b84ab116738f062452f` | Refuses an existing referenced project outside the discovered roster; 163 fixtures. |
+| [FSC-03 #3800](https://github.com/FS-GG/.github/pull/3800) | `c8a772e742cbbc1539d891473c64d68e36f305d5` | Refuses a missing referenced project and completes two historical workflow inventories; 164 fixtures. |
+| [FSC-04 #1035](https://github.com/FS-GG/FS.GG.SDD/pull/1035) | `4ca06d9a6ed535110883b0ac3986c353290d841c` | Caps provisional pinned relative paths at 1,024 UTF-16 code units; 1,481 Commands tests. |
+| [FSC-04 #1036](https://github.com/FS-GG/FS.GG.SDD/pull/1036) | `ed9b4c6e88e16a4e5414580e47cafb280b077fab` | Uses fixed 80 KiB second-pass compare buffer, without peak-memory or atomicity proof; 1,482 Commands tests. |
+| [FSC-05 #579](https://github.com/FS-GG/FS.GG.Templates/pull/579) | `ab392ae799c24f2be8b6e32d63d3c3bbc762577f` | Refuses unowned bytes before ZIP central directory; 69 payload/29 custody controls. |
+| [FSC-05 #580](https://github.com/FS-GG/FS.GG.Templates/pull/580) | `840f32f4be5db240e61da0d5a4bf98fb91926f90` | Refuses nonzero multi-disk ZIP markers; 72 payload/29 custody controls. |
+| [FSC-05 #581](https://github.com/FS-GG/FS.GG.Templates/pull/581) | `8f8252a7588a0079fa7653b65614dc64010782e5` | Binds ZIP end-record entry counts to parsed members; 76 payload/29 custody controls. |
+| [GS2-09.7 #703](https://github.com/FS-GG/FS.GG.Coordination/pull/703) | `42d1adafadb6b3c849ee3a27a8a72fe0c5338d7b` | Refuses duplicate raw ruleset condition members; 145 focused tests. |
+| [GS2-09.9 #704](https://github.com/FS-GG/FS.GG.Coordination/pull/704) | `50bce2b99ca0347ccce055303f3dc44293ab585d` | Binds nested pull repository URLs to selected target and refuses list/detail drift; 83 fake-port tests. |
+| [FSC-03 F# #3801](https://github.com/FS-GG/.github/pull/3801) | `b3ae107d4e5b3d911d850fbb34029412099bf451` | Pure Rule B refuses a referenced node absent from its supplied graph; 148 policy tests. Supplied graph remains unauthenticated. |
+| [FSC-05 #582](https://github.com/FS-GG/FS.GG.Templates/pull/582) | `9dc235eb69778c0e74740fe24fc9675ab74f1141` | Refuses nonempty ZIP central member comments; 77 payload/29 custody controls. |
+| [GS2-09.7 #705](https://github.com/FS-GG/FS.GG.Coordination/pull/705) | `7af17b858f2d274011fde2f71cd562926a2cb6f4` | Refuses duplicate nested ruleset parameter members before retaining JSON; 146 focused tests. |
+| [GS2-09.9 #706](https://github.com/FS-GG/FS.GG.Coordination/pull/706) | `bd85c334c41b1f9c78179e918829c55b817ea0c6` | Binds present pull URL to selected repository and number; 86 fake-port tests. |
+| [FSC-03 F# #3802](https://github.com/FS-GG/.github/pull/3802) | `7418842a49da10f9944a2106d14e1d65a3401794` | Refuses Windows drive-prefixed paths in pure Rule B graph and project inputs; 154 policy tests. |
+| [FSC-04 #1037](https://github.com/FS-GG/FS.GG.SDD/pull/1037) | `4e2b5bf0aa760154b006197beea9281cd60c84e2` | Reserves checked first-pass file length to reduce test-thread allocation; 1,483 Commands tests, no peak-memory or atomicity proof. |
+| [FSC-05 #583](https://github.com/FS-GG/FS.GG.Templates/pull/583) | `6f65af89837b6da010a5a5983be247490de07b1f` | Refuses altered selected central/local ZIP header metadata; 82 payload/29 custody controls. |
+| [GS2-09.9 #707](https://github.com/FS-GG/FS.GG.Coordination/pull/707) | `6f7c4de6f8c892ecde9a34c392cb284834eb75ca` | Binds present branch commit URL to selected repository and SHA in both protection probes; 88 fake-port tests. |
+| [FSC-03 F# #3803](https://github.com/FS-GG/.github/pull/3803) | `9912114a5a5651ba5624486183614dac2499fff7` | Refuses surrounding whitespace in supplied ProjectReference Include that installed MSBuild trims; 158 policy tests. |
+| [FSC-05 #584](https://github.com/FS-GG/FS.GG.Templates/pull/584) | `1fa5d682b7c864948ea9c216f04a8ea5ceba4865` | Refuses matching nonzero ZIP flags in selected local/central headers; 85 payload/29 custody controls. |
+| [GS2-09.9 #708](https://github.com/FS-GG/FS.GG.Coordination/pull/708) | `01c206a474e9f40f9369ce291a6e8e34237158e8` | Uses type-sensitive canonical JSON digest for initial/terminal protection policy comparison; 90 fake-port tests. |
+| [FSC-03 F# #3804](https://github.com/FS-GG/.github/pull/3804) | `310f702287f7db8b2565c977d61c08a82321a6c1` | Dormant pure supplied-source assembler refuses duplicate project identities, absent references and empty lists before graph construction; 163 policy tests. |
+| [GS2-09.7 #709](https://github.com/FS-GG/FS.GG.Coordination/pull/709) | `bf322d6d36fa18df67af4fc10a44908f2e4c992b` | Requires exact PR marker-number set across issue page, PR page and raw-to-typed adapter, closing same-count subject substitution; 711 full unit tests. Initial sandbox census and Q5/Q6 remain held. |
+| [FSC-04 #1038](https://github.com/FS-GG/FS.GG.SDD/pull/1038) | `6ca4befec823793fcb6f585db7bfb8b48984b8ad` | Transfers only freshly completed private Linux pinned-read bytes into `CapturedFile`, preserving defensive copy for supplied arrays; 1,486 Commands tests, no peak-memory or atomicity proof. |
+| [FSC-05 #585](https://github.com/FS-GG/FS.GG.Templates/pull/585) | `519603fa4c4bb46755dc28b221005de0f251083f` | Requires selected ZIP local DOS time/date to match central record; 87 payload/29 custody controls, selected archive still NO_VERDICT. |
+| [GS2-09.9 #710](https://github.com/FS-GG/FS.GG.Coordination/pull/710) | `6ced357930e81ada8753b7305627f6dd73d4fea5` | Requires present and type-sensitive equal selected pull list/detail fields; 92 fake-port tests, native effect still held. |
+| [FSC-03 F# #3805](https://github.com/FS-GG/.github/pull/3805) | `a927784f1496d6644bf3311c7f9bceeaffe03e9b` | Pure supplied-source assembler refuses `.proj`/`.targets` identities outside the live Python project's discovered extension roster; 166 policy tests, source provenance still unauthenticated. |
+| [GS2-09.7 #711](https://github.com/FS-GG/FS.GG.Coordination/pull/711) | `74ea9066da07a2adba2e8e0971e4c3decafe2a43` | Raw-to-typed provider adapter refuses duplicate PR marker members in a captured issue page before extraction; 133 focused tests. Initial census and Q5/Q6 remain held. |
+| [GS2-09.9 #712](https://github.com/FS-GG/FS.GG.Coordination/pull/712) | `826d9c1dc38b43a59f3acb8dbed35e0a91edcb33` | Strict native JSON parser refuses exponent overflow before repository readback; 94 fake-port tests, one-attempt native effect held. |
+| [FSC-05 #586](https://github.com/FS-GG/FS.GG.Templates/pull/586) | `1e80421fcec60f95824ce64508d4858fc03f962c` | Refuses invalid DOS date/time fields even when ZIP local and central values agree; 94 payload/29 custody controls, selected archive NO_VERDICT. |
+| [FSC-03 F# #3806](https://github.com/FS-GG/.github/pull/3806) | `a4ea873e96ef51628469a4a30cd9bab00e7c5289` | Dormant pure handoff requires supplied project XML identities to match a supplied expected roster; 174 policy tests, expected roster still unauthenticated. |
+| [GS2-09.9 #713](https://github.com/FS-GG/FS.GG.Coordination/pull/713) | `55ba5c9d8fee433c79a0c892b8699cd0bd01d4fb` | Refuses `.` or `..` repository path segments before injected native callbacks; 95 fake-port tests. Installed provider and one-attempt native effect remain held. |
+| [GS2-09.7 #714](https://github.com/FS-GG/FS.GG.Coordination/pull/714) | `d3c90bce8947b796a7bd34d0181f32b0a35ee6dd` | Raw-to-typed project binder refuses duplicate `hasNextPage` members in item, field and value pages; 135 focused tests. Q5/Q6 remain held. |
+| [FSC-04 #1039](https://github.com/FS-GG/FS.GG.SDD/pull/1039) | `38e48ef03bda4a52528aa5a4941e27e181ae24e8` | Fills one budget-checked private array directly from a pinned descriptor and refuses short or extra-byte reads; 1,490 Commands tests. Allocation fixture does not prove peak memory or atomicity. |
+| [FSC-05 #587](https://github.com/FS-GG/FS.GG.Templates/pull/587) | `028e1ab32f87113acfdbba9de808a43f2d15470e` | Refuses trailing bytes after a raw-deflate end marker inside the declared compressed member size; 95 payload/29 custody controls, selected archive NO_VERDICT. |
+| [FSC-03 F# #3807](https://github.com/FS-GG/.github/pull/3807) | `1a6b278279ab6554fc1066cd1239e5a3c585e569` | Pure supplied-source handoff binds raw XML bytes to caller-supplied SHA-256 digests before exact-roster graph assembly; 182 policy tests. Digest and roster provenance remain unauthenticated. |
+| [GS2-09.9 #715](https://github.com/FS-GG/FS.GG.Coordination/pull/715) | `331d4b80c7473c92f75e324c1127b78c355125eb` | Native reader binds present repository owner and name to the selected full name; lost-response fake stays unknown after one attempted PUT, 97 focused tests. Installed provider and #550 remain held. |
+| [GS2-09.7 #716](https://github.com/FS-GG/FS.GG.Coordination/pull/716) | `f2b13c35abeb9a46114f98e75f0993b28a45b0bf` | Raw-to-typed relation binder refuses duplicate root `data` JSON members in initial and continuation pages; 136 focused tests. Hosted checks queued, initial census and Q5/Q6 held. |
+| [FSC-05 #588](https://github.com/FS-GG/FS.GG.Templates/pull/588) | `f3692ddbbabd11ec089826f360bc0429fc208b18` | Refuses nonzero DOS external-attribute bits even when a ZIP member has Unix regular-file mode; 97 payload/29 custody controls, selected archive NO_VERDICT. |
+| [FSC-03 F# #3808](https://github.com/FS-GG/.github/pull/3808) | `5d1c0254da01d868c3b057eeee21ff44c43df968` | Pure Rule B refuses unsupported GitHub glob `?`, `+` and `[]` operators instead of false-green coverage; 185 tests. Matching live Python repair is pending. |
+| [GS2-09.7 #717](https://github.com/FS-GG/FS.GG.Coordination/pull/717) | `f33214b088db881cc7603006ef452310e57f0af9` | Raw-to-typed issue binder refuses duplicate repository identity members in captured responses; 137 focused tests. Hosted checks queued, initial census and Q5/Q6 held. |
+| [GS2-09.9 #718](https://github.com/FS-GG/FS.GG.Coordination/pull/718) | `6d1e5d86c502a270851ed7196b018d158d7900d9` | Pure closed-candidate check compares canonical selected bytes with packet bytes, refusing Python boolean/float aliases for integer facts; 80 focused tests, candidate remains non-authorizing. Closed archive pin changed to `d665e9b66f42aa3df8b270b792d5958aec6c4bd2bd136010cd146b5e237dcd19`; #550 held. |
+| [FSC-05 #589](https://github.com/FS-GG/FS.GG.Templates/pull/589) | `177d8a53f5b2e48d25b5dab4b9979fdf0cb48979` | Requires Unix 0644 mode for non-template regular ZIP members, retaining the signed signature exception; 99 payload/29 custody controls, selected archive NO_VERDICT. |
+| [FSC-04 #1040](https://github.com/FS-GG/FS.GG.SDD/pull/1040) | `1bab7cdc32635a2b6d45b8c7457313907f740f71` | Provisional Linux pinned reader refuses NFC/ignore-case aliases in declarations, physical roster and selected path; 1,496 Commands tests, Windows/ABA/atomicity still unproved. |
+| [FSC-03 Python #3809](https://github.com/FS-GG/.github/pull/3809) | `94c44071bc75dd5de7b243c2b3c9c7efbf66fce5` | Live Rule B gate refuses unsupported GitHub path operators `?`, `+` and `[]` before coverage; 168 fixture controls. Stack acceptance and installed receiver proof remain open. |
+| [GS2-09.9 #719](https://github.com/FS-GG/FS.GG.Coordination/pull/719) | `371948c4e749585e0b0fc599396ad0d25cd540cc` | Closed scaffold verifier refuses a float `nativeSource.size` in a resealed manifest; 19 focused tests. Local approval digest remains caller supplied, #550 held. |
+| [GS2-09.7 #720](https://github.com/FS-GG/FS.GG.Coordination/pull/720) | `677274aac21e234bf1ec4f13c848bbf212a35f1a` | Raw-to-typed issue binder independently checks unique issue identities, unique PR markers and disjoint issue/marker numbers; 139 focused tests. Hosted checks queued, Q5/Q6 held. |
+| [FSC-03 Python #3810](https://github.com/FS-GG/.github/pull/3810) | `cd2617ca07ccdf07fbbad556bb49a1fe72201c71` | Live static graph refuses unverified custom SDK declarations that can import hidden `ProjectReference` edges; 170 fixtures after an installed MSBuild probe. Built-in resolver provenance and F# parity remain open. |
+| [GS2-09.9 #721](https://github.com/FS-GG/FS.GG.Coordination/pull/721) | `70ccbf3b0505cb90eb50035e377f4157ed660c27` | Release preflight refuses incomplete or falsely authorizing byte-verifier results; 59 focused tests. Closed archive and manifest pins unchanged, workflows disabled and #550 held. |
+| [FSC-05 #590](https://github.com/FS-GG/FS.GG.Templates/pull/590) | `a6b25cf6f7bfb0448cd01491be7aa1224faf2fb2` | Read-only ZIP reader refuses embedded NUL filenames that `zipfile` silently shortens; 101 payload/29 custody controls, selected archive NO_VERDICT. |
+| [FSC-04 #1041](https://github.com/FS-GG/FS.GG.SDD/pull/1041) | `2079be649681c496629b5af11c3760026ae7486b` | Pinned closed-root selection refuses Unicode/case aliases, including a late alias during capture; 1,500 Commands tests. ABA, Windows and cross-root proof remain open. |
+| [GS2-09.7 #722](https://github.com/FS-GG/FS.GG.Coordination/pull/722) | `08ecebc9fa2b407ae1a76f3b3f575c7f1113b938` | Raw-to-typed project binder refuses duplicate or blank item IDs across captured rows; 140 focused tests. Hosted checks queued, initial census and Q5/Q6 held. |
+| [FSC-03 F# #3811](https://github.com/FS-GG/.github/pull/3811) | `979afbcc3bc26f41488caad55ec0f4f788e64d6b` | Pure supplied-graph reader refuses unverified custom SDK declarations, matching Python #3810; 191 policy tests. SDK/Import provenance and evaluated graph remain open. |
+| [GS2-09.9 #723](https://github.com/FS-GG/FS.GG.Coordination/pull/723) | `fb3df0645d60759f5bc8c056bc4f98af5e27f178` | Git-tree witness requires the exact versioned closed byte-verifier success result; 21 focused tests, witness cannot dispatch and #550 held. |
+| [FSC-05 #591](https://github.com/FS-GG/FS.GG.Templates/pull/591) | `298a18acf89cf393df0d6a17aaa14460e2661f16` | Pin/roster custody observer refuses NUL-shortened non-owner member names as NO_VERDICT; 31 custody/101 payload controls, selected archive still NO_VERDICT. |
+| [GS2-09.9 #724](https://github.com/FS-GG/FS.GG.Coordination/pull/724) | `e4fb1f90ab986ba426802fc0db5b8ef5586bb57f` | Read-only native-effect admission matrix separates the closed native-free scaffold from a future reviewed runnable revision and installed no-grant controls; 16 local links resolve. It supplies no protected selection or authority. |
+| [FSC-04 #1042](https://github.com/FS-GG/FS.GG.SDD/pull/1042) | `161e07ad766d2e92f7c720c60da6563f00aef577` | Provisional Linux preview discovers complete `work/` candidate inventory through held descriptors rather than a caller file list; 1,505 Commands tests. Atomicity, Windows and installed proof remain open. |
+| [FSC-05 #592](https://github.com/FS-GG/FS.GG.Templates/pull/592) | `82acf2df0a0966b6c37ef26216402fecf6b3e6de` | Custody observer refuses leading/trailing ZIP overlays and local-to-central gaps as NO_VERDICT; 34 custody/101 payload controls. Selected archive remains NO_VERDICT. |
+| [GS2-09.7 #725](https://github.com/FS-GG/FS.GG.Coordination/pull/725) | `8f46f41a16fb6707b3f2ae8a555fbd621d02c934` | Native activity reconciler binds initial issue-page origin, owner/repo and repository ID to configured options; 720 full unit tests. Protected option pins and provider byte custody, Q5/Q6 remain open. |
+| [GS2-09.9 #726](https://github.com/FS-GG/FS.GG.Coordination/pull/726) | `d753d9c4470ba8a8903301197794d950790579d9` | Adversarial correction to #724 adds missing #550 v5 contract, source/workflow, request, journal and grant evidence cells and fixes the late-drift journal-read counter; 18 links resolve. Runnable source and protected reviewer remain absent. |
+| [FSC-03 F# #3812](https://github.com/FS-GG/.github/pull/3812) | `ef20439a8b326cedf66e12595f6df3224197b50d` | Pure SHA-1 Git-tree object walker derives a complete supplied project roster; 199 tests, local read-only 350-object/27-project dogfood matched `git ls-tree`. Root tree and project bytes lack authenticated binding. |
+| [GS2-09.7 #727](https://github.com/FS-GG/FS.GG.Coordination/pull/727) | `65bbb126db8718c57aeb1715dd7e77082751f70b` | Read-only owner packet distinguishes registered Q4 diagnostic repository from an unselected migration copy and records protected admission, exact run/attempt/target, native byte custody and journal/receipt joins for Q5/Q6. No protected action. |
+| [GS2-09.9 #728](https://github.com/FS-GG/FS.GG.Coordination/pull/728) | `82d2b4344d5a0c6767aff0c2a24a1b75344b78e3` | Source-only typed v5 port proposal maps protected roles but its only entry exits 78 without grant or port access; 10 focused tests. Closed archive and disabled workflows unchanged, #550 held. |
+| [FSC-03 F# #3813](https://github.com/FS-GG/.github/pull/3813) | `925ab69551bd412d797e4dfaa6bd588ca2ced3b1` | Pure adapter binds supplied project bytes to Git blob IDs before XML graph inspection; 203 tests. Root tree remains unauthenticated to repository/commit. |
+| [FSC-04 #1043](https://github.com/FS-GG/FS.GG.SDD/pull/1043) | `70b76458a97d0a530f7885afa406288bf45ece4f` | Read-only preview re-verifies raw byte overlap for every selected `work/` file shared by model bundle and discovered inventory; 1,510 Commands tests. Common instant/ABA still unproved. |
+| [GS2-09.9 #729](https://github.com/FS-GG/FS.GG.Coordination/pull/729) | `23130dd81e7d59cf061a53fbecd109af2adce279` | Seals the source-only closed v5 result against caller-forged authorization, dispatch, effect count, exit and schema fields; 12 focused tests. Protected role identities remain unproved, #550 held. |
+| [Telemetry schema #730](https://github.com/FS-GG/FS.GG.Coordination/pull/730) | `d195d603bf996b56532abf1191e4416504e4567c` | Direct-session schema probe binds `turn/completed` through the selected server notification route rather than an unused definition; 146 adapter tests. Current-session attachment and native completed-turn usage remain no-verdict. |
+| [GS2-09.9 #731](https://github.com/FS-GG/FS.GG.Coordination/pull/731) | `96b76b7d607713ad215aef9d6b0fd287d5ee825b` | Source-only design for a separate runnable revision's file/member/workflow graph; eight links resolve. Current closed archive, exit-78 entry and disabled workflows remain unchanged, #550 held. |
+| [FSC-03 F# #3814](https://github.com/FS-GG/.github/pull/3814) | `c4411260de3b4f25bbd7c91c090f0aa7e98ef652` | Pure exact-commit reader port verifies supplied raw Git commit hash and binds its tree to the project graph; 212 tests. Reader and accepted repository/commit pin remain unauthenticated. |
+| [Telemetry schema #732](https://github.com/FS-GG/FS.GG.Coordination/pull/732) | `d5f30278a62c904ad2a07dcf21f680603ec2fae1` | Direct-session schema probe binds the actual `thread/resume` client request route; 149 adapter tests. Current-session attachment and native completed-turn usage remain no-verdict. |
+| [GS2-09.7 #733](https://github.com/FS-GG/FS.GG.Coordination/pull/733) | `3b03e4bb1e9c237e10764a73e3f06a4a0bfd8014` | Source-only protected issue-census reader/store port checks run/attempt/nonce/candidate/workflow/repository/store and page/typed joins; 726 full unit tests. Installed ACL/provider byte custody and Q5/Q6 held. |
+| [GS2-09.9 #734](https://github.com/FS-GG/FS.GG.Coordination/pull/734) | `1f9360eeab7d590d04f3f93b95e35e56f6681717` | Offline cross-module controls bind sealed operation-plan and native PR request bytes/digest; 62 focused tests. Protected plan/seal, runnable artifact and #550 effect held. |
+| [FSC-04 #1044](https://github.com/FS-GG/FS.GG.SDD/pull/1044) | `ec4637bda6c52ef8001c62ed154f2d90961229c1` | Read-only preview compares two bundle/work-tree capture pairs and refuses changed roster/raw bytes; 1,515 Commands tests. Four sequential captures still lack common-instant/ABA proof. |
+| [GS2-09.9 #735](https://github.com/FS-GG/FS.GG.Coordination/pull/735) | `a19627eedb34a5060787a9dfcc7c28f811b2f31f` | Source-only sealed-plan adapter returns immutable, non-authorizing canonical request bytes from the same verified read; 17 focused tests. Protected plan/seal and #550 dispatch remain held. |
+| [Telemetry usage #736](https://github.com/FS-GG/FS.GG.Coordination/pull/736) | `f60d2cf10ecb5aec5ea2a6747a86722c6bab80e1` | Dormant direct-session usage reducer refuses malformed but equal reservation/subscription scope keys; 152 adapter tests. Current-session authentication and completed-turn usage remain no-verdict. |
+| [GS2-09.7 #737](https://github.com/FS-GG/FS.GG.Coordination/pull/737) | `f4bc3c8cfad696497eef0addb05c7549fb5758c2` | Source-only census binder refuses captured POST, redirect and byte-substituted bodies; 727 full unit tests. Protected native HTTP/provider custody and Q5/Q6 remain held. |
+| [FSC-03 F# #3815](https://github.com/FS-GG/.github/pull/3815) | `7d5a67e3ce29970e309ae294a844b8e1044ae98a` | Pure GitHub GraphQL response adapter binds exact repository, commit and tree identity and refuses partial/foreign/duplicate JSON; 221 tests. Authenticated transport and accepted pin remain uninstalled. |
+| [GS2-09.9 #738](https://github.com/FS-GG/FS.GG.Coordination/pull/738) | `2b21d54a65b5b453538fef55792ce5ce73f9730f` | Source-only sealed-plan adapter binds attestation to a distinct exact read-seal scope, rechecks both readers for drift, and closes five fake-port false passes; 20 focused tests. Fake scopes remain non-authoritative and #550 stays held. |
+| [FSC-04 #1045](https://github.com/FS-GG/FS.GG.SDD/pull/1045) | `ff8215ec6125ffafc058b24b5cfa7439dabd31da` | Physical ABA and post-final-capture controls show four matching reads still lack a common instant; the read-only success type is explicitly `ObservedAgreement`, not authorization. 1,517 Commands tests. |
+| [Telemetry usage #739](https://github.com/FS-GG/FS.GG.Coordination/pull/739) | `35c90bfc2bcecb1ca0506fba4c55d883a4233d0f` | Dormant direct-session correlation refuses malformed reservation, transport, protocol and UTC facts; 157 adapter tests. Native completed-turn usage and Host capture remain no-verdict. |
+| [GS2-09.7 #740](https://github.com/FS-GG/FS.GG.Coordination/pull/740) | `f06b927e91fec650a3c0ffd620ecc6981fb0aeec` | Source-only census binder refuses foreign provider IDs and ambiguous headers, and includes recorded headers in its corpus digest; 729 full unit tests. Native wire custody, freshness and Q5/Q6 stay held. |
+| [FSC-03 F# #3816](https://github.com/FS-GG/.github/pull/3816) | `b7920dfdf4b6d3b815d8e287954da24dfbdd2420` | Dormant GraphQL HTTP reader fixes the endpoint and refuses redirect, wrong origin/status/media, mutation and oversized/underreported body; 230 F# tests. No live credential, accepted pin or installed receiver. |
+| [GS2-09.9 #741](https://github.com/FS-GG/FS.GG.Coordination/pull/741) | `de3bc6d714da6dbae57d0a23b220e59c336df217` | Closed read-only plan-seal event witness binds canonical event identity/digest to verified plan/request and selected custody facts; eight new and ten existing focused tests. The event backend/identities remain fake-port only and #550/#545 stay held. |
+| [Telemetry usage #742](https://github.com/FS-GG/FS.GG.Coordination/pull/742) | `d33d0b1df180b89701112a15a9f85169ff6b62b4` | Dormant usage adapter refuses malformed typed snapshot/exec/upstream candidates using counter grammars and cumulative domination checks; 160 Release execution tests. Native use and Host receipt remain no-verdict. |
+| [FSC-04 #1046](https://github.com/FS-GG/FS.GG.SDD/pull/1046) | `f5434a4d6be635b8ce080e6707e67bbf4c65101b` | Physical core-source schedule returns the same observed A0/B1 pair twice although it never coexisted on disk; four-capture preview remains non-authorizing `ObservedAgreement`. 1,519 Commands tests; common-instant producer custody remains open. |
+| [GS2-09.7 #743](https://github.com/FS-GG/FS.GG.Coordination/pull/743) | `0452ad506ea95cb4944db7d4048179e9a227ae99` | Second read-only custody port compares exact store descriptors and object-by-object run/selection/raw capture records, refusing missing or changed store evidence; 730 full unit tests. Protected ACL/native custody, inventory, Q5/Q6 remain held. |
+| [Telemetry usage #744](https://github.com/FS-GG/FS.GG.Coordination/pull/744) | `809b1255933f8e7e1f93f1fe08536868a923a32d` | Source-only continuity gate refuses equal malformed expected/bound scopes before authenticator read; 161 Release execution tests. Current-session usage and Host capture remain no-verdict. |
+| [FSC-03 F# #3817](https://github.com/FS-GG/.github/pull/3817) | `b5f47897f5146f223d83b85ad104f614a733f379` | Source-only strict protected-main response reducer derives a provisional commit pin and composes it with commit/tree/project bytes; 237 tests. Authenticated REST reader is uninstalled and a moving tip is not a durable acceptance receipt. |
+| [GS2-09.9 #745](https://github.com/FS-GG/FS.GG.Coordination/pull/745) | `cee907ebcd0c3a65bcae61e6953a433eba0e841e` | Closed fake-port v5 journal intent readback distinguishes claimed CAS acknowledgment from independent committed-marker readback; 20 focused and adjacent tests. Real protected writer/replay/grant and #550 effect remain held. |
+| [Telemetry usage #746](https://github.com/FS-GG/FS.GG.Coordination/pull/746) | `ba8173aeb79b09d7cd9ef983ff9e29122de81a5d` | Source-only prospective-window validation refuses equal malformed scopes before reservation CAS/current-session source; 163 Release execution tests. Native completed-turn usage and Host receipt remain absent. |
+| [FSC-03 F# #3818](https://github.com/FS-GG/.github/pull/3818) | `f63ad22d9b8568635dff93c16b6eeb9356aaee03` | Dormant fixed-URL protected-branch HTTP reader refuses redirects, status/origin/media mismatch and oversized responses; 247 F# tests. No live request, accepted freshness or installed receiver. |
+| [GS2-09.7 #747](https://github.com/FS-GG/FS.GG.Coordination/pull/747) | `d496707cc0cd8a379dce7f487e8d198d3c4ef68f` | Source-only store installation descriptor pins artifact/ACL digest and role principals before reader invocation, refusing candidate read/write, mutable objects and drift; 730 full unit tests. Real IAM/native custody and Q5/Q6 remain held. |
+| [Telemetry usage #748](https://github.com/FS-GG/FS.GG.Coordination/pull/748) | `45e86f719c7a94f504ab93bfd7bb28cfa19e3db4` | Source-only reservation chronology refuses pre-reservation observation and second-clock rollback with a burned challenge gap; 165 Release execution tests. Trusted clock/current-session usage and Host receipt remain absent. |
+| [GS2-09.9 #749](https://github.com/FS-GG/FS.GG.Coordination/pull/749) | `f5b3897248078498507cc907e9dd303ce10b06fd` | Closed v5 native-request custody joins sealed plan bytes, seal-event witness, journal readback, target digest and typed POST fields, including independent generation/head pin; 18 focused/adjacent tests. Still non-authorizing under #550/#545. |
+| [GS2-09.7 #750](https://github.com/FS-GG/FS.GG.Coordination/pull/750) | `29a4bce39a69ba5015e8e62eb0ae140845795668` | Source-only full-store inventory readback checks complete ordered object set and stable pre/post seal before corpus digest; 731 full unit tests. Native linearizable completeness/freshness and Q5/Q6 remain held. |
+| [FSC-03 F# #3819](https://github.com/FS-GG/.github/pull/3819) | `c0243275a3064bb7ff29bc0eb8f7d0a2ad7c7d67` | Dormant read-only object port materializes reachable Git tree/project blobs by exact SHA-1 ID, kind and raw hash, refusing missing closure; 253 F# tests. Provider/accepted pin/receiver remain uninstalled. |
+| [Telemetry usage #751](https://github.com/FS-GG/FS.GG.Coordination/pull/751) | `dc9243562e407add0b15a34195639c1e266bd4bf` | Source-only subscription handoff retains validation time and burns challenge on first-start clock regression; final full Release execution suite 166 tests. Genuine turn/Host capture remains absent. |
+| [GS2-09.9 #752](https://github.com/FS-GG/FS.GG.Coordination/pull/752) | `9e282a08155fb8188546a508e16703423c502ad3` | Closed provider request spec binds exact verified bytes to fixed GitHub POST path with one-send ceiling, no automatic retry or redirects; 21 focused/adjacent tests. No installed transport, token, grant, CAS or effect. |
+| [FSC-04 #1047](https://github.com/FS-GG/FS.GG.SDD/pull/1047) | `83229e3e10b2f56bc428921826654ccf585929cf` | Optional read-only preview takes both core `.fsgg` files from one full Git commit OID and refuses replace-ref, missing, symlink and oversized sources; 1,524 Commands tests. Selected commit, dirty/full-source closure and generation binding remain open. |
+| [Telemetry usage #754](https://github.com/FS-GG/FS.GG.Coordination/pull/754) | `2ac85e735c852dd6cf2d82e6d734486fc25fcc52` | Source-only subscription gate requires timestamp strictly after reservation and burns a tied challenge; 167 Release execution tests. Trusted clock, native usage and Host capture remain absent. |
+| [GS2-09.7 #753](https://github.com/FS-GG/FS.GG.Coordination/pull/753) | `3d2ea9efc885ef83c5ea3c8fe7ef9b9a025809be` | Source-only inventory seal now requires domain-separated commitment to exact selection, store roles and ordered captures; 731 full unit tests. Commitment is unsigned; native attestation/freshness and Q5/Q6 remain held. |
+| [FSC-03 F# #3820](https://github.com/FS-GG/.github/pull/3820) | `76402a097f51b6e4a1ab094e01192a8b82e7e76e` | Dormant composed reader rechecks the exact protected branch tip after Git object reads, refusing changed or unavailable final tip; 255 F# tests. Still an observation, not durable accepted pin or installed parity. |
+| [GS2-09.9 #755](https://github.com/FS-GG/FS.GG.Coordination/pull/755) | `6f2b0707f0e95acf71c4b2e8bed8754c7dbd265d` | Token-free fake metadata join binds closed provider request to selected App installation, repository, effective permissions, credential/mint IDs, target/prestate and expiry; 20 focused/adjacent tests. Actual token custody/App attestation and #550 remain held. |
+| [Telemetry usage #756](https://github.com/FS-GG/FS.GG.Coordination/pull/756) | `7009476d31abc7eff966ef9b3a5fdcd0764f0f86` | Standalone direct-session handoff now refuses malformed expected scope before assignment or current-turn source reads; 168 Release execution tests. Current-session transport/native usage/Host capture remain absent. |
+| [FSC-03 F# #3821](https://github.com/FS-GG/.github/pull/3821) | `028647e384e2e96ba5e7a8f70bc8233984487c77` | Supplied-snapshot branch path now rechecks protected main after membership/commit/project bytes, refusing changed or unavailable final tip; 255 F# tests. Two reads remain an observation window, not durable accepted pin. |
+| [Telemetry usage #757](https://github.com/FS-GG/FS.GG.Coordination/pull/757) | `e962e94f162523756f702a344af9b41460d9cc1c` | Dormant reducer refuses terminal summaries impossible under the journal reader's entry cap or start/terminal shape; 170 Release execution tests. Structural checks do not authenticate sealed replay or Host capture. |
+| [FSC-03 F# #3822](https://github.com/FS-GG/.github/pull/3822) | `c92c32950bd2082155aa73a954848cd63db7e657` | Dormant protected-branch REST and commit GraphQL readers refuse false declared Content-Length, both shorter and longer than streamed bytes; 257 F# tests. Credential/accepted pin/installed parity remain held. |
+| [GS2-09.7 #758](https://github.com/FS-GG/FS.GG.Coordination/pull/758) | `8d6ca3fc09bc6d6bac0fca40e9c842106b1d1385` | Source-only P-256 signed inventory-seal verifier binds exact run/target/store and bounded UTC claims using fake signer/clock ports; 734 full unit tests. Protected key, clock, store head and Q5/Q6 remain held. |
+| [GS2-09.9 #759](https://github.com/FS-GG/FS.GG.Coordination/pull/759) | `85704a8e811b89d42357da77fba99ce4d48f5f47` | Token-free public-handle custody observer binds event ID/digest to credential, App/installation/target, request/run and distinct reader; 20 focused/adjacent tests. Protected vault handle-to-token proof and #550 remain held. |
+| [FSC-03 F# #3823](https://github.com/FS-GG/.github/pull/3823) | `55cffe84ec8c9d01e3a1d39803306c40d6195e69` | Dormant branch and GraphQL readers refuse Content-Encoding and disable automatic decompression; 259 F# tests. Accepted credential custody, durable pin and receiver parity remain held. |
+| [FSC-04 #1048](https://github.com/FS-GG/FS.GG.SDD/pull/1048) | `55ecb160c23fdfc17b85ce36c0e29daa6dd709a5` | Read-only pinned/no-follow Linux comparison refuses dirty project/sdd bytes and same-byte symlink against selected commit blobs; 1,530 Commands tests. Mode/common instant/full-source and effect proof remain open. |
+| [Telemetry usage #760](https://github.com/FS-GG/FS.GG.Coordination/pull/760) | `12c4eae599df6ed9d4af2f18a63db49323b395c7` | Private journal writer window halts on immediate or nonadjacent duplicate receipt EntryIds before reducing them; 172 Release execution tests. Durable store/sealed replay and genuine Host capture remain unproven. |
+| [FSC-03 F# #3824](https://github.com/FS-GG/.github/pull/3824) | `529f17a7ff220222dd7041b71275390d33629c0e` | Dormant branch and GraphQL readers refuse declared non-UTF-8 JSON charset while explicit UTF-8 controls pass; 261 F# tests. Credential custody, accepted pin and receiver parity remain held. |
+| [GS2-09.9 #761](https://github.com/FS-GG/FS.GG.Coordination/pull/761) | `4acd6655ce58b50c567fcd206b9b098758fc80bc` | Separate proposed v5 vault entry exits 78 for absent/untrusted grant before any protected port read; 17 focused/adjacent tests including clean-directory refusal. It is not installed and #550/#545 remain held. |
+| [GS2-09.7 #762](https://github.com/FS-GG/FS.GG.Coordination/pull/762) | `115e78a6f286af96c09f03c89824c229960a96ef` | Source-only one-use signed-attestation claim port binds exact run/target/store generation and refuses duplicate/unknown/lost CAS or forged readback; 736 full unit tests. Protected durable journal/key/clock/store head and Q5/Q6 remain held. |
+| [FSC-03 F# #3825](https://github.com/FS-GG/.github/pull/3825) | `6116fe49cb31afb5ec3d2f553d5876e7b299fcc5` | Dormant REST and GraphQL reader factories enforce RFC 6750 bearer-value grammar before handler construction; 263 F# tests. Syntax does not establish credential source/scope or installed receiver parity. |
+| [Telemetry usage #763](https://github.com/FS-GG/FS.GG.Coordination/pull/763) | `e083114886fe80935b5db89a64323a81393a03b9` | Source-only v2 turn/completed parser refuses malformed common ThreadItem identity/discriminator and null/nonobject items; 176 Release execution tests. Variant payload/native usage/Host capture remain unproven. |
+| [GS2-09.9 #764](https://github.com/FS-GG/FS.GG.Coordination/pull/764) | `ed4b7fab43f892920d032f4ebe3f9f8a1796b802` | Deterministic local no-grant ZIP candidate and exact-byte verifier, stacked on #761; nine focused/adjacent tests and two identical clean builds. Archive not committed or protected-installed; #550/#545 and effect remain held. |
+| [GS2-09.7 #766](https://github.com/FS-GG/FS.GG.Coordination/pull/766) | `719dd2a9f46731336f50123eb46edcfbeb1e3254` | Source-only exact journal-head CAS, one-generation successor and independent final-head readback; 737 full unit tests. Protected durable journal and Q5/Q6 remain held. |
+| [FSC-03 F# #3826](https://github.com/FS-GG/.github/pull/3826) | `05f92619ab2d280ca6a9a3162d055c8aa12014fc` | Dormant strict Git ID validators refuse terminal-newline SHA values before provisional branch facts or raw provider dispatch; 267 F# tests. Credential/accepted pin/installed receiver remain held. |
+| [FSC-04 #1049](https://github.com/FS-GG/FS.GG.SDD/pull/1049) | `d1bcc2aed975a47668c68e9ab59b7c61b80cbff1` | Read-only opened-descriptor comparison of selected Git executable mode, including mid-read chmod; seven focused and 1,537 Commands tests. Common instant, complete source and effect proof remain open. |
+| [Telemetry usage #765](https://github.com/FS-GG/FS.GG.Coordination/pull/765) | `72eb8bd83739ee57397c607e33f6401b6f354964` | Dormant v2 ThreadItem parser refuses missing or nonstring `agentMessage.text`; 14 focused and 178 full Release execution tests. Other variants and genuine runner/Host capture remain unproven. |
+| [FSC-03 F# #3827](https://github.com/FS-GG/.github/pull/3827) | `016da99fec14523e9e7313c7d85ea68f7fa923ca` | Dormant repository/request identity checks refuse terminal-newline full names before provisional pin, GraphQL membership or raw commit dispatch; 272 F# tests. Live gate, credential and installed receiver remain held. |
+| [Telemetry usage #767](https://github.com/FS-GG/FS.GG.Coordination/pull/767) | `9ec8fbf3bf09ab5bd12336b5d81127993904142a` | Dormant v2 parser refuses malformed top-level `commandExecution` fields and foreign status; 18 focused and 182 full Release execution tests. Nested/optional item payloads and genuine Host capture remain open. |
+| [FSC-03 F# #3828](https://github.com/FS-GG/.github/pull/3828) | `c4fc5d5fae86df179129389d2063b44a9c17161a` | Dormant project and implicit XML adapters refuse unresolved DirectoryBuildPropsPath and ImportDirectoryBuildProps/Targets selection properties; 281 F# tests. Evaluated MSBuild/installed parity held. |
+| [GS2-09.9 #768](https://github.com/FS-GG/FS.GG.Coordination/pull/768) | `feecee76bf9345a63c5366ec11344365ba706b2f` | Closed fake-port source/reviewer selection join pins #764 ZIP, manifest, builder/verifier, entry and disabled-workflow bytes; eight selection and four artifact tests. Protected installation/native effect #550/#545 held. |
+| [GS2-09.7 #769](https://github.com/FS-GG/FS.GG.Coordination/pull/769) | `76988acf9f494ff998a800e87c0f80b863124c6c` | Source-only protected store-head readback refuses stale/foreign/unavailable generation before journal CAS and drift after claim; 740 full unit tests. Native linearizable custody, release interlock and Q5/Q6 held. |
+| [Telemetry usage #770](https://github.com/FS-GG/FS.GG.Coordination/pull/770) | `37da7da8b41df899197a1222e0677d0afdde7b4d` | Dormant v2 parser refuses malformed nested CommandAction variants and required fields; 22 focused and 186 full Release execution tests. Other variants and genuine Host capture remain open. |
+| [FSC-04 #1050](https://github.com/FS-GG/FS.GG.SDD/pull/1050) | `58132088a92426a036c98545c73c042e82d1fb25` | Optional selected-commit preview refuses a nested copied source borrowing its enclosing repository commit; four focused and 1,541 Commands tests. Repository/object-store authority, full-source and common-instant proof remain open. |
+| [FSC-03 F# #3829](https://github.com/FS-GG/.github/pull/3829) | `50f95a7183cb0d8f4f107433c7d4585d6d235e0f` | Dormant ProjectReference XML reducer refuses items without exact `Include`, including lowercase and Update-only forms; 284 F# tests plus local MSBuild refusal probe. Live Python gate/evaluated graph/installed parity held. |
+| [Telemetry usage #771](https://github.com/FS-GG/FS.GG.Coordination/pull/771) | `c398b839f30eba846139abc9c8f02072c9e87c4f` | Dormant v2 `commandExecution` reducer refuses malformed optional numeric, nullable text and source-enum fields; 26 focused and 190 full Release execution tests. Other ThreadItem variants and genuine Host capture remain open. |
+| [GS2-09.7 #772](https://github.com/FS-GG/FS.GG.Coordination/pull/772) | `b11bbf9adf1ab1d36afa44d558ab40556037a111` | Source-only journal claim binds exact protected store-head resource/artifact, atomic compare capability and corpus/head SHA into the one-use request; 742 full unit tests. Real shared transaction, release interlock and Q5/Q6 remain held. |
+| [FSC-03 F# #3830](https://github.com/FS-GG/.github/pull/3830) | `18d22e367cc8529e351e500f1dadb5d35a54e920` | Dormant protected-pin, GraphQL and raw-commit reducers refuse repository node IDs with whitespace/control characters before provisional facts; 287 F# tests. Provider provenance/installed receiver held. |
+| [GS2-09.9 #773](https://github.com/FS-GG/FS.GG.Coordination/pull/773) | `cb356e45717fc5e912e0fc3f0d9d006ebb7a0fc2` | Closed fake-port installed no-grant refusal joins exact #764 ZIP and runner path/image/runtime, exit 78 and zero-effect audit; 19 focused tests. Fake records cannot authorize protected install or #550 native effect; #545 held. |
+| [Telemetry usage #774](https://github.com/FS-GG/FS.GG.Coordination/pull/774) | `5aeceaf123e1d308d86bd5bd8293ee30b739f533` | Dormant v2 parser validates required `fileChange` payload and nested change/kind variants from pinned schemas; 30 focused and 194 full Release execution tests. Other variants and genuine runner/Host capture remain open. |
+| [FSC-03 F# #3831](https://github.com/FS-GG/.github/pull/3831) | `b4ca40b2cea57df8ba61eccf22bc90939594e4e3` | Dormant branch, GraphQL membership/request and raw-commit identity guards refuse `.` or `..` repository segments before provisional facts; 290 F# tests. Provider/installed receiver held. |
+| [Telemetry usage #775](https://github.com/FS-GG/FS.GG.Coordination/pull/775) | `85be0cb62586d023df743c84e294e5f69e4bde9c` | Dormant `mcpToolCall` parser requires arguments, server, tool and closed status while leaving schema-permitted argument JSON open; 33 focused and 197 full Release execution tests. Optional result/error and Host capture pending. |
+| [FSC-04 #1051](https://github.com/FS-GG/FS.GG.SDD/pull/1051) | `7b7880f93faf6f521e7bde20e27d976a6d4290b1` | Read-only selected-commit preview refuses symlinked `.git` and forged gitfile roots that borrow a sibling repository; four focused and 1,545 Commands tests. Git registry/object-store authority and common instant open. |
+| [FSC-03 F# #3832](https://github.com/FS-GG/.github/pull/3832) | `7ab7b1ac3438db0f0f697904411029459780deac` | Dormant raw-commit adapter refuses NUL in extra headers; independent `git fsck --strict` rejected the fixed red-before object; 291 F# tests. Provider/installed parity held. |
+| [GS2-09.9 #776](https://github.com/FS-GG/FS.GG.Coordination/pull/776) | `44db648373d20c1ae2ce86c5bf740894cb0a09f7` | Fake-port producer witness binds selected #764 ZIP/disabled workflow, exact run/actor/artifact and #773 installed refusal; 24 focused tests. Protected producer/provider/runner identity and #550/#545 held. |
+| [GS2-09.7 #777](https://github.com/FS-GG/FS.GG.Coordination/pull/777) | `c5bf52cced9fbe623e88779f72aaad4d38a48c41` | Source-only release-reservation fake port checks signed seal, protected store/journal heads, one-use claim and atomic compare-and-consume readback; 746 full unit tests. Installed same-authority storage/token handoff and Q5/Q6 held. |
+| [Telemetry usage #778](https://github.com/FS-GG/FS.GG.Coordination/pull/778) | `96f4a073112cd0ac7209bf2c367d3bb1a4f04781` | Dormant `mcpToolCall` parser refuses malformed optional result/error object shapes and nested duplicate keys; 36 focused and 200 full Release execution tests. Genuine runner/Host capture pending. |
+| [FSC-03 F# #3833](https://github.com/FS-GG/.github/pull/3833) | `6233fc17de7b10c864490cff53fad99227fc37bd` | Dormant raw-commit parser refuses malformed parent IDs; independent `git fsck --strict` rejected the fixed red-before object; 292 F# tests. Parent object closure/provider/installed parity held. |
+| [GS2-09.9 #779](https://github.com/FS-GG/FS.GG.Coordination/pull/779) | `c8b40db857483afc3f314793e8dc27f3b87b7a9f` | Closed fake-port raw Git commit/tree/blob witness binds exact #764 entry, builder/verifier, manifest and disabled workflow bytes; duplicate conflicting tree header now refused. 29 focused tests; protected Git/provider/install/#550/#545 held. |
+| [Telemetry usage #780](https://github.com/FS-GG/FS.GG.Coordination/pull/780) | `8b200b4b57f962585bea5514d1272a97716a0a84` | Dormant `mcpToolCall` parser validates optional app context/UI, read-only hint, duration, legacy URI and plugin ID shapes; 40 focused and 204 full Release execution tests. Genuine Host capture pending. |
+| [GS2-09.7 #781](https://github.com/FS-GG/FS.GG.Coordination/pull/781) | `8b99e36de3fbb13196bf7f8a6374fb29913f761b` | Source-only one-use reservation binds signed issuance/expiry and protected clock/signer pins with atomic expiry check; 748 full unit tests. Real protected clock/signer/token handoff and Q5/Q6 held. |
+| [FSC-03 F# #3834](https://github.com/FS-GG/.github/pull/3834) | `2672982896b155b0ca1c8542c96901c82d906f0b` | Dormant raw-tree parser refuses reserved `.git` aliases rejected by independent `git fsck --strict`; 293 F# tests. Provider/installed receiver held. |
+| [FSC-04 #1052](https://github.com/FS-GG/FS.GG.SDD/pull/1052) | `cace956fa195a2f694de3a606ec7f0f3f7bec368` | Read-only selected-commit preview rechecks Git root/registration after blob reads, refusing persistent `.git` switch; three focused and 1,548 Commands tests. Swap-back ABA remains non-authorizing. |
+| [FSC-03 F# #3835](https://github.com/FS-GG/.github/pull/3835) | `8716bf1a83f9f4cfef57721a7354a295195c81c0` | Dormant raw-tree parser enforces Git byte ordering with directory virtual slash; independent `git fsck --strict` rejected two red-before trees. 295 F# tests; provider/installed receiver held. |
+| [Telemetry usage #782](https://github.com/FS-GG/FS.GG.Coordination/pull/782) | `526ef95da0fcb28657c8683f6460e9b1de02aa49` | Dormant `dynamicToolCall` parser validates required fields/status and nested content-item union; 44 focused and 208 full Release execution tests. Genuine runner/native turn/Host capture pending. |
+| [FSC-03 F# #3836](https://github.com/FS-GG/.github/pull/3836) | `7050864cbfa75612c66e810ef0ef4f13bc2c8e45` | Dormant raw-tree parser refuses zero-padded filemode rejected by independent `git fsck --strict`; 296 F# tests. Live Python/provider/installed receiver held. |
+| [GS2-09.7 #783](https://github.com/FS-GG/FS.GG.Coordination/pull/783) | `9974e66eed1518b7b72247d3cff9995bf5ea95dd` | Source-only signed clock artifact and fake installation descriptor refuse candidate-writable/non-monotonic clocks and bind reservation request; 748 full unit tests. Host clock/signer/token custody and Q5/Q6 held. |
+| [GS2-09.9 #784](https://github.com/FS-GG/FS.GG.Coordination/pull/784) | `6fecff1cc3a88cef4202b376c6c619db417bd78c` | Closed fake independent install-approval event joins selected tree/five-file source set, #764 ZIP, runner path/image/runtime and no-grant interval; 35 focused tests. No protected approval/install or #550 native effect; #545 held. |
+| [Telemetry usage #785](https://github.com/FS-GG/FS.GG.Coordination/pull/785) | `50becaacaa9719faeefd04e2b8b3c2583bfaff21` | Dormant `collabAgentToolCall` parser validates required fields, nested agent states and optional model/prompt/effort; 49 focused and 213 full Release execution tests. Genuine runner/Host capture pending. |
+| [FSC-03 F# #3837](https://github.com/FS-GG/.github/pull/3837) | `87feb26f43d54ba8a92042dd9f8d67599737d425` | Dormant raw-tree parser refuses Git's `git~1` short alias rejected by independent `git fsck --strict`; 297 F# tests. Other filesystem aliases/provider/installed parity held. |
+| [GS2-09.9 #786](https://github.com/FS-GG/FS.GG.Coordination/pull/786) | `bdd5109b49a2e8b5e3a4c75ab4eafb2a2c134972` | Closed fake-port install-approval join requires distinct public reader/credential IDs across artifact, workflow, Git, identity, probe and audit roles; 37 focused tests. Identities unauthenticated; #550/#545 and installed native effect held. |
+| [FSC-03 F# #3838](https://github.com/FS-GG/.github/pull/3838) | `28fe0c12260feac22092e423e99c4051b86c6066` | Dormant raw-tree parser refuses `.git` alternate stream names rejected by independent `git fsck --strict`; 298 F# tests. Provider/installed receiver held. |
+| [Telemetry usage #787](https://github.com/FS-GG/FS.GG.Coordination/pull/787) | `b0e81c51aa37639d7156769367e102c07fb8cb24` | Dormant `webSearch` parser validates required query, optional results and nested action variants from pinned schemas; 53 focused and 217 full Release execution tests. Genuine runner/Host capture pending. |
+| [FSC-04 #1053](https://github.com/FS-GG/FS.GG.SDD/pull/1053) | `1baeca54dd237eb55c8d618f7505e1baf90e8e21` | Read-only selected-commit preview refuses registered Git repositories whose alternate object store changes; six focused and 1,554 Commands tests. Swap-back ABA, complete source and common-instant proof remain open. Verified after the 20:18:17 UTC report cutoff. |
+| [FSC-03 F# #3839](https://github.com/FS-GG/.github/pull/3839) | `706e2ab33bdd58c46714f0c86279077027127599` | Dormant raw-tree parser refuses four observed Unicode `.git` aliases from independent `git fsck --strict` controls; 299 F# tests. Alias coverage, provider and installed parity remain unproven. Verified after the report cutoff. |
+| [GS2-09.7 #788](https://github.com/FS-GG/FS.GG.Coordination/pull/788) | `bf81dd8b981d3576423459ca424aff1489699b9a` | Fake-port token-handoff marker binds the exact durable reservation, selected App installation, repository, permission digest, inaccessible vault, attempt ID and atomic consume/expiry descriptor; 751 full local unit tests. No token minted or dispatched; protected custody and Q5/Q6 held. Verified after the report cutoff. |
+| [Telemetry usage #789](https://github.com/FS-GG/FS.GG.Coordination/pull/789) | `594d623850b81a0bab0563c86f356bbcb1aef67e` | Dormant pinned-schema `subAgentActivity` parser requires path/thread/kind identity; copied-live negative controls, 56 focused and 220 full Release execution tests. Project 2 access and genuine runner/native turn/applied Host receipt remain pending. Verified after the report cutoff. |
+| [GS2-09.9 #790](https://github.com/FS-GG/FS.GG.Coordination/pull/790) | `db30896087e47634ba7c19dbf21e757256df4e23` | Closed fake issuer event joins runner attempt, artifact, approval, actor, image, interpreter, runtime, path and precommand timing with a tenth distinct reader role; 42 focused tests. Protected issuer identity, installation and #545/#550 native effect remain held. Verified after the report cutoff. |
+| [FSC-03 F# #3840](https://github.com/FS-GG/.github/pull/3840) | `62da60cd5e59d49a35f447bef05ca774e342da31` | Dormant raw-tree parser refuses independently Git-flagged bidirectional formatting aliases of `.git`; focused fixture failed before repair and 300 F# tests pass at the exact head. Live Python/provider/receiver and installed parity remain held. Verified after the report cutoff. |
+| [Telemetry usage #791](https://github.com/FS-GG/FS.GG.Coordination/pull/791) | `7a7de702462ebe23df352a13401465d139cc89c9` | Dormant native `Turn.itemsView` parser validates pinned enum and refuses terminal closure from explicit `summary` or `notLoaded` items; copied-live red-before, 59 focused and 223 full Release execution tests. Project 2 access and genuine runner/Host capture remain pending. Verified after the report cutoff. |
+| [FSC-03 F# #3841](https://github.com/FS-GG/.github/pull/3841) | `eff379c1f51d4cf713e6666beaac8eeee7c415ab` | Dormant raw-tree parser refuses combined `git~1` short-name and stream aliases observed with independent `git fsck --strict`; focused fixture failed before repair and 301 F# tests pass. Provider/installed parity and live receiver remain held. Verified after the report cutoff. |
+| [GS2-09.7 #792](https://github.com/FS-GG/FS.GG.Coordination/pull/792) | `d3786cfa73b925e5f7a9cf9b04843fda75aa2025` | Read-only fake native-attempt recovery inspector joins the exact handoff marker to pinned complete candidate-inaccessible readback, refuses missing/duplicate/foreign/invalid phases, and returns recovery holds only; negative controls and 754 full local unit tests passed. Installed provider/revocation custody, #3690 adjudication and Q5/Q6 remain held. |
+| [FSC-04 #1054](https://github.com/FS-GG/FS.GG.SDD/pull/1054) | `6703cd874bcb7869d30d21c8a628281f91348a87` | Read-only selected-commit preview refuses persistent symlink redirection of Git's object directory; red-before control, four focused and 1,558 Commands tests, zero Release warnings/errors. Redirect-then-restore ABA remains accepted and non-authorizing; producer/receiver/effect held. |
+| [FSC-03 F# #3842](https://github.com/FS-GG/.github/pull/3842) | `994e9c8ef744b4c64c01b1c58e24a9956bc98127` | Dormant raw-tree parser refuses all-zero object IDs on project and non-project entries, matching independent `git fsck --strict` refusals; two red-before fixtures and 302 F# tests. Live Python/provider/installed receiver held. |
+| [Telemetry usage #793](https://github.com/FS-GG/FS.GG.Coordination/pull/793) | `3929627648b8febab6a1066dee601a91815f59e5` | Dormant native Turn parser validates nullable timestamps/duration and refuses regressed terminal chronology or negative duration; copied-live red-before, 62 focused and 226 full Release execution tests. Project 2 access and genuine runner/Host capture pending. |
+| [GS2-09.9 #794](https://github.com/FS-GG/FS.GG.Coordination/pull/794) | `446614c069c824eabcbb60ef35b4f273eb89e7b0` | Versioned canonical fake runner issuer envelope binds selected run/attempt, source tree, artifact, install approval, image/runtime/path and selected key fingerprint/nonce/audience to an injected verifier call; 47 focused tests. Fake verifier gives no protected identity; key/issuer and #545/#550 installation/native effect remain held. |
+| [GS2-09.7 #795](https://github.com/FS-GG/FS.GG.Coordination/pull/795) | `0dddd04e8f2a21cdd6d088398b09ca461837c03d` | Fake native-attempt recovery requires a complete exact-attempt snapshot between matching protected pre/post heads; red-before control and 755 full local unit tests. Snapshot seal/completeness remain self-asserted; native provider/revocation custody and Q5/Q6 held. Verified after the 20:27:49 UTC report cutoff. |
+| [Telemetry usage #796](https://github.com/FS-GG/FS.GG.Coordination/pull/796) | `d72ccaabab52fafb81f710c5fc9e4925fac6cf3c` | Dormant native Turn parser validates top-level error shape and failed-status attribution; copied-live red-before, 65 focused and 229 full Release execution tests. Nested error variants and genuine runner/Host capture remain open. Verified after the report cutoff. |
+| [FSC-03 F# #3843](https://github.com/FS-GG/.github/pull/3843) | `70002295954d590988037c8c51a1423b18267dce` | Dormant raw-commit parser checks bounded author/committer identity shapes against four independent Git-rejected fixtures while preserving Git-accepted empty-email control; 307 F# tests. Full fsck parity, live Python gate and receiver remain held. Verified after the report cutoff. |
+| [GS2-09.9 #797](https://github.com/FS-GG/FS.GG.Coordination/pull/797) | `82499ca5e24d461d975f59c4a0ef187596f66ceb` | Closed fake key-registry witness binds issuer envelope digest/nonce, actor/run/event, source/artifact, approval, audience, revocation and distinct verifier reader; red-before controls and 52 focused tests. Fake public-key hash does not establish protected signer identity; #545/#550 installation/native effect held. |
+| [Telemetry usage #798](https://github.com/FS-GG/FS.GG.Coordination/pull/798) | `6c5a4b601639f66cd3f52fad7af9528629f95b19` | Dormant native Turn.error parser validates pinned `codexErrorInfo` union and HTTP/status shapes; copied-live red-before, 69 focused and 233 full Release execution tests. Misalignment subtype and genuine runner/Host capture remain open. |
+| [FSC-04 #1055](https://github.com/FS-GG/FS.GG.SDD/pull/1055) | `cfcff12730097e490d4c75bb5ca3117abe02454a` | Read-only selected-commit preview disables Git lazy fetching; a disposable blob-filtered partial clone refused missing project blob and left it absent after the red-before repair. Two focused and 1,560 Commands tests, zero Release warnings/errors. Preview remains non-authorizing; complete-source/common-instant/installed proof held. |
+| [GS2-09.7 #799](https://github.com/FS-GG/FS.GG.Coordination/pull/799) | `0e8690656627b2de1b4d9922571db822c723b833` | Fake native recovery snapshot commitment frames attempt/head, selection, target, clock, phase, token fingerprint and revocation receipt; tamper red-before and 755 full local unit tests. Commitment is unsigned, not native custody; #3690 adjudication, Q5/Q6 and effects held. Verified after the 20:33:20 UTC report cutoff. |
+| [FSC-05 F# #593](https://github.com/FS-GG/FS.GG.Templates/pull/593) | `61e7d9662022ca0d2cc565881eaf3785d5d880b9` | Pure provider Composition exact-string anchors refuse terminal-newline false green in owner/request name, floor, registry pin, parameter key and route; red-before, 38 F# assertions, 29 provider-tool and 34 archive custody controls. Selected archive remains NO_VERDICT; no publication or receiver change. Verified after the report cutoff. |
+| [Telemetry usage #800](https://github.com/FS-GG/FS.GG.Coordination/pull/800) | `4deca57e0292e4e9298ca30fd3b48f89ecf2b175` | Dormant native Turn.error misalignment subtype validates nullable detail/errorType and nested steer message; copied-live red-before, 72 focused and 236 full Release execution tests. Project 2 access and genuine runner/Host capture remain open. Verified after the report cutoff. |
+| [GS2-09.9 #801](https://github.com/FS-GG/FS.GG.Coordination/pull/801) | `06d404d869560533b1e53a40e4e1cc3e192efdda` | Corrects impossible fake key-registry chronology: protected key approval precedes signing, envelope-bound observation follows signing, and future observation refuses; red-before and 53 focused tests. Timestamps/key remain unauthenticated; protected key custody, #545/#550 installation/native effect held. |
+| [GS2-09.7 #802](https://github.com/FS-GG/FS.GG.Coordination/pull/802) | `0afac490bc787747256231fa739532d271ce7c80` | Fake-key P-256 native snapshot attestation binds exact attempt, resource/artifact, canonical seal, signer/clock and validity window; forged-signature red-before, three focused and 758 full local unit tests. Not wired to installed protected reader/signer; #3690 adjudication, Q5/Q6 and effects held. |
+| [Telemetry usage #803](https://github.com/FS-GG/FS.GG.Coordination/pull/803) | `9390f9aabbbb501f748a9c1391d669e36aa0d128` | Dormant native usage reducer refuses adjacent semantically identical last/cumulative snapshots despite harmless wire whitespace changes; copied-live red-before, 74 focused and 238 full Release execution tests. Native cursor/completed-turn usage and runner/Host capture remain open. |
+| [FSC-05 F# #594](https://github.com/FS-GG/FS.GG.Templates/pull/594) | `2dc44dfe6904ce8896488f442a074612a8276e95` | Dormant pure provider reducer requires NuGet package `::` pinned numeric version source; unpinned red-before, 45 F# controls, 29 provider-tool and 34 archive custody controls. This is stricter than live Python input behavior; selected archive NO_VERDICT and installed parity/receiver held. |
+| [FSC-04 #1056](https://github.com/FS-GG/FS.GG.SDD/pull/1056) | `8125ded842937f581289e9acd19b044f63f34759` | Read-only preview refuses persistent symlink redirect of Git's `objects/pack` directory; red-before, four focused and 1,564 Commands tests, zero Release warnings/errors. Redirect-then-restore ABA, pack handles, complete source and common-instant proof remain open; preview non-authorizing. |
+| [GS2-09.9 #804](https://github.com/FS-GG/FS.GG.Coordination/pull/804) | `0543231e8b39bda71549b583c0b43f50208002df` | Closed post-registry adapter passes exact selected 32-byte public key, canonical payload and signature to injected fake verifier, binding envelope/hash/nonce/issuer and narrow verifier scope; 59 focused tests. Fake success proves no approved key or actual Ed25519 custody; #545/#550 installation/native effect held. |
+| [Telemetry usage #805](https://github.com/FS-GG/FS.GG.Coordination/pull/805) | `78bcb0d7a98b7d7e94278fd3d4372912a7e9ba11` | Dormant native turn reducer refuses terminal attribution when same-ID start and terminal frames supply conflicting `startedAt`; copied-live red-before, 76 focused and 240 full Release execution tests. Native cursor/completed-turn usage and runner/Host capture remain open. |
+| [FSC-05 F# #595](https://github.com/FS-GG/FS.GG.Templates/pull/595) | `a4d677eb2b9b2621f1a58c2b7233d9928ed98f41` | Dormant pure provider reducer refuses template ID and related field values that can inject into effective-provider summary; red-before, 51 F# controls, 29 provider-tool and 34 archive custody controls. Stricter than live Python, so no parity claim; selected archive NO_VERDICT and receiver held. |
+| [GS2-09.9 #806](https://github.com/FS-GG/FS.GG.Coordination/pull/806) | `84353020452f783ddd29e100842741544fb11b4c` | Source-only protected key/verifier/nonce admission packet separates pre-signing key approval, post-signing envelope observation, current revocation, actual verifier/dependency closure and atomic nonce replay custody, with installed negative controls. Prose links/diff checks pass; no code tests changed. No protected trust root selected; #545/#550 installation/native effect held. |
+| [GS2-09.7 #807](https://github.com/FS-GG/FS.GG.Coordination/pull/807) | `87ebd46162816bcc44f079689599c06fef62ecde` | Fake signed recovery entry verifies the exact stable snapshot returned by its own read and binds reader/signer resource and artifact pins; forged/mismatched controls red-before, four focused and 759 full local unit tests. Both signed and unsigned paths remain hold-only; protected signer/reader, #3690 adjudication and Q5/Q6 held. Verified after the 20:43:44 UTC report cutoff. |
+| [Telemetry usage #808](https://github.com/FS-GG/FS.GG.Coordination/pull/808) | `b7efc02a0e96a85bbb76cfb322ecaa078877a30d` | Dormant continuity and usage parsers accept and type-check pinned optional root `emittedAtMs` notification field; copied-live red-before, 85 focused and 244 full Release execution tests. Emission time is not a native cursor or completed-turn usage; genuine runner/Host capture remains open. |
+| [FSC-05 F# #596](https://github.com/FS-GG/FS.GG.Templates/pull/596) | `94a1da296f4d4501f3b65c2cfb489443fb948e17` | Dormant pure provider reducer refuses unsafe declared defaults and requested parameter values, including line-break injection; red-before, 59 F# controls, 30 provider-tool and 34 archive custody controls. Stricter than live Python, so no installed parity claim; selected archive NO_VERDICT and receiver held. |
+| [GS2-09.7 #809](https://github.com/FS-GG/FS.GG.Coordination/pull/809) | `4455bc0e1567291768700e9f7e177a9fdb9f1f7e` | Read-only owner admission packet names OperatingV1/#3690 adjudication, sandbox/App, atomic store/vault/marker, native reader, signer/clock and recovery/Q5-Q6 facts needed before signed or unsigned recovery can authorize anything. Diff and five links checked; no code tests changed. Both recovery paths remain hold-only. |
+| [FSC-04 #1057](https://github.com/FS-GG/FS.GG.SDD/pull/1057) | `4af526e286f10db87e57b9198387181bc5ecacfc` | Read-only preview refuses persistent symlinked loose-object fanout directories under Git's object store; red-before, four focused and 1,568 Commands tests, zero Release warnings/errors. Swap-back ABA and handle custody remain open; preview non-authorizing. |
+| [GS2-09.9 #810](https://github.com/FS-GG/FS.GG.Coordination/pull/810) | `dbcaffb51534f12dee914463315b9c4a776bdbe8` | Read-only verifier packaging comparison records local in-process package and pinned OpenSSL CLI closure requirements and independent negative controls; disposable local OpenSSL verification/refusal observed, prose links/diff checked. No route/key selected or protected runner proof; #545/#550 installation/native effect held. |
+| [FSC-05 F# #597](https://github.com/FS-GG/FS.GG.Templates/pull/597) | `121d7ede52104d5e82c2e45016f9bd0878ad0c0d` | Dormant F# provider parser refuses nested content beneath scalar fields and orphan content before the first provider; red-before, 59 F# controls, 33 provider-tool and 34 archive custody controls. Live Python accepts a nested fixture; this stricter F# behavior has no installed parity claim, and selected archive remains NO_VERDICT. |
+| [Telemetry usage #811](https://github.com/FS-GG/FS.GG.Coordination/pull/811) | `d8c74e886269e5feba3620d460a71456fd0acdc0` | Dormant continuity reducer latches a gap on regressing optional notification `emittedAtMs`; copied-live red-before, 80 focused and 246 full Release execution tests. Emission time is non-cursor metadata; genuine runner/native usage/Host capture remains open. |
+| [GS2-09.7 #812](https://github.com/FS-GG/FS.GG.Coordination/pull/812) | `f31f9340eaf48b27e2e17e27631e39f8effe4c08` | Fake signed native recovery refuses foreign durable-marker clock and drifted handoff clock identity across marker, handoff description, signed entry and verifier; two red-before controls, six focused and 761 full unit tests. Protected signer/reader installation, #3690 adjudication and Q5/Q6 remain held. |
+| [FSC-05 F# #598](https://github.com/FS-GG/FS.GG.Templates/pull/598) | `4b100241196e89f212dac56a5e24420ef0141b8a` | Dormant F# provider reducer refuses unpaired UTF-16 surrogates instead of silently emitting replacement UTF-8 bytes, while retaining valid supplementary characters; baseline probe, 68 F# controls, 33 provider-tool and 34 archive custody controls. Selected archive NO_VERDICT; no receiver activation. |
+| [FSC-04 #1058](https://github.com/FS-GG/FS.GG.SDD/pull/1058) | `36228b2381dcee180db2519b1f80266e6fc67bd2` | Read-only preview refuses symlinked loose-object leaf files with a bounded 4,096-leaf no-follow scan; red-before, five focused and 1,573 Commands tests, zero Release warnings/errors. Link-then-remove ABA, handle custody and complete-source proof remain open; preview non-authorizing. |
+| [Telemetry usage #813](https://github.com/FS-GG/FS.GG.Coordination/pull/813) | `a5b6de293a99ce3c17c1819840d4f35b081f0782` | Dormant usage-truth reducer refuses thread-snapshot count exceeding correlated sealed usage-update count; copied-live red-before, 21 focused and 247 full Release execution tests. Snapshot-to-journal custody and native completed-turn usage remain NO_VERDICT; genuine runner/Host capture pending. |
+| [GS2-09.7 #814](https://github.com/FS-GG/FS.GG.Coordination/pull/814) | `3f93c541b6c77454b25a82fe391bbc9dc682b3ff` | Fake native recovery rereads exact durable handoff marker after stable snapshot, refusing withdrawn or changed marker; red-before and 762 full unit tests. Signed path inherits the check but remains hold-only; protected marker/native reader/signer, #3690 adjudication and Q5/Q6 held. |
+| [Telemetry usage #815](https://github.com/FS-GG/FS.GG.Coordination/pull/815) | `9ce478cca3211d07f0442d9fff7b31a8ebb56f58` | Dormant usage-truth reducer refuses duplicate ThreadSnapshot wire digests as separate observations; copied-live red-before, 23 focused and 249 full Release execution tests. Exact snapshot-to-journal digest membership, native completed-turn usage and genuine runner/Host capture remain NO_VERDICT. |
+| [GS2-09.9 #816](https://github.com/FS-GG/FS.GG.Coordination/pull/816) | `01c5b5a303b4087d8e408e8b33729c035fd12167` | Direct offline native pull/protection classifiers refuse explicit or malformed provider response status before exact readback; red-before 302/401 false greens and 66 focused tests. External native source/builder/manifest pins updated, closed archive bytes unchanged; protected #550 target/App/CAS/grant/installed effect and #545 remain held. |
+| [FSC-05 F# #599](https://github.com/FS-GG/FS.GG.Templates/pull/599) | `6c954a672e3a9b61bb37d418e8190f6e51a834ca` | Dormant F# provider reader refuses unsupported double-quoted YAML escapes that decode to different effective bytes; independent YamlDotNet red-before, 68 F# controls, 35 provider-tool and 34 archive custody controls. Refusal is stricter than live Python; selected archive NO_VERDICT and receiver held. |
+| [GS2-09.7 #817](https://github.com/FS-GG/FS.GG.Coordination/pull/817) | `893e2e737a1ea88ea80b3f523db510eff82873c2` | Fake signed recovery and shared inspector refuse malformed durable selection run/attempt/nonce, commit IDs, HTTPS origin and owner/repo; independent red-before and 763 full unit tests. Structural validity is not authenticated selection; protected signer/reader, #3690 adjudication and Q5/Q6 held. |
+| [Telemetry usage #818](https://github.com/FS-GG/FS.GG.Coordination/pull/818) | `40423b30828a7a5c8345fd0083378f9969092472` | Dormant structural journal replay carries accepted usage-frame SHA list into correlated terminal; usage-truth reducer refuses snapshot candidates absent from that list and malformed/count/duplicate digest summaries. Copied-live red-before, 39 focused and 251 full Release execution tests. Trusted journal/native completed-turn usage and runner/Host capture remain NO_VERDICT. |
+| [FSC-05 F# #600](https://github.com/FS-GG/FS.GG.Templates/pull/600) | `69c9ab48d91febe3ce97115ad51ecddf6f9cee3d` | Dormant F# scalar reader refuses unquoted YAML null spellings while retaining quoted literal `"null"`; independent YamlDotNet red-before, 68 F# controls, 39 provider-tool and 34 archive custody controls. Stricter than live Python; selected archive NO_VERDICT and receiver held. |
+| [FSC-04 #1059](https://github.com/FS-GG/FS.GG.SDD/pull/1059) | `df537506e3a79db5ee268c1468398a85429297fd` | Read-only preview verifies selected blob bytes against Git object ID after loose-object substitution; independent SHA-1/SHA-256 red-before, six focused and 1,579 Commands tests, zero Release warnings/errors. Commit/tree integrity, pinned handles, ABA/common instant and installed parity remain open; preview non-authorizing. |
+| [FSC-05 F# #601](https://github.com/FS-GG/FS.GG.Templates/pull/601) | `02d79fae35373ba629b50e10b5c99c3861fad43e` | Dormant provider reader refuses bare YAML flow indicators while preserving quoted strings; independent YamlDotNet controls, 68 F# tests, 43 provider-tool and 34 archive custody tests. Stricter than live Python; selected archive NO_VERDICT, no receiver activation. |
+| [GS2-09.7 #819](https://github.com/FS-GG/FS.GG.Coordination/pull/819) | `01f3734c56765ae4ca4e90f802624a8ff4d78728` | Source-only claim-to-reservation marker chain binds selected attempt and protected identities; 765 full unit tests. Structural controls do not establish installed custody; #3690 adjudication and Q5/Q6 remain held. |
+| [GS2-09.9 #820](https://github.com/FS-GG/FS.GG.Coordination/pull/820) | `3f994b8946c8e0fde3ff01529edc1c93a03e0dcb` | Offline native pull classifier refuses 201 response PR identity that conflicts with exact readback; 69 focused tests. External pins remain provisional; #545/#550 installed provider, grant and native effect held. |
+| [Telemetry usage #821](https://github.com/FS-GG/FS.GG.Coordination/pull/821) | `c9d0a85f36c0a1cfcfe0f719beabb86d7250b6ac` | Dormant usage-truth reducer requires exact typed counter equality after wire-digest membership; 40 focused and 252 full Release execution tests. Native usage and genuine runner/applied Host capture remain NO_VERDICT. |
+| [FSC-05 F# #602](https://github.com/FS-GG/FS.GG.Templates/pull/602) | `8f3e53e17ce1c6cca67efad36279f73faedd764b` | Dormant provider reader refuses bare block and alias indicators while preserving quoted lookalikes; independent YamlDotNet red-before, 68 F# tests, 48 provider-tool and 34 archive custody tests. Stricter than live Python; selected archive NO_VERDICT. |
+| [GS2-09.9 #822](https://github.com/FS-GG/FS.GG.Coordination/pull/822) | `ed677b752715bc56e014081f686a8bbb00059470` | Offline native classifier refuses conflicting, duplicate or malformed 2xx Location versus response body and exact readback; red-before and 70 focused tests. #545/#550 protected installation, grant and native effect held. |
+| [GS2-09.7 #823](https://github.com/FS-GG/FS.GG.Coordination/pull/823) | `0bd33d82b402240e8b0453c008bb8cca7c3a747d` | Source-only signed snapshot verifier now requires the pinned native attempt and App scope; red-before and 766 full unit tests. Protected signer/reader custody, #3690 adjudication and Q5/Q6 remain held. |
+| [FSC-04 #1060](https://github.com/FS-GG/FS.GG.SDD/pull/1060) | `d78f403a58d3fc3b053a77fcdaf1aafd8c0312f1` | Read-only preview verifies selected commit body against Git object ID and caps it provisionally at 1 MiB; five focused and 1,584 Commands tests, zero Release warnings/errors. Earlier Git reads already rejected the tested corruption later; tree custody, handles, ABA/common instant and installed parity remain open. |
+| [Telemetry usage #824](https://github.com/FS-GG/FS.GG.Coordination/pull/824) | `7afd8d3618286540ed76de1c620c7019ebda670b` | Dormant pinned-schema guard refuses newly added ServerNotification routes exposing turn plus usage payload pending review; copied-live red-before, 14 focused and 254 full Release execution tests. This is narrow drift control, not schema-byte or native usage acceptance; runner/Host capture remains NO_VERDICT. |
+| [Telemetry usage #825](https://github.com/FS-GG/FS.GG.Coordination/pull/825) | `3050f4b59e7ec62a8833d089524df187706f30ba` | Pure prospective current-session gate refuses source observation timestamp tied with challenge issue time; copied-live red-before, eight focused and 255 full Release execution tests. Clock/issuer/native event provenance and genuine runner/applied Host capture remain NO_VERDICT. |
+| [FSC-05 F# #603](https://github.com/FS-GG/FS.GG.Templates/pull/603) | `35a699e010004eed6d18b0d30e71797f38153252` | Dormant provider reader refuses present but empty YAML `parameters:` block, which independent YamlDotNet reads as null rather than a sequence; red-before, 68 F# tests, 49 provider-tool and 34 archive custody tests. Intentionally stricter than live Python; selected archive NO_VERDICT. |
+| [GS2-09.7 #826](https://github.com/FS-GG/FS.GG.Coordination/pull/826) | `42eee0d7a8c9321bd269fac90181899370493b3a` | Source-only recovery refuses non-UTC signed-expiry markers at expected, handoff and snapshot readbacks; two red-before offset-rewrite controls and 769 full unit tests. Protected raw-byte signer/reader custody, #3690 adjudication and Q5/Q6 held. |
+| [GS2-09.9 #827](https://github.com/FS-GG/FS.GG.Coordination/pull/827) | `bb920de6f85afed06d2dce5584cf9d3a35bc2a5a` | Offline native pull reader/classifier refuses nested head/base repository owner/name/URL contradictions across listed and detail PR rows; lost-response red-before and 73 focused tests. External pins remain provisional; #545/#550 installed provider, grant and native effect held. |
+| [Telemetry usage #828](https://github.com/FS-GG/FS.GG.Coordination/pull/828) | `3da7be2cfa0a50c9848985f7ec90ba8539702425` | Dormant direct-session mapper refuses known inadequate `thread-last-total-snapshot`, exec-child and upstream-response counter provenance labels; copied-live red-before, six focused and 256 full Release execution tests. Arbitrary provenance/current-session source and genuine runner/applied Host capture remain NO_VERDICT. |
+| [GS2-09.7 #829](https://github.com/FS-GG/FS.GG.Coordination/pull/829) | `61e652e9a4b9fd3f4371b3e5c7f4c9ff5f62b688` | Standalone fake signed native snapshot verifier now shares recovery inspector's phase-shape refusal for impossible token and revocation-receipt combinations; red-before and 770 full unit tests. Protected native bytes/signer/store, #3690 adjudication and Q5/Q6 held. |
+| [FSC-05 F# #604](https://github.com/FS-GG/FS.GG.Templates/pull/604) | `430a70b352250c948682b43cfe2840529ea2b8e9` | Dormant F# provider parser refuses duplicate floor metadata keys, including `requires` and `adr`; independent YamlDotNet red-before, 68 F# tests, 52 provider-tool and 34 archive custody tests. Intentionally stricter than live Python; selected archive NO_VERDICT. |
+| [GS2-09.9 #830](https://github.com/FS-GG/FS.GG.Coordination/pull/830) | `c3585f9d639ad4b6d5d1f09d72b277980df267fc` | Offline native pull/protection reader refuses within-probe repository node-ID drift and malformed present node IDs after one lost-response POST; red-before and 76 focused tests. Protected selected target node, #545/#550 installed provider, grant and native effect remain held. |
+| [Telemetry usage #831](https://github.com/FS-GG/FS.GG.Coordination/pull/831) | `58bf0c10d6094c334dc44d27748c96f1b908ca3b` | Dormant pinned-schema inspector refuses present non-object `type` on selected turn/usage definitions; copied-live mutation red-before, 16 focused and 258 full Release execution tests. Schema bytes remain caller-supplied; native usage and genuine runner/applied Host capture NO_VERDICT. |
+| [FSC-04 #1061](https://github.com/FS-GG/FS.GG.SDD/pull/1061) | `ba38076d81e664ae87527cf82f0e6bb7a953eee6` | Read-only selected preview verifies commit-to-root-tree-to-`.fsgg`-tree-to-blob object-ID chain from held bytes; SHA-1/SHA-256 child-tree corruption was a full-preview false green before repair. Six focused, 71 Git preview and 1,590 Commands tests; zero Release warnings/errors. Physical handles, ABA/common instant, Windows/installed parity and effects held. |
+| [FSC-05 F# #605](https://github.com/FS-GG/FS.GG.Templates/pull/605) | `41bca4f7c277ca00aa0003e368b352ed9e09421e` | Dormant F# registry-pin reader refuses duplicate `contracts` roots instead of retaining the first selected pin; independent YamlDotNet red-before, 68 F# tests, 53 provider-tool and 34 archive custody tests. Intentionally stricter than live Python; selected archive NO_VERDICT. |
+| [GS2-09.9 #832](https://github.com/FS-GG/FS.GG.Coordination/pull/832) | `dfc09e7be6927fddc73b6cfce0bec42dd7d9a566` | Offline native open-PR census rejects any listed/detail row with contradictory closed, draft or merged lifecycle before marker selection; lost-response red-before and 78 focused tests. Provisional source pins only; #545/#550 target/App/CAS/grant/installation and native effect held. |
+| [GS2-09.7 #833](https://github.com/FS-GG/FS.GG.Coordination/pull/833) | `0618022586da7ad411c7dce437800dfdce66c946` | Source-only recovery identity validation refuses malformed UTF-16 that previously collapsed distinct run nonces or store IDs into the same framed UTF-8 claim/reservation/native-attempt hash; two red-before controls and 772 full unit tests. Upstream/native raw-byte custody, #3690 adjudication and Q5/Q6 held. |
+| [FSC-05 F# #606](https://github.com/FS-GG/FS.GG.Templates/pull/606) | `ef4dba9eb530ee48d4c0f64641f3e5a83c99f284` | Dormant F# registry-pin reader refuses repeated selected `minimum-fsgg-sdd` blocks instead of retaining an empty first block and accepting a later version; independent YamlDotNet red-before, 68 F# tests, 54 provider-tool and 34 archive custody tests. Intentionally stricter than live Python; selected archive NO_VERDICT. Verified after the 21:24:30 UTC report source cutoff. |
+| [GS2-09.9 #834](https://github.com/FS-GG/FS.GG.Coordination/pull/834) | `9b12176d06cc69d122ffa03b58cf3899c844b397` | Offline native open-PR census binds every listed/detail base repository ID/name to the selected target while allowing unrelated fork heads; lost-response false green red-before and 80 focused tests. Provisional source pins only; #545/#550 target/App/CAS/grant/installation and native effect held. Verified after the 21:24:30 UTC report source cutoff. |
+| [Telemetry usage #835](https://github.com/FS-GG/FS.GG.Coordination/pull/835) | `bf28914ce12ec927a3237429e53e455d9127a0b5` | Dormant pinned-schema inspector requires both ThreadTokenUsage last/total references and integer TokenUsageBreakdown counter shape; copied-live string-valued red-before, 18 focused and 260 full Release execution tests. Schema custody, genuine runner/native usage/applied Host capture remain NO_VERDICT. Verified after the 21:24:30 UTC report source cutoff. |
+
+These are draft sources, not GS2 receipts. GS2-09.9 still lacks installed
+provider/native-effect acceptance (#545 disputed, #550 held); GS2-09.7 still
+lacks initial census, full typed inspect, journal/custom receipts and Q5/Q6.
+The immediate #550 prerequisite remains an independently reviewed runnable
+effect artifact/workflow at an exact integrated Coordination commit, followed
+by installed no-grant refusal using a protected observer/image/runtime and
+zero-effect counters. Authenticated dispatch/reviewer/issuer events, selected
+disposable target and effective single-repository App scope, protected CAS
+writer with independent replay reader, and one-use grant are still absent.
+The source-only closed scaffolds do not satisfy these installed identities or
+authorize the one-POST effect.
+The protected Coordination sequence is
+[#532](https://github.com/FS-GG/FS.GG.Coordination/pull/532) →
+[#527](https://github.com/FS-GG/FS.GG.Coordination/pull/527) →
+[#526](https://github.com/FS-GG/FS.GG.Coordination/pull/526) →
+[#529](https://github.com/FS-GG/FS.GG.Coordination/pull/529), under the
+Coordination owner's gate. At the 2026-09-25 21:15 UTC read-only check,
+#532 was behind with no review decision, #527 was blocked with cancelled
+old-head jobs, and #526/#529 were draft and behind. No protected merge
+was inferred from source-only draft checks.
+FSC-03 lacks authenticated roster/Import/evaluated-graph and installed
+receiver parity. FSC-04 lacks ABA/post-check/cross-root/Windows and effect
+proof. FSC-05 selected native versus retained release remains NO_VERDICT and
+lacks complete ZIP closure, producer/served-byte custody, #511 CAS and
+receiver proof. No draft authorizes a protected merge or cutover.
+
+[V2-PROG-01 renderer draft #3735](https://github.com/FS-GG/.github/pull/3735)
+at `48ef2d177c4d209b81ed979110d62bf8b7018f90` adds a typed local JSONL
+diagnostic path and a script workflow that obtains fresh authenticated
+telemetry readiness, scans the root session family, and renders the pure F#
+snapshot. Local counter, weekly allowance and projection rows explicitly say
+their collector/account scope is unverified; they do not claim Host capture.
+The separate metadata file supplies lanes, workstreams and completion history;
+the F# script requires that metadata to be dated within two minutes of the
+scan, and the orchestrator must rebuild it from live roster/PR evidence before
+each ten-minute report. A fresh fixture rendered with unverified usage and
+pending capture; a three-minute-old fixture was refused. The local path passed
+24 focused renderer tests and a live read-only render. It remains a source-only
+draft pending owner acceptance. Its later adapter refuses non-UTC report
+timestamps and any completion that postdates metadata verification; focused
+fresh/offset/postdated fixtures passed or refused as expected.
+The script README now requires a new evidence cutoff for each run, with live
+roster, explicit launch settings, exact PR heads/commit times, current counts,
+and a pushed roadmap head before assigning that head to completions. A mere
+metadata timestamp change is insufficient evidence of those checks.
+At each ten-minute deadline, freeze the **verified source set** at an explicit
+UTC cutoff and render promptly. Drafts first verified after that cutoff belong
+to the next source report even if their commit timestamp is earlier; disclose
+that case explicitly. Continue to refresh live lane tasks, authenticated
+telemetry readiness and local counter diagnostics at render time, and label
+their observation times separately from the source cutoff. Do not keep chasing
+new PRs at the expense of the report cadence. The newest-five table describes
+the frozen verified set, not all unseen repository commits.
+Each typed lane now carries required `CurrentWork`; the Markdown lane table
+renders it beside the lane identity. A running lane with blank work is refused.
+The JSON adapter requires `currentWork` for every lane. Focused tests pass
+25/25; missing and blank current-work JSON fixtures each exited 2 without
+creating a report. Every ten-minute metadata rebuild must set all six
+concrete assignments from the live roster rather than carry forward stale
+task descriptions.
+
+At the 18:12:37 UTC rendered checkpoint, the source-only workflow counted six
+active Sol/high lanes (one reserved GS2-09.9 and one direct GS2-09.7), 30
+family sessions and 80 completed ten-minute periods from the 04:47:05 UTC root
+start. The latest completed 17:57:05–18:07:05 UTC period had 34,676,694
+input tokens (34,395,008 cached; 281,686 noncached), 98,119 output and
+34,774,813 total; the all-period team mean, including zero-use periods, was
+31,084,008.81 total. Local root weekly usage was 85% at 18:12:17, leaving
+15%; the same-reset earliest-to-latest percentage slope gives a conditional
+continuous-use, account-wide projection near 22:09 UTC. Counter and account
+scope remain **unverified local diagnostics**, not collector/Host capture.
+Fresh direct authenticated telemetry probes were ready/configured on
+`main-fsharp-dev`, pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false. The five completion rows referred to this roadmap's
+then-current head `932d3f0e0f96feb05979a19175127eb0bb453ad3`, committed
+after those draft heads were recorded. A subsequent read-only same-credential
+GraphQL probe again resolved pinned Coordination Project 1 but returned
+`FORBIDDEN Resource not accessible by personal access token` for Project 2;
+the installed all-project runner remains unable to qualify an end-to-end item.
+At the 18:43 UTC read-only same-credential recheck, pinned Project 1 again
+resolved as `PVT_kwDOEYAWY84Bb08W` / Coordination while Project 2 again
+returned `FORBIDDEN Resource not accessible by personal access token`. The
+minimal installed-runner admission blocker is unchanged; this query produced
+no selected work item, native turn or applied Host receipt.
+
+At the 18:34:59 UTC rendered checkpoint, a newly checked roster and exact PR
+heads counted six active Sol/high lanes, including the reserved GS2-09.9 and
+direct GS2-09.7 workers. The local root family had 30 sessions and 82 completed
+ten-minute periods. The latest 18:17:05–18:27:05 UTC period had 42,264,763
+input tokens (41,966,592 cached; 298,171 noncached), 96,581 output and
+42,361,344 total; the all-period team mean, including zero-use periods, was
+31,362,490.20 total. Local weekly usage was 87% at 18:34:34, leaving 13%,
+with a conditional continuous-use, account-wide same-reset projection near
+21:57 UTC. These remain **unverified local diagnostics**. Authenticated health
+and `main-fsharp-dev` workspace status were ready/configured with zero pending
+and unacknowledged items and no lossy state; end-to-end runner/Host capture
+remained pending. The five completion rows cited roadmap head `c01dc9f8`,
+which had already recorded those exact source heads. The wrapper command
+rendered successfully with zero build warnings/errors; the 24 focused tests
+passed. A separate three-minute-old metadata run exited 2 and left no report
+file, confirming the source-only freshness guard refuses that stale input.
+
+At the 18:45:14 UTC rendered checkpoint, freshly checked metadata again counted
+six active Sol/high lanes with reserved GS2-09.9 and direct GS2-09.7 workers.
+The local root family had 30 sessions and 83 completed ten-minute periods.
+The latest 18:27:05–18:37:05 UTC period had 36,996,957 input tokens
+(36,650,624 cached; 346,333 noncached), 100,266 output and 37,097,223 total;
+the all-period team mean, including zero-use periods, was 31,431,583.36 total.
+Local weekly usage was 88% at 18:44:52, leaving 12%, with a conditional
+continuous-use, account-wide same-reset projection near 21:51 UTC. These are
+**unverified local diagnostics**. Direct authenticated telemetry was
+ready/configured with a zero lossless queue; runner/Host capture remained
+pending. The five completion rows cited previously pushed roadmap head
+`a9aaf097`, which contained each draft's exact source head. The script rendered
+with zero build warnings/errors; 24 focused tests remained green.
+
+At the 18:57:12 UTC rendered checkpoint, six Sol/high lanes remained active;
+the fifth worker had moved from FSC-05 to source-only telemetry capture
+qualification, while the reserved GS2-09.9 and direct GS2-09.7 workers
+continued. The local root family had 30 sessions and 85 completed ten-minute
+periods. The latest 18:47:05–18:57:05 UTC period had 37,941,021 input tokens
+(37,612,800 cached; 328,221 noncached), 119,635 output and 38,060,656 total;
+the all-period team mean, including zero-use periods, was 31,551,863.54 total.
+Local weekly usage was 89% at 18:56:53, leaving 11%, with a conditional
+continuous-use, account-wide same-reset projection near 21:47 UTC. These
+remain **unverified local diagnostics**, not runner/Host capture. Fresh direct
+authenticated telemetry was ready/configured with a zero lossless queue;
+capture acceptance remained pending. The five completion rows cited pushed
+roadmap head `c77d72d6`, which recorded each exact draft head. The script
+rendered with zero build warnings/errors, and 24 focused tests remained green.
+
+At the 19:07:53 UTC rendered checkpoint, the freshly checked roster contained
+six active GPT-6-Sol/high lanes, each with a concrete current-work cell: the
+orchestrator on roadmap/reporting; reserved GS2-09.9 on sealed-plan byte
+custody; direct GS2-09.7 on HTTP-header/provider freshness; FSC-03 on
+authenticated GitHub commit transport; FSC-04 on ABA/common-instant preview;
+and telemetry source on trusted current-session/native usage qualification.
+The local root family had 30 sessions and 86 completed ten-minute periods.
+The latest 18:57:05–19:07:05 UTC period had 38,677,177 input tokens
+(38,359,808 cached; 317,369 noncached), 113,374 output and 38,790,551
+total. The all-period **team** mean, including zero-use periods, was
+31,636,034.33 total. The local weekly diagnostic was 90% used at 19:07:26,
+leaving 10%, with a conditional continuous-use, account-wide same-reset
+projection near 21:41 UTC. These remain **unverified local diagnostics**, not
+collector/Host capture. Direct authenticated telemetry health was ready;
+`main-fsharp-dev` was configured with pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false. End-to-end runner/Host capture stayed pending.
+The five completion rows cited previously pushed roadmap head `7f0c1bd6`,
+which already recorded their exact source heads. The F# script rendered with
+zero build warnings/errors, and 25 focused tests passed. Drafts #738, #1045,
+#739 and #740 arrived after this render; none was counted as a completed row
+at that cutoff. Their workers were immediately recycled into disjoint source
+tasks, preserving six active lanes.
+
+The next source evidence cutoff was frozen at 19:18:06 UTC rather than chased
+through later arriving drafts. Its F# report rendered at 19:21:42 UTC after
+fresh validation of that frozen source set and the live six-lane task roster;
+the script's two-minute metadata guard had correctly refused the unrefreshed
+19:18 snapshot. The recorded source roadmap head was `a4bd72bd`, with five
+draft completions #3817, #744, #743, #1046 and #742 in newest-first order.
+Drafts #745 (19:19:44 commit) and #746 (19:20:18 commit) were outside the
+cutoff and are assigned to the next report. The latest complete local team
+period, 19:07:05–19:17:05 UTC, had 27,557,809 input tokens (27,217,792
+cached; 340,017 noncached), 106,355 output and 27,664,164 total; the mean
+over 87 completed periods including zero-use periods was 31,590,380.64
+total. Local unverified weekly usage was 91% at 19:21:25, leaving 9%; the
+conditional continuous-use, account-wide projection was near 21:39 UTC.
+Authenticated telemetry health and `main-fsharp-dev` workspace status were
+ready/configured at 19:21:42 with pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false. This is readiness only; genuine runner native
+turn/usage and matching applied Host receipt are still absent. Release render
+had zero warnings/errors and renderer tests remained 25/25. No protected
+gate was cleared by this report.
+
+At the 19:27:14 UTC **verified-source** cutoff, the live roster again had six
+active GPT-6-Sol/high lanes with concrete current tasks, including reserved
+GS2-09.9 and direct GS2-09.7 workers. The F# report rendered at 19:28:06
+UTC from recorded roadmap head `26f934d0`. The latest complete
+19:17:05–19:27:05 UTC local team period had 32,311,657 input tokens
+(32,056,960 cached; 254,697 noncached), 116,636 output and 32,428,293
+total. Across 88 completed periods including zero-use periods, the team mean
+was 31,599,902.38 total. Local unverified weekly usage was 91% at 19:27:55,
+leaving 9%; the conditional continuous-use, account-wide projection was near
+21:47 UTC. Authenticated health and `main-fsharp-dev` workspace status were
+ready/configured at 19:28:05–06, pending=0, pendingUnacknowledged=0 and
+unacknowledgedLossy=false; end-to-end runner/Host capture remained pending.
+The five latest verified draft rows were #749, #748, #747, #3818 and #746.
+#750 had a 19:26:59 commit but its worker notice arrived after verification
+froze, so it was explicitly deferred to the next source report; #3819,
+#751 and #752 were committed after the cutoff. The Release render had zero
+warnings/errors, and renderer tests remained 25/25. No protected hold was
+cleared by this report.
+
+At the 19:39:48 UTC verified-source cutoff, six GPT-6-Sol/high lanes were
+active, including reserved GS2-09.9 and direct GS2-09.7. The F# report
+rendered at 19:41:44 UTC from recorded roadmap head `dc817c8c`, with all six
+concrete current-task rows. The latest complete local team period,
+19:27:05–19:37:05 UTC, had 36,239,128 input tokens (35,940,992 cached;
+298,136 noncached), 103,056 output and 36,342,184 total. Across 89
+completed periods including zero-use periods, the team mean was
+31,653,186.44 total. Local unverified weekly usage was 92% at 19:41:39,
+leaving 8%; the conditional continuous-use, account-wide projection was
+near 21:45 UTC. Authenticated health and `main-fsharp-dev` workspace status
+were ready/configured at 19:41:44 with pending=0,
+pendingUnacknowledged=0 and unacknowledgedLossy=false. This is readiness
+only; end-to-end runner/native turn/Host capture remained pending. The
+newest five frozen draft rows were #760, #1048, #3823, #759 and #758.
+Post-cutoff #3824 and #761 were excluded. The Release render had zero
+warnings/errors; renderer tests remained 25/25. No protected gate was
+cleared by this report.
+
+At the 17:51 UTC source checkpoint, the newest five completed **draft
+commits** were verified against their PR heads. Their completion is source
+preparation, not an accepted V2 receipt or authorization to merge:
+
+| Committed UTC | Workstream / draft | Exact head | Evidence |
+| --- | --- | --- | --- |
+| 2026-09-25 17:50:10 | GS2-09.7 duplicate issue-type refusal | `7f36e810a40cbd340f7e262dbae7437fe17a9d8f` | [Coordination #695](https://github.com/FS-GG/FS.GG.Coordination/pull/695), 140 focused tests |
+| 2026-09-25 17:50:05 | FSC-03 external symlink refusal | `475dc96c41ac8a5dbc4eecffc7cc60f428c98709` | [`.github` #3795](https://github.com/FS-GG/.github/pull/3795), 156 fixtures |
+| 2026-09-25 17:49:58 | GS2-09.9 selected identity copy | `95e53a9ec72d12514730c42eff6ff99b453ca4f7` | [Coordination #694](https://github.com/FS-GG/FS.GG.Coordination/pull/694), 38 fake-port tests |
+| 2026-09-25 17:49:53 | FSC-05 pinned Unicode version | `9e29cd0573d3cde787a20e9cb44b190a2d9bc4b1` | [Templates #578](https://github.com/FS-GG/FS.GG.Templates/pull/578), 68 payload / 29 archive controls |
+| 2026-09-25 17:49:29 | FSC-04 capture file bound | `03c196a8f90a0c1a68c65a3d196aebe433a25b1b` | [SDD #1034](https://github.com/FS-GG/FS.GG.SDD/pull/1034), 1,477 Commands tests |
+[`.github` FSC-03 #3754](https://github.com/FS-GG/.github/pull/3754) at
+`238362b2179456092fce92b0bbf9b45b3d5f26a3` stops an embedded `run: |` marker from
+excusing a missing Rule (b) dependency in the F# source; 91 Release tests pass.
+Differential review found the live Python `allow_uncovered()` still accepts a marker inside
+a valid multiline quoted scalar on current main. Source audit found draft #3698 already
+repairs that case through its shared scalar-span logic; stacked
+[`.github` #3755](https://github.com/FS-GG/.github/pull/3755) at
+`c5e4cd7bb935c5a6183819a2e20fd2575f25bc0f` adds independent full-gate Rule (b)
+regression controls (91 Python fixtures) without duplicating the repair. Current main
+falsely passes the fixture, while #3698/#3755 refuse and a real later comment remains
+accepted. The repair is not live until this stack receives owner acceptance and protected
+readback. The F# replacement remains unaccepted.
+[Templates #549](https://github.com/FS-GG/FS.GG.Templates/pull/549) at
+`b3b3b9622e78ced0839a60b0dfd7c61625978a23` makes the F# comparator return
+NO_VERDICT for decomposed Unicode template paths instead of a false payload match;
+16 focused and 29 stacked controls pass. Producer, served-byte, transaction, installed
+and receiver custody remain open.
+[Templates #550](https://github.com/FS-GG/FS.GG.Templates/pull/550) at
+`e272ae4288a6941f46fbcfb57a9032837851cfed` also refuses an extra nested
+config-shaped template member that previously yielded a payload-only match; 18 focused
+and 29 stacked controls pass. Ordinary nested assets remain accepted.
+[Templates #551](https://github.com/FS-GG/FS.GG.Templates/pull/551) at
+`38f0a162d42983f377c3e62d17f8a38090ae7f7b` refuses a file/child-path collision,
+including case-variant ancestor aliases, that previously returned a payload match;
+20 payload and 29 archive controls pass. It is not served or installed custody proof.
+[Templates #552](https://github.com/FS-GG/FS.GG.Templates/pull/552) at
+`0eb690ce4a7699ae3ffe235dc32047936d2a83be` refuses a 64-hex digest with a trailing
+newline that a regex anchor had accepted; 21 payload and 29 archive controls pass.
+Producer, served-byte, transaction, installed and receiver holds remain unchanged.
+[Templates #553](https://github.com/FS-GG/FS.GG.Templates/pull/553) at
+`09130c225779c76be33d1e8c050c6e91d34f84ae` refuses asset path components with
+trailing periods or ASCII spaces that previously returned a payload match; 24 payload
+and 29 archive controls pass. This is still local comparator evidence only.
+[`.github` FSC-03 #3756](https://github.com/FS-GG/.github/pull/3756) at
+`ee36fbce6784a6edd1915b0fdb216ba80ed078bd` checks PR and push path filters
+independently in the pure Rule (b) reducer, closing a red-before push-only omission;
+98 F# and 91 Python focused fixtures pass. Malformed one-sided `paths: null` is still
+stricter in F# than current Python main. Stacked
+[`.github` #3757](https://github.com/FS-GG/.github/pull/3757) at
+`b391106d5d0e6051d535302f1c64cdf462dcaeb3` repairs three red-before Python
+false greens for present one-sided `paths: null`, `[]` and scalar filters while leaving
+an absent key unfiltered; 95 Python fixtures pass. The stack and F# replacement still
+need owner acceptance and installed parity. Stacked
+[`.github` #3758](https://github.com/FS-GG/.github/pull/3758) at
+`0a6daa906ead404b0df8f06c52b71f9142d670d2` additionally refuses bare
+`[true]`, `[42]` and `[null]` path-list values that produced red-before false greens;
+quoted strings remain valid. Ninety-nine Python and 11 matching F# syntax controls pass.
+Stacked [`.github` #3759](https://github.com/FS-GG/.github/pull/3759) at
+`e037e951c02cfab48e0087f8b3967b42a1e3034d` refuses plain or explicitly tagged
+duplicate YAML mapping keys that previously overwrote a project-naming filter and
+returned a false green; 101 Python and four matching F# duplicate-key controls pass.
+The repair stack is still draft, with owner acceptance and installed parity pending.
+
 ### 1.1 Before active `FS.GG.Coordination` bootstrap
 
 The README-only repository exists at the explicitly authorized inert bootstrap commit
@@ -179,6 +1602,13 @@ Before dispatching a unit, classify every adjacent row as one of:
 
 The Coordination board remains the visibility and dependency projection. It is not allowed to recreate the
 superseded execution plan by presenting a historical M-series row as `Ready`.
+
+The [F# automation convergence interlude](#v2-fs-i1--f-automation-convergence-interlude)
+uses these same classes. Its `FSC` slices are planning anchors, not new GS2 receipt IDs or a second
+scheduler. A port selected for the cutover candidate is a `candidate-input-change`; a separately
+proven defect in a required gate is a `v2-blocker`; optional ports can remain `parallel-product` or
+be explicitly `cutover-deferred`. Count shebangs, inline workflow code, and generated receivers when
+classifying an executable path; suffix-only inventory is incomplete.
 
 ### 1.5 Single-operator execution readiness
 
@@ -1501,6 +2931,57 @@ GS2-11.3 through the switch and verification window, do not start or advance
 independent telemetry mutations: stop ingress, drain active work, and preserve
 the fleet freeze until the roadmap explicitly releases deferred programs.
 
+### V2-FS-I1 — F# automation convergence interlude
+
+The [17-repository review](reports/2026-09-25-fsgg-fleet-code-architecture-review.md)
+and [design and staged roadmap](coordination/2026-09-25-fsharp-automation-convergence-design-and-roadmap.md)
+identifies policy, registry, manifest, provider and projection logic suitable for owner-specific F#
+tools. It also identifies shell launchers, independent Python oracles, native credential adapters,
+generated receivers and historical evidence that remain until a separately qualified replacement
+exists. This is a parallel planning part, **not a new GS2 unit, acceptance receipt, or universal
+Python/Bash removal gate**. The prior
+[telemetry/roadmap-closure design](reports/2026-09-04-fsharp-roadmap-telemetry-and-projection-automation-design.md)
+requires current-source reconciliation before any remaining work is scheduled; current Host and
+dashboard roadmaps and V2-CI-I1 retain their owners.
+
+The preparation lanes are independent when touch sets do not overlap: executable/receiver census,
+confirmed source-closure, CI-output and path-coherence repairs, pure `.github` policy scaffolding,
+effective executable-step wiring repair, SDD generic artifact contract, Templates provider composition,
+product skill-staging characterization, and read-only Coordination/release transport analysis. At each
+scheduling pass, fill `min(available agent slots, safe disjoint bounded lanes)` with accountable owners;
+do not leave a slot idle solely because a later receipt, producer publication or protected merge is queued.
+Reserve at least one **active worker lane** (in addition to the roadmap orchestrator) for direct V2
+critical-path delivery at every scheduling pass. That worker advances the current GS2 gate, its
+concrete blocker, or the next V2 prerequisite; queue observation alone does not fill the reservation.
+Optional F# ports, review and refactoring use only the remaining worker slots. When the reserved
+worker finishes, assign another direct V2 task before filling an optional slot; never backfill the
+reservation with migration work. If no direct V2 source or evidence task can start, record the exact
+external authority or source blocker and keep the reserved slot unassigned rather than counting an
+optional worker as V2 delivery. This reservation is a scheduling rule, not permission to bypass any gate.
+Provisional source branches, draft PRs, characterization, scaffolds, tests and refactors may proceed
+against a recorded base while their merge or activation prerequisite is pending. Record the prerequisite,
+non-authoritative status, exact head and intended follow-up repair/rebase in the owning PR. When the
+prerequisite lands, the same owner rebases or repairs that PR, reruns affected local and hosted controls,
+and only then seeks normal admission. Serialize overlapping shared files, immutable producer publication
+and receiver pinning, protected merge order, sandbox mutations, live gate flips and Authority writes. A published
+producer and exact installed receiver proof precede removal of old logic. Preserve the independent
+refusal controls, owner-specific BOM/CRLF policies, credential custody, ambiguous-effect recovery,
+and Q0–Q10 qualification strength. Enduring `.github` policy tooling avoids V1-only Coord runtime
+dependencies. Telemetry Contracts and Store reference the Coord Core assembly; Store compiles telemetry
+source from a historical Coord CLI path into the Store assembly. Host references Contracts and Store,
+not the Coord CLI binary, and its package includes Core. Q9 inventories this exact closure and
+qualifies any V1-only dependency removal. GS2-14 does not require deleting every Coord project.
+
+Before GS2-10, record which bounded ports actually enter the candidate and explicitly defer the
+remainder. Selected package/lock, registry, workflow, generated receiver and settings changes must
+be qualified and stabilized before freeze. A later change mints a new full Q0–Q7 candidate or waits
+for `OperatingV2`; no optional port may cross GS2-11–GS2-12. The GS2-09.7 isolated rehearsal,
+GS2-09.9 callable handoff, `OpenV2` human approval and 15-real-item observation remain unchanged.
+At this proposal's review, **no optional F# port is selected** for GS2-10; census, current-source
+reconciliation, source-only implementation and read-only parity can proceed, while publication and receiver flips default to
+deferral. The confirmed source repairs follow their own normal gates. Change that selection
+only with exact installed evidence and an explicit prefreeze candidate-input disposition.
+
 ### GS2-09 — Build migration, archive, and rollback tooling
 
 **Parents:** `.github#2954`, `.github#2963`, `.github#2965`
@@ -1513,6 +2994,212 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
   and the exact callable-readiness handoff consumed by discovery. It performs no fleet migration, does not open
   v2, and remains an additive prerequisite before representative rehearsal. The exact GS2-09.9 qualification
   and custom acceptance receipt are pending.
+
+  An independent offline review of the sealed isolated-operation adapter reproduced wrong PR head/base
+  acceptance after an ambiguous POST, force-push-enabled protection acceptance after an ambiguous PUT,
+  and an exception-chain secret leak. [Coordination draft #547](https://github.com/FS-GG/FS.GG.Coordination/pull/547)
+  records the non-authoritative characterization. The current #545 candidate's green checks do not prove
+  these identity-bound Q3/Q6 refusals; its auto-merge was disabled and its receipt is disputed. Keep the
+  historical packets immutable. Qualify a versioned operator with rotated contract/proposal/validator
+  digests and fresh exact Q3/Q6 negative controls before issuing any GS2-09.9 acceptance receipt.
+  [Provisional operator draft #549](https://github.com/FS-GG/FS.GG.Coordination/pull/549) and
+  [stacked loopback transport draft #551](https://github.com/FS-GG/FS.GG.Coordination/pull/551)
+  exercise strict offline predicates and controlled lost-response HTTP cases. The
+  [v5 contract and qualification draft #550](https://github.com/FS-GG/FS.GG.Coordination/pull/550)
+  remains non-authoritative. [Native classifier draft #574](https://github.com/FS-GG/FS.GG.Coordination/pull/574)
+  repairs a wrong-target source false green: Python boolean `true` previously equaled selected
+  repository ID `1` in native reads and pull reconciliation. Its 23 focused offline controls
+  require exact integer identities, but the provisional operator remains inactive.
+  [Protection-context draft #575](https://github.com/FS-GG/FS.GG.Coordination/pull/575)
+  repairs a second source false green after an ambiguous response: an extra required status
+  context was ignored while `ExactProtection` was returned. Its 24 focused offline controls
+  refuse foreign, duplicate or malformed contexts without activating the operator.
+  [Protection-flag draft #576](https://github.com/FS-GG/FS.GG.Coordination/pull/576)
+  refuses an unselected enabled optional protection flag that previously still produced
+  `ExactProtection` after an ambiguous response; 25 focused offline controls pass. The
+  protected target, credential, journal, grant and one-POST authority remain absent.
+  [Selected-null draft #577](https://github.com/FS-GG/FS.GG.Coordination/pull/577)
+  repairs a missing-versus-null false green for required review and restriction fields after
+  ambiguous readback; 26 focused offline controls pass. It does not authorize the provisional
+  operator or any protected provider effect.
+  [Protection-URL drafts #578](https://github.com/FS-GG/FS.GG.Coordination/pull/578)
+  and [#579](https://github.com/FS-GG/FS.GG.Coordination/pull/579) refuse foreign root,
+  nested and branch protection URLs after ambiguous responses; 27 and 28 focused offline
+  controls pass respectively. [Pull-list draft #580](https://github.com/FS-GG/FS.GG.Coordination/pull/580)
+  requires listed PR state, draft, title and body to be present and agree with detail before
+  classifying a lost-response pull as exact; 29 focused offline controls pass. These stacked
+  source drafts do not supply installed-provider custody or protected one-POST authority.
+  [Selected-ref draft #581](https://github.com/FS-GG/FS.GG.Coordination/pull/581)
+  closes a lost-response tag-object false green by requiring the selected ref URL, commit
+  object type and selected-repository commit URL; 30 focused offline controls pass. Its
+  protected installed-provider and native-effect hold is unchanged.
+  [Pagination-coherence draft #582](https://github.com/FS-GG/FS.GG.Coordination/pull/582)
+  refuses contradictory first/previous page links that previously allowed `ExactPull`
+  after a lost POST; 31 focused offline controls pass. It is source-only and stacked on #581.
+  [Read-only custody packet #583](https://github.com/FS-GG/FS.GG.Coordination/pull/583)
+  pins the draft source/artifact heads and hashes, records #563 disabled, and names the
+  absent producer, observer, issuer/reviewer, target, credential, CAS journal, grant and
+  native readback evidence. Its proposed negative controls are unrun; the packet is not
+  protected install or one-POST authorization.
+  [No-effect candidate verifier #585](https://github.com/FS-GG/FS.GG.Coordination/pull/585)
+  checks supplied source/workflow/artifact/runtime pins, actor, review, target and one-POST
+  intent against independent expectations, with four focused synthetic test methods.
+  Even matching input remains `authorized=false` and `can_dispatch=false`; protected
+  observers, selected credential/target, CAS/replay, grant and installed effect are absent.
+  [Read-only observer ports #587](https://github.com/FS-GG/FS.GG.Coordination/pull/587)
+  bind three previously omitted producer identities and compose source, workflow, review,
+  target-scope and plan observations from supplied bytes; five observer and four candidate
+  tests pass with fake ports closed to file/token/socket/SQLite effects. Protected GitHub
+  authentication, installed artifact/workflow custody and one-POST authority remain absent.
+  [Injected workflow observer #589](https://github.com/FS-GG/FS.GG.Coordination/pull/589)
+  binds exact workflow run attempt and file-at-commit bytes to the candidate through a
+  read-only injected port; five adapter and five observer tests pass. Real evidence needs
+  a separately reviewed protected `.github` read-only App transport and identity
+  attestation with selected Actions/Contents/metadata scope. No effect route is added.
+  [Review/audit observer #591](https://github.com/FS-GG/FS.GG.Coordination/pull/591)
+  composes injected read-only approval history and membership with a distinct protected
+  audit-event port; 15 relevant fake controls pass. Protected App identity/permission
+  attestation and immutable approval event ID/time remain absent; dispatch is refused.
+  [Selected-target observer #592](https://github.com/FS-GG/FS.GG.Coordination/pull/592)
+  binds selected repository, installation-list and ref reads to raw-response hashes and
+  an independent protected attestation port; 20 relevant fake controls pass. Protected
+  App identity/effective scope, complete target prestate and actual execution credential
+  record remain unproved; the one-POST gate stays closed.
+  [Injected plan reader #594](https://github.com/FS-GG/FS.GG.Coordination/pull/594)
+  binds canonical operation request bytes, the current native PR marker, and exact source,
+  workflow, run, review and target identities through a separate seal port; five new and
+  20 upstream fake controls pass. It remains a stacked draft with no installed seal,
+  protected source/release observer, credential, CAS, grant or native effect.
+  [Source/release observer #596](https://github.com/FS-GG/FS.GG.Coordination/pull/596)
+  binds a supplied Coordination commit/tree, successful producer run/attempt/actor,
+  published artifact digest and size, and three ZIP member hashes to a distinct
+  attestation port; five new and 25 upstream fake controls pass. Protected artifact
+  attempt/redirect custody, actual effect artifact, App identity and execution credential
+  remain absent, so the installed native-effect gate stays closed.
+  [Injected audit-event adapter #598](https://github.com/FS-GG/FS.GG.Coordination/pull/598)
+  binds a supplied workflow-approval document, actor, repository, run and time to a
+  separate immutable joint record for attempt, environment and approval-response hash;
+  five new and 30 upstream fake controls pass. Protected audit identity/permission,
+  joint-record issuer and installed effect remain absent; dispatch stays refused.
+  [Credential-scope observer #600](https://github.com/FS-GG/FS.GG.Coordination/pull/600)
+  compares supplied token-free App mint metadata with an independent effective-scope
+  witness, binding repository, App/installation IDs, exact permissions, target response
+  hashes and expiry; five new and 35 upstream fake controls pass. Protected issuer
+  custody, real effective-token scope and complete target prestate remain unproved.
+  [GET-only target prestate #602](https://github.com/FS-GG/FS.GG.Coordination/pull/602)
+requires two complete matching absent-marker censuses and binds selected run, attempt,
+repository, refs and transcript digest to a distinct witness; five new and 40 upstream
+fake controls pass. Protected reader identity, witness custody, target continuity and
+  execution credential reconciliation remain unproved; no dispatch is enabled.
+  [Scope/prestate join #604](https://github.com/FS-GG/FS.GG.Coordination/pull/604)
+  compares supplied effective App scope and target prestate through closed fake ports;
+  a red-before Python boolean-as-repository-ID false green was repaired, and 16 focused
+  controls pass. Protected reader identity, provider-backed scope, witness custody and
+  target continuity remain absent; installed one-POST authority stays closed.
+  [Independent prestate-witness draft #605](https://github.com/FS-GG/FS.GG.Coordination/pull/605)
+  carries witness principal, credential and time window through the target prestate
+  reader into the App-scope join, refusing reused reader identity and stale claims;
+  16 focused fake controls pass. Protected immutable witness custody, authenticated
+  reader, effective scope and target continuity remain absent.
+  [Witness-ID type guard #606](https://github.com/FS-GG/FS.GG.Coordination/pull/606)
+  refuses a witnessed Python boolean `true` as selected numeric repository or
+  installation ID `1` in the target prestate adapter; 17 focused fake controls pass.
+  Protected witness event/producer, reader identities, effective App scope and target
+  continuity remain unproved.
+  [Credential-ID type guards #608](https://github.com/FS-GG/FS.GG.Coordination/pull/608)
+  refuse Python boolean or float aliases for the selected repository ID in supplied
+  App issuance, mint, response and effective-scope records; 18 focused fake controls
+  pass. Protected issuer/witness identities, effective scope and target continuity
+  remain absent.
+  [Protected-owner qualification packet #609](https://github.com/FS-GG/FS.GG.Coordination/pull/609)
+  pins the provisional source heads and separates inspect-only release evidence from
+  later native effect admission. It names independent producer/artifact/image/runtime,
+  review, target/App, journal/replay and native readback controls; 18 inherited focused
+  tests pass. The next source prerequisite is a distinct closed effect artifact and
+  disabled workflow with installed no-grant zero token/CAS/POST controls. No protected
+  release selection, install, grant or one-POST decision follows from this packet.
+  [Closed effect scaffold #611](https://github.com/FS-GG/FS.GG.Coordination/pull/611)
+  adds a separate deterministic zipapp and disabled proposal workflow with unselected
+  pins and permissions. Its entry always exits 78 and the closed port performs zero
+  token, CAS and HTTP calls; eight focused controls and a local clean-install canary
+  pass. It is not a protected install, grant or executable native effect.
+  [Closed artifact hardening #613](https://github.com/FS-GG/FS.GG.Coordination/pull/613)
+  makes alternate native source inert rather than importable and rejects a ZIP with
+  trailing bytes even if its supplied manifest is rewritten; ten focused controls
+  pass. Its approved manifest digest remains caller-supplied without protected
+  independent approval. Both proposal workflows stay disabled, and no installed
+  effect authority follows.
+  [Native-free closed scaffold #614](https://github.com/FS-GG/FS.GG.Coordination/pull/614)
+  removes extractable provisional native bytes from the closed archive and requires
+  separate builder/native source inputs for its pure verifier; 11 focused controls pass.
+  Independent integrated revision, approved manifest digest, artifact/runtime custody
+  and a separately authorized runnable effect remain absent. Both workflows stay disabled.
+  [Stacked grant-parser draft #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554)
+  fail-closes a proposed one-POST envelope but always refuses dispatch; it has no issuer, trusted
+  replay reservation or installed effect entry. [Stacked inspect-only zipapp draft #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555)
+  is a deterministic local clean-install candidate whose inspection still refuses dispatch; it is
+  not a protected installed provider or native-effect proof. [Stacked authority-port draft #559](https://github.com/FS-GG/FS.GG.Coordination/pull/559)
+  sketches independent issuer, observer, replay and journal CAS boundaries, but its ports are
+  unimplemented and every result remains non-dispatchable. [Stacked install-pin draft #560](https://github.com/FS-GG/FS.GG.Coordination/pull/560)
+  checks local archive/source and interpreter bytes with read-only negative controls; it lacks
+  protected artifact and runtime provenance or an installed effect path. [Stacked runtime-closure draft #561](https://github.com/FS-GG/FS.GG.Coordination/pull/561)
+  hashes a local interpreter, standard-library tree and observed mapped files, but its local
+  manifest is not a protected image or independent release pin. [Stacked provenance draft #562](https://github.com/FS-GG/FS.GG.Coordination/pull/562)
+  refuses the existing ordinary CLI release workflows and models the required immutable source,
+  workflow, image, runtime and independent approval packet; its observer ports are not installed.
+  [Stacked workflow draft #563](https://github.com/FS-GG/FS.GG.Coordination/pull/563) adds a disabled,
+  inspect-only release skeleton with empty pins and permissions; it cannot install or dispatch.
+  [Readback draft #564](https://github.com/FS-GG/FS.GG.Coordination/pull/564) binds a proposed
+  protected source/workflow/artifact/image/approval packet to later installed refusal controls, but
+  its observations and immutable coordinates have not been supplied by a protected release.
+  [Adversarial qualification draft #565](https://github.com/FS-GG/FS.GG.Coordination/pull/565)
+  closes a source-only selection gap: a resealed packet could previously substitute the dispatch
+  actor or artifact producer IDs while satisfying pure consistency checks. Its 42 isolated controls
+  bind those IDs and refuse self-review, but no protected release packet or installed native effect
+  has been observed.
+  [Installed-control draft #566](https://github.com/FS-GG/FS.GG.Coordination/pull/566)
+  repairs a second source-only false green: observation without a source tree, dispatch actor or
+  producer run/artifact IDs passed the proposed installed control. Its 44 isolated controls now
+  require exact identities; a matching local draft packet remains non-authorizing without
+  independent protected source readback and selected digest approval.
+  [Nonzero-pin draft #567](https://github.com/FS-GG/FS.GG.Coordination/pull/567) repairs a
+  source-only verifier gap that accepted nine all-zero source, workflow, image and runtime
+  placeholders with matching synthetic observations. Its 45 isolated controls pass locally;
+  the workflow remains disabled with empty permissions and a refreshed exact verifier pin.
+  Protected publication, independent approval, installed path and native-effect readback remain open.
+  [Historical-digest draft #568](https://github.com/FS-GG/FS.GG.Coordination/pull/568)
+  refuses both known disabled workflow digests after a red-before control showed the earlier
+  template digest could pass a later proposed selection. Its 46 isolated controls pass locally;
+  the first protected owner step is still review of integrated source and a new runnable,
+  inspect-only release with independently selected immutable runner, artifact and reviewer facts.
+  [Selection-review draft #569](https://github.com/FS-GG/FS.GG.Coordination/pull/569)
+  repairs a self-sealed selection false green by requiring a fourth distinct read-only review
+  observation bound to exact selection bytes, digest, reviewer, actor and approval time. Its
+  49 isolated controls pass locally, but the observer has no protected implementation and every
+  fixture remains non-authorizing.
+  [Review-coordinate draft #570](https://github.com/FS-GG/FS.GG.Coordination/pull/570)
+  repairs two source-only false greens: a review event without its own origin coordinates, and
+  a review timestamp preceding installed-control observation. Its 51 isolated controls pass;
+  no protected observer or installed inspect-only release exists.
+  [Probe-invocation draft #571](https://github.com/FS-GG/FS.GG.Coordination/pull/571)
+  repairs a refusal-record false green that omitted the pinned interpreter and archive. Its
+  52 isolated controls require the exact interpreter, `-I -S`, canonical installed archive path
+  and subcommand for both proposed probes; no protected installation or native effect follows.
+  [Archive-object draft #572](https://github.com/FS-GG/FS.GG.Coordination/pull/572)
+  repairs a source-only observation that named the archive path and hash without the object
+  actually probed. Its 53 isolated controls require matching regular-file real path, device,
+  inode and exact digest before and after both probes; a protected observer must still collect
+  those facts from the installed filesystem under read-only custody.
+  [Archive-metadata draft #573](https://github.com/FS-GG/FS.GG.Coordination/pull/573)
+  further requires exact size, read-only regular mode, one link, and stable modification and
+  change times; 54 isolated controls pass. Before/after metadata cannot exclude a transient
+  mutation, so protected immutable-directory custody throughout both probes is still required.
+  The #550 staged exact-copy loopback
+  harness exercises corrected classifier, HTTP and durable-fence paths, but an independent boundary
+  review found it insufficient for the installed provider/credential path and corrected native-effect clause. Qualify the corrected
+  version through an actual installed provider path or a new protected isolated native operation,
+  revalidate the historical archive as historical evidence, and rerun exact Q3/Q6 before rotating
+  the gate/index or accepting GS2-09.9. Loopback results alone do not prove that boundary.
 
   [Protected callable discovery handoff](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json)
   records the packet received by discovery; it is not the GS2-09.9 acceptance receipt.
@@ -1550,8 +3237,180 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
   evidence and independent controls remain required; a source-only or historical Q4 run does not accept
   this unit. The [governing cohort contract](coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md#registered-migration-rehearsal-cohort)
   owns the target and permission boundary.
+  [Coordination draft #552](https://github.com/FS-GG/FS.GG.Coordination/pull/552) prepares a
+  candidate-side validator for the sanitized #3690 mint proof, token digest, selected target/grants,
+  expiry, and host pin before either live candidate path calls a provider. This is source-only
+  consistency evidence, not independent protected authorization, host run-binding, or Q5/Q6 acceptance.
+  [`.github` #3690](https://github.com/FS-GG/.github/pull/3690) merged as
+  `ff425734d277fa54c3d71601da90fe7b22619c15` on 2026-09-25 05:35 UTC
+  without common OperatingV1 effect admission. Record that process violation
+  separately from any sandbox receipt; the merge does not accept Q5/Q6 or authorize
+  a sandbox run. [Coordination draft #556](https://github.com/FS-GG/FS.GG.Coordination/pull/556)
+  records the protected-rehearsal decision packet and its hold on authenticated run/candidate/nonce
+  binding, installed command, and native Q5/Q6 evidence. [Stacked verifier draft #558](https://github.com/FS-GG/FS.GG.Coordination/pull/558)
+  checks a proposed signed run envelope with offline refusal tests, but #3690 has no protected signer,
+  pinned verifier key or admitted host release gate. [Host signer draft #3711](https://github.com/FS-GG/.github/pull/3711)
+  is source-only and refuses before reading a credential while its reviewed public-key pin is empty;
+  it has no installed signer, token release or sandbox effect. [Stacked release-contract draft #3712](https://github.com/FS-GG/.github/pull/3712)
+  requires a trusted durable host claim and revoke verdict before handoff, but its authority ports
+  are uninstalled; a one-time handoff alone cannot make a GitHub App token single-use.
+  [Stacked host-claim draft #3713](https://github.com/FS-GG/.github/pull/3713) models atomic claim,
+  crash and unknown-result refusals, but its protected store pins remain empty and no native
+  revocation port is installed. [Refusal-finalizer draft #3714](https://github.com/FS-GG/.github/pull/3714)
+  attempts a separately pinned native revoke after post-handoff store failure but keeps the outcome
+  pending without durable intent, observation and receipt; all live pins remain empty.
+  [Recovery-worker draft #3715](https://github.com/FS-GG/.github/pull/3715) handles one sealed pending
+  token with exact journal/vault/binding identity and no repeat revoke after uncertain claim, but has
+  no installed queue, scheduler or authority ports. [Pending-token census draft #3716](https://github.com/FS-GG/.github/pull/3716)
+  requires a sealed high-water snapshot, complete ordered pages, exact identities and independent
+  digest/readback before releasing recovery subjects; its protected mint index and scheduler are absent.
+  [Adversarial boundary draft #3717](https://github.com/FS-GG/.github/pull/3717) repairs two
+  source-only false greens: a claimed `committed` CAS response without exact durable token-digest
+  readback could hand off a token, and incomplete worker/finalizer/revoker pins could release
+  census subjects. Its 77 stacked `.github` controls and 18 Coordination controls pass locally;
+  protected signer, custody, scheduler, native Q5/Q6 and installed receiver readback remain absent.
+  [Signer-custody draft #3718](https://github.com/FS-GG/.github/pull/3718) repairs two more
+  source-only false greens: a vault descriptor could omit candidate-read denial, and a non-string
+  equality spoof of escrow readback could invoke the candidate. Its 79 stacked `.github` tests
+  pass locally; host-only ACL, signer/store/vault pins and native Q5/Q6 remain unproved.
+  [Protected-revision draft #3720](https://github.com/FS-GG/.github/pull/3720) repairs a
+  source-only gap where a coherently changed workflow SHA could be signed and released. Its
+  82 local controls require an independently admitted exact workflow SHA before credential
+  access or handoff. A workflow cannot self-pin its own commit; the distinct protected
+  admission authority and its durable run/candidate facts remain unimplemented.
+  [Protected-admission draft #3722](https://github.com/FS-GG/.github/pull/3722) repairs a
+  second self-assertion false green: copying `PINNED_WORKFLOW_SHA` from the same runner context
+  previously allowed signing and fake candidate release. Its 87 local controls require a
+  separate current native decision readback at signer and release, bound to exact workflow,
+  candidate, run/attempt/nonce, target, signer and policy facts. The real durable authority,
+  authenticated adapter, ACLs and live pins have not been installed.
+  [Admission-freshness draft #3724](https://github.com/FS-GG/.github/pull/3724) repairs
+  stale-decision false greens at signer and release by requiring canonical UTC issuance,
+  expiry and a maximum ten-minute lifetime. Its 90 local controls pass; the fake port cannot
+  prove protected authority, clock or durable storage. At this layer, one-use claim identity
+  remained unresolved because the source keyed claims by signed token binding digest.
+  [Decision-claim draft #3725](https://github.com/FS-GG/.github/pull/3725) repairs that
+  false green: two distinct token bindings under one admission decision previously reached
+  the fake candidate twice. Its 94 local controls derive a stable decision ID excluding token
+  and validity time, then require durable claim and exact decision/binding/token readback.
+  Protected single-key CAS durability, ACLs and revocation-versus-claim ordering remain open.
+  [Atomic-claim draft #3727](https://github.com/FS-GG/.github/pull/3727) repairs a
+  red-before revocation just before CAS that previously allowed fake handoff. Its 96 local
+  controls require an atomic admitted-state claim and exact native readback; the installed
+  shared transaction boundary and post-claim revocation policy remain unproved.
+  [Launch-fence draft #3728](https://github.com/FS-GG/.github/pull/3728) repairs a
+  post-claim revocation false green by requiring one same-authority candidate invocation
+  decision. Its 98 local controls keep definite refusal at zero exposure and treat unknown
+  outcome as possibly exposed without retry; the real launch interlock and token custody
+  remain unproved.
+  [Cancellation-finalizer draft #3730](https://github.com/FS-GG/.github/pull/3730)
+  repairs a cancellation path that skipped native token revocation after possible exposure.
+  Its 102 local controls attempt revoke in `finally`, retain unknown outcomes pending and
+  forbid a second launch after a consumed claim; installed recovery scheduling and native
+  readback remain unproved.
+  [Recovery-observer draft #3732](https://github.com/FS-GG/.github/pull/3732)
+  repairs a duplicate native revoke after restart by observing the first revoke before any
+  retry; 107 focused local controls pass. Installed recovery and native readback remain open.
+  [Native-attempt draft #3734](https://github.com/FS-GG/.github/pull/3734)
+  closes a second revoke after an ambiguous finalizer attempt with a protected shared attempt
+  claim and exact readback in 115 local controls. The shared CAS authority, complete mint
+  census, scheduler and crash-resolution policy remain uninstalled.
+  [Sealed-mint census draft #3736](https://github.com/FS-GG/.github/pull/3736)
+  refuses an empty pending scan that omits minted tokens by requiring a sealed full mint
+  count/digest and one exact pending or terminal revoked entry through the high-water mark;
+  120 local controls pass. Authentic append-only mint index, native terminal readback and
+  durable scheduler remain uninstalled.
+  [Native-terminal census draft #3737](https://github.com/FS-GG/.github/pull/3737)
+  refuses a journal-only terminal receipt that hides an active token: a fresh challenge-bound
+  native readback must match the sealed mint, token and installation identities; 124 local
+  controls pass. The protected adapter, authentic joint seal and scheduler remain uninstalled.
+  [Scheduled-recovery draft #3738](https://github.com/FS-GG/.github/pull/3738)
+  refuses a native revoke without a pinned durable host schedule and independent joint-seal
+  readback; 132 local controls pass. Protected complete enqueue, atomic schedule/claim
+  ordering and pre-pending mint escalation remain uninstalled.
+  [Complete-batch recovery draft #3739](https://github.com/FS-GG/.github/pull/3739)
+  refuses a standalone committed job without a sealed full batch, binds batch ID to the
+  one-use claim, and models no-effect append/readback refusals; 139 focused local controls
+  pass. Authentic joint seal, candidate-inaccessible protected scheduler store and atomic
+  batch/claim authority remain uninstalled.
+  [Atomic-store contract draft #3740](https://github.com/FS-GG/.github/pull/3740)
+  binds claim readback to exact batch, schedule, seal and protected identities and defines
+  no-effect atomic append/withdraw/claim ports with race negatives; 148 focused local
+  controls pass. The authentic joint seal and installed candidate-inaccessible durable
+  authority are still required.
+  [Signed joint-seal draft #3741](https://github.com/FS-GG/.github/pull/3741)
+  requires a pinned RSA-PSS signer key, exact signed mint/pending envelope and current
+  protected head/generation readback across census, scheduler batch, job and recovery
+  claim; 165 focused local controls pass. Live pins are blank. Protected signer/store
+  custody, monotonic head, complete input and generation-enforcing append/claim CAS are
+  absent, so Q5/Q6 and sandbox dispatch remain held.
+  [Challenge-bound head draft #3742](https://github.com/FS-GG/.github/pull/3742)
+  refuses a replayed old signed seal plus old self-reported head by requiring two distinct
+  fresh challenges and signed current-head attestations from a declared linearizable
+  store; 170 focused local controls pass. The protected signer must actually read the
+  current durable head with monotonic generation across crashes. Its custody, ACL and
+  clock evidence, live pins and Q5/Q6 remain absent.
+  [Durable generation-floor draft #3743](https://github.com/FS-GG/.github/pull/3743)
+  refuses a freshly signed lower head after restart through an injected atomic
+  nondecreasing full-record floor and two readbacks; 181 focused local controls pass.
+  Protected owners must choose a separately durable rollback domain with pinned
+  signer/store/floor identities, ACLs and transaction evidence before live use.
+  [Generation-checked append/claim draft #3744](https://github.com/FS-GG/.github/pull/3744)
+  carries the verified generation and floor identity into atomic batch append and
+  recovery claim, then rechecks signed head after durable readback; red-before fakes
+  exposed false success and native revoke after a head advance. 185 focused local
+  controls pass. Protected signer/store/floor installation, ACL and transaction proof,
+  #3690 admission and Q5/Q6 remain open.
+  [Shared native-attempt claim draft #3745](https://github.com/FS-GG/.github/pull/3745)
+  binds recovery's one-use marker to the durable claim, expected generation and pinned
+  floor before native revoke; a head advance before the claim and a marker without a
+  durable claim were red-before false greens. 189 focused local controls pass. Installed
+  shared namespace, transaction ordering and native readback remain unproved.
+  [Shared namespace pin draft #3746](https://github.com/FS-GG/.github/pull/3746)
+  requires an exact blank-by-default native-attempt resource identity through finalizer
+  descriptor, marker readback and pending census; 196 focused local controls pass.
+  Installed one-key serializable store/ACL and native provider-call ordering remain
+  unproved, including emergency outage and unknown-readback double-revoke risk.
+  [Emergency recovery characterization #3747](https://github.com/FS-GG/.github/pull/3747)
+  reproduces two best-effort native revokes across a restart after a lost response and
+  unknown readback while both verdicts remain pending and candidate handoff stays
+  blocked; 197 focused local controls pass. Source-only changes cannot establish
+  durable one-use authority here. Protected owners must qualify a shared attempt
+  store, provider idempotency or authoritative exact-token readback with crash,
+  lost-result and ACL traces before Q5/Q6.
+  [Protected supplier packet #3748](https://github.com/FS-GG/.github/pull/3748)
+  assigns admission, App/vault, signer/floor, shared marker store, revoker/provider,
+  outage policy and Q5/Q6 facts to owner roles without asserting a protected principal.
+  It requires proved idempotency or settled exact-token native readback before retry;
+  active or unknown alone holds. The focused finalizer suite passes 35 controls, while
+  live pins and protected receipts remain absent.
+  [Q5/Q6 packet correction #3749](https://github.com/FS-GG/.github/pull/3749)
+  maps all nine accepted authorities in two passes, exact manifest/effects, six
+  interruption cuts, archive, five rollback domains, distinct rerun, independent
+  omissions and zero residue. It reuses the accepted Q4 sandbox/App route under
+  ADR-0089 and requests no new credential; 35 focused finalizer controls pass.
+  Installed host authority and native rehearsal evidence remain absent.
+  [Q4 admission/installation packet #3750](https://github.com/FS-GG/.github/pull/3750)
+  records that the installed Q4 workflow still runs GS2-04.9 with direct candidate
+  token handoff, while #3690 merged source has no separate OperatingV1 effect admission
+  and live signer/store/recovery pins remain blank. It names independent protected
+  release, workflow, credential, store, revoker and Q5/Q6 readback actions; no installed
+  authority or sandbox acceptance is inferred.
+  [Pure interruption-cut draft #615](https://github.com/FS-GG/FS.GG.Coordination/pull/615)
+  adds before-intent, after-readback and before-receipt cases to Coordination's
+  in-memory migration-step model with fake read/write/dispatch assertions; 11 focused
+  tests pass under local SDK 10.0.401. The repository pins unavailable local 10.0.400,
+  and real fresh-process provider cuts, nine-authority Q5 interpretation, rollback and
+  protected Q5/Q6 receipt remain unproved.
+  No rehearsal dispatch is implied by these drafts.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
+  [Coordination draft #553](https://github.com/FS-GG/FS.GG.Coordination/pull/553) adds source-only
+  refusal controls for case-variant and split `Link` pagination headers that previously let a
+  migration REST reader treat an incomplete page as terminal. It also refuses two discovered subjects
+  collapsing onto one v2 result identity and changes the manifest seal when a result identity changes.
+  Its provisional tests do not accept
+  GS2-09.8; the GS2-09.7 receipt, exact live rerun, unknown-subject and no-omission Q5/Q6 proof remain.
 
 ### GS2-10 — Qualify the exact candidate and prepare the fleet
 
@@ -1562,7 +3421,8 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
 
 - [ ] **GS2-10.1 — Freeze candidate identities.** Record source commits, dependency locks, model/compiler
   fingerprints, packages, container/tool assets if any, workflows, App build, verifier artifacts, Typed
-  SDD lifecycle-default decision, provider/scaffolder identities, and every receiver head/settings profile.
+  SDD lifecycle-default decision, provider/scaffolder identities, every receiver head/settings profile,
+  and any selected F# tooling contract, canonicalization policy and installed artifact identity.
 - [ ] **GS2-10.2 — Run the full qualification matrix.** No selective rerun may replace a failed full
   result; repairs create a new candidate identity.
 - [ ] **GS2-10.3 — Complete live shadow comparison.** Read the complete fleet repeatedly over a bounded
@@ -1709,7 +3569,9 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
   `ContractingV1(plan)` or extend observation without changing the eligible population or denominator.
 - [ ] **GS2-14.5 — Delete v1 runtime code.** Remove v1 readers/writers, public generic mutation routes,
   compatibility adapters, old event/schema decoders, and source packages/workflows after exact static and
-  runtime inventory checks.
+  runtime inventory checks. Include Contracts/Store's Core assembly dependency, Store's historical
+  CLI-path source link and Host's packaged closure in that inventory. Retain or extract reusable code
+  only with clean-install, package/loaded-assembly and old-client refusal proof.
 - [ ] **GS2-14.6 — Delete v1 data authorities.** Remove Class/Kind/Repo Scope/Blocked-by Project fields,
   body sentinels/metadata parsers, old status writers, control comments used as authority, and temporary
   backfill projections after exact deletion checks.
@@ -1742,7 +3604,10 @@ or v1 retired. It must not delay `GS2-11` once all actual cutover prerequisites 
 - broader Typed SDD extensions for contract topology, skill delivery, Governance rules, provider/template
   composition, and executable TestSpecs;
 - a later decision to make `typed-sdd` the default lifecycle, subject to the `GS2-10` candidate-freeze
-  rule above; and
+  rule above;
+- optional F# ports of Coordination credential transport, release custody, telemetry successors and
+  shell launchers from [V2-FS-I1](#v2-fs-i1--f-automation-convergence-interlude), except a bounded
+  selected prefreeze cohort or a separately proven required-gate repair; and
 - convenience UI, reports, or projections that do not authorize a coordination decision.
 
 These may proceed independently with their own evidence. If one becomes a real prerequisite, the governing
