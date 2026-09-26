@@ -111,7 +111,7 @@ jobs:
       # see that script's own header, and the shared rationale in this file's own top-of-file comment.
       - name: Restore cached shellcheck tarball
         if: ${{ steps.impact.outputs.run == 'true' }}
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/shellcheck-cache
           key: shellcheck-${{ env.SHELLCHECK_VERSION }}-${{ env.SHELLCHECK_SHA256 }}
@@ -145,7 +145,7 @@ jobs:
       # Warm this, and scripts/install-shellcheck.sh below never touches the network at all (#2501) —
       # see that script's own header, and the shared rationale in this file's own top-of-file comment.
       - name: Restore cached shellcheck tarball
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/shellcheck-cache
           key: shellcheck-${{ env.SHELLCHECK_VERSION }}-${{ env.SHELLCHECK_SHA256 }}
