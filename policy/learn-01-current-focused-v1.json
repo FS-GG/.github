@@ -112,7 +112,8 @@
     "sharedCostRule": "Each unique cost identity is allocated once; fractions across original items must sum to one.",
     "missingUsage": "unknown-unbounded",
     "zeroImputationForbidden": true,
-    "completeTokenComparisonRequires": "Every expected invocation and shared cost has one terminal, deduplicated, provider-native total."
+    "expectedInventory": "Freeze every root, child, retry, review, integration, rescue and repair invocation plus its expected native turn identities independently of observed usage.",
+    "completeTokenComparisonRequires": "Every expected invocation is terminal, every expected native turn and shared cost has exactly one deduplicated provider-native total, and no unexpected usage is present."
   },
   "window": {
     "minimumEnrollmentDays": 28,
@@ -128,12 +129,20 @@
     "confidenceLevel": 0.95,
     "power": 0.8,
     "primary": {
-      "endpoint": "mean-log-provider-total-tokens-per-original-item",
+      "endpoint": "arithmetic-mean-provider-total-tokens-per-assigned-original-item",
+      "estimand": "one-minus-focused-arithmetic-mean-divided-by-current-arithmetic-mean",
+      "interval": "95-percent blocked randomization interval for the arithmetic-mean ratio, inverted over multiplicative effects with the frozen assignment algorithm",
+      "zeroHandling": "Legal zero-token original-item totals remain in the arithmetic mean; missing or unbounded totals remain unknown and are never zero. If the control-arm arithmetic mean is zero, the ratio is undefined and the result is insufficient data.",
       "practicalReduction": 0.10,
-      "planningLogStandardDeviation": 0.75,
+      "planningCoefficientOfVariation": 2.0,
       "planningDesignEffect": 1.1,
-      "minimumIndependentOriginalItemsPerArm": 875
+      "planningFormula": "ceil(2 * (z_0.975 + z_0.8)^2 * coefficientOfVariation^2 * designEffect / practicalReduction^2)",
+      "minimumIndependentOriginalItemsPerArm": 6908
     },
+    "secondary": [
+      {"endpoint": "median-provider-total-tokens-per-original-item", "claim": "descriptive-secondary"},
+      {"endpoint": "geometric-mean-provider-total-tokens-per-original-item", "claim": "descriptive-secondary-positive-totals-only", "zeroRule": "Report zero mass separately; geometric mean is undefined when an arm includes legal zero totals."}
+    ],
     "guardrails": [
       {"endpoint": "fixed-14-day-completion-rate", "nonInferiorityMarginAbsolute": 0.10},
       {"endpoint": "median-assignment-to-acceptance-latency", "nonInferiorityRatio": 1.25},
