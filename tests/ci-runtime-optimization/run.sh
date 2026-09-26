@@ -95,7 +95,7 @@ if [ "$analysis_invocations" = 2 ]; then
 else
   bad "shell lint has $analysis_invocations structured ShellCheck analysis sites instead of 2"
 fi
-if grep -Eq 'SHELL_LINT_MANIFEST|SHELL_LINT_RECEIPT|upload-artifact@v4' \
+if grep -Eq 'SHELL_LINT_MANIFEST|SHELL_LINT_RECEIPT|upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' \
   "$ROOT/.github/workflows/shell-lint.yml" >/dev/null \
   && grep -Eq 'fsgg.shell-lint-manifest/v1|fsgg.shell-lint-receipt/v1' \
     "$ROOT/scripts/lib/select-shellcheck-findings.py" >/dev/null; then
