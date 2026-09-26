@@ -39,6 +39,24 @@ the active set, then refill capacity as lanes join or stop. An active feature, r
 effect does not idle another ready lane when capacity remains. Keep the user's named-feature boundary when
 the request is narrower than programme-wide work.
 
+The parent integrator controls PR admission across workers. Dependent micro-steps accumulate as tested commits
+on an isolated local branch; open one PR only for a coherent, reviewable outcome with its own focused checks.
+Do not open a draft PR merely to retain each intermediate commit. Allow at most one open delivery PR per
+dependency chain and two newly qualifying PRs per repository at a time. Before authorizing creation, read
+the live open PRs and hosted check queue; when the limit is full, keep prepared branches local and consolidate
+or land an existing PR first. A larger PR still needs an intelligible scope and exact content preservation;
+never collapse a whole feature chain merely to hit a PR-count target. Only the named integrator grants
+workers the remote PR step.
+
+For new FS-GG PRs, the integrator uses `tools/pr-lane-admission.py` instead of direct `gh pr create` or
+`POST /pulls`. Assign one stable `--campaign-id` for the active programme queue and a stable
+`--dependency-chain-id` for each named part or existing root stack; do not rotate either ID for individual
+commits, workers, attempts or PRs. Pass the pushed branch's exact `--head-sha`, PR title and prepared body
+file. The helper reads live open PRs, refuses a same-chain PR or a third managed PR in that repository,
+checks the remote head again and then creates the PR. Existing PR repair uses the existing PR and does not
+consume another slot. The helper is an admission control for participating integrators, not a GitHub-wide
+rule against other callers; report that limit when assessing recurrence risk.
+
 Use section 9.8's named parts as the default Astra assignment boundaries, not one assignment per stage,
 PR or repair. Follow the linked plan before creating another; check the owner when no plan is linked.
 Preserve a valid narrower native-unit plan. Split a part only for an independently executable outcome,
