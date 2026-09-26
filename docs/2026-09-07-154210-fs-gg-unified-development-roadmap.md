@@ -69,7 +69,8 @@ They are historical observations, not another current task list.
 **Mandatory closure update:** every Unified Roadmap item that reaches authoritative **Closed** or **Done** must
 update this report after native readback. Include same-repository updates in the owning PR; cross-repository
 projection follows asynchronously without delaying its delivery. The programme driver must not select the
-next item while the completed item is absent here. Update the relevant current row and its evidence link;
+next item on that item's dependency chain while the completed item is absent here. Independent ready lanes
+may continue while the projection lands. Update the relevant current row and its evidence link;
 retain detailed milestone history in the owning plan. CI ticks and intermediate checkpoints need no edit.
 
 ### 0.1 Stage progress
@@ -1124,9 +1125,11 @@ existing source/effect separation and does not authorize a current protected wri
 | **Telemetry / measurement — `.github` producer, installed operator** | Repair attributed observation gaps and qualify prospective published/installed changes under their own authority. | No general migration dependency. R5 needs its actual ordinary-v2 cohort; missing efficiency evidence cannot manufacture or veto unrelated operational acceptance. |
 | **Optional/product work — owning repositories** | Authorized independent research/source work, reused O3/Choreo/FsQuint foundations, and unrelated product fixes. | Candidate-affecting changes join the same freeze disposition. Release D.5 and production canaries keep their specific `OperatingV2` gates. |
 
-These are concurrency opportunities, not an instruction to spawn workers or assume staffing. Use one
-integrator for shared Coordination surfaces and exact candidate assembly. Pause only the dependent effect
-when an authority input is missing; state which independent source work remains useful.
+For programme-wide advancement, dispatch independently ready lanes in parallel within actual worker,
+integrator and hosted-CI capacity; a named-feature request stays within that feature. Give concurrent
+workers isolated worktrees and disjoint touch-sets. Use one integrator for shared Coordination surfaces
+and exact candidate assembly. Pause only the dependent effect when an authority input is missing;
+state which independent source work remains useful.
 
 [ADR-0084](adr/0084-semantic-reuse-never-cancels-coherent-validation.md) still governs CI concurrency:
 validated exact-head `reused` evidence may overlap native delivery with coherent closure; `current` or
@@ -1311,11 +1314,11 @@ That source supplies protocol depth; this unified roadmap owns the feature's pla
 
 ### 9.8 Feature parts and subroadmap index
 
-These are the default **parts for Astra planning**, named by deliverable. Select the next dependency-ready
-part when programme advancement is requested; use a fresh Astra-high planner when that part needs its
-first plan. A valid active subroadmap continues with its existing identity. Within a part, detail only
-the next useful window and retain later outcomes as an outline. Source changes, routine repairs and
-individual PRs do not create new parts or require fresh planning.
+These are the default **parts for Astra planning**, named by deliverable. Select independent
+dependency-ready parts concurrently when programme advancement is requested; use a fresh Astra-high
+planner when each part needs its first plan. A valid active subroadmap continues with its existing
+identity. Within a part, detail only the next useful window and retain later outcomes as an outline.
+Source changes, routine repairs and individual PRs do not create new parts or require fresh planning.
 
 A part can span stages where one outcome crosses an operating boundary, and one stage can contain
 independently useful parts. The entries below are planning scopes, not a second GS2 queue or completion
