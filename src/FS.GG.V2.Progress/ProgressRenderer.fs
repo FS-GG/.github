@@ -4,7 +4,7 @@ open System
 open System.Globalization
 open System.Text.RegularExpressions
 
-/// A presentation state. The words remain visible when emoji are unavailable.
+// A presentation state. The words remain visible when emoji are unavailable.
 type Status =
     | ActiveHealthy
     | Pending
@@ -133,8 +133,8 @@ type Telemetry = {
     Capture: CaptureClaim
 }
 
-/// A collector-verified observation of the Codex CLI /status display.
-/// Context occupancy is a window size, not cumulative or period token usage.
+// A collector-verified observation of the Codex CLI /status display.
+// Context occupancy is a window size, not cumulative or period token usage.
 type CliStatusObservation = {
     Authenticated: bool
     CollectorVerified: bool
@@ -154,8 +154,8 @@ type NativePeriodUsage = {
     CollectorVerified: bool
 }
 
-/// Native JSONL token_count totals are cumulative within one session.
-/// Cached input is a subset of input; total equals input plus output.
+// Native JSONL token_count totals are cumulative within one session.
+// Cached input is a subset of input; total equals input plus output.
 type NativeTokenCounters = {
     InputTokens: int64
     CachedInputTokens: int64
@@ -504,8 +504,8 @@ module ProgressRenderer =
                  LatestPeriodDelta = latestDelta; AllPeriodsTotal = allTotal
                  AllPeriodMean = mean; LatestRate = latest; Exhaustion = exhaustion }
 
-    /// Validates caller-supplied facts and derives only counts and display order.
-    /// The collector must verify provenance of runner items and Host receipts before constructing a claim.
+    // Validates caller-supplied facts and derives only counts and display order.
+    // The collector must verify provenance of runner items and Host receipts before constructing a claim.
     let derive (snapshot: ProgressSnapshot) : Result<DerivedProgress, string list> =
         let errors = ResizeArray<string>()
         let require condition message = if not condition then errors.Add message
@@ -749,7 +749,7 @@ module ProgressRenderer =
 
     let private rowsOrNone rows = if List.isEmpty rows then [ "_None supplied._" ] else rows
 
-    /// Pure Markdown projection. No collection, file writes, or authority updates occur here.
+    // Pure Markdown projection. No collection, file writes, or authority updates occur here.
     let private render (progress: DerivedProgress) : string =
         let snapshot = progress.Snapshot
         let lanes = snapshot.Lanes |> List.sortWith (fun a b -> ordinal.Compare(a.Id, b.Id))

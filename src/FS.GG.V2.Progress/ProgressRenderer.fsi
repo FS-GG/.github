@@ -2,6 +2,7 @@ namespace FS.GG.V2.Progress
 
 open System
 
+/// A presentation state. The words remain visible when emoji are unavailable.
 type Status =
     | ActiveHealthy
     | Pending
@@ -160,6 +161,8 @@ type Telemetry = {
     Capture: CaptureClaim
 }
 
+/// A collector-verified observation of the Codex CLI /status display.
+/// Context occupancy is a window size, not cumulative or period token usage.
 type CliStatusObservation = {
     Authenticated: bool
     CollectorVerified: bool
@@ -179,6 +182,8 @@ type NativePeriodUsage = {
     CollectorVerified: bool
 }
 
+/// Native JSONL token_count totals are cumulative within one session.
+/// Cached input is a subset of input; total equals input plus output.
 type NativeTokenCounters = {
     InputTokens: int64
     CachedInputTokens: int64
@@ -302,5 +307,9 @@ type DerivedProgress = {
 
 module ProgressRenderer =
     val statusText: Status -> string
+
+    /// Validates caller-supplied facts and derives only counts and display order.
+    /// The collector must verify provenance of runner items and Host receipts before constructing a claim.
     val derive: ProgressSnapshot -> Result<DerivedProgress, string list>
+
     val renderSnapshot: ProgressSnapshot -> Result<string, string list>
