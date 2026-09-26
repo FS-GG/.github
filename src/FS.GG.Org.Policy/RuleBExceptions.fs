@@ -6,7 +6,7 @@ open System.IO
 open System.Text.RegularExpressions
 open YamlDotNet.RepresentationModel
 
-/// Pure source-only classification of rule (b)'s path-bound `allow-uncovered` comments.
+// Pure source-only classification of rule (b)'s path-bound `allow-uncovered` comments.
 module RuleBExceptions =
     type Disposition =
         | Uncovered
@@ -52,8 +52,8 @@ module RuleBExceptions =
                 | _ -> ()
         covered
 
-    /// Resolve only directories actually omitted by the supplied coverage observation. A signed
-    /// marker for another directory can never excuse one of these entries.
+    // Resolve only directories actually omitted by the supplied coverage observation. A signed
+    // marker for another directory can never excuse one of these entries.
     let inspect (path: string) (text: string) (coverage: RuleBCoverage) : Result<Map<string, Disposition>, SyntaxDiagnostic> =
         WorkflowSyntax.inspect path text
         |> Result.map (fun _ ->

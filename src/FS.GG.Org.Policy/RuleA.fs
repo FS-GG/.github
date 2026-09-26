@@ -6,13 +6,13 @@ open System.IO
 open System.Text.RegularExpressions
 open YamlDotNet.RepresentationModel
 
-/// A single-workflow result. The caller must refuse a whole-tree audit with zero audited pairs.
+// A single-workflow result. The caller must refuse a whole-tree audit with zero audited pairs.
 type RuleAResult = { AuditedPair: bool; Verdict: RuleAVerdict }
 
-/// Aggregate audit result; zero pairs cannot masquerade as a clean fleet scan.
+// Aggregate audit result; zero pairs cannot masquerade as a clean fleet scan.
 type RuleAAudit = { AuditedPairs: int; Verdict: RuleAVerdict }
 
-/// Pure, source-only PR/push path agreement. This is not an installed gate or a parity receipt.
+// Pure, source-only PR/push path agreement. This is not an installed gate or a parity receipt.
 module RuleA =
     let private noVerdict path code message =
         { AuditedPair = false; Verdict = NoVerdict { Path = path; Code = code; Message = message } }
@@ -70,7 +70,7 @@ module RuleA =
             Error { Path = path; Code = "paths-negated"; Message = name + ".paths contains a negated pattern" }
         | Sequence values -> Ok (Some (Set.ofList values))
 
-    /// Evaluate rule (a) for one workflow. No filesystem, workflow mutation, or receiver effect.
+    // Evaluate rule (a) for one workflow. No filesystem, workflow mutation, or receiver effect.
     let inspect path text =
         match WorkflowSyntax.inspect path text with
         | Error diagnostic -> result false (NoVerdict diagnostic)
@@ -96,7 +96,7 @@ module RuleA =
                     | Some _, Some _, _ -> result true Agreement
                     | _ -> result false Agreement
 
-    /// Audit an already enumerated workflow set. Filesystem enumeration belongs to a later adapter.
+    // Audit an already enumerated workflow set. Filesystem enumeration belongs to a later adapter.
     let audit (workflows: seq<string * string>) =
         let inspected = workflows |> Seq.map (fun (path, text) -> inspect path text) |> Seq.toList
         let count = inspected |> List.sumBy (fun item -> if item.AuditedPair then 1 else 0)

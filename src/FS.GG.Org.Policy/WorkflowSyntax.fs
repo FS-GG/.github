@@ -7,32 +7,32 @@ open System.Text.RegularExpressions
 open YamlDotNet.Core
 open YamlDotNet.RepresentationModel
 
-/// A syntax refusal. A later policy evaluator may add findings without changing parser failures.
+// A syntax refusal. A later policy evaluator may add findings without changing parser failures.
 type SyntaxDiagnostic = { Code: string; Path: string; Message: string }
 
-/// Distinguishes a missing `paths` key from a present, malformed value such as `paths: null`.
+// Distinguishes a missing `paths` key from a present, malformed value such as `paths: null`.
 type PathsSyntax =
     | Missing
     | Sequence of string list
     | Invalid of string
 
-/// Syntax of one Actions event declaration, before path-agreement policy is evaluated.
+// Syntax of one Actions event declaration, before path-agreement policy is evaluated.
 type TriggerSyntax = { Declared: bool; Paths: PathsSyntax; HasPathsIgnore: bool }
 
-/// The bounded rule (a) input. Run scalars remain data and never become YAML comments.
+// The bounded rule (a) input. Run scalars remain data and never become YAML comments.
 type WorkflowSyntax = {
     PullRequest: TriggerSyntax
     Push: TriggerSyntax
     RunScalars: string list
 }
 
-/// Reserved policy result shape. This source-only scaffold does not issue an agreement verdict.
+// Reserved policy result shape. This source-only scaffold does not issue an agreement verdict.
 type RuleAVerdict =
     | Agreement
     | Finding of string
     | NoVerdict of SyntaxDiagnostic
 
-/// Parses only the syntax needed by the future organization-owned path policy.
+// Parses only the syntax needed by the future organization-owned path policy.
 module WorkflowSyntax =
     let private error code path message = Error { Code = code; Path = path; Message = message }
 
@@ -167,7 +167,7 @@ module WorkflowSyntax =
         | Some value -> Error value
         | None -> Ok (runs |> Seq.toList)
 
-    /// Parse one YAML document without reading files, resolving Actions expressions, or judging parity.
+    // Parse one YAML document without reading files, resolving Actions expressions, or judging parity.
     let inspect path (text: string) : Result<WorkflowSyntax, SyntaxDiagnostic> =
         try
             let stream = YamlStream()

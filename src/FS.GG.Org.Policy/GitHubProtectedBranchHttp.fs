@@ -6,8 +6,8 @@ open System.Net.Http
 open System.Net.Http.Headers
 open System.Text.RegularExpressions
 
-/// Dormant authenticated HTTPS reader for the exact protected-main branch request. No installed
-/// credential source or receiver path constructs it. The fixture handler is test-assembly only.
+// Dormant authenticated HTTPS reader for the exact protected-main branch request. No installed
+// credential source or receiver path constructs it. The fixture handler is test-assembly only.
 module GitHubProtectedBranchHttp =
     let private maximumBytes = 65536
 
@@ -79,7 +79,7 @@ module GitHubProtectedBranchHttp =
                     // Transport errors never expose credentials, request headers or response bytes.
                     Error ()
 
-        /// The normal factory owns a no-redirect, no-cookie handler for the fixed GitHub host.
+        // The normal factory owns a no-redirect, no-cookie handler for the fixed GitHub host.
         static member Create(token: string) : Result<Reader, unit> =
             if not (validToken token) then Error ()
             else
@@ -89,7 +89,7 @@ module GitHubProtectedBranchHttp =
                                           AutomaticDecompression = DecompressionMethods.None)
                 Ok(new Reader(token, handler))
 
-        /// Test assembly only: deterministic response and no external network access.
+        // Test assembly only: deterministic response and no external network access.
         static member internal ForFixture(token: string, handler: HttpMessageHandler) : Result<Reader, unit> =
             if not (validToken token) || isNull handler then Error ()
             else Ok(new Reader(token, handler))

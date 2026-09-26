@@ -1,7 +1,7 @@
 namespace FS.GG.Org.Policy
 
-/// Per-workflow Rule (b) observation over supplied project-reference facts. This is not a fleet
-/// verdict: project enumeration, workflow discovery, and installed receiver proof are absent.
+// Per-workflow Rule (b) observation over supplied project-reference facts. This is not a fleet
+// verdict: project enumeration, workflow discovery, and installed receiver proof are absent.
 type RuleBWorkflowObservation =
     { Subjects: Set<string>
       Omitted: Map<string, RuleBExceptions.Disposition> }
@@ -20,8 +20,8 @@ module RuleBWorkflow =
             |> Result.mapError (fun diagnostic -> { diagnostic with Path = path })
             |> Result.map Some
 
-    /// Reduce each declared event filter independently. One-sided workflows remain in Rule (b)
-    /// scope, even though Rule (a) deliberately does not compare them.
+    // Reduce each declared event filter independently. One-sided workflows remain in Rule (b)
+    // scope, even though Rule (a) deliberately does not compare them.
     let inspect path text graph : Result<RuleBWorkflowObservation, SyntaxDiagnostic> =
         WorkflowSyntax.inspect path text
         |> Result.bind (fun syntax ->

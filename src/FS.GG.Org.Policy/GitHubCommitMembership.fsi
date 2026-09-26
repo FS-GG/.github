@@ -1,6 +1,7 @@
 namespace FS.GG.Org.Policy
 
-/// Provisional repository-scoped GraphQL commit membership over an exact read-only port.
+/// Validate repository-scoped GraphQL commit membership provisionally. This contract supplies
+/// no credential, transport, accepted pin source, or policy authority.
 module GitHubCommitMembership =
     type ExactRequest =
         { Document: string
@@ -20,6 +21,8 @@ module GitHubCommitMembership =
     val internal isExactReadRequest: request: ExactRequest -> bool
 
     /// Check repository identity, commit membership, and tree ID in a bounded response.
+    /// The reader still needs authenticated GitHub transport and a complete HTTP 200 response;
+    /// fixture or caller-supplied bytes alone cannot establish membership.
     val inspectProvisionalMembership:
         pin: GitCommitProvenance.ExactCommitPin -> expectedTreeId: string ->
         reader: IReadOnlyGraphQlReader -> Result<ProvisionalMembership, SyntaxDiagnostic>

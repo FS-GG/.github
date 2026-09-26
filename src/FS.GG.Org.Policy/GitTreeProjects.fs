@@ -6,8 +6,8 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.RegularExpressions
 
-/// Pure SHA-1 Git tree discovery for Rule (b), over supplied bytes or an exact-object reader.
-/// Authenticating the root to a repository commit remains a separate provider obligation.
+// Pure SHA-1 Git tree discovery for Rule (b), over supplied bytes or an exact-object reader.
+// Authenticating the root to a repository commit remains a separate provider obligation.
 module GitTreeProjects =
     type private Entry = { Mode: string; Name: string; ObjectId: string }
 
@@ -118,9 +118,9 @@ module GitTreeProjects =
                             error path "malformed tree entry UTF-8 name"
         parse 0 Set.empty []
 
-    /// Enumerate every discoverable project under a complete set of raw SHA-1 Git tree objects.
-    /// Returned blob IDs identify project contents but do not prove that separately supplied
-    /// project bytes match them. A caller-provided root ID is not an authenticated commit anchor.
+    // Enumerate every discoverable project under a complete set of raw SHA-1 Git tree objects.
+    // Returned blob IDs identify project contents but do not prove that separately supplied
+    // project bytes match them. A caller-provided root ID is not an authenticated commit anchor.
     let inspectSha1
         (rootTreeId: string)
         (treeObjects: (string * byte[]) list)
@@ -182,9 +182,9 @@ module GitTreeProjects =
                 | Ok [] -> error "<root-tree>" "rooted tree has no discoverable projects"
                 | Ok roster -> Ok(List.sortBy fst roster)
 
-    /// Bind an exact set of project bytes to the blob IDs in a verified, caller-supplied tree.
-    /// The resulting SHA-256 roster is derived from those bytes for the XML graph adapter.
-    /// This does not authenticate the root tree ID to a repository or commit.
+    // Bind an exact set of project bytes to the blob IDs in a verified, caller-supplied tree.
+    // The resulting SHA-256 roster is derived from those bytes for the XML graph adapter.
+    // This does not authenticate the root tree ID to a repository or commit.
     let bindSha1ProjectBlobDigests
         (rootTreeId: string)
         (treeObjects: (string * byte[]) list)
@@ -220,9 +220,9 @@ module GitTreeProjects =
                                     bind (Set.add path seen) ((path, digest) :: digests) rest
                 bind Set.empty [] sources
 
-    /// Fetch the reachable tree closure and every discovered project blob by exact SHA-1 ID.
-    /// Each read's type, returned ID and raw bytes are checked before any graph can be formed.
-    /// This port has no installed local/network reader; root commit provenance is separate.
+    // Fetch the reachable tree closure and every discovered project blob by exact SHA-1 ID.
+    // Each read's type, returned ID and raw bytes are checked before any graph can be formed.
+    // This port has no installed local/network reader; root commit provenance is separate.
     let materializeReadOnlySha1Snapshot
         (rootTreeId: string)
         (reader: IReadOnlyObjectReader)

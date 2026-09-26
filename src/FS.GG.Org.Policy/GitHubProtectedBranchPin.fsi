@@ -1,6 +1,7 @@
 namespace FS.GG.Org.Policy
 
-/// Provisional protected-main tip observation; provider and pin acceptance remain external.
+/// Derive a provisional pin from an exact protected-main observation. An authenticated,
+/// no-redirect REST reader and accepted repository identity remain external prerequisites.
 module GitHubProtectedBranchPin =
     type ExactRepository =
         { RepositoryNodeId: string
@@ -25,6 +26,8 @@ module GitHubProtectedBranchPin =
     val internal isExactReadRequest: request: ExactRequest -> bool
 
     /// Check an exact read-only branch response and return a provisional commit pin.
+    /// One observed tip is neither an immutable acceptance receipt nor a guarantee that main
+    /// remains at that tip; repository-ID membership requires a later GraphQL check.
     val inspectProvisionalPin:
         repository: ExactRepository -> reader: IReadOnlyProtectedBranchReader ->
         Result<GitCommitProvenance.ExactCommitPin, SyntaxDiagnostic>

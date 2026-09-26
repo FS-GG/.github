@@ -5,9 +5,9 @@ open System.Collections.Generic
 open System.Text.Json
 open System.Text.RegularExpressions
 
-/// Provisional pin derived from an exact protected-main branch observation. The REST reader is
-/// deliberately a port: an authenticated, no-redirect implementation and accepted repository
-/// identity still have to be installed before this can establish policy source authority.
+// Provisional pin derived from an exact protected-main branch observation. The REST reader is
+// deliberately a port: an authenticated, no-redirect implementation and accepted repository
+// identity still have to be installed before this can establish policy source authority.
 module GitHubProtectedBranchPin =
     type ExactRepository =
         { RepositoryNodeId: string
@@ -31,7 +31,7 @@ module GitHubProtectedBranchPin =
     let private error path message =
         Error { Code = "github-protected-pin"; Path = path; Message = message }
 
-    /// The concrete transport must reject arbitrary URLs before attaching its bearer token.
+    // The concrete transport must reject arbitrary URLs before attaching its bearer token.
     let internal isExactReadRequest (request: ExactRequest) =
         not (isNull (box request))
         && GitCommitProvenance.validRepositorySegment request.Owner
@@ -93,9 +93,9 @@ module GitHubProtectedBranchPin =
         with :? JsonException ->
             error "<branch>" "branch response JSON is malformed"
 
-    /// Read the exact main branch tip; refuse any missing protection or HTTP provenance fact.
-    /// This records one observed protected tip, not an immutable acceptance receipt or a
-    /// guarantee that main remains at that tip. GraphQL repository-ID membership follows later.
+    // Read the exact main branch tip; refuse any missing protection or HTTP provenance fact.
+    // This records one observed protected tip, not an immutable acceptance receipt or a
+    // guarantee that main remains at that tip. GraphQL repository-ID membership follows later.
     let inspectProvisionalPin
         (repository: ExactRepository)
         (reader: IReadOnlyProtectedBranchReader)

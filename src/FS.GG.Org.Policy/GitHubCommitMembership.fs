@@ -5,8 +5,8 @@ open System.Collections.Generic
 open System.Text.Json
 open System.Text.RegularExpressions
 
-/// Exact, read-only GitHub GraphQL commit-membership response contract. It validates returned
-/// facts but supplies no credentials, network transport, accepted pin source, or authority.
+// Exact, read-only GitHub GraphQL commit-membership response contract. It validates returned
+// facts but supplies no credentials, network transport, accepted pin source, or authority.
 module GitHubCommitMembership =
     type ExactRequest =
         { Document: string
@@ -33,7 +33,7 @@ module GitHubCommitMembership =
     let private canonicalSha1 (value: string) =
         not (isNull value) && Regex.IsMatch(value, @"\A[0-9a-f]{40}\z", RegexOptions.CultureInvariant)
 
-    /// The concrete HTTP reader must not execute arbitrary GraphQL documents through this port.
+    // The concrete HTTP reader must not execute arbitrary GraphQL documents through this port.
     let internal isExactReadRequest (request: ExactRequest) =
         not (isNull (box request))
         && String.Equals(request.Document, document, StringComparison.Ordinal)
@@ -115,9 +115,9 @@ module GitHubCommitMembership =
         with :? JsonException ->
             error "<graphql>" "GraphQL response JSON is malformed"
 
-    /// Query the exact repository and commit OID, then validate all selected fields. The reader
-    /// must later be implemented with authenticated GitHub transport and a complete HTTP 200
-    /// response; fixture or caller-supplied bytes alone cannot establish repository membership.
+    // Query the exact repository and commit OID, then validate all selected fields. The reader
+    // must later be implemented with authenticated GitHub transport and a complete HTTP 200
+    // response; fixture or caller-supplied bytes alone cannot establish repository membership.
     let inspectProvisionalMembership
         (pin: GitCommitProvenance.ExactCommitPin)
         (expectedTreeId: string)

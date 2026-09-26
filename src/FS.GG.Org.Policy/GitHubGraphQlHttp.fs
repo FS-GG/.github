@@ -8,9 +8,9 @@ open System.Text
 open System.Text.Json
 open System.Text.RegularExpressions
 
-/// Dormant read-only HTTPS transport for the fixed GitHub commit-membership query. The normal
-/// factory owns its handler and disables redirects; no credential source or policy entry point
-/// constructs it in the installed receiver.
+// Dormant read-only HTTPS transport for the fixed GitHub commit-membership query. The normal
+// factory owns its handler and disables redirects; no credential source or policy entry point
+// constructs it in the installed receiver.
 module GitHubGraphQlHttp =
     let private endpoint = Uri("https://api.github.com/graphql")
     let private maximumBytes = 65536
@@ -82,8 +82,8 @@ module GitHubGraphQlHttp =
                     // Never return a response body, request, or credential in an error.
                     Error ()
 
-        /// Production construction owns a no-redirect HTTPS handler and needs an explicitly
-        /// supplied credential. Accepted token custody and receiver activation remain separate.
+        // Production construction owns a no-redirect HTTPS handler and needs an explicitly
+        // supplied credential. Accepted token custody and receiver activation remain separate.
         static member Create(token: string) : Result<Reader, unit> =
             if not (validToken token) then Error ()
             else
@@ -93,7 +93,7 @@ module GitHubGraphQlHttp =
                                           AutomaticDecompression = DecompressionMethods.None)
                 Ok(new Reader(token, handler))
 
-        /// Test assembly only: permits deterministic handler-backed refusal controls.
+        // Test assembly only: permits deterministic handler-backed refusal controls.
         static member internal ForFixture(token: string, handler: HttpMessageHandler) : Result<Reader, unit> =
             if not (validToken token) || isNull handler then Error ()
             else Ok(new Reader(token, handler))

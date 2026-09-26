@@ -8,8 +8,8 @@ open System.Text.RegularExpressions
 open System.Xml
 open System.Xml.Linq
 
-/// Pure single-project XML adapter for Rule (b). Caller-supplied bytes and project identity are
-/// inputs; project discovery, source authentication, and installed receiver wiring are separate.
+// Pure single-project XML adapter for Rule (b). Caller-supplied bytes and project identity are
+// inputs; project discovery, source authentication, and installed receiver wiring are separate.
 module ProjectReferenceXml =
     let private error code path message =
         Error { Code = code; Path = path; Message = message }
@@ -85,13 +85,13 @@ module ProjectReferenceXml =
             let target = String.Join("/", parts)
             if valid && normalized target then Some target else None
 
-    /// Decode ProjectReference Include values and resolve them to normalized repo-relative paths.
-    /// Explicit imports and target-time ProjectReference changes require MSBuild evaluation.
-    /// Tasks may also emit ProjectReference items without an item element in these XML bytes.
-    /// Dynamic Output item names cannot be resolved from one XML file.
-    /// ProjectReference Remove changes the evaluated item set and is not a static edge.
-    /// Unverified SDK declarations can import references absent from project XML.
-    /// No filesystem reads or assertions about a complete project roster occur here.
+    // Decode ProjectReference Include values and resolve them to normalized repo-relative paths.
+    // Explicit imports and target-time ProjectReference changes require MSBuild evaluation.
+    // Tasks may also emit ProjectReference items without an item element in these XML bytes.
+    // Dynamic Output item names cannot be resolved from one XML file.
+    // ProjectReference Remove changes the evaluated item set and is not a static edge.
+    // Unverified SDK declarations can import references absent from project XML.
+    // No filesystem reads or assertions about a complete project roster occur here.
     let inspect (projectPath: string) (xml: string) : Result<string list, SyntaxDiagnostic> =
         if not (normalized projectPath) then
             error "project-path" projectPath "project identity must be a normalized repo-relative path"
@@ -170,10 +170,10 @@ module ProjectReferenceXml =
             | :? XmlException as ex -> error "project-xml" projectPath ex.Message
             | :? ArgumentException as ex -> error "project-xml" projectPath ex.Message
 
-    /// Assemble only caller-supplied project XML into a closed local graph. Duplicate identities,
-    /// missing referenced sources, and identities outside the live project discovery extensions
-    /// refuse before Map construction can erase evidence. This does not authenticate discovery,
-    /// file bytes, implicit imports, or evaluated MSBuild items.
+    // Assemble only caller-supplied project XML into a closed local graph. Duplicate identities,
+    // missing referenced sources, and identities outside the live project discovery extensions
+    // refuse before Map construction can erase evidence. This does not authenticate discovery,
+    // file bytes, implicit imports, or evaluated MSBuild items.
     let inspectSuppliedProjectSet
         (sources: (string * string) list)
         : Result<Map<string, string list>, SyntaxDiagnostic> =
@@ -206,9 +206,9 @@ module ProjectReferenceXml =
                             collect (Set.add path seen) (Map.add path references graph) rest
             collect Set.empty Map.empty sources
 
-    /// Require an exact identity match between a separately supplied expected roster and source
-    /// rows. This closes the local handoff against omitted independent projects, but the caller
-    /// must still authenticate that the expected roster is a complete provider enumeration.
+    // Require an exact identity match between a separately supplied expected roster and source
+    // rows. This closes the local handoff against omitted independent projects, but the caller
+    // must still authenticate that the expected roster is a complete provider enumeration.
     let inspectSuppliedProjectSetAgainstRoster
         (expected: string list)
         (sources: (string * string) list)
@@ -240,9 +240,9 @@ module ProjectReferenceXml =
                         | Some path -> error "project-roster" path (sprintf "supplied project %s is absent from expected roster" path)
                         | None -> Ok graph
 
-    /// Bind supplied raw XML bytes to a separately supplied digest roster before reducing the
-    /// graph. XML decoding follows the byte stream's declaration. Digest provenance and complete
-    /// provider enumeration remain external requirements; this function authenticates neither.
+    // Bind supplied raw XML bytes to a separately supplied digest roster before reducing the
+    // graph. XML decoding follows the byte stream's declaration. Digest provenance and complete
+    // provider enumeration remain external requirements; this function authenticates neither.
     let inspectSuppliedProjectBytesAgainstDigests
         (expected: (string * string) list)
         (sources: (string * byte[]) list)
@@ -303,10 +303,10 @@ module ProjectReferenceXml =
                                     | :? ArgumentException as ex -> error "project-source-xml" path ex.Message
                 readSources Set.empty [] sources
 
-    /// Reduce a caller-supplied Git tree and an exact set of blob-matching project bytes.
-    /// Copies supplied tree and project bytes once so ID checks and XML parsing observe the
-    /// same local snapshot.
-    /// The root tree still needs an authenticated repository/commit provenance provider.
+    // Reduce a caller-supplied Git tree and an exact set of blob-matching project bytes.
+    // Copies supplied tree and project bytes once so ID checks and XML parsing observe the
+    // same local snapshot.
+    // The root tree still needs an authenticated repository/commit provenance provider.
     let inspectSuppliedGitSnapshot
         (rootTreeId: string)
         (treeObjects: (string * byte[]) list)
@@ -322,8 +322,8 @@ module ProjectReferenceXml =
         | Error diagnostic -> Error diagnostic
         | Ok digests -> inspectSuppliedProjectBytesAgainstDigests digests snapshots
 
-    /// Build the provisional graph from a read-only exact-object provider instead of a
-    /// caller-supplied tree/blob roster. The root still needs authenticated commit provenance.
+    // Build the provisional graph from a read-only exact-object provider instead of a
+    // caller-supplied tree/blob roster. The root still needs authenticated commit provenance.
     let inspectReadOnlyGitObjectSnapshot
         (rootTreeId: string)
         (reader: GitTreeProjects.IReadOnlyObjectReader)
@@ -332,8 +332,8 @@ module ProjectReferenceXml =
         | Error diagnostic -> Error diagnostic
         | Ok(trees, sources) -> inspectSuppliedGitSnapshot rootTreeId trees sources
 
-    /// Compose the exact commit/tree check with blob binding and XML inspection. This remains
-    /// provisional until the reader's repository custody and pin source are authenticated.
+    // Compose the exact commit/tree check with blob binding and XML inspection. This remains
+    // provisional until the reader's repository custody and pin source are authenticated.
     let inspectSuppliedPinnedGitSnapshot
         (pin: GitCommitProvenance.ExactCommitPin)
         (reader: GitCommitProvenance.IReadOnlyCommitReader)
@@ -345,8 +345,8 @@ module ProjectReferenceXml =
         | Error diagnostic -> Error diagnostic
         | Ok verified -> inspectSuppliedGitSnapshot verified.TreeId treeObjects sources
 
-    /// Add a repository-scoped GitHub commit lookup to the pure snapshot chain. The GraphQL
-    /// reader and accepted pin are still uninstalled trust boundaries.
+    // Add a repository-scoped GitHub commit lookup to the pure snapshot chain. The GraphQL
+    // reader and accepted pin are still uninstalled trust boundaries.
     let inspectSuppliedGitHubMembershipSnapshot
         (pin: GitCommitProvenance.ExactCommitPin)
         (membershipReader: GitHubCommitMembership.IReadOnlyGraphQlReader)
@@ -372,9 +372,9 @@ module ProjectReferenceXml =
                 "protected main commit changed during graph observation"
         | Ok _ -> Ok graph
 
-    /// Derive the provisional exact commit pin from the observed protected main branch before
-    /// repository membership, commit bytes, tree and project bytes are checked, then reobserve
-    /// the tip before returning the provisional graph.
+    // Derive the provisional exact commit pin from the observed protected main branch before
+    // repository membership, commit bytes, tree and project bytes are checked, then reobserve
+    // the tip before returning the provisional graph.
     let inspectSuppliedProtectedBranchSnapshot
         (repository: GitHubProtectedBranchPin.ExactRepository)
         (branchReader: GitHubProtectedBranchPin.IReadOnlyProtectedBranchReader)
@@ -391,10 +391,10 @@ module ProjectReferenceXml =
             | Error diagnostic -> Error diagnostic
             | Ok graph -> recheckProtectedPin repository branchReader pin graph
 
-    /// Compose the provisional protected pin and commit checks with exact read-only Git object
-    /// reads, then reobserve the protected tip before returning a graph. This bounds the
-    /// observation window; provider authentication, source acceptance and evaluated MSBuild
-    /// remain external.
+    // Compose the provisional protected pin and commit checks with exact read-only Git object
+    // reads, then reobserve the protected tip before returning a graph. This bounds the
+    // observation window; provider authentication, source acceptance and evaluated MSBuild
+    // remain external.
     let inspectReadOnlyProtectedBranchSnapshot
         (repository: GitHubProtectedBranchPin.ExactRepository)
         (branchReader: GitHubProtectedBranchPin.IReadOnlyProtectedBranchReader)
@@ -416,8 +416,8 @@ module ProjectReferenceXml =
                     | Error diagnostic -> Error diagnostic
                     | Ok graph -> recheckProtectedPin repository branchReader pin graph
 
-    /// A local observation of one caller-supplied implicit file. The result does not establish
-    /// nearest-file selection, import closure, source provenance, or a Rule (b) graph verdict.
+    // A local observation of one caller-supplied implicit file. The result does not establish
+    // nearest-file selection, import closure, source provenance, or a Rule (b) graph verdict.
     type SuppliedImplicitObservation = NoDirectReferenceInSuppliedXml
 
     let inspectSuppliedImplicitXml

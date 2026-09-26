@@ -9,6 +9,7 @@ module RuleBExceptions =
         | Signed of reason: string
 
     /// Match comments only to directories present in the supplied coverage observation.
+    /// A signed marker for another directory cannot excuse an omitted dependency.
     val inspect:
         path: string ->
         text: string ->

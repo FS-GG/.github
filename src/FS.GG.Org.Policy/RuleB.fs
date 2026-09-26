@@ -5,11 +5,11 @@ open System.Collections.Generic
 open System.Text
 open System.Text.RegularExpressions
 
-/// Coverage facts over a supplied, normalized project-reference graph. Empty subjects are unscoped,
-/// not an authoritative fleet-wide agreement.
+// Coverage facts over a supplied, normalized project-reference graph. Empty subjects are unscoped,
+// not an authoritative fleet-wide agreement.
 type RuleBCoverage = { Subjects: string list; Uncovered: (string * string) list }
 
-/// Pure source-only rule (b) core. Filesystem discovery, project XML and workflow YAML are separate inputs.
+// Pure source-only rule (b) core. Filesystem discovery, project XML and workflow YAML are separate inputs.
 module RuleB =
     let private diagnostic message =
         { Code = "coverage-input"; Path = "<coverage>"; Message = message }
@@ -67,11 +67,11 @@ module RuleB =
                     pending.Push transitive
         found |> Seq.sort |> Seq.toList
 
-    /// Inspect only facts supplied by a later authoritative enumerator. Every referenced project
-    /// must have a supplied graph node; this does not authenticate the enumerator or its roster.
-    /// A broad `src/**` or a single source-file pattern does not name a project; only a literal
-    /// prefix equal to its directory does. Refuse GitHub filter operators this matcher does not
-    /// implement instead of treating them as literal characters or a different wildcard.
+    // Inspect only facts supplied by a later authoritative enumerator. Every referenced project
+    // must have a supplied graph node; this does not authenticate the enumerator or its roster.
+    // A broad `src/**` or a single source-file pattern does not name a project; only a literal
+    // prefix equal to its directory does. Refuse GitHub filter operators this matcher does not
+    // implement instead of treating them as literal characters or a different wildcard.
     let inspect (patterns: string list) (graph: Map<string, string list>) : Result<RuleBCoverage, SyntaxDiagnostic> =
         if List.isEmpty patterns
            || patterns |> List.exists (fun value ->

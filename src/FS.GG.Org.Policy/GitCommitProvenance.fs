@@ -6,9 +6,9 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.RegularExpressions
 
-/// Pure, provisional binding of a supplied Git root tree to one exact commit. The read-only
-/// reader port has no installed implementation here; its repository identity and completeness
-/// must be authenticated by the provider before this result can carry policy authority.
+// Pure, provisional binding of a supplied Git root tree to one exact commit. The read-only
+// reader port has no installed implementation here; its repository identity and completeness
+// must be authenticated by the provider before this result can carry policy authority.
 module GitCommitProvenance =
     type ExactCommitPin =
         { RepositoryNodeId: string
@@ -36,7 +36,7 @@ module GitCommitProvenance =
     let private canonicalSha1 (value: string) =
         not (isNull value) && Regex.IsMatch(value, @"\A[0-9a-f]{40}\z", RegexOptions.CultureInvariant)
 
-    /// Node IDs are opaque, but whitespace and controls cannot be exact repository identities.
+    // Node IDs are opaque, but whitespace and controls cannot be exact repository identities.
     let internal validRepositoryNodeId (value: string) =
         not (String.IsNullOrWhiteSpace value)
         && (value
@@ -94,9 +94,9 @@ module GitCommitProvenance =
             else
                 Ok tree.Groups.[1].Value
 
-    /// Validate exact pin and reader claims, then verify raw SHA-1 commit bytes and their tree.
-    /// A fake reader can still fabricate repository membership; provider authentication and an
-    /// accepted pin are external prerequisites. No branch/ref alias is accepted here.
+    // Validate exact pin and reader claims, then verify raw SHA-1 commit bytes and their tree.
+    // A fake reader can still fabricate repository membership; provider authentication and an
+    // accepted pin are external prerequisites. No branch/ref alias is accepted here.
     let inspectProvisionalRoot
         (pin: ExactCommitPin)
         (expectedTreeId: string)
