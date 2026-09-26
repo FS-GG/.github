@@ -36,4 +36,8 @@ jobs:
           python3 tests/gs2-09-7-host-refusal-finalizer/test_host_refusal_finalizer.py
           python3 tests/gs2-09-7-host-pending-census/test_host_pending_census.py
           python3 tests/gs2-09-7-host-boundary-adversarial/test_boundary_adversarial.py
+          python3 tests/gs2-09-7-host-recovery-scheduler/test_host_recovery_scheduler.py
           python3 tests/gs2-09-7-host-recovery-worker/test_host_recovery_worker.py
+          python3 tests/gs2-09-7-host-recovery-store/test_atomic_store.py
+          python3 tests/gs2-09-7-host-joint-seal/test_joint_seal.py
+          python3 tests/gs2-09-7-host-head-floor/test_head_floor.py
