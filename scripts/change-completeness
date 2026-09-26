@@ -35,7 +35,7 @@ else
 fi
 
 engine_changed=false
-if grep -Eq '^(src/FS\.GG\.(Coord|Telemetry)\.|tests/FS\.GG\.(Coord|Telemetry)\.|tests/(m6-decision-cutover|delivery-leading-line|coord-engine-|review-critic-succession-wire|ci-runtime-optimization|change-completeness|change-risk-compatibility)/|scripts/(fsgg-coord|fsgg-coord-guards\.sh|record-board-fixture\.py|read-trx-count\.py|change-completeness|import-coordination-v1-admission\.py)|Directory\.(Build|Packages)|dist/dotnet/Directory\.Build\.props|global\.json|\.github/workflows/coord-engine\.yml)' "$PATHS"; then
+if grep -Eq '^(src/FS\.GG\.(Coord|Telemetry)\.|tests/FS\.GG\.(Coord|Telemetry)\.|tests/(m6-decision-cutover|delivery-leading-line|coord-engine-|review-critic-succession-wire|change-completeness|change-risk-compatibility)/|scripts/(fsgg-coord|fsgg-coord-guards\.sh|record-board-fixture\.py|read-trx-count\.py|change-completeness|import-coordination-v1-admission\.py)|Directory\.(Build|Packages)|dist/dotnet/Directory\.Build\.props|global\.json|\.github/workflows/coord-engine\.yml)' "$PATHS"; then
   engine_changed=true
 fi
 [ -z "$OUTPUT_FILE" ] || printf 'engine_changed=%s\n' "$engine_changed" >>"$OUTPUT_FILE"
@@ -71,6 +71,12 @@ stage "GS2-08.6 independent producer fence attacks"
 python3 "$ROOT/tests/producer-fence-attacks/run.py"
 python3 "$ROOT/tests/producer-fence-attacks/selftest.py"
 python3 "$ROOT/tests/producer-fence-attacks/probe_legacy.py" --verify
+
+# This fixture owns scripts/ci-gate-impact.py and its own test tree. Keeping it in the required,
+# bounded predecessor lets those files prove their live selectors without scheduling the engine's
+# unrelated build, browser, replay, and mutation suites.
+stage "focused CI selector and non-vacuity contract"
+bash "$ROOT/tests/ci-runtime-optimization/run.sh"
 
 if [ "$engine_changed" = true ]; then
   stage "locked restore and affected-engine compile"

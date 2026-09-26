@@ -10,17 +10,48 @@ ok() { pass=$((pass + 1)); printf 'PASS  %s\n' "$1"; }
 bad() { fail=$((fail + 1)); printf 'FAIL  %s\n' "$1" >&2; }
 
 printf 'docs/readme.md\n' >"$WORK/docs.paths"
-printf 'src/FS.GG.Coord.Core/Review.fs\n' >"$WORK/engine.paths"
+printf '%s\n' \
+  'scripts/ci-gate-impact.py' \
+  'tests/ci-runtime-optimization/run.sh' \
+  'src/FS.GG.Coord.Core/Review.fs' >"$WORK/engine.paths"
 
 GITHUB_OUT="$WORK/docs.out" "$ROOT/scripts/change-completeness" \
   --paths-file "$WORK/docs.paths" --github-output "$WORK/docs.out" >"$WORK/docs.log" \
   && ok 'unrelated changes take the bounded non-engine route' || bad 'unrelated route failed'
 grep -qx 'engine_changed=false' "$WORK/docs.out" && ok 'unrelated changes do not schedule expensive engine work' || bad 'unrelated impact was misclassified'
 
+for path in 'scripts/ci-gate-impact.py' 'tests/ci-runtime-optimization/run.sh'; do
+  printf '%s\n' "$path" >"$WORK/focused-ci.paths"
+  : >"$WORK/focused-ci.out"
+  GITHUB_OUT="$WORK/focused-ci.out" "$ROOT/scripts/change-completeness" \
+    --paths-file "$WORK/focused-ci.paths" --github-output "$WORK/focused-ci.out" >"$WORK/focused-ci.log" \
+    && ok "$path takes the bounded non-engine route" || bad "$path focused route failed"
+  grep -qx 'engine_changed=false' "$WORK/focused-ci.out" \
+    && ok "$path does not schedule the full engine job" \
+    || bad "$path was misclassified"
+  grep -Eq '^ci-runtime-optimization: [1-9][0-9]* passed, 0 failed$' "$WORK/focused-ci.log" \
+    && ok "$path executes a non-vacuous focused selector fixture" \
+    || bad "$path omitted or vacuously passed the focused selector fixture"
+done
+
 GITHUB_OUT="$WORK/engine.out" "$ROOT/scripts/change-completeness" \
   --paths-file "$WORK/engine.paths" --github-output "$WORK/engine.out" >/dev/null \
-  && ok 'engine changes run the focused structural route' || bad 'engine route failed'
-grep -qx 'engine_changed=true' "$WORK/engine.out" && ok 'engine changes schedule the expensive successor' || bad 'engine impact was misclassified'
+  && ok 'mixed focused-CI and engine changes run the focused structural route' || bad 'mixed engine route failed'
+grep -qx 'engine_changed=true' "$WORK/engine.out" \
+  && ok 'an engine change cannot hide inside a focused CI selector change' \
+  || bad 'mixed engine impact was incorrectly skipped'
+
+selector="$(grep -F 'if grep -Eq ' "$ROOT/scripts/change-completeness")"
+for required_pattern in \
+  'src/FS\.GG\.(Coord|Telemetry)\.' \
+  '\.github/workflows/coord-engine\.yml' \
+  'Directory\.(Build|Packages)' \
+  'dist/dotnet/Directory\.Build\.props' \
+  'global\.json'; do
+  [[ "$selector" == *"$required_pattern"* ]] \
+    && ok "engine selector retains $required_pattern" \
+    || bad "engine selector lost $required_pattern"
+done
 
 if grep -Fq 'FS.GG.Coord.Cli.Lifecycle.Tests.fsproj' "$ROOT/scripts/change-completeness" \
   && ! grep -Fq 'dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj" -c Release --no-restore' "$ROOT/scripts/change-completeness"; then
@@ -52,6 +83,7 @@ for label in \
   'v1 writer census structural closure' \
   'v1 receiver source census offline closure' \
   'GS2-08.6 independent producer fence attacks' \
+  'focused CI selector and non-vacuity contract' \
   'command catalogue, parser, render, write-ness, contract, and help closure' \
   'v1 writer census candidate-built metadata' \
   'handler ownership and production registration' \
@@ -108,6 +140,25 @@ fi
 grep -Fq 'timeout-minutes: 5' "$ROOT/.github/workflows/coord-engine.yml" \
   && ok 'workflow encodes the five-minute target' \
   || bad 'five-minute target is not encoded'
+
+focused_fixture_calls="$(grep -Fc 'bash "$ROOT/tests/ci-runtime-optimization/run.sh"' "$ROOT/scripts/change-completeness" || true)"
+if [ "$focused_fixture_calls" = 1 ]; then
+  ok 'required predecessor owns exactly one focused CI selector fixture invocation'
+else
+  bad "required predecessor has $focused_fixture_calls focused CI selector fixture invocations"
+fi
+if grep -Fq 'run: bash tests/ci-runtime-optimization/run.sh' "$ROOT/.github/workflows/coord-engine.yml"; then
+  bad 'full engine job still repeats the focused CI selector fixture'
+else
+  ok 'full engine job does not repeat the focused CI selector fixture'
+fi
+grep -Fq "if: github.event_name == 'workflow_dispatch' || needs.change-completeness.outputs.engine_changed == 'true'" \
+  "$ROOT/.github/workflows/coord-engine.yml" \
+  && ok 'workflow uses the bounded impact decision for pull requests and pushes' \
+  || bad 'workflow can bypass the bounded impact decision outside manual dispatch'
+grep -Fq -- '- "scripts/ci-gate-impact.py"' "$ROOT/.github/workflows/coord-engine.yml" \
+  && ok 'push trigger reaches the bounded selector check when its implementation changes' \
+  || bad 'push trigger omits the CI selector implementation'
 
 # This unfiltered required context independently proves the Q0 job is reachable. A checker
 # that only runs inside the checked job cannot detect its own job/trigger being disabled.
