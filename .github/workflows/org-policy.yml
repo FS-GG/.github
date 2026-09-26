@@ -1,0 +1,62 @@
+# org-policy — the FSC-03 source-only policy graph and its refusal tests.
+# The test selector derives this suite from the direct dotnet test invocation below.
+name: org-policy
+
+on:
+  pull_request:
+    paths:
+      - "src/FS.GG.Org.Policy/**"
+      - "tests/FS.GG.Org.Policy.Tests/**"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/org-policy.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/FS.GG.Org.Policy/**"
+      - "tests/FS.GG.Org.Policy.Tests/**"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/org-policy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+
+      - name: Restore (locked)
+        run: dotnet restore tests/FS.GG.Org.Policy.Tests/FS.GG.Org.Policy.Tests.fsproj --locked-mode
+
+      - name: Build
+        run: dotnet build tests/FS.GG.Org.Policy.Tests/FS.GG.Org.Policy.Tests.fsproj --no-restore -c Release
+
+      - name: Test the policy graph refusals
+        run: dotnet test tests/FS.GG.Org.Policy.Tests/FS.GG.Org.Policy.Tests.fsproj --no-build -c Release --logger "console;verbosity=normal"
+
+      - name: Verify the suite did not silently run zero tests
+        run: |
+          set -euo pipefail
+          out="$(dotnet test tests/FS.GG.Org.Policy.Tests/FS.GG.Org.Policy.Tests.fsproj --no-build -c Release 2>&1)"
+          printf '%s\n' "$out"
+          passed="$(printf '%s' "$out" | grep -oE 'Passed:[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1 || echo 0)"
+          if [ "${passed:-0}" -lt 300 ]; then
+            echo "::error title=org-policy: test discovery is incomplete::Only ${passed:-0} policy tests ran; this candidate has 307 assertions."
+            exit 1
+          fi
+          echo "org-policy: $passed test(s) passed" >> "$GITHUB_STEP_SUMMARY"
