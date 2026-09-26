@@ -995,6 +995,18 @@ install is what keeps the composition honest. See the
   `extends: ["github>FS-GG/.github"]`) with custom managers for the embedded pins
   the standard NuGet manager misses. Producers push to the org GitHub Packages
   feed on release; consumers auto-PR the bump.
+- **Coordination candidate qualification.** This repository owns the governing
+  [ADR-0084](adr/0084-semantic-reuse-never-cancels-coherent-validation.md); the
+  FS.GG.Coordination producer owns semantic classification, execution selection,
+  sharding, aggregate receipts, and recovery. Full coherent execution is the
+  default. The scoped profile is limited to exact-head reused routine PRs with
+  authentic complete prior full evidence and an audited nonauthority path set.
+  It retains the base formal fragment and all nonformal partitions, records the
+  omitted scenarios as outside scope, and emits a distinct receipt that cannot
+  supply full reuse or recovery evidence. Main, nightly, merge-group, dispatch,
+  release, and comprehensive acceptance boundaries retain full execution. The
+  profile remains disabled until the producer's versioned selection and
+  adversarial fixtures land together.
 - **The coordination fabric is a typed, packaged component ([ADR-0034](adr/0034-typed-coordination-engine.md),
   accepted 2026-07-12; cut over and finished under [ADR-0040](adr/0040-port-the-io-layer.md), 2026-07-15).**
   The client every worker and CI job drives — `scripts/fsgg-coord` — **was** ~7,000 lines of bash whose
