@@ -571,6 +571,30 @@ else
   bad "the real tree's node suite is NOT derived — the scrape vocabulary has lost its node row" "$out"
 fi
 
+# FSC-03's two executable projects must be selected when their shared policy source changes.
+# Copy the shipped workflow, so this checks its actual PR filter and runnable step spelling.
+r="$(root permissionpolicy)"
+cp "$REPO_ROOT/.github/workflows/org-permission-policy.yml" "$r/.github/workflows/"
+suite "$r" tests/FS.GG.Org.PermissionPolicy.Tests/run.sh
+suite "$r" tests/FS.GG.Org.PermissionPolicy.Differential/run.sh
+mkdir -p "$r/src/FS.GG.Org.PermissionPolicy" "$r/docs"
+echo x > "$r/src/FS.GG.Org.PermissionPolicy/Permissions.fs"
+echo x > "$r/docs/unrelated.md"
+seal "$r"
+touchf "$r" src/FS.GG.Org.PermissionPolicy/Permissions.fs
+selects "permission source selects reducer controls" "$r" yes "bash tests/FS.GG.Org.PermissionPolicy.Tests/run.sh"
+selects "permission source selects differential corpus" "$r" yes "bash tests/FS.GG.Org.PermissionPolicy.Differential/run.sh"
+git -C "$r" checkout -- src/FS.GG.Org.PermissionPolicy/Permissions.fs
+touchf "$r" tests/FS.GG.Org.PermissionPolicy.Tests/run.sh
+selects "reducer test edit selects both focused checks" "$r" yes "bash tests/FS.GG.Org.PermissionPolicy.Differential/run.sh"
+git -C "$r" checkout -- tests/FS.GG.Org.PermissionPolicy.Tests/run.sh
+touchf "$r" tests/FS.GG.Org.PermissionPolicy.Differential/run.sh
+selects "differential test edit selects reducer controls" "$r" yes "bash tests/FS.GG.Org.PermissionPolicy.Tests/run.sh"
+git -C "$r" checkout -- tests/FS.GG.Org.PermissionPolicy.Differential/run.sh
+touchf "$r" docs/unrelated.md
+selects "unrelated prose does not select permission controls" "$r" no "bash tests/FS.GG.Org.PermissionPolicy.Tests/run.sh"
+git -C "$r" checkout -- docs/unrelated.md
+
 # The side effect #860 asks for, pinned against the real tree: tests/merge-guard is wired to no
 # workflow and CI has never run it. When somebody wires it, this leg goes red and should be deleted.
 out="$(python3 "$TOOL" --root "$REPO_ROOT" --list --all 2>&1 || true)"
