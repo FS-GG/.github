@@ -2,7 +2,6 @@ namespace FS.GG.Org.PermissionPolicy
 
 open System.Text.RegularExpressions
 
-/// A provider-extracted App-token step; Absent means the observed step requests no scopes.
 type AppTokenRequestFact =
     {
         Repository: string
@@ -23,7 +22,6 @@ type AppTokenWorkflowScan =
         Requests: AppTokenStepVerdict list
     }
 
-/// Pure comparison against an already-bound, pinned App installation inventory.
 [<RequireQualifiedAccess>]
 module AppGrantComparison =
     let private scopeName = Regex("^[a-z][a-z0-9_]*$", RegexOptions.CultureInvariant)
@@ -59,8 +57,6 @@ module AppGrantComparison =
                     |> Scopes
                 Permissions.compare inventory Absent (Scopes scopes)
 
-    /// Scan a supplied authority workflow and compare every observed App-token step.
-    /// The returned list is evidence, not an aggregate gate verdict.
     let compareWorkflow (bound: BoundPermissionCall) repository path text =
         if repository <> bound.AppGrants.Repository then
             Error { Code = "app-workflow-repository-mismatch"; Path = path }

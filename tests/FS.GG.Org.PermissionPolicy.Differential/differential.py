@@ -19,7 +19,10 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 PYTHON_GATE = ROOT / "scripts/check-workflow-permissions.py"
-FSHARP_RUNNER = HERE / "bin/Debug/net10.0/DifferentialRunner.dll"
+FSHARP_RUNNER = Path(os.environ.get(
+    "FSGG_PERMISSION_DIFFERENTIAL_RUNNER",
+    HERE / "bin/Debug/net10.0/DifferentialRunner.dll",
+))
 AUTHORITY = "FS-GG/.github"
 EXPECTED_PYTHON = {
     "exact": "OK",

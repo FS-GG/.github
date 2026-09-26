@@ -23,8 +23,6 @@ type FleetWorkflowEnumeration =
       State: WorkflowEnumerationState
       WorkflowPaths: string list }
 
-/// Supplied facts only. The provider adapter must authenticate the registry bytes, repo heads,
-/// and terminal listing results before this evidence may support an installed gate decision.
 type FleetInventoryEvidence =
     { Registry: FleetRegistrySnapshot option
       Heads: FleetRepositoryHead list option
@@ -35,7 +33,6 @@ type ProvisionalFleetVerdict =
     | ProvisionalSatisfied
     | ProvisionalFindings of AggregatePermissionFinding list
 
-/// Check the shape and cross-source closure of supplied fleet facts; never an authority verdict.
 [<RequireQualifiedAccess>]
 module FleetInventoryContract =
     let private authority = "FS-GG/.github"

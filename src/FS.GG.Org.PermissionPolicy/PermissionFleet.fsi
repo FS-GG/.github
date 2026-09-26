@@ -31,7 +31,7 @@ type CallerFleetEvidence =
       Calls: CallerCallFact list option
       Authority: AggregatePermissionEvidence }
 
-/// Reduce all calls in an exact supplied caller fleet. Provider reads remain external.
+/// Reduce all calls in an exact supplied caller fleet. This does not authenticate provider reads.
 [<RequireQualifiedAccess>]
 module PermissionFleet =
     val evaluate:

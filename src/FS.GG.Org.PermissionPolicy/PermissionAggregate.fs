@@ -45,8 +45,6 @@ type AggregatePermissionVerdict =
     | GateSatisfied
     | GateFindings of AggregatePermissionFinding list
 
-/// A complete, supplied-source reducer for one bound caller/callee pair and all selected
-/// authority workflows. Provider authentication and fleet-wide enumeration remain external.
 [<RequireQualifiedAccess>]
 module PermissionAggregate =
     let private authority = "FS-GG/.github"

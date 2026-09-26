@@ -21,6 +21,7 @@ module AppGrantComparison =
     val compare: bound: BoundPermissionCall -> request: AppTokenRequestFact option -> PermissionVerdict
 
     /// Scan supplied authority workflow bytes and compare every observed App-token step.
+    /// The returned list is evidence, not an aggregate gate verdict.
     val compareWorkflow:
         bound: BoundPermissionCall ->
         repository: string ->

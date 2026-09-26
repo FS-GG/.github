@@ -8,7 +8,6 @@ type CallerRepositoryWorkflowRoster =
       SourceRef: string
       WorkflowPaths: string list }
 
-/// Supplied caller inventory. Provider authentication and completeness are external obligations.
 type CallerFleetRoster =
     { Repository: string
       Path: string
@@ -34,7 +33,6 @@ type CallerFleetEvidence =
       Calls: CallerCallFact list option
       Authority: AggregatePermissionEvidence }
 
-/// Reduce all calls in an exact supplied caller fleet. This does not authenticate provider reads.
 [<RequireQualifiedAccess>]
 module PermissionFleet =
     let private authority = "FS-GG/.github"

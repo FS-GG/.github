@@ -32,7 +32,8 @@ type AggregatePermissionVerdict =
     | GateSatisfied
     | GateFindings of AggregatePermissionFinding list
 
-/// Reduce one bound caller/callee pair and all supplied authority workflow facts.
+/// A complete, supplied-source reducer for one bound caller/callee pair and all selected
+/// authority workflows. Provider authentication and fleet-wide enumeration remain external.
 [<RequireQualifiedAccess>]
 module PermissionAggregate =
     val evaluate:

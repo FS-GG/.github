@@ -3,7 +3,6 @@ namespace FS.GG.Org.PermissionPolicy
 open System
 open System.Text.RegularExpressions
 
-/// A provider-supplied read of the callee named by one reusable-workflow call.
 type CalleeOrigin = WorkingTree | ExactRefRead
 
 type CalleeContentFact =
@@ -22,7 +21,6 @@ type RosterFact =
         Repositories: string list
     }
 
-/// The pinned inventory is a separate fact; its provider read remains external.
 type AppGrantFact =
     {
         Repository: string
@@ -46,7 +44,6 @@ type BoundPermissionCall =
         AppGrants: AppGrantFact
     }
 
-/// Pure identity checks for provider facts. This module does not fetch, authenticate or compare grants.
 [<RequireQualifiedAccess>]
 module PermissionEvidenceBinding =
     let private authority = "FS-GG/.github"

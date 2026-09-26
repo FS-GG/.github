@@ -2,7 +2,6 @@ namespace FS.GG.Org.PermissionPolicy
 
 open System
 
-/// A syntax adapter must preserve absence, null and every mapping entry before reduction.
 type PermissionBlock =
     | Absent
     | Null
@@ -28,7 +27,6 @@ type PermissionVerdict =
     | UnprovenDefault
     | Refused of string
 
-/// Pure caller/callee permission comparison. This does not resolve YAML, refs or GitHub state.
 [<RequireQualifiedAccess>]
 module Permissions =
     let private level = function
@@ -77,8 +75,6 @@ module Permissions =
         | Some value -> value
         | Option.None -> Map.tryFind scope grants |> Option.defaultValue NoAccess
 
-    /// Job permissions override workflow permissions. A callee with no declared scopes
-    /// imposes no floor, so the caller block need not be parsed in that case.
     let compare workflow job callee =
         match parse callee with
         | Error code -> Refused code

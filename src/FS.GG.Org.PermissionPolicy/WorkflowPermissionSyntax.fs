@@ -46,7 +46,6 @@ type AppTokenDetailedScan =
         Requests: AppTokenStep list
     }
 
-/// A pure YAML adapter for the permission reducer. Pinned-ref and roster reads remain external.
 [<RequireQualifiedAccess>]
 module WorkflowPermissionSyntax =
     let private error code path = Error { Code = code; Path = path }
@@ -151,8 +150,6 @@ module WorkflowPermissionSyntax =
         | :? YamlException -> error "yaml-invalid" path
         | :? ArgumentException -> error "yaml-invalid" path
 
-    /// Extract every repository identity from supplied registry bytes. The caller must authenticate
-    /// the bytes and source ref; this parser only enforces the local YAML and identity shape.
     let registryRepositories path text =
         parse path text
         |> Result.bind (fun root ->
@@ -224,13 +221,10 @@ module WorkflowPermissionSyntax =
                     | None -> error "job-shape" path
                     | Some job -> Ok(root, job))
 
-    /// Inspect one caller job by exact ID; the caller/callee uses relationship is resolved elsewhere.
     let caller path jobId text =
         selectedJob path jobId text
         |> Result.map (fun (root, job) -> block root, block job)
 
-    /// Require the selected job to call the organization's reusable workflow at a stated ref.
-    /// Reading that ref and binding the returned callee bytes remain separate provider work.
     let callerCall path jobId text =
         selectedJob path jobId text
         |> Result.bind (fun (root, job) ->
@@ -248,8 +242,6 @@ module WorkflowPermissionSyntax =
                             JobPermissions = block job
                         })
 
-    /// Enumerate organization reusable-workflow calls from every job in one supplied caller file.
-    /// The caller workflow roster and bytes must be authenticated by the provider separately.
     let callerCallJobs path text =
         parse path text
         |> Result.bind (fun root ->
@@ -288,11 +280,8 @@ module WorkflowPermissionSyntax =
                 | Some code -> error code path
                 | None -> Ok(List.ofSeq calls))
 
-    /// Inspect only the callee's top-level grant; this permissive entry point has no call evidence.
     let callee path text = parse path text |> Result.map block
 
-    /// Require the callee's `workflow_call` declaration before comparing its grant.
-    /// This is syntax only: the caller's ref must still resolve to these exact bytes.
     let callableCallee path text =
         parse path text
         |> Result.bind (fun root ->
@@ -374,8 +363,6 @@ module WorkflowPermissionSyntax =
                         | Some code -> error code path
                         | None -> Ok(selected, if List.isEmpty entries then Absent else Scopes entries))
 
-    /// Inspect every step in every ordinary job, then extract static App-token requests.
-    /// A valid reusable-call job has no steps; malformed job and step shapes refuse.
     let private scanAppTokenSteps path text =
         parse path text
         |> Result.bind (fun root ->
