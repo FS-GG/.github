@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="WorkflowSyntax.fsi" />
+    <Compile Include="WorkflowSyntax.fs" />
+    <Compile Include="GitTreeProjects.fsi" />
+    <Compile Include="GitTreeProjects.fs" />
+    <Compile Include="GitCommitProvenance.fsi" />
+    <Compile Include="GitCommitProvenance.fs" />
+    <Compile Include="GitHubCommitMembership.fsi" />
+    <Compile Include="GitHubCommitMembership.fs" />
+    <Compile Include="GitHubGraphQlHttp.fsi" />
+    <Compile Include="GitHubGraphQlHttp.fs" />
+    <Compile Include="GitHubProtectedBranchPin.fsi" />
+    <Compile Include="GitHubProtectedBranchPin.fs" />
+    <Compile Include="GitHubProtectedBranchHttp.fsi" />
+    <Compile Include="GitHubProtectedBranchHttp.fs" />
+    <Compile Include="ProjectReferenceXml.fsi" />
+    <Compile Include="ProjectReferenceXml.fs" />
+    <Compile Include="RuleA.fsi" />
+    <Compile Include="RuleA.fs" />
+    <Compile Include="RuleB.fsi" />
+    <Compile Include="RuleB.fs" />
+    <Compile Include="RuleBExceptions.fsi" />
+    <Compile Include="RuleBExceptions.fs" />
+    <Compile Include="RuleBWorkflow.fsi" />
+    <Compile Include="RuleBWorkflow.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FS.GG.Org.Policy.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>
