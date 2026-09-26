@@ -1,0 +1,37 @@
+name: learn-01-analysis
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/learn-01-analysis.yml'
+      - 'docs/research/learn-01-current-focused-contract.md'
+      - 'policy/learn-01-current-focused-v1.json'
+      - 'tools/learn-01-analysis.py'
+      - 'tests/learn-01-analysis/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/learn-01-analysis.yml'
+      - 'docs/research/learn-01-current-focused-contract.md'
+      - 'policy/learn-01-current-focused-v1.json'
+      - 'tools/learn-01-analysis.py'
+      - 'tests/learn-01-analysis/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: learn-01-analysis-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  synthetic-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - run: bash tests/learn-01-analysis/run.sh

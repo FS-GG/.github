@@ -1,0 +1,24 @@
+{
+  "schema": "fsgg.learn.synthetic-corpus/v1",
+  "contractId": "learn-01-current-focused-v1",
+  "analysisUnit": "original-item",
+  "issues": [
+    {"originalItemId": "I-001", "assignedArm": "current", "labelSource": "persisted-pre-treatment-assignment", "assignmentOrdinal": 1, "firstTreatmentWorkOrdinal": 2, "outcome": "accepted", "scenarios": []},
+    {"originalItemId": "I-002", "assignedArm": "focused", "labelSource": "persisted-pre-treatment-assignment", "assignmentOrdinal": 1, "firstTreatmentWorkOrdinal": 2, "outcome": "failed", "scenarios": ["failure"]},
+    {"originalItemId": "I-003", "assignedArm": "current", "labelSource": "persisted-pre-treatment-assignment", "assignmentOrdinal": 1, "firstTreatmentWorkOrdinal": 2, "outcome": "cancelled", "scenarios": ["cancellation"]},
+    {"originalItemId": "I-004", "assignedArm": "focused", "labelSource": "persisted-pre-treatment-assignment", "assignmentOrdinal": 1, "firstTreatmentWorkOrdinal": 2, "outcome": "open", "scenarios": ["open"]},
+    {"originalItemId": "I-005", "assignedArm": "current", "labelSource": "persisted-pre-treatment-assignment", "assignmentOrdinal": 1, "firstTreatmentWorkOrdinal": 2, "outcome": "accepted", "scenarios": ["rescue"]},
+    {"originalItemId": "I-006", "assignedArm": "focused", "labelSource": "persisted-pre-treatment-assignment", "assignmentOrdinal": 1, "firstTreatmentWorkOrdinal": 2, "outcome": "accepted", "scenarios": ["delayed-repair"]}
+  ],
+  "costs": [
+    {"costId": "root-001", "kind": "root", "completeness": "complete", "providerTotalTokens": 1000, "allocations": [{"originalItemId": "I-001", "fraction": 1.0}]},
+    {"costId": "root-002", "kind": "root", "completeness": "complete", "providerTotalTokens": 800, "allocations": [{"originalItemId": "I-002", "fraction": 1.0}]},
+    {"costId": "root-003", "kind": "root", "completeness": "complete", "providerTotalTokens": 400, "allocations": [{"originalItemId": "I-003", "fraction": 1.0}]},
+    {"costId": "root-004", "kind": "root", "completeness": "unknown-unbounded", "providerTotalTokens": null, "allocations": [{"originalItemId": "I-004", "fraction": 1.0}]},
+    {"costId": "root-005", "kind": "root", "completeness": "complete", "providerTotalTokens": 700, "allocations": [{"originalItemId": "I-005", "fraction": 1.0}]},
+    {"costId": "rescue-005", "kind": "rescue", "completeness": "complete", "providerTotalTokens": 500, "allocations": [{"originalItemId": "I-005", "fraction": 1.0}]},
+    {"costId": "root-006", "kind": "root", "completeness": "complete", "providerTotalTokens": 600, "allocations": [{"originalItemId": "I-006", "fraction": 1.0}]},
+    {"costId": "repair-006", "kind": "repair", "completeness": "complete", "providerTotalTokens": 300, "allocations": [{"originalItemId": "I-006", "fraction": 1.0}]},
+    {"costId": "shared-plan-001-002", "kind": "shared-planning", "completeness": "complete", "providerTotalTokens": 200, "allocations": [{"originalItemId": "I-001", "fraction": 0.5}, {"originalItemId": "I-002", "fraction": 0.5}]}
+  ]
+}
