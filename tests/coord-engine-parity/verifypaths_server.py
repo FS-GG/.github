@@ -73,6 +73,10 @@ BODIES = {
     ("FS.GG.SDD", 72): "",  # no touch-set declared
     ("FS.GG.SDD", 494): "Paths: src/Scene/**, tests/Scene/**",
     ("FS.GG.Rendering", 494): "Paths: src/Audio/**",
+    (".github", 2845): "Paths: src/Scene/**, tests/Scene/**",
+    (".github", 2846): "Paths: src/Audio/**",
+    (".github", 2847): "",
+    (".github", 2848): "Paths: src/Scene/**, **/other-repo",
 }
 
 

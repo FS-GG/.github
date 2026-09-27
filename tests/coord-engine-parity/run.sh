@@ -2279,6 +2279,32 @@ if [ -z "$VP_PORT" ]; then bad "verify-paths --issue fixture bound a port"; else
     && ok "#479: ...and it fails closed under --warn too — a straddle is never advisory (case 23)" \
     || bad "#479 --warn fail-closed parity" "rc=$mwrc: $mw"
 
+  # #2858: the explicit Coordination issue owns paths in the named PR repository. The
+  # branch still points at #70, so an Audio declaration must DRIFT on the Scene PR.
+  c1="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2845)"; c1rc=$?
+  { [ "$c1rc" -eq 0 ] && printf '%s' "$c1" | grep -q 'FSGG-PATHS OK' \
+      && printf '%s' "$c1" | grep -q 'FS.GG.SDD' \
+      && printf '%s' "$c1" | grep -q 'issue-body Paths: declared by FS-GG/.github#2845'; } \
+    && ok "#2858: explicit Coordination issue checks PR-repo files and names the declaration" \
+    || bad "#2858 explicit Coordination OK" "rc=$c1rc: $c1"
+  c2="$(vpi FS-GG/.github#2846 --pr 7 --repo FS.GG.SDD)"; c2rc=$?
+  { [ "$c2rc" -ne 0 ] && printf '%s' "$c2" | grep -q 'FSGG-PATHS DRIFT' \
+      && printf '%s' "$c2" | grep -q '.github#2846'; } \
+    && ok "#2858: positional ref wins over a conventionally named branch, with inversion" \
+    || bad "#2858 positional inversion" "rc=$c2rc: $c2"
+  c3="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2847)"; c3rc=$?
+  { [ "$c3rc" -ne 0 ] && ! printf '%s' "$c3" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+    && ok "#2858: undeclared cross-repo namespace refuses before verdict" \
+    || bad "#2858 undeclared refusal" "rc=$c3rc: $c3"
+  c4="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2848)"; c4rc=$?
+  { [ "$c4rc" -ne 0 ] && ! printf '%s' "$c4" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+    && ok "#2858: ambiguous cross-repo declaration refuses before verdict" \
+    || bad "#2858 ambiguous refusal" "rc=$c4rc: $c4"
+  c5="$(vpi --pr 7 --issue FS-GG/.github#2845)"; c5rc=$?
+  { [ "$c5rc" -ne 0 ] || ! printf '%s' "$c5" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+    && ok "#2858: absent explicit PR repository cannot authorize cross-repo comparison" \
+    || bad "#2858 missing target namespace" "rc=$c5rc: $c5"
+
   # 3. #494: the issue read is repo-qualified — same PR, same issue NUMBER, opposite verdict by repo
   #    (case 24 lines 56-62). SDD#494 (Scene) → OK; Rendering#494 (Audio) → DRIFT on PR 7's Scene files.
   q1="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/FS.GG.SDD#494)"; q1rc=$?
