@@ -61,8 +61,9 @@ class FakeApi:
         self.read_attempts += 1
         return next(self.reads)
 
-    def merge(self, repo: str, pr: int, head: str, method: str) -> dict:
+    def merge(self, request) -> dict:
         self.attempts += 1
+        self.last_request = request
         value = next(self.writes)
         if isinstance(value, BaseException):
             raise value
@@ -132,8 +133,108 @@ class RoutineDeliveryTests(unittest.TestCase):
                 MODULE.EffectAdmissionUnavailable,
                 "common v1 effect admission is unavailable",
             ):
-                api.merge("FS-GG/.github", 7, HEAD, "squash")
+                api.merge(MODULE.merge_effect_request(
+                    "FS-GG/.github", 7, HEAD, "main", "d" * 40, "squash",
+                ))
         invoked.assert_not_called()
+
+    def test_merge_effect_request_binds_complete_source_and_target_identity(self):
+        api = FakeApi([opened(), merged()], [{"merged": True, "sha": MERGE}])
+        code, _ = self.call(api)
+        request = api.last_request
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            (request.repository, request.pullRequest, request.expectedHead,
+             request.baseRef, request.baseSha, request.mergeMethod),
+            ("FS-GG/.github", 1, HEAD, "main", "d" * 40, "squash"),
+        )
+        self.assertEqual(request.operationId, "routine-delivery:FS-GG/.github:pull:1")
+        self.assertIn(HEAD, request.effectId)
+        self.assertEqual(request.source, "fsgg.github.routine-delivery/1")
+        mutations = {
+            "repository": "FS-GG/other",
+            "pullRequest": 2,
+            "expectedHead": "c" * 40,
+            "baseRef": "release",
+            "baseSha": "e" * 40,
+            "mergeMethod": "merge",
+            "operationId": "other-operation",
+            "effectId": "other-effect",
+            "source": "other-source",
+        }
+        for field, value in mutations.items():
+            with self.subTest(field=field):
+                self.assertNotEqual(
+                    request.digest(), MODULE.replace(request, **{field: value}).digest(),
+                )
+
+    def test_unreadable_base_identity_refuses_before_admission(self):
+        unreadable = {**opened(), "base": {"ref": "main"}}
+        api = FakeApi([unreadable])
+        code, result = self.call(api)
+        self.assertEqual((code, result.outcome, api.attempts), (2, "refused", 0))
+        self.assertIn("base identity", result.reason)
+
+    def test_installed_port_requires_correlated_applied_settlement(self):
+        request = MODULE.merge_effect_request(
+            "FS-GG/.github", 7, HEAD, "main", "d" * 40, "squash",
+        )
+        response = {"merged": True, "sha": MERGE}
+        response_sha = hashlib.sha256(json.dumps(
+            response, separators=(",", ":"), sort_keys=True,
+        ).encode()).hexdigest()
+
+        class Port:
+            def __init__(self, evidence):
+                self.evidence = evidence
+                self.calls = 0
+
+            def execute(self, observed):
+                self.calls += 1
+                self.observed = observed
+                return MODULE.AdmissionApplied(response, self.evidence)
+
+        evidence = MODULE.AppliedEffectEvidence(
+            request.effectId, request.digest(), response_sha, MERGE,
+        )
+        port = Port(evidence)
+        self.assertEqual(MODULE.GhApi(port).merge(request), response)
+        self.assertEqual((port.calls, port.observed), (1, request))
+
+        mismatches = (
+            MODULE.AppliedEffectEvidence("wrong", request.digest(), response_sha, MERGE),
+            MODULE.AppliedEffectEvidence(request.effectId, "0" * 64, response_sha, MERGE),
+            MODULE.AppliedEffectEvidence(request.effectId, request.digest(), "0" * 64, MERGE),
+            MODULE.AppliedEffectEvidence(request.effectId, request.digest(), response_sha, "c" * 40),
+        )
+        for mismatch in mismatches:
+            with self.subTest(mismatch=mismatch):
+                with self.assertRaisesRegex(MODULE.AmbiguousWrite, "correlated"):
+                    MODULE.GhApi(Port(mismatch)).merge(request)
+
+    def test_partial_and_indeterminate_admission_only_reconcile(self):
+        request = MODULE.merge_effect_request(
+            "FS-GG/.github", 7, HEAD, "main", "d" * 40, "squash",
+        )
+
+        class Port:
+            def __init__(self, outcome):
+                self.outcome = outcome
+                self.calls = 0
+
+            def execute(self, _):
+                self.calls += 1
+                return self.outcome
+
+        for outcome in (
+            MODULE.AdmissionPartial("provider-partial"),
+            MODULE.AdmissionIndeterminate("lost-response"),
+        ):
+            port = Port(outcome)
+            with self.subTest(outcome=outcome):
+                with self.assertRaisesRegex(MODULE.AmbiguousWrite, "reconciliation"):
+                    MODULE.GhApi(port).merge(request)
+                self.assertEqual(port.calls, 1)
 
     def test_admission_refusal_is_not_an_attempt_or_readback_delivery(self):
         api = FakeApi(
@@ -155,6 +256,20 @@ class RoutineDeliveryTests(unittest.TestCase):
         self.assertIn("changed head", result.reason)
         self.assertEqual(asdict(result)["observedHead"], "c" * 40)
 
+    def test_open_pr_with_contradictory_merge_fields_refuses_before_a_write(self):
+        contradictory = {**opened(), "merged_at": "", "merge_commit_sha": MERGE}
+        api = FakeApi([contradictory])
+        code, result = self.call(api)
+        self.assertEqual((code, result.outcome, api.attempts), (2, "refused", 0))
+        self.assertIn("contradictory", result.reason)
+
+    def test_closed_pr_with_malformed_merge_time_is_not_delivered(self):
+        contradictory = {**merged(), "merged_at": "not-a-time"}
+        api = FakeApi([contradictory])
+        code, result = self.call(api)
+        self.assertEqual((code, result.outcome, result.codeDelivery, api.attempts),
+                         (2, "refused", "not-delivered", 0))
+
     def test_success_requires_native_merged_readback(self):
         api = FakeApi([opened(), merged()], [{"merged": True, "sha": MERGE}])
         code, result = self.call(api, publication=True)
@@ -162,36 +277,67 @@ class RoutineDeliveryTests(unittest.TestCase):
         self.assertEqual((result.mergeCommit, result.attempts), (MERGE, 1))
         self.assertEqual(asdict(result)["observedHead"], HEAD)
 
-    def test_ambiguous_write_reads_back_before_retry(self):
+    def test_ambiguous_write_with_merged_readback_stays_indeterminate(self):
         api = FakeApi([opened(), merged()], [MODULE.AmbiguousWrite("timeout")])
         code, result = self.call(api)
-        self.assertEqual((code, result.outcome, api.attempts), (0, "delivered-after-readback", 1))
+        self.assertEqual((code, result.outcome, result.codeDelivery, api.attempts),
+                         (3, "indeterminate", "unknown", 1))
+        self.assertIsNone(result.mergeCommit)
         self.assertEqual(asdict(result)["expectedHead"], HEAD)
 
-    def test_definitely_unmerged_readback_allows_one_retry(self):
+    def test_open_readback_cannot_exclude_delayed_merge_or_allow_retry(self):
         api = FakeApi(
-            [opened(), opened(), merged()],
+            [opened(), opened()],
             [MODULE.AmbiguousWrite("timeout"), {"merged": True, "sha": MERGE}],
         )
         code, result = self.call(api)
-        self.assertEqual((code, result.outcome, api.attempts), (0, "delivered", 2))
+        self.assertEqual((code, result.outcome, api.attempts), (3, "indeterminate", 1))
 
-    def test_two_ambiguous_writes_stop_indeterminate(self):
-        api = FakeApi(
-            [opened(), opened(), opened()],
-            [MODULE.AmbiguousWrite("timeout"), MODULE.AmbiguousWrite("timeout")],
-        )
+    def test_failed_readback_after_ambiguous_write_stays_indeterminate(self):
+        api = FakeApi([opened()], [MODULE.AmbiguousWrite("timeout")])
+        api.get_pr = mock.Mock(side_effect=[opened(), RuntimeError("read unavailable")])
         code, result = self.call(api)
         self.assertEqual((code, result.outcome, result.codeDelivery, api.attempts),
-                         (3, "indeterminate", "unknown", 2))
-        self.assertEqual(asdict(result)["observedHead"], HEAD)
+                         (3, "indeterminate", "unknown", 1))
+        self.assertIsNone(result.observedHead)
 
-    def test_retry_requires_current_native_merge_eligibility(self):
+    def test_blocked_readback_does_not_settle_ambiguous_write(self):
         blocked = {**opened(), "mergeable_state": "blocked"}
         api = FakeApi([opened(), blocked], [MODULE.AmbiguousWrite("timeout")])
         code, result = self.call(api)
-        self.assertEqual((code, result.outcome, api.attempts), (2, "refused", 1))
-        self.assertIn("blocked", result.reason)
+        self.assertEqual((code, result.outcome, api.attempts), (3, "indeterminate", 1))
+
+    def test_generic_merge_error_with_merged_readback_stays_indeterminate(self):
+        api = FakeApi([opened(), merged()], [RuntimeError("provider error")])
+        code, result = self.call(api)
+        self.assertEqual((code, result.outcome, result.codeDelivery, api.attempts),
+                         (3, "indeterminate", "unknown", 1))
+
+    def test_response_commit_must_match_native_readback(self):
+        api = FakeApi([opened(), merged()], [{"merged": True, "sha": "c" * 40}])
+        code, result = self.call(api)
+        self.assertEqual((code, result.outcome, result.codeDelivery, api.attempts),
+                         (3, "indeterminate", "unknown", 1))
+
+    def test_positive_response_with_contradictory_native_merge_stays_indeterminate(self):
+        contradictory = {**merged(), "merged": False, "merged_at": ""}
+        api = FakeApi([opened(), contradictory], [{"merged": True, "sha": MERGE}])
+        code, result = self.call(api)
+        self.assertEqual((code, result.outcome, result.codeDelivery, api.attempts),
+                         (3, "indeterminate", "unknown", 1))
+
+    def test_non_object_merge_response_stays_indeterminate(self):
+        api = FakeApi([opened(), merged()], [[]])
+        code, result = self.call(api)
+        self.assertEqual((code, result.outcome, result.codeDelivery, api.attempts),
+                         (3, "indeterminate", "unknown", 1))
+
+    def test_positive_response_without_readback_stays_indeterminate(self):
+        api = FakeApi([opened()], [{"merged": True, "sha": MERGE}])
+        api.get_pr = mock.Mock(side_effect=[opened(), RuntimeError("read unavailable")])
+        code, result = self.call(api)
+        self.assertEqual((code, result.outcome, result.codeDelivery, api.attempts),
+                         (3, "indeterminate", "unknown", 1))
 
     def test_current_candidate_waits_for_coherent_pass(self):
         api = FakeApi([opened()], runs=[run()], selections={7: selection("current")})
@@ -222,6 +368,16 @@ class RoutineDeliveryTests(unittest.TestCase):
         self.assertEqual((code, result.codeDelivery, result.coherentValidation),
                          (0, "delivered", "passed"))
 
+    def test_post_merge_coherent_read_failure_keeps_one_attempt(self):
+        completed = run("completed", "success")
+        api = FakeApi([opened(), merged()], [{"merged": True, "sha": MERGE}],
+                      [completed], {7: selection("current")})
+        api.coherent_runs = mock.Mock(side_effect=[[completed], RuntimeError("read unavailable")])
+        code, result = self.call(api, coherent=True)
+        self.assertEqual((code, result.outcome, result.codeDelivery, result.attempts),
+                         (3, "indeterminate", "unknown", 1))
+        self.assertEqual(result.observedHead, HEAD)
+
     def test_merged_reuse_stays_pending_without_becoming_disputed(self):
         api = FakeApi([merged()], runs=[run()], selections={7: selection("reused")})
         code, result = self.call(api, coherent=True)
@@ -250,13 +406,13 @@ class RoutineDeliveryTests(unittest.TestCase):
         self.assertEqual((code, result.validationDisposition, result.coherentValidation, api.attempts),
                          (2, "failed", "failed", 0))
 
-    def test_failure_after_unsuccessful_merge_attempt_is_not_called_delivered(self):
+    def test_failure_after_unconfirmed_merge_attempt_stays_indeterminate(self):
         failure = {"status": "completed", "conclusion": "failure", "name": "run-partition (3)"}
         api = FakeApi([opened(), opened()], [{"merged": False}], [run()], {7: selection("reused")},
                       job_reads=[[], [failure]])
         code, result = self.call(api, coherent=True)
         self.assertEqual((code, result.outcome, result.codeDelivery),
-                         (2, "refused", "not-delivered"))
+                         (3, "indeterminate", "unknown"))
 
     def test_merged_source_with_invalid_selection_is_disputed_not_undelivered(self):
         bad = selection("reused").replace(b'"reason":"fixture"', b'"reason":"tampered"')

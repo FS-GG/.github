@@ -15,7 +15,7 @@ import sys
 import tempfile
 import zipfile
 from dataclasses import asdict, dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Protocol
 
 sys.dont_write_bytecode = True
@@ -55,10 +55,118 @@ class EffectAdmissionUnavailable(RuntimeError):
     """The accepted common effect admission cannot authorize this provider mutation."""
 
 
+@dataclass(frozen=True)
+class MergeEffectRequest:
+    """Exact caller identity handed to the Coordination-owned v1 effect boundary.
+
+    This is a consumer request, not admission authority. The future transport must
+    translate it into Coordination's ``MutationContext`` and ``MutationRequest``
+    only from verified authority and journal state; this client must not invent
+    those values.
+    """
+
+    repository: str
+    pullRequest: int
+    expectedHead: str
+    baseRef: str
+    baseSha: str
+    mergeMethod: str
+    operationId: str
+    effectId: str
+    source: str
+
+    def canonical_bytes(self) -> bytes:
+        # Local correlation proof only. This is not an authority or transport wire schema.
+        return json.dumps(asdict(self), separators=(",", ":"), sort_keys=True).encode()
+
+    def digest(self) -> str:
+        return hashlib.sha256(self.canonical_bytes()).hexdigest()
+
+
+@dataclass(frozen=True)
+class AppliedEffectEvidence:
+    """Coordination settlement evidence correlated to one exact merge request."""
+
+    effectId: str
+    requestSha256: str
+    responseSha256: str
+    mergeCommit: str
+
+
+@dataclass(frozen=True)
+class AdmissionApplied:
+    response: dict[str, Any]
+    evidence: AppliedEffectEvidence
+
+
+@dataclass(frozen=True)
+class AdmissionRefused:
+    reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class AdmissionPartial:
+    reason: str
+
+
+@dataclass(frozen=True)
+class AdmissionIndeterminate:
+    reason: str
+
+
+AdmissionOutcome = AdmissionApplied | AdmissionRefused | AdmissionPartial | AdmissionIndeterminate
+
+
+class V1AdmissionPort(Protocol):
+    """Consumer port for the still-dormant Coordination transport.
+
+    An implementation must obtain its opaque ``OperationHandle`` from
+    ``V1AdmissionService.admit`` and carry that same handle through journaled
+    prepare, dispatch, reconciliation, and settlement. No caller-supplied
+    authority or handle is accepted at this seam.
+    """
+
+    def execute(self, request: MergeEffectRequest) -> AdmissionOutcome: ...
+
+
+class DisabledV1AdmissionPort:
+    """Production default until Coordination publishes the journal-backed transport."""
+
+    def execute(self, request: MergeEffectRequest) -> AdmissionOutcome:
+        return AdmissionRefused((
+            "common v1 effect admission is unavailable: install a Coordination-owned "
+            "V1AdmissionService transport joined to the admission journal CAS, dispatch fence, "
+            "provider reconciliation, and effect settlement",
+        ))
+
+
+def merge_effect_request(
+    repo: str,
+    pr: int,
+    head: str,
+    base_ref: str,
+    base_sha: str,
+    method: str,
+) -> MergeEffectRequest:
+    operation = f"routine-delivery:{repo}:pull:{pr}"
+    effect = f"merge:{repo}:pull:{pr}:{head}:{base_sha}:{method}"
+    return MergeEffectRequest(
+        repository=repo,
+        pullRequest=pr,
+        expectedHead=head,
+        baseRef=base_ref,
+        baseSha=base_sha,
+        mergeMethod=method,
+        operationId=operation,
+        effectId=effect,
+        source="fsgg.github.routine-delivery/1",
+    )
+
+
 class NativeApi(Protocol):
     def get_pr(self, repo: str, pr: int) -> dict[str, Any]: ...
 
-    def merge(self, repo: str, pr: int, head: str, method: str) -> dict[str, Any]: ...
+    def merge(self, request: MergeEffectRequest) -> dict[str, Any]: ...
 
     def coherent_runs(self, repo: str, workflow: str, head: str) -> list[dict[str, Any]]: ...
 
@@ -68,6 +176,9 @@ class NativeApi(Protocol):
 
 
 class GhApi:
+    def __init__(self, admission: V1AdmissionPort | None = None):
+        self._admission = admission or DisabledV1AdmissionPort()
+
     @staticmethod
     def _run(args: list[str], *, timeout: int = 30) -> dict[str, Any]:
         try:
@@ -89,15 +200,47 @@ class GhApi:
             raise RuntimeError("GitHub returned a non-JSON response") from error
 
     def get_pr(self, repo: str, pr: int) -> dict[str, Any]:
-        return self._run([f"repos/{repo}/pulls/{pr}"])
+        value = self._run([f"repos/{repo}/pulls/{pr}"])
+        if not isinstance(value, dict):
+            raise RuntimeError("GitHub returned a non-object pull request")
+        return value
 
-    def merge(self, repo: str, pr: int, head: str, method: str) -> dict[str, Any]:
-        # This source boundary cannot retroactively disable retained/published copies. Operators must
-        # separately remove their credentials or callers before this prepared retirement lands last.
-        raise EffectAdmissionUnavailable(
-            "common v1 effect admission is unavailable; direct REST merge is disabled "
-            "until a qualified admitted delivery boundary replaces it"
+    def merge(self, request: MergeEffectRequest) -> dict[str, Any]:
+        try:
+            outcome = self._admission.execute(request)
+        except Exception as error:
+            raise AmbiguousWrite("admission transport failed without a correlated outcome") from error
+        if isinstance(outcome, AdmissionRefused):
+            detail = "; ".join(outcome.reasons) or "common v1 effect admission refused"
+            raise EffectAdmissionUnavailable(detail)
+        if isinstance(outcome, AdmissionPartial):
+            raise AmbiguousWrite(f"partial admitted merge effect requires reconciliation: {outcome.reason}")
+        if isinstance(outcome, AdmissionIndeterminate):
+            raise AmbiguousWrite(f"indeterminate admitted merge effect requires reconciliation: {outcome.reason}")
+        if not isinstance(outcome, AdmissionApplied):
+            raise AmbiguousWrite("admission transport returned an unsupported outcome")
+
+        response = outcome.response
+        evidence = outcome.evidence
+        try:
+            response_bytes = json.dumps(response, separators=(",", ":"), sort_keys=True).encode()
+        except (TypeError, ValueError) as error:
+            raise AmbiguousWrite("applied admission outcome has a non-canonical response") from error
+        response_sha = hashlib.sha256(response_bytes).hexdigest()
+        merge_commit = response.get("sha") if isinstance(response, dict) else None
+        correlated = (
+            isinstance(response, dict)
+            and evidence.effectId == request.effectId
+            and evidence.requestSha256 == request.digest()
+            and evidence.responseSha256 == response_sha
+            and isinstance(merge_commit, str)
+            and SHA_RE.fullmatch(merge_commit) is not None
+            and evidence.mergeCommit == merge_commit
+            and response.get("merged") is True
         )
+        if not correlated:
+            raise AmbiguousWrite("applied admission outcome lacks correlated effect settlement evidence")
+        return response
 
     def coherent_runs(self, repo: str, workflow: str, head: str) -> list[dict[str, Any]]:
         pages = self._run([
@@ -258,11 +401,18 @@ def merged_commit_of(pr: dict[str, Any]) -> str | None:
 
 def outcome_time_of(pr: dict[str, Any]) -> str | None:
     value = pr.get("merged_at")
-    return value if isinstance(value, str) and value else None
+    if not isinstance(value, str) or not value.endswith("Z"):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return value if parsed.utcoffset() == timedelta(0) else None
 
 
 def is_merged(pr: dict[str, Any]) -> bool:
-    return pr.get("merged") is True or pr.get("merged_at") is not None
+    return (pr.get("merged") is True and pr.get("state") == "closed"
+            and outcome_time_of(pr) is not None and merged_commit_of(pr) is not None)
 
 
 def coherent_state(runs: list[dict[str, Any]], expected_head: str) -> tuple[str, str | None, dict[str, Any] | None]:
@@ -376,6 +526,8 @@ def eligible(pr: dict[str, Any], expected_head: str) -> tuple[bool, str | None]:
         return False, f"changed head: expected {expected_head}, observed {observed or 'unreadable'}"
     if is_merged(pr):
         return True, None
+    if pr.get("merged") is not False or pr.get("merged_at") is not None:
+        return False, "pull request has contradictory or malformed merge evidence"
     if pr.get("state") != "open":
         return False, f"pull request is {pr.get('state') or 'unreadable'}, not open"
     if pr.get("draft") is True:
@@ -402,6 +554,8 @@ def summarize(
 ) -> tuple[int, Summary]:
     publication = "pending" if publication_required else "not-required"
     before = api.get_pr(repo, pr_number)
+    if not isinstance(before, dict):
+        raise RuntimeError("native pull request readback is not an object")
     base_ref, base_sha = base_of(before)
     def bound(*values: Any, native: dict[str, Any] = before) -> Summary:
         now = datetime.now(timezone.utc)
@@ -419,6 +573,12 @@ def summarize(
         return 2, bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
             "refused", "not-delivered", publication, None, 0, reason, "current", "unobserved",
+        )
+    if not is_merged(before) and (base_ref is None or base_sha is None):
+        return 2, bound(
+            "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
+            "refused", "not-delivered", publication, None, 0,
+            "pull request base identity is unreadable", "current", "unobserved",
         )
     disposition, coherent = "current", "not-required"
     if coherent_workflow:
@@ -449,90 +609,105 @@ def summarize(
             "ready", "not-delivered", publication, None, 0, None, disposition, coherent,
         )
 
-    attempts = 0
-    while attempts < 2:
-        attempts += 1
+    request = merge_effect_request(
+        repo, pr_number, expected_head, base_ref, base_sha, merge_method,
+    )
+    attempts = 1
+    try:
+        response = api.merge(request)
+    except EffectAdmissionUnavailable as error:
+        return 2, bound(
+            "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
+            "refused", "not-delivered", publication, None, 0, str(error), disposition, coherent,
+        )
+    except AmbiguousWrite:
+        # Native PR state does not identify which request merged it. A still-open PR also
+        # cannot exclude a delayed provider effect, so neither state authorizes a retry.
         try:
-            response = api.merge(repo, pr_number, expected_head, merge_method)
-        except EffectAdmissionUnavailable as error:
-            return 2, bound(
-                "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
-                "refused", "not-delivered", publication, None, 0, str(error), disposition, coherent,
-            )
-        except AmbiguousWrite:
             after = api.get_pr(repo, pr_number)
-            allowed, reason = eligible(after, expected_head)
-            if is_merged(after) and head_of(after) == expected_head:
-                if coherent_workflow:
-                    disposition, coherent, reason = validation_state(api, repo, coherent_workflow, expected_head)
-                disputed = coherent == "failed" or disposition in {"invalid", "deferred", "failed"}
-                return 4 if disputed else 0, bound(
-                    "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
-                    "delivered-disputed" if disputed else "delivered-after-readback",
-                    "delivered", publication,
-                    merged_commit_of(after), attempts, reason if disputed else None, disposition,
-                    "disputed" if disputed else coherent, native=after,
-                )
-            if not allowed:
-                return 2, bound(
-                    "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
-                    "refused", "not-delivered", publication, None, attempts, reason, disposition, coherent,
-                )
-            if attempts < 2:
-                continue
+            if not isinstance(after, dict):
+                after = None
+        except RuntimeError:
+            after = None
+        return 3, bound(
+            "fsgg.routine-delivery/v1", repo, pr_number, expected_head,
+            head_of(after) if after is not None else None,
+            "indeterminate", "unknown", publication, None, attempts,
+            "ambiguous merge response; native PR readback cannot correlate the effect",
+            disposition, coherent,
+        )
+    except RuntimeError as error:
+        try:
+            after = api.get_pr(repo, pr_number)
+            if not isinstance(after, dict):
+                after = None
+        except RuntimeError:
+            after = None
+        return 3, bound(
+            "fsgg.routine-delivery/v1", repo, pr_number, expected_head,
+            head_of(after) if after is not None else None,
+            "indeterminate", "unknown", publication, None, attempts,
+            f"merge request failed without a provider exclusion proof: {error}",
+            disposition, coherent,
+        )
+
+    try:
+        after = api.get_pr(repo, pr_number)
+    except RuntimeError:
+        return 3, bound(
+            "fsgg.routine-delivery/v1", repo, pr_number, expected_head, None,
+            "indeterminate", "unknown", publication, None, attempts,
+            "merge response cannot be confirmed because native PR readback is unavailable",
+            disposition, coherent,
+        )
+    if not isinstance(after, dict) or not isinstance(response, dict):
+        return 3, bound(
+            "fsgg.routine-delivery/v1", repo, pr_number, expected_head,
+            head_of(after) if isinstance(after, dict) else None,
+            "indeterminate", "unknown", publication, None, attempts,
+            "merge response or native PR readback has a malformed shape",
+            disposition, coherent,
+        )
+    merge_commit = response.get("sha")
+    effect_confirmed = (
+        response.get("merged") is True and is_merged(after) and head_of(after) == expected_head
+        and isinstance(merge_commit, str) and SHA_RE.fullmatch(merge_commit)
+        and merge_commit == merged_commit_of(after)
+    )
+    if coherent_workflow:
+        try:
+            disposition, coherent, reason = validation_state(api, repo, coherent_workflow, expected_head)
+        except RuntimeError:
             return 3, bound(
                 "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
                 "indeterminate", "unknown", publication, None, attempts,
-                "two ambiguous merge attempts; native readback still reports an eligible open PR", disposition, coherent,
+                "post-merge coherent validation is unavailable after one effect attempt",
+                disposition, coherent,
             )
-        except RuntimeError as error:
-            after = api.get_pr(repo, pr_number)
-            if is_merged(after) and head_of(after) == expected_head:
-                if coherent_workflow:
-                    disposition, coherent, reason = validation_state(api, repo, coherent_workflow, expected_head)
-                disputed = coherent == "failed" or disposition in {"invalid", "deferred", "failed"}
-                return 4 if disputed else 0, bound(
+        if coherent == "failed" or disposition in {"invalid", "deferred", "failed"}:
+            if not effect_confirmed:
+                return 3, bound(
                     "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
-                    "delivered-disputed" if disputed else "delivered-after-readback",
-                    "delivered", publication,
-                    merged_commit_of(after), attempts, reason if disputed else None, disposition,
-                    "disputed" if disputed else coherent, native=after,
+                    "indeterminate", "unknown", publication, None, attempts,
+                    "coherent validation failed and the merge effect remains unproven",
+                    disposition, coherent,
                 )
-            return 2, bound(
+            return 4, bound(
                 "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
-                "refused", "not-delivered", publication, None, attempts, str(error), disposition, coherent,
+                "delivered-disputed", "delivered", publication, merge_commit, attempts, reason,
+                disposition, "disputed", native=after,
             )
-
-        after = api.get_pr(repo, pr_number)
-        if coherent_workflow:
-            disposition, coherent, reason = validation_state(api, repo, coherent_workflow, expected_head)
-            if coherent == "failed" or disposition in {"invalid", "deferred", "failed"}:
-                if not is_merged(after) or head_of(after) != expected_head:
-                    return 2, bound(
-                        "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
-                        "refused", "not-delivered", publication, None, attempts, reason,
-                        disposition, coherent,
-                    )
-                return 4, bound(
-                    "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
-                    "delivered-disputed", "delivered", publication, merged_commit_of(after), attempts, reason,
-                    disposition, "disputed", native=after,
-                )
-        if response.get("merged") is True and is_merged(after) and head_of(after) == expected_head:
-            merge_commit = response.get("sha")
-            if not isinstance(merge_commit, str) or not SHA_RE.fullmatch(merge_commit):
-                merge_commit = merged_commit_of(after)
-            return 0, bound(
-                "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
-                "delivered", "delivered", publication, merge_commit, attempts, None, disposition, coherent, native=after,
-            )
-        return 3, bound(
+    if effect_confirmed:
+        return 0, bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
-            "indeterminate", "unknown", publication, None, attempts,
-            "merge response and native PR readback do not both establish delivery", disposition, coherent,
+            "delivered", "delivered", publication, merge_commit, attempts, None,
+            disposition, coherent, native=after,
         )
-
-    raise AssertionError("bounded merge loop escaped")
+    return 3, bound(
+        "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
+        "indeterminate", "unknown", publication, None, attempts,
+        "merge response and native PR readback do not both establish delivery", disposition, coherent,
+    )
 
 
 def parser() -> argparse.ArgumentParser:
