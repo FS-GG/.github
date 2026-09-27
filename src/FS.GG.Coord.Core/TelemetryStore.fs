@@ -311,6 +311,12 @@ module TelemetryStore =
         | ActivitySpan of ActivitySpan
         | ActivityUsageAttribution of ActivityUsageAttribution
         | Complication of Complication
+        | LearnTaskSnapshot of
+            snapshotId: string * rubricVersion: string * snapshotDigest: string * capturedAt: string
+        | LearnContextManifest of
+            recipeId: string * recipeDigest: string * manifestId: string * manifestDigest: string
+        | LearnExperimentAssignment of
+            windowId: string * policyId: string * arm: string * assignedAt: string * deviation: string option
 
     type Fact =
         {
@@ -1851,6 +1857,53 @@ module TelemetryStore =
                                 Evidence = evidence
                             })
                 | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has unsupported trigger or cause"
+                | values -> Error(sprintf "%A" values)
+            | "learn-task-snapshot" ->
+                match
+                    requiredText label node "snapshotId",
+                    requiredText label node "rubricVersion",
+                    requiredText label node "snapshotDigest",
+                    requiredTimestamp label node "capturedAt"
+                with
+                | Ok snapshot, Ok rubric, Ok digest, Ok captured when itemId.IsSome && Regex.IsMatch(digest, "^[0-9a-f]{64}$") ->
+                    make
+                        [ "snapshotId"; "rubricVersion"; "snapshotDigest"; "capturedAt" ]
+                        (LearnTaskSnapshot(snapshot, rubric, digest, captured))
+                | Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label}.snapshotDigest must be 64 lowercase hexadecimal characters"
+                | values -> Error(sprintf "%A" values)
+            | "learn-context-manifest" ->
+                match
+                    requiredText label node "recipeId",
+                    requiredText label node "recipeDigest",
+                    requiredText label node "manifestId",
+                    requiredText label node "manifestDigest"
+                with
+                | Ok recipe, Ok recipeDigest, Ok manifest, Ok manifestDigest when itemId.IsSome
+                    &&
+                    Regex.IsMatch(recipeDigest, "^[0-9a-f]{64}$")
+                    && Regex.IsMatch(manifestDigest, "^[0-9a-f]{64}$")
+                    ->
+                    make
+                        [ "recipeId"; "recipeDigest"; "manifestId"; "manifestDigest" ]
+                        (LearnContextManifest(recipe, recipeDigest, manifest, manifestDigest))
+                | Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} recipe and manifest digests must be 64 lowercase hexadecimal characters"
+                | values -> Error(sprintf "%A" values)
+            | "learn-experiment-assignment" ->
+                match
+                    requiredText label node "windowId",
+                    requiredText label node "policyId",
+                    requiredText label node "arm",
+                    requiredTimestamp label node "assignedAt",
+                    optionalText label node "deviation"
+                with
+                | Ok window, Ok policy, Ok arm, Ok assigned, Ok deviation when itemId.IsSome
+                    && (arm = "current" || arm = "focused")
+                    && (deviation |> Option.forall (fun value -> value.Length <= 512))
+                    ->
+                    make
+                        [ "windowId"; "policyId"; "arm"; "assignedAt"; "deviation" ]
+                        (LearnExperimentAssignment(window, policy, arm, assigned, deviation))
+                | Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has invalid arm or deviation"
                 | values -> Error(sprintf "%A" values)
             | _ -> Error $"%s{label}.kind is unsupported"
         | values -> Error(sprintf "%A" values)

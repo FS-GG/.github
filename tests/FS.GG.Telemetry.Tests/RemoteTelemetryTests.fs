@@ -151,6 +151,48 @@ module RemoteTelemetryTests =
     let resolve _ _ = Task.FromResult(Some(String('x', 32)))
 
     [<Fact>]
+    let ``LEARN pre-dispatch facts are typed and bounded by the existing batch contract`` () =
+        let bytes =
+            Encoding.UTF8.GetBytes
+                """{"schema":"fsgg.telemetry.ingest/1","ingestId":"learn-batch","sourceIdentity":"producer","generation":"g1","cursor":"1","eventCount":3,"events":[{"kind":"learn-task-snapshot","identity":"snapshot-1","itemId":"LEARN-01.2","revision":1,"snapshotId":"task-1","rubricVersion":"rubric-v1","snapshotDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","capturedAt":"2026-09-27T08:00:00Z"},{"kind":"learn-context-manifest","identity":"manifest-1","itemId":"LEARN-01.2","revision":1,"recipeId":"recipe-v1","recipeDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","manifestId":"manifest-v1","manifestDigest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},{"kind":"learn-experiment-assignment","identity":"assignment-1","itemId":"LEARN-01.2","revision":1,"windowId":"window-v1","policyId":"learn-01-current-focused-v1","arm":"focused","assignedAt":"2026-09-27T08:01:00Z","deviation":null}]}"""
+
+        match TelemetryStore.parseBatch bytes with
+        | Ok batch ->
+            Assert.Equal(3, batch.Facts.Length)
+            Assert.Contains(batch.Facts, fun fact -> fact.Kind = "learn-experiment-assignment")
+        | Error errors -> Assert.Fail(String.concat "; " errors)
+
+    [<Fact>]
+    let ``LEARN assignment rejects unsupported arms before persistence`` () =
+        let bytes =
+            Encoding.UTF8.GetBytes
+                """{"schema":"fsgg.telemetry.ingest/1","ingestId":"learn-batch","sourceIdentity":"producer","generation":"g1","cursor":"1","eventCount":1,"events":[{"kind":"learn-experiment-assignment","identity":"assignment-1","itemId":"LEARN-01.2","revision":1,"windowId":"window-v1","policyId":"learn-01-current-focused-v1","arm":"outcome-derived","assignedAt":"2026-09-27T08:01:00Z","deviation":null}]}"""
+
+        Assert.True(TelemetryStore.parseBatch bytes |> Result.isError)
+
+    [<Fact>]
+    let ``LEARN assignment replay is idempotent and redraw is refused by the schema-10 store`` () =
+        let root = Path.Combine(Path.GetTempPath(), "learn-observation-" + Guid.NewGuid().ToString("N"))
+        let batch ingest revision arm =
+            Encoding.UTF8.GetBytes
+                $"""{{"schema":"fsgg.telemetry.ingest/1","ingestId":"{ingest}","sourceIdentity":"producer","generation":"g1","cursor":"{revision}","eventCount":1,"events":[{{"kind":"learn-experiment-assignment","identity":"assignment-1","itemId":"LEARN-01.2","revision":{revision},"windowId":"window-v1","policyId":"learn-01-current-focused-v1","arm":"{arm}","assignedAt":"2026-09-27T08:01:00Z","deviation":null}}]}}"""
+
+        try
+            TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
+            |> Result.defaultWith (String.concat "; " >> failwith)
+            |> ignore
+            let original = batch "learn-1" 1 "focused"
+            Assert.True(TelemetryStoreApplication.ingest root TelemetryStore.ApprovedLocalDurable original |> Result.isOk)
+            Assert.True(TelemetryStoreApplication.ingest root TelemetryStore.ApprovedLocalDurable original |> Result.isOk)
+            let redraw = batch "learn-2" 2 "current"
+            let result = TelemetryStoreApplication.ingest root TelemetryStore.ApprovedLocalDurable redraw
+            match result with
+            | Error errors -> Assert.Contains("immutable after pre-dispatch persistence", String.concat "; " errors)
+            | Ok _ -> Assert.Fail "assignment redraw must be refused"
+        finally
+            if Directory.Exists root then Directory.Delete(root, true)
+
+    [<Fact>]
     let ``client accepts only a complete bound receipt`` () =
         task {
             use client =

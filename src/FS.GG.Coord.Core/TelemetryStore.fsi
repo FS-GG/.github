@@ -303,6 +303,12 @@ module TelemetryStore =
         | ActivitySpan of ActivitySpan
         | ActivityUsageAttribution of ActivityUsageAttribution
         | Complication of Complication
+        | LearnTaskSnapshot of
+            snapshotId: string * rubricVersion: string * snapshotDigest: string * capturedAt: string
+        | LearnContextManifest of
+            recipeId: string * recipeDigest: string * manifestId: string * manifestDigest: string
+        | LearnExperimentAssignment of
+            windowId: string * policyId: string * arm: string * assignedAt: string * deviation: string option
 
     type Fact =
         {

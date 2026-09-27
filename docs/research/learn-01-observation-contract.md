@@ -1,0 +1,27 @@
+# LEARN-01.2 observation and issue-analysis contract
+
+LEARN-01.2 adds three pre-dispatch facts to the existing telemetry ingest schema. They use the existing
+64 KiB event and batch limits, canonical digest, durable receipt, replay, SQLite writer, and private
+dashboard snapshot. No execution intent is copied into a separate journal.
+
+| Fact kind | Required identity |
+| --- | --- |
+| `learn-task-snapshot` | Item, snapshot and rubric IDs, a SHA-256 snapshot digest, and capture time |
+| `learn-context-manifest` | Item, recipe and manifest IDs, plus a SHA-256 digest for each |
+| `learn-experiment-assignment` | Item, policy and window IDs, `current` or `focused`, assignment time, and an optional bounded deviation |
+
+Each kind is unique per original item. Exact receipt replay is idempotent. Assignments cannot be revised or
+redrawn after persistence. The facts remain in `ingest_facts`, preserving schema-10 stores without migration,
+and the bounded private dashboard read exposes them as `learningObservations`. Public projections remain
+unchanged.
+
+`tools/learn-01-analysis.py --observations <snapshot>` selects facts by stable identity and revision, sorts the
+selection before hashing, and derives one whole-issue report. Exact duplicates and input ordering do not change
+the digest or totals. A later non-assignment correction supersedes an earlier revision; assignment corrections
+are refused. Children, retries, reviews, rescues, and repairs remain costs of the canonical original item.
+Provider mismatch, unsupported usage, missing child usage, incomplete CI, and open invocations keep the affected
+issue incomplete. Late facts become visible only on a new analysis of a new immutable input snapshot.
+
+The synthetic fixture proves source behavior only. Telemetry configuration, publication, installation, live
+collection, and any efficiency conclusion remain pending. Current native usage is `not-configured`, so no live
+token total is claimed.

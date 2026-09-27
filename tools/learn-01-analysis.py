@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import gzip
+import hashlib
 import json
 import math
 import pathlib
@@ -69,6 +72,120 @@ def validate_contract(contract: dict) -> None:
         raise Refusal("LEARN-01.1 cannot claim publication, operation, observation or feature exit")
 
 
+def validate_observations(corpus: dict, observations: dict) -> dict:
+    """Select a stable pre-dispatch fact set from a bounded telemetry snapshot."""
+    if observations.get("schema") == "fsgg.telemetry.item-detail/2":
+        encoded = observations.get("canonicalSnapshotGzip")
+        if not isinstance(encoded, str):
+            raise Refusal("telemetry snapshot lacks canonicalSnapshotGzip")
+        try:
+            compressed = base64.b64decode(encoded, validate=True)
+            if len(compressed) > 1024 * 1024:
+                raise Refusal("compressed telemetry snapshot exceeds analysis bound")
+            raw = gzip.decompress(compressed)
+            if len(raw) > 4 * 1024 * 1024:
+                raise Refusal("telemetry snapshot exceeds analysis bound")
+            content = json.loads(raw)
+            rows = content.get("learningObservations", [])
+            events = [json.loads(row["canonical"]) for row in rows]
+        except (ValueError, KeyError, TypeError, gzip.BadGzipFile, json.JSONDecodeError) as error:
+            raise Refusal("telemetry snapshot learning observations are malformed") from error
+        observations = {
+            "schema": "fsgg.learn.observation-snapshot/v1",
+            "workspaceId": "authenticated-scoped-dashboard",
+            "events": events,
+        }
+    if observations.get("schema") != "fsgg.learn.observation-snapshot/v1":
+        raise Refusal("unsupported observation snapshot schema")
+    events = observations.get("events")
+    workspace = observations.get("workspaceId")
+    if not isinstance(workspace, str) or not workspace:
+        raise Refusal("observation snapshot requires a workspace identity")
+    if not isinstance(events, list) or not events or len(events) > 10000:
+        raise Refusal("observation snapshot requires between 1 and 10000 events")
+
+    by_identity = {}
+    duplicates = 0
+    corrections = 0
+    for event in events:
+        if not isinstance(event, dict):
+            raise Refusal("observation events must be objects")
+        identity = event.get("identity")
+        revision = event.get("revision", 0)
+        kind = event.get("kind")
+        if event.get("workspaceId", workspace) != workspace:
+            raise Refusal("cross-workspace observation join is forbidden")
+        if not isinstance(identity, str) or not identity or not isinstance(revision, int) or revision < 0:
+            raise Refusal("observation identity and revision are invalid")
+        if kind not in {"learn-task-snapshot", "learn-context-manifest", "learn-experiment-assignment"}:
+            raise Refusal("observation kind is unsupported")
+        prior = by_identity.get(identity)
+        if prior == event:
+            duplicates += 1
+            continue
+        if prior is not None:
+            if revision <= prior.get("revision", 0):
+                raise Refusal("observation identity conflicts without a newer revision")
+            if kind == "learn-experiment-assignment" or prior.get("kind") == "learn-experiment-assignment":
+                raise Refusal("experiment assignment cannot be redrawn on retry")
+            corrections += 1
+        by_identity[identity] = event
+
+    selected = {}
+    roots = {item["itemId"]: item for item in corpus.get("items", []) if item.get("parentItemId") is None}
+    for event in by_identity.values():
+        item = event.get("itemId")
+        key = (item, event["kind"])
+        if item not in roots:
+            raise Refusal("pre-dispatch observation must belong to an original item")
+        if key in selected:
+            raise Refusal("each original item requires one stable observation of each kind")
+        selected[key] = event
+
+    hex_digest = lambda value: isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+    for item, root in roots.items():
+        required = {
+            kind: selected.get((item, kind))
+            for kind in ("learn-task-snapshot", "learn-context-manifest", "learn-experiment-assignment")
+        }
+        if any(value is None for value in required.values()):
+            raise Refusal(f"{item}: incomplete pre-dispatch observation set")
+        snapshot = required["learn-task-snapshot"]
+        manifest = required["learn-context-manifest"]
+        assignment = required["learn-experiment-assignment"]
+        required_ids = [snapshot.get("snapshotId"), snapshot.get("rubricVersion"), manifest.get("recipeId"),
+                        manifest.get("manifestId"), assignment.get("windowId"), assignment.get("policyId")]
+        if any(not isinstance(value, str) or not value for value in required_ids):
+            raise Refusal(f"{item}: observation identity fields must be non-empty strings")
+        if not hex_digest(snapshot.get("snapshotDigest")):
+            raise Refusal(f"{item}: invalid task snapshot digest")
+        if not hex_digest(manifest.get("recipeDigest")) or not hex_digest(manifest.get("manifestDigest")):
+            raise Refusal(f"{item}: invalid recipe or manifest digest")
+        if assignment.get("arm") != root.get("assignedArm") or assignment.get("policyId") != corpus.get("contractId"):
+            raise Refusal(f"{item}: observed assignment disagrees with the frozen issue contract")
+        if assignment.get("assignedAt") != root.get("assignedAt"):
+            raise Refusal(f"{item}: observed assignment time disagrees with the frozen issue contract")
+        try:
+            captured = datetime.fromisoformat(snapshot["capturedAt"].replace("Z", "+00:00"))
+            assigned = datetime.fromisoformat(assignment["assignedAt"].replace("Z", "+00:00"))
+        except (AttributeError, ValueError) as error:
+            raise Refusal(f"{item}: observation timestamps must be RFC3339") from error
+        if captured.tzinfo is None or assigned.tzinfo is None or captured > assigned:
+            raise Refusal(f"{item}: task snapshot must precede assignment")
+        deviation = assignment.get("deviation")
+        if deviation is not None and (not isinstance(deviation, str) or not deviation or len(deviation) > 512):
+            raise Refusal(f"{item}: assignment deviation must be null or a bounded string")
+
+    canonical = json.dumps(sorted(by_identity.values(), key=lambda value: value["identity"]), separators=(",", ":"), sort_keys=True)
+    return {
+        "observationSchema": observations["schema"],
+        "observationDigest": hashlib.sha256(canonical.encode()).hexdigest(),
+        "observationFacts": len(by_identity),
+        "duplicateFactsIgnored": duplicates,
+        "correctedFacts": corrections,
+    }
+
+
 def validate_corpus(contract: dict, corpus: dict) -> dict:
     if corpus.get("schema") != "fsgg.learn.synthetic-corpus/v1":
         raise Refusal("unsupported corpus schema")
@@ -89,6 +206,8 @@ def validate_corpus(contract: dict, corpus: dict) -> dict:
         raise Refusal("corpus requires an expected shared-cost inventory")
     if not isinstance(costs, list) or not costs:
         raise Refusal("corpus requires costs")
+    if len(items) > 10000 or len(expected_invocations) > 10000 or len(expected_shared_costs) > 10000 or len(costs) > 20000:
+        raise Refusal("corpus exceeds bounded issue-analysis input")
 
     items_by_id = {}
     for item in items:
@@ -251,6 +370,9 @@ def validate_corpus(contract: dict, corpus: dict) -> dict:
         if completeness not in {"complete", "unknown-unbounded"}:
             raise Refusal(f"{cost_id}: invalid completeness")
         amount = cost.get("providerTotalTokens")
+        expected_provider = cost.get("expectedProvider")
+        observed_provider = cost.get("observedProvider")
+        usage_support = cost.get("usageSupport", "supported")
         if completeness == "complete" and (not isinstance(amount, int) or isinstance(amount, bool) or amount < 0):
             raise Refusal(f"{cost_id}: complete provider total must be a non-negative integer")
         if completeness == "unknown-unbounded" and amount is not None:
@@ -273,6 +395,10 @@ def validate_corpus(contract: dict, corpus: dict) -> dict:
                 totals[item] += amount * float(fraction)
             else:
                 incomplete_reasons[item].add("unknown-unbounded-usage")
+            if expected_provider is not None and observed_provider != expected_provider:
+                incomplete_reasons[item].add("provider-mismatch")
+            if usage_support != "supported":
+                incomplete_reasons[item].add("unsupported-usage:" + str(usage_support))
         if not math.isclose(fraction_sum, 1.0, rel_tol=0.0, abs_tol=1e-9):
             raise Refusal(f"{cost_id}: shared-cost fractions must sum to one")
         if len(allocations) > 1:
@@ -345,16 +471,23 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("contract", type=pathlib.Path)
     parser.add_argument("corpus", type=pathlib.Path)
+    parser.add_argument("--observations", type=pathlib.Path)
     parser.add_argument("--output", type=pathlib.Path)
     args = parser.parse_args(argv)
     try:
         contract = load(args.contract)
         validate_contract(contract)
-        result = validate_corpus(contract, load(args.corpus))
+        corpus = load(args.corpus)
+        result = validate_corpus(contract, corpus)
+        if args.observations:
+            result.update(validate_observations(corpus, load(args.observations)))
     except (OSError, json.JSONDecodeError, Refusal) as error:
         print(f"refused: {error}", file=sys.stderr)
         return 2
     rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
+    if len(rendered.encode("utf-8")) > 1024 * 1024:
+        print("refused: analysis output exceeds 1048576 bytes", file=sys.stderr)
+        return 2
     if args.output:
         args.output.write_text(rendered, encoding="utf-8")
     else:

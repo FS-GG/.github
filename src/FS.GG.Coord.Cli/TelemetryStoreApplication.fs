@@ -1622,6 +1622,18 @@ PRAGMA user_version=10;
                     "$evidence", box complication.Evidence
                     "$revision", box fact.Revision
                 ]
+        | TelemetryStore.LearnTaskSnapshot _
+        | TelemetryStore.LearnContextManifest _
+        | TelemetryStore.LearnExperimentAssignment _ ->
+            // LEARN observations are immutable canonical ingest facts. Keeping them in
+            // the existing append/replay ledger avoids a second execution-intent journal.
+            let item = fact.ItemId |> Option.defaultWith (fun () -> invalidOp "LEARN observation requires itemId")
+            let count =
+                scalarCount
+                    "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind=$kind;"
+                    [ "$item", box item; "$kind", box fact.Kind ]
+            if count <> 1L then
+                invalidOp $"%s{fact.Kind} must be unique per item"
 
         match fact.ItemId, fact.Payload with
         | Some item,
@@ -2530,6 +2542,8 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                 | Some(_, digest, _) when digest = fact.ContentDigest -> replayed <- replayed + 1L
                                 | Some(_, _, revision) when fact.Revision <= revision ->
                                     invalidOp $"native fact identity conflict: %s{fact.Kind}/%s{fact.Identity}"
+                                | Some(oldKind, _, _) when oldKind = "learn-experiment-assignment" ->
+                                    invalidOp $"%s{oldKind} is immutable after pre-dispatch persistence"
                                 | Some(oldKind, oldDigest, revision) ->
                                     use correction = connection.CreateCommand()
 
@@ -4596,6 +4610,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                     $" WHERE %s{column} IN (SELECT item_id FROM budget_population_facts WHERE item_id=$selected OR original_item_id=$selected UNION SELECT $selected)"
 
                             let itemFilter = whereItem "item_id"
+                            let learningItemFilter = if itemId.IsSome then " AND item_id=$selected" else ""
 
                             let table name order =
                                 rows ($"SELECT * FROM %s{name}%s{itemFilter} ORDER BY %s{order} LIMIT 10001;")
@@ -4668,6 +4683,9 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                 table "activity_usage_attributions" "item_id,usage_identity"
                                 "complications", table "complication_events" "item_id,occurred_at,identity"
                                 "reviews", table "process_reviews" "item_id,scope,attempt_id,fact_revision"
+                                "learningObservations",
+                                rows
+                                    ($"SELECT identity,kind,item_id,revision,content_digest,canonical FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment')%s{learningItemFilter} ORDER BY item_id,kind,identity LIMIT 10001;")
                             ]
                             |> List.iter (fun (name, value) -> content[name] <- value)
 
