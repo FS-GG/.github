@@ -36,6 +36,8 @@ class Opener:
     def open(self, request, timeout):
         self.requests.append(request)
         value = self.values[request.full_url]
+        if isinstance(value, list):
+            value = value.pop(0)
         if isinstance(value, Exception):
             raise value
         return value
@@ -51,7 +53,7 @@ def mint_proof(token):
         "repositorySelection": "selected",
         "repository": {"id": probe.REPOSITORY_ID, "nodeId": probe.REPOSITORY_NODE_ID,
                        "fullName": f"{probe.OWNER}/{probe.REPOSITORY}"},
-        "permissions": {**probe.EXPECTED_WRITES, "metadata": "read"},
+        "permissions": {**probe.EXPECTED_WRITES, **probe.EXPECTED_READS},
         "mintResponseSha256": "a" * 64,
         "tokenSha256": hashlib.sha256(token.encode()).hexdigest(),
     }
@@ -61,16 +63,39 @@ def provider_values():
     values = {}
     for name, path, _, _ in probe.STATIC_PROBES:
         body = {}
-        if name == "repository-identity":
+        if name == "organization-identity":
+            body = {"login": probe.OWNER, "id": 1, "node_id": "O_1"}
+        elif name == "repository-identity":
             body = {"id": probe.REPOSITORY_ID, "node_id": probe.REPOSITORY_NODE_ID,
                     "full_name": f"{probe.OWNER}/{probe.REPOSITORY}", "private": True,
+                    "visibility": "private", "fork": False, "source": None,
+                    "default_branch": "main", "updated_at": "2026-09-28T00:00:00Z",
                     "owner": {"login": probe.OWNER, "id": 1, "node_id": "O_1"}}
         elif name == "repository-environments":
             body = {"total_count": 1, "environments": [{"id": 9, "node_id": "ENV_9", "name": "protected/test"}]}
         elif name == "repository-rulesets":
             body = [{"id": 17, "node_id": "RRS_17", "source_type": "Organization"}]
         elif name == "organization-custom-property-schema":
-            body = []
+            body = [
+                {"property_name": "team", "value_type": "single_select", "required": False,
+                 "default_value": "core", "allowed_values": ["core", "edge"],
+                 "values_editable_by": "org_and_repo_actors", "require_explicit_values": False,
+                 "source_type": "organization",
+                 "url": f"{probe.API}/orgs/{probe.OWNER}/properties/schema/team"},
+                {"property_name": "tier", "value_type": "single_select", "required": False,
+                 "default_value": None, "allowed_values": ["gold", "silver"],
+                 "values_editable_by": "org_actors", "require_explicit_values": False,
+                 "source_type": "organization",
+                 "url": f"{probe.API}/orgs/{probe.OWNER}/properties/schema/tier"},
+                {"property_name": "omitted", "value_type": "string", "required": False,
+                 "default_value": "fallback", "allowed_values": [],
+                 "values_editable_by": "org_actors", "require_explicit_values": False,
+                 "source_type": "organization",
+                 "url": f"{probe.API}/orgs/{probe.OWNER}/properties/schema/omitted"},
+            ]
+        elif name == "repository-custom-property-values":
+            body = [{"property_name": "team", "value": "core"},
+                    {"property_name": "tier", "value": "gold"}]
         values[probe.API + path] = Response(200, body)
     values[probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/environments/protected%2Ftest/secrets?per_page=100"] = \
         Response(200, {"total_count": 1, "secrets": [{"name": "DO_NOT_RETAIN"}]})
@@ -93,15 +118,39 @@ class SettingsScopeProbeTests(unittest.TestCase):
         encoded = json.dumps(report, sort_keys=True)
         self.assertFalse(report["activation"])
         self.assertEqual("unknown", report["authority"]["installedAppGrant"])
+        self.assertEqual("qualified-current-token-read", report["customProperties"]["verdict"])
+        self.assertEqual(
+            {"definitionCount": 3,
+             "definitionTypes": {"multi_select": 0, "single_select": 2,
+                                 "string": 1, "true_false": 0, "url": 0},
+             "equalToDefaultProvenanceUnknownCount": 1,
+             "omittedProvenanceUnknownCount": 1,
+             "providerProvenExplicitCount": 1,
+             "returnedValueCount": 2},
+            report["customProperties"]["summary"])
         self.assertEqual(
             [{"kind": "environment", "id": 9, "nodeId": "ENV_9"},
              {"kind": "ruleset", "id": 17, "nodeId": "RRS_17", "sourceType": "Organization"}],
             report["conditionalParents"])
         self.assertNotIn(token, encoded)
         self.assertNotIn("DO_NOT_RETAIN", encoded)
+        self.assertNotIn("fallback", encoded)
+        self.assertNotIn("gold", encoded)
+        self.assertNotIn('"team"', encoded)
         self.assertTrue(all(request.get_method() == "GET" for request in opener.requests))
+        self.assertTrue(all(request.data is None for request in opener.requests))
         self.assertTrue(all(request.headers["X-github-api-version"] == probe.API_VERSION
                             for request in opener.requests))
+        custom_urls = {
+            probe.API + f"/orgs/{probe.OWNER}/properties/schema",
+            probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/properties/values",
+        }
+        self.assertEqual({url: 2 for url in custom_urls},
+                         {url: sum(request.full_url == url for request in opener.requests)
+                          for url in custom_urls})
+        self.assertTrue(all(page["terminal"] and page["links"] == {}
+                            for item in report["probes"] if "custom-property" in item["name"]
+                            for page in item["pages"]))
 
     def test_denials_preserve_access_and_unknown_applicability(self):
         headers = Message()
@@ -118,12 +167,37 @@ class SettingsScopeProbeTests(unittest.TestCase):
         self.assertEqual("unknown", result["classification"]["feature"])
         self.assertEqual(403, result["pages"][0]["status"])
 
+        unauthorized = urllib.error.HTTPError(
+            probe.API + f"/orgs/{probe.OWNER}/properties/schema",
+            401, "unauthorized", headers, None)
+        unauthorized.read = lambda _limit: b'{"message":"credential"}'
+        result, _ = probe.probe_pages(
+            "organization-custom-property-schema",
+            f"/orgs/{probe.OWNER}/properties/schema", False,
+            "organization_custom_properties:read", "token",
+            Opener({probe.API + f"/orgs/{probe.OWNER}/properties/schema": unauthorized}))
+        self.assertEqual("unauthorized", result["classification"]["access"])
+
+        missing = urllib.error.HTTPError(
+            probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/properties/values",
+            404, "missing", headers, None)
+        missing.read = lambda _limit: b'{"message":"ambiguous"}'
+        result, _ = probe.probe_pages(
+            "repository-custom-property-values",
+            f"/repos/{probe.OWNER}/{probe.REPOSITORY}/properties/values", False,
+            "metadata:read", "token",
+            Opener({probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/properties/values": missing}))
+        self.assertEqual("not-found", result["classification"]["access"])
+        self.assertEqual("unknown", result["classification"]["inheritance"])
+
     def test_allowlist_rejects_mutation_hosts_and_pagination_escape(self):
         self.assertFalse(probe.allowed_url("https://evil.example/repos/FS-GG/x"))
         self.assertFalse(probe.allowed_url(probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/actions/permissions?unexpected=1"))
         self.assertFalse(probe.allowed_url(probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}?page=2"))
         self.assertFalse(probe.allowed_url(probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/environments/x/secrets"))
         self.assertFalse(probe.allowed_url(probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/environments/x/secrets/name"))
+        self.assertFalse(probe.allowed_url(
+            probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/properties/values?per_page=100"))
         with self.assertRaisesRegex(ValueError, "allowlist"):
             probe.get("https://evil.example/value", "token", Opener({}))
         path = f"/repos/{probe.OWNER}/{probe.REPOSITORY}/environments?per_page=100"
@@ -180,6 +254,53 @@ class SettingsScopeProbeTests(unittest.TestCase):
             probe.probe_pages("repository-rulesets", path, True, "administration:read", "token",
                               Opener({url: first, page2: missing_prior}))
 
+    def test_custom_property_pages_refuse_partial_and_escaped_continuations(self):
+        path = f"/repos/{probe.OWNER}/{probe.REPOSITORY}/properties/values"
+        url = probe.API + path
+        page2 = url + "?page=2"
+        partial = Response(200, [{"property_name": "partial", "value": "x"}],
+                           links(next=page2, last=page2))
+        with self.assertRaisesRegex(ValueError, "allowlist|unexpectedly paginated"):
+            probe.probe_pages("repository-custom-property-values", path, False, "metadata:read", "token",
+                              Opener({url: partial}))
+        escaped = Response(200, [{}] * 100,
+                           links(next=probe.API + f"/repos/{probe.OWNER}/foreign/properties/values?page=2",
+                                 last=page2))
+        with self.assertRaisesRegex(ValueError, "allowlist"):
+            probe.probe_pages("repository-custom-property-values", path, False, "metadata:read", "token",
+                              Opener({url: escaped}))
+
+    def test_custom_property_bytes_and_typed_values_fail_closed(self):
+        with self.assertRaisesRegex(ValueError, "duplicate JSON member"):
+            probe.decode_collection(
+                b'[{"property_name":"one","property_name":"two"}]', None,
+                "repository-custom-property-values")
+
+        schema = provider_values()[
+            probe.API + f"/orgs/{probe.OWNER}/properties/schema"].raw
+        unknown = json.dumps([{"property_name": "foreign", "value": "x"}]).encode()
+        with self.assertRaisesRegex(ValueError, "unknown or duplicated"):
+            probe.custom_property_summary([schema], [unknown])
+        invalid = json.dumps([{"property_name": "tier", "value": "bronze"}]).encode()
+        with self.assertRaisesRegex(ValueError, "violates"):
+            probe.custom_property_summary([schema], [invalid])
+
+    def test_second_read_requires_exact_raw_bytes(self):
+        token = "ghs_" + "s" * 40
+        values = provider_values()
+        path = probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/properties/values"
+        first = Response(200, [{"property_name": "team", "value": "core"},
+                               {"property_name": "tier", "value": "gold"}])
+        second = Response(200, [])
+        second.raw = b'[ {"property_name":"team","value":"core"},{"property_name":"tier","value":"gold"} ]'
+        values[path] = [first, second]
+        with tempfile.TemporaryDirectory() as directory:
+            proof = Path(directory) / "mint.json"
+            proof.write_text(json.dumps(mint_proof(token)), encoding="utf-8")
+            with mock.patch.object(probe, "source_binding", return_value={"headSha": "b" * 40}):
+                with self.assertRaisesRegex(ValueError, "raw response changed"):
+                    probe.build_report(token, proof, ROOT, "b" * 40, Opener(values))
+
     def test_malformed_parent_rows_cannot_claim_observed_absence(self):
         token = "ghs_" + "r" * 40
         values = provider_values()
@@ -201,6 +322,11 @@ class SettingsScopeProbeTests(unittest.TestCase):
             path.write_text(json.dumps(changed), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "unexpected write"):
                 probe.load_mint_proof(path, token)
+            changed = mint_proof(token)
+            changed["permissions"].pop("organization_custom_properties")
+            path.write_text(json.dumps(changed), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "settings read grant"):
+                probe.load_mint_proof(path, token)
             path.write_text(json.dumps(mint_proof(token)), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "differs"):
                 probe.load_mint_proof(path, token + "x")
@@ -216,6 +342,8 @@ class SettingsScopeProbeTests(unittest.TestCase):
         self.assertIn("--method DELETE installation/token", text)
         self.assertIn("if-no-files-found: error", text)
         self.assertIn("python3 -m unittest", text)
+        self.assertIn(".customProperties.verdict", text)
+        self.assertIn(".app.permissions.organization_custom_properties", text)
         self.assertNotIn("permission-actions:", text)
         self.assertNotIn("permission-environments:", text)
 

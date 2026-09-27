@@ -107,3 +107,8 @@ jobs:
           test "$(jq -r .sandbox.repository.id "$report")" = 1353050537
           test "$(jq -r .sandbox.repository.nodeId "$report")" = R_kgDOUKXpqQ
           test "$(jq -r .sandbox.project.nodeId "$report")" = PVT_kwDOEYAWY84BiESo
+          test "$(jq -r .app.permissions.metadata "$report")" = read
+          test "$(jq -r .app.permissions.organization_custom_properties "$report")" = read
+          test "$(jq -r .customProperties.verdict "$report")" = qualified-current-token-read
+          test "$(jq -r .customProperties.schemaStatus "$report")" = 200
+          test "$(jq -r .customProperties.repositoryValuesStatus "$report")" = 200

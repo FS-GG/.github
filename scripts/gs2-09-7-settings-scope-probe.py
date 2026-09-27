@@ -32,8 +32,13 @@ EXPECTED_WRITES = {
     "pull_requests": "write",
     "organization_projects": "write",
 }
+EXPECTED_READS = {
+    "metadata": "read",
+    "organization_custom_properties": "read",
+}
 
 STATIC_PROBES = (
+    ("organization-identity", f"/orgs/{OWNER}", False, "metadata:read"),
     ("repository-identity", f"/repos/{OWNER}/{REPOSITORY}", False, "metadata:read"),
     ("repository-actions", f"/repos/{OWNER}/{REPOSITORY}/actions/permissions", False, "administration:read"),
     ("repository-actions-access", f"/repos/{OWNER}/{REPOSITORY}/actions/permissions/access", False, "administration:read"),
@@ -42,9 +47,16 @@ STATIC_PROBES = (
     ("repository-rulesets", f"/repos/{OWNER}/{REPOSITORY}/rulesets?includes_parents=true&per_page=100", True, "administration:read"),
     ("organization-actions", f"/orgs/{OWNER}/actions/permissions", False, "organization_administration:read"),
     ("organization-private-fork-workflows", f"/orgs/{OWNER}/actions/permissions/fork-pr-workflows-private-repos", False, "organization_administration:read"),
-    ("organization-custom-property-schema", f"/orgs/{OWNER}/properties/schema?per_page=100", True, "organization_custom_properties:read"),
+    ("organization-custom-property-schema", f"/orgs/{OWNER}/properties/schema", False, "organization_custom_properties:read"),
+    ("repository-custom-property-values", f"/repos/{OWNER}/{REPOSITORY}/properties/values", False, "metadata:read"),
     ("organization-immutable-releases", f"/orgs/{OWNER}/settings/immutable-releases", False, "organization_administration:read"),
 )
+
+CUSTOM_PROPERTY_PROBES = {
+    name: (path, paginated, permission)
+    for name, path, paginated, permission in STATIC_PROBES
+    if name in {"organization-custom-property-schema", "repository-custom-property-values"}
+}
 
 
 def require(condition: bool, message: str) -> None:
@@ -62,7 +74,8 @@ def canonical(value: object) -> bytes:
 
 def allowed_url(value: str, allow_page_one: bool = False) -> bool:
     parsed = urllib.parse.urlsplit(value)
-    if (parsed.scheme, parsed.netloc) != ("https", "api.github.com") or parsed.fragment:
+    if ((parsed.scheme, parsed.netloc) != ("https", "api.github.com") or parsed.fragment
+            or "%" in parsed.query or "+" in parsed.query):
         return False
     environment_secrets = re.fullmatch(
         rf"/repos/{re.escape(OWNER)}/{re.escape(REPOSITORY)}/environments/[^/]+/secrets",
@@ -151,6 +164,7 @@ def same_population(left: str, right: str) -> bool:
 def disposition(status: int) -> dict[str, str]:
     access = {
         200: "accessible",
+        401: "unauthorized",
         403: "forbidden",
         404: "not-found",
         429: "rate-limited",
@@ -163,20 +177,28 @@ def disposition(status: int) -> dict[str, str]:
     }
 
 
-def decode_object(raw: bytes, label: str) -> dict:
+def decode_json(raw: bytes, label: str) -> object:
+    def unique_object(pairs):
+        value = {}
+        for key, item in pairs:
+            require(key not in value, f"{label} returned duplicate JSON member {key}")
+            value[key] = item
+        return value
+
     try:
-        value = json.loads(raw)
+        return json.loads(raw, object_pairs_hook=unique_object)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError(f"{label} returned malformed JSON") from error
+
+
+def decode_object(raw: bytes, label: str) -> dict:
+    value = decode_json(raw, label)
     require(isinstance(value, dict), f"{label} returned a non-object")
     return value
 
 
 def decode_collection(raw: bytes, field: str | None, label: str) -> list:
-    try:
-        value = json.loads(raw)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise ValueError(f"{label} returned malformed JSON") from error
+    value = decode_json(raw, label)
     if field is not None:
         require(isinstance(value, dict), f"{label} returned a non-object")
         value = value.get(field)
@@ -242,7 +264,7 @@ def page_record(url: str, status: int, raw: bytes, relations: dict[str, str], in
     }
 
 
-def probe_pages(name: str, path: str, paginated: bool, permission: str, token: str, opener=None) -> tuple[dict, list[dict]]:
+def probe_pages(name: str, path: str, paginated: bool, permission: str, token: str, opener=None) -> tuple[dict, list[bytes]]:
     url = API + path
     pages = []
     decoded = []
@@ -274,6 +296,105 @@ def probe_pages(name: str, path: str, paginated: bool, permission: str, token: s
     return result, decoded
 
 
+def validate_repository(value: dict) -> dict:
+    require(value.get("id") == REPOSITORY_ID and value.get("node_id") == REPOSITORY_NODE_ID
+            and value.get("full_name") == f"{OWNER}/{REPOSITORY}" and value.get("private") is True
+            and value.get("visibility") == "private" and value.get("fork") is False,
+            "provider repository identity differs from the registered sandbox")
+    require(isinstance(value.get("default_branch"), str) and value["default_branch"]
+            and isinstance(value.get("updated_at"), str) and value["updated_at"],
+            "provider repository revision identity is incomplete")
+    require(value.get("source") is None, "registered sandbox unexpectedly reports a fork source")
+    owner = value.get("owner")
+    require(isinstance(owner, dict) and owner.get("login") == OWNER and type(owner.get("id")) is int
+            and owner["id"] > 0 and isinstance(owner.get("node_id"), str) and owner["node_id"],
+            "provider account identity is incomplete")
+    return owner
+
+
+def validate_organization(value: dict, repository_owner: dict) -> dict:
+    require(value.get("login") == OWNER and type(value.get("id")) is int and value["id"] > 0
+            and isinstance(value.get("node_id"), str) and value["node_id"],
+            "provider organization identity is incomplete")
+    require(value["id"] == repository_owner["id"] and value["node_id"] == repository_owner["node_id"],
+            "repository owner differs from the probed organization")
+    return {"login": value["login"], "id": value["id"], "nodeId": value["node_id"]}
+
+
+def property_value_valid(definition: dict, value: object) -> bool:
+    if value is None:
+        return True
+    kind = definition["value_type"]
+    allowed = definition["allowed_values"]
+    if kind in {"string", "url"}:
+        return isinstance(value, str)
+    if kind == "single_select":
+        return isinstance(value, str) and value in allowed
+    if kind == "multi_select":
+        return (isinstance(value, list) and all(isinstance(item, str) for item in value)
+                and len(value) == len(set(value)) and all(item in allowed for item in value))
+    return isinstance(value, str) and value in {"true", "false"}
+
+
+def custom_property_summary(schema_bodies: list[bytes], value_bodies: list[bytes]) -> dict:
+    definitions = {}
+    type_counts = {kind: 0 for kind in ("string", "url", "single_select", "multi_select", "true_false")}
+    for raw in schema_bodies:
+        for definition in decode_collection(raw, None, "organization-custom-property-schema"):
+            require(isinstance(definition, dict), "custom property definition is not an object")
+            name = definition.get("property_name")
+            kind = definition.get("value_type")
+            require(isinstance(name, str) and name and name not in definitions,
+                    "custom property definition identity is missing or duplicated")
+            require(kind in type_counts and definition.get("source_type") == "organization",
+                    "custom property definition type or source is unsupported")
+            require(definition.get("url") == f"{API}/orgs/{OWNER}/properties/schema/{urllib.parse.quote(name, safe='')}",
+                    "custom property definition URL escaped the bound organization")
+            require(("required" not in definition or type(definition["required"]) is bool)
+                    and ("require_explicit_values" not in definition
+                         or type(definition["require_explicit_values"]) is bool)
+                    and definition.get("values_editable_by") in {None, "org_actors", "org_and_repo_actors"},
+                    "custom property definition controls are incomplete")
+            allowed = definition.get("allowed_values")
+            allowed = [] if allowed is None else allowed
+            require(isinstance(allowed, list) and all(isinstance(item, str) for item in allowed)
+                    and len(allowed) == len(set(allowed)),
+                    "custom property allowed values are malformed")
+            definition = {**definition, "allowed_values": allowed}
+            require(property_value_valid(definition, definition.get("default_value")),
+                    "custom property default value is malformed")
+            definitions[name] = definition
+            type_counts[kind] += 1
+
+    returned = {}
+    for raw in value_bodies:
+        for item in decode_collection(raw, None, "repository-custom-property-values"):
+            require(isinstance(item, dict), "repository custom property value is not an object")
+            name = item.get("property_name")
+            require(isinstance(name, str) and name in definitions and name not in returned,
+                    "repository custom property value is unknown or duplicated")
+            require(property_value_valid(definitions[name], item.get("value")),
+                    "repository custom property value violates its definition")
+            returned[name] = item.get("value")
+
+    explicit = 0
+    equal_default_unknown = 0
+    for name, value in returned.items():
+        default = definitions[name].get("default_value")
+        if value == default:
+            equal_default_unknown += 1
+        elif value is not None:
+            explicit += 1
+    return {
+        "definitionCount": len(definitions),
+        "definitionTypes": type_counts,
+        "returnedValueCount": len(returned),
+        "providerProvenExplicitCount": explicit,
+        "equalToDefaultProvenanceUnknownCount": equal_default_unknown,
+        "omittedProvenanceUnknownCount": len(definitions) - len(returned),
+    }
+
+
 def load_mint_proof(path: Path, token: str) -> dict:
     value = json.loads(path.read_text(encoding="utf-8"))
     require(isinstance(value, dict) and value.get("schema") == "fsgg.github-substrate-v2.sandbox-mint-grants/1",
@@ -292,6 +413,8 @@ def load_mint_proof(path: Path, token: str) -> dict:
     grants = value.get("permissions")
     require(isinstance(grants, dict) and all(grants.get(key) == level for key, level in EXPECTED_WRITES.items()),
             "mint proof omits the current sandbox grant")
+    require(all(grants.get(key) == level for key, level in EXPECTED_READS.items()),
+            "mint proof omits the settings read grant")
     require(all(re.fullmatch(r"[a-z][a-z0-9_]*", key) and level in ("read", "write")
                 for key, level in grants.items()), "mint proof contains a malformed grant")
     require(all(level != "write" or key in EXPECTED_WRITES for key, level in grants.items()),
@@ -326,12 +449,17 @@ def source_binding(workspace: Path, revision: str) -> dict:
 def build_report(token: str, mint_path: Path, workspace: Path, revision: str, opener=None) -> dict:
     mint = load_mint_proof(mint_path, token)
     probes = []
+    observations = {}
     environment_parents = []
     repository = None
+    organization = None
     for name, path, paginated, permission in STATIC_PROBES:
         result, bodies = probe_pages(name, path, paginated, permission, token, opener)
         probes.append(result)
-        if name == "repository-identity" and result["pages"][-1]["status"] == 200:
+        observations[name] = (result, bodies)
+        if name == "organization-identity" and result["pages"][-1]["status"] == 200:
+            organization = decode_object(bodies[0], name)
+        elif name == "repository-identity" and result["pages"][-1]["status"] == 200:
             repository = decode_object(bodies[0], name)
         elif name == "repository-environments" and result["pages"][-1]["status"] == 200:
             population = []
@@ -382,12 +510,55 @@ def build_report(token: str, mint_path: Path, workspace: Path, revision: str, op
             result["classification"]["inheritance"] = \
                 "observed-parent-ids" if inherited else "observed-no-parent-ids"
     require(repository is not None, "repository identity was inaccessible")
-    require(repository.get("id") == REPOSITORY_ID and repository.get("node_id") == REPOSITORY_NODE_ID
-            and repository.get("full_name") == f"{OWNER}/{REPOSITORY}" and repository.get("private") is True,
-            "provider repository identity differs from the registered sandbox")
-    owner = repository.get("owner")
-    require(isinstance(owner, dict) and owner.get("login") == OWNER and type(owner.get("id")) is int
-            and isinstance(owner.get("node_id"), str), "provider account identity is incomplete")
+    require(organization is not None, "organization identity was inaccessible")
+    owner = validate_repository(repository)
+    account = validate_organization(organization, owner)
+
+    confirmation_specs = {
+        **CUSTOM_PROPERTY_PROBES,
+        "organization-identity": next((path, paginated, permission) for name, path, paginated, permission
+                                      in STATIC_PROBES if name == "organization-identity"),
+        "repository-identity": next((path, paginated, permission) for name, path, paginated, permission
+                                    in STATIC_PROBES if name == "repository-identity"),
+    }
+    confirmations = {}
+    for name, (path, paginated, permission) in confirmation_specs.items():
+        confirmation, bodies = probe_pages(f"{name}-confirmation", path, paginated, permission, token, opener)
+        probes.append(confirmation)
+        confirmations[name] = (confirmation, bodies)
+        first, first_bodies = observations[name]
+        require([page["status"] for page in confirmation["pages"]]
+                == [page["status"] for page in first["pages"]], f"{name} status changed between reads")
+        if first["pages"][-1]["status"] == 200:
+            require(first_bodies == bodies, f"{name} raw response changed between reads")
+            require([decode_json(raw, name) for raw in first_bodies]
+                    == [decode_json(raw, name) for raw in bodies], f"{name} typed response changed between reads")
+
+    confirmed_repository = decode_object(confirmations["repository-identity"][1][0], "repository-identity-confirmation")
+    confirmed_owner = validate_repository(confirmed_repository)
+    require(confirmed_repository["updated_at"] == repository["updated_at"],
+            "repository updated_at changed between settings reads")
+    confirmed_organization = decode_object(confirmations["organization-identity"][1][0],
+                                           "organization-identity-confirmation")
+    require(validate_organization(confirmed_organization, confirmed_owner) == account,
+            "organization identity changed between settings reads")
+
+    schema_result, schema_bodies = observations["organization-custom-property-schema"]
+    values_result, value_bodies = observations["repository-custom-property-values"]
+    custom_statuses = [schema_result["pages"][-1]["status"], values_result["pages"][-1]["status"]]
+    if custom_statuses == [200, 200]:
+        property_summary = custom_property_summary(schema_bodies, value_bodies)
+        property_verdict = "qualified-current-token-read"
+    else:
+        property_summary = None
+        if 401 in custom_statuses:
+            property_verdict = "refused-unauthorized"
+        elif 403 in custom_statuses:
+            property_verdict = "refused-forbidden"
+        elif 404 in custom_statuses:
+            property_verdict = "unknown-not-found"
+        else:
+            property_verdict = "refused-provider-status"
     report = {
         "schema": "fsgg.github-substrate-v2.settings-scope-probe/1",
         "activation": False,
@@ -399,9 +570,16 @@ def build_report(token: str, mint_path: Path, workspace: Path, revision: str, op
                         "identitySource": "protected-workflow-constant"},
         },
         "app": mint,
-        "account": {"login": owner["login"], "id": owner["id"], "nodeId": owner["node_id"]},
+        "account": account,
         "conditionalParents": sorted(environment_parents, key=lambda item: (item["id"], item["nodeId"])),
         "probes": probes,
+        "customProperties": {
+            "schemaStatus": custom_statuses[0],
+            "repositoryValuesStatus": custom_statuses[1],
+            "verdict": property_verdict,
+            "summary": property_summary,
+            "provenanceRule": "equal-default-and-omitted-values-remain-unknown",
+        },
         "authority": {
             "installedAppGrant": "unknown",
             "settingsAuthority": "unavailable",
