@@ -1,0 +1,140 @@
+{
+  "base": {
+    "branch": "main",
+    "refetched_unchanged": true,
+    "sha": "ba38fd8a78fd45bb43dafdce68020f607af22f0f"
+  },
+  "candidates": [
+    {
+      "aggregate_patch_sha256": "5a8fa2a1486eb50f379a0b2b89595ac8b4e285e855f2e28115bb607cd8c37516",
+      "branch": "consolidated/fsc06-characterization-20260927",
+      "changed_path_blobs_equal": true,
+      "changed_paths": 3,
+      "diff_check": true,
+      "group": "FSC06 characterization",
+      "head": "47bd324e5e45a5f10528a2d431b395feb66967d9",
+      "only_old_tip_to_candidate_extra_path": ".github/workflows/gate.yml",
+      "range_diff_all_equal": true,
+      "source_prs": [
+        1330
+      ],
+      "source_range": "66836abdaef87d601fc084d90658fdb605fbe023..eccca354f1c2b059208ad2df7d96db643223234c",
+      "tests": [
+        "bash src/FS.GG.Rendering.Skills/verify-package.sh: PASS",
+        "python3 scripts/test-release-custody.py: 10/10 PASS"
+      ],
+      "worktree": "/home/developer/projects/FS.GG.Rendering-backlog-fsc06-characterization-20260927"
+    },
+    {
+      "aggregate_patch_sha256": "72c7b3fe49231924970e44ef2b1bee8505c086ef27ff236a36f9bed744883c97",
+      "branch": "consolidated/fsc06-release-preflight-20260927",
+      "changed_path_blobs_equal": true,
+      "changed_paths": 9,
+      "diff_check": true,
+      "group": "FSC06 release preflight",
+      "head": "e9368237c90d1673ee112affa7d4c0b1f173dabd",
+      "only_old_tip_to_candidate_extra_path": ".github/workflows/gate.yml",
+      "range_diff_all_equal": true,
+      "source_prs": [
+        1332,
+        1333
+      ],
+      "source_range": "66836abdaef87d601fc084d90658fdb605fbe023..b74373e79b5b5a901711c0a52e42252f476322a8",
+      "tests": [
+        "python3 scripts/test-release-preflight.py: 15/15 PASS",
+        "dotnet restore ReleasePreflight.Tests --locked-mode: PASS",
+        "dotnet run ReleasePreflight.Tests -c Release --no-restore: 16/16 PASS"
+      ],
+      "worktree": "/home/developer/projects/FS.GG.Rendering-backlog-fsc06-preflight-20260927"
+    },
+    {
+      "aggregate_patch_sha256": "694c354b26d4570416f6763e20e763557103d42e37eee1da10875d716a282367",
+      "branch": "consolidated/fsc08-skill-capture-20260927",
+      "changed_path_blobs_equal": true,
+      "changed_paths": 22,
+      "diff_check": true,
+      "group": "FSC08 skill capture",
+      "head": "8c4e86ab95f7f6375c7db473ee2ac7dac942ed99",
+      "only_old_tip_to_candidate_extra_path": ".github/workflows/gate.yml",
+      "range_diff_all_equal": true,
+      "source_prs": [
+        1331,
+        1334,
+        1335,
+        1336,
+        1337,
+        1338,
+        1339,
+        1340
+      ],
+      "source_range": "66836abdaef87d601fc084d90658fdb605fbe023..37c29b2199c348b2c5c14944f272bcd4869a53cf",
+      "tests": [
+        "pure policy: 21 controls + 20 rows PASS",
+        "physical observation: 10 controls + 20 rows PASS",
+        "pinned source: 10/10 PASS",
+        "captured plan: 22/22 PASS",
+        "manifest capture: 18/18 PASS",
+        "directory mode: 12/12 PASS",
+        "output mode: 18/18 PASS",
+        "cross-root instant: 6/6 PASS",
+        "Python outside-link contrast: PASS"
+      ],
+      "worktree": "/home/developer/projects/FS.GG.Rendering-backlog-fsc08-skills-20260927"
+    }
+  ],
+  "created_at": "2026-09-27T08:19:52.476454Z",
+  "historical_ci": {
+    "1330": "16 pass, 1 fail, 6 cancelled; deterministic failure was unrelated issue-1256 frame-budget sample",
+    "1331": "19 pass, 2 fail; deterministic failure was same unrelated frame-budget sample and routine-eligibility rejected missing source-only authority",
+    "1332": "21 pass",
+    "1333-1340": "each 2 pass, 1 skipped"
+  },
+  "ready_pr_overlap_guard": {
+    "checked_open_non_draft_prs": [
+      1273,
+      1272,
+      1238,
+      1236,
+      1231,
+      1053,
+      1052,
+      977,
+      851,
+      778
+    ],
+    "path_overlap": [],
+    "result": "PASS"
+  },
+  "recommendation": {
+    "candidate_count": 3,
+    "close_after_replacement_admission": [
+      1330,
+      1331,
+      1332,
+      1333,
+      1334,
+      1335,
+      1336,
+      1337,
+      1338,
+      1339,
+      1340
+    ],
+    "close_guard": "Open and qualify the matching candidate at its recorded head, require current protected contexts, verify old drafts still match the immutable snapshot, then close without deleting remote source branches."
+  },
+  "remote_effects_performed": false,
+  "repository": "FS-GG/FS.GG.Rendering",
+  "required_status_checks": {
+    "contexts": [
+      "Deterministic gate",
+      "API compatibility gate (breaking-change \u2192 SemVer major)",
+      "kit / coordination-kit",
+      "skill-view-check",
+      "materialize / receiver-validate"
+    ],
+    "strict": false
+  },
+  "schema": "fsgg.pr-backlog-consolidation/1",
+  "snapshot": "/home/developer/projects/FS.GG.Rendering-pr-backlog-snapshot-20260927.json",
+  "source_branches_preserved": true
+}
