@@ -450,29 +450,56 @@ def native_snapshot(value: object) -> dict[str, object]:
                            separators=(",", ":"), ensure_ascii=True).encode("ascii")
     if hashlib.sha256(projected).hexdigest() != roster_digest:
         raise ConfigurationError("native inventory roster digest disagrees with the roster")
+    app_collection = value.get("appServerResponses")
+    rollout_collection = value.get("rolloutRecords")
+    if (not isinstance(app_collection, list) or not 3 <= len(app_collection) <= 1024 or
+            not isinstance(rollout_collection, list) or len(rollout_collection) > 1024):
+        raise ConfigurationError("native App Server source evidence is incomplete")
     evidence_chunks = []
-    decoded_collections = []
-    for collection in (value.get("appServerResponses"), value.get("rolloutRecords")):
-        if not isinstance(collection, list) or len(collection) > 1024:
-            raise ConfigurationError("native source byte evidence is malformed")
-        total_bytes = 0
-        decoded = []
-        for record in collection:
+    app_entries = []
+    total_bytes = 0
+    app_fields = {"method", "threadId", "requestCursor", "requestSha256", "requestBytesBase64",
+                  "responseSha256", "responseBytesBase64"}
+    try:
+        for record in app_collection:
+            if not isinstance(record, dict) or set(record) != app_fields:
+                raise ConfigurationError("native App Server source evidence is malformed")
+            request_raw = base64.b64decode(record["requestBytesBase64"], validate=True)
+            response_raw = base64.b64decode(record["responseBytesBase64"], validate=True)
+            total_bytes += len(request_raw) + len(response_raw)
+            if (total_bytes > 512 * 1024 or not request_raw or not response_raw or
+                    record["requestSha256"] != hashlib.sha256(request_raw).hexdigest() or
+                    record["responseSha256"] != hashlib.sha256(response_raw).hexdigest()):
+                raise ConfigurationError("native App Server source evidence is malformed")
+            request_document, response_document = json.loads(request_raw), json.loads(response_raw)
+            params = request_document.get("params") if isinstance(request_document, dict) else None
+            method = request_document.get("method") if isinstance(request_document, dict) else None
+            if (method not in {"thread/list", "thread/read", "thread/turns/list"} or
+                    not isinstance(params, dict) or record["method"] != method or
+                    record["threadId"] != params.get("threadId") or
+                    record["requestCursor"] != params.get("cursor") or
+                    not isinstance(response_document, dict) or
+                    response_document.get("id") != request_document.get("id") or
+                    not isinstance(response_document.get("result"), dict)):
+                raise ConfigurationError("App Server response is not bound to its exact request")
+            evidence_chunks.extend((request_raw, response_raw))
+            app_entries.append((record, request_document, response_document))
+    except (TypeError, ValueError, UnicodeError, json.JSONDecodeError) as error:
+        raise ConfigurationError("native App Server source evidence is malformed") from error
+    rollout_raws = []
+    total_bytes = 0
+    try:
+        for record in rollout_collection:
             if not isinstance(record, dict) or set(record) != {"sha256", "bytesBase64"}:
                 raise ConfigurationError("native source byte evidence is malformed")
-            try:
-                raw = base64.b64decode(record["bytesBase64"], validate=True)
-            except (TypeError, ValueError) as error:
-                raise ConfigurationError("native source byte evidence is malformed") from error
+            raw = base64.b64decode(record["bytesBase64"], validate=True)
             total_bytes += len(raw)
-            if (total_bytes > 512 * 1024 or not raw or
-                    record.get("sha256") != hashlib.sha256(raw).hexdigest()):
+            if total_bytes > 512 * 1024 or not raw or record["sha256"] != hashlib.sha256(raw).hexdigest():
                 raise ConfigurationError("native source byte evidence is malformed")
             evidence_chunks.append(raw)
-            decoded.append(raw)
-        decoded_collections.append(decoded)
-    if len(value["appServerResponses"]) < 3:
-        raise ConfigurationError("native App Server source evidence is incomplete")
+            rollout_raws.append(raw)
+    except (TypeError, ValueError) as error:
+        raise ConfigurationError("native source byte evidence is malformed") from error
     exact_digest = hashlib.sha256()
     binding = json.dumps({"collectorProducer": value["collectorProducer"],
                           "capturedAt": captured_at, "hostSource": value["inventoryHostSource"]},
@@ -494,29 +521,41 @@ def native_snapshot(value: object) -> dict[str, object]:
         if label is not None and (not isinstance(label, str) or label != label.strip() or
                                   not label or len(label) > 128):
             raise ConfigurationError(f"native {field} observation is malformed")
-    app_documents = []
-    try:
-        app_documents = [json.loads(raw) for raw in decoded_collections[0]]
-    except (UnicodeError, json.JSONDecodeError) as error:
-        raise ConfigurationError("retained App Server bytes are malformed") from error
-    thread_sources = [document.get("result", {}).get("thread") for document in app_documents
-                      if isinstance(document, dict) and isinstance(document.get("result"), dict)]
+    thread_sources = [response["result"].get("thread") for record, _, response in app_entries
+                      if record["method"] == "thread/read" and record["threadId"] == thread_id]
     if not any(isinstance(thread, dict) and thread.get("id") == thread_id and
                thread.get("modelProvider") == provider and thread.get("model") == value.get("model") and
                thread.get("reasoningEffort") == value.get("effort") for thread in thread_sources):
         raise ConfigurationError("native provider/profile does not match retained App Server bytes")
     retained_turns = []
-    for document in app_documents:
-        result = document.get("result") if isinstance(document, dict) else None
-        data = result.get("data") if isinstance(result, dict) else None
-        if isinstance(data, list) and data and all(isinstance(row, dict) and "status" in row for row in data):
-            retained_turns.extend(data)
+    actual_paging = []
+    previous_cursor = None
+    seen_cursors = set()
+    turn_entries = [(record, response["result"]) for record, _, response in app_entries
+                    if record["method"] == "thread/turns/list" and record["threadId"] == thread_id]
+    for number, (record, result) in enumerate(turn_entries, 1):
+        data, next_cursor = result.get("data"), result.get("nextCursor")
+        if (record["requestCursor"] != previous_cursor or not isinstance(data, list) or
+                any(not isinstance(row, dict) for row in data) or
+                (next_cursor is not None and (not isinstance(next_cursor, str) or not next_cursor or
+                                              next_cursor in seen_cursors)) or
+                (number < len(turn_entries) and next_cursor is None) or
+                (number == len(turn_entries) and next_cursor is not None)):
+            raise ConfigurationError("retained App Server paging chain is incomplete")
+        actual_paging.append({"page": number, "requestCursor": previous_cursor,
+                              "nextCursor": next_cursor, "rowCount": len(data)})
+        retained_turns.extend(data)
+        if next_cursor is not None:
+            seen_cursors.add(next_cursor)
+        previous_cursor = next_cursor
+    if actual_paging != paging:
+        raise ConfigurationError("native inventory paging evidence disagrees with retained response bytes")
     if [(row.get("id"), row.get("status")) for row in retained_turns] != [
             (row["turnId"], row["status"]) for row in inventory]:
         raise ConfigurationError("native turn inventory does not match retained App Server bytes")
     native_records = defaultdict(list)
     try:
-        for raw in decoded_collections[1]:
+        for raw in rollout_raws:
             document = json.loads(raw)
             payload = document.get("payload") if isinstance(document, dict) else None
             if not isinstance(document, dict) or document.get("type") != "token_usage_record" or not isinstance(payload, dict) or \

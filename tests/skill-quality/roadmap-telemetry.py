@@ -42,12 +42,19 @@ def native_snapshot(thread, identifiers, turns, *, complete=True, provider="open
                "rowCount": len(inventory)}]
     captured_at = "2026-09-27T12:00:00Z"
     app_values = [
-        {"id": 100, "result": {"data": [{"id": thread}], "nextCursor": None}},
+        {"id": 100, "result": {"data": [{"id": thread, "status": "completed"}], "nextCursor": None}},
         {"id": 200, "result": {"thread": {"id": thread, "modelProvider": provider,
           "model": model, "reasoningEffort": effort}}},
         {"id": 300, "result": {"data": [{"id": row["turnId"], "status": row["status"]}
                                             for row in inventory], "nextCursor": None}},
     ]
+    requests = [
+        {"id": 100, "method": "thread/list", "params": {"cursor": None, "limit": 100}},
+        {"id": 200, "method": "thread/read", "params": {"threadId": thread, "includeTurns": False}},
+        {"id": 300, "method": "thread/turns/list",
+         "params": {"threadId": thread, "cursor": None, "limit": 100}},
+    ]
+    request_raw = [json.dumps(value, separators=(",", ":")).encode() + b"\n" for value in requests]
     app_raw = [json.dumps(value, separators=(",", ":")).encode() + b"\n" for value in app_values]
     rollout_raw = [json.dumps({"type": "token_usage_record", "payload": {
         "thread_id": thread, "turn_id": row["turnId"], "response_id": "fixture-response",
@@ -58,12 +65,20 @@ def native_snapshot(thread, identifiers, turns, *, complete=True, provider="open
                           "capturedAt": captured_at,
                           "hostSource": "codex-app-server:thread/turns/list"},
                          sort_keys=True, separators=(",", ":")).encode()
-    for raw in [binding, *app_raw, *rollout_raw]:
+    app_chunks = [raw for pair in zip(request_raw, app_raw) for raw in pair]
+    for raw in [binding, *app_chunks, *rollout_raw]:
         source.update(len(raw).to_bytes(8, "big"))
         source.update(raw)
     source_digest = source.hexdigest()
     records = lambda rows: [{"sha256": hashlib.sha256(raw).hexdigest(),
                              "bytesBase64": MODULE.base64.b64encode(raw).decode()} for raw in rows]
+    app_records = [{"method": request["method"], "threadId": request["params"].get("threadId"),
+                    "requestCursor": request["params"].get("cursor"),
+                    "requestSha256": hashlib.sha256(request_bytes).hexdigest(),
+                    "requestBytesBase64": MODULE.base64.b64encode(request_bytes).decode(),
+                    "responseSha256": hashlib.sha256(response_bytes).hexdigest(),
+                    "responseBytesBase64": MODULE.base64.b64encode(response_bytes).decode()}
+                   for request, request_bytes, response_bytes in zip(requests, request_raw, app_raw)]
     return {"threadId": thread, "allTurnIds": list(identifiers), "turnInventory": inventory,
             "inventoryProvenance": "codex-app-server-thread-turns-list",
             "inventoryHostSource": "codex-app-server:thread/turns/list",
@@ -71,7 +86,7 @@ def native_snapshot(thread, identifiers, turns, *, complete=True, provider="open
             "inventoryRosterDigest": roster_digest, "inventorySourceDigest": source_digest,
             "usageProvenance": "codex-native-token-usage-record",
             "collectorProducer": "fsgg-work-roadmap-native-collector/1",
-            "appServerResponses": records(app_raw), "rolloutRecords": records(rollout_raw),
+            "appServerResponses": app_records, "rolloutRecords": records(rollout_raw),
             "provider": provider,
             "providerProvenance": ("codex-app-server-thread.modelProvider"
                                    if provider is not None else None),
@@ -79,6 +94,34 @@ def native_snapshot(thread, identifiers, turns, *, complete=True, provider="open
 
 
 class RoadmapTelemetryTests(unittest.TestCase):
+    def test_thread_list_status_is_not_a_turn_and_exact_terminal_cursor_is_required(self):
+        thread = "22222222-2222-4222-8222-222222222222"
+        turn = "33333333-3333-4333-8333-333333333333"
+        snapshot = native_snapshot(thread, [turn], [], complete=False)
+        # The fixture's thread/list row deliberately has the real Thread.status
+        # shape; only the method-bound thread/turns/list row belongs to the roster.
+        self.assertEqual(MODULE.native_snapshot(snapshot)["allTurnIds"], [turn])
+
+        response = json.loads(MODULE.base64.b64decode(
+            snapshot["appServerResponses"][2]["responseBytesBase64"]))
+        response["result"]["nextCursor"] = "missing-page"
+        raw = json.dumps(response, separators=(",", ":")).encode() + b"\n"
+        snapshot["appServerResponses"][2]["responseSha256"] = hashlib.sha256(raw).hexdigest()
+        snapshot["appServerResponses"][2]["responseBytesBase64"] = MODULE.base64.b64encode(raw).decode()
+        binding = json.dumps({"collectorProducer": snapshot["collectorProducer"],
+                              "capturedAt": snapshot["inventoryCapturedAt"],
+                              "hostSource": snapshot["inventoryHostSource"]},
+                             sort_keys=True, separators=(",", ":")).encode()
+        digest = hashlib.sha256()
+        for value in [binding, *[MODULE.base64.b64decode(record[field])
+                                  for record in snapshot["appServerResponses"]
+                                  for field in ("requestBytesBase64", "responseBytesBase64")]]:
+            digest.update(len(value).to_bytes(8, "big"))
+            digest.update(value)
+        snapshot["inventorySourceDigest"] = digest.hexdigest()
+        with self.assertRaisesRegex(MODULE.ConfigurationError, "paging chain is incomplete"):
+            MODULE.native_snapshot(snapshot)
+
     def test_repository_environment_precedence_avoids_checkout_discovery(self):
         with mock.patch.dict(os.environ, {
             "FSGG_TELEMETRY_REPOSITORY": "FS-GG/explicit",
@@ -701,10 +744,14 @@ class RoadmapTelemetryTests(unittest.TestCase):
 
         def replace_record(snapshot, collection, index, document):
             raw = json.dumps(document, separators=(",", ":")).encode() + b"\n"
-            snapshot[collection][index] = {
-                "sha256": hashlib.sha256(raw).hexdigest(),
-                "bytesBase64": MODULE.base64.b64encode(raw).decode(),
-            }
+            if collection == "appServerResponses":
+                snapshot[collection][index]["responseSha256"] = hashlib.sha256(raw).hexdigest()
+                snapshot[collection][index]["responseBytesBase64"] = MODULE.base64.b64encode(raw).decode()
+            else:
+                snapshot[collection][index] = {
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "bytesBase64": MODULE.base64.b64encode(raw).decode(),
+                }
             digest = hashlib.sha256()
             binding = json.dumps({"collectorProducer": snapshot["collectorProducer"],
                                   "capturedAt": snapshot["inventoryCapturedAt"],
@@ -712,20 +759,32 @@ class RoadmapTelemetryTests(unittest.TestCase):
                                  sort_keys=True, separators=(",", ":")).encode()
             digest.update(len(binding).to_bytes(8, "big"))
             digest.update(binding)
-            for name in ("appServerResponses", "rolloutRecords"):
-                for record in snapshot[name]:
-                    value = MODULE.base64.b64decode(record["bytesBase64"])
+            for record in snapshot["appServerResponses"]:
+                for field in ("requestBytesBase64", "responseBytesBase64"):
+                    value = MODULE.base64.b64decode(record[field])
                     digest.update(len(value).to_bytes(8, "big"))
                     digest.update(value)
+            for record in snapshot["rolloutRecords"]:
+                value = MODULE.base64.b64decode(record["bytesBase64"])
+                digest.update(len(value).to_bytes(8, "big"))
+                digest.update(value)
             snapshot["inventorySourceDigest"] = digest.hexdigest()
 
         forged_provider = native_snapshot(thread, [one], [], complete=False)
         response = json.loads(MODULE.base64.b64decode(
-            forged_provider["appServerResponses"][1]["bytesBase64"]))
+            forged_provider["appServerResponses"][1]["responseBytesBase64"]))
         response["result"]["thread"]["modelProvider"] = "foreign"
         replace_record(forged_provider, "appServerResponses", 1, response)
         with self.assertRaisesRegex(MODULE.ConfigurationError, "provider/profile"):
             MODULE.native_snapshot(forged_provider)
+
+        nonterminal_page = native_snapshot(thread, [one], [], complete=False)
+        response = json.loads(MODULE.base64.b64decode(
+            nonterminal_page["appServerResponses"][2]["responseBytesBase64"]))
+        response["result"]["nextCursor"] = "unretained-next-page"
+        replace_record(nonterminal_page, "appServerResponses", 2, response)
+        with self.assertRaisesRegex(MODULE.ConfigurationError, "paging chain is incomplete"):
+            MODULE.native_snapshot(nonterminal_page)
 
         forged_usage = native_snapshot(thread, [one], [{
             "turnId": one, "turnSequence": 1,

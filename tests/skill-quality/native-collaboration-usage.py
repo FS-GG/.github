@@ -74,6 +74,8 @@ class NativeUsageTests(unittest.TestCase):
             self.assertEqual(result["provider"], "openai")
             self.assertEqual(result["providerProvenance"], "codex-app-server-thread.modelProvider")
             self.assertGreaterEqual(len(result["appServerResponses"]), 3)
+            self.assertEqual([row["method"] for row in result["appServerResponses"]],
+                             ["thread/list", "thread/read", "thread/turns/list"])
             self.assertEqual(len(result["rolloutRecords"]), 4)
             class NoProviderServer(FakeServer):
                 def request(self, request_id, method, params):

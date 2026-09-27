@@ -88,12 +88,13 @@ class AppServer:
             raise HostUnavailable("Codex App Server is unavailable") from error
 
     def request_with_evidence(self, request_id: int, method: str,
-                              params: dict[str, object]) -> tuple[dict[str, object], bytes]:
+                              params: dict[str, object]) -> tuple[dict[str, object], bytes, bytes]:
         if self.process.stdin is None or self.process.stdout is None:
             raise HostUnavailable("Codex App Server stream is unavailable")
-        self.process.stdin.write(json.dumps(
+        request_bytes = json.dumps(
             {"id": request_id, "method": method, "params": params},
-            separators=(",", ":")).encode("utf-8") + b"\n")
+            separators=(",", ":")).encode("utf-8") + b"\n"
+        self.process.stdin.write(request_bytes)
         self.process.stdin.flush()
         deadline = time.monotonic() + 8
         while time.monotonic() < deadline:
@@ -110,7 +111,7 @@ class AppServer:
                 result = response.get("result")
                 if not isinstance(result, dict) or response.get("error") is not None:
                     raise HostUnavailable("Codex App Server refused a read-only usage request")
-                return result, line
+                return result, request_bytes, line
         raise HostUnavailable("Codex App Server read timed out")
 
     def request(self, request_id: int, method: str, params: dict[str, object]) -> dict[str, object]:
@@ -135,29 +136,43 @@ class AppServer:
 
 
 def request_with_evidence(server: AppServer, request_id: int, method: str,
-                          params: dict[str, object]) -> tuple[dict[str, object], bytes]:
+                          params: dict[str, object]) -> tuple[dict[str, object], bytes, bytes]:
     exact = getattr(server, "request_with_evidence", None)
     if callable(exact):
         return exact(request_id, method, params)
     result = server.request(request_id, method, params)
     # Test doubles use this deterministic wire representation. Production is
     # always AppServer.request_with_evidence and retains the exact line read.
-    return result, json.dumps({"id": request_id, "result": result},
+    request_raw = json.dumps({"id": request_id, "method": method, "params": params},
+                             separators=(",", ":"), ensure_ascii=True).encode("ascii") + b"\n"
+    response_raw = json.dumps({"id": request_id, "result": result},
                               separators=(",", ":"), ensure_ascii=True).encode("ascii") + b"\n"
+    return result, request_raw, response_raw
+
+
+def app_evidence_record(method: str, params: dict[str, object], request_raw: bytes,
+                        response_raw: bytes) -> dict[str, object]:
+    return {"method": method, "threadId": params.get("threadId"),
+            "requestCursor": params.get("cursor"),
+            "requestSha256": hashlib.sha256(request_raw).hexdigest(),
+            "requestBytesBase64": base64.b64encode(request_raw).decode("ascii"),
+            "responseSha256": hashlib.sha256(response_raw).hexdigest(),
+            "responseBytesBase64": base64.b64encode(response_raw).decode("ascii")}
 
 
 def page_with_evidence(server: AppServer, method: str, request_id: int,
-                       params: dict[str, object]) -> tuple[list[dict[str, object]], list[dict[str, object]], list[bytes]]:
+                       params: dict[str, object]) -> tuple[list[dict[str, object]], list[dict[str, object]], list[dict[str, object]]]:
     rows: list[dict[str, object]] = []
     paging: list[dict[str, object]] = []
-    evidence: list[bytes] = []
+    evidence: list[dict[str, object]] = []
     cursor: str | None = None
     seen_cursors: set[str] = set()
     for offset in range(10):
         request = dict(params, cursor=cursor, limit=100)
-        result, raw = request_with_evidence(server, request_id + offset, method, request)
-        evidence.append(raw)
-        if sum(map(len, evidence)) > MAX_EVIDENCE_BYTES:
+        result, request_raw, response_raw = request_with_evidence(server, request_id + offset, method, request)
+        evidence.append(app_evidence_record(method, request, request_raw, response_raw))
+        if sum(len(base64.b64decode(row["requestBytesBase64"])) +
+               len(base64.b64decode(row["responseBytesBase64"])) for row in evidence) > MAX_EVIDENCE_BYTES:
             raise HostUnavailable("native App Server evidence exceeds the bound")
         data = result.get("data")
         if not isinstance(data, list) or any(not isinstance(row, dict) for row in data):
@@ -272,10 +287,13 @@ def collect(parent_thread_id: str, native_id: str, *, command: str = "codex",
             child_id = child.get("id")
             if not isinstance(child_id, str) or not UUID.fullmatch(child_id):
                 continue
-            thread_result, thread_raw = request_with_evidence(
-                server, 200, "thread/read", {"threadId": child_id, "includeTurns": False})
-            app_evidence.append(thread_raw)
-            if sum(map(len, app_evidence)) > MAX_EVIDENCE_BYTES:
+            thread_params = {"threadId": child_id, "includeTurns": False}
+            thread_result, thread_request, thread_raw = request_with_evidence(
+                server, 200, "thread/read", thread_params)
+            app_evidence.append(app_evidence_record(
+                "thread/read", thread_params, thread_request, thread_raw))
+            if sum(len(base64.b64decode(row["requestBytesBase64"])) +
+                   len(base64.b64decode(row["responseBytesBase64"])) for row in app_evidence) > MAX_EVIDENCE_BYTES:
                 raise HostUnavailable("native App Server evidence exceeds the bound")
             thread = thread_result.get("thread")
             if not isinstance(thread, dict):
@@ -294,7 +312,8 @@ def collect(parent_thread_id: str, native_id: str, *, command: str = "codex",
             server, "thread/turns/list", 300,
             {"threadId": thread_id, "sortDirection": "asc", "itemsView": "notLoaded"})
         app_evidence.extend(turn_evidence)
-        if sum(map(len, app_evidence)) > MAX_EVIDENCE_BYTES:
+        if sum(len(base64.b64decode(row["requestBytesBase64"])) +
+               len(base64.b64decode(row["responseBytesBase64"])) for row in app_evidence) > MAX_EVIDENCE_BYTES:
             raise HostUnavailable("native App Server evidence exceeds the bound")
         inventory_captured_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     provider = thread.get("modelProvider")
@@ -305,12 +324,13 @@ def collect(parent_thread_id: str, native_id: str, *, command: str = "codex",
     model, effort = thread.get("model"), thread.get("reasoningEffort")
     profile_available = all(isinstance(value, str) and value == value.strip() and value and len(value) <= 128
                             for value in (provider, model, effort))
-    app_records = [{"sha256": hashlib.sha256(raw).hexdigest(),
-                    "bytesBase64": base64.b64encode(raw).decode("ascii")} for raw in app_evidence]
+    app_records = app_evidence
+    app_bytes = [raw for row in app_records for raw in (
+        base64.b64decode(row["requestBytesBase64"]), base64.b64decode(row["responseBytesBase64"]))]
     if not turns:
         inventory = []
         roster_digest = inventory_digest(thread_id, inventory)
-        evidence_digest = exact_evidence_digest(app_evidence, inventory_captured_at)
+        evidence_digest = exact_evidence_digest(app_bytes, inventory_captured_at)
         return {"threadId": thread_id, "turns": [], "allTurnIds": [], "turnInventory": inventory,
                 "inventoryProvenance": INVENTORY_PROVENANCE, "usageProvenance": USAGE_PROVENANCE,
                 "inventoryHostSource": INVENTORY_HOST_SOURCE, "inventoryPaging": inventory_paging,
@@ -352,7 +372,7 @@ def collect(parent_thread_id: str, native_id: str, *, command: str = "codex",
         row["usageAvailable"] = True
         observations.append({"turnId": turn["id"], "turnSequence": sequence, "usage": total})
     roster_digest = inventory_digest(thread_id, inventory)
-    evidence_digest = exact_evidence_digest(app_evidence + rollout_evidence, inventory_captured_at)
+    evidence_digest = exact_evidence_digest(app_bytes + rollout_evidence, inventory_captured_at)
     rollout_records = [{"sha256": hashlib.sha256(raw).hexdigest(),
                         "bytesBase64": base64.b64encode(raw).decode("ascii")} for raw in rollout_evidence]
     return {"threadId": thread_id, "turns": observations, "allTurnIds": ids,
