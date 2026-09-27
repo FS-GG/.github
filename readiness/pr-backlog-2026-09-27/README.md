@@ -29,7 +29,7 @@ Rendering #1343 is the single open managed replacement at this checkpoint. It us
 
 ## Queue controls and remaining work
 
-The parent integrator admits no more than two actively qualifying heads across the programme, one managed PR per dependency chain and at most two managed PRs per repository. Intermediate source batches remain local. Existing ready PRs are merged only after exact-head checks and current-main integration review. The nine September 13 queued runs identified in the census could not be canceled: both normal and force-cancel GitHub requests returned HTTP 409, so no capacity was inferred from them.
+The parent integrator admits one managed PR per dependency chain and at most two managed PRs per repository. It checks each repository's live hosted queue before admission; independent repositories can qualify in parallel when capacity is available. Intermediate source batches remain local. Existing ready PRs are merged only after exact-head checks and current-main integration review. The nine September 13 queued runs identified in the census could not be canceled: both normal and force-cancel GitHub requests returned HTTP 409, so no capacity was inferred from them.
 
 SDD, Templates, Rendering, and Game preserved candidates remain distinct from merged source, publication, installed receiver adoption, and roadmap acceptance. Net #57 needs the #53 protobuf-net.Grpc version plus repaired lockfiles; a local combined candidate passes locked restore and 29 tests. SDD and Templates source cuts and Game batches are being prepared against current main. Protected `.github` #3695 and Coordination #545 holds were not bypassed.
 
@@ -74,3 +74,7 @@ Net #95 opened from a branch with an `item/` prefix, which made protected receiv
 ## 09:28 UTC continuation
 
 Net #96's new receiver validation and all other required checks passed at exact head `54b7de145a1dcaa9c98daa1d7f6bc7102b0f37f1`, then it merged at `5b76131772c62606cb3082b7a646d487c33bd0f8`. Original #49, #44, #43, #41 and #52 closed unmerged only after main was read back with all five intended package versions, the retained #92 YoloDev version and the merged #96 commit. Every original head and source branch was checked immediately before closure and again afterward. Row-level evidence is in `net-ready-original-closures.json`. The replacement's post-merge CI is pending. A complete organization search after those dispositions counted 63 open PRs.
+
+## 09:32 UTC continuation
+
+Net #96's post-merge `gate` and `coordination-coherence` runs passed at main `5b76131772c62606cb3082b7a646d487c33bd0f8`. SDD #1064's post-merge gate passed at main `61ca836421b6c9c15e51ee40ba8c24dd40ba0ea3`. Governance #431 (Fantomas 8.0.5) merged from exact green head `ba147a4984ffd7ffe5ee30e8275eb5d7ad51b47b` at `f4eb16f06d933674c81aad038f2a60b78a3be06b`; the merge and main commit were read back, and its post-merge gate remains in progress. Rendering's single exact-main rerun of `36308935378` remains in progress, so no new Rendering PR has been admitted. The complete organization search counted 66 open PRs at 09:31 UTC as new bot PRs arrived.
