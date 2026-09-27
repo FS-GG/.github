@@ -53,7 +53,8 @@ module DeliveryReceiptProducer =
                         |> Result.bind (fun () -> observe ports request)
                         |> Result.bind (fun fresh ->
                             match fresh.Evidence with
-                            | Some evidence when evidence = request.Evidence -> Ok AlreadyPresent
+                            | Some evidence when evidence = request.Evidence ->
+                                headCurrent ports request |> Result.map (fun () -> AlreadyPresent)
                             | Some _ -> Error "delivery obligation already has a conflicting receipt"
                             | None ->
                                 // The whole leading marker is the durable slot. A different body at that

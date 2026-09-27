@@ -125,6 +125,22 @@ module DeliveryReceiptProducerTests =
         Assert.Equal(0, writes.Value)
 
     [<Fact>]
+    let ``matching receipt observed with moved head refuses AlreadyPresent`` () =
+        let ledger, current, writes, ports = fixture ()
+        let reads = ref 0
+        let raced =
+            { ports with
+                Comments = fun () ->
+                    reads.Value <- reads.Value + 1
+                    if reads.Value = 2 then
+                        ledger.Value <- [ declaration; receipt evidence ]
+                        current.Value <- String.replicate 40 "b"
+                    Ok ledger.Value }
+        expectError "stale" (DeliveryReceiptProducer.produceWith raced request)
+        Assert.Equal(2, reads.Value)
+        Assert.Equal(0, writes.Value)
+
+    [<Fact>]
     let ``prospective evidence rejects a final newline`` () =
         let _, _, writes, ports = fixture ()
         expectError "evidence" (DeliveryReceiptProducer.produceWith ports { request with Evidence = evidence + "\n" })
