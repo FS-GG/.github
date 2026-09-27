@@ -269,6 +269,7 @@ module SkillTelemetryAdapter =
                 state.Remove "pendingPublication" |> ignore
                 let operation = requiredString "operation" pending
                 if operation.StartsWith("native-usage:", StringComparison.Ordinal) then state.Remove "usageIntent" |> ignore
+                if operation.StartsWith("native-roster:", StringComparison.Ordinal) then state.Remove "rosterIntent" |> ignore
                 saveState config state
             fail message
         if requiredString "operation" pending = "population-only" then
@@ -399,11 +400,14 @@ module SkillTelemetryAdapter =
             if phase <> "started" && phase <> "terminal" then fail "parent dispatch must be started before a child is expected"
             if requiredString "itemId" value <> item then fail "parent and child dispatches must share the item identity"
             if optionalString "originalItemId" value |> Option.defaultValue item <> original then fail "parent and child dispatches must share the original item identity"
-            if phase = "terminal" && relation <> "follow-up" then fail "parent dispatch must be started before a child is expected"
             parentDispatch <- Some(requiredString "dispatchId" value)
             parentInvocation <- Some(requiredString "invocationId" value)
             assignmentDigest <- optionalString "originalAssignmentDigest" value
             actualRelation <- relation
+            if relation = "follow-up" then
+                match value["usageLedger"] with
+                | null | :? JsonObject -> ()
+                | _ -> fail "follow-up usage baseline is malformed"
         | None when relation <> "root" -> fail "child and follow-up dispatches require --parent-token"
         | None when original <> item -> assignmentDigest <- Some(authorizedOriginal feature item original)
         | None -> ()
@@ -422,6 +426,8 @@ module SkillTelemetryAdapter =
             elif phase <> "expected" then fail "dispatch attempt already progressed beyond expectation"
             outputDispatch "expected" (requiredString "token" existing) (coverage existing)
         | None ->
+            if parent |> Option.exists (fun value -> requiredString "phase" value = "terminal" && actualRelation <> "follow-up") then
+                fail "parent dispatch must be started before a child is expected"
             let token, activation, dispatch, invocation = Guid.NewGuid().ToString("N"), Guid.NewGuid().ToString("N"), Guid.NewGuid().ToString("N"), Guid.NewGuid().ToString("N")
             let activation, rootInvocation =
                 match parent with
@@ -432,6 +438,15 @@ module SkillTelemetryAdapter =
                 match Environment.GetEnvironmentVariable "CODEX_THREAD_ID" with
                 | value when not (String.IsNullOrEmpty value) && Guid.TryParse value |> fst -> Some value
                 | _ -> None
+            let baseline =
+                match parent, hostParent with
+                | Some previous, Some thread when actualRelation = "follow-up" && optionalString "hostParentThreadId" previous = Some thread ->
+                    match NativeUsage.collect (Guid.Parse thread) (requiredString "nativeId" previous)
+                              (requiredString "rootInvocationId" previous) (requiredString "invocationId" previous) 0 with
+                    | Ok inventory -> Some inventory
+                    | Error _ -> None
+                | _ -> None
+            let baselineIds = baseline |> Option.map (fun inventory -> inventory.AllTurnIds |> List.map string) |> Option.defaultValue []
             let state = jsonObject [
                 "schema", node stateSchema; "token", node token; "phase", node "begin-pending"; "sequence", node 0
                 "featureId", node feature; "itemId", node item; "originalItemId", node original
@@ -443,9 +458,23 @@ module SkillTelemetryAdapter =
                 "parentInvocationId", (parentInvocation |> Option.map node |> Option.defaultValue nullNode)
                 "relation", node actualRelation; "lateAfterSeconds", node lateAfter; "nativeId", nullNode
                 "hostParentThreadId", (hostParent |> Option.map node |> Option.defaultValue nullNode)
-                "baselineTurnIds", jsonArray Seq.empty; "usageBaselineKnown", node (actualRelation <> "follow-up")
+                "baselineTurnIds", jsonArray (baselineIds |> Seq.map node)
+                "baselineThreadId", (baseline |> Option.map (fun inventory -> node (string inventory.ThreadId)) |> Option.defaultValue nullNode)
+                "baselineProvenance", (baseline |> Option.map (fun _ -> node "codex-app-server-thread-turns-list") |> Option.defaultValue nullNode)
+                "usageBaselineKnown", node (actualRelation <> "follow-up" || baseline.IsSome)
                 "associationProducer", (config.Producer |> Option.map node |> Option.defaultValue nullNode)
                 "associationDigest", (config.BindingDigest |> Option.map node |> Option.defaultValue nullNode) ]
+            baseline |> Option.iter (fun inventory ->
+                state["baselineHostSource"] <- node "codex-app-server:thread/turns/list"
+                state["baselinePaging"] <- JsonNode.Parse(inventory.InventoryPaging.GetRawText())
+                state["baselineCapturedAt"] <- node inventory.InventoryCapturedAt
+                state["baselineRosterDigest"] <- node inventory.RosterDigest
+                state["baselineSourceDigest"] <- node inventory.SourceDigest
+                state["baselineSourceBinding"] <- JsonNode.Parse(inventory.SourceBinding.GetRawText())
+                state["baselineProducerStream"] <- parent |> Option.map (requiredString "producerStream" >> node) |> Option.defaultValue nullNode
+                state["baselineCollectorProducer"] <- node "fsgg-work-roadmap-native-collector/1"
+                state["baselineAppServerResponses"] <- JsonNode.Parse(inventory.AppServerResponses.GetRawText())
+                state["baselineRolloutRecords"] <- JsonNode.Parse(inventory.RolloutRecords.GetRawText()))
             let at = timestamp ()
             let events = ResizeArray<JsonNode>()
             if actualRelation = "root" then
@@ -483,97 +512,282 @@ module SkillTelemetryAdapter =
         | _ -> fail "dispatch must be expected before start"
         outputDispatch "started" token (coverage state)
 
+    let private rosterFingerprint threadId turnId sequence provenance =
+        let fields = jsonArray [ node threadId; node turnId; node sequence; node provenance ]
+        fields.ToJsonString(compact) |> utf8.GetBytes |> sha256
+
+    let private rosterOperationHash (entries: JsonObject list) =
+        let rows =
+            entries
+            |> List.map (fun entry ->
+                let hash = requiredString "hash" entry
+                let turnId = requiredString "turnId" entry
+                let sequence = requiredInt "turnSequence" entry
+                $"{{\"hash\": \"{hash}\", \"turnId\": \"{turnId}\", \"turnSequence\": {sequence}}}")
+        "[" + String.concat ", " rows + "]" |> utf8.GetBytes |> sha256
+
+    let private usageFingerprint (state: JsonObject) (inventory: NativeInventory) (turn: NativeTurn) =
+        let quoteOption value = value |> Option.map JsonSerializer.Serialize |> Option.defaultValue "null"
+        let usage = turn.Usage
+        let fields =
+            $"[{turn.Sequence}, {quoteOption inventory.Provider}, {quoteOption inventory.ProviderProvenance}, {quoteOption inventory.Model}, {quoteOption inventory.Effort}, \"codex-native-token-usage-record\", {{\"cached_input_tokens\": {usage.CachedInput}, \"input_tokens\": {usage.Input}, \"output_tokens\": {usage.Output}, \"reasoning_output_tokens\": {usage.Reasoning}, \"total_tokens\": {usage.Total}}}]"
+        fields |> utf8.GetBytes |> sha256
+
+    let private finishRosterIntent config (state: JsonObject) =
+        match state["rosterIntent"] with
+        | null -> ()
+        | :? JsonObject as intent ->
+            let published = if state.ContainsKey "turnRosterPublishedCount" then requiredInt "turnRosterPublishedCount" state else 0
+            let roster =
+                match state["expectedTurnRoster"] with
+                | :? JsonArray as values -> values |> Seq.choose stringValue |> Seq.toList
+                | _ -> fail "native turn roster intent is malformed"
+            let baseline =
+                match state["baselineTurnIds"] with
+                | :? JsonArray as values -> values |> Seq.choose stringValue |> Seq.toList
+                | null -> []
+                | _ -> fail "native turn roster intent is malformed"
+            let entries =
+                match intent["entries"] with
+                | :? JsonArray as values -> values |> Seq.toList
+                | _ -> fail "native turn roster intent is malformed"
+            if published < 0 || requiredInt "offset" intent <> published ||
+               optionalString "expectedTurnRosterProvenance" state <> Some "codex-app-server-thread-turns-list" then
+                fail "native turn roster intent is malformed"
+            let threadId = requiredString "nativeThreadId" state
+            for index, entry in entries |> List.indexed do
+                match entry with
+                | :? JsonObject as value ->
+                    let position = published + index
+                    let sequence = baseline.Length + position + 1
+                    let turnId = requiredString "turnId" value
+                    if value.Count <> 3 || position >= roster.Length || roster[position] <> turnId ||
+                       requiredInt "turnSequence" value <> sequence ||
+                       requiredString "hash" value <> rosterFingerprint threadId turnId sequence "codex-app-server-thread-turns-list" then
+                        fail "native turn roster intent differs from expected population"
+                | _ -> fail "native turn roster intent is malformed"
+            state["turnRosterPublishedCount"] <- node (published + entries.Length)
+            state.Remove "rosterIntent" |> ignore
+            saveState config state
+        | _ -> fail "native turn roster intent is malformed"
+
+    let private resumeNativePublication config (state: JsonObject) =
+        match state["pendingPublication"] with
+        | :? JsonObject as pending ->
+            let operation = requiredString "operation" pending
+            try publishPending config state
+            with error ->
+                if not (state.ContainsKey "pendingPublication") && operation.StartsWith("native-roster:", StringComparison.Ordinal) then
+                    state.Remove "rosterIntent" |> ignore
+                    saveState config state
+                raise error
+            if operation = "native-thread" then state["nativeThreadPublished"] <- node true
+            elif operation = "native-inventory-authority" then
+                state["nativeInventoryPublished"] <- node true
+                match state["nativeInventoryIntegration"] with
+                | :? JsonObject as value -> value["status"] <- node "published"
+                | _ -> ()
+            elif operation.StartsWith("native-roster:", StringComparison.Ordinal) then finishRosterIntent config state
+            saveState config state
+        | null -> ()
+        | _ -> fail "telemetry publication intent is malformed"
+
     let private reconcileUsage config (state: JsonObject) =
         if requiredString "phase" state <> "terminal" || optionalString "hostParentThreadId" state |> Option.isNone then
             "native-collaboration-usage-unsupported"
+        elif (if state.ContainsKey "usageBaselineKnown" then not (boolValue "usageBaselineKnown" state)
+              else requiredString "relation" state = "follow-up") then
+            "native-collaboration-usage-unknown"
         else
-            if state.ContainsKey "pendingPublication" then
-                let pending = state["pendingPublication"] :?> JsonObject
-                let operation = requiredString "operation" pending
-                publishPending config state
-                if operation = "native-thread" then
-                    state["nativeThreadPublished"] <- node true
-                elif operation.StartsWith("native-roster:", StringComparison.Ordinal) then
-                    match state["rosterIntent"] with
-                    | :? JsonObject as intent ->
-                        state["turnRosterPublishedCount"] <- node (requiredInt "nextCursor" intent)
-                        state.Remove "rosterIntent" |> ignore
-                    | _ -> fail "native turn roster intent is malformed"
-                elif operation.StartsWith("native-usage:", StringComparison.Ordinal) then
-                    match state["usageIntent"], state["usageLedger"] with
-                    | (:? JsonObject as intent), (:? JsonObject as ledger) ->
-                        ledger[requiredString "turnId" intent] <- jsonObject [ "revision", node (requiredInt "revision" intent); "hash", node (requiredString "hash" intent) ]
-                        state.Remove "usageIntent" |> ignore
-                    | _ -> fail "native usage intent is malformed"
+            resumeNativePublication config state
+            if state.ContainsKey "rosterIntent" then finishRosterIntent config state
+            match state["usageIntent"] with
+            | :? JsonObject as intent ->
+                if state.ContainsKey "pendingPublication" then publishPending config state
+                let ledger =
+                    match state["usageLedger"] with
+                    | :? JsonObject as value -> value
+                    | null -> let value = JsonObject() in state["usageLedger"] <- value; value
+                    | _ -> fail "native usage ledger is malformed"
+                ledger[requiredString "turnId" intent] <- jsonObject [
+                    "revision", node (requiredInt "revision" intent)
+                    "hash", node (requiredString "hash" intent) ]
+                state.Remove "usageIntent" |> ignore
                 saveState config state
+            | null -> ()
+            | _ -> fail "native usage intent is malformed"
             let parentThread = Guid.Parse(requiredString "hostParentThreadId" state)
             match NativeUsage.collect parentThread (requiredString "nativeId" state) (requiredString "rootInvocationId" state) (requiredString "invocationId" state) 0 with
             | Error _ -> "native-collaboration-usage-unknown"
             | Ok inventory ->
-                let roster = inventory.AllTurnIds |> List.map string
-                let oldRoster =
-                    match state["expectedTurnRoster"] with
+                let allIds = inventory.AllTurnIds |> List.map string
+                let baseline =
+                    match state["baselineTurnIds"] with
                     | :? JsonArray as values -> values |> Seq.choose stringValue |> Seq.toList
                     | null -> []
-                    | _ -> fail "native expected turn roster is malformed"
-                if roster |> List.truncate oldRoster.Length <> oldRoster then fail "native expected turn roster changed or reordered"
-                match optionalString "nativeThreadId" state with
-                | Some existing when existing <> string inventory.ThreadId -> fail "native child thread changed for a dispatch"
-                | _ -> ()
-                state["nativeThreadId"] <- node (string inventory.ThreadId)
-                state["expectedTurnRoster"] <- jsonArray (roster |> Seq.map node)
-                state["nativeInventorySourceDigest"] <- node inventory.SourceDigest
-                state["nativeInventoryRosterDigest"] <- node inventory.RosterDigest
-                saveState config state
-                if not (state.ContainsKey "nativeThreadPublished") || not (boolValue "nativeThreadPublished" state) then
-                    let threadEvent = event "runtime-start" ("runtime-thread-" + requiredString "invocationId" state) (Some(requiredString "itemId" state)) [ "invocationId", state["invocationId"].DeepClone(); "threadId", node (string inventory.ThreadId); "turnId", nullNode; "turnSequence", nullNode; "processId", node 0; "phase", node "thread" ]
-                    publish config state "native-thread" "terminal" [ threadEvent ]
-                    state["nativeThreadPublished"] <- node true
-                    saveState config state
-                let mutable published =
-                    if state.ContainsKey "turnRosterPublishedCount" then requiredInt "turnRosterPublishedCount" state else 0
-                if published < 0 || published > roster.Length then fail "native turn roster publication cursor is malformed"
-                while published < roster.Length do
-                    let entries = roster |> List.skip published |> List.truncate 64
-                    let events =
-                        entries
-                        |> List.mapi (fun index turnId ->
-                            event "runtime-start" (digest "runtime-turn-" [ requiredString "invocationId" state; turnId ]) (Some(requiredString "itemId" state)) [ "invocationId", state["invocationId"].DeepClone(); "threadId", node (string inventory.ThreadId); "turnId", node turnId; "turnSequence", node (published + index + 1); "processId", node 0; "phase", node "turn" ])
-                    let next = published + entries.Length
-                    state["rosterIntent"] <- jsonObject [ "nextCursor", node next; "turnIds", jsonArray (entries |> Seq.map node) ]
-                    saveState config state
-                    publish config state ("native-roster:" + digest "" entries) "terminal" events
-                    state["turnRosterPublishedCount"] <- node next
-                    state.Remove "rosterIntent" |> ignore
-                    saveState config state
-                    published <- next
-                let ledger =
-                    match state["usageLedger"] with
-                    | :? JsonObject as value -> value
-                    | null -> let value = JsonObject() in state["usageLedger"] <- value; saveState config state; value
-                    | _ -> fail "native usage ledger is malformed"
-                for turn in inventory.Turns do
-                    let turnId = string turn.TurnId
-                    let fingerprint = digest "" [ string turn.Sequence; turn.Provider; turn.Model; turn.Effort; string turn.Usage.Input; string turn.Usage.CachedInput; string turn.Usage.Output; string turn.Usage.Reasoning; string turn.Usage.Total ]
-                    let previousRevision, previousHash =
-                        match ledger[turnId] with
-                        | :? JsonObject as previous -> requiredInt "revision" previous, requiredString "hash" previous
-                        | _ -> -1, ""
-                    if previousHash <> fingerprint then
-                        let revision = previousRevision + 1
-                        let observation = event "runtime-turn-usage" (digest "runtime-turn-usage-" [ requiredString "invocationId" state; turnId ]) (Some(requiredString "itemId" state)) [
-                            "invocationId", state["invocationId"].DeepClone(); "threadId", node (string inventory.ThreadId); "turnId", node turnId; "turnSequence", node turn.Sequence
-                            "provider", node turn.Provider; "requestedModel", state["model"].DeepClone(); "observedModel", node turn.Model; "requestedEffort", state["effort"].DeepClone(); "observedEffort", node turn.Effort
-                            "backend", node "codex-collaboration"; "scope", node "turn"; "provenance", node "codex-native-token-usage-record"
-                            "input", node turn.Usage.Input; "cachedInput", node turn.Usage.CachedInput; "output", node turn.Usage.Output; "reasoning", node turn.Usage.Reasoning; "total", node turn.Usage.Total ]
-                        observation["revision"] <- node revision
-                        state["usageIntent"] <- jsonObject [ "turnId", node turnId; "revision", node revision; "hash", node fingerprint ]
+                    | _ -> fail "native usage baseline is malformed"
+                if baseline.Length <> (Set.ofList baseline).Count ||
+                   (allIds |> List.truncate baseline.Length) <> baseline ||
+                   (optionalString "baselineThreadId" state |> Option.exists ((<>) (string inventory.ThreadId))) then
+                    "native-collaboration-usage-unknown"
+                else
+                    let eligible = allIds |> List.skip baseline.Length
+                    let oldRoster =
+                        match state["expectedTurnRoster"] with
+                        | :? JsonArray as values -> values |> Seq.choose stringValue |> Seq.toList
+                        | null -> []
+                        | _ -> fail "native expected turn roster is malformed"
+                    if (eligible |> List.truncate oldRoster.Length) <> oldRoster then
+                        fail "native expected turn roster changed or reordered"
+                    match optionalString "nativeThreadId" state with
+                    | Some existing when existing <> string inventory.ThreadId -> fail "native child thread changed for a dispatch"
+                    | _ -> ()
+                    if not (state.ContainsKey "nativeThreadPublished") || not (boolValue "nativeThreadPublished" state) then
+                        state["nativeThreadId"] <- node (string inventory.ThreadId)
                         saveState config state
-                        publish config state $"native-usage:{turnId}:{revision}" "terminal" [ observation ]
-                        ledger[turnId] <- jsonObject [ "revision", node revision; "hash", node fingerprint ]
-                        state.Remove "usageIntent" |> ignore
+                        let threadEvent =
+                            event "runtime-start" ("runtime-thread-" + requiredString "invocationId" state)
+                                (Some(requiredString "itemId" state)) [
+                                "invocationId", state["invocationId"].DeepClone(); "threadId", node (string inventory.ThreadId)
+                                "turnId", nullNode; "turnSequence", nullNode; "processId", node 0; "phase", node "thread" ]
+                        publish config state "native-thread" "terminal" [ threadEvent ]
+                        state["nativeThreadPublished"] <- node true
                         saveState config state
-                "native-collaboration-usage-unknown"
+                    let publishedAuthority = state.ContainsKey "nativeInventoryPublished" && boolValue "nativeInventoryPublished" state
+                    if publishedAuthority then
+                        if eligible <> oldRoster then fail "published native inventory roster cannot change"
+                    else
+                        let binding = JsonNode.Parse(inventory.SourceBinding.GetRawText()) :?> JsonObject
+                        let bindingBytes = Convert.FromBase64String(requiredString "bytesBase64" binding)
+                        let body = JsonNode.Parse(bindingBytes) :?> JsonObject
+                        let boundIds =
+                            match body["orderedTurnIds"] with
+                            | :? JsonArray as values -> values |> Seq.choose stringValue |> Seq.toList
+                            | _ -> fail "native source binding is malformed"
+                        if requiredString "rootInvocationId" body <> requiredString "rootInvocationId" state ||
+                           requiredString "invocationId" body <> requiredString "invocationId" state ||
+                           requiredString "parentThreadId" body <> requiredString "hostParentThreadId" state ||
+                           requiredString "threadId" body <> string inventory.ThreadId || boundIds <> allIds ||
+                           requiredInt "revision" body <> 0 || requiredString "sha256" binding <> sha256 bindingBytes then
+                            fail "native source binding differs from durable dispatch identity"
+                        state["nativeThreadId"] <- node (string inventory.ThreadId)
+                        state["expectedTurnRoster"] <- jsonArray (eligible |> Seq.map node)
+                        state["expectedTurnRosterProvenance"] <- node "codex-app-server-thread-turns-list"
+                        state["nativeInventoryHostSource"] <- node "codex-app-server:thread/turns/list"
+                        state["nativeInventoryPaging"] <- JsonNode.Parse(inventory.InventoryPaging.GetRawText())
+                        state["nativeInventoryCapturedAt"] <- node inventory.InventoryCapturedAt
+                        state["nativeInventoryRosterDigest"] <- node inventory.RosterDigest
+                        state["nativeInventorySourceDigest"] <- node inventory.SourceDigest
+                        state["nativeInventoryProducerStream"] <- state["producerStream"].DeepClone()
+                        state["nativeInventoryBindingDigest"] <- node (requiredString "sha256" binding)
+                        state["nativeInventorySourceBinding"] <- binding.DeepClone()
+                        state["nativeInventoryCollectorProducer"] <- node "fsgg-work-roadmap-native-collector/1"
+                        state["nativeInventoryAppServerResponses"] <- JsonNode.Parse(inventory.AppServerResponses.GetRawText())
+                        state["nativeInventoryRolloutRecords"] <- JsonNode.Parse(inventory.RolloutRecords.GetRawText())
+                        let provider = inventory.Provider
+                        let provenance = inventory.ProviderProvenance
+                        if optionalString "nativeProvider" state |> Option.exists (fun old -> Some old <> provider || optionalString "nativeProviderProvenance" state <> provenance) then
+                            fail "native provider observation changed for a thread"
+                        state["nativeProvider"] <- provider |> Option.map node |> Option.defaultValue nullNode
+                        state["nativeProviderProvenance"] <- provenance |> Option.map node |> Option.defaultValue nullNode
+                        let pages = inventory.InventoryPaging.GetArrayLength()
+                        let factReady = provider.IsSome && inventory.Model = Some(requiredString "model" state) &&
+                                        inventory.Effort = Some(requiredString "effort" state) && pages = 1
+                        let inventoryId = digest "native-inventory-" [ requiredString "invocationId" state ]
+                        let fact =
+                            event "runtime-native-inventory/1" (digest "runtime-native-inventory-" [ requiredString "invocationId" state ])
+                                (Some(requiredString "itemId" state)) [
+                                "inventoryId", node inventoryId; "originalItemId", state["originalItemId"].DeepClone()
+                                "invocationId", state["invocationId"].DeepClone(); "page", node 1; "pages", node 1
+                                "expectedTurnIds", jsonArray (eligible |> Seq.map node)
+                                "expectedProvider", (provider |> Option.map node |> Option.defaultValue nullNode)
+                                "requestedModel", state["model"].DeepClone(); "requestedEffort", state["effort"].DeepClone()
+                                "support", node "provider-native-final-turn-counters"; "followupBaseline", node baseline.Length
+                                "capturedAt", node inventory.InventoryCapturedAt
+                                "sourceKind", node "provider-capability-and-dispatch-roster"; "sourceDigest", node inventory.SourceDigest ]
+                        let sourceFact =
+                            event "runtime-native-inventory-source/1" (digest "runtime-native-inventory-source-" [ requiredString "invocationId" state ])
+                                (Some(requiredString "itemId" state)) [
+                                "inventoryId", node inventoryId; "originalItemId", state["originalItemId"].DeepClone()
+                                "invocationId", state["invocationId"].DeepClone(); "sourceDigest", node inventory.SourceDigest
+                                "sourceBinding", binding.DeepClone() ]
+                        state["nativeInventoryIntegration"] <- jsonObject [
+                            "status", node (if factReady then "ready" else "incomplete-source-provenance")
+                            "reason", (if factReady then nullNode else node "provider/profile provenance or a stable single-page inventory is unavailable")
+                            "collectorProducer", node "fsgg-work-roadmap-native-collector/1"
+                            "sourceDigest", node inventory.SourceDigest; "sourceBinding", binding.DeepClone()
+                            "fact", (if factReady then fact.DeepClone() else nullNode)
+                            "sourceFact", (if factReady then sourceFact.DeepClone() else nullNode) ]
+                        saveState config state
+                        if factReady then
+                            publish config state "native-inventory-authority" "terminal" [ fact; sourceFact ]
+                            state["nativeInventoryPublished"] <- node true
+                            (state["nativeInventoryIntegration"] :?> JsonObject)["status"] <- node "published"
+                            saveState config state
+                    let mutable published =
+                        if state.ContainsKey "turnRosterPublishedCount" then requiredInt "turnRosterPublishedCount" state else 0
+                    if published < 0 || published > eligible.Length then fail "native turn roster publication cursor is malformed"
+                    if not (state.ContainsKey "turnRosterPublishedCount") then
+                        state["turnRosterPublishedCount"] <- node 0
+                        saveState config state
+                    while published < eligible.Length do
+                        let chunk = eligible |> List.skip published |> List.truncate 64
+                        let entries =
+                            chunk |> List.mapi (fun index turnId ->
+                                let sequence = baseline.Length + published + index + 1
+                                jsonObject [ "turnId", node turnId; "turnSequence", node sequence
+                                             "hash", node (rosterFingerprint (string inventory.ThreadId) turnId sequence "codex-app-server-thread-turns-list") ])
+                        let events =
+                            chunk |> List.mapi (fun index turnId ->
+                                let sequence = baseline.Length + published + index + 1
+                                event "runtime-start" (digest "runtime-turn-" [ requiredString "invocationId" state; turnId ])
+                                    (Some(requiredString "itemId" state)) [
+                                    "invocationId", state["invocationId"].DeepClone(); "threadId", node (string inventory.ThreadId)
+                                    "turnId", node turnId; "turnSequence", node sequence; "processId", node 0; "phase", node "turn" ])
+                        state["rosterIntent"] <- jsonObject [ "offset", node published; "entries", jsonArray (entries |> Seq.map (fun value -> value :> JsonNode)) ]
+                        saveState config state
+                        publish config state ("native-roster:" + rosterOperationHash entries) "terminal" events
+                        finishRosterIntent config state
+                        published <- requiredInt "turnRosterPublishedCount" state
+                    let ledger =
+                        match state["usageLedger"] with
+                        | :? JsonObject as value -> value
+                        | null -> let value = JsonObject() in state["usageLedger"] <- value; saveState config state; value
+                        | _ -> fail "native usage ledger is malformed"
+                    let eligibleSet = Set.ofList eligible
+                    for turn in inventory.Turns do
+                        let turnId = string turn.TurnId
+                        if eligibleSet.Contains turnId then
+                            let fingerprint = usageFingerprint state inventory turn
+                            let previousRevision, previousHash =
+                                match ledger[turnId] with
+                                | :? JsonObject as previous -> requiredInt "revision" previous, requiredString "hash" previous
+                                | _ -> -1, ""
+                            if previousHash <> fingerprint then
+                                let revision = previousRevision + 1
+                                let observation = event "runtime-turn-usage" (digest "runtime-turn-usage-" [ requiredString "invocationId" state; turnId ]) (Some(requiredString "itemId" state)) [
+                                    "invocationId", state["invocationId"].DeepClone(); "threadId", node (string inventory.ThreadId); "turnId", node turnId; "turnSequence", node turn.Sequence
+                                    "provider", (inventory.Provider |> Option.map node |> Option.defaultValue nullNode)
+                                    "requestedModel", state["model"].DeepClone(); "observedModel", (inventory.Model |> Option.map node |> Option.defaultValue nullNode)
+                                    "requestedEffort", state["effort"].DeepClone(); "observedEffort", (inventory.Effort |> Option.map node |> Option.defaultValue nullNode)
+                                    "backend", node "codex-collaboration"; "scope", node "turn"; "provenance", node "codex-native-token-usage-record"
+                                    "input", node turn.Usage.Input; "cachedInput", node turn.Usage.CachedInput; "output", node turn.Usage.Output; "reasoning", node turn.Usage.Reasoning; "total", node turn.Usage.Total ]
+                                observation["revision"] <- node revision
+                                state["usageIntent"] <- jsonObject [ "turnId", node turnId; "revision", node revision; "hash", node fingerprint ]
+                                saveState config state
+                                publish config state $"native-usage:{turnId}:{revision}" "terminal" [ observation ]
+                                ledger[turnId] <- jsonObject [ "revision", node revision; "hash", node fingerprint ]
+                                state.Remove "usageIntent" |> ignore
+                                saveState config state
+                    match state["nativeInventoryIntegration"] with
+                    | :? JsonObject as integration ->
+                        integration["locallyReconciled"] <- node (inventory.Complete && not eligible.IsEmpty &&
+                            (inventory.Turns |> List.map (fun turn -> string turn.TurnId) |> List.filter eligibleSet.Contains) = eligible &&
+                            (ledger |> Seq.map (fun entry -> entry.Key) |> Set.ofSeq) = eligibleSet &&
+                            requiredInt "turnRosterPublishedCount" state = eligible.Length)
+                        saveState config state
+                    | _ -> ()
+                    "native-collaboration-usage-unknown"
 
     let private dashboard config =
         let completed = execute 60 8192 [ config.Engine; "telemetry"; "dashboard"; "publisher-event"; "--config"; config.Path ]

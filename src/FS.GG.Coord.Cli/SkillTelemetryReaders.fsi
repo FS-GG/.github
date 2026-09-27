@@ -1,6 +1,7 @@
 namespace FS.GG.Coord.Cli
 
 open System
+open System.Text.Json
 
 module SkillTelemetryReaders =
     type Coverage =
@@ -101,6 +102,12 @@ module SkillTelemetryReaders =
             Effort: string option
             SourceDigest: string
             RosterDigest: string
+            InventoryPaging: JsonElement
+            InventoryCapturedAt: string
+            SourceBinding: JsonElement
+            AppServerResponses: JsonElement
+            RolloutRecords: JsonElement
+            ProviderProvenance: string option
         }
 
     module NativeUsage =

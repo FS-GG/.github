@@ -1,10 +1,13 @@
 namespace FS.GG.Coord.Cli.AdapterHarness
 
 open System
+open System.Buffers.Binary
+open System.Collections.Generic
 open System.IO
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
+open System.Text.Json.Nodes
 open FS.GG.Coord.Cli
 open FS.GG.Coord.Cli.SkillTelemetryReaders
 open FS.GG.Coord.Cli.SkillTelemetryAdapter
@@ -185,6 +188,152 @@ module Program =
                 |> String.concat "\n"
             require (publications.Contains "\"phase\":\"turn\"") "native turn population was not published"
             require (publications.Contains "runtime-turn-usage") "native turn usage was not published"
+            require (publications.Contains "runtime-native-inventory/1" && publications.Contains "runtime-native-inventory-source/1") "source-bound native inventory facts were not published"
+            let statePath = Path.Combine(host.StoreRoot, "orchestrator-dispatches", childToken + ".json")
+            let readState () = JsonNode.Parse(File.ReadAllText statePath) :?> JsonObject
+            let saveState (state: JsonObject) = File.WriteAllText(statePath, state.ToJsonString() + "\n")
+            let state = readState ()
+            require (state["nativeInventoryPublished"].GetValue<bool>()) "native inventory authority acknowledgement was not retained"
+            let integration = state["nativeInventoryIntegration"] :?> JsonObject
+            let sourceBinding = state["nativeInventorySourceBinding"] :?> JsonObject
+            require (integration["status"].GetValue<string>() = "published") "native inventory integration did not settle"
+            require (sourceBinding["sha256"].GetValue<string>().Length = 64) "native source binding was not retained"
+            use sourceHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256)
+            let appendChunk (bytes: byte array) =
+                let length = Array.zeroCreate<byte> 8
+                BinaryPrimitives.WriteInt64BigEndian(length.AsSpan(), int64 bytes.Length)
+                sourceHash.AppendData length
+                sourceHash.AppendData bytes
+            appendChunk (Convert.FromBase64String(sourceBinding["bytesBase64"].GetValue<string>()))
+            for record in state["nativeInventoryAppServerResponses"] :?> JsonArray do
+                appendChunk (Convert.FromBase64String(record["requestBytesBase64"].GetValue<string>()))
+                appendChunk (Convert.FromBase64String(record["responseBytesBase64"].GetValue<string>()))
+            for record in state["nativeInventoryRolloutRecords"] :?> JsonArray do
+                appendChunk (Convert.FromBase64String(record["bytesBase64"].GetValue<string>()))
+            let computedSourceDigest = Convert.ToHexString(sourceHash.GetHashAndReset()).ToLowerInvariant()
+            require (computedSourceDigest = state["nativeInventorySourceDigest"].GetValue<string>()) "retained native source bytes did not bind the published digest"
+            let originalLedger = state["usageLedger"] :?> JsonObject
+            let firstTurn = originalLedger |> Seq.head
+            let firstTurnId = firstTurn.Key
+            let firstUsage = firstTurn.Value.DeepClone()
+            originalLedger.Remove(firstTurnId) |> ignore
+            state["usageIntent"] <- JsonObject([ KeyValuePair("turnId", JsonValue.Create firstTurnId :> JsonNode);
+                                                    KeyValuePair("revision", firstUsage["revision"].DeepClone());
+                                                    KeyValuePair("hash", firstUsage["hash"].DeepClone()) ])
+            state["turnRosterPublishedCount"] <- JsonValue.Create 0
+            let roster = state["expectedTurnRoster"] :?> JsonArray
+            let threadId = state["nativeThreadId"].GetValue<string>()
+            let entries = JsonArray()
+            for index in 0 .. roster.Count - 1 do
+                let turnId = roster[index].GetValue<string>()
+                let source = $"[\"{threadId}\",\"{turnId}\",{index + 1},\"codex-app-server-thread-turns-list\"]"
+                let hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes source)).ToLowerInvariant()
+                entries.Add(JsonObject([ KeyValuePair("turnId", JsonValue.Create turnId :> JsonNode);
+                                         KeyValuePair("turnSequence", JsonValue.Create(index + 1) :> JsonNode);
+                                         KeyValuePair("hash", JsonValue.Create hash :> JsonNode) ]))
+            state["rosterIntent"] <- JsonObject([ KeyValuePair("offset", JsonValue.Create 0 :> JsonNode);
+                                                   KeyValuePair("entries", entries :> JsonNode) ])
+            saveState state
+            let priorPublications = File.ReadAllLines(log).Length
+            let resumed = run (Some host) (UsageReconcile childToken)
+            require (resumed.ExitCode = 0) (text resumed.Stderr)
+            let settled = readState ()
+            require (isNull settled["rosterIntent"] && isNull settled["usageIntent"] &&
+                     settled["turnRosterPublishedCount"].GetValue<int>() = roster.Count &&
+                     (settled["usageLedger"] :?> JsonObject).ContainsKey(firstTurnId)) "acknowledged native intents did not settle"
+            require (File.ReadAllLines(log).Length = priorPublications) "acknowledged native intents were republished"
+            let pendingState = readState ()
+            let sequence = pendingState["sequence"].GetValue<int>() + 1
+            let invocationId = pendingState["invocationId"].GetValue<string>()
+            let cursor = sequence.ToString("000000")
+            let pendingIntegration = pendingState["nativeInventoryIntegration"] :?> JsonObject
+            let facts = JsonArray()
+            facts.Add(pendingIntegration["fact"].DeepClone())
+            facts.Add(pendingIntegration["sourceFact"].DeepClone())
+            let batch = JsonObject()
+            batch["schema"] <- JsonValue.Create "fsgg.telemetry.ingest/1"
+            batch["ingestId"] <- JsonValue.Create($"{invocationId}-{cursor}")
+            batch["sourceIdentity"] <- pendingState["producerStream"].DeepClone()
+            batch["generation"] <- pendingState["invocationId"].DeepClone()
+            batch["cursor"] <- JsonValue.Create(string sequence)
+            batch["eventCount"] <- JsonValue.Create 2
+            batch["events"] <- facts
+            pendingState["sequence"] <- JsonValue.Create sequence
+            pendingState["nativeInventoryPublished"] <- JsonValue.Create false
+            pendingIntegration["status"] <- JsonValue.Create "ready"
+            let pending = JsonObject()
+            pending["operation"] <- JsonValue.Create "native-inventory-authority"
+            pending["nextPhase"] <- JsonValue.Create "terminal"
+            pending["batch"] <- batch
+            pendingState["pendingPublication"] <- pending
+            saveState pendingState
+            let replay = run (Some host) (UsageReconcile childToken)
+            require (replay.ExitCode = 0) (text replay.Stderr)
+            let replayed = readState ()
+            let replayedIntegration = replayed["nativeInventoryIntegration"] :?> JsonObject
+            require (isNull replayed["pendingPublication"] && replayed["nativeInventoryPublished"].GetValue<bool>() &&
+                     replayedIntegration["status"].GetValue<string>() = "published") "retained native authority intent did not settle"
+            require (File.ReadAllLines(log).Length = priorPublications + 1) "retained native authority batch was not replayed exactly once"
+            let pendingRoster = readState ()
+            let rosterSequence = pendingRoster["sequence"].GetValue<int>() + 1
+            let rosterBatch = JsonObject()
+            rosterBatch["schema"] <- JsonValue.Create "fsgg.telemetry.ingest/1"
+            rosterBatch["ingestId"] <- JsonValue.Create(invocationId + "-" + rosterSequence.ToString("000000"))
+            rosterBatch["sourceIdentity"] <- pendingRoster["producerStream"].DeepClone()
+            rosterBatch["generation"] <- pendingRoster["invocationId"].DeepClone()
+            rosterBatch["cursor"] <- JsonValue.Create(string rosterSequence)
+            rosterBatch["eventCount"] <- JsonValue.Create 0
+            rosterBatch["events"] <- JsonArray()
+            let rosterPending = JsonObject()
+            rosterPending["operation"] <- JsonValue.Create "native-roster:retained-fixture"
+            rosterPending["nextPhase"] <- JsonValue.Create "terminal"
+            rosterPending["batch"] <- rosterBatch
+            pendingRoster["sequence"] <- JsonValue.Create rosterSequence
+            pendingRoster["turnRosterPublishedCount"] <- JsonValue.Create 0
+            let rosterIntent = JsonObject()
+            rosterIntent["offset"] <- JsonValue.Create 0
+            rosterIntent["entries"] <- entries.DeepClone()
+            pendingRoster["rosterIntent"] <- rosterIntent
+            pendingRoster["pendingPublication"] <- rosterPending
+            saveState pendingRoster
+            let rosterReplay = run (Some host) (UsageReconcile childToken)
+            require (rosterReplay.ExitCode = 0) (text rosterReplay.Stderr)
+            let rosterSettled = readState ()
+            require (isNull rosterSettled["pendingPublication"] && isNull rosterSettled["rosterIntent"] &&
+                     rosterSettled["turnRosterPublishedCount"].GetValue<int>() = roster.Count) "retained v1 roster intent did not settle"
+            require (File.ReadAllLines(log).Length = priorPublications + 2) "retained roster batch was not replayed exactly once"
+            let followup = run (Some host) (Begin("SKILL-FS-01", "NATIVE", None, "followup", Some "child", Some childToken,
+                                                "follow-up", "fixture", "fixture-model", "medium", 60))
+            require (followup.ExitCode = 0) (text followup.Stderr)
+            let followupToken = (resultJson followup).GetProperty("token").GetString()
+            let followupState = JsonNode.Parse(File.ReadAllText(Path.Combine(host.StoreRoot, "orchestrator-dispatches", followupToken + ".json"))) :?> JsonObject
+            require (followupState["usageBaselineKnown"].GetValue<bool>() &&
+                     (followupState["baselineTurnIds"] :?> JsonArray).Count = roster.Count &&
+                     followupState["baselineSourceBinding"] <> null) "follow-up baseline evidence was not captured"
+            require ((run (Some host) (Started(followupToken, "child_1"))).ExitCode = 0) "follow-up start failed"
+            require ((run (Some host) (Finish(followupToken, "completed", None))).ExitCode = 0) "follow-up finish failed"
+            let followupTerminal = JsonNode.Parse(File.ReadAllText(Path.Combine(host.StoreRoot, "orchestrator-dispatches", followupToken + ".json"))) :?> JsonObject
+            require ((followupTerminal["expectedTurnRoster"] :?> JsonArray).Count = 0 &&
+                     followupTerminal["turnRosterPublishedCount"].GetValue<int>() = 0) "follow-up counted baseline turns"
+            Environment.SetEnvironmentVariable("CODEX_THREAD_ID", "55555555-5555-5555-5555-555555555555")
+            let unknown = run (Some host) (Begin("SKILL-FS-01", "NATIVE", None, "unknown-baseline", Some "child", Some childToken,
+                                               "follow-up", "fixture", "fixture-model", "medium", 60))
+            require (unknown.ExitCode = 0) (text unknown.Stderr)
+            let unknownToken = (resultJson unknown).GetProperty("token").GetString()
+            let unknownState = JsonNode.Parse(File.ReadAllText(Path.Combine(host.StoreRoot, "orchestrator-dispatches", unknownToken + ".json"))) :?> JsonObject
+            require (not (unknownState["usageBaselineKnown"].GetValue<bool>())) "unproven follow-up baseline was promoted"
+            require ((run (Some host) (Started(unknownToken, "child_1"))).ExitCode = 0) "unknown-baseline start failed"
+            require ((run (Some host) (Finish(unknownToken, "completed", None))).ExitCode = 0) "unknown-baseline finish failed"
+            let unknownTerminal = JsonNode.Parse(File.ReadAllText(Path.Combine(host.StoreRoot, "orchestrator-dispatches", unknownToken + ".json"))) :?> JsonObject
+            require (isNull unknownTerminal["nativeInventoryPublished"]) "unknown follow-up baseline published inventory"
+            let changedRoster = readState ()
+            let truncated = JsonArray()
+            let originalRoster = changedRoster["expectedTurnRoster"] :?> JsonArray
+            truncated.Add(originalRoster[0].DeepClone())
+            changedRoster["expectedTurnRoster"] <- truncated
+            saveState changedRoster
+            let refusedRoster = run (Some host) (UsageReconcile childToken)
+            require (refusedRoster.ExitCode = 1 && (text refusedRoster.Stderr).Contains "published native inventory roster cannot change") "published native roster changed"
         finally
             Environment.SetEnvironmentVariable("PATH", previousPath)
             for name in [ "CODEX_HOME"; "CODEX_THREAD_ID"; "SKILL_FS_01_ROLLOUT"; "SKILL_FS_01_MODE" ] do Environment.SetEnvironmentVariable(name, null)

@@ -87,6 +87,12 @@ module SkillTelemetryReaders =
             Effort: string option
             SourceDigest: string
             RosterDigest: string
+            InventoryPaging: JsonElement
+            InventoryCapturedAt: string
+            SourceBinding: JsonElement
+            AppServerResponses: JsonElement
+            RolloutRecords: JsonElement
+            ProviderProvenance: string option
         }
 
     let private failure message =
@@ -1275,16 +1281,16 @@ module SkillTelemetryReaders =
             =
             JsonSerializer.SerializeToUtf8Bytes(
                 {|
-                    schema = "fsgg.telemetry.native-inventory-source-binding/1"
-                    producerIdentity = "fsgg-work-roadmap-native-collector/1"
                     capturedAt = capturedAt
                     hostSource = "codex-app-server:thread/turns/list"
-                    rootInvocationId = rootInvocation
                     invocationId = invocation
-                    parentThreadId = parentThread.ToString("D")
-                    threadId = threadId.ToString("D")
                     orderedTurnIds = turnIds |> List.map (fun (value: Guid) -> value.ToString("D"))
+                    parentThreadId = parentThread.ToString("D")
+                    producerIdentity = "fsgg-work-roadmap-native-collector/1"
                     revision = revision
+                    rootInvocationId = rootInvocation
+                    schema = "fsgg.telemetry.native-inventory-source-binding/1"
+                    threadId = threadId.ToString("D")
                 |},
                 JsonSerializerOptions(PropertyNamingPolicy = null)
             )
@@ -1500,12 +1506,81 @@ module SkillTelemetryReaders =
                                                                 turnIds
                                                                 revision
 
-                                                        let sourceDigest =
-                                                            combineDigest (
-                                                                binding :: (server.Evidence @ rolloutEvidence)
-                                                            )
-
                                                         let inventoryValues = inventory |> Seq.toList
+
+                                                        let evidenceRecords =
+                                                            server.Evidence
+                                                            |> List.chunkBySize 2
+                                                            |> List.choose (function
+                                                                | [ requestBytes; responseBytes ] ->
+                                                                    match Json.parse requestBytes with
+                                                                    | Ok request ->
+                                                                        let methodName = stringField "method" request |> Option.defaultValue ""
+                                                                        if methodName = "initialize" then None
+                                                                        else
+                                                                            let parameters = request.GetProperty("params")
+                                                                            let cursor =
+                                                                                match Json.optionalStringProperty "cursor" parameters with
+                                                                                | Some value -> value
+                                                                                | None -> None
+                                                                            Some
+                                                                                {|
+                                                                                    method = methodName
+                                                                                    threadId = stringField "threadId" parameters |> Option.toObj
+                                                                                    requestCursor = cursor |> Option.toObj
+                                                                                    requestSha256 = sha256 requestBytes
+                                                                                    requestBytesBase64 = Convert.ToBase64String requestBytes
+                                                                                    responseSha256 = sha256 responseBytes
+                                                                                    responseBytesBase64 = Convert.ToBase64String responseBytes
+                                                                                |}
+                                                                    | Error _ -> None
+                                                                | _ -> None)
+
+                                                        let mutable previousCursor: string option = None
+                                                        let paging =
+                                                            evidenceRecords
+                                                            |> List.filter (fun record -> record.method = "thread/turns/list")
+                                                            |> List.mapi (fun index record ->
+                                                                let response = Convert.FromBase64String record.responseBytesBase64
+                                                                let parsed = JsonDocument.Parse response
+                                                                let result = parsed.RootElement.GetProperty("result")
+                                                                let next =
+                                                                    match Json.optionalStringProperty "nextCursor" result with
+                                                                    | Some value -> value
+                                                                    | None -> None
+                                                                let rowCount = result.GetProperty("data").GetArrayLength()
+                                                                let row =
+                                                                    {|
+                                                                        page = index + 1
+                                                                        requestCursor = previousCursor |> Option.toObj
+                                                                        nextCursor = next |> Option.toObj
+                                                                        rowCount = rowCount
+                                                                    |}
+                                                                previousCursor <- next
+                                                                row)
+
+                                                        let bindingRecord =
+                                                            {|
+                                                                schema = "fsgg.telemetry.native-inventory-source-binding/1"
+                                                                producerIdentity = "fsgg-work-roadmap-native-collector/1"
+                                                                sha256 = sha256 binding
+                                                                bytesBase64 = Convert.ToBase64String binding
+                                                            |}
+
+                                                        let rolloutRecords =
+                                                            rolloutEvidence
+                                                            |> List.map (fun bytes ->
+                                                                {|
+                                                                    sha256 = sha256 bytes
+                                                                    bytesBase64 = Convert.ToBase64String bytes
+                                                                |})
+
+                                                        let sourceEvidence =
+                                                            evidenceRecords
+                                                            |> List.collect (fun record ->
+                                                                [ Convert.FromBase64String record.requestBytesBase64
+                                                                  Convert.FromBase64String record.responseBytesBase64 ])
+                                                        let sourceDigest = combineDigest (binding :: (sourceEvidence @ rolloutEvidence))
 
                                                         Ok
                                                             {
@@ -1520,6 +1595,12 @@ module SkillTelemetryReaders =
                                                                 Effort = effort
                                                                 SourceDigest = sourceDigest
                                                                 RosterDigest = rosterDigest threadId inventoryValues
+                                                                InventoryPaging = JsonSerializer.SerializeToElement paging
+                                                                InventoryCapturedAt = capturedAt
+                                                                SourceBinding = JsonSerializer.SerializeToElement bindingRecord
+                                                                AppServerResponses = JsonSerializer.SerializeToElement evidenceRecords
+                                                                RolloutRecords = JsonSerializer.SerializeToElement rolloutRecords
+                                                                ProviderProvenance = provider |> Option.map (fun _ -> "codex-app-server-thread.modelProvider")
                                                             }
                                 | _ -> failure "native child thread metadata is unavailable"
                 with error ->
