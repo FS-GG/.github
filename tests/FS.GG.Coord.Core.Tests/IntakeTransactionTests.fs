@@ -198,5 +198,15 @@ module IntakeTransactionTests =
         let changed = { first with Owner = "Changed" }
         Assert.True(IntakeTransaction.apply (Some state) (IntakeTransaction.Intent changed) |> Result.isError)
         Assert.True(IntakeTransaction.apply (Some state) (IntakeTransaction.InFlight changed) |> Result.isError)
+        let changedRequest =
+            match IntakeTransaction.prepareIntent identity draft (Encoding.UTF8.GetBytes "changed request") |> get with
+            | IntakeTransaction.Intent binding -> binding
+            | _ -> failwith "wrong phase"
+        let changedDraft =
+            match IntakeTransaction.prepareIntent identity { draft with Title = "Changed title" } (Encoding.UTF8.GetBytes "request") |> get with
+            | IntakeTransaction.Intent binding -> binding
+            | _ -> failwith "wrong phase"
+        Assert.True(IntakeTransaction.apply (Some state) (IntakeTransaction.InFlight changedRequest) |> Result.isError)
+        Assert.True(IntakeTransaction.apply (Some state) (IntakeTransaction.Intent changedDraft) |> Result.isError)
         Assert.Equal(second, (entry state secondIdentity).Binding)
         Assert.True(IntakeTransaction.find state { identity with DraftId = "missing" } |> get |> Option.isNone)
