@@ -35,6 +35,14 @@ class Learn01ContractTests(unittest.TestCase):
         result = MODULE.validate_observations(CORPUS, envelope)
         self.assertEqual(18, result["observationFacts"])
 
+    def test_dashboard_gzip_expansion_is_stopped_at_output_bound(self):
+        envelope = {
+            "schema": "fsgg.telemetry.item-detail/2",
+            "canonicalSnapshotGzip": base64.b64encode(gzip.compress(b"x" * (4 * 1024 * 1024 + 1))).decode(),
+        }
+        with self.assertRaisesRegex(MODULE.Refusal, "exceeds analysis bound"):
+            MODULE.validate_observations(CORPUS, envelope)
+
     def test_exact_duplicate_is_idempotent(self):
         observations = copy.deepcopy(OBSERVATIONS)
         observations["events"].append(copy.deepcopy(observations["events"][0]))
@@ -49,6 +57,26 @@ class Learn01ContractTests(unittest.TestCase):
         observations["events"].append(correction)
         result = MODULE.validate_observations(CORPUS, observations)
         self.assertEqual(1, result["correctedFacts"])
+
+    def test_correction_selection_is_independent_of_revision_order(self):
+        forward = copy.deepcopy(OBSERVATIONS)
+        original = next(event for event in forward["events"] if event["identity"] == "snapshot-001")
+        correction = copy.deepcopy(original)
+        correction.update({"revision": 2, "snapshotDigest": "9" * 64})
+        forward["events"].append(correction)
+        reversed_order = copy.deepcopy(OBSERVATIONS)
+        original_index = next(index for index, event in enumerate(reversed_order["events"]) if event["identity"] == "snapshot-001")
+        reversed_order["events"].insert(original_index, copy.deepcopy(correction))
+        expected = MODULE.validate_observations(CORPUS, forward)
+        actual = MODULE.validate_observations(CORPUS, reversed_order)
+        self.assertEqual(expected["observationDigest"], actual["observationDigest"])
+        self.assertEqual(1, actual["correctedFacts"])
+
+    def test_boolean_revision_is_rejected(self):
+        observations = copy.deepcopy(OBSERVATIONS)
+        observations["events"][0]["revision"] = True
+        with self.assertRaisesRegex(MODULE.Refusal, "identity and revision are invalid"):
+            MODULE.validate_observations(CORPUS, observations)
 
     def test_retry_cannot_redraw_assignment(self):
         observations = copy.deepcopy(OBSERVATIONS)

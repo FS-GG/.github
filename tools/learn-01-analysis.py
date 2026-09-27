@@ -6,6 +6,7 @@ import argparse
 import base64
 import gzip
 import hashlib
+import io
 import json
 import math
 import pathlib
@@ -82,13 +83,22 @@ def validate_observations(corpus: dict, observations: dict) -> dict:
             compressed = base64.b64decode(encoded, validate=True)
             if len(compressed) > 1024 * 1024:
                 raise Refusal("compressed telemetry snapshot exceeds analysis bound")
-            raw = gzip.decompress(compressed)
-            if len(raw) > 4 * 1024 * 1024:
+            maximum = 4 * 1024 * 1024
+            raw = bytearray()
+            with gzip.GzipFile(fileobj=io.BytesIO(compressed), mode="rb") as stream:
+                while len(raw) <= maximum:
+                    chunk = stream.read(min(64 * 1024, maximum + 1 - len(raw)))
+                    if not chunk:
+                        break
+                    raw.extend(chunk)
+            if len(raw) > maximum:
                 raise Refusal("telemetry snapshot exceeds analysis bound")
             content = json.loads(raw)
             rows = content.get("learningObservations", [])
             events = [json.loads(row["canonical"]) for row in rows]
-        except (ValueError, KeyError, TypeError, gzip.BadGzipFile, json.JSONDecodeError) as error:
+        except Refusal:
+            raise
+        except (ValueError, KeyError, TypeError, OSError, EOFError, json.JSONDecodeError) as error:
             raise Refusal("telemetry snapshot learning observations are malformed") from error
         observations = {
             "schema": "fsgg.learn.observation-snapshot/v1",
@@ -104,7 +114,7 @@ def validate_observations(corpus: dict, observations: dict) -> dict:
     if not isinstance(events, list) or not events or len(events) > 10000:
         raise Refusal("observation snapshot requires between 1 and 10000 events")
 
-    by_identity = {}
+    revisions_by_identity = defaultdict(dict)
     duplicates = 0
     corrections = 0
     for event in events:
@@ -115,21 +125,29 @@ def validate_observations(corpus: dict, observations: dict) -> dict:
         kind = event.get("kind")
         if event.get("workspaceId", workspace) != workspace:
             raise Refusal("cross-workspace observation join is forbidden")
-        if not isinstance(identity, str) or not identity or not isinstance(revision, int) or revision < 0:
+        if (not isinstance(identity, str) or not identity or not isinstance(revision, int)
+                or isinstance(revision, bool) or revision < 0):
             raise Refusal("observation identity and revision are invalid")
         if kind not in {"learn-task-snapshot", "learn-context-manifest", "learn-experiment-assignment"}:
             raise Refusal("observation kind is unsupported")
-        prior = by_identity.get(identity)
+        prior = revisions_by_identity[identity].get(revision)
         if prior == event:
             duplicates += 1
             continue
         if prior is not None:
-            if revision <= prior.get("revision", 0):
-                raise Refusal("observation identity conflicts without a newer revision")
-            if kind == "learn-experiment-assignment" or prior.get("kind") == "learn-experiment-assignment":
-                raise Refusal("experiment assignment cannot be redrawn on retry")
-            corrections += 1
-        by_identity[identity] = event
+            raise Refusal("observation identity has conflicting content at the same revision")
+        revisions_by_identity[identity][revision] = event
+
+    by_identity = {}
+    for identity, revisions in revisions_by_identity.items():
+        versions = list(revisions.values())
+        kinds = {event["kind"] for event in versions}
+        if "learn-experiment-assignment" in kinds and len(versions) > 1:
+            raise Refusal("experiment assignment cannot be redrawn on retry")
+        if len(kinds) != 1:
+            raise Refusal("observation identity cannot change kind across revisions")
+        corrections += len(versions) - 1
+        by_identity[identity] = revisions[max(revisions)]
 
     selected = {}
     roots = {item["itemId"]: item for item in corpus.get("items", []) if item.get("parentItemId") is None}
