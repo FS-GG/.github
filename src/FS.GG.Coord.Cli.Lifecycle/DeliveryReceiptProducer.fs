@@ -47,21 +47,28 @@ module DeliveryReceiptProducer =
                     | None ->
                         headCurrent ports request
                         |> Result.bind (fun () -> ports.AuthorizeWrite())
-                        |> Result.bind (fun () ->
-                            // The whole leading marker is the durable slot. A different body at that slot
-                            // is a conflict, and the writer rereads after both success and response loss.
-                            let marker = $"<!-- fsgg:delivery-receipt id={request.ObligationId} head={request.HeadSha} "
-                            let write = ports.WriteDurableComment marker body
-                            // A lost response is resolved from the authoritative ledger, never from the
-                            // attempted POST. This read is mandatory even when the writer returned Ok.
-                            headCurrent ports request
-                            |> Result.bind (fun () -> observe ports request)
-                            |> Result.bind (fun after ->
-                                match after.Evidence, write with
-                                | Some evidence, _ when evidence = request.Evidence -> Ok Written
-                                | Some _, _ -> Error "delivery receipt readback conflicts with requested evidence"
-                                | None, Error reason -> Error $"delivery receipt write failed and no exact readback exists: {reason}"
-                                | None, Ok () -> Error "delivery receipt write returned success without authoritative readback"))))
+                        // The authority callback can itself observe a newer state. Refresh both facts
+                        // after it, at the final pre-POST boundary, without spending authority twice.
+                        |> Result.bind (fun () -> headCurrent ports request)
+                        |> Result.bind (fun () -> observe ports request)
+                        |> Result.bind (fun fresh ->
+                            match fresh.Evidence with
+                            | Some evidence when evidence = request.Evidence -> Ok AlreadyPresent
+                            | Some _ -> Error "delivery obligation already has a conflicting receipt"
+                            | None ->
+                                // The whole leading marker is the durable slot. A different body at that
+                                // slot is a conflict; the writer rereads after success and response loss.
+                                let marker = $"<!-- fsgg:delivery-receipt id={request.ObligationId} head={request.HeadSha} "
+                                let write = ports.WriteDurableComment marker body
+                                // An attempted POST is not authority. Exact readback is mandatory.
+                                headCurrent ports request
+                                |> Result.bind (fun () -> observe ports request)
+                                |> Result.bind (fun after ->
+                                    match after.Evidence, write with
+                                    | Some evidence, _ when evidence = request.Evidence -> Ok Written
+                                    | Some _, _ -> Error "delivery receipt readback conflicts with requested evidence"
+                                    | None, Error reason -> Error $"delivery receipt write failed and no exact readback exists: {reason}"
+                                    | None, Ok () -> Error "delivery receipt write returned success without authoritative readback"))))
 
     let produceLive transport (target: Types.Ref) authorizeWrite request =
         if target.Number <> request.PullRequest then
