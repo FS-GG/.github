@@ -1,0 +1,449 @@
+{
+  "capturedAt": "2026-09-27T08:37:29.991902+00:00",
+  "repository": "FS-GG/FS.GG.SDD",
+  "candidateHead": "fccf81618628d26f0ea2aacafab760d5d520f89a",
+  "sourceHeadsPreserved": 63,
+  "closures": [
+    {
+      "number": 1000,
+      "head": "10d0d25982f9d6802099a6814163e0b9d6fd588e",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1001,
+      "head": "2dda03fe41337bb4c2c5fe83bf8a847268f8a4f7",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1002,
+      "head": "c204042e42b748fc35a202227398d9c54417c9c1",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1003,
+      "head": "87534251e3b47a7b89d2aaae9a56794d95d82093",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1004,
+      "head": "8cdbd66ef448b32de83dd4a3d06b80586e8dd40b",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1005,
+      "head": "e3e2c79f1a243982a11e24254bf21417b642aeb3",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1006,
+      "head": "19a70a76c0bbfbf51f59551b12f9c5464912ea01",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1007,
+      "head": "b2659b446448e07714379549ebd1846adcd4c103",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1008,
+      "head": "3eda418033870f994ed675e3b9092f2abd66efbf",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1009,
+      "head": "f7b51b98c819fca77b662e462ac53e5d2b5d2402",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1010,
+      "head": "72403386611af4f942ee9055bb75f3a684422351",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1011,
+      "head": "f19d2b7307b280d632a9b6b7e7b379dd750a5ee3",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1012,
+      "head": "ace5c52d2fcfd7bb090e669b2337c3a0e64de8ff",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1013,
+      "head": "685b42fb149055d2b82445139b34f5b7dba16150",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1014,
+      "head": "8ae58f5027d3778ae1d34b108c5ff9a414f3bbda",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1015,
+      "head": "8c0e641d66136665fe46c4a5c35c656e727b4d19",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1016,
+      "head": "29cd0dd40fdefde6afba2139708ed9956b1ef3ae",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1017,
+      "head": "d7b14134251a19561c7c3d819058c2fc3f782c3e",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1018,
+      "head": "6d12c523bcb02cd1644fe7e4429bd1ed82818a4c",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1019,
+      "head": "773a91d1c3be1026e86c36300c7adc58b5b61b5d",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1020,
+      "head": "7e7582a28ecf5d465f24a1ba94161343c6b0b5fa",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1021,
+      "head": "a2d1d3b4bce34f40f5dd283fd663cfbda3f6a60d",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1022,
+      "head": "d69de00bee0f5ce47420343724e9f897d5e6d631",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1023,
+      "head": "da2650c0bf404adfcd46bc2890db63393e30dd23",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1024,
+      "head": "901df809e74e473e329d1cc324366b72d88a815d",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1025,
+      "head": "2cee1a8a71f75751bd878be72b8c8eee0bfec051",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1026,
+      "head": "cf92c80f45580f6ed818a5a058417b8fa6a0cb94",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1027,
+      "head": "bbb2ba2e3d0ce802ce413a8bdf5ff3a0ec713c33",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1028,
+      "head": "8952bae1acac51eca771c1a8b273bd821b73c03f",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1029,
+      "head": "6a835e74169174b9de229ec824955e83dbabcb41",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1030,
+      "head": "7b7bd46354ac6c2d2781ac0e069bd1c4f1bd3dcc",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1031,
+      "head": "2a2a1e1aa97698560553927ef427f50914f2e518",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1032,
+      "head": "d2b509adc253583b1c355136833721bdef79f638",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1033,
+      "head": "c3d482fc331b05c160b3098fa874139e2db9d5b0",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1034,
+      "head": "03c196a8f90a0c1a68c65a3d196aebe433a25b1b",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1035,
+      "head": "4ca06d9a6ed535110883b0ac3986c353290d841c",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1036,
+      "head": "ed9b4c6e88e16a4e5414580e47cafb280b077fab",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1037,
+      "head": "4e2b5bf0aa760154b006197beea9281cd60c84e2",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1038,
+      "head": "6ca4befec823793fcb6f585db7bfb8b48984b8ad",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1039,
+      "head": "38e48ef03bda4a52528aa5a4941e27e181ae24e8",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1040,
+      "head": "1bab7cdc32635a2b6d45b8c7457313907f740f71",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1041,
+      "head": "2079be649681c496629b5af11c3760026ae7486b",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1042,
+      "head": "161e07ad766d2e92f7c720c60da6563f00aef577",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1043,
+      "head": "70b76458a97d0a530f7885afa406288bf45ece4f",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1044,
+      "head": "ec4637bda6c52ef8001c62ed154f2d90961229c1",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1045,
+      "head": "ff8215ec6125ffafc058b24b5cfa7439dabd31da",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1046,
+      "head": "f5434a4d6be635b8ce080e6707e67bbf4c65101b",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1047,
+      "head": "83229e3e10b2f56bc428921826654ccf585929cf",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1048,
+      "head": "55ecb160c23fdfc17b85ce36c0e29daa6dd709a5",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1049,
+      "head": "d1bcc2aed975a47668c68e9ab59b7c61b80cbff1",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1050,
+      "head": "58132088a92426a036c98545c73c042e82d1fb25",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1051,
+      "head": "7b7880f93faf6f521e7bde20e27d976a6d4290b1",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1052,
+      "head": "cace956fa195a2f694de3a606ec7f0f3f7bec368",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1053,
+      "head": "1baeca54dd237eb55c8d618f7505e1baf90e8e21",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1054,
+      "head": "6703cd874bcb7869d30d21c8a628281f91348a87",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1055,
+      "head": "cfcff12730097e490d4c75bb5ca3117abe02454a",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1056,
+      "head": "8125ded842937f581289e9acd19b044f63f34759",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1057,
+      "head": "4af526e286f10db87e57b9198387181bc5ecacfc",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1058,
+      "head": "36228b2381dcee180db2519b1f80266e6fc67bd2",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1059,
+      "head": "df537506e3a79db5ee268c1468398a85429297fd",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1060,
+      "head": "d78f403a58d3fc3b053a77fcdaf1aafd8c0312f1",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1061,
+      "head": "ba38076d81e664ae87527cf82f0e6bb7a953eee6",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1062,
+      "head": "cb67bd0d4aeb0b519668feedc0226b51d09fccc0",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    }
+  ]
+}

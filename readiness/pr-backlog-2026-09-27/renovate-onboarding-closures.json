@@ -1,0 +1,46 @@
+{
+  "capturedAt": "2026-09-27T08:47:15.115677+00:00",
+  "purpose": "Retain installed qualification/sandbox fixtures without activating Renovate onboarding and new bot PR queue",
+  "closures": [
+    {
+      "repository": "FS-GG/FS.GG.Coordination.Authority",
+      "number": 1,
+      "head": "95089299343e88eef44698a5756afa6970d89c37",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "repository": "FS-GG/FS.GG.GitHub.Substrate.Sandbox",
+      "number": 3,
+      "head": "bf5f8821ae867266722c44be598f17f3c8efc4d6",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "repository": "FS-GG/svg-workspace-qualification-clean-20260914",
+      "number": 1,
+      "head": "e4c07805d240b043e31cfc7e86cd92dc4251d3af",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "repository": "FS-GG/svg-workspace-public-clean-20260914",
+      "number": 1,
+      "head": "95bed1d0aa78b03b28f4ee27294771923d3a67bd",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "repository": "FS-GG/svg-workspace-public-retained-20260914",
+      "number": 1,
+      "head": "c4423af667f298e86332cb6a37fb4bfb9a0461d2",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    }
+  ]
+}

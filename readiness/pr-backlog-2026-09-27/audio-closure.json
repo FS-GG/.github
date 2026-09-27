@@ -1,0 +1,57 @@
+{
+  "capturedAt": "2026-09-27T08:25:45.264977+00:00",
+  "repository": "FS-GG/FS.GG.Audio",
+  "candidateHead": "806b479816b7b89caf43bf87957422d94bac50ce",
+  "sourceHeadsPreserved": 7,
+  "closures": [
+    {
+      "number": 313,
+      "head": "219512e16456d9b5d9e89dc58edc4130f2c9891f",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 315,
+      "head": "8d821703526bc72ab360a18d93cb27a8fde8e3c8",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 316,
+      "head": "8cd4c99f572d88ba12a1a8aabeff5c7f785b86c7",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 317,
+      "head": "757a4b9a10cd864dba645f7712dfb0b8a99f43f3",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 318,
+      "head": "ed17d5334ee8e780c2214ea4bac944466166d6fd",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 319,
+      "head": "902750955c10b23a09402cf503ef482bd24b1948",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 320,
+      "head": "2173710c0cc13ba1477cac07683b26f5f6a462dc",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    }
+  ]
+}

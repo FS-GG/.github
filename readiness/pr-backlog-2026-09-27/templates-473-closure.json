@@ -1,0 +1,14 @@
+{
+  "baseRefName": "main",
+  "closedAt": "2026-09-27T08:57:42Z",
+  "headRefName": "chore/bump-fs-gg-ui-template",
+  "headRefOid": "a3a996759651a3547c274c14c9966a036d429b98",
+  "mergedAt": null,
+  "number": 473,
+  "reason": "Superseded: current main has FS.GG.UI.Template 0.31.0 in README/provider and completed 0.31.0 release history; old head would reintroduce PIN HISTORY ENTRY REQUIRED and failed composition.",
+  "repository": "FS-GG/FS.GG.Templates",
+  "retainedHeadRefOid": "a3a996759651a3547c274c14c9966a036d429b98",
+  "schema": "fsgg-pr-backlog-closure/v1",
+  "state": "closed",
+  "url": "https://github.com/FS-GG/FS.GG.Templates/pull/473"
+}

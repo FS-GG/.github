@@ -10,7 +10,7 @@ description: "A researched successor plan from the current v2 frontier: process 
 Short name: **Unified Roadmap**. In FS-GG development discussions, **“the roadmap”**, **“current roadmap”**
 and **“compacted roadmap”** refer to this document unless another roadmap is explicitly named.
 
-Authored: **2026-09-07 15:42:10 UTC**. Evidence reconciliation: **2026-09-24**.
+Authored: **2026-09-07 15:42:10 UTC**. Evidence reconciliation: **2026-09-24**; product source closure readback: **2026-09-27**.
 Status: **active programme; V2 migration implementation and rehearsal remain the critical path**.
 
 **Start from completed development simplification and the existing v2 implementation. Finish and qualify
@@ -88,6 +88,12 @@ retain detailed milestone history in the owning plan. CI ticks and intermediate 
 | **V6 — Observation and retirement** | No accepted post-open window identified. | GS2-14 owns baseline plus 15 distinct completed-work readings, contraction and `OperatingV2`; R5's independent cohort/30-day follow-up remains separate. |
 | **E0/E1 and O0–O3** | Selected single-host O0–O3 is accepted; Choreo C0–C6 is source/formal-qualified. | Reuse these foundations. Exact installed inclusion of later Choreo fixes and comparative-value claims require their own evidence; neither blocks migration source work. |
 | **F0–F5 / LEARN-01** | LEARN-01.1's baseline and reviewable experiment contract are source-delivered in the [feature plan](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md) through [PR #3845](https://github.com/FS-GG/.github/pull/3845). No enrollment, comparative result or live operation is established; F0–F5 remain conditional. | LEARN-01.2–.3 remain source work; .4–.5 and production canaries retain their installed-artifact, operating-epoch and effect-authority gates. |
+
+#### Product source milestone projection
+
+SC2C-01.1 is source delivered in the private [SC2 Client PR #2](https://github.com/FS-GG/FS.GG.SC2.Client/pull/2), merged at `c90c07fc32c9c17374ecfef9d1df1b019e973f2a` with its exact main verification passing. The reproducible workspace, native/WebSocket contract corpus and browser baseline are available for SC2C-01.2; worker interaction, live StarCraft II sessions and installed operation remain open.
+
+FOURD-01.1 and FOURD-01.2 are source delivered in the private [FourD PR #1](https://github.com/FS-GG/FS.GG.FourD/pull/1) and [PR #2](https://github.com/FS-GG/FS.GG.FourD/pull/2), merged at `5661d85ce62264b84a56a4fb32716cd1350408ff` and `8096fd19431a74fff7366217142908c4bf226496`. Each exact main verification passed. The four-axis movement kernel and ray/cover laboratory are available for FOURD-01.3; tactical encounter, publication and installed use remain open.
 
 #### SVG milestone projection
 

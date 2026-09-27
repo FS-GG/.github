@@ -1,0 +1,115 @@
+{
+  "capturedAt": "2026-09-27T08:24:42.507474+00:00",
+  "repository": "FS-GG/FS.GG.Rendering",
+  "candidateHeads": [
+    {
+      "branch": "consolidated/fsc06-characterization-20260927",
+      "head": "47bd324e5e45a5f10528a2d431b395feb66967d9",
+      "sourcePRs": [
+        1330
+      ]
+    },
+    {
+      "branch": "consolidated/fsc06-release-preflight-20260927",
+      "head": "e9368237c90d1673ee112affa7d4c0b1f173dabd",
+      "sourcePRs": [
+        1332,
+        1333
+      ]
+    },
+    {
+      "branch": "consolidated/fsc08-skill-capture-20260927",
+      "head": "8c4e86ab95f7f6375c7db473ee2ac7dac942ed99",
+      "sourcePRs": [
+        1331,
+        1334,
+        1335,
+        1336,
+        1337,
+        1338,
+        1339,
+        1340
+      ]
+    }
+  ],
+  "sourceHeadsPreserved": 11,
+  "closures": [
+    {
+      "number": 1330,
+      "head": "eccca354f1c2b059208ad2df7d96db643223234c",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1331,
+      "head": "9f69cc6245fbed91469936fc1d443f15009bdf45",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1332,
+      "head": "734ffd2157b43b8505c77e2594d21e4961d26442",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1333,
+      "head": "b74373e79b5b5a901711c0a52e42252f476322a8",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1334,
+      "head": "6dd3ead052839e9f35c96c12567c2042a6a17c2f",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1335,
+      "head": "56dbe1ae80a17d6d3b4b8ea0bfd94e5c5f05efa7",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1336,
+      "head": "42dd058ce0e7a96d8a2cd034d1d2a12c74bbd57e",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1337,
+      "head": "e1b4230e665cef837f479db81d404fd87a61da05",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1338,
+      "head": "eb607ed01296681ed00f86fd744d145e7bf61b21",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1339,
+      "head": "cb42974650ce353ee813c517cf6a19b68bed4469",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 1340,
+      "head": "37c29b2199c348b2c5c14944f272bcd4869a53cf",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    }
+  ]
+}
