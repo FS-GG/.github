@@ -55,10 +55,118 @@ class EffectAdmissionUnavailable(RuntimeError):
     """The accepted common effect admission cannot authorize this provider mutation."""
 
 
+@dataclass(frozen=True)
+class MergeEffectRequest:
+    """Exact caller identity handed to the Coordination-owned v1 effect boundary.
+
+    This is a consumer request, not admission authority. The future transport must
+    translate it into Coordination's ``MutationContext`` and ``MutationRequest``
+    only from verified authority and journal state; this client must not invent
+    those values.
+    """
+
+    repository: str
+    pullRequest: int
+    expectedHead: str
+    baseRef: str
+    baseSha: str
+    mergeMethod: str
+    operationId: str
+    effectId: str
+    source: str
+
+    def canonical_bytes(self) -> bytes:
+        # Local correlation proof only. This is not an authority or transport wire schema.
+        return json.dumps(asdict(self), separators=(",", ":"), sort_keys=True).encode()
+
+    def digest(self) -> str:
+        return hashlib.sha256(self.canonical_bytes()).hexdigest()
+
+
+@dataclass(frozen=True)
+class AppliedEffectEvidence:
+    """Coordination settlement evidence correlated to one exact merge request."""
+
+    effectId: str
+    requestSha256: str
+    responseSha256: str
+    mergeCommit: str
+
+
+@dataclass(frozen=True)
+class AdmissionApplied:
+    response: dict[str, Any]
+    evidence: AppliedEffectEvidence
+
+
+@dataclass(frozen=True)
+class AdmissionRefused:
+    reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class AdmissionPartial:
+    reason: str
+
+
+@dataclass(frozen=True)
+class AdmissionIndeterminate:
+    reason: str
+
+
+AdmissionOutcome = AdmissionApplied | AdmissionRefused | AdmissionPartial | AdmissionIndeterminate
+
+
+class V1AdmissionPort(Protocol):
+    """Consumer port for the still-dormant Coordination transport.
+
+    An implementation must obtain its opaque ``OperationHandle`` from
+    ``V1AdmissionService.admit`` and carry that same handle through journaled
+    prepare, dispatch, reconciliation, and settlement. No caller-supplied
+    authority or handle is accepted at this seam.
+    """
+
+    def execute(self, request: MergeEffectRequest) -> AdmissionOutcome: ...
+
+
+class DisabledV1AdmissionPort:
+    """Production default until Coordination publishes the journal-backed transport."""
+
+    def execute(self, request: MergeEffectRequest) -> AdmissionOutcome:
+        return AdmissionRefused((
+            "common v1 effect admission is unavailable: install a Coordination-owned "
+            "V1AdmissionService transport joined to the admission journal CAS, dispatch fence, "
+            "provider reconciliation, and effect settlement",
+        ))
+
+
+def merge_effect_request(
+    repo: str,
+    pr: int,
+    head: str,
+    base_ref: str,
+    base_sha: str,
+    method: str,
+) -> MergeEffectRequest:
+    operation = f"routine-delivery:{repo}:pull:{pr}"
+    effect = f"merge:{repo}:pull:{pr}:{head}:{base_sha}:{method}"
+    return MergeEffectRequest(
+        repository=repo,
+        pullRequest=pr,
+        expectedHead=head,
+        baseRef=base_ref,
+        baseSha=base_sha,
+        mergeMethod=method,
+        operationId=operation,
+        effectId=effect,
+        source="fsgg.github.routine-delivery/1",
+    )
+
+
 class NativeApi(Protocol):
     def get_pr(self, repo: str, pr: int) -> dict[str, Any]: ...
 
-    def merge(self, repo: str, pr: int, head: str, method: str) -> dict[str, Any]: ...
+    def merge(self, request: MergeEffectRequest) -> dict[str, Any]: ...
 
     def coherent_runs(self, repo: str, workflow: str, head: str) -> list[dict[str, Any]]: ...
 
@@ -68,6 +176,9 @@ class NativeApi(Protocol):
 
 
 class GhApi:
+    def __init__(self, admission: V1AdmissionPort | None = None):
+        self._admission = admission or DisabledV1AdmissionPort()
+
     @staticmethod
     def _run(args: list[str], *, timeout: int = 30) -> dict[str, Any]:
         try:
@@ -94,13 +205,42 @@ class GhApi:
             raise RuntimeError("GitHub returned a non-object pull request")
         return value
 
-    def merge(self, repo: str, pr: int, head: str, method: str) -> dict[str, Any]:
-        # This source boundary cannot retroactively disable retained/published copies. Operators must
-        # separately remove their credentials or callers before this prepared retirement lands last.
-        raise EffectAdmissionUnavailable(
-            "common v1 effect admission is unavailable; direct REST merge is disabled "
-            "until a qualified admitted delivery boundary replaces it"
+    def merge(self, request: MergeEffectRequest) -> dict[str, Any]:
+        try:
+            outcome = self._admission.execute(request)
+        except Exception as error:
+            raise AmbiguousWrite("admission transport failed without a correlated outcome") from error
+        if isinstance(outcome, AdmissionRefused):
+            detail = "; ".join(outcome.reasons) or "common v1 effect admission refused"
+            raise EffectAdmissionUnavailable(detail)
+        if isinstance(outcome, AdmissionPartial):
+            raise AmbiguousWrite(f"partial admitted merge effect requires reconciliation: {outcome.reason}")
+        if isinstance(outcome, AdmissionIndeterminate):
+            raise AmbiguousWrite(f"indeterminate admitted merge effect requires reconciliation: {outcome.reason}")
+        if not isinstance(outcome, AdmissionApplied):
+            raise AmbiguousWrite("admission transport returned an unsupported outcome")
+
+        response = outcome.response
+        evidence = outcome.evidence
+        try:
+            response_bytes = json.dumps(response, separators=(",", ":"), sort_keys=True).encode()
+        except (TypeError, ValueError) as error:
+            raise AmbiguousWrite("applied admission outcome has a non-canonical response") from error
+        response_sha = hashlib.sha256(response_bytes).hexdigest()
+        merge_commit = response.get("sha") if isinstance(response, dict) else None
+        correlated = (
+            isinstance(response, dict)
+            and evidence.effectId == request.effectId
+            and evidence.requestSha256 == request.digest()
+            and evidence.responseSha256 == response_sha
+            and isinstance(merge_commit, str)
+            and SHA_RE.fullmatch(merge_commit) is not None
+            and evidence.mergeCommit == merge_commit
+            and response.get("merged") is True
         )
+        if not correlated:
+            raise AmbiguousWrite("applied admission outcome lacks correlated effect settlement evidence")
+        return response
 
     def coherent_runs(self, repo: str, workflow: str, head: str) -> list[dict[str, Any]]:
         pages = self._run([
@@ -434,6 +574,12 @@ def summarize(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
             "refused", "not-delivered", publication, None, 0, reason, "current", "unobserved",
         )
+    if not is_merged(before) and (base_ref is None or base_sha is None):
+        return 2, bound(
+            "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
+            "refused", "not-delivered", publication, None, 0,
+            "pull request base identity is unreadable", "current", "unobserved",
+        )
     disposition, coherent = "current", "not-required"
     if coherent_workflow:
         disposition, coherent, reason = validation_state(api, repo, coherent_workflow, expected_head)
@@ -463,9 +609,12 @@ def summarize(
             "ready", "not-delivered", publication, None, 0, None, disposition, coherent,
         )
 
+    request = merge_effect_request(
+        repo, pr_number, expected_head, base_ref, base_sha, merge_method,
+    )
     attempts = 1
     try:
-        response = api.merge(repo, pr_number, expected_head, merge_method)
+        response = api.merge(request)
     except EffectAdmissionUnavailable as error:
         return 2, bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,

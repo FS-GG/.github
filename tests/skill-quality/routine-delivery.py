@@ -61,8 +61,9 @@ class FakeApi:
         self.read_attempts += 1
         return next(self.reads)
 
-    def merge(self, repo: str, pr: int, head: str, method: str) -> dict:
+    def merge(self, request) -> dict:
         self.attempts += 1
+        self.last_request = request
         value = next(self.writes)
         if isinstance(value, BaseException):
             raise value
@@ -132,8 +133,108 @@ class RoutineDeliveryTests(unittest.TestCase):
                 MODULE.EffectAdmissionUnavailable,
                 "common v1 effect admission is unavailable",
             ):
-                api.merge("FS-GG/.github", 7, HEAD, "squash")
+                api.merge(MODULE.merge_effect_request(
+                    "FS-GG/.github", 7, HEAD, "main", "d" * 40, "squash",
+                ))
         invoked.assert_not_called()
+
+    def test_merge_effect_request_binds_complete_source_and_target_identity(self):
+        api = FakeApi([opened(), merged()], [{"merged": True, "sha": MERGE}])
+        code, _ = self.call(api)
+        request = api.last_request
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            (request.repository, request.pullRequest, request.expectedHead,
+             request.baseRef, request.baseSha, request.mergeMethod),
+            ("FS-GG/.github", 1, HEAD, "main", "d" * 40, "squash"),
+        )
+        self.assertEqual(request.operationId, "routine-delivery:FS-GG/.github:pull:1")
+        self.assertIn(HEAD, request.effectId)
+        self.assertEqual(request.source, "fsgg.github.routine-delivery/1")
+        mutations = {
+            "repository": "FS-GG/other",
+            "pullRequest": 2,
+            "expectedHead": "c" * 40,
+            "baseRef": "release",
+            "baseSha": "e" * 40,
+            "mergeMethod": "merge",
+            "operationId": "other-operation",
+            "effectId": "other-effect",
+            "source": "other-source",
+        }
+        for field, value in mutations.items():
+            with self.subTest(field=field):
+                self.assertNotEqual(
+                    request.digest(), MODULE.replace(request, **{field: value}).digest(),
+                )
+
+    def test_unreadable_base_identity_refuses_before_admission(self):
+        unreadable = {**opened(), "base": {"ref": "main"}}
+        api = FakeApi([unreadable])
+        code, result = self.call(api)
+        self.assertEqual((code, result.outcome, api.attempts), (2, "refused", 0))
+        self.assertIn("base identity", result.reason)
+
+    def test_installed_port_requires_correlated_applied_settlement(self):
+        request = MODULE.merge_effect_request(
+            "FS-GG/.github", 7, HEAD, "main", "d" * 40, "squash",
+        )
+        response = {"merged": True, "sha": MERGE}
+        response_sha = hashlib.sha256(json.dumps(
+            response, separators=(",", ":"), sort_keys=True,
+        ).encode()).hexdigest()
+
+        class Port:
+            def __init__(self, evidence):
+                self.evidence = evidence
+                self.calls = 0
+
+            def execute(self, observed):
+                self.calls += 1
+                self.observed = observed
+                return MODULE.AdmissionApplied(response, self.evidence)
+
+        evidence = MODULE.AppliedEffectEvidence(
+            request.effectId, request.digest(), response_sha, MERGE,
+        )
+        port = Port(evidence)
+        self.assertEqual(MODULE.GhApi(port).merge(request), response)
+        self.assertEqual((port.calls, port.observed), (1, request))
+
+        mismatches = (
+            MODULE.AppliedEffectEvidence("wrong", request.digest(), response_sha, MERGE),
+            MODULE.AppliedEffectEvidence(request.effectId, "0" * 64, response_sha, MERGE),
+            MODULE.AppliedEffectEvidence(request.effectId, request.digest(), "0" * 64, MERGE),
+            MODULE.AppliedEffectEvidence(request.effectId, request.digest(), response_sha, "c" * 40),
+        )
+        for mismatch in mismatches:
+            with self.subTest(mismatch=mismatch):
+                with self.assertRaisesRegex(MODULE.AmbiguousWrite, "correlated"):
+                    MODULE.GhApi(Port(mismatch)).merge(request)
+
+    def test_partial_and_indeterminate_admission_only_reconcile(self):
+        request = MODULE.merge_effect_request(
+            "FS-GG/.github", 7, HEAD, "main", "d" * 40, "squash",
+        )
+
+        class Port:
+            def __init__(self, outcome):
+                self.outcome = outcome
+                self.calls = 0
+
+            def execute(self, _):
+                self.calls += 1
+                return self.outcome
+
+        for outcome in (
+            MODULE.AdmissionPartial("provider-partial"),
+            MODULE.AdmissionIndeterminate("lost-response"),
+        ):
+            port = Port(outcome)
+            with self.subTest(outcome=outcome):
+                with self.assertRaisesRegex(MODULE.AmbiguousWrite, "reconciliation"):
+                    MODULE.GhApi(port).merge(request)
+                self.assertEqual(port.calls, 1)
 
     def test_admission_refusal_is_not_an_attempt_or_readback_delivery(self):
         api = FakeApi(
