@@ -77,6 +77,10 @@ def provider_values():
     return values
 
 
+def links(**relations):
+    return {"Link": ", ".join(f'<{url}>; rel="{relation}"' for relation, url in relations.items())}
+
+
 class SettingsScopeProbeTests(unittest.TestCase):
     def test_report_binds_identity_and_never_retains_sensitive_payloads(self):
         token = "ghs_" + "t" * 40
@@ -127,6 +131,66 @@ class SettingsScopeProbeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "allowlist"):
             probe.probe_pages("repository-environments", path, True, "actions:read", "token",
                               Opener({probe.API + path: escaped}))
+        encoded_path = probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/%72ulesets?includes_parents=true&per_page=100&page=2"
+        with self.assertRaisesRegex(ValueError, "escaped the allowlist"):
+            probe.link_relations({"link": f'<{encoded_path}>; rel="next"'})
+
+    def test_skipped_page_and_short_page_next_refuse(self):
+        path = f"/repos/{probe.OWNER}/{probe.REPOSITORY}/rulesets?includes_parents=true&per_page=100"
+        url = probe.API + path
+        page4 = url + "&page=4"
+        skipped = Response(200, [{}] * 100, links(next=page4, last=page4))
+        with self.assertRaisesRegex(ValueError, "not sequential"):
+            probe.probe_pages("repository-rulesets", path, True, "administration:read", "token",
+                              Opener({url: skipped}))
+        page2 = url + "&page=2"
+        short = Response(200, [{}], links(next=page2, last=page2))
+        with self.assertRaisesRegex(ValueError, "short page"):
+            probe.probe_pages("repository-rulesets", path, True, "administration:read", "token",
+                              Opener({url: short}))
+
+    def test_duplicate_and_malformed_link_relations_refuse(self):
+        path = f"/repos/{probe.OWNER}/{probe.REPOSITORY}/rulesets?includes_parents=true&per_page=100"
+        url = probe.API + path
+        page2 = url + "&page=2"
+        duplicate = Response(200, [{}] * 100,
+                             {"Link": f'<{page2}>; rel="next", <{page2}>; rel="next", <{page2}>; rel="last"'})
+        with self.assertRaisesRegex(ValueError, "duplicate next"):
+            probe.probe_pages("repository-rulesets", path, True, "administration:read", "token",
+                              Opener({url: duplicate}))
+        malformed = Response(200, [{}] * 100, {"Link": f'<{page2}>; next'})
+        with self.assertRaisesRegex(ValueError, "malformed"):
+            probe.probe_pages("repository-rulesets", path, True, "administration:read", "token",
+                              Opener({url: malformed}))
+
+    def test_terminal_page_requires_prior_relations_and_declared_last(self):
+        path = f"/repos/{probe.OWNER}/{probe.REPOSITORY}/rulesets?includes_parents=true&per_page=100"
+        url = probe.API + path
+        page1 = url + "&page=1"
+        page2 = url + "&page=2"
+        first = Response(200, [{}] * 100, links(next=page2, last=page2))
+        terminal = Response(200, [], links(first=page1, prev=page1))
+        result, _ = probe.probe_pages(
+            "repository-rulesets", path, True, "administration:read", "token",
+            Opener({url: first, page2: terminal}))
+        self.assertTrue(result["pages"][-1]["terminal"])
+        self.assertEqual({"first": page1, "prev": page1}, result["pages"][-1]["links"])
+        missing_prior = Response(200, [], links(first=page1))
+        with self.assertRaisesRegex(ValueError, "prior pagination relations are incomplete"):
+            probe.probe_pages("repository-rulesets", path, True, "administration:read", "token",
+                              Opener({url: first, page2: missing_prior}))
+
+    def test_malformed_parent_rows_cannot_claim_observed_absence(self):
+        token = "ghs_" + "r" * 40
+        values = provider_values()
+        rules_path = next(path for name, path, _, _ in probe.STATIC_PROBES if name == "repository-rulesets")
+        values[probe.API + rules_path] = Response(200, [{"id": 17, "source_type": "Organization"}])
+        with tempfile.TemporaryDirectory() as directory:
+            proof = Path(directory) / "mint.json"
+            proof.write_text(json.dumps(mint_proof(token)), encoding="utf-8")
+            with mock.patch.object(probe, "source_binding", return_value={"headSha": "b" * 40}):
+                with self.assertRaisesRegex(ValueError, "ruleset parent identity is incomplete"):
+                    probe.build_report(token, proof, ROOT, "b" * 40, Opener(values))
 
     def test_mint_proof_refuses_extra_write_and_token_mismatch(self):
         token = "ghs_" + "a" * 40

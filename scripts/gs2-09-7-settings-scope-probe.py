@@ -60,7 +60,7 @@ def canonical(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
 
 
-def allowed_url(value: str) -> bool:
+def allowed_url(value: str, allow_page_one: bool = False) -> bool:
     parsed = urllib.parse.urlsplit(value)
     if (parsed.scheme, parsed.netloc) != ("https", "api.github.com") or parsed.fragment:
         return False
@@ -83,7 +83,8 @@ def allowed_url(value: str) -> bool:
         paginated = matched[0][2]
     permitted = set(expected) | ({"page"} if paginated else set())
     return set(query).issubset(permitted) and all(query.get(key) == values for key, values in expected.items()) \
-        and ("page" not in query or query["page"][0].isdigit() and int(query["page"][0]) >= 2)
+        and ("page" not in query or query["page"][0].isdigit()
+             and int(query["page"][0]) >= (1 if allow_page_one else 2))
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -113,18 +114,38 @@ def get(url: str, token: str, opener=None) -> tuple[int, dict[str, str], bytes]:
     return response.status, {key.lower(): value for key, value in response.headers.items()}, raw
 
 
-def next_link(headers: dict[str, str]) -> str | None:
+def link_relations(headers: dict[str, str]) -> dict[str, str]:
     links = headers.get("link")
     if not links:
-        return None
-    matches = []
+        return {}
+    relations = {}
     for item in links.split(","):
         match = re.fullmatch(r'\s*<([^>]+)>;\s*rel="([^"]+)"\s*', item)
         require(match is not None, "malformed provider Link header")
-        if match.group(2) == "next":
-            matches.append(match.group(1))
-    require(len(matches) <= 1, "duplicate next pagination link")
-    return matches[0] if matches else None
+        relation = match.group(2)
+        require(relation in {"first", "prev", "next", "last"}, "unknown pagination relation")
+        require(relation not in relations, f"duplicate {relation} pagination relation")
+        require(allowed_url(match.group(1), allow_page_one=True),
+                f"{relation} pagination relation escaped the allowlist")
+        relations[relation] = match.group(1)
+    return relations
+
+
+def page_number(url: str) -> int:
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+    return int(query.get("page", ["1"])[0])
+
+
+def same_population(left: str, right: str) -> bool:
+    first = urllib.parse.urlsplit(left)
+    second = urllib.parse.urlsplit(right)
+    if first.path != second.path:
+        return False
+    first_query = urllib.parse.parse_qs(first.query)
+    second_query = urllib.parse.parse_qs(second.query)
+    first_query.pop("page", None)
+    second_query.pop("page", None)
+    return first_query == second_query
 
 
 def disposition(status: int) -> dict[str, str]:
@@ -163,7 +184,51 @@ def decode_collection(raw: bytes, field: str | None, label: str) -> list:
     return value
 
 
-def page_record(url: str, status: int, raw: bytes, next_url: str | None, index: int) -> dict:
+def page_rows(name: str, raw: bytes) -> list:
+    if name == "repository-environments":
+        return decode_collection(raw, "environments", name)
+    if name.startswith("environment-secrets-"):
+        return decode_collection(raw, "secrets", name)
+    return decode_collection(raw, None, name)
+
+
+def validate_page_links(name: str, url: str, status: int, raw: bytes,
+                        relations: dict[str, str], expected_last: int | None) -> tuple[str | None, int | None]:
+    current = page_number(url)
+    require(all(same_population(url, target) for target in relations.values()),
+            f"{name} pagination changed endpoint")
+    if status != 200:
+        require(not relations, f"{name} error response unexpectedly paginated")
+        return None, expected_last
+    rows = page_rows(name, raw)
+    if current == 1:
+        require("first" not in relations and "prev" not in relations,
+                f"{name} first page has prior relations")
+    else:
+        require("first" in relations and "prev" in relations,
+                f"{name} prior pagination relations are incomplete")
+        require(page_number(relations["first"]) == 1
+                and page_number(relations["prev"]) == current - 1,
+                f"{name} prior pagination relation is inconsistent")
+    following = relations.get("next")
+    last = relations.get("last")
+    if following is None:
+        require(last is None, f"{name} terminal page has a last relation")
+        require(expected_last is None or current == expected_last,
+                f"{name} terminated before the declared last page")
+        return None, expected_last
+    require(len(rows) == 100, f"{name} short page has a next relation")
+    require(page_number(following) == current + 1, f"{name} next page is not sequential")
+    require(last is not None and page_number(last) >= current + 1,
+            f"{name} last pagination relation is incomplete")
+    declared_last = page_number(last)
+    require(expected_last is None or declared_last == expected_last,
+            f"{name} last pagination relation drifted")
+    return following, declared_last
+
+
+def page_record(url: str, status: int, raw: bytes, relations: dict[str, str], index: int) -> dict:
+    next_url = relations.get("next")
     return {
         "index": index,
         "method": "GET",
@@ -171,6 +236,7 @@ def page_record(url: str, status: int, raw: bytes, next_url: str | None, index: 
         "apiVersion": API_VERSION,
         "status": status,
         "responseSha256": sha256(raw),
+        "links": dict(sorted(relations.items())),
         "nextEndpoint": next_url,
         "terminal": next_url is None,
     }
@@ -181,17 +247,19 @@ def probe_pages(name: str, path: str, paginated: bool, permission: str, token: s
     pages = []
     decoded = []
     seen = set()
+    expected_last = None
     while True:
         require(url not in seen and len(pages) < MAX_PAGES, f"{name} pagination escaped its bound")
         seen.add(url)
         status, headers, raw = get(url, token, opener)
-        following = next_link(headers)
-        require(following is None or paginated, f"{name} unexpectedly paginated")
-        if following is not None:
-            require(allowed_url(following), f"{name} pagination escaped the allowlist")
-            require(urllib.parse.urlsplit(following).path == urllib.parse.urlsplit(url).path,
-                    f"{name} pagination changed endpoint")
-        pages.append(page_record(url, status, raw, following, len(pages) + 1))
+        relations = link_relations(headers)
+        require(not relations or paginated, f"{name} unexpectedly paginated")
+        if paginated:
+            following, expected_last = validate_page_links(
+                name, url, status, raw, relations, expected_last)
+        else:
+            following = None
+        pages.append(page_record(url, status, raw, relations, len(pages) + 1))
         if status == 200:
             decoded.append(raw)
         if status != 200 or following is None:
@@ -279,10 +347,12 @@ def build_report(token: str, mint_path: Path, workspace: Path, revision: str, op
             identities = []
             for item in population:
                 require(isinstance(item, dict) and type(item.get("id")) is int
-                        and isinstance(item.get("node_id"), str) and isinstance(item.get("name"), str),
+                        and item["id"] > 0 and isinstance(item.get("node_id"), str)
+                        and item["node_id"] and isinstance(item.get("name"), str) and item["name"],
                         "environment parent identity is incomplete")
                 identities.append((item["id"], item["node_id"], item["name"]))
-            require(len(identities) == len(set(identities)), "environment parent identity is duplicated")
+            require(all(len(values) == len(set(values)) for values in zip(*identities)) if identities else True,
+                    "environment parent identity is duplicated")
             for identifier, node_id, environment_name in identities:
                 environment_parents.append({"kind": "environment", "id": identifier, "nodeId": node_id})
                 encoded = urllib.parse.quote(environment_name, safe="")
@@ -293,17 +363,21 @@ def build_report(token: str, mint_path: Path, workspace: Path, revision: str, op
                 probes.append(child)
         elif name == "repository-rulesets" and result["pages"][-1]["status"] == 200:
             inherited = []
+            all_rulesets = []
             for raw in bodies:
                 for item in decode_collection(raw, None, name):
                     require(isinstance(item, dict) and type(item.get("id")) is int
-                            and isinstance(item.get("node_id"), str)
-                            and isinstance(item.get("source_type"), str),
+                            and item["id"] > 0 and isinstance(item.get("node_id"), str) and item["node_id"]
+                            and item.get("source_type") in {"Repository", "Organization", "Enterprise"},
                             "ruleset parent identity is incomplete")
+                    all_rulesets.append((item["id"], item["node_id"]))
                     if item["source_type"] != "Repository":
                         inherited.append({"kind": "ruleset", "id": item["id"],
                                           "nodeId": item["node_id"], "sourceType": item["source_type"]})
-            keys = [(item["id"], item["nodeId"], item["sourceType"]) for item in inherited]
-            require(len(keys) == len(set(keys)), "ruleset parent identity is duplicated")
+            require(len(all_rulesets) == len(set(all_rulesets))
+                    and len({item[0] for item in all_rulesets}) == len(all_rulesets)
+                    and len({item[1] for item in all_rulesets}) == len(all_rulesets),
+                    "ruleset parent identity is duplicated")
             environment_parents.extend(inherited)
             result["classification"]["inheritance"] = \
                 "observed-parent-ids" if inherited else "observed-no-parent-ids"
