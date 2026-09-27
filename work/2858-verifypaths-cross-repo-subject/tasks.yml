@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/2858-verifypaths-cross-repo-subject/spec.md
-    digest: 12c1d35fca9dfc590e4f1fd698b8bb87d4d4fb2a3f444772e86423dfb62a8f73
+    digest: 65c0eb0a7c9801a0e7f50749bc1f6c94fcc885e00f24c611c33bf190dee86480
     schemaVersion: 1
   - label: clarifications
     path: work/2858-verifypaths-cross-repo-subject/clarifications.md
@@ -21,11 +21,11 @@ sources:
     schemaVersion: 1
   - label: checklist
     path: work/2858-verifypaths-cross-repo-subject/checklist.md
-    digest: 402b496eb03edf58701730013d52e54b880dd7d0bd0bf9f8625ce3da6bf3b445
+    digest: 53832fdc7842bb9b26839d745046da9333d116c7863bbebd8c04449288a949b0
     schemaVersion: 1
   - label: plan
     path: work/2858-verifypaths-cross-repo-subject/plan.md
-    digest: 51024952610d04f9828713f4b001d5e4824961c3a418ef5b52d7b3e3c773e5f8
+    digest: 27382ea6baf2eb49a824b47a8db32539deb0133d404a93c8e22de9dec7392e33
     schemaVersion: 1
 tasks:
   - id: T001
@@ -65,7 +65,7 @@ tasks:
     dependencies: []
     requirements: [FR-004]
     decisions: []
-    sourceIds: [AC-004, FR-004]
+    sourceIds: [AC-004, AC-007, FR-004]
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV004]
   - id: T005
@@ -105,7 +105,7 @@ tasks:
     dependencies: [T001]
     requirements: []
     decisions: []
-    sourceIds: [AC-004, DEC-001, FR-004, PD-004]
+    sourceIds: [AC-004, AC-007, DEC-001, FR-004, PD-004]
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV008]
   - id: T009
@@ -148,6 +148,16 @@ tasks:
     sourceIds: [GV-001, PD-001]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV012]
+  - id: T013
+    title: Implement plan decision PD-005
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-006, AC-007, FR-005, PD-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV013]
 acceptedDeferrals: []
 findings: []
 advisoryNotes:

@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2858-verifypaths-cross-repo-subject/spec.md sha256:12c1d35fca9dfc590e4f1fd698b8bb87d4d4fb2a3f444772e86423dfb62a8f73 schemaVersion:1
+- spec: work/2858-verifypaths-cross-repo-subject/spec.md sha256:65c0eb0a7c9801a0e7f50749bc1f6c94fcc885e00f24c611c33bf190dee86480 schemaVersion:1
 - clarifications: work/2858-verifypaths-cross-repo-subject/clarifications.md sha256:ec259e4aa43af4d4e276ce361d2757e6cb4ff70658faa6772419ca5b6eebb870 schemaVersion:1
-- checklist: work/2858-verifypaths-cross-repo-subject/checklist.md sha256:402b496eb03edf58701730013d52e54b880dd7d0bd0bf9f8625ce3da6bf3b445 schemaVersion:1
+- checklist: work/2858-verifypaths-cross-repo-subject/checklist.md sha256:53832fdc7842bb9b26839d745046da9333d116c7863bbebd8c04449288a949b0 schemaVersion:1
 
 ## Plan Scope
 - Work item 2858-verifypaths-cross-repo-subject is planned from the current specification, clarification, and checklist facts.
@@ -30,8 +30,8 @@ Prose status: planned
 - PD-001 [AC-001] [FR-001] complete: Parse at most one named issue from a positional ref or `--issue` before branch resolution; a named issue bypasses the branch and closing-ref lookup. Refuse two explicit subjects.
 - PD-002 [AC-002] [AC-005] [FR-002] [DEC-001] complete: Permit cross-repository comparison only when the named issue is in the current owner's `.github` repository and the caller explicitly supplies the PR `--repo`. Keep an implicit cross-repository closing ref on the existing SKIP path and refuse other explicit straddles.
 - PD-003 [AC-003] [FR-003] complete: Print the PR owner/repository and the full Coordination issue ref beside `issue-body Paths:` on OK and DRIFT. Retain the existing marker vocabulary consumed by the drift gate.
-- PD-004 [AC-004] [FR-004] [DEC-001] complete: Refuse a named Coordination subject without an explicit PR repository, and refuse an undeclared or partly unmatchable cross-repository `Paths:` declaration before OK or DRIFT. Do not let `--warn` turn a refusal green.
-- PD-005 [AC-006] [FR-005] complete: Add HTTP parity cases for the branch/subject inversion, cross-repository OK and DRIFT, ambiguous and undeclared refusal, and unchanged conventional-branch and implicit-closing behavior.
+- PD-004 [AC-004] [AC-007] [FR-004] [DEC-001] complete: Preserve same-repo `--issue` inference when `--repo` is absent. Refuse an undeclared or partly unmatchable cross-repository `Paths:` declaration before OK or DRIFT, even under `--warn`. For a cross-repository comparison, classify files against the authored `Paths:` alone: the issue repository's generated roster and SDD package cannot exempt files in the target PR repository.
+- PD-005 [AC-006] [AC-007] [FR-005] complete: Add HTTP parity cases for the branch/subject inversion, cross-repository OK and DRIFT, ambiguous and undeclared refusal, and unchanged conventional-branch and implicit-closing behavior. Add a command-boundary inversion with a known `.github` generated path that must DRIFT in the target repository.
 
 ## Contract Impact
 - PC-001 [PD-001] [PD-002] [PD-003] command report: `verify-paths` accepts an optional positional issue ref alongside the existing `--issue` form; an explicit Coordination issue plus PR `--repo` now reaches OK or DRIFT, and verdict text identifies both repositories and issue-body `Paths:`. Existing `FSGG-PATHS` markers and exit meanings remain the gate contract. Package publication belongs to a later coherent-set release after the current Kit release source is settled.

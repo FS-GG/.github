@@ -41,7 +41,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "402b496eb03edf58701730013d52e54b880dd7d0bd0bf9f8625ce3da6bf3b445"
+        "value": "53832fdc7842bb9b26839d745046da9333d116c7863bbebd8c04449288a949b0"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +61,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "51024952610d04f9828713f4b001d5e4824961c3a418ef5b52d7b3e3c773e5f8"
+        "value": "27382ea6baf2eb49a824b47a8db32539deb0133d404a93c8e22de9dec7392e33"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "12c1d35fca9dfc590e4f1fd698b8bb87d4d4fb2a3f444772e86423dfb62a8f73"
+        "value": "65c0eb0a7c9801a0e7f50749bc1f6c94fcc885e00f24c611c33bf190dee86480"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "daaa90d5ca55541f44f4fba32c59c518cb2315c1cbfc81fbfef5733bcf750c97"
+        "value": "9c98dfcb257819569e154ef8ba8e75a8164693874e606d04fb66ef43e733c3bf"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -311,6 +311,16 @@
     {
       "id": "AR023",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/spec.md",
+      "targetPath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
+      "sourceId": "AC-007",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR024",
+      "sourcePath": "work/2858-verifypaths-cross-repo-subject/spec.md",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/checklist.md",
       "sourceId": null,
       "targetId": null,
@@ -319,7 +329,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR024",
+      "id": "AR025",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/spec.md",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/plan.md",
       "sourceId": null,
@@ -329,7 +339,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR025",
+      "id": "AR026",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/spec.md",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "sourceId": "FR-001",
@@ -339,7 +349,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR026",
+      "id": "AR027",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/spec.md",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "sourceId": "FR-002",
@@ -349,7 +359,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR027",
+      "id": "AR028",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/spec.md",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "sourceId": "FR-003",
@@ -359,7 +369,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR028",
+      "id": "AR029",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/spec.md",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "sourceId": "FR-004",
@@ -369,7 +379,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR029",
+      "id": "AR030",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/spec.md",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "sourceId": "FR-005",
@@ -379,7 +389,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR030",
+      "id": "AR031",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/spec.md",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/clarifications.md",
       "sourceId": null,
@@ -389,7 +399,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR031",
+      "id": "AR032",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/spec.md",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "sourceId": null,
@@ -399,7 +409,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR032",
+      "id": "AR033",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "sourceId": "T006",
@@ -409,7 +419,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR033",
+      "id": "AR034",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "sourceId": "T007",
@@ -419,7 +429,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR034",
+      "id": "AR035",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "sourceId": "T008",
@@ -429,7 +439,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR035",
+      "id": "AR036",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "sourceId": "T009",
@@ -439,7 +449,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR036",
+      "id": "AR037",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "sourceId": "T010",
@@ -449,7 +459,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR037",
+      "id": "AR038",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "sourceId": "T011",
@@ -459,10 +469,20 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR038",
+      "id": "AR039",
       "sourcePath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "targetPath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
       "sourceId": "T012",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR040",
+      "sourcePath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
+      "targetPath": "work/2858-verifypaths-cross-repo-subject/tasks.yml",
+      "sourceId": "T013",
       "targetId": "T001",
       "relationship": "taskDependency",
       "state": "current",
@@ -471,7 +491,7 @@
   ],
   "readiness": {
     "status": "implementationReady",
-    "readyCount": 38,
+    "readyCount": 40,
     "advisoryCount": 0,
     "warningCount": 0,
     "blockingCount": 0,
