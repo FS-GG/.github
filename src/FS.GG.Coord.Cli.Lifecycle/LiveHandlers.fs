@@ -236,8 +236,15 @@ module LiveHandlers =
     // case §6.3 names, and a failed read must not be able to masquerade as a legitimate answer
     // (`#266`). Nothing is made worse by refusing — the previous marker, if any, is left exactly as
     // it was, and `delivery` is safe to re-run.
-    let electionGrounding (ctx: Context) (target: Ref) (gen: string) (pr: int) : Errors.IoResult<string * string> =
-        let receiver = $"%s{target.Owner}/%s{target.Repo}"
+    let electionGroundingForReceiver
+        (ctx: Context)
+        (target: Ref)
+        (receiverOwner: string)
+        (receiverRepo: string)
+        (gen: string)
+        (pr: int)
+        : Errors.IoResult<string * string> =
+        let receiver = $"%s{receiverOwner}/%s{receiverRepo}"
 
         // `Operation.compose` is slice 1's key (`.github#2311`), and it is CALLED rather than
         // re-expressed so that this producer and the fence's check 5 cannot disagree about a key.
@@ -256,9 +263,9 @@ module LiveHandlers =
         | Ok key ->
             let opkey = key.Value
 
-            Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo target.Number
-            |> Result.bind (fun comments ->
-                let owned =
+            let readElections () =
+                Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo target.Number
+                |> Result.map (fun comments ->
                     comments
                     |> List.map (fun comment ->
                         ({
@@ -267,16 +274,30 @@ module LiveHandlers =
                             Body = comment.Body
                         }
                         : Driver.ReviewComment))
-                    |> DeliveryApplication.electionsFromComments
-                    |> DeliveryApplication.electionsOwnedBy opkey pr
+                    |> DeliveryApplication.electionsFromComments)
 
-                match lowestElection owned with
-                // ALREADY ELECTED — the ordinary case on every call after the first, and the reason a
-                // repeated `delivery` neither costs a write nor denies its own pull request. The
-                // LOWEST of this target's own elections is named, not the first one read: a duplicate
-                // that a lost POST response could have created must not change which id is granted.
-                | Some election -> Ok(opkey, string election.Id)
-                | None ->
+            let winnerForThisPr elections =
+                elections
+                |> DeliveryApplication.electionsForOperation opkey
+                |> lowestElection
+                |> function
+                    | None -> Ok None
+                    | Some winner when winner.Fields.TryFind "pr" = Some(string pr) -> Ok(Some winner)
+                    | Some winner ->
+                        let winnerPr = winner.Fields.TryFind "pr" |> Option.defaultValue "unreadable"
+                        Error(
+                            Errors.Malformed(
+                                target.Short,
+                                $"merge election %d{winner.Id} already won receiver %s{receiver} for pull request %s{winnerPr}, not %d{pr}"
+                            )
+                        )
+
+            readElections ()
+            |> Result.bind (fun elections ->
+                match winnerForThisPr elections with
+                | Error error -> Error error
+                | Ok(Some election) -> Ok(opkey, string election.Id)
+                | Ok None ->
                     // The marker is the comment's FIRST BYTE, because the fence anchors its match at
                     // position 0 of the raw body and never trims. The prose belongs after it.
                     let body =
@@ -287,7 +308,58 @@ module LiveHandlers =
                         + "one whose merge this generation admits."
 
                     Writes.postIssueComment ctx.Transport target body
-                    |> Result.map (fun id -> (opkey, string id)))
+                    |> Result.bind (fun _ ->
+                        // The POST response does not elect its own comment. Re-read the complete item
+                        // thread and apply the same lowest-id rule as the fence, closing the concurrent
+                        // contender race before any PR authorization is written.
+                        readElections ()
+                        |> Result.bind (fun current ->
+                            match winnerForThisPr current with
+                            | Ok(Some election) -> Ok(opkey, string election.Id)
+                            | Ok None ->
+                                Error(
+                                    Errors.Malformed(
+                                        target.Short,
+                                        "the posted merge election was absent from the authoritative reread"
+                                    )
+                                )
+                            | Error error -> Error error)))
+
+    let electionGrounding (ctx: Context) (target: Ref) (gen: string) (pr: int) : Errors.IoResult<string * string> =
+        electionGroundingForReceiver ctx target target.Owner target.Repo gen pr
+
+    let private writeAuthorization
+        (ctx: Context)
+        (target: Ref)
+        (receiverOwner: string)
+        (receiverRepo: string)
+        (prNumber: int)
+        (gen: string)
+        (opkey: string)
+        (grant: string)
+        (head: string)
+        (body: string)
+        : Errors.IoResult<unit> =
+        match rebindAuthorization body target.Canonical gen opkey grant head with
+        | AuthorizationCurrent -> Ok()
+        | AuthorizationRebound rebound ->
+            let payload =
+                let o = System.Text.Json.Nodes.JsonObject()
+                o.["body"] <- System.Text.Json.Nodes.JsonValue.Create rebound
+                o.ToJsonString()
+
+            let request: Request =
+                {
+                    Method = "PATCH"
+                    Path = $"repos/%s{receiverOwner}/%s{receiverRepo}/pulls/%d{prNumber}"
+                    Query = []
+                    Body = Transport.Json payload
+                    Budget = Rest
+                    IfNoneMatch = None
+                    Subject = $"%s{receiverOwner}/%s{receiverRepo}#%d{prNumber}"
+                }
+
+            ctx.Transport.Send request |> Result.map ignore
 
     /// `delivery`'s automatic write-side counterpart to `scripts/check-claim-generation.py`'s read side
     /// (.github#2395). A no-op whenever there is nothing yet to authorize: no PR (`pr = None`), no LIVE
@@ -347,27 +419,87 @@ module LiveHandlers =
             |> Result.bind (fun (opkey, grant) ->
                 Reads.prBody ctx.Transport target.Owner target.Repo prNumber
                 |> Result.bind (fun body ->
-                    match rebindAuthorization body target.Canonical gen opkey grant head with
-                    | AuthorizationCurrent -> Ok()
-                    | AuthorizationRebound rebound ->
-                        let payload =
-                            let o = System.Text.Json.Nodes.JsonObject()
-                            o.["body"] <- System.Text.Json.Nodes.JsonValue.Create rebound
-                            o.ToJsonString()
-
-                        let request: Request =
-                            {
-                                Method = "PATCH"
-                                Path = $"repos/%s{target.Owner}/%s{target.Repo}/pulls/%d{prNumber}"
-                                Query = []
-                                Body = Transport.Json payload
-                                Budget = Rest
-                                IfNoneMatch = None
-                                Subject = target.Short
-                            }
-
-                        ctx.Transport.Send request |> Result.map ignore))
+                    writeAuthorization
+                        ctx
+                        target
+                        target.Owner
+                        target.Repo
+                        prNumber
+                        gen
+                        opkey
+                        grant
+                        head
+                        body))
         | _ -> Ok()
+
+    /// Cross-repository authorization is a bounded source-only protocol. The election remains on the
+    /// item, while every PR fact and the final PATCH are addressed to the explicit receiver. All mutable
+    /// authority is reread after the election and before the PATCH.
+    let ensureCrossRepositoryAuthorization
+        (ctx: Context)
+        (scope: DeliveryApplication.DeliveryScope)
+        (leaseMinutes: int)
+        (marker: Reads.Marker)
+        (pr: int)
+        (inspectedHead: string)
+        (inspectedFiles: string list)
+        : Errors.IoResult<unit> =
+        if not scope.CrossRepository then
+            Error(Errors.Malformed(scope.Item.Short, "cross-repository authorization requires distinct item and receiver repositories"))
+        else
+            let gen = string marker.Id
+
+            electionGroundingForReceiver
+                ctx
+                scope.Item
+                scope.ReceiverOwner
+                scope.ReceiverRepo
+                gen
+                pr
+            |> Result.bind (fun (opkey, grant) ->
+                let currentMarker =
+                    Reads.markerScan ctx.Transport scope.Item.Owner scope.Item.Repo scope.Item.Number
+                    |> Result.bind (Reads.requireCompleteMarkerScan scope.Item.Short)
+                    |> Result.bind (fun markers ->
+                        authorizedMarker leaseMinutes markers (fun () ->
+                            Reads.prAlive ctx.Transport scope.Item.Owner scope.Item.Repo scope.Item.Number))
+
+                match
+                    currentMarker,
+                    Reads.prHeadSha ctx.Transport scope.ReceiverOwner scope.ReceiverRepo pr,
+                    Reads.prBody ctx.Transport scope.ReceiverOwner scope.ReceiverRepo pr,
+                    Reads.prClosingRef ctx.Transport scope.ReceiverOwner scope.ReceiverRepo pr,
+                    Reads.prFiles ctx.Transport scope.ReceiverOwner scope.ReceiverRepo pr
+                with
+                | Error error, _, _, _, _
+                | _, Error error, _, _, _
+                | _, _, Error error, _, _
+                | _, _, _, Error error, _
+                | _, _, _, _, Error error -> Error error
+                | Ok None, _, _, _, _ ->
+                    Error(Errors.Malformed(scope.Item.Short, "the item has no current holder at authorization readback"))
+                | Ok(Some current), _, _, _, _ when current.Id <> marker.Id || current.Worker <> marker.Worker ->
+                    Error(Errors.Malformed(scope.Item.Short, "the item holder or claim generation changed before authorization"))
+                | Ok(Some _), Ok head, _, _, _ when head <> inspectedHead ->
+                    Error(Errors.Malformed(scope.Item.Short, "the receiver pull request head changed before authorization"))
+                | Ok(Some _), _, Ok body, _, _ when not (DeliveryApplication.hasCanonicalClosingLinkage scope.Item body) ->
+                    Error(Errors.Malformed(scope.Item.Short, "the receiver pull request lost its explicit canonical closing linkage"))
+                | Ok(Some _), _, _, Ok closing, _ when closing <> Some scope.Item ->
+                    Error(Errors.Malformed(scope.Item.Short, "the receiver pull request closing authority no longer names the item"))
+                | Ok(Some _), _, _, _, Ok files when files <> inspectedFiles ->
+                    Error(Errors.Malformed(scope.Item.Short, "the receiver pull request changed paths before authorization"))
+                | Ok(Some _), Ok head, Ok body, Ok _, Ok _ ->
+                    writeAuthorization
+                        ctx
+                        scope.Item
+                        scope.ReceiverOwner
+                        scope.ReceiverRepo
+                        pr
+                        gen
+                        opkey
+                        grant
+                        head
+                        body)
 
     // Prove that moving from an accepted base to the current base preserves the reviewed candidate
     // delta. Both `landable` and the final guarded merge call this same function, so the merge boundary
@@ -458,31 +590,43 @@ module LiveHandlers =
                 eprint $"fsgg-coord-engine: delivery: %s{message}"
                 ExitError
             | Ok target ->
-                let candidate =
-                    scanAndDecide
-                        ctx
-                        { opts with
-                            Repo = Some target.Repo
-                            Limit = None
-                        }
-                        Cache.Scheduling
-                    |> Result.mapError Errors.explain
-                    |> Result.bind (fun (_, doc, _) ->
-                        Snapshot.parse doc
-                        |> Result.mapError (fun errors ->
-                            errors
-                            |> List.map (fun error -> $"%s{error.Path}: %s{error.Message}")
-                            |> String.concat "; ")
-                        |> Result.bind (fun snapshot ->
-                            match snapshot.Candidates |> List.tryFind (fun item -> item.Item.Ref = target) with
-                            | Some item -> Ok item
-                            | None -> Error $"%s{target.Short} is not present in the fresh board scan"))
+                let scope = DeliveryApplication.deliveryScope ctx.Owner opts.Repo target
 
-                match candidate with
-                | Error message ->
+                let candidate =
+                    scope
+                    |> Result.bind (fun scope ->
+                        (if scope.CrossRepository && opts.Pr.IsNone then
+                             Error "cross-repository delivery requires an explicit receiver pull request via --pr N"
+                         else
+                             DeliveryApplication.validateDeliveryEffects scope opts.Apply opts.Flip)
+                        |> Result.bind (fun () ->
+                            scanAndDecide
+                                ctx
+                                { opts with
+                                    Repo = Some target.Repo
+                                    Limit = None
+                                }
+                                Cache.Scheduling
+                            |> Result.mapError Errors.explain
+                            |> Result.bind (fun (_, doc, _) ->
+                                Snapshot.parse doc
+                                |> Result.mapError (fun errors ->
+                                    errors
+                                    |> List.map (fun error -> $"%s{error.Path}: %s{error.Message}")
+                                    |> String.concat "; ")
+                                |> Result.bind (fun snapshot ->
+                                    match snapshot.Candidates |> List.tryFind (fun item -> item.Item.Ref = target) with
+                                    | Some item -> Ok item
+                                    | None -> Error $"%s{target.Short} is not present in the fresh board scan"))))
+
+                match scope, candidate with
+                | Error message, _ ->
+                    eprint $"fsgg-coord-engine: delivery: %s{message}"
+                    ExitError
+                | Ok _, Error message ->
                     eprint $"fsgg-coord-engine: delivery cannot establish board facts: %s{message}"
                     ExitError
-                | Ok candidate ->
+                | Ok scope, Ok candidate ->
                     let terminalBoardState =
                         candidate.Item.Status = Done && candidate.Item.State = Closed
 
@@ -556,6 +700,7 @@ module LiveHandlers =
                                   bool *
                                   bool *
                                   bool *
+                                  string list *
                                   Delivery.Obligation list *
                                   Delivery.PostMergeVerification,
                                   Errors.IoError
@@ -575,18 +720,20 @@ module LiveHandlers =
                                     false,
                                     false,
                                     [],
+                                    [],
                                     Delivery.NotObserved
                                 )
                             | Some pr ->
                                 match
-                                    Reads.prHeadRef ctx.Transport target.Owner target.Repo pr,
-                                    Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
-                                    Reads.prLandable ctx.Transport target.Owner target.Repo pr,
-                                    Reads.prClosingRef ctx.Transport target.Owner target.Repo pr,
-                                    Reads.prFiles ctx.Transport target.Owner target.Repo pr,
-                                    Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr
+                                    Reads.prHeadRef ctx.Transport scope.ReceiverOwner scope.ReceiverRepo pr,
+                                    Reads.prHeadSha ctx.Transport scope.ReceiverOwner scope.ReceiverRepo pr,
+                                    Reads.prLandable ctx.Transport scope.ReceiverOwner scope.ReceiverRepo pr,
+                                    Reads.prClosingRef ctx.Transport scope.ReceiverOwner scope.ReceiverRepo pr,
+                                    Reads.prFiles ctx.Transport scope.ReceiverOwner scope.ReceiverRepo pr,
+                                    Reads.commentsWithIdentity ctx.Transport scope.ReceiverOwner scope.ReceiverRepo pr,
+                                    Reads.prBody ctx.Transport scope.ReceiverOwner scope.ReceiverRepo pr
                                 with
-                                | Ok branch, Ok head, landable, Ok closing, Ok files, Ok comments ->
+                                | Ok branch, Ok head, landable, Ok closing, Ok files, Ok comments, Ok prBody ->
                                     let review, reviewProblem =
                                         comments
                                         |> List.map (fun comment ->
@@ -601,10 +748,17 @@ module LiveHandlers =
                                     let itemBranchCanonical =
                                         branch.StartsWith($"item/%d{target.Number}-", StringComparison.Ordinal)
 
-                                    let linkageCanonical = closing |> Option.exists ((=) target)
+                                    let linkageCanonical =
+                                        closing |> Option.exists ((=) target)
+                                        && (not scope.CrossRepository
+                                            || DeliveryApplication.hasCanonicalClosingLinkage target prBody)
 
-                                    let pathsVerified =
-                                        deliveryPathClassifier ctx target deliveryTouchSet files |> projectPathVerdict
+                                    let pathClassifications =
+                                        DeliveryApplication.classifyReceiverPaths
+                                            scope
+                                            deliveryTouchSet
+                                            files
+                                            (fun () -> deliveryPathClassifier ctx target deliveryTouchSet files)
 
                                     let reviewComments =
                                         comments
@@ -623,33 +777,42 @@ module LiveHandlers =
                                     let postMergeVerification =
                                         if landable = PrMerged then
                                             match
-                                                Reads.postMergeVerification ctx.Transport target.Owner target.Repo pr
+                                                Reads.postMergeVerification
+                                                    ctx.Transport
+                                                    scope.ReceiverOwner
+                                                    scope.ReceiverRepo
+                                                    pr
                                             with
                                             | Ok verification -> verification
                                             | Error error -> Delivery.Unreadable(Errors.explain error)
                                         else
                                             Delivery.NotObserved
 
-                                    Ok(
-                                        branch,
-                                        Some pr,
-                                        head,
-                                        itemBranchCanonical,
-                                        linkageCanonical,
-                                        pathsVerified,
-                                        review,
-                                        reviewProblem,
-                                        (landable = PrGreen),
-                                        (landable = PrMerged),
-                                        obligationsDeclared,
-                                        obligations,
-                                        postMergeVerification
-                                    )
-                                | Error error, _, _, _, _, _
-                                | _, Error error, _, _, _, _
-                                | _, _, _, Error error, _, _
-                                | _, _, _, _, Error error, _
-                                | _, _, _, _, _, Error error -> Error error
+                                    match pathClassifications with
+                                    | Error reason -> Error(Errors.Malformed(target.Short, reason))
+                                    | Ok classifications ->
+                                        Ok(
+                                            branch,
+                                            Some pr,
+                                            head,
+                                            itemBranchCanonical,
+                                            linkageCanonical,
+                                            (projectPathVerdict classifications),
+                                            review,
+                                            reviewProblem,
+                                            (landable = PrGreen),
+                                            (landable = PrMerged),
+                                            obligationsDeclared,
+                                            files,
+                                            obligations,
+                                            postMergeVerification
+                                        )
+                                | Error error, _, _, _, _, _, _
+                                | _, Error error, _, _, _, _, _
+                                | _, _, _, Error error, _, _, _
+                                | _, _, _, _, Error error, _, _
+                                | _, _, _, _, _, Error error, _
+                                | _, _, _, _, _, _, Error error -> Error error
 
                         // Ensure the PR's `fsgg:pr-authorization` marker is current BEFORE deriving the
                         // lifecycle facts below — a write to the PR body that no fact in
@@ -678,9 +841,23 @@ module LiveHandlers =
                                      landable,
                                      merged,
                                      obligationsDeclared,
+                                     files,
                                      obligations,
                                      postMergeVerification) ->
-                                    ensureAuthorization ctx target marker pr head merged
+                                    (if scope.CrossRepository then
+                                         match marker, pr, merged with
+                                         | Some held, Some prNumber, false ->
+                                             ensureCrossRepositoryAuthorization
+                                                 ctx
+                                                 scope
+                                                 opts.LeaseMinutes
+                                                 held
+                                                 prNumber
+                                                 head
+                                                 files
+                                         | _ -> Ok()
+                                     else
+                                         ensureAuthorization ctx target marker pr head merged)
                                     |> Result.map (fun () ->
                                         (branch,
                                          pr,
@@ -693,6 +870,7 @@ module LiveHandlers =
                                          landable,
                                          merged,
                                          obligationsDeclared,
+                                         files,
                                          obligations,
                                          postMergeVerification)))
 
@@ -709,13 +887,14 @@ module LiveHandlers =
                              landable,
                              merged,
                              obligationsDeclared,
+                             _,
                              obligations,
                              postMergeVerification) ->
                             let facts: Delivery.Snapshot =
                                 {
                                     Freshness =
                                         {
-                                            ItemRef = target.Short
+                                            ItemRef = if scope.CrossRepository then target.Canonical else target.Short
                                             ClaimGeneration =
                                                 marker
                                                 |> Option.map (fun held -> string held.Id)
@@ -3524,18 +3703,33 @@ module LiveHandlers =
                                             | Error e -> fail e
                                             | Ok files ->
                                                 let classifications =
-                                                    if crossesRepo issue then
-                                                        // The shared classifier binds generated-path authority to the
-                                                        // ISSUE repo. For a Coordination declaration, the changed files
-                                                        // belong to the PR repo instead. Neither this checkout's generated
-                                                        // roster nor the issue's SDD package can exempt target-repo files.
-                                                        Delivery.classifyPaths
-                                                            (Declared tokens)
-                                                            (Delivery.AuthorityKnown("cross-repo:no-generated-exemption", Set.empty))
-                                                            (Delivery.AuthorityKnown("cross-repo:no-sdd-exemption", []))
-                                                            files
-                                                    else
-                                                        deliveryPathClassifier ctx issue (Declared tokens) files
+                                                    match
+                                                        DeliveryApplication.deliveryScope owner (Some repo) issue
+                                                        |> Result.bind (fun scope ->
+                                                            DeliveryApplication.classifyReceiverPaths
+                                                                scope
+                                                                (Declared tokens)
+                                                                files
+                                                                (fun () ->
+                                                                    deliveryPathClassifier
+                                                                        ctx
+                                                                        issue
+                                                                        (Declared tokens)
+                                                                        files))
+                                                    with
+                                                    | Ok value -> value
+                                                    | Error reason ->
+                                                        // The surrounding guards already reject every invalid scope and
+                                                        // ambiguous token. Retain fail-closed behavior if those contracts
+                                                        // diverge in a future edit.
+                                                        files
+                                                        |> List.map (fun path ->
+                                                            {
+                                                                Path = path
+                                                                Admission = Delivery.UnknownPath
+                                                                Reason = reason
+                                                                AuthorityRevisions = []
+                                                            })
 
                                                 // #498/ADR-0044: the generated, CI-gated artifacts this PR REGENERATED are drift
                                                 // by the letter of the touch-set and are not a finding — §1 forbids declaring

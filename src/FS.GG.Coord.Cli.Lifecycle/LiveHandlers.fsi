@@ -135,6 +135,17 @@ module LiveHandlers =
         pr: int ->
             FS.GG.Coord.GitHub.Errors.IoResult<string * string>
 
+    /// Receiver-aware election grounding. Reads/posts elections on the item while composing the
+    /// operation key for the explicit PR repository, then rereads the winner before returning.
+    val electionGroundingForReceiver:
+        ctx: Kernel.Context ->
+        target: FS.GG.Coord.Types.Ref ->
+        receiverOwner: string ->
+        receiverRepo: string ->
+        gen: string ->
+        pr: int ->
+            FS.GG.Coord.GitHub.Errors.IoResult<string * string>
+
     /// `delivery`'s automatic write-side counterpart to `scripts/check-claim-generation.py`'s read side
     /// (.github#2395). A no-op whenever there is nothing yet to authorize: no PR (`pr = None`), no LIVE
     /// claim held by this worker (`marker = None` — the same fact `delivery` already refuses to act on
@@ -184,6 +195,17 @@ module LiveHandlers =
         pr: int option ->
         head: string ->
         merged: bool ->
+            FS.GG.Coord.GitHub.Errors.IoResult<unit>
+
+    /// Cross-repository authorization with final item-holder, receiver head, linkage and paths readback.
+    val ensureCrossRepositoryAuthorization:
+        ctx: Kernel.Context ->
+        scope: DeliveryApplication.DeliveryScope ->
+        leaseMinutes: int ->
+        marker: FS.GG.Coord.GitHub.Reads.Marker ->
+        pr: int ->
+        inspectedHead: string ->
+        inspectedFiles: string list ->
             FS.GG.Coord.GitHub.Errors.IoResult<unit>
 
     /// `review` — the resumable review/repair protocol (.github#2175) as one typed answer, and `review record`

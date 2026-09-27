@@ -1751,6 +1751,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         {
             mutable Requests: (string * string) list
             mutable PostedBodies: string list
+            mutable PostedIds: int64 list
             mutable PatchedBodies: string list
         }
 
@@ -1758,6 +1759,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
         {
             Requests = []
             PostedBodies = []
+            PostedIds = []
             PatchedBodies = []
         }
 
@@ -1771,13 +1773,28 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
             w.Requests <- w.Requests @ [ req.Method, req.Path.Trim '/' ]
 
             match req.Method, req.Path.Trim '/' with
-            | "GET", "repos/FS-GG/.github/issues/2395/comments" -> itemComments
+            | "GET", "repos/FS-GG/.github/issues/2395/comments" ->
+                match itemComments, List.zip w.PostedIds w.PostedBodies with
+                | Ok response, [] -> Ok response
+                | Ok response, posted ->
+                    let original = response.Body.Trim()
+                    let inside = original.Substring(1, original.Length - 2)
+                    let appended = commentListing posted |> fun json -> json.Substring(1, json.Length - 2)
+                    let separator = if String.IsNullOrWhiteSpace inside then "" else ","
+                    okResponse ($"[%s{inside}%s{separator}%s{appended}]")
+                | Error error, _ -> Error error
             | "POST", "repos/FS-GG/.github/issues/2395/comments" ->
                 match req.Body with
                 | Json payload ->
                     use doc = System.Text.Json.JsonDocument.Parse payload
                     w.PostedBodies <- w.PostedBodies @ [ doc.RootElement.GetProperty("body").GetString() ]
                 | _ -> failwith "expected the election POST to carry a JSON body"
+
+                match postResult with
+                | Ok response ->
+                    use doc = System.Text.Json.JsonDocument.Parse response.Body
+                    w.PostedIds <- w.PostedIds @ [ doc.RootElement.GetProperty("id").GetInt64() ]
+                | Error _ -> ()
 
                 postResult
             | "GET", "repos/FS-GG/.github/pulls/9001" -> okResponse (jsonBody prBody)
@@ -1912,7 +1929,7 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
     // would let two executors sharing one generation both pass check 4, which is exactly the
     // "at most one merge per (item, generation, receiver)" guarantee the election exists to provide.
     [<Fact>]
-    let ``#2395 an election posted for a different pull request is not reused, and this target elects its own`` () =
+    let ``#2395 an election posted for a different pull request already won and this target refuses`` () =
         let w = world ()
 
         let transport =
@@ -1931,11 +1948,10 @@ tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages 
                 head
                 false
         with
-        | Error e -> failwithf "expected ensureAuthorization to succeed, got %A" e
-        | Ok() ->
-            Assert.Single w.PostedBodies |> ignore
-            let body = Assert.Single w.PatchedBodies
-            Assert.Contains("grant=5309319124 ", body)
+        | Ok() -> failwith "expected the lower competing election to refuse this pull request"
+        | Error _ ->
+            Assert.Empty w.PostedBodies
+            Assert.Empty w.PatchedBodies
 
     // FAIL CLOSED, AND THE ASSERTION IS THE ABSENCE OF A WRITE RATHER THAN THE PRESENCE OF AN ERROR.
     // A grounding that could not be established must leave the pull-request body exactly as it was:

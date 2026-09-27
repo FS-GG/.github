@@ -426,7 +426,7 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              head you MEAN to gate, for a caller that just force-pushed (the
                                              PR object lags). Neither can green; both are pending (#737)
 
-  delivery <ref> [--pr N] [--flip] [--apply] [--json|--text]
+  delivery <ref> [--pr N] [--repo RECEIVER] [--flip] [--apply] [--json|--text]
                                              re-read one claimed item's delivery facts and emit its sole
                                              freshness-bound action. WRITES ON PLAIN `--pr N` TOO
                                              (.github#2488), not only under `--apply`: whenever the caller
@@ -435,6 +435,9 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              marker current — a runtime-state-gated write no flag turns
                                              off, distinct from --apply's SEPARATE, larger effect
                                              (guarded landing: a real merge or the `Complete` transition).
+                                             An explicit different RECEIVER keeps board/claim/elections on
+                                             <ref> and addresses every PR read/PATCH to RECEIVER;
+                                             cross-repo --apply/--flip refuse before effects.
                                              --flip performs the terminal parent roll-up after typed receipt
                                              creation and the issue/board completion projections
   delivery --snapshot FILE [--json|--text]   the pure, IO-free form — see DECISION above

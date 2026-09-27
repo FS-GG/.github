@@ -9,6 +9,89 @@ module DeliveryApplication =
     open FS.GG.Coord
     open FS.GG.Coord.Cli.Options
 
+    /// The two repositories participating in live delivery. The item remains the board, claim and
+    /// election authority; the receiver owns the pull request and every PR-scoped read or write.
+    type DeliveryScope =
+        {
+            Item: Types.Ref
+            ReceiverOwner: string
+            ReceiverRepo: string
+            CrossRepository: bool
+        }
+
+    /// Resolve the receiver without guessing an owner. `--repo` is intentionally a repository name,
+    /// not an owner/repository slug: accepting a slug here would make a foreign receiver look local.
+    let deliveryScope (owner: string) (explicitRepo: string option) (item: Types.Ref) : Result<DeliveryScope, string> =
+        if not (String.Equals(item.Owner, owner, StringComparison.OrdinalIgnoreCase)) then
+            Error $"item '%s{item.Canonical}' belongs to foreign owner '%s{item.Owner}'"
+        else
+            match explicitRepo with
+            | Some repo when String.IsNullOrWhiteSpace repo || repo.Contains('/') || repo.Contains('#') ->
+                Error $"receiver repository '%s{repo}' is ambiguous or foreign; pass a repository name such as FS.GG.SDD"
+            | Some repo ->
+                Ok
+                    {
+                        Item = item
+                        ReceiverOwner = owner
+                        ReceiverRepo = repo
+                        CrossRepository = not (String.Equals(item.Repo, repo, StringComparison.OrdinalIgnoreCase))
+                    }
+            | None ->
+                Ok
+                    {
+                        Item = item
+                        ReceiverOwner = item.Owner
+                        ReceiverRepo = item.Repo
+                        CrossRepository = false
+                    }
+
+    let validateDeliveryEffects (scope: DeliveryScope) (apply: bool) (flip: bool) : Result<unit, string> =
+        if scope.CrossRepository && (apply || flip) then
+            Error
+                "cross-repository delivery is source-authorization-only; --apply and --flip are refused before any board, item, or pull-request effect"
+        else
+            Ok()
+
+    /// GitHub only creates cross-repository closing linkage from a fully-qualified canonical ref.
+    /// Keep this body check beside delivery's repository split so a same-number receiver issue can
+    /// never stand in for the coordination item named on the command line.
+    let hasCanonicalClosingLinkage (item: Types.Ref) (body: string) : bool =
+        let keyword = @"(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)"
+        let canonical = Regex.Escape item.Canonical
+        Regex.IsMatch(body, $@"(?im)\b%s{keyword}\s+%s{canonical}(?=$|[\s,.;:!?()])")
+
+    /// Apply #3894's receiver namespace rule in one place. Cross-repository declarations receive no
+    /// generated-file or SDD-package exemptions, and every token must be matchable in the receiver.
+    let classifyReceiverPaths
+        (scope: DeliveryScope)
+        (touchSet: Types.TouchSet)
+        (files: string list)
+        (sameRepository: unit -> Delivery.PathClassification list)
+        : Result<Delivery.PathClassification list, string> =
+        if not scope.CrossRepository then
+            Ok(sameRepository ())
+        else
+            match touchSet with
+            | Types.Declared tokens ->
+                let unmatchable =
+                    tokens
+                    |> List.choose (function
+                        | Types.Unmatchable value -> Some value
+                        | Types.Matchable _ -> None)
+
+                if not (List.isEmpty unmatchable) then
+                    let rendered = String.concat ", " unmatchable
+                    Error
+                        $"the cross-repository Paths: declaration contains ambiguous or unmatchable tokens: %s{rendered}"
+                else
+                    Delivery.classifyPaths
+                        touchSet
+                        (Delivery.AuthorityKnown("cross-repo:no-generated-exemption", Set.empty))
+                        (Delivery.AuthorityKnown("cross-repo:no-sdd-exemption", []))
+                        files
+                    |> Ok
+            | _ -> Error "cross-repository delivery requires an explicit, matchable Paths: declaration"
+
     let private eprint (message: string) = Console.Error.WriteLine(message)
 
     let private input opts =
@@ -601,6 +684,11 @@ module DeliveryApplication =
         |> List.filter (fun election ->
             election.Fields.TryFind "opkey" = Some opkey
             && election.Fields.TryFind "pr" = Some(string pr))
+
+    /// Every contender for one receiver-aware operation key. The lowest server-assigned comment id
+    /// wins; callers use `pr=` only to prove that the winner belongs to their target PR.
+    let electionsForOperation (opkey: string) (elections: Election list) : Election list =
+        elections |> List.filter (fun election -> election.Fields.TryFind "opkey" = Some opkey)
 
     /// The live adapter must consume its delivery receipt and prove that the same claim generation
     /// still wins immediately before it asks GitHub to merge.  Keeping this boundary pure makes the

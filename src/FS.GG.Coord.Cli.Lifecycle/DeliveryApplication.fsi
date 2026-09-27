@@ -2,6 +2,32 @@ namespace FS.GG.Coord.Cli
 
 /// JSON snapshot boundary for the pure claim-to-done lifecycle decision.
 module DeliveryApplication =
+    type DeliveryScope =
+        {
+            Item: FS.GG.Coord.Types.Ref
+            ReceiverOwner: string
+            ReceiverRepo: string
+            CrossRepository: bool
+        }
+
+    /// Resolve item and receiver repositories without inferring a foreign owner.
+    val deliveryScope:
+        owner: string -> explicitRepo: string option -> item: FS.GG.Coord.Types.Ref -> Result<DeliveryScope, string>
+
+    /// Refuse cross-repository merge/completion effects before any live read or write.
+    val validateDeliveryEffects: scope: DeliveryScope -> apply: bool -> flip: bool -> Result<unit, string>
+
+    /// True only when a PR body carries a fully-qualified GitHub closing keyword for this item.
+    val hasCanonicalClosingLinkage: item: FS.GG.Coord.Types.Ref -> body: string -> bool
+
+    /// Shared #3894 path contract for same- and cross-repository delivery.
+    val classifyReceiverPaths:
+        scope: DeliveryScope ->
+        touchSet: FS.GG.Coord.Types.TouchSet ->
+        files: string list ->
+        sameRepository: (unit -> FS.GG.Coord.Delivery.PathClassification list) ->
+            Result<FS.GG.Coord.Delivery.PathClassification list, string>
+
     /// Whether a consumed delivery receipt still authorizes the live adapter to issue its merge request.
     ///
     /// This is a two-case answer on purpose: there is no "probably", and no case that carries a
@@ -76,6 +102,9 @@ module DeliveryApplication =
     /// The elections this delivery target already owns: same operation key AND same pull request.
     /// Deliberately narrower than the fence's candidate set, which is keyed on the opkey alone.
     val electionsOwnedBy: opkey: string -> pr: int -> elections: Election list -> Election list
+
+    /// Every election bearing a receiver-aware operation key.
+    val electionsForOperation: opkey: string -> elections: Election list -> Election list
 
     /// Consume the inspected receipt and require the current winning claim generation before a merge.
     val authorizeGuardedLanding:
