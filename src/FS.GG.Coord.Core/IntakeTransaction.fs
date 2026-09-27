@@ -71,6 +71,8 @@ module IntakeTransaction =
         validIdentity binding.Identity
         && not (String.IsNullOrWhiteSpace binding.Owner)
         && not (String.IsNullOrWhiteSpace binding.Repository)
+        && Encoding.UTF8.GetByteCount(binding.Owner) <= 256
+        && Encoding.UTF8.GetByteCount(binding.Repository) <= 256
         && validDigest binding.DraftDigest
         && not (List.isEmpty binding.CompatibleDigests)
         && List.head binding.CompatibleDigests = binding.DraftDigest
@@ -86,6 +88,7 @@ module IntakeTransaction =
     let prepareIntent identity (draft: Intake.Draft) (request: byte[]) =
         if not (validIdentity identity) || identity.DraftId <> draft.Id then Error "draft and immutable target identity differ"
         elif draft.Schema <> Intake.Schema then Error "unsupported intake draft schema"
+        elif Intake.validate draft |> Result.isError then Error "invalid intake draft"
         elif draft.Owner = "" || draft.Repository = "" then Error "missing draft owner/repository"
         elif isNull request || request.Length = 0 || request.Length > 32768 then Error "request bytes are absent or oversized"
         else
@@ -117,6 +120,8 @@ module IntakeTransaction =
         issue.RepositoryId = binding.Identity.RepositoryId
         && not (String.IsNullOrWhiteSpace issue.NodeId)
         && not (String.IsNullOrWhiteSpace issue.Url)
+        && Encoding.UTF8.GetByteCount(issue.NodeId) <= 256
+        && Encoding.UTF8.GetByteCount(issue.Url) <= 2048
         && issue.Number > 0
         && receipt.IssueNumber = issue.Number
         && receipt.DraftId = binding.Identity.DraftId
@@ -130,7 +135,7 @@ module IntakeTransaction =
         elif prior |> Option.exists (fun old -> not (sameBinding old.Binding binding)) then Error "intake binding changed"
         else
             match prior, event with
-            | None, Intent _ -> Ok { Phase = "Intent"; Binding = binding; Issue = None; Receipt = None }
+            | None, Intent _ -> Ok { Phase = "Intent"; Binding = { binding with RequestBytes = Array.copy binding.RequestBytes }; Issue = None; Receipt = None }
             | Some old, InFlight _ when old.Phase = "Intent" ->
                 Ok { old with Phase = "InFlight" }
             | Some old, Unknown _ when old.Phase = "InFlight" -> Ok old
