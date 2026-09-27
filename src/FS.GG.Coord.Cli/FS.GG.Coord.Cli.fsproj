@@ -130,14 +130,12 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.91.4 — preserve reviewed prospective roadmap member originals in completed telemetry groups.
+    <PackageReleaseNotes>0.91.5 — align the coordination tool with FSharp.Core 10.1.401 and ship compatible telemetry updates.
 
-The roadmap adapter requires an exact protected assignment before a non-self member begins, and
-children inherit its original. The telemetry store retains that original when actual native delivery
-and every expected dispatch settle; conflicting or unfinished members stay open. The assignment
-registry begins empty. Live grouping still requires new authorized work, installed Host adoption,
-complete time and token receipts, and separately approved public aliases. Historical item
-identities and costs are not backfilled by this release.
+The CLI now packs the FSharp.Core 10.1.401 dependency required by FSharp.Compiler.Service
+43.12.401. Since 0.91.4, the coordination source also adds typed learning inventory and
+accounting facts, native source binding, and roadmap telemetry handling. Kit and Drivers
+carry the accumulated compatible skill updates under the same coherent version.
 
 $(FsggStandingAdvisories)
 
