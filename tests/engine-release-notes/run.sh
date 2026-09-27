@@ -394,26 +394,51 @@ else
     "checker line=${checker_line:-missing}; prepared-package line=${pack_line:-missing}"
 fi
 
-# THE LIMIT IS EXPRESSED ONCE (.github#2579 criterion 2). A second copy in a workflow or a fixture is
-# a copy that drifts the day nuget.org moves the number, and the drifting copy is the one an author
-# will read.
+# THE LIMIT IS EXPRESSED ONCE (.github#2579 criterion 2). A second executable copy in a workflow
+# or test code can drift the day nuget.org moves the number and mislead an author.
 #
 # "EXPRESSED" MEANS AN EXECUTABLE DEFINITION, NOT AN OCCURRENCE OF THE DIGITS. The checker's own
 # docstring QUOTES nuget.org's refusal verbatim — "may not be more than 35000 characters long" — and
 # that citation is the point of naming the constraint as external rather than a second authority to
-# drift from. So this leg asserts two separable things: exactly one assignment, and no occurrence at
-# all outside the file that carries it. Neither alone is the claim.
+# drift from. This leg asserts exactly one assignment and no executable copy elsewhere.
+# The captured 0.91.4 release manifest is immutable publication evidence: editing its
+# recorded preflight limit would falsify the release record.
 holder="scripts/check-engine-release-notes.py"
 assignments="$(cd "$ROOT" && grep -c "^NUGET_ORG_RELEASE_NOTES_LIMIT = $LIMIT\$" "$holder" || true)"
-elsewhere="$(cd "$ROOT" && grep -rn --exclude-dir=regression -- "$LIMIT" \
-  scripts/ .github/workflows/ tests/ \
-  | grep -v "^$holder:" | grep -v '^tests/engine-release-notes/run.sh:' || true)"
+secondary_limit_occurrences() {
+  (cd "$1" && grep -rn --exclude-dir=regression -- "$LIMIT" \
+    scripts/ .github/workflows/ tests/ \
+    | grep -v "^$holder:" \
+    | grep -v '^tests/engine-release-notes/run.sh:' \
+    | grep -v '^tests/kit-bump-shape/release-manifest-v0.91.4.json:' || true)
+}
+elsewhere="$(secondary_limit_occurrences "$ROOT")"
 if [ "$assignments" = "1" ] && [ -z "$elsewhere" ]; then
-  ok "nuget.org's limit has exactly one definition, in the checker, and no copy anywhere else"
+  ok "nuget.org's limit has one definition and no executable copy elsewhere"
 else
-  bad "nuget.org's limit must be defined once in $holder and appear in no other file" \
+  bad "nuget.org's limit must be defined once in $holder with no executable copy elsewhere" \
     "assignments in $holder: $assignments (want 1); occurrences elsewhere:
 $elsewhere"
+fi
+
+# The exemption is exact-path evidence. A duplicate in a script must still fail.
+scan_fixture="$WORK/limit-scan"
+mkdir -p "$scan_fixture/scripts" "$scan_fixture/.github/workflows" \
+  "$scan_fixture/tests/kit-bump-shape"
+printf '{"maxReleaseNotesCharacters":%s}\n' "$LIMIT" \
+  > "$scan_fixture/tests/kit-bump-shape/release-manifest-v0.91.4.json"
+if [ -z "$(secondary_limit_occurrences "$scan_fixture")" ]; then
+  ok "the immutable published manifest is treated as evidence"
+else
+  bad "the immutable published manifest must be treated as evidence"
+fi
+printf 'NUGET_ORG_RELEASE_NOTES_LIMIT = %s\n' "$LIMIT" \
+  > "$scan_fixture/scripts/duplicate-release-limit.py"
+if secondary_limit_occurrences "$scan_fixture" \
+    | grep -q '^scripts/duplicate-release-limit.py:'; then
+  ok "an executable duplicate limit still fails the scan"
+else
+  bad "an executable duplicate limit must fail the scan"
 fi
 
 # .github#2512's ACTUAL DEFECT, PINNED HERE, AND .github#2579's EXTENSION OF IT. Every case above
