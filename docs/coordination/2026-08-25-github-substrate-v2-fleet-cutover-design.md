@@ -363,7 +363,11 @@ shell table.
 The global epoch is a protocol state machine stored in a content-addressed Git ledger on a dedicated,
 ruleset-protected cutover ref and bound to the exact cutover manifest. Each transition is an expected-parent
 commit; a protected, non-deletable phase tag anchors the accepted commit. The GitHub App is the sole normal
-writer and its bypass is limited to the protected `fleet-cutover` environment. A dedicated cutover-control
+writer and its cutover route is bound to the accepted environment ID and policy digest for each phase
+in the exact candidate. Candidate data cannot select an arbitrary environment. The
+existing `fleet-cutover` environment remains the historical GS2-08.2 authorization target; the proposed
+one-owner cutover candidate uses a separate `fleet-cutover-owner` environment only after its policy is
+accepted, installed, and qualified. A dedicated cutover-control
 issue projects the current state, evidence, and operator guidance for humans, but it is not authority:
 
 ```text
@@ -394,6 +398,119 @@ contradictory result. During any frozen or switching state, normal writes refuse
 the manifest identity, current epoch commit, protected environment approval, and the dedicated cutover
 operation grant. The issue projection is regenerated only after the authoritative transition re-reads
 successfully.
+
+#### OperatingV1 admission after genesis
+
+The installed v1 admission genesis establishes a journal root, not authority for a caller to create an
+admission. While the verified epoch is `OperatingV1`, one protected service derives each new
+`MutationContext` from two complete, coherent native reads of the bounded issue or pull request,
+outstanding operation and delivery records, claim journals, and the exact effect target. It admits
+only a registered caller whose immutable source, workflow, and service identity are observed;
+caller arguments are proposed lookup keys, not authority. A no-claim routine operation requires an
+explicit accepted policy classification. For a required claim, the service semantically decodes the
+current nonterminal `ClaimAuthorityRecord` and binds its canonical subject, owner, complete touch set,
+lease, operation and fence state, exact grant journal commit and generation to the requested target.
+It distinguishes grant refs from conflict-domain refs; structural journal validity or a matching
+generation alone is insufficient. The sealed context includes the current cutover
+commit, admission journal parent and generation, stable operation and idempotency identity, terminal
+pagination proofs, and source and target revisions. Unreadable, incomplete, contradictory, or changed
+facts refuse. An ordinary CLI argument, ambient user token, or previously returned handle cannot
+nominate a new admission. The CLI may only resume or inspect a handle already verified in the journal.
+
+The initial trusted caller form is a dedicated GitHub Actions admission service run from a pinned
+workflow and source revision on protected `.github` `main`. Native provider readback must bind its
+repository, workflow path and bytes, head, run ID and attempt, actor, and branch-restricted runtime
+environment to the registered service before any plan is sealed. Dispatch inputs remain lookup hints.
+The job REST record alone does not establish its environment. Main binds the
+exact check-run ID to GitHub-signed OIDC environment, environment node ID and
+subject claims, checks them against the installed policy and native environment
+name, ID and current branch and approval rules, and reads the run's native review
+history for every required approval. Deployment/status observations may corroborate
+this identity, but their caller-supplied target and log URLs cannot prove a
+job-to-environment link. If signed claims, native approval readback, or the
+protected probe cannot establish that binding, admission activation refuses.
+Before activation, a protected probe must establish the provider's actual signed
+`workflow_sha` and subject semantics against native workflow bytes and run evidence.
+Main's installed service policy admits only independently qualified source and
+workflow revisions with exact byte digests. When a protected `main` merge changes
+the signed revision, the service refuses until a separately governed policy
+rotation qualifies and installs the new identity and retires the old one; the
+requester cannot nominate a revision or widen the permitted set.
+The service job receives no ordinary App private key. A separate protected Main-host issuer process
+retains the dedicated ordinary App key, distinct from the one-time human-reviewed genesis key and
+cutover approval. Until the run provenance, environment restriction, issuer boundary, and key custody
+are installed and qualified together, the service has no admission authority.
+An in-progress run cannot prove its own origin with a completed-run artifact. Before accessing the
+key, the issuer verifies a GitHub-signed in-run OIDC token with an audience bound to the exact sealed
+plan and nonce, issuer signature and time bounds, one-shot token identity, and repository, workflow,
+source head, run, attempt, job and environment claims. It cross-checks those claims against fresh
+native run, job, workflow-source and environment reads, then durably consumes the plan and nonce
+before minting. An in-memory `jti` cache alone cannot prevent the job from requesting another token
+for the same plan. A caller-supplied run ID, an ambient token, or a matching native run lookup alone
+cannot authenticate the requesting job.
+
+The service seals one exact admission plan before obtaining its short-lived ordinary App credential.
+The protected issuer verifies the registered service identity and request provenance, exact plan digest,
+operation, expected journal parent, current epoch, repository and one-shot handoff identity before
+minting with its custody-bound App key. An App JWT is not intrinsically plan-scoped: the trusted issuer and
+consumer enforce that binding locally, observe the effective minted token scope and expiry, and refuse
+replay or a changed plan. The Actions service sends only the sealed public plan and signed job proof to
+Main. Main's protected issuer executes the fixed CAS transport locally, passing the JWT only to its
+local child on a bounded anonymous descriptor; any later credential-bearing provider mutation likewise
+uses a separately authorized Main-local fixed-operation executor. The service receives only a public
+response-unknown status or verified effect receipt for fresh typed readback, never a JWT, installation
+token, CLI credential value or credential artifact. The one-time genesis
+workflow, approval, signing key and JWT are not reusable authorization for a later admission.
+The Main-local issuer rereads the epoch, claim and journal, compares them to the sealed plan
+immediately before its CAS append, and uses the exact expected parent. The Actions service returns
+an admitted handle only after independent exact journal readback.
+A lost response or conflicting parent is reconciled from durable state under the same operation
+identity; uncertainty never permits a second blind append. A restored `InFlight` handle is
+reconciliation-only and cannot send a provider mutation. Before every provider mutation, including
+an authorized retry or compensation, the Main-local credential-bearing executor itself rereads the
+epoch, claim, admission, operation, manifest, seal, journal parent, and source and target heads,
+compares them to the sealed plan, then durably consumes a new one-shot dispatch fence under exclusive
+send ownership immediately before the provider call. The request also carries the provider's exact
+supported conditional precondition. A native pull-request merge can condition the PR head SHA but
+cannot condition the base SHA through GitHub's merge API. Before enabling that route, the protected
+executor must prove an installed provider-enforced exclusive base-writer boundary and complete
+human, App, queue, admin and bypass census, hold its durable local owner/fence, reread the exact base
+and head, send with the head condition, and verify method-specific result ancestry. If another base
+writer can act outside that boundary, native merge dispatch refuses. An Actions preflight cannot
+replace the Main-local final check; a crash after
+fence consumption remains uncertain until reconciliation. A retry requires a durable
+`StronglyAbsent` settlement that binds the original request and proves delayed application
+impossible; it uses a new attempt identity. `Applied` is
+terminal for that effect; `Partial` and `Indeterminate` permit reconciliation or an independently
+authorized recovery plan, never a replay of the uncertain request.
+
+For a provider effect, reconciliation requires exact request and idempotency identity plus fresh
+target readback. For a native pull-request merge, the sealed pre-send request identity includes the
+repository and PR node, expected head and base, merge method, operation, effect and idempotency
+identities; the resulting commit is a post-send observation that must match an independent provider
+readback. It reports `Applied` only for a verified matching provider effect identity and receipt;
+a matching target state created by another actor is
+insufficient. It reports `StronglyAbsent` only when evidence bound to the original request proves
+delayed application impossible through an idempotency, conditional-fence, or retired-request contract.
+`Partial` retains the observed completed subset and its recovery or compensation plan, while unreadable
+or lost-response evidence remains `Indeterminate`. Neither permits blind replay. An open PR, 404, or
+missing merge commit on one read does not prove strong absence; if GitHub cannot provide it, an
+unknown merge without provider correlation remains pending for manual reconciliation and cannot
+be retried under a fresh effect identity.
+The admission service cannot authorize its own source installation. Installing the service, issuer,
+and provider executor in `.github` requires a separate, explicit one-time protected owner decision
+before any native source merge. That decision must name the exact qualified PR heads and ordered
+expected bases, installation workflow and artifact bytes, owner approval and credential scope,
+expiry, and independent merge and installed-source readback. A moved base, changed source or rule,
+missing approval, or uncertain merge result stops the packet for renewed qualification. This
+bootstrap installs only the named source; it grants no ordinary v1 effect or cutover transition.
+The earlier genesis approval in ADR-0087 does not authorize this installation.
+No direct routine merge, intake, Project write or other normal v1 mutation route is enabled until the
+installed service, issuer, journal and provider probes qualify together. Independent controls must
+refuse caller-supplied contexts, foreign or stale claims, moved source/target revisions, changed epoch,
+wrong credential scope, CAS races, lost responses, partial effects, and old clients. The accepted
+GS2-08 bridge fence remains the outer precondition; this admission contract adds no v2 production
+writer and grants no cutover transition.
 
 ### 4.10 Sealed legacy history
 
@@ -730,6 +847,63 @@ Current live restrictions remain binding. GS2-13.2 retains genuine protected hum
 exact irreversible `OpenV2` decision. The proposed profile needs no second human, but cannot be replaced
 by unattended approval under the owner's identity.
 
+The prospective profile is a distinct `FS-GG/.github:fleet-cutover-owner` environment with sole
+required reviewer user ID `1645484`, self-review permitted, a five-minute wait, no administrator
+bypass, and only the exact `main` deployment branch. Its identity and effective rules are read back
+from GitHub and bound to the candidate; an environment name or settings plan alone is insufficient.
+Installed qualification observes the provider-enforced wait before a protected job starts and rejects
+early or absent approval, rather than inferring elapsed time from the configured value alone.
+The old `fleet-cutover` environment and accepted GS2-08.2 receipt retain their historical meaning.
+No source projection, workflow change, or administrative update may reinterpret that receipt as an
+approval under the new profile.
+
+The manifest serializes the allowed phase-to-environment ID and policy-digest mapping. An independent
+validator compares it with the accepted profile and fresh provider readback before every protected
+effect; a missing mapping, unknown ID or weaker policy refuses. GS2-10's execution inventory names
+the interpreter, workflow, credential and target for `Preparing`, `FreezeRequested`, `Frozen`,
+`SwitchedV2`, `VerifiedV2`, `OpenV2`, `ObservingV2`, `ContractingV1`, `OperatingV2`,
+`RollingBack` and `OperatingV1(recovery)`.
+Each row declares whether a fresh native approval is required, its expiry/renewal rule, expected
+prestate, durable attempt and receipt, readback, and retry or recovery route. No approval or effect
+identity carries into another phase unless that exact reuse is accepted and verified.
+
+Each protected cutover operation binds the candidate, manifest, phase, expected epoch parent,
+authorized targets and plan, stable attempt identity, expiry, and approval scope before any effect.
+The protected workflow checks its repository, manual trigger, exact `main` ref, and run attempt, while
+the Coordination verifier independently reads the actual run, approver, environment ID and effective
+policy. It refuses missing approval, a bot or wrong approver, another run or attempt, changed intent,
+stale candidate, expired receipt, and policy drift. An unknown effect result reconciles by its durable
+receipt and unchanged attempt identity. The dedicated cutover journal credential cannot stand in for
+ordinary settlement or organization administration.
+
+For `OpenV2`, a trusted preparation job publishes an immutable decision packet and its digest before
+approval. The packet contains the exact manifest/candidate, `VerifiedV2` head, Q0–Q8 roll-up,
+remaining risks, rollback boundary, workflow inputs, and intended epoch transition. The operator
+must review it and approve the pending deployment through their own interactive GitHub session,
+then separately confirm the packet digest and approval-credential custody through a direct human
+channel outside the agent's GitHub credential path. Agents must not call pending-deployment approval
+with the owner's PAT or session. Native approver user ID alone cannot prove human action. The
+environment-gated approval job has no cutover credential and can only emit a bound approval receipt;
+its automatic start after native approval cannot change the epoch or any production target.
+
+GS2-10 must establish a durable first-party capture route that issues a confirmation receipt bound
+to human identity, approval run and attempt, packet digest, expiry and credential-custody attestation.
+The receipt's origin and integrity must be checked against a trust anchor unavailable to agents;
+an agent quotation, copied chat message, or agent-supplied workflow input is insufficient. A separate
+effect run may obtain the cutover credential only after it independently verifies that confirmation
+receipt, the native approval, and exact packet/run/attempt equality. It re-reads environment policy
+and current epoch immediately before the effect. An absent or stale receipt, unavailable capture
+route, rerun, or changed packet refuses the effect and requires fresh human approval and confirmation.
+No chat or GitHub actor ID is claimed as cryptographic proof that a human held a token; the trusted
+capture route and credential custody are separate qualification obligations before `OpenV2`.
+
+This prospective design does not activate the profile. Before the GS2-10 candidate freezes, the
+governing policy amendment, independently generated architecture, security and operations critiques,
+accepted ADR-0090, cross-repository implementation, installed policy readback, native approval and
+refusal evidence, and isolated full-route rehearsal must agree. `OpenV2` still requires the human's
+fresh run-bound confirmation of the exact irreversible decision. Its production effect remains
+closed until Q0–Q8 and the protected epoch predicates pass.
+
 ### 10.0 Bootstrap qualification lane
 
 V2 is not implemented or certified through the existing coordination validation/verification lifecycle.
@@ -870,7 +1044,8 @@ green head ready for the cutover window.
 
 ### F5 — request and establish freeze
 
-- Acquire the dedicated cutover operation grant through the protected `fleet-cutover` environment.
+- Acquire the dedicated cutover operation grant through the protected environment bound in the accepted
+  candidate; the prospective one-owner route requires qualified `fleet-cutover-owner` installation.
 - Commit and anchor `FreezeRequested(manifest)` in the cutover ledger.
 - Stop new claims, intake applies, board mutations, review advances, merges performed by the coordination
   client, dispatches, and releases.
@@ -909,8 +1084,11 @@ Exit: every positive journey passes and every named wrong-path control refuses o
 
 ### F8 — open v2
 
-- Present the exact manifest, evidence roll-up, remaining risks, and rollback boundary for protected
-  environment approval.
+- Present the immutable decision packet and digest, exact manifest, evidence roll-up, remaining
+  risks, and rollback boundary for fresh, run-bound protected human approval in the accepted
+  candidate-bound environment; the approval job emits a receipt without a cutover credential or
+  production effect. A separate effect run verifies the independently captured human confirmation,
+  native approval and packet equality before it may obtain the cutover credential.
 - Commit and anchor `OpenV2(acceptance)`, then lift the v2 normal-write fence.
 - Prove one real bounded work item completes from intake through done under v2.
 

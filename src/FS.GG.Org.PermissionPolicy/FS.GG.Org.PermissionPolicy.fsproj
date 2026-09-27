@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="YamlDotNet" />
+    <Compile Include="Permissions.fsi" />
+    <Compile Include="Permissions.fs" />
+    <Compile Include="WorkflowPermissionSyntax.fsi" />
+    <Compile Include="WorkflowPermissionSyntax.fs" />
+    <Compile Include="PermissionEvidenceBinding.fsi" />
+    <Compile Include="PermissionEvidenceBinding.fs" />
+    <Compile Include="AppGrantComparison.fsi" />
+    <Compile Include="AppGrantComparison.fs" />
+    <Compile Include="PermissionAggregate.fsi" />
+    <Compile Include="PermissionAggregate.fs" />
+    <Compile Include="PermissionFleet.fsi" />
+    <Compile Include="PermissionFleet.fs" />
+    <Compile Include="FleetInventoryContract.fsi" />
+    <Compile Include="FleetInventoryContract.fs" />
+  </ItemGroup>
+</Project>

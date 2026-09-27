@@ -135,9 +135,9 @@ jobs:
           args=(--actions actions.json --deliveries deliveries.json --source-revision "$GITHUB_SHA" --output telemetry-dashboard/data/dashboard.json)
           [ ! -f host.json ] || args+=(--host host.json --host-revision '${{ steps.host.outputs.revision }}')
           python3 tools/telemetry-dashboard.py compose "${args[@]}"
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
         if: steps.refresh.outputs.build == 'true'
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         if: steps.refresh.outputs.build == 'true'
         with:
           path: telemetry-dashboard
@@ -175,4 +175,4 @@ jobs:
       - name: Deploy exact built artifact
         if: steps.latest.outputs.deploy == 'true'
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

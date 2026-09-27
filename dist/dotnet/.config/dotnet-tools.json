@@ -9,20 +9,20 @@
       ]
     },
     "fs.gg.coord.cli": {
-      "version": "0.90.0",
+      "version": "0.91.4",
       "commands": [
         "fsgg-coord-engine"
       ]
     },
     "fs.gg.coordination.cli": {
-      "version": "0.1.1",
+      "version": "0.1.2",
       "commands": [
         "fsgg-coordination"
       ],
       "rollForward": false
     },
     "fantomas": {
-      "version": "8.0.0",
+      "version": "8.0.5",
       "commands": [
         "fantomas"
       ],

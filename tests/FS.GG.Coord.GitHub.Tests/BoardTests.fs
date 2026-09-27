@@ -1309,6 +1309,152 @@ let private capturing (docs: System.Collections.Generic.List<string>) (responses
         else
             queue.Dequeue())
 
+let private projectOne =
+    { Owner = "FS-GG"; Number = 1; Title = "Coordination"; Id = "PVT_kwDOEYAWY84Bb08W" }
+
+let private exactProjectResponse owner number title id =
+    $"""{{"data":{{"organization":{{"login":"{owner}","projectV2":{{"id":"{id}","number":{number},"title":"{title}","fields":{{"totalCount":1,"nodes":[{{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{{"id":"opt_ready","name":"Ready"}}]}}]}}}}}}}}}}"""
+
+[<Fact>]
+let ``direct Project 1 bootstrap uses no all-project enumeration and binds exact identity`` () =
+    let docs = System.Collections.Generic.List<string>()
+    let transport = capturing docs [ ok (exactProjectResponse "FS-GG" 1 "Coordination" projectOne.Id) ]
+
+    match bootstrapExactProject transport projectOne with
+    | Ok resolved ->
+        Assert.Equal(projectOne.Id, resolved.Id)
+        Assert.Equal(projectOne.Number, resolved.Number)
+        Assert.Equal(projectOne.Owner, resolved.Owner)
+        Assert.Equal(projectOne.Title, resolved.Title)
+        Assert.True(resolved.Fields.ContainsKey "Status")
+        Assert.Single(docs) |> ignore
+        Assert.Contains("projectV2(number: $number)", docs.[0])
+        Assert.DoesNotContain("projectsV2(", docs.[0])
+    | other -> failwith $"the exact Project 1 response must resolve — got %A{other}"
+
+[<Theory>]
+[<InlineData("FS-GG", 2, "Coordination", "PVT_kwDOEYAWY84Bb08W")>]
+[<InlineData("FS-GG", 1, "Other", "PVT_kwDOEYAWY84Bb08W")>]
+[<InlineData("FS-GG", 1, "Coordination", "PVT_foreign")>]
+[<InlineData("Other", 1, "Coordination", "PVT_kwDOEYAWY84Bb08W")>]
+let ``direct Project 1 bootstrap refuses foreign owner number title or id`` owner number title id =
+    let transport = serving (exactProjectResponse owner number title id)
+
+    match bootstrapExactProject transport projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"a foreign exact-project identity must refuse — got %A{other}"
+
+[<Fact>]
+let ``direct Project 1 bootstrap refuses missing project and partial field map`` () =
+    let missing = serving """{"data":{"organization":{"login":"FS-GG","projectV2":null}}}"""
+
+    match bootstrapExactProject missing projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"a missing direct project must refuse — got %A{other}"
+
+    let partial =
+        (exactProjectResponse "FS-GG" 1 "Coordination" projectOne.Id).Replace("\"totalCount\":1", "\"totalCount\":51")
+
+    match bootstrapExactProject (serving partial) projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"a partial direct field map must refuse — got %A{other}"
+
+[<Fact>]
+let ``direct Project 1 bootstrap refuses incomplete caller pin without transport`` () =
+    let transport = Fake.Recorder(fun _ -> failwith "an incomplete pin must not query GitHub")
+
+    match bootstrapExactProject transport { projectOne with Id = "" } with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"an incomplete caller pin must refuse before IO — got %A{other}"
+
+[<Fact>]
+let ``direct Project 1 bootstrap refuses duplicate field names and IDs`` () =
+    let duplicate =
+        """{"data":{"organization":{"login":"FS-GG","projectV2":{"id":"PVT_kwDOEYAWY84Bb08W","number":1,"title":"Coordination","fields":{"totalCount":2,"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]},{"id":"PVTSSF_shadow","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_shadow","name":"Shadow"}]}]}}}}}"""
+
+    match bootstrapExactProject (serving duplicate) projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"duplicate direct-project field names must refuse — got %A{other}"
+
+    let duplicateId =
+        duplicate.Replace("\"id\":\"PVTSSF_shadow\",\"name\":\"Status\"",
+                          "\"id\":\"PVTSSF_status\",\"name\":\"Owner\"")
+    Assert.True(duplicate <> duplicateId)
+
+    match bootstrapExactProject (serving duplicateId) projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"duplicate direct-project field IDs must refuse — got %A{other}"
+
+[<Fact>]
+let ``direct Project 1 bootstrap refuses duplicate single-select option names`` () =
+    let duplicate =
+        """{"data":{"organization":{"login":"FS-GG","projectV2":{"id":"PVT_kwDOEYAWY84Bb08W","number":1,"title":"Coordination","fields":{"totalCount":1,"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_shadow","name":"Ready"}]}]}}}}}"""
+
+    match bootstrapExactProject (serving duplicate) projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"duplicate direct-project option names must refuse — got %A{other}"
+
+    let duplicateId =
+        duplicate.Replace("\"id\":\"opt_shadow\",\"name\":\"Ready\"",
+                          "\"id\":\"opt_ready\",\"name\":\"Blocked\"")
+    Assert.True(duplicate <> duplicateId)
+
+    match bootstrapExactProject (serving duplicateId) projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"duplicate direct-project option IDs must refuse — got %A{other}"
+
+[<Theory>]
+[<InlineData("\"login\":\"FS-GG\"", "\"login\":\"Other\",\"login\":\"FS-GG\"")>]
+[<InlineData("\"number\":1", "\"number\":2,\"number\":1")>]
+[<InlineData("\"totalCount\":1", "\"totalCount\":51,\"totalCount\":1")>]
+[<InlineData("\"dataType\":\"SINGLE_SELECT\"", "\"dataType\":\"UNRECOGNIZED\",\"dataType\":\"SINGLE_SELECT\"")>]
+[<InlineData("\"id\":\"opt_ready\"", "\"id\":\"opt_foreign\",\"id\":\"opt_ready\"")>]
+let ``direct Project 1 bootstrap refuses shadowed raw JSON members`` (original: string) (replacement: string) =
+    let baseline = exactProjectResponse "FS-GG" 1 "Coordination" projectOne.Id
+    let shadowed = baseline.Replace(original, replacement)
+    Assert.True(baseline <> shadowed)
+
+    match bootstrapExactProject (serving shadowed) projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"shadowed raw direct-project member must refuse — got %A{other}"
+
+[<Theory>]
+[<InlineData("\"dataType\":\"UNRECOGNIZED\"")>]
+[<InlineData("\"dataType\":null")>]
+[<InlineData("\"dataType\":\"MULTI_SELECT\"")>]
+let ``direct Project 1 bootstrap refuses a partially unreadable field map`` extraType =
+    let response =
+        $"""{{"data":{{"organization":{{"login":"FS-GG","projectV2":{{"id":"PVT_kwDOEYAWY84Bb08W","number":1,"title":"Coordination","fields":{{"totalCount":2,"nodes":[{{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{{"id":"opt_ready","name":"Ready"}}]}},{{"id":"PVTF_extra","name":"Extra",{extraType}}}]}}}}}}}}}}"""
+
+    match bootstrapExactProject (serving response) projectOne with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"an unreadable field in an otherwise usable map must refuse — got %A{other}"
+
+[<Theory>]
+[<InlineData("ASSIGNEES")>]
+[<InlineData("TITLE")>]
+[<InlineData("PARENT_ISSUE")>]
+[<InlineData("CLOSED")>]
+let ``direct Project 1 bootstrap keeps editable fields beside known omitted builtins`` builtInType =
+    let response =
+        $"""{{"data":{{"organization":{{"login":"FS-GG","projectV2":{{"id":"PVT_kwDOEYAWY84Bb08W","number":1,"title":"Coordination","fields":{{"totalCount":2,"nodes":[{{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{{"id":"opt_ready","name":"Ready"}}]}},{{"id":"PVTF_builtin","name":"Built in","dataType":"{builtInType}"}}]}}}}}}}}}}"""
+
+    match bootstrapExactProject (serving response) projectOne with
+    | Ok resolved when resolved.Fields.Count = 1 && resolved.Fields.ContainsKey "Status" -> ()
+    | other -> failwith $"a known omitted builtin must not erase the editable map — got %A{other}"
+
+[<Fact>]
+let ``direct Project 1 bootstrap propagates authorization errors without enumerating projects`` () =
+    let docs = System.Collections.Generic.List<string>()
+    let denied = """{"errors":[{"type":"FORBIDDEN","message":"Resource not accessible"}],"data":{"organization":null}}"""
+    let transport = capturing docs [ ok denied ]
+
+    match bootstrapExactProject transport projectOne with
+    | Error(GraphQlErrors _) ->
+        Assert.Single(docs) |> ignore
+        Assert.DoesNotContain("projectsV2(", docs.[0])
+    | other -> failwith $"authorization failure must remain a failure without fallback — got %A{other}"
+
 [<Fact>]
 let ``bootstrap resolves a USER-owned board through user(login:) (#1344)`` () =
     // A personal-account board answers to `user(login:)`, and both the project list and the field schema come
@@ -1512,6 +1658,110 @@ let ``bootstrapCached serves the day-cache on the second call - zero GraphQL (#4
         | Some { Type = SingleSelect options } -> Assert.Equal("opt_ready", options.["Ready"])
         | other -> failwith $"the re-hydrated Status must be a single-select — got %A{other}"
     | other -> failwith $"warm bootstrapCached must serve the cache — got %A{other}"
+
+let private withBootstrapMode mode (action: unit -> unit) =
+    let prior = Environment.GetEnvironmentVariable "FSGG_COORD_BOOTSTRAP_MODE"
+    let priorOwnerKind = Environment.GetEnvironmentVariable "FSGG_COORD_OWNER_TYPE"
+
+    try
+        Environment.SetEnvironmentVariable("FSGG_COORD_BOOTSTRAP_MODE", mode)
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", null)
+        action ()
+    finally
+        Environment.SetEnvironmentVariable("FSGG_COORD_BOOTSTRAP_MODE", prior)
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", priorOwnerKind)
+
+[<Fact>]
+let ``unset bootstrap mode keeps the ordinary project enumeration path`` () =
+    use _sandbox = new Sandbox()
+
+    withBootstrapMode null (fun () ->
+        let docs = System.Collections.Generic.List<string>()
+        let transport =
+            capturing
+                docs
+                [ ok """{"data":{"organization":{"projectsV2":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
+                  ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}}}}""" ]
+
+        match bootstrapCached transport "FS-GG" "Coordination" with
+        | Ok resolved ->
+            Assert.Equal(12, resolved.Number)
+            Assert.Equal(2, docs.Count)
+            Assert.Contains("projectsV2(", docs.[0])
+        | other -> failwith $"the unset mode must retain title enumeration — got %A{other}")
+
+[<Fact>]
+let ``opt-in bootstrap bypasses an old title cache and selects exact Project 1 once`` () =
+    use _sandbox = new Sandbox()
+    Assert.True(Cache.putBoardMap "FS-GG" "Coordination" (boardToJson board))
+
+    withBootstrapMode "exact-project1" (fun () ->
+        let docs = System.Collections.Generic.List<string>()
+        let transport = capturing docs [ ok (exactProjectResponse "FS-GG" 1 "Coordination" projectOne.Id) ]
+
+        match bootstrapCached transport "FS-GG" "Coordination" with
+        | Ok resolved ->
+            Assert.Equal(1, resolved.Number)
+            Assert.Equal(projectOne.Id, resolved.Id)
+            Assert.Single(docs) |> ignore
+            Assert.Contains("projectV2(number: $number)", docs.[0])
+            Assert.DoesNotContain("projectsV2(", docs.[0])
+        | other -> failwith $"the opt-in route must resolve the pinned project — got %A{other}")
+
+[<Fact>]
+let ``opt-in bootstrap refuses a wrong project id with no enumeration fallback`` () =
+    withBootstrapMode "exact-project1" (fun () ->
+        let docs = System.Collections.Generic.List<string>()
+        let transport = capturing docs [ ok (exactProjectResponse "FS-GG" 1 "Coordination" "PVT_foreign") ]
+
+        match bootstrapCached transport "FS-GG" "Coordination" with
+        | Error(Malformed _) ->
+            Assert.Single(docs) |> ignore
+            Assert.DoesNotContain("projectsV2(", docs.[0])
+        | other -> failwith $"a wrong project pin must refuse without fallback — got %A{other}")
+
+[<Fact>]
+let ``opt-in bootstrap refuses wrong owner title or owner kind before IO`` () =
+    withBootstrapMode "exact-project1" (fun () ->
+        let transport = Fake.Recorder(fun _ -> failwith "the wrong board must not be queried")
+
+        for owner, title in [ "Elsewhere", "Coordination"; "FS-GG", "Other" ] do
+            match bootstrapCached transport owner title with
+            | Error(Malformed _) -> ()
+            | other -> failwith $"wrong owner or title must refuse — got %A{other}"
+
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", "user")
+
+        match bootstrapCached transport "FS-GG" "Coordination" with
+        | Error(Malformed _) -> ()
+        | other -> failwith $"wrong owner kind must refuse — got %A{other}")
+
+[<Fact>]
+let ``opt-in bootstrap refuses partial fields and denied direct read without fallback`` () =
+    withBootstrapMode "exact-project1" (fun () ->
+        let partial =
+            (exactProjectResponse "FS-GG" 1 "Coordination" projectOne.Id).Replace("\"totalCount\":1", "\"totalCount\":51")
+
+        for response in
+            [ partial
+              """{"errors":[{"type":"FORBIDDEN","message":"Resource not accessible"}],"data":{"organization":null}}""" ] do
+            let docs = System.Collections.Generic.List<string>()
+            let transport = capturing docs [ ok response ]
+
+            match bootstrapCached transport "FS-GG" "Coordination" with
+            | Error _ ->
+                Assert.Single(docs) |> ignore
+                Assert.DoesNotContain("projectsV2(", docs.[0])
+            | other -> failwith $"an incomplete or denied direct read must refuse — got %A{other}")
+
+[<Fact>]
+let ``unknown bootstrap mode refuses instead of silently enumerating`` () =
+    withBootstrapMode "direct-project1-typo" (fun () ->
+        let transport = Fake.Recorder(fun _ -> failwith "unknown mode must not query GitHub")
+
+        match bootstrapCached transport "FS-GG" "Coordination" with
+        | Error(Malformed _) -> ()
+        | other -> failwith $"unknown mode must refuse — got %A{other}")
 
 [<Fact>]
 let ``itemIdCached serves the forever-cache on the second lookup - one GraphQL, then zero`` () =

@@ -68,6 +68,44 @@ governing rule and prepared decision artifact. The known protected `OpenV2` conf
 unavailable administrator authority cannot be created by a design edit. Prepare each necessary change
 and independent lane before reporting a concrete unresolved authority gap.
 
+## Cutover approval profile transition
+
+The 2026-09-25 provider readback still shows `FS-GG/.github:fleet-cutover` (environment ID
+`21550151971`) with reviewer IDs `1645484` and `4456104`, self-review prevention enabled, no
+administrator bypass, one custom `main` deployment branch, and no environment secrets. The
+[installed workflow](../../.github/workflows/gs2-ledger-protected-authorization.yml) targets that
+environment and only produces a short-lived initializer receipt. The proposed
+[`fleet-cutover-owner` profile](../adr/0090-single-operator-v2-cutover-execution.md) has no observed
+environment ID or installed execution route. The existing environment and its historical GS2-08.2
+receipt must remain distinct from any future profile.
+
+The cross-repository source changes have an ordered boundary:
+
+1. Amend the governing design for the operation-specific approval policy, retain distinct
+   architecture, security and operations critique evidence, then accept ADR-0090 before changing the
+   workflow, provider plan, or conformance contract. Retain the historical accepted receipt unchanged.
+2. Prepare the exact desired settings plan for `fleet-cutover-owner`: sole reviewer `1645484`,
+   self-review permitted, five-minute wait, no administrator bypass, and only exact `main`. Keep its
+   creation or update as a separately authorized administrative effect with a fresh readback.
+3. Bind each cutover phase to one declared environment and exact candidate intent. The `.github`
+   authorization workflow and Coordination's
+   `LedgerProtectionPlanAdapter`, `LedgerProtectionProviderAdapter`, conformance predicate, capture
+   script, native approval verifier, fixtures and operator instructions must agree on that binding.
+   The current Coordination source still selects `fleet-cutover`; its plan lists both reviewers and
+   its conformance predicate expects self-review prevention to be disabled, unlike live state.
+4. Qualify the new contract against provider readback and native run evidence before adding it to the
+   GS2-10 candidate. Exercise same-owner dispatch and genuine approval, then refuse absent or wrong
+   approver, wrong run or attempt, wrong environment ID, non-`main` ref, stale candidate or intent,
+   expiry, and changed policy. A generated test alone cannot supply the independent refusal controls.
+5. Exercise the installed route in the registered isolated cutover rehearsal. Only the exact accepted
+   candidate and later protected production decision may use it for a production phase; `OpenV2`
+   retains its run-bound human confirmation.
+
+The workflow hardening in [PR #3686](https://github.com/FS-GG/.github/pull/3686) checks repository,
+manual dispatch, `main` and first attempt for the existing initializer receipt. It does not change
+the approval profile or prove the later phase executor. A green source PR, a settings plan, or an
+environment listing alone cannot close GS2-10.5.
+
 ## Acceptance limit
 
 The audit supports a one-operator implementation plan. It cannot certify fully autonomous completion

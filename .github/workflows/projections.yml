@@ -32,13 +32,17 @@ on:
       - "src/FS.GG.Coord.Cli.Kernel/**"
       - "src/FS.GG.Coord.Cli.BoardOps/**"
       - "src/FS.GG.Coord.GitHub/**"
+      - "src/FS.GG.ProjectionPolicy/**"
       - "scripts/generate-projections"
       - "tests/component-count/**"
+      - "tests/FS.GG.ProjectionPolicy.Tests/**"
+      - "tests/projection-markers/**"
       - "docs/coordination/parallel-work.md"
       - "docs/architecture.md"
       - "docs/registry/compatibility.md"
       - "registry/dependencies.yml"
       - "registry/repos.yml"
+      - "registry/skills.yml"
       - "docs/components.md"
       - "docs/consumer/versioning-and-updates.md"
       - ".claude/skills/**"
@@ -61,13 +65,17 @@ on:
       - "src/FS.GG.Coord.Cli.Kernel/**"
       - "src/FS.GG.Coord.Cli.BoardOps/**"
       - "src/FS.GG.Coord.GitHub/**"
+      - "src/FS.GG.ProjectionPolicy/**"
       - "scripts/generate-projections"
       - "tests/component-count/**"
+      - "tests/FS.GG.ProjectionPolicy.Tests/**"
+      - "tests/projection-markers/**"
       - "docs/coordination/parallel-work.md"
       - "docs/architecture.md"
       - "docs/registry/compatibility.md"
       - "registry/dependencies.yml"
       - "registry/repos.yml"
+      - "registry/skills.yml"
       - "docs/components.md"
       - "docs/consumer/versioning-and-updates.md"
       - ".claude/skills/**"
@@ -106,6 +114,14 @@ jobs:
       # The `versions` region is emitted from registry/dependencies.yml, so the generator reads YAML.
       # Without this the generator dies on `import yaml` — loudly, and before it renders anything.
       - uses: ./.github/actions/setup-policy-python
+
+      - name: Test skill count projection policy
+        run: bash tests/FS.GG.ProjectionPolicy.Tests/run.sh
+
+      - name: Test projection marker refusals
+        run: bash tests/projection-markers/run.sh
+        env:
+          FSGG_COORD_ENGINE_BIN: ${{ github.workspace }}/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
 
       - name: Every projection is current
         run: bash scripts/generate-projections --check

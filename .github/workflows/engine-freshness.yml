@@ -46,6 +46,7 @@ on:
       - "scripts/fsgg_feed.py"   # the shared feed reader + NuGet ordering (.github#263)
       - "tests/engine-freshness/**"
       - ".github/workflows/engine-freshness.yml"
+  # paths-coherence: allow-divergence — every main merge can change engine freshness, while PRs run only the fixture
   push:
     branches: [main]
     # DELIBERATELY UNFILTERED, unlike feed-coherence's push trigger. The verdict is a function of
@@ -120,7 +121,7 @@ jobs:
       # verdict", never as "nothing is owed".
       - name: Keep the measurement
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: engine-freshness-report
           path: freshness.json

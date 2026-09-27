@@ -92,7 +92,7 @@ expect() {
   out="$(run "$@")" || rc=$?
   if [ "$rc" -ne "$want" ]; then
     bad "$name (exit $rc, want $want)" "$out"
-  elif [ -n "$needle" ] && ! grep -qF "$needle" <<<"$out"; then
+  elif [ -n "$needle" ] && ! grep -qF -- "$needle" <<<"$out"; then
     bad "$name (exit $want, but not for the stated reason: want '$needle')" "$out"
   else
     ok "$name"
@@ -198,6 +198,80 @@ algebra "a job-level block that satisfies the callee passes, despite a bare top 
         0 "ok:" $'permissions:\n  contents: read' \
         $'    permissions:\n      contents: read\n      packages: read'
 
+WDUP="$WORK/w-duplicate-caller"; mkdir -p "$WDUP/FS-GG__R"
+cat > "$WDUP/FS-GG__R/c.yml" <<'YAML'
+permissions: { contents: none }
+permissions: { contents: read, packages: read }
+jobs:
+  sync:
+    uses: FS-GG/.github/.github/workflows/cal.yml@main
+YAML
+expect "duplicate caller permissions refuse before the second key can mask an undergrant" \
+  3 "duplicate YAML mapping key 'permissions'" "$WDUP" "$RC"
+
+# PyYAML follows YAML 1.1 scalar construction: bare `on` and `true` both become the boolean True,
+# and True compares equal to integer 1. Duplicate detection must therefore compare constructed
+# keys rather than their source spelling. Quoted "1" remains a string and is a distinct key.
+WBOOL="$WORK/w-constructed-bool-collision"; mkdir -p "$WBOOL/FS-GG__R"
+cat > "$WBOOL/FS-GG__R/c.yml" <<'YAML'
+on: { pull_request: {} }
+true: { push: {} }
+permissions: { contents: read, packages: read }
+jobs:
+  sync:
+    uses: FS-GG/.github/.github/workflows/cal.yml@main
+YAML
+expect "constructed YAML keys refuse on plus true before one boolean key masks the other" \
+  3 "duplicate YAML mapping key True" "$WBOOL" "$RC"
+
+WINTBOOL="$WORK/w-constructed-int-bool-collision"; mkdir -p "$WINTBOOL/FS-GG__R"
+cat > "$WINTBOOL/FS-GG__R/c.yml" <<'YAML'
+1: first
+true: second
+permissions: { contents: read, packages: read }
+jobs:
+  sync:
+    uses: FS-GG/.github/.github/workflows/cal.yml@main
+YAML
+expect "constructed YAML keys refuse integer one plus boolean true" \
+  3 "duplicate YAML mapping key True" "$WINTBOOL" "$RC"
+
+WINTSTRING="$WORK/w-constructed-int-string-distinct"; mkdir -p "$WINTSTRING/FS-GG__R"
+cat > "$WINTSTRING/FS-GG__R/c.yml" <<'YAML'
+1: integer
+"1": string
+permissions: { contents: read, packages: read }
+jobs:
+  sync:
+    uses: FS-GG/.github/.github/workflows/cal.yml@main
+YAML
+expect "constructed integer one and quoted string one remain distinct" \
+  0 "ok:" "$WINTSTRING" "$RC"
+
+WUNHASHABLE="$WORK/w-unhashable-key"; mkdir -p "$WUNHASHABLE/FS-GG__R"
+cat > "$WUNHASHABLE/FS-GG__R/c.yml" <<'YAML'
+? [one, two]
+: value
+permissions: { contents: read, packages: read }
+jobs:
+  sync:
+    uses: FS-GG/.github/.github/workflows/cal.yml@main
+YAML
+expect "constructed unhashable YAML keys refuse safely" \
+  3 "found unhashable key" "$WUNHASHABLE" "$RC"
+
+RDUP="$WORK/r-duplicate-callee"; mkdir -p "$RDUP/.github/workflows" "$RDUP/registry"
+cat > "$RDUP/.github/workflows/cal.yml" <<'YAML'
+on: { workflow_call: {}, workflow_call: {} }
+permissions: { contents: read }
+jobs: { x: { steps: [{ run: 'true' }] } }
+YAML
+roster "$RDUP/registry/repos.yml" FS-GG/R
+WCALDUP="$WORK/w-duplicate-callee"; mkdir -p "$WCALDUP/FS-GG__R"
+caller "$WCALDUP/FS-GG__R/c.yml" "permissions: { contents: read }" "cal.yml@main"
+expect "duplicate callee workflow_call event refuses before selecting a last value" \
+  3 "duplicate YAML mapping key 'workflow_call'" "$WCALDUP" "$RDUP"
+
 # =============================================================================================
 # 2b. App-token installation grants. A request outside the pinned grant inventory makes GitHub
 # refuse the ENTIRE mint before any later step runs, so it must be a pre-merge finding too.
@@ -217,16 +291,41 @@ jobs:
 YAML
 WAPP="$WORK/w-app-token"; mkdir -p "$WAPP/FS-GG__R"
 caller "$WAPP/FS-GG__R/c.yml" $'permissions:\n  contents: read\n  packages: read' "cal.yml@main"
+expect "a selected App without its own inventory refuses even when the default would undergrant" \
+  3 "no App grant inventory selects app-id secret 'DEDICATED_APP_CLIENT_ID'" "$WAPP" "$RC" \
+  --app-grants contents:read --require-app-identity-grants
+expect "a selected App without its own inventory refuses even when the default would pass" \
+  3 "no App grant inventory selects app-id secret 'DEDICATED_APP_CLIENT_ID'" "$WAPP" "$RC" \
+  --app-grants contents:read,issues:write --require-app-identity-grants
+expect "strict App identity mode requires a default inventory before scanning" \
+  3 "--require-app-identity-grants requires --app-grants" "$WAPP" "$RC" \
+  --require-app-identity-grants
 expect "an App-token request outside the pinned installation grants is caught before merge" \
   1 "issues: requests write, installation grants none" "$WAPP" "$RC" \
-  --app-grants contents:read
+  --app-grants contents:read --require-app-identity-grants \
+  --app-grants-for DEDICATED_APP_CLIENT_ID=contents:read
 expect "the same App-token request is green when the inventory grants it" \
   0 "ok:" "$WAPP" "$RC" \
-  --app-grants contents:read,issues:write
-expect "a separately custodied App selects its explicit required grant contract" \
-  0 "ok:" "$WAPP" "$RC" \
-  --app-grants contents:read \
+  --app-grants contents:read --require-app-identity-grants \
   --app-grants-for DEDICATED_APP_CLIENT_ID=contents:read,issues:write
+expect "a separately custodied App selects its explicit required grant contract" \
+  1 "issues: requests write, installation grants none" "$WAPP" "$RC" \
+  --app-grants contents:read,issues:write --require-app-identity-grants \
+  --app-grants-for DEDICATED_APP_CLIENT_ID=contents:read
+cat > "$RC/.github/workflows/app-token-duplicate.yml" <<'YAML'
+jobs:
+  mint:
+    steps:
+      - uses: actions/create-github-app-token@v3
+        with:
+          permission-contents: none
+          permission-contents: read
+YAML
+expect "duplicate App permission input refuses before the second key can mask the first" \
+  3 "duplicate YAML mapping key 'permission-contents'" "$WAPP" "$RC" \
+  --app-grants contents:read,issues:write --require-app-identity-grants \
+  --app-grants-for DEDICATED_APP_CLIENT_ID=issues:write
+rm "$RC/.github/workflows/app-token-duplicate.yml"
 
 # GS2-08.9 retires the automatic publisher and its App-token/package request. Pin that capability
 # loss directly, then keep the auditor inversion independent of the retired production workflow.
@@ -251,8 +350,97 @@ jobs:
 YAML
 expect "INVERSION: a synthetic organisation-packages over-scope still red-lights" \
   1 "organization_packages: requests read, installation grants none" "$WAPP" "$RC" \
-  --app-grants contents:write,issues:write,packages:read,pull_requests:write
+  --app-grants contents:write,issues:write,packages:read,pull_requests:write \
+  --app-grants-for DEDICATED_APP_CLIENT_ID=contents:write,issues:write
 rm "$RC/.github/workflows/app-token-org-package-overscope.yml"
+cat > "$RC/.github/workflows/app-token-unsupported.yml" <<'YAML'
+jobs:
+  mint:
+    steps:
+      - uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.ORDINARY_APP_ID }}
+          permission-contents: read
+YAML
+expect "strict mode refuses an App identity selected from vars instead of a pinned secret" \
+  3 "App identity must be a static secrets.NAME selector" "$WAPP" "$RC" \
+  --app-grants contents:read,issues:write --require-app-identity-grants \
+  --app-grants-for DEDICATED_APP_CLIENT_ID=issues:write
+sed -i 's/app-id: \${{ vars.ORDINARY_APP_ID }}/app-id: 123/' \
+  "$RC/.github/workflows/app-token-unsupported.yml"
+expect "strict mode refuses a literal App ID that cannot bind to a pinned inventory" \
+  3 "App identity must be a static secrets.NAME selector" "$WAPP" "$RC" \
+  --app-grants contents:read,issues:write --require-app-identity-grants \
+  --app-grants-for DEDICATED_APP_CLIENT_ID=issues:write
+rm "$RC/.github/workflows/app-token-unsupported.yml"
+
+# The optional authority roster is independent of the directory scan. Without
+# it, deleting or replacing an App-token workflow can make the scan vacuously
+# green; with it, every expected file, job and App step must remain present.
+RAUTH="$WORK/r-authority-roster"; mkdir -p "$RAUTH/.github/workflows" "$RAUTH/registry"
+cat > "$RAUTH/.github/workflows/cal.yml" <<'YAML'
+on: { workflow_call: {} }
+permissions: { contents: read }
+jobs: { x: { steps: [{ run: echo ready }] } }
+YAML
+cat > "$RAUTH/.github/workflows/app.yml" <<'YAML'
+jobs:
+  mint:
+    steps:
+      - uses: actions/create-github-app-token@v3
+        with: { permission-contents: read }
+YAML
+roster "$RAUTH/registry/repos.yml" FS-GG/R
+WAUTH="$WORK/w-authority-roster"; mkdir -p "$WAUTH/FS-GG__R"
+caller "$WAUTH/FS-GG__R/c.yml" "permissions: { contents: read }" "cal.yml@main"
+AUTH_ROSTER="$WORK/authority-workflows.json"
+cat > "$AUTH_ROSTER" <<'JSON'
+{
+  "schemaVersion": 1,
+  "repository": "FS-GG/.github",
+  "sourceRef": "fixture-head",
+  "workflows": [
+    {"path": ".github/workflows/cal.yml", "jobs": [
+      {"job_id": "x", "reusable": false, "steps": 1, "app_steps": []}]},
+    {"path": ".github/workflows/app.yml", "jobs": [
+      {"job_id": "mint", "reusable": false, "steps": 1, "app_steps": [1]}]}
+  ]
+}
+JSON
+authority_args=(--app-grants contents:read --require-app-identity-grants \
+  --authority-workflow-roster "$AUTH_ROSTER" --authority-source-ref fixture-head)
+expect "authority roster mode refuses a missing source ref" \
+  3 "--authority-workflow-roster requires --authority-source-ref" "$WAUTH" "$RAUTH" \
+  --app-grants contents:read --require-app-identity-grants \
+  --authority-workflow-roster "$AUTH_ROSTER"
+expect "authority roster mode requires strict App inventory selection" \
+  3 "--authority-workflow-roster requires --require-app-identity-grants" "$WAUTH" "$RAUTH" \
+  --app-grants contents:read --authority-workflow-roster "$AUTH_ROSTER" \
+  --authority-source-ref fixture-head
+expect "an explicitly empty authority roster path cannot disable the requested check" \
+  3 "--authority-workflow-roster requires --authority-source-ref" "$WAUTH" "$RAUTH" \
+  --app-grants contents:read --require-app-identity-grants \
+  --authority-workflow-roster "" --authority-source-ref fixture-head
+expect "complete independent authority workflow roster passes" \
+  0 "ok:" "$WAUTH" "$RAUTH" "${authority_args[@]}"
+mv "$RAUTH/.github/workflows/app.yml" "$WORK/app-roster-saved.yml"
+expect "a missing authority workflow refuses before a vacuous App scan" \
+  3 "authority roster workflow set mismatch" "$WAUTH" "$RAUTH" "${authority_args[@]}"
+mv "$WORK/app-roster-saved.yml" "$RAUTH/.github/workflows/app.yml"
+sed -i 's/  mint:/  other:/' "$RAUTH/.github/workflows/app.yml"
+expect "a replaced authority job refuses before a gate verdict" \
+  3 "authority roster job shape mismatch" "$WAUTH" "$RAUTH" "${authority_args[@]}"
+sed -i 's/  other:/  mint:/' "$RAUTH/.github/workflows/app.yml"
+sed -i 's/uses: actions\/create-github-app-token@v3/run: echo no-token/' \
+  "$RAUTH/.github/workflows/app.yml"
+expect "an unobserved App-token step refuses before a gate verdict" \
+  3 "authority roster job shape mismatch" "$WAUTH" "$RAUTH" "${authority_args[@]}"
+sed -i 's/run: echo no-token/uses: actions\/create-github-app-token@v3/' \
+  "$RAUTH/.github/workflows/app.yml"
+expect "a stale authority roster source ref refuses" \
+  3 "authority roster header invalid or stale" "$WAUTH" "$RAUTH" \
+  --app-grants contents:read --require-app-identity-grants \
+  --authority-workflow-roster "$AUTH_ROSTER" --authority-source-ref other-head
 
 # =============================================================================================
 # 3. Fail closed. "I could not check" is never green, and never a finding either.

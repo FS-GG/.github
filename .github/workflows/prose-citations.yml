@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  fixture:
+  live-prose:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -26,16 +26,6 @@ jobs:
           python-version: "3.x"
       - name: Prove the gate can reject a genuine offender
         run: bash tests/prose-citations/run.sh
-
-  live-prose:
-    runs-on: ubuntu-latest
-    needs: fixture
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.x"
       - name: Check tracked live prose
         id: check
         run: |

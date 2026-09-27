@@ -7,10 +7,6 @@
       "self_test": ["python3", "scripts/policy-runner.py", "inventory", "--self-test"]
     },
     {
-      "id": "projection-fixture",
-      "command": ["bash", "tests/projection/run.sh"]
-    },
-    {
       "id": "policy-runner-fixture",
       "command": ["bash", "tests/policy-runner/run.sh"]
     },

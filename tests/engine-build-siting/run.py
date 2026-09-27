@@ -103,6 +103,9 @@ REDIRECT_FLAGS = (
 DECLARED_SITES: dict[str, str | None] = {
     # The one sanctioned way a gate harness gets an engine. Redirect enforced, not assumed.
     "scripts/build-gate-engine": None,
+    # The permission differential builds its non-engine runner and project-reference graph through
+    # an explicit temporary artifacts root. The redirect moves both bin/ and obj/ out of the checkout.
+    "tests/FS.GG.Org.PermissionPolicy.Differential/run.sh": None,
     # M6 builds its focused Core/Lifecycle test subjects directly, but redirects the complete output
     # graph through --artifacts-path to a fresh temp directory and proves positive test totals.
     "tests/m6-decision-cutover/run.sh": None,
