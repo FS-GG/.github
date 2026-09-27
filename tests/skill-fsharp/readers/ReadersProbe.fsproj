@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RollForward>Major</RollForward>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+    <Compile Include="../../../src/FS.GG.Coord.Cli/SkillTelemetryReaders.fsi" Link="SkillTelemetryReaders.fsi" />
+    <Compile Include="../../../src/FS.GG.Coord.Cli/SkillTelemetryReaders.fs" Link="SkillTelemetryReaders.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+</Project>

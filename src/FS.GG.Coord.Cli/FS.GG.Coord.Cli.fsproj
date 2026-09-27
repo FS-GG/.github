@@ -265,6 +265,10 @@ the standing safety advisories carry forward.
     <Compile Include="TelemetryCiApplication.fs" />
     <Compile Include="TelemetryApplication.fsi" />
     <Compile Include="TelemetryApplication.fs" />
+    <Compile Include="SkillTelemetryReaders.fsi" />
+    <Compile Include="SkillTelemetryReaders.fs" />
+    <Compile Include="SkillPreflight.fsi" />
+    <Compile Include="SkillPreflight.fs" />
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
@@ -293,5 +297,6 @@ the standing safety advisories carry forward.
 
   <ItemGroup>
     <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="YamlDotNet" />
   </ItemGroup>
 </Project>
