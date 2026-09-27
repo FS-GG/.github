@@ -437,8 +437,8 @@ module LiveHandlers =
 
                         Ok(Some evidence)
 
-    /// Append a prospective obligation receipt only for this worker's claimed item and its
-    /// exact closing PR. The producer performs the head/obligation/evidence and readback fences.
+    // Append a prospective obligation receipt only for this worker's claimed item and its
+    // exact closing PR. The producer performs the head/obligation/evidence and readback fences.
     let private deliveryReceipt (ctx: Context) (opts: Options) raw id evidence =
         match worker opts, opts.Pr with
         | Error code, _ -> code
