@@ -49,13 +49,13 @@ reviewed public aggregate releases on GitHub.
 ## 0. Current progress report
 
 **Current frontier: callable v2 is qualified for its isolated scope; GS2-09.1–.6 migration contracts are
-accepted; GS2-09.7 representative execution and GS2-09.8 omission proof remain open.** Fleet production
-`OpenV2`, Q4 and `OperatingV2` are not established by those results.
+accepted; new GS2-09.7 and GS2-09.9 source is merged, while their protected qualification and GS2-09.8
+omission proof remain open.** Fleet production `OpenV2`, Q4 and `OperatingV2` are not established by those results.
 The protected OperatingV1 admission *genesis* is now installed and independently read back; post-genesis
 admission CAS, copy-specific effect authority and ordinary CLI enablement remain separate open gates.
 
-This report was reconciled against protected repository revisions on **2026-09-24**. The
-[code audit](reports/2026-09-24-v2-roadmap-code-audit.md) records exact revisions, implementation boundaries,
+The GS2 source frontier was updated from protected merges on **2026-09-27**. The broader
+[code audit](reports/2026-09-24-v2-roadmap-code-audit.md) records its 2026-09-24 revisions, implementation boundaries,
 limitations and corrections. The [dependency graph and parallel lanes](#91-dependencies-and-parallelism)
 identify executable work; the [feature index](#98-feature-parts-and-subroadmap-index) links its owners.
 The I1 closure projection below uses its later protected [installed qualification](operations/v2-ci-i1-installed-qualification.md).
@@ -81,7 +81,7 @@ retain detailed milestone history in the owning plan. CI ticks and intermediate 
 | **V0 — Simplified baseline and v2 binding** | Routine is the adopted source-delivery default. Governance routing/reuse primitives and telemetry sources exist; their presence does not prove the complete installed routine-v2 profile or efficiency. | `.github`, Coordination, Governance and receivers bind the effective routine obligations and R5 receiving population before candidate freeze. R2/R4/R5 measurement gaps remain separately attributed. |
 | **V1 — Events, queue and incumbent fence** | GS2-07.1–.8 and GS2-08.1–.9 retain accepted native evidence. The exact 0.90.0 bridge and residual-writer retirement are reusable inputs. | Preserve the accepted fence and census through new source and receiver changes. Do not reopen completed units or infer Q4. |
 | **I1 — Unattended CI credential interlude** | Milestones 01–06 are complete: source policy and Coordination 0.1.2 were delivered, the two-job path passed isolated hosted refusal, recovery and readback, and its exact receiver profile was selected for GS2-10. [Installed qualification](operations/v2-ci-i1-installed-qualification.md) records the evidence and bounded timing. | Production credential execution remains inactive at `OperatingV1`; GS2-10 candidate qualification and a separate protected `OpenV2` decision precede activation. The measured cohort does not establish a production bureaucracy percentage. |
-| **V2 — Callable path and migration rehearsal** | V2-CALL-01.1–.5 complete at their bounded callable boundary. Package 0.1.1, native isolated effect/recovery, cleanup and discovery handoff are evidenced. GS2-09.1–.6 accept pure migration contracts. Protected OperatingV1 admission genesis is installed with exact typed readback. | Coordination completes provider capture, migration execution, isolated representative rehearsal (.7), then independent omission/idempotency proof and parent closure (.8). Post-genesis append and copy-specific effect authority remain separate joins. |
+| **V2 — Callable path and migration rehearsal** | V2-CALL-01.1–.5 complete at their bounded callable boundary. Package 0.1.1, native isolated effect/recovery, cleanup and discovery handoff are evidenced. GS2-09.1–.6 accept pure migration contracts. [GS2-09.7 migration source](https://github.com/FS-GG/FS.GG.Coordination/pull/847), [host source](https://github.com/FS-GG/.github/pull/3879), [direct-session source](https://github.com/FS-GG/FS.GG.Coordination/pull/848), and [GS2-09.9 source](https://github.com/FS-GG/FS.GG.Coordination/pull/846) are merged. Protected OperatingV1 admission genesis is installed with exact typed readback. | GS2-09.9 still needs versioned operator/contract/gate rotation and protected Q3/Q6 acceptance. Coordination then qualifies provider capture, migration execution and isolated representative rehearsal (.7), followed by independent omission/idempotency proof and parent closure (.8). Post-genesis append and copy-specific effect authority remain separate joins. |
 | **V3 — Exact candidate and receivers** | Not accepted. Existing publication, provider, tool and receiver evidence can support preparation. | GS2-10 freezes exact inputs, qualifies the complete candidate and clean/retained receivers, rehearses the cutover, and closes concurrent changes. |
 | **V4 — Closed switch** | Not entered by this audit. | GS2-11–12: authorized freeze/drain, exact switch, verification, and executable rollback while still closed. |
 | **V5 — Open and ordinary use** | No fleet production `OpenV2` acceptance identified. The synthetic callable target is not the fleet. | GS2-13 owns irreversible open, permanent v1 fence, real ordinary journeys and `ObservingV2`. |
@@ -124,27 +124,29 @@ This audit neither requalified a live Host nor measured an efficiency cohort.
 | Evidence | Scope established | Scope still open |
 |---|---|---|
 | [GS2-07 and GS2-08 accepted receipts](https://github.com/FS-GG/FS.GG.Coordination/tree/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/accepted) | Event/queue qualification, bridge, receiver adoption and residual-writer disposition. | Preserve validity across later changes; no Q4 or production open inferred. |
-| [OperatingV1 admission installation and typed readback](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5814570932) | The protected genesis operation ref exists at the exact planned parentless commit; independent exact-object replay restores generation 1 `AdmissionsOpen`. | The production post-genesis append port, incumbent operation/claim inventory, ordinary CLI fence removal and GS2-09.7 effect authority are not established by genesis. |
+| [OperatingV1 admission installation and typed readback](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5814570932) | The protected genesis operation ref exists at the exact planned parentless commit; independent exact-object replay restores generation 1 `AdmissionsOpen`. The [governing issuer design](https://github.com/FS-GG/.github/pull/3877) is merged. | The [held public-key verifier](https://github.com/FS-GG/FS.GG.Coordination/pull/533) is one inactive prerequisite. Native job/PR identity reading, durable one-shot consume, full plan codec, dedicated key custody, provider reconciliation, installed post-genesis append and copy-specific effect authority still require qualification. |
 | [Callable readiness](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/gs2-09-9/callable-readiness.json) and [handoff](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json) | Installed 0.1.1 in one admitted synthetic disposable repository; sealed plan, provider/journal recovery, no-op replay and cleanup. | Migration/cutover, production targets, release effects and general writer enablement are excluded. |
 | [GS2-09.1–.6 receipts](https://github.com/FS-GG/FS.GG.Coordination/tree/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/accepted) | Discovery, manifest, transforms, live-operation dispositions, sealed history and rollback **contracts**. | Fresh nine-authority provider capture, effect execution and actual representative rollback. |
 | [Replay/omission source controls, PR #507](https://github.com/FS-GG/FS.GG.Coordination/pull/507) | Exact manifest replay, added-subject refusal and every rollback receipt prefix under controlled tests. | Live interruption/retry, complete copy population and independent .7/.8 acceptance. |
-| Local GS2-09.7 prototype at `82b4772d3807dfec08901f898d9129ab76e88aac` | Existing step-execution/provider-reader work to inspect and preserve before implementation. | No remote branch or protected-main inclusion was observed. It is not delivered or provider-accepted evidence. |
+| [GS2-09.7 source PR #847](https://github.com/FS-GG/FS.GG.Coordination/pull/847) and [host PR #3879](https://github.com/FS-GG/.github/pull/3879) | Migration and host source are delivered on protected main, preserving the earlier implementation stack. | The registered isolated cohort, full nine-authority capture, Q5/Q6, interruption/rollback, cleanup and independent protected acceptance are still open. |
+| [GS2-09.9 source PRs #845](https://github.com/FS-GG/FS.GG.Coordination/pull/845) and [#846](https://github.com/FS-GG/FS.GG.Coordination/pull/846) | The closed v2/v5 effect source and readback controls are delivered; proposed workflows remain disabled and grant no protected effect. | The [#545 qualification hold](https://github.com/FS-GG/FS.GG.Coordination/pull/545) still requires versioned operator, contract/proposal, validator and typed-index rotation, fresh registered Q3/Q6, and protected acceptance. Merged negative source tests alone do not clear it. |
 
 ### 0.4 Active work and immediate critical path
 
-1. **Resume the existing GS2-09.7 implementation.** Recover its exact local work, compare it with current
-   protected main, and qualify source slices through the normal reviewed route. Complete the remaining
-   provider surfaces and closed migration interpreter; do not rebuild GS2-09.1–.6 contracts.
+1. **Qualify the delivered GS2-09.9 callable source.** Keep the proposed workflows disabled until the
+   versioned operator, contract, validator and typed index bind the repaired negative controls. Run fresh
+   registered Q3/Q6 and protected qualification before recording GS2-09.9 acceptance.
 2. **In parallel, complete post-genesis admission/effect readiness and prepare V0/V3 inputs.**
    The protected OperatingV1 genesis is installed and may be read as an accepted input. Its owner still
-   owes the scoped append/CAS path, incumbent inventory and copy-specific effect authority; ordinary CLI
-   writes remain fenced. Read-only research, controlled source tests, receiver inventory and omission
-   controls can proceed independently. Their common integration point is the exact isolated executable
-   candidate, not a blanket source-work blockade.
-3. **Join at real representative acceptance.** Bind complete copy-specific discovery, manifest, journal,
-   effects, archive and rollback; execute all interruption cuts and a second round, then establish .8
-   no-omission/idempotency and complete GS2-09 closure.
-4. **Freeze only the qualified candidate.** Finish or explicitly defer competing publications/default/pin
+   owes the scoped append/CAS path, incumbent inventory, identity and one-shot issuer controls, provider
+   reconciliation and copy-specific effect authority; ordinary CLI writes remain fenced. Read-only
+   research, controlled source tests, receiver inventory and omission controls can proceed independently.
+3. **Qualify GS2-09.7 on the registered cohort.** Use the merged migration and host source, complete
+   copy-specific discovery, manifest, journal, effects, archive and rollback, then execute all interruption
+   cuts, cleanup and a second round under the protected Q5/Q6 controls.
+4. **Prove no omission and close GS2-09.** Establish independent .8 idempotency/no-omission evidence and
+   parent closure from the representative .7 result.
+5. **Freeze only the qualified candidate.** Finish or explicitly defer competing publications/default/pin
    changes, then execute GS2-10–14 under their existing contracts and operating authority.
 
 The [lane table](#91-dependencies-and-parallelism) names each owner, ready work and join condition.
