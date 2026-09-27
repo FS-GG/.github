@@ -13,6 +13,18 @@ binds loopback, prints a one-use bootstrap URL, and never activates or migrates 
 store while opening the dashboard. See the
 [local telemetry store reference](../../docs/reference/local-telemetry-store.md).
 
+The package also exposes `skill roadmap-telemetry [--config PATH] COMMAND`,
+`skill preflight assess PATH`, and
+`skill preflight graph PATH --requires TARGET:SOURCE[,SOURCE]`.
+Roadmap telemetry uses an explicitly selected or
+discovered private host configuration; without one, it reports
+`not-configured` and exits 2 without creating a store. Preflight reads bounded
+inputs and returns an advisory cost assessment or a literal workflow dependency
+check. These compiled commands are additive source capability. The existing
+Python skill entry points remain in use until a published tool and selected
+receivers are switched under the
+[conversion roadmap](../../docs/roadmaps/skill-python-fsharp-conversion.md).
+
 ## What it is for
 
 `scripts/fsgg-coord` was 4,000 lines of bash modelling a concurrent, transactional, budget-constrained
