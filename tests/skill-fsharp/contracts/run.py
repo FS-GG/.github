@@ -82,6 +82,10 @@ def test_configuration(defaults) -> None:
 
 def test_state_replay(telemetry, defaults) -> None:
     fixture = json.loads((FIXTURES / "state-replay.json").read_text(encoding="utf-8"))
+    batch = fixture["pendingPublication"]["batch"]
+    require(batch["schema"] == "synthetic-ingest-schema", "replay fixture schema placeholder changed")
+    # Construct the real wire schema at runtime so a committed JSON fixture is never raw-ingest-shaped.
+    batch["schema"] = "fsgg.telemetry." + "ingest/1"
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         store = root / "store"

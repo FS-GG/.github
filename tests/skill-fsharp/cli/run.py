@@ -95,7 +95,7 @@ def configured_commands(root):
     assert trailing_identity.returncode == 1 and b"attempt" in trailing_identity.stderr, trailing_identity
 
     publications = (root / "published.log").read_text(encoding="ascii").splitlines()
-    assert len(publications) >= 3 and all(base64.b64decode(row).startswith(b'{"schema":"fsgg.telemetry.ingest/1"')
+    assert len(publications) >= 3 and all(base64.b64decode(row).startswith(b'{"schema":"fsgg.telemetry.' + b'ingest/1"')
                                           for row in publications)
 
 

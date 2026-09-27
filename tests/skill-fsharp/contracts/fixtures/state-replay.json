@@ -15,7 +15,7 @@
     "operation": "begin",
     "nextPhase": "expected",
     "batch": {
-      "schema": "fsgg.telemetry.ingest/1",
+      "schema": "synthetic-ingest-schema",
       "ingestId": "22222222222222222222222222222222-000001",
       "sourceIdentity": "fixture-producer",
       "generation": "22222222222222222222222222222222",

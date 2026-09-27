@@ -735,7 +735,7 @@ module SkillTelemetryReaders =
         let private maximumEvidenceBytes = 512 * 1024
         let private maximumLineBytes = 1024 * 1024
 
-        /// Keeps bounded wire lines exactly; rollout callers may discard oversized rows.
+        // Keeps bounded wire lines exactly; rollout callers may discard oversized rows.
         type private ExactLines(source: Stream) =
             let buffer = Array.zeroCreate<byte> 8192
             let mutable offset = 0
