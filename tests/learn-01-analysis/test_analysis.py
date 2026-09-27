@@ -17,10 +17,14 @@ CORPUS = json.loads((ROOT / "tests/learn-01-analysis/fixtures/synthetic.json").r
 OBSERVATIONS = json.loads((ROOT / "tests/learn-01-analysis/fixtures/observations.json").read_text())
 
 
-def private_envelope(content, workspace="workspace-a"):
+def private_envelope(content, workspace="workspace-a", version=2):
     body = copy.deepcopy(content)
     body["workspaceId"] = workspace
     body.setdefault("selection", {"mode": "all", "complete": True})
+    if version == 3:
+        body["learningSnapshotSchema"] = "fsgg.telemetry.learn-item-detail/3"
+        for row in body.get("learningObservations", []):
+            row.setdefault("content_digest", hashlib.sha256(row["canonical"].encode()).hexdigest())
     canonical = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
     return {
         "schema": "fsgg.telemetry.item-detail/2",
@@ -31,6 +35,133 @@ def private_envelope(content, workspace="workspace-a"):
 
 
 class Learn01ContractTests(unittest.TestCase):
+    def complete_v3_content(self):
+        events = [copy.deepcopy(event) for event in OBSERVATIONS["events"] if event.get("itemId") == "I-001"]
+        events.extend([
+            {
+                "kind": "learn-accounting-inventory/1", "identity": "accounting-I-001", "itemId": "I-001",
+                "revision": 1, "inventoryId": "accounting-v1", "windowId": "window-2026-01",
+                "policyId": "learn-01-current-focused-v1", "scope": "whole-original-item",
+                "cutoffAt": "2026-02-02T00:00:00Z", "expectedDispatchIds": ["dispatch-I-001"],
+                "expectedSharedCostIds": ["shared-I-001"], "sourceKind": "prospective-independent-roster",
+                "sourceDigest": "a" * 64,
+            },
+            {
+                "kind": "runtime-native-inventory/1", "identity": "native-I-001-1", "itemId": "I-001",
+                "revision": 1, "inventoryId": "native-I-001", "originalItemId": "I-001",
+                "invocationId": "inv-I-001", "page": 1, "pages": 1,
+                "expectedTurnIds": ["turn-I-001"], "expectedProvider": "openai",
+                "requestedModel": "gpt-fixed", "requestedEffort": "medium",
+                "support": "provider-native-final-turn-counters", "followupBaseline": 0,
+                "capturedAt": "2025-12-31T23:59:30Z",
+                "sourceKind": "provider-capability-and-dispatch-roster", "sourceDigest": "b" * 64,
+            },
+            {
+                "kind": "learn-shared-cost/1", "identity": "shared-I-001-fact", "itemId": "I-001",
+                "revision": 1, "nativeCostId": "shared-I-001", "provider": "openai",
+                "providerTotalTokens": 20, "allocations": [{"originalItemId": "I-001", "tokens": 20}],
+                "sourceKind": "native-shared-cost", "sourceDigest": "c" * 64,
+            },
+        ])
+        return {
+            "learningObservations": [
+                {"canonical": json.dumps(event, separators=(",", ":"), sort_keys=True)} for event in events
+            ],
+            "populations": [],
+            "admissions": [{
+                "identity": "admission-I-001", "item_id": "I-001", "invocation_id": "inv-I-001",
+                "requested_model": "gpt-fixed", "requested_effort": "medium", "backend": "codex",
+            }],
+            "expectedDispatches": [{
+                "item_id": "I-001", "dispatch_id": "dispatch-I-001", "relation": "root",
+            }],
+            "lineage": [{
+                "item_id": "I-001", "dispatch_id": "dispatch-I-001", "invocation_id": "inv-I-001",
+            }],
+            "usage": [{
+                "identity": "usage-I-001", "item_id": "I-001", "invocation_id": "inv-I-001",
+                "turn_id": "turn-I-001", "provider": "openai", "requested_model": "gpt-fixed",
+                "observed_model": "gpt-fixed", "requested_effort": "medium", "observed_effort": "medium",
+                "total": 100,
+            }],
+            "terminals": [{"item_id": "I-001", "invocation_id": "inv-I-001"}],
+            "runtimeGaps": [], "ciRuns": [], "ciPopulationCoverage": [],
+        }
+
+    def test_complete_v3_private_snapshot_qualifies_from_typed_rosters(self):
+        content = self.complete_v3_content()
+        result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content, version=3))
+        self.assertTrue(result["tokenComparisonQualified"])
+        self.assertEqual({"current": 120, "focused": 0}, result["providerTotalTokensByArm"])
+
+        missing = copy.deepcopy(content)
+        missing["learningObservations"] = [
+            row for row in missing["learningObservations"]
+            if json.loads(row["canonical"])["kind"] != "runtime-native-inventory/1"
+        ]
+        incomplete = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(missing, version=3))
+        self.assertIn("missing-native-inventory:inv-I-001", incomplete["incompleteTokenReasons"]["I-001"])
+
+        duplicate_turn = copy.deepcopy(content)
+        extra = copy.deepcopy(duplicate_turn["usage"][0])
+        extra["identity"] = "usage-I-001-copy"
+        duplicate_turn["usage"].append(extra)
+        with self.assertRaisesRegex(MODULE.Refusal, "duplicate native turn identity"):
+            MODULE.analyze_private_snapshot(CONTRACT, private_envelope(duplicate_turn, version=3))
+
+        missing_turn = copy.deepcopy(content)
+        missing_turn["usage"] = []
+        missing_result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(missing_turn, version=3))
+        self.assertIn("expected-native-turn-roster-mismatch:inv-I-001", missing_result["incompleteTokenReasons"]["I-001"])
+
+        truncated_pages = copy.deepcopy(content)
+        native = next(json.loads(row["canonical"]) for row in truncated_pages["learningObservations"]
+                      if json.loads(row["canonical"])["kind"] == "runtime-native-inventory/1")
+        native["pages"] = 2
+        truncated_pages["learningObservations"] = [
+            {"canonical": json.dumps(native, separators=(",", ":"), sort_keys=True)}
+            if json.loads(row["canonical"])["kind"] == "runtime-native-inventory/1" else row
+            for row in truncated_pages["learningObservations"]
+        ]
+        truncated_result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(truncated_pages, version=3))
+        self.assertIn("incomplete-native-inventory-pages:inv-I-001", truncated_result["incompleteTokenReasons"]["I-001"])
+
+        cross_item_turn = copy.deepcopy(content)
+        cross_item_turn["usage"][0]["item_id"] = "foreign-original"
+        with self.assertRaisesRegex(MODULE.Refusal, "usage crosses original-item identity"):
+            MODULE.analyze_private_snapshot(CONTRACT, private_envelope(cross_item_turn, version=3))
+
+        unsupported = copy.deepcopy(content)
+        native = next(json.loads(row["canonical"]) for row in unsupported["learningObservations"]
+                      if json.loads(row["canonical"])["kind"] == "runtime-native-inventory/1")
+        native["support"] = "unknown"
+        unsupported["learningObservations"] = [
+            {"canonical": json.dumps(native, separators=(",", ":"), sort_keys=True)}
+            if json.loads(row["canonical"])["kind"] == "runtime-native-inventory/1" else row
+            for row in unsupported["learningObservations"]
+        ]
+        unsupported_result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(unsupported, version=3))
+        self.assertIn("usage-support-unproven:inv-I-001", unsupported_result["incompleteTokenReasons"]["I-001"])
+
+        bad_shared = copy.deepcopy(content)
+        shared = next(json.loads(row["canonical"]) for row in bad_shared["learningObservations"]
+                      if json.loads(row["canonical"])["kind"] == "learn-shared-cost/1")
+        shared["allocations"][0]["tokens"] = 19
+        bad_shared["learningObservations"] = [
+            {"canonical": json.dumps(shared, separators=(",", ":"), sort_keys=True)}
+            if json.loads(row["canonical"])["kind"] == "learn-shared-cost/1" else row
+            for row in bad_shared["learningObservations"]
+        ]
+        with self.assertRaisesRegex(MODULE.Refusal, "shared allocations do not equal provider total"):
+            MODULE.analyze_private_snapshot(CONTRACT, private_envelope(bad_shared, version=3))
+
+        reopened = copy.deepcopy(content)
+        reopened["expectedDispatches"].append({
+            "item_id": "I-001", "dispatch_id": "dispatch-reopened", "relation": "follow-up",
+        })
+        reopened_result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(reopened, version=3))
+        self.assertIn("expected-dispatch-roster-mismatch", reopened_result["incompleteTokenReasons"]["I-001"])
+
     def test_observation_snapshot_is_order_independent_and_bounded(self):
         first = MODULE.validate_observations(CORPUS, OBSERVATIONS)
         reordered = copy.deepcopy(OBSERVATIONS)

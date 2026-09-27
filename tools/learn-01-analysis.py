@@ -233,9 +233,17 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
     except (KeyError, TypeError, json.JSONDecodeError) as error:
         raise Refusal("telemetry snapshot learning observations are malformed") from error
 
+    observation_kinds = {"learn-task-snapshot", "learn-context-manifest", "learn-experiment-assignment"}
+    supported_kinds = observation_kinds | {
+        "learn-accounting-inventory/1", "runtime-native-inventory/1", "learn-shared-cost/1"
+    }
+    unknown_kinds = {event.get("kind") for event in events} - supported_kinds
+    if unknown_kinds:
+        raise Refusal("private snapshot contains unsupported learning fact kinds: " + ", ".join(sorted(unknown_kinds)))
+    observation_events = [event for event in events if event.get("kind") in observation_kinds]
     assignments = {
         event.get("itemId"): event
-        for event in events
+        for event in observation_events
         if event.get("kind") == "learn-experiment-assignment"
     }
     if not assignments or None in assignments:
@@ -252,8 +260,16 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
     ]
     observation_result = validate_observations(
         {"contractId": contract.get("contractId"), "items": roots},
-        {"schema": "fsgg.learn.observation-snapshot/v1", "workspaceId": workspace, "events": events},
+        {"schema": "fsgg.learn.observation-snapshot/v1", "workspaceId": workspace, "events": observation_events},
     )
+    is_v3 = content.get("learningSnapshotSchema") == "fsgg.telemetry.learn-item-detail/3"
+    if is_v3:
+        for row in content.get("learningObservations", []):
+            canonical = row.get("canonical")
+            digest = row.get("content_digest")
+            if (not isinstance(canonical, str) or
+                    digest != hashlib.sha256(canonical.encode()).hexdigest()):
+                raise Refusal("v3 learning fact digest does not bind canonical bytes")
 
     original_by_item = {item: item for item in assignments}
     for row in content.get("populations", []):
@@ -294,12 +310,18 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
             lineage_by_dispatch[dispatch] = value
         else:
             raise Refusal("invocation lineage is not bound to an assigned original item")
+    dispatch_original = {}
+    dispatch_relation = {}
     for row in content.get("expectedDispatches", []):
         dispatch = row.get("dispatch_id")
         item = row.get("item_id")
         original = original_by_item.get(item)
         if original is None or not isinstance(dispatch, str):
             raise Refusal("expected dispatch is not bound to an assigned original item")
+        if dispatch in dispatch_original:
+            raise Refusal("duplicate expected dispatch identity")
+        dispatch_original[dispatch] = original
+        dispatch_relation[dispatch] = row.get("relation")
         lineage = lineage_by_dispatch.get(dispatch)
         if lineage is None:
             incomplete[original].add("missing-expected-invocation:" + dispatch)
@@ -314,16 +336,14 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
     for original in assignments:
         if original not in admitted_originals:
             incomplete[original].add("missing-root-admission")
-        # Schema 10 has no affirmative producer facts closing these inventories.
-        # Snapshot query completeness and absence of a gap are not evidence that the
-        # expected population, native turns, shared costs, provider, or support are complete.
-        incomplete[original].update({
-            "expected-dispatch-population-unproven",
-            "expected-native-turn-inventory-unavailable",
-            "expected-shared-cost-inventory-unavailable",
-            "expected-provider-unavailable",
-            "usage-support-unproven",
-        })
+        if not is_v3:
+            incomplete[original].update({
+                "expected-dispatch-population-unproven",
+                "expected-native-turn-inventory-unavailable",
+                "expected-shared-cost-inventory-unavailable",
+                "expected-provider-unavailable",
+                "usage-support-unproven",
+            })
 
     terminal = {row.get("invocation_id") for row in content.get("terminals", [])}
     gaps = defaultdict(set)
@@ -337,6 +357,7 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
 
     observed_usage = Counter()
     observed_providers = defaultdict(set)
+    observed_turns = defaultdict(set)
     seen_usage = set()
     for row in content.get("usage", []):
         identity = row.get("identity")
@@ -347,7 +368,17 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
         if invocation not in invocations:
             raise Refusal(f"{identity}: usage has no expected admitted invocation")
         original, admission = invocations[invocation]
+        if original_by_item.get(row.get("item_id")) != original:
+            raise Refusal(f"{identity}: usage crosses original-item identity")
         observed_usage[invocation] += 1
+        turn_id = row.get("turn_id")
+        if is_v3:
+            if not isinstance(turn_id, str) or not turn_id:
+                incomplete[original].add("missing-native-turn-identity:" + identity)
+            elif turn_id in observed_turns[invocation]:
+                raise Refusal("duplicate native turn identity: " + turn_id)
+            else:
+                observed_turns[invocation].add(turn_id)
         total = row.get("total")
         provider = row.get("provider")
         requested_model = row.get("requested_model")
@@ -394,6 +425,153 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
         if any(row.get(name) != "complete" for name in dimensions) or row.get("continuation") != "none":
             incomplete[original].add("incomplete-ci-population")
 
+    if is_v3:
+        valid_digest = lambda value: (isinstance(value, str) and len(value) == 64 and
+                                      all(character in "0123456789abcdef" for character in value))
+        accounting_by_original = {}
+        native_pages = defaultdict(dict)
+        shared_by_cost = {}
+        for event in events:
+            kind = event.get("kind")
+            if kind == "learn-accounting-inventory/1":
+                original = event.get("itemId")
+                if original not in assignments or original in accounting_by_original:
+                    raise Refusal("accounting inventory must be unique per assigned original item")
+                if (event.get("scope") != "whole-original-item" or
+                        event.get("sourceKind") != "prospective-independent-roster" or
+                        not valid_digest(event.get("sourceDigest")) or
+                        event.get("policyId") != assignments[original].get("policyId") or
+                        event.get("windowId") != assignments[original].get("windowId")):
+                    raise Refusal(f"{original}: accounting inventory disagrees with persisted assignment")
+                dispatches = event.get("expectedDispatchIds")
+                shared = event.get("expectedSharedCostIds")
+                if (not isinstance(dispatches, list) or len(dispatches) != len(set(dispatches)) or
+                        not all(isinstance(value, str) and value for value in dispatches) or
+                        not isinstance(shared, list) or len(shared) != len(set(shared)) or
+                        not all(isinstance(value, str) and value for value in shared)):
+                    raise Refusal(f"{original}: accounting inventory rosters are malformed")
+                try:
+                    assigned = datetime.fromisoformat(assignments[original]["assignedAt"].replace("Z", "+00:00"))
+                    cutoff = datetime.fromisoformat(event["cutoffAt"].replace("Z", "+00:00"))
+                except (KeyError, AttributeError, ValueError) as error:
+                    raise Refusal(f"{original}: accounting inventory cutoff is malformed") from error
+                if assigned.tzinfo is None or cutoff.tzinfo is None or cutoff <= assigned:
+                    raise Refusal(f"{original}: accounting cutoff must follow assignment")
+                accounting_by_original[original] = event
+            elif kind == "runtime-native-inventory/1":
+                invocation = event.get("invocationId")
+                original = event.get("originalItemId")
+                item_original = original_by_item.get(event.get("itemId"))
+                if invocation not in invocations or original != item_original or invocations[invocation][0] != original:
+                    raise Refusal("native inventory crosses invocation or original-item identity")
+                page = event.get("page")
+                pages = event.get("pages")
+                if (not isinstance(page, int) or isinstance(page, bool) or not isinstance(pages, int) or
+                        isinstance(pages, bool) or page < 1 or pages < 1 or page > pages):
+                    raise Refusal("native inventory paging is malformed")
+                if not valid_digest(event.get("sourceDigest")):
+                    raise Refusal("native inventory source digest is malformed")
+                if page in native_pages[invocation]:
+                    raise Refusal("duplicate native inventory page")
+                native_pages[invocation][page] = event
+            elif kind == "learn-shared-cost/1":
+                cost = event.get("nativeCostId")
+                if not isinstance(cost, str) or not cost or cost in shared_by_cost:
+                    raise Refusal("shared native cost identities must be unique")
+                if event.get("sourceKind") != "native-shared-cost" or not valid_digest(event.get("sourceDigest")):
+                    raise Refusal("shared native cost provenance is malformed")
+                shared_by_cost[cost] = event
+
+        for original in assignments:
+            inventory = accounting_by_original.get(original)
+            if inventory is None:
+                incomplete[original].add("missing-accounting-inventory")
+                continue
+            expected_dispatches = set(inventory["expectedDispatchIds"])
+            observed_dispatches = {value for value, owner in dispatch_original.items() if owner == original}
+            if expected_dispatches != observed_dispatches:
+                incomplete[original].add("expected-dispatch-roster-mismatch")
+            expected_shared = set(inventory["expectedSharedCostIds"])
+            observed_shared = {
+                cost for cost, event in shared_by_cost.items()
+                if any(allocation.get("originalItemId") == original for allocation in event.get("allocations", []))
+            }
+            if expected_shared != observed_shared:
+                incomplete[original].add("expected-shared-cost-roster-mismatch")
+
+        expected_invocations = {lineage_by_dispatch[dispatch][0] for dispatch in dispatch_original if dispatch in lineage_by_dispatch}
+        if expected_invocations != set(invocations):
+            for original in assignments:
+                incomplete[original].add("expected-invocation-population-mismatch")
+        for invocation, (original, admission) in invocations.items():
+            pages = native_pages.get(invocation, {})
+            if not pages:
+                incomplete[original].add("missing-native-inventory:" + invocation)
+                continue
+            page_counts = {event.get("pages") for event in pages.values()}
+            if len(page_counts) != 1 or set(pages) != set(range(1, next(iter(page_counts)) + 1)):
+                incomplete[original].add("incomplete-native-inventory-pages:" + invocation)
+                continue
+            first = pages[1]
+            stable = ("inventoryId", "originalItemId", "invocationId", "expectedProvider", "requestedModel",
+                      "requestedEffort", "support", "followupBaseline", "capturedAt", "sourceKind", "sourceDigest")
+            if any(any(event.get(name) != first.get(name) for name in stable) for event in pages.values()):
+                raise Refusal("native inventory pages disagree on stable provenance")
+            if (first.get("support") != "provider-native-final-turn-counters" or
+                    first.get("sourceKind") != "provider-capability-and-dispatch-roster"):
+                incomplete[original].add("usage-support-unproven:" + invocation)
+            expected_turns = []
+            for page in sorted(pages):
+                turns = pages[page].get("expectedTurnIds")
+                if not isinstance(turns, list) or not turns or not all(isinstance(turn, str) and turn for turn in turns):
+                    incomplete[original].add("missing-expected-turns:" + invocation)
+                    turns = []
+                expected_turns.extend(turns)
+            if len(expected_turns) != len(set(expected_turns)):
+                raise Refusal("native inventory repeats a turn across pages")
+            if set(expected_turns) != observed_turns[invocation]:
+                incomplete[original].add("expected-native-turn-roster-mismatch:" + invocation)
+            expected_provider = first.get("expectedProvider")
+            if (not isinstance(expected_provider, str) or not expected_provider or
+                    observed_providers[original] != {expected_provider}):
+                incomplete[original].add("provider-mismatch:" + invocation)
+            if (admission.get("requested_model") != first.get("requestedModel") or
+                    admission.get("requested_effort") != first.get("requestedEffort")):
+                incomplete[original].add("requested-profile-mismatch:" + invocation)
+            followups = sum(1 for dispatch, owner in dispatch_original.items()
+                            if owner == original and dispatch_relation.get(dispatch) == "follow-up")
+            if first.get("followupBaseline") != followups:
+                incomplete[original].add("followup-baseline-mismatch:" + invocation)
+
+        expected_all_shared = set().union(*(
+            set(event["expectedSharedCostIds"]) for event in accounting_by_original.values()
+        )) if accounting_by_original else set()
+        if expected_all_shared != set(shared_by_cost):
+            for original in assignments:
+                incomplete[original].add("shared-cost-population-mismatch")
+        for cost, event in shared_by_cost.items():
+            allocations = event.get("allocations")
+            total = event.get("providerTotalTokens")
+            provider = event.get("provider")
+            if (not isinstance(total, int) or isinstance(total, bool) or total < 0 or
+                    not isinstance(allocations, list) or not allocations):
+                raise Refusal(cost + ": shared cost is malformed")
+            seen_originals = set()
+            allocated = 0
+            for allocation in allocations:
+                original = allocation.get("originalItemId")
+                tokens = allocation.get("tokens")
+                if (original not in assignments or original in seen_originals or not isinstance(tokens, int) or
+                        isinstance(tokens, bool) or tokens < 0):
+                    raise Refusal(cost + ": shared allocation is malformed or crosses original-item identity")
+                seen_originals.add(original)
+                allocated += tokens
+                totals[original] += tokens
+                if observed_providers[original] and observed_providers[original] != {provider}:
+                    incomplete[original].add("shared-provider-mismatch:" + cost)
+            if allocated != total:
+                raise Refusal(cost + ": shared allocations do not equal provider total")
+
     arms = {item: assignment.get("arm") for item, assignment in assignments.items()}
     arm_totals = {arm: [] for arm in ("current", "focused")}
     for item, arm in arms.items():
@@ -419,9 +597,8 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
         "incompleteTokenOriginalItems": incomplete_items,
         "incompleteTokenReasons": {item: sorted(incomplete[item]) for item in incomplete_items},
         "tokenComparisonQualified": not incomplete_items,
-        "qualificationPrerequisite": (
-            "versioned producer facts for complete expected dispatch and native-turn inventories, "
-            "complete shared-cost inventory, expected provider, and affirmative usage support"
+        "qualificationPrerequisite": None if not incomplete_items else (
+            "complete verified v3 accounting, native-turn, shared-cost, provider, profile, and support evidence"
         ),
         "claim": "private-snapshot-analysis-no-efficiency-result",
     }

@@ -171,6 +171,43 @@ module RemoteTelemetryTests =
         Assert.True(TelemetryStore.parseBatch bytes |> Result.isError)
 
     [<Fact>]
+    let ``LEARN v3 accounting facts are closed typed and immutable in schema 10`` () =
+        let root = Path.Combine(Path.GetTempPath(), "learn-v3-" + Guid.NewGuid().ToString("N"))
+        let exported = Path.Combine(Path.GetTempPath(), "learn-v3-public-" + Guid.NewGuid().ToString("N") + ".json")
+        let batch ingest revision cutoff sharedTokens =
+            Encoding.UTF8.GetBytes
+                $"""{{"schema":"fsgg.telemetry.ingest/1","ingestId":"{ingest}","sourceIdentity":"producer","generation":"g1","cursor":"{revision}","eventCount":3,"events":[{{"kind":"learn-accounting-inventory/1","identity":"accounting-1","itemId":"LEARN-01.2","revision":{revision},"inventoryId":"accounting-v1","windowId":"window-v1","policyId":"learn-01-current-focused-v1","scope":"whole-original-item","cutoffAt":"{cutoff}","expectedDispatchIds":["dispatch-1"],"expectedSharedCostIds":["shared-1"],"sourceKind":"prospective-independent-roster","sourceDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},{{"kind":"runtime-native-inventory/1","identity":"native-1","itemId":"LEARN-01.2","revision":{revision},"inventoryId":"native-v1","originalItemId":"LEARN-01.2","invocationId":"invocation-1","page":1,"pages":1,"expectedTurnIds":["turn-1"],"expectedProvider":"openai","requestedModel":"gpt-fixed","requestedEffort":"medium","support":"provider-native-final-turn-counters","followupBaseline":0,"capturedAt":"2026-09-27T08:00:00Z","sourceKind":"provider-capability-and-dispatch-roster","sourceDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},{{"kind":"learn-shared-cost/1","identity":"shared-1-fact","itemId":"LEARN-01.2","revision":{revision},"nativeCostId":"shared-1","provider":"openai","providerTotalTokens":20,"allocations":[{{"originalItemId":"LEARN-01.2","tokens":{sharedTokens}}}],"sourceKind":"native-shared-cost","sourceDigest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}]}}"""
+
+        try
+            let original = batch "learn-v3-1" 1 "2026-10-27T08:00:00Z" 20
+            match TelemetryStore.parseBatch original with
+            | Ok parsed -> Assert.Equal(3, parsed.Facts.Length)
+            | Error errors -> Assert.Fail(String.concat "; " errors)
+            Assert.True(batch "learn-v3-bad" 1 "2026-10-27T08:00:00Z" 19 |> TelemetryStore.parseBatch |> Result.isError)
+
+            TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
+            |> Result.defaultWith (String.concat "; " >> failwith)
+            |> ignore
+            Assert.True(TelemetryStoreApplication.ingest root TelemetryStore.ApprovedLocalDurable original |> Result.isOk)
+            Assert.True(TelemetryStoreApplication.ingest root TelemetryStore.ApprovedLocalDurable original |> Result.isOk)
+            let correction = batch "learn-v3-2" 2 "2026-11-27T08:00:00Z" 20
+            match TelemetryStoreApplication.ingest root TelemetryStore.ApprovedLocalDurable correction with
+            | Error errors -> Assert.Contains("immutable after pre-dispatch persistence", String.concat "; " errors)
+            | Ok _ -> Assert.Fail "inventory correction must be refused"
+            TelemetryStoreApplication.exportPublic root TelemetryStore.ApprovedLocalDurable None exported
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            use publicDocument = JsonDocument.Parse(File.ReadAllText exported)
+            Assert.Equal(0, publicDocument.RootElement.GetProperty("items").GetArrayLength())
+            publicDocument.Dispose()
+            TelemetryStoreApplication.exportPublic root TelemetryStore.ApprovedLocalDurable (Some "LEARN-01.2") exported
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            use directDocument = JsonDocument.Parse(File.ReadAllText exported)
+            Assert.Equal(0L, directDocument.RootElement.GetProperty("factCount").GetInt64())
+        finally
+            if Directory.Exists root then Directory.Delete(root, true)
+            if File.Exists exported then File.Delete exported
+
+    [<Fact>]
     let ``LEARN assignment replay is idempotent and redraw is refused by the schema-10 store`` () =
         let root = Path.Combine(Path.GetTempPath(), "learn-observation-" + Guid.NewGuid().ToString("N"))
         let batch ingest revision arm =
@@ -230,6 +267,7 @@ module RemoteTelemetryTests =
             use gzip = new GZipStream(input, CompressionMode.Decompress)
             use canonical = JsonDocument.Parse gzip
             Assert.Equal("workspace-private", canonical.RootElement.GetProperty("workspaceId").GetString())
+            Assert.Equal("fsgg.telemetry.learn-item-detail/3", canonical.RootElement.GetProperty("learningSnapshotSchema").GetString())
             Assert.Equal(3, canonical.RootElement.GetProperty("learningObservations").GetArrayLength())
 
             TelemetryStoreApplication.exportPublic root TelemetryStore.ApprovedLocalDurable None exported
@@ -247,6 +285,54 @@ module RemoteTelemetryTests =
             if Directory.Exists root then Directory.Delete(root, true)
             if File.Exists exported then File.Delete exported
             if File.Exists directExport then File.Delete directExport
+
+    [<Fact>]
+    let ``LEARN store produced v3 snapshot qualifies only from complete typed inventories`` () =
+        let root = Path.Combine(Path.GetTempPath(), "learn-v3-e2e-" + Guid.NewGuid().ToString("N"))
+        let snapshotPath = Path.Combine(Path.GetTempPath(), "learn-v3-snapshot-" + Guid.NewGuid().ToString("N") + ".json")
+        let privateScope =
+            { scope with
+                Workspace = "workspace-v3"
+                Producer = "producer-v3"
+            }
+        let bytes =
+            Encoding.UTF8.GetBytes
+                """{"schema":"fsgg.telemetry.envelope/1","workspaceId":"workspace-v3","producerId":"producer-v3","streamId":"runtime","batchId":"learn-v3-complete","payload":{"schema":"fsgg.telemetry.ingest/1","ingestId":"ignored","sourceIdentity":"producer-v3","generation":"g1","cursor":"1","eventCount":10,"events":[{"kind":"learn-task-snapshot","identity":"snapshot-v3","itemId":"I-001","revision":1,"snapshotId":"task-I-001","rubricVersion":"learn-01-rubric-v1","snapshotDigest":"1111111111111111111111111111111111111111111111111111111111111111","capturedAt":"2025-12-31T23:59:00Z"},{"kind":"learn-context-manifest","identity":"manifest-v3","itemId":"I-001","revision":1,"recipeId":"focused-recipe-v1","recipeDigest":"1111111111111111111111111111111111111111111111111111111111111111","manifestId":"manifest-I-001","manifestDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"kind":"learn-experiment-assignment","identity":"assignment-v3","itemId":"I-001","revision":1,"windowId":"window-2026-01","policyId":"learn-01-current-focused-v1","arm":"current","assignedAt":"2026-01-01T00:00:00Z","deviation":null},{"kind":"learn-accounting-inventory/1","identity":"accounting-v3","itemId":"I-001","revision":1,"inventoryId":"accounting-v1","windowId":"window-2026-01","policyId":"learn-01-current-focused-v1","scope":"whole-original-item","cutoffAt":"2026-02-02T00:00:00Z","expectedDispatchIds":["dispatch-v3"],"expectedSharedCostIds":[],"sourceKind":"prospective-independent-roster","sourceDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"kind":"runtime-native-inventory/1","identity":"native-v3","itemId":"I-001","revision":1,"inventoryId":"native-v1","originalItemId":"I-001","invocationId":"inv-v3","page":1,"pages":1,"expectedTurnIds":["turn-v3"],"expectedProvider":"openai","requestedModel":"gpt-fixed","requestedEffort":"medium","support":"provider-native-final-turn-counters","followupBaseline":0,"capturedAt":"2025-12-31T23:59:30Z","sourceKind":"provider-capability-and-dispatch-roster","sourceDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},{"kind":"runtime-admission","identity":"admission-v3","itemId":"I-001","revision":1,"invocationId":"inv-v3","featureId":"LEARN-01","attemptId":"attempt-v3","parentAttemptId":null,"producerStream":"runtime","requestedModel":"gpt-fixed","requestedEffort":"medium","backend":"codex"},{"kind":"expected-dispatch","identity":"expected-v3","itemId":"I-001","revision":1,"dispatchId":"dispatch-v3","activationId":"activation-v3","relation":"root","parentDispatchId":null,"runtime":"codex","expectedAt":"2026-01-01T00:00:00Z","clockProvenance":"host-wall"},{"kind":"invocation-lineage","identity":"lineage-v3","itemId":"I-001","revision":1,"dispatchId":"dispatch-v3","invocationId":"inv-v3","relation":"root","parentInvocationId":null,"rootInvocationId":"inv-v3","runtime":"codex"},{"kind":"runtime-turn-usage","identity":"usage-v3","itemId":"I-001","revision":1,"invocationId":"inv-v3","threadId":"thread-v3","turnId":"turn-v3","turnSequence":1,"provider":"openai","requestedModel":"gpt-fixed","observedModel":"gpt-fixed","requestedEffort":"medium","observedEffort":"medium","backend":"codex","scope":"completed-turn","provenance":"codex-exec-jsonl","input":99,"cachedInput":0,"output":1,"reasoning":null,"total":100},{"kind":"runtime-terminal","identity":"terminal-v3","itemId":"I-001","revision":1,"invocationId":"inv-v3","threadId":"thread-v3","outcome":"completed","exitCode":0}]}}"""
+
+        try
+            TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.enrollReceiptProducer root TelemetryStore.ApprovedLocalDurable privateScope
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.submitReceipt root TelemetryStore.ApprovedLocalDurable privateScope bytes
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.drainReceipts root TelemetryStore.ApprovedLocalDurable privateScope.Workspace
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            let snapshot =
+                TelemetryStoreApplication.scopedDashboardSnapshot root TelemetryStore.ApprovedLocalDurable privateScope.Workspace None
+                |> Result.defaultWith (String.concat "; " >> failwith)
+            File.WriteAllText(snapshotPath, snapshot)
+
+            let repository = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "..", ".."))
+            let start = ProcessStartInfo("python3")
+            start.WorkingDirectory <- repository
+            start.RedirectStandardOutput <- true
+            start.RedirectStandardError <- true
+            start.ArgumentList.Add(Path.Combine(repository, "tools", "learn-01-analysis.py"))
+            start.ArgumentList.Add(Path.Combine(repository, "policy", "learn-01-current-focused-v1.json"))
+            start.ArgumentList.Add("--observations")
+            start.ArgumentList.Add(snapshotPath)
+            use childProcess = Process.Start start
+            let output = childProcess.StandardOutput.ReadToEnd()
+            let errors = childProcess.StandardError.ReadToEnd()
+            childProcess.WaitForExit()
+            Assert.True(childProcess.ExitCode = 0, errors)
+            use report = JsonDocument.Parse output
+            Assert.True(report.RootElement.GetProperty("tokenComparisonQualified").GetBoolean())
+            Assert.Equal(100L, report.RootElement.GetProperty("providerTotalTokensByArm").GetProperty("current").GetInt64())
+        finally
+            if Directory.Exists root then Directory.Delete(root, true)
+            if File.Exists snapshotPath then File.Delete snapshotPath
 
     [<Fact>]
     let ``client accepts only a complete bound receipt`` () =
