@@ -3283,21 +3283,27 @@ module LiveHandlers =
         | Some pr ->
             let owner = ctx.Owner
 
-            // An explicit `--issue` (owner/repo#n, repo#n, or a URL) names the issue the PR implements —
-            // no branch or closing-ref resolution needed. It is parsed up front because its repo is
-            // authoritative: it decides the repo when `--repo` is absent, and a `--issue` in a DIFFERENT
-            // repo than `--repo` is a straddle the tool refuses (#479).
+            // A positional ref or `--issue` names the declaration directly, bypassing branch and
+            // closing-ref resolution. They are alternatives, never competing authorities (#2858).
+            let namedIssue =
+                match opts.Args, opts.Issue with
+                | [], raw -> Ok raw
+                | [ raw ], None -> Ok(Some raw)
+                | [ _ ], Some _ -> Result.Error "name the issue once, either as <ref> or with --issue"
+                | _ -> Result.Error "expected at most one positional issue ref"
+
             let issueRef =
-                match opts.Issue with
-                | None -> Ok None
-                | Some raw ->
+                match namedIssue with
+                | Result.Error m -> Result.Error m
+                | Ok None -> Ok None
+                | Ok(Some raw) ->
                     match parseRef ctx raw with
                     | Ok r -> Ok(Some r)
                     | Error m -> Result.Error m
 
             match issueRef with
             | Result.Error m ->
-                eprint $"fsgg-coord-engine: verify-paths --issue: %s{m}"
+                eprint $"fsgg-coord-engine: verify-paths issue ref: %s{m}"
                 ExitError
             | Ok issueRef ->
 
@@ -3376,17 +3382,24 @@ module LiveHandlers =
 
                             ExitRed
 
-                    // #479: `--repo` and `--issue` naming DIFFERENT repos is a straddle — a touch-set in one repo
-                    // says nothing about the files changed in the other, and printing a verdict on the wrong subject
-                    // is the exact fail-open this command exists to prevent (#266). It fails CLOSED both by default
-                    // AND under --warn: --warn downgrades a real DRIFT to advisory, but it cannot license a verdict on
-                    // a subject that was never compared. (Only reachable when BOTH flags are present — with `--repo`
-                    // absent, `repo` IS the issue's repo and they agree by construction.)
+                    // Repo mismatch is normally a refusal (#479). Only an explicitly named Coordination
+                    // issue paired with an explicit PR repo can declare paths in that target namespace
+                    // (#2858). --warn never downgrades a refused comparison.
+                    let crossesRepo (issue: Ref) =
+                        not (String.Equals(issue.Repo, repo, StringComparison.OrdinalIgnoreCase))
+                        || not (String.Equals(issue.Owner, owner, StringComparison.OrdinalIgnoreCase))
+
+                    // A Coordination issue can explicitly own paths in a target repository. The caller
+                    // must name BOTH the declaration and the PR repository; an inferred closing ref can
+                    // never authorize this exception. Other cross-repo issues remain outside this contract.
+                    let coordinationSubject (issue: Ref) =
+                        (opts.Issue.IsSome || not (List.isEmpty opts.Args))
+                        && opts.Repo.IsSome
+                        && String.Equals(issue.Owner, owner, StringComparison.OrdinalIgnoreCase)
+                        && String.Equals(issue.Repo, ".github", StringComparison.OrdinalIgnoreCase)
+
                     match issueRef with
-                    | Some ir when
-                        opts.Repo.IsSome
-                        && not (String.Equals(ir.Repo, repo, StringComparison.OrdinalIgnoreCase))
-                        ->
+                    | Some ir when crossesRepo ir && not (coordinationSubject ir) ->
                         // No FSGG-PATHS verdict — the touch-set drift gate greps stdout for one, and a straddle
                         // produces none; it exits non-zero and the gate reads that as the failure it is.
                         eprint (
@@ -3441,7 +3454,7 @@ module LiveHandlers =
                         | Ok(Some issue) ->
                             // Repo-relative touch-sets: a PR in repo A that closes an issue in repo B cannot be checked
                             // against B's paths — those say nothing about A's files (#353).
-                            if not (String.Equals(issue.Repo, repo, StringComparison.OrdinalIgnoreCase)) then
+                            if crossesRepo issue && not (coordinationSubject issue) then
                                 printfn
                                     "FSGG-PATHS SKIP — PR #%d is in %s/%s but implements %s/%s#%d, in another repo — a touch-set there says nothing about the files changed here."
                                     pr
@@ -3457,6 +3470,12 @@ module LiveHandlers =
                                 match Reads.issueBody ctx.Transport issue.Owner issue.Repo issue.Number with
                                 | Error e -> fail e
                                 | Ok body ->
+                                    let declarationRef =
+                                        if crossesRepo issue then
+                                            $"%s{issue.Owner}/%s{issue.Repo}#%d{issue.Number}"
+                                        else
+                                            issue.Short
+
                                     match TouchSet.parse body with
                                     | Undeclared
                                     | DeclaredNone
@@ -3467,7 +3486,7 @@ module LiveHandlers =
                                             "FSGG-PATHS SKIP — %s declares no 'Paths:' touch-set; nothing to verify against."
                                             issue.Short
 
-                                        combine ExitGreen
+                                        if crossesRepo issue then ExitNoVerdict else combine ExitGreen
                                     | Unreadable reason ->
                                         // Should not happen (we just read the body), but the type demands it be handled, and
                                         // "I could not read the body" is an error, never a SKIP.
@@ -3482,7 +3501,12 @@ module LiveHandlers =
                                                 | Unmatchable u -> Some u
                                                 | Matchable _ -> None)
 
-                                        if List.length unmatchable = List.length tokens then
+                                        if crossesRepo issue && not (List.isEmpty unmatchable) then
+                                            eprint
+                                                $"fsgg-coord-engine: verify-paths: %s{issue.Short}'s Paths: declaration has ambiguous or unmatchable tokens for PR repository %s{owner}/%s{repo}; no cross-repo verdict was made."
+
+                                            ExitNoVerdict
+                                        elif List.length unmatchable = List.length tokens then
                                             // EVERY token is unmatchable — the declaration reserves nothing (#273). That is
                                             // INVALID, not "everything drifts": the touch-set is the broken thing.
                                             let bad = String.Join(", ", unmatchable)
@@ -3500,7 +3524,18 @@ module LiveHandlers =
                                             | Error e -> fail e
                                             | Ok files ->
                                                 let classifications =
-                                                    deliveryPathClassifier ctx issue (Declared tokens) files
+                                                    if crossesRepo issue then
+                                                        // The shared classifier binds generated-path authority to the
+                                                        // ISSUE repo. For a Coordination declaration, the changed files
+                                                        // belong to the PR repo instead. Neither this checkout's generated
+                                                        // roster nor the issue's SDD package can exempt target-repo files.
+                                                        Delivery.classifyPaths
+                                                            (Declared tokens)
+                                                            (Delivery.AuthorityKnown("cross-repo:no-generated-exemption", Set.empty))
+                                                            (Delivery.AuthorityKnown("cross-repo:no-sdd-exemption", []))
+                                                            files
+                                                    else
+                                                        deliveryPathClassifier ctx issue (Declared tokens) files
 
                                                 // #498/ADR-0044: the generated, CI-gated artifacts this PR REGENERATED are drift
                                                 // by the letter of the touch-set and are not a finding — §1 forbids declaring
@@ -3585,18 +3620,22 @@ module LiveHandlers =
 
                                                 if projectPathVerdict classifications then
                                                     printfn
-                                                        "FSGG-PATHS OK — PR #%d stays inside the touch-set declared by %s."
+                                                        "FSGG-PATHS OK — PR #%d in %s/%s stays inside issue-body Paths: declared by %s."
                                                         pr
-                                                        issue.Short
+                                                        owner
+                                                        repo
+                                                        declarationRef
 
                                                     reportRegenerated ()
                                                     reportSddPackage ()
                                                     combine ExitGreen
                                                 else
                                                     printfn
-                                                        "FSGG-PATHS DRIFT — PR #%d changes files outside the touch-set declared by %s:"
+                                                        "FSGG-PATHS DRIFT — PR #%d in %s/%s changes files outside issue-body Paths: declared by %s:"
                                                         pr
-                                                        issue.Short
+                                                        owner
+                                                        repo
+                                                        declarationRef
 
                                                     printfn "  undeclared (review):"
 

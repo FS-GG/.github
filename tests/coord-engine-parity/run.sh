@@ -2238,10 +2238,10 @@ fi
 # touch-set, bypassing the branch/closing-ref resolution — and the repo-boundary refusals it enables. That
 # was a real PORT GAP: `verifyPaths` had no `--issue` path at all. It is closed here. `--issue`'s repo is
 # authoritative, which gives three certified properties (case 23 lines 85-89, case 24 lines 56-142):
-#   * #479 — a `--issue` in a DIFFERENT repo than `--repo` is a STRADDLE the tool refuses: a touch-set
-#     there says nothing about the files changed here, so it reaches NO verdict (no OK/DRIFT on stdout for
-#     the drift gate to grep) and FAILS CLOSED — by default AND under --warn (--warn downgrades a real
-#     DRIFT to advisory; it cannot license a verdict on a subject that was never compared).
+#   * #479 — a `--issue` in a DIFFERENT repo than `--repo` is normally a STRADDLE the tool refuses:
+#     a touch-set there says nothing about the files changed here. #2858 adds the explicit
+#     Coordination-owned declaration exception, exercised below. Other straddles still reach NO
+#     verdict by default and under --warn.
 #   * #494 — the issue read is REPO-QUALIFIED: SDD#494 (Scene) and Rendering#494 (Audio) share a NUMBER
 #     but are different touch-sets, so the same PR 7 (Scene files) is OK against one and DRIFT against the
 #     other. A store keyed by number alone could not tell them apart — the fixture keys issues by repo.
@@ -2250,7 +2250,8 @@ fi
 # Re-expressed at the HTTP layer (ADR-0040 §5): bash counts `gh` reads and logs each read's repo; here the
 # fixture serves repo-keyed issue bodies and the PROPERTY (right verdict per repo, refusal across the
 # boundary) is what parity holds — the boundary is enforced by the ANSWER, not by a call count.
-vpsrv -- verifypaths
+VP_AUTHLOG="$(mktemp)"
+vpsrv FSGG_PARITY_REQLOG="$VP_AUTHLOG" -- verifypaths
 if [ -z "$VP_PORT" ]; then bad "verify-paths --issue fixture bound a port"; else
   vpi() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$VP_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" verify-paths "$@" 2>&1; }
 
@@ -2278,6 +2279,58 @@ if [ -z "$VP_PORT" ]; then bad "verify-paths --issue fixture bound a port"; else
   { [ "$mwrc" -ne 0 ] && ! printf '%s' "$mw" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
     && ok "#479: ...and it fails closed under --warn too — a straddle is never advisory (case 23)" \
     || bad "#479 --warn fail-closed parity" "rc=$mwrc: $mw"
+
+  # #2858: the explicit Coordination issue owns paths in the named PR repository. The
+  # branch still points at #70, so an Audio declaration must DRIFT on the Scene PR.
+  c1="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2845)"; c1rc=$?
+  { [ "$c1rc" -eq 0 ] && grep -q 'FSGG-PATHS OK' <<<"$c1" \
+      && grep -q 'FS.GG.SDD' <<<"$c1" \
+      && grep -q 'issue-body Paths: declared by FS-GG/.github#2845' <<<"$c1"; } \
+    && ok "#2858: explicit Coordination issue checks PR-repo files and names the declaration" \
+    || bad "#2858 explicit Coordination OK" "rc=$c1rc: $c1"
+  c2="$(vpi FS-GG/.github#2846 --pr 7 --repo FS.GG.SDD)"; c2rc=$?
+  { [ "$c2rc" -ne 0 ] && grep -q 'FSGG-PATHS DRIFT' <<<"$c2" \
+      && grep -q '.github#2846' <<<"$c2"; } \
+    && ok "#2858: positional ref wins over a conventionally named branch, with inversion" \
+    || bad "#2858 positional inversion" "rc=$c2rc: $c2"
+  c3="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2847)"; c3rc=$?
+  { [ "$c3rc" -ne 0 ] && grep -q "declares no 'Paths:'" <<<"$c3" \
+      && ! grep -qE 'FSGG-PATHS (OK|DRIFT)' <<<"$c3"; } \
+    && ok "#2858: undeclared cross-repo namespace refuses before verdict" \
+    || bad "#2858 undeclared refusal" "rc=$c3rc: $c3"
+  c4="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2848)"; c4rc=$?
+  { [ "$c4rc" -ne 0 ] && grep -q 'ambiguous or unmatchable tokens' <<<"$c4" \
+      && ! grep -qE 'FSGG-PATHS (OK|DRIFT)' <<<"$c4"; } \
+    && ok "#2858: ambiguous cross-repo declaration refuses before verdict" \
+    || bad "#2858 ambiguous refusal" "rc=$c4rc: $c4"
+  c5="$(vpi --pr 7 --issue FS-GG/.github#2845)"; c5rc=$?
+  { [ "$c5rc" -eq 0 ] && grep -q 'FSGG-PATHS OK' <<<"$c5"; } \
+    && ok "#2858: same-repo --issue without --repo remains valid" \
+    || bad "#2858 same-repo --issue regression" "rc=$c5rc: $c5"
+  c6="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2847 --warn)"; c6rc=$?
+  { [ "$c6rc" -ne 0 ] && grep -q "declares no 'Paths:'" <<<"$c6" \
+      && ! grep -qE 'FSGG-PATHS (OK|DRIFT)' <<<"$c6"; } \
+    && ok "#2858: --warn cannot downgrade undeclared cross-repo refusal" \
+    || bad "#2858 undeclared --warn refusal" "rc=$c6rc: $c6"
+  c7="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2848 --warn)"; c7rc=$?
+  { [ "$c7rc" -ne 0 ] && grep -q 'ambiguous or unmatchable tokens' <<<"$c7" \
+      && ! grep -qE 'FSGG-PATHS (OK|DRIFT)' <<<"$c7"; } \
+    && ok "#2858: --warn cannot downgrade ambiguous cross-repo refusal" \
+    || bad "#2858 ambiguous --warn refusal" "rc=$c7rc: $c7"
+  c8="$(vpi FS-GG/.github#2845 --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2846)"; c8rc=$?
+  { [ "$c8rc" -ne 0 ] && grep -q 'name the issue once' <<<"$c8" \
+      && ! grep -qE 'FSGG-PATHS (OK|DRIFT)' <<<"$c8"; } \
+    && ok "#2858: two explicit subjects refuse before a verdict" \
+    || bad "#2858 conflicting subjects" "rc=$c8rc: $c8"
+  : > "$VP_AUTHLOG"
+  c9="$(FSGG_KIT_ROOT="$REPO_ROOT" vpi --pr 12 --repo FS.GG.SDD --issue FS-GG/.github#2845)"; c9rc=$?
+  { [ "$c9rc" -ne 0 ] && grep -q 'FSGG-PATHS DRIFT' <<<"$c9" \
+      && grep -q 'registry/driver-skill-manifest.json' <<<"$c9" \
+      && ! grep -q 'regenerated (expected)' <<<"$c9" \
+      && grep -q 'GET /repos/FS-GG/.github/issues/2845$' "$VP_AUTHLOG" \
+      && ! grep -q 'GET /repos/FS-GG/.github/issues/2845/comments' "$VP_AUTHLOG"; } \
+    && ok "#2858: cross-repo drift never consults the issue repo's generated/SDD exemptions" \
+    || bad "#2858 cross-repo exemption inversion" "rc=$c9rc: $c9; requests=$(cat "$VP_AUTHLOG")"
 
   # 3. #494: the issue read is repo-qualified — same PR, same issue NUMBER, opposite verdict by repo
   #    (case 24 lines 56-62). SDD#494 (Scene) → OK; Rendering#494 (Audio) → DRIFT on PR 7's Scene files.
@@ -2311,6 +2364,7 @@ if [ -z "$VP_PORT" ]; then bad "verify-paths --issue fixture bound a port"; else
     || bad "--issue decides repo parity" "rc=$n1rc: $n1"
   kill "$VP_SRV" 2>/dev/null
 fi
+rm -f "$VP_AUTHLOG"
 
 # 6. --issue BYPASSES the head-ref read entirely (case 23 lines 85-89): even when the PR read 503s — so
 #    the branch could not be resolved — a run that NAMED its issue still reaches a verdict. The fix guards
@@ -2403,6 +2457,12 @@ if [ -z "$VP_PORT" ]; then bad "verify-paths closing-ref fixture bound a port"; 
   printf '%s' "$x9" | grep -q 'FSGG-PATHS SKIP' \
     && ok "verify-paths: a PR that closes NOTHING is still the unlinked SKIP — the PR-keyed arm did not swallow it (case 24)" \
     || bad "unlinked SKIP must survive the closing-ref arm" "$x9"
+  x13="$(vpx --pr 13 --repo FS.GG.SDD)"; x13rc=$?
+  { [ "$x13rc" -eq 0 ] && grep -q 'FSGG-PATHS SKIP' <<<"$x13" \
+      && grep -q 'FS-GG/.github#2845' <<<"$x13" \
+      && ! grep -qE 'FSGG-PATHS (OK|DRIFT)' <<<"$x13"; } \
+    && ok "#2858: an implicit Coordination closing ref cannot authorize a cross-repo verdict" \
+    || bad "#2858 implicit Coordination close" "rc=$x13rc: $x13"
   kill "$VP_SRV" 2>/dev/null
 fi
 
