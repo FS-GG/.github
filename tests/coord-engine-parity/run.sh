@@ -2283,50 +2283,50 @@ if [ -z "$VP_PORT" ]; then bad "verify-paths --issue fixture bound a port"; else
   # #2858: the explicit Coordination issue owns paths in the named PR repository. The
   # branch still points at #70, so an Audio declaration must DRIFT on the Scene PR.
   c1="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2845)"; c1rc=$?
-  { [ "$c1rc" -eq 0 ] && printf '%s' "$c1" | grep -q 'FSGG-PATHS OK' \
-      && printf '%s' "$c1" | grep -q 'FS.GG.SDD' \
-      && printf '%s' "$c1" | grep -q 'issue-body Paths: declared by FS-GG/.github#2845'; } \
+  { [ "$c1rc" -eq 0 ] && grep -q 'FSGG-PATHS OK' <<<"$c1" \
+      && grep -q 'FS.GG.SDD' <<<"$c1" \
+      && grep -q 'issue-body Paths: declared by FS-GG/.github#2845' <<<"$c1"; } \
     && ok "#2858: explicit Coordination issue checks PR-repo files and names the declaration" \
     || bad "#2858 explicit Coordination OK" "rc=$c1rc: $c1"
   c2="$(vpi FS-GG/.github#2846 --pr 7 --repo FS.GG.SDD)"; c2rc=$?
-  { [ "$c2rc" -ne 0 ] && printf '%s' "$c2" | grep -q 'FSGG-PATHS DRIFT' \
-      && printf '%s' "$c2" | grep -q '.github#2846'; } \
+  { [ "$c2rc" -ne 0 ] && grep -q 'FSGG-PATHS DRIFT' <<<"$c2" \
+      && grep -q '.github#2846' <<<"$c2"; } \
     && ok "#2858: positional ref wins over a conventionally named branch, with inversion" \
     || bad "#2858 positional inversion" "rc=$c2rc: $c2"
   c3="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2847)"; c3rc=$?
-  { [ "$c3rc" -ne 0 ] && printf '%s' "$c3" | grep -q "declares no 'Paths:'" \
-      && ! printf '%s' "$c3" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+  { [ "$c3rc" -ne 0 ] && grep -q "declares no 'Paths:'" <<<"$c3" \
+      && ! grep -qE 'FSGG-PATHS (OK|DRIFT)' <<<"$c3"; } \
     && ok "#2858: undeclared cross-repo namespace refuses before verdict" \
     || bad "#2858 undeclared refusal" "rc=$c3rc: $c3"
   c4="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2848)"; c4rc=$?
-  { [ "$c4rc" -ne 0 ] && printf '%s' "$c4" | grep -q 'ambiguous or unmatchable tokens' \
-      && ! printf '%s' "$c4" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+  { [ "$c4rc" -ne 0 ] && grep -q 'ambiguous or unmatchable tokens' <<<"$c4" \
+      && ! grep -qE 'FSGG-PATHS (OK|DRIFT)' <<<"$c4"; } \
     && ok "#2858: ambiguous cross-repo declaration refuses before verdict" \
     || bad "#2858 ambiguous refusal" "rc=$c4rc: $c4"
   c5="$(vpi --pr 7 --issue FS-GG/.github#2845)"; c5rc=$?
-  { [ "$c5rc" -eq 0 ] && printf '%s' "$c5" | grep -q 'FSGG-PATHS OK'; } \
+  { [ "$c5rc" -eq 0 ] && grep -q 'FSGG-PATHS OK' <<<"$c5"; } \
     && ok "#2858: same-repo --issue without --repo remains valid" \
     || bad "#2858 same-repo --issue regression" "rc=$c5rc: $c5"
   c6="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2847 --warn)"; c6rc=$?
-  { [ "$c6rc" -ne 0 ] && printf '%s' "$c6" | grep -q "declares no 'Paths:'" \
-      && ! printf '%s' "$c6" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+  { [ "$c6rc" -ne 0 ] && grep -q "declares no 'Paths:'" <<<"$c6" \
+      && ! grep -qE 'FSGG-PATHS (OK|DRIFT)' <<<"$c6"; } \
     && ok "#2858: --warn cannot downgrade undeclared cross-repo refusal" \
     || bad "#2858 undeclared --warn refusal" "rc=$c6rc: $c6"
   c7="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2848 --warn)"; c7rc=$?
-  { [ "$c7rc" -ne 0 ] && printf '%s' "$c7" | grep -q 'ambiguous or unmatchable tokens' \
-      && ! printf '%s' "$c7" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+  { [ "$c7rc" -ne 0 ] && grep -q 'ambiguous or unmatchable tokens' <<<"$c7" \
+      && ! grep -qE 'FSGG-PATHS (OK|DRIFT)' <<<"$c7"; } \
     && ok "#2858: --warn cannot downgrade ambiguous cross-repo refusal" \
     || bad "#2858 ambiguous --warn refusal" "rc=$c7rc: $c7"
   c8="$(vpi FS-GG/.github#2845 --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2846)"; c8rc=$?
-  { [ "$c8rc" -ne 0 ] && printf '%s' "$c8" | grep -q 'name the issue once' \
-      && ! printf '%s' "$c8" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+  { [ "$c8rc" -ne 0 ] && grep -q 'name the issue once' <<<"$c8" \
+      && ! grep -qE 'FSGG-PATHS (OK|DRIFT)' <<<"$c8"; } \
     && ok "#2858: two explicit subjects refuse before a verdict" \
     || bad "#2858 conflicting subjects" "rc=$c8rc: $c8"
   : > "$VP_AUTHLOG"
   c9="$(FSGG_KIT_ROOT="$REPO_ROOT" vpi --pr 12 --repo FS.GG.SDD --issue FS-GG/.github#2845)"; c9rc=$?
-  { [ "$c9rc" -ne 0 ] && printf '%s' "$c9" | grep -q 'FSGG-PATHS DRIFT' \
-      && printf '%s' "$c9" | grep -q 'registry/driver-skill-manifest.json' \
-      && ! printf '%s' "$c9" | grep -q 'regenerated (expected)' \
+  { [ "$c9rc" -ne 0 ] && grep -q 'FSGG-PATHS DRIFT' <<<"$c9" \
+      && grep -q 'registry/driver-skill-manifest.json' <<<"$c9" \
+      && ! grep -q 'regenerated (expected)' <<<"$c9" \
       && grep -q 'GET /repos/FS-GG/.github/issues/2845$' "$VP_AUTHLOG" \
       && ! grep -q 'GET /repos/FS-GG/.github/issues/2845/comments' "$VP_AUTHLOG"; } \
     && ok "#2858: cross-repo drift never consults the issue repo's generated/SDD exemptions" \
@@ -2458,9 +2458,9 @@ if [ -z "$VP_PORT" ]; then bad "verify-paths closing-ref fixture bound a port"; 
     && ok "verify-paths: a PR that closes NOTHING is still the unlinked SKIP — the PR-keyed arm did not swallow it (case 24)" \
     || bad "unlinked SKIP must survive the closing-ref arm" "$x9"
   x13="$(vpx --pr 13 --repo FS.GG.SDD)"; x13rc=$?
-  { [ "$x13rc" -eq 0 ] && printf '%s' "$x13" | grep -q 'FSGG-PATHS SKIP' \
-      && printf '%s' "$x13" | grep -q 'FS-GG/.github#2845' \
-      && ! printf '%s' "$x13" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+  { [ "$x13rc" -eq 0 ] && grep -q 'FSGG-PATHS SKIP' <<<"$x13" \
+      && grep -q 'FS-GG/.github#2845' <<<"$x13" \
+      && ! grep -qE 'FSGG-PATHS (OK|DRIFT)' <<<"$x13"; } \
     && ok "#2858: an implicit Coordination closing ref cannot authorize a cross-repo verdict" \
     || bad "#2858 implicit Coordination close" "rc=$x13rc: $x13"
   kill "$VP_SRV" 2>/dev/null
