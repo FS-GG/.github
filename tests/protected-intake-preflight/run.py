@@ -43,6 +43,16 @@ def evidence() -> dict:
 
 
 class ProtectedIntakePreflightTests(unittest.TestCase):
+    def paged(self, pages):
+        calls = []
+
+        def fetch(path):
+            calls.append(path)
+            return pages[len(calls) - 1]
+
+        values = MODULE._paged_dicts("/repos/FS-GG/.github/issues/1/comments", "comments", fetch)
+        return values, calls
+
     def test_candidate_is_inert_intake_specific_and_not_an_accepted_anchor(self):
         policy, anchor = MODULE.static_candidate()
         self.assertFalse(policy["activation"])
@@ -169,13 +179,56 @@ class ProtectedIntakePreflightTests(unittest.TestCase):
         source = MODULE.SCRIPT_PATH.read_text(encoding="utf-8")
         self.assertIn("urllib.request.urlopen", source)
         self.assertIn('"User-Agent": "fsgg-protected-intake-preflight/1"', source)
-        self.assertIn("for page in range(1, 101)", source)
+        self.assertIn("for _ in range(100)", source)
         request_source = source.split("def _get", 1)[1].split("def _json", 1)[0]
         self.assertNotIn("Authorization", request_source)
         self.assertNotIn("GH_TOKEN", source)
         self.assertNotIn("subprocess", source)
         self.assertNotIn("/git/refs", source)
         self.assertIn("/git/ref/heads/fsgg/v2/journal/operation/13", source)
+
+    def test_short_page_with_next_is_followed_until_terminal_link(self):
+        endpoint = "https://api.github.com/repos/FS-GG/.github/issues/1/comments"
+        values, calls = self.paged(
+            [
+                (200, [{"id": 1}], {"Link": f'<{endpoint}?per_page=100&page=2>; rel="next"'}),
+                (200, [{"id": 2}], {}),
+            ]
+        )
+        self.assertEqual([{"id": 1}, {"id": 2}], values)
+        self.assertEqual(2, len(calls))
+        self.assertTrue(calls[1].endswith("page=2"))
+
+    def test_malformed_population_row_refuses_complete_census(self):
+        with self.assertRaisesRegex(MODULE.Refusal, "malformed row"):
+            self.paged([(200, [{"id": 1}, "not-an-object"], {})])
+
+    def test_escaped_link_refuses_complete_census(self):
+        escaped = (
+            'https://api.github.com/repos/FS-GG/.github/issues/1/comments'
+            '?per_page=100&page=%32'
+        )
+        with self.assertRaisesRegex(MODULE.Refusal, "malformed or escaped"):
+            self.paged([(200, [{"id": 1}], {"Link": f'<{escaped}>; rel="next"'})])
+
+    def test_multi_page_population_validates_scope_sequence_and_terminal_page(self):
+        endpoint = "https://api.github.com/repos/FS-GG/.github/issues/1/comments"
+        links = [
+            f'<{endpoint}?per_page=100&page=2>; rel="next", <{endpoint}?per_page=100&page=3>; rel="last"',
+            f'<{endpoint}?per_page=100&page=1>; rel="first", <{endpoint}?per_page=100&page=1>; rel="prev", <{endpoint}?per_page=100&page=3>; rel="next", <{endpoint}?per_page=100&page=3>; rel="last"',
+            f'<{endpoint}?per_page=100&page=1>; rel="first", <{endpoint}?per_page=100&page=2>; rel="prev", <{endpoint}?per_page=100&page=3>; rel="last"',
+        ]
+        values, calls = self.paged(
+            [(200, [{"id": page}], {"Link": links[page - 1]}) for page in range(1, 4)]
+        )
+        self.assertEqual([1, 2, 3], [item["id"] for item in values])
+        self.assertEqual(3, len(calls))
+
+    def test_duplicate_page_link_refuses_complete_census(self):
+        endpoint = "https://api.github.com/repos/FS-GG/.github/issues/1/comments"
+        link = f'<{endpoint}?per_page=100&page=1>; rel="next"'
+        with self.assertRaisesRegex(MODULE.Refusal, "repeated or skipped"):
+            self.paged([(200, [{"id": 1}], {"Link": link})])
 
 
 if __name__ == "__main__":

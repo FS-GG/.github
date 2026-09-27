@@ -255,16 +255,92 @@ def _json(path: str) -> object:
     return value
 
 
-def _comments(repository: str, number: int) -> list[dict]:
+def _header(headers: dict, name: str) -> str | None:
+    if any(not isinstance(key, str) for key in headers):
+        raise Refusal("pagination headers malformed")
+    values = [value for key, value in headers.items() if key.lower() == name.lower()]
+    if len(values) > 1 or (values and not isinstance(values[0], str)):
+        raise Refusal("pagination headers malformed")
+    return values[0] if values else None
+
+
+def _link_relations(headers: dict) -> dict[str, str]:
+    raw = _header(headers, "Link")
+    if raw is None:
+        return {}
+    if not raw or any(character in raw for character in ("\\", "\r", "\n")):
+        raise Refusal("pagination Link malformed or escaped")
+    relations: dict[str, str] = {}
+    for part in raw.split(","):
+        match = re.fullmatch(
+            r'\s*<([^<>\s]+)>\s*;\s*rel="(next|prev|first|last)"\s*', part
+        )
+        if match is None:
+            raise Refusal("pagination Link malformed or escaped")
+        url, relation = match.groups()
+        if relation in relations:
+            raise Refusal("pagination Link has duplicate relation")
+        relations[relation] = url
+    return relations
+
+
+def _page_from_link(url: str, endpoint: str) -> int:
+    if "%" in url:
+        raise Refusal("pagination Link malformed or escaped")
+    parsed = urllib.parse.urlsplit(url)
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc != "api.github.com"
+        or parsed.path != endpoint
+        or parsed.fragment
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise Refusal("pagination Link left the requested endpoint")
+    query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    if len(query) != 2 or {key for key, _ in query} != {"per_page", "page"}:
+        raise Refusal("pagination Link query malformed")
+    values = dict(query)
+    if values["per_page"] != "100" or not re.fullmatch(r"[1-9][0-9]*", values["page"]):
+        raise Refusal("pagination Link query malformed")
+    return int(values["page"])
+
+
+def _paged_dicts(endpoint: str, population: str, fetch=_get) -> list[dict]:
+    if not endpoint.startswith("/repos/") or "?" in endpoint or "%" in endpoint:
+        raise Refusal(f"{population} request identity malformed")
     values: list[dict] = []
-    for page in range(1, 101):
-        result = _json(f"/repos/{repository}/issues/{number}/comments?per_page=100&page={page}")
-        if not isinstance(result, list):
-            raise Refusal("native approval comment population malformed")
-        values.extend(item for item in result if isinstance(item, dict))
-        if len(result) < 100:
+    visited: set[int] = set()
+    page = 1
+    for _ in range(100):
+        if page in visited:
+            raise Refusal(f"{population} pagination repeated a page")
+        visited.add(page)
+        status, result, headers = fetch(f"{endpoint}?per_page=100&page={page}")
+        if status != 200 or not isinstance(result, list) or not isinstance(headers, dict):
+            raise Refusal(f"{population} population malformed")
+        if any(not isinstance(item, dict) for item in result):
+            raise Refusal(f"{population} population contains a malformed row")
+        values.extend(result)
+        relations = _link_relations(headers)
+        linked_pages = {
+            relation: _page_from_link(url, endpoint) for relation, url in relations.items()
+        }
+        if "first" in linked_pages and linked_pages["first"] != 1:
+            raise Refusal(f"{population} pagination first page drift")
+        if "prev" in linked_pages and linked_pages["prev"] != page - 1:
+            raise Refusal(f"{population} pagination previous page drift")
+        if "next" not in linked_pages:
+            if "last" in linked_pages and linked_pages["last"] != page:
+                raise Refusal(f"{population} terminal page drift")
             return values
-    raise Refusal("native approval comment population exceeded bound")
+        next_page = linked_pages["next"]
+        if next_page != page + 1 or next_page in visited:
+            raise Refusal(f"{population} pagination repeated or skipped a page")
+        if "last" in linked_pages and linked_pages["last"] < next_page:
+            raise Refusal(f"{population} pagination last page drift")
+        page = next_page
+    raise Refusal(f"{population} population exceeded bound")
 
 
 def collect_live(env: dict[str, str]) -> dict:
@@ -299,8 +375,10 @@ def collect_live(env: dict[str, str]) -> dict:
             raise Refusal(f"protected source file differs from checkout: {relative}")
         file_hashes[relative] = sha256(raw)
 
-    pulls = _json(f"/repos/{repository}/commits/{source}/pulls?per_page=100")
-    if not isinstance(pulls, list) or len(pulls) != 1 or not isinstance(pulls[0], dict):
+    pulls = _paged_dicts(
+        f"/repos/{repository}/commits/{source}/pulls", "native pull request association"
+    )
+    if len(pulls) != 1:
         raise Refusal("protected source has no unique native pull request")
     pull = pulls[0]
     if pull.get("state") != "closed" or pull.get("merged_at") is None or pull.get("merge_commit_sha") != source:
@@ -308,7 +386,9 @@ def collect_live(env: dict[str, str]) -> dict:
     number = pull.get("number")
     if not isinstance(number, int) or number <= 0:
         raise Refusal("protected source pull request identity malformed")
-    comments = _comments(repository, number)
+    comments = _paged_dicts(
+        f"/repos/{repository}/issues/{number}/comments", "native approval comment"
+    )
     review_records = []
     for comment in comments:
         body = comment.get("body")
