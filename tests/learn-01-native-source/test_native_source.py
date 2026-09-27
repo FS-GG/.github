@@ -7,9 +7,12 @@ import importlib.util
 import json
 import os
 import pathlib
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
+from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("learn_native", ROOT / "tools" / "learn_01_native_source.py")
@@ -118,6 +121,32 @@ class FakeTransport:
 
 
 class NativeSourceTests(unittest.TestCase):
+    def test_app_server_partial_line_obeys_read_deadline(self):
+        script = (
+            "import sys, time\n"
+            "sys.stdin.buffer.readline()\n"
+            "sys.stdout.buffer.write(b'{\"id\":1,\"result\":')\n"
+            "sys.stdout.buffer.flush()\n"
+            "time.sleep(2)\n"
+        )
+        transport = native._AppServerTransport.__new__(native._AppServerTransport)
+        transport._next = 1
+        transport._pending = bytearray()
+        transport._process = subprocess.Popen(
+            [sys.executable, "-u", "-c", script], stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0,
+        )
+        try:
+            started = time.monotonic()
+            with patch.object(native, "APP_SERVER_READ_TIMEOUT", 0.25):
+                with self.assertRaisesRegex(native.NativeSourceError, "read timed out"):
+                    transport.request("thread/read", {"threadId": ROOT_ID})
+            self.assertLess(time.monotonic() - started, 1.5)
+        finally:
+            transport.close()
+            transport._process.stdin.close()
+            transport._process.stdout.close()
+
     def make_sources(self, base: pathlib.Path, mutate=None):
         sessions = base / "sessions" / "2026" / "09"
         sessions.mkdir(parents=True)

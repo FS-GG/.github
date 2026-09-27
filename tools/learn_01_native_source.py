@@ -35,6 +35,7 @@ MAX_THREADS = 128
 MAX_PAGES = 16
 PAGE_LIMIT = 100
 MAX_RESPONSE_BYTES = 1024 * 1024
+APP_SERVER_READ_TIMEOUT = 8.0
 MAX_ROLLOUT_BYTES = 32 * 1024 * 1024
 MAX_RECORD_BYTES = 1024 * 1024
 MAX_CAPTURE_BYTES = 64 * 1024 * 1024
@@ -105,6 +106,7 @@ class _AppServerTransport:
 
     def __init__(self, command: str = "codex") -> None:
         self._next = 1
+        self._pending = bytearray()
         try:
             self._process = subprocess.Popen(
                 [command, "app-server"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -130,13 +132,23 @@ class _AppServerTransport:
         request = _canonical({"id": request_id, "method": method, "params": params}) + b"\n"
         process.stdin.write(request)
         process.stdin.flush()
-        deadline = time.monotonic() + 8.0
+        deadline = time.monotonic() + APP_SERVER_READ_TIMEOUT
         while time.monotonic() < deadline:
-            ready = select.select([process.stdout], [], [], max(0.0, deadline - time.monotonic()))[0]
-            if not ready:
-                break
-            raw = process.stdout.readline(MAX_RESPONSE_BYTES + 1)
-            if not raw or len(raw) > MAX_RESPONSE_BYTES:
+            newline = self._pending.find(b"\n")
+            if newline < 0:
+                if len(self._pending) > MAX_RESPONSE_BYTES:
+                    raise NativeSourceError("App Server response is missing or oversized")
+                ready = select.select([process.stdout], [], [], max(0.0, deadline - time.monotonic()))[0]
+                if not ready:
+                    break
+                chunk = os.read(process.stdout.fileno(), min(65536, MAX_RESPONSE_BYTES + 1 - len(self._pending)))
+                if not chunk:
+                    raise NativeSourceError("App Server response is missing or oversized")
+                self._pending.extend(chunk)
+                continue
+            raw = bytes(self._pending[:newline + 1])
+            del self._pending[:newline + 1]
+            if len(raw) > MAX_RESPONSE_BYTES:
                 raise NativeSourceError("App Server response is missing or oversized")
             try:
                 envelope = _loads(raw, "App Server response")
