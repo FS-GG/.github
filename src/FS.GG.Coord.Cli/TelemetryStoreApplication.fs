@@ -1622,6 +1622,22 @@ PRAGMA user_version=10;
                     "$evidence", box complication.Evidence
                     "$revision", box fact.Revision
                 ]
+        | TelemetryStore.LearnTaskSnapshot _
+        | TelemetryStore.LearnContextManifest _
+        | TelemetryStore.LearnExperimentAssignment _
+        | TelemetryStore.LearnAccountingInventory _ ->
+            // LEARN observations are immutable canonical ingest facts. Keeping them in
+            // the existing append/replay ledger avoids a second execution-intent journal.
+            let item = fact.ItemId |> Option.defaultWith (fun () -> invalidOp "LEARN observation requires itemId")
+            let count =
+                scalarCount
+                    "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind=$kind;"
+                    [ "$item", box item; "$kind", box fact.Kind ]
+            if count <> 1L then
+                invalidOp $"%s{fact.Kind} must be unique per item"
+        | TelemetryStore.RuntimeNativeInventory _
+        | TelemetryStore.RuntimeNativeInventorySource _
+        | TelemetryStore.LearnSharedCost _ -> ()
 
         match fact.ItemId, fact.Payload with
         | Some item,
@@ -2530,6 +2546,10 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                 | Some(_, digest, _) when digest = fact.ContentDigest -> replayed <- replayed + 1L
                                 | Some(_, _, revision) when fact.Revision <= revision ->
                                     invalidOp $"native fact identity conflict: %s{fact.Kind}/%s{fact.Identity}"
+                                | Some(oldKind, _, _) when oldKind.StartsWith("learn-", StringComparison.Ordinal)
+                                    || oldKind = "runtime-native-inventory/1"
+                                    || oldKind = "runtime-native-inventory-source/1" ->
+                                    invalidOp $"%s{oldKind} is immutable after pre-dispatch persistence"
                                 | Some(oldKind, oldDigest, revision) ->
                                     use correction = connection.CreateCommand()
 
@@ -4198,7 +4218,9 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
 
         {
             ItemId = itemId
-            FactCount = count "ingest_facts"
+            FactCount =
+                runtimeScalar
+                    "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1');"
             UsageObservations = usageCount
             DeliveryObservations = count "delivery_observations"
             Input = sum "input_count" + runtimeSum "input_count"
@@ -4596,9 +4618,21 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                     $" WHERE %s{column} IN (SELECT item_id FROM budget_population_facts WHERE item_id=$selected OR original_item_id=$selected UNION SELECT $selected)"
 
                             let itemFilter = whereItem "item_id"
+                            let learningItemFilter = if itemId.IsSome then " AND item_id=$selected" else ""
 
                             let table name order =
                                 rows ($"SELECT * FROM %s{name}%s{itemFilter} ORDER BY %s{order} LIMIT 10001;")
+
+                            // Establish bounded completeness before writing selection.complete.
+                            // LIMIT alone cannot distinguish an exact boundary from truncation.
+                            use learningCount = connection.CreateCommand()
+                            learningCount.Transaction <- transaction
+                            learningCount.CommandText <-
+                                $"SELECT count(*) FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1')%s{learningItemFilter};"
+                            itemId |> Option.iter (parameter learningCount "$selected")
+
+                            if Convert.ToInt64(learningCount.ExecuteScalar()) > 10000L then
+                                raise (InvalidOperationException("learning observation snapshot row bound exceeded"))
 
                             let summaries = JsonArray()
 
@@ -4610,6 +4644,18 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
 
                             let content = JsonObject()
                             let selectionMode = if itemId.IsSome then "item" else "all"
+
+                            // Bind retained private snapshots to the store's actual workspace.
+                            // An unprovisioned legacy store remains available for ordinary local
+                            // inspection, but cannot be mistaken for an experiment input.
+                            let snapshotWorkspace =
+                                scalarText
+                                    connection
+                                    "SELECT coalesce((SELECT value FROM store_metadata WHERE key='receiptWorkspace'),'');"
+
+                            content["workspaceId"] <- JsonValue.Create(snapshotWorkspace)
+                            content["learningSnapshotSchema"] <-
+                                JsonValue.Create("fsgg.telemetry.learn-item-detail/3")
 
                             content["selection"] <-
                                 JsonSerializer.SerializeToNode
@@ -4668,6 +4714,9 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                 table "activity_usage_attributions" "item_id,usage_identity"
                                 "complications", table "complication_events" "item_id,occurred_at,identity"
                                 "reviews", table "process_reviews" "item_id,scope,attempt_id,fact_revision"
+                                "learningObservations",
+                                rows
+                                    ($"SELECT identity,kind,item_id,revision,content_digest,canonical FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1')%s{learningItemFilter} ORDER BY item_id,kind,identity LIMIT 10001;")
                             ]
                             |> List.iter (fun (name, value) -> content[name] <- value)
 
@@ -4683,6 +4732,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                             let revision = CanonicalJson.sha256 canonicalBytes
                             let envelope = JsonObject()
                             envelope["schema"] <- JsonValue.Create("fsgg.telemetry.item-detail/2")
+                            envelope["workspaceId"] <- JsonValue.Create(snapshotWorkspace)
                             envelope["observedAt"] <- JsonValue.Create(DateTimeOffset.UtcNow.ToString("O"))
                             envelope["revision"] <- JsonValue.Create(revision)
 
@@ -5489,7 +5539,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                         use command = connection.CreateCommand()
 
                         command.CommandText <-
-                            "SELECT DISTINCT item_id FROM ingest_facts WHERE item_id IS NOT NULL ORDER BY item_id;"
+                            "SELECT DISTINCT item_id FROM ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1') ORDER BY item_id;"
 
                         use reader = command.ExecuteReader()
                         let items = ResizeArray<string>()

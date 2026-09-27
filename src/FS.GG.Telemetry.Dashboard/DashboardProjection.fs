@@ -537,15 +537,18 @@ module DashboardProjection =
 
                 let names =
                     set["schema"
+                        "workspaceId"
                         "observedAt"
                         "revision"
                         "canonicalSnapshotGzip"
                         "operational"]
 
-                if not (exactNames envelope names) then
+                if not (exactNames envelope names || exactNames envelope (Set.remove "workspaceId" names)) then
                     Error InvalidEnvelope
                 elif text "schema" envelope <> Some "fsgg.telemetry.item-detail/2" then
                     Error UnsupportedSchema
+                elif text "workspaceId" envelope |> Option.exists (fun workspace -> workspace <> "" && workspace <> authorizedWorkspace) then
+                    Error UnauthorizedWorkspace
                 else
                     match
                         text "revision" envelope, text "canonicalSnapshotGzip" envelope, property "operational" envelope
@@ -618,7 +621,9 @@ module DashboardProjection =
                                     let snapshot = snapshotDocument.RootElement
 
                                     let expected =
-                                        set["selection"
+                                        set["workspaceId"
+                                            "learningSnapshotSchema"
+                                            "selection"
                                             "store"
                                             "items"
                                             "summaries"
@@ -646,11 +651,23 @@ module DashboardProjection =
                                             "activities"
                                             "activityUsageAttributions"
                                             "complications"
-                                            "reviews"]
+                                            "reviews"
+                                            "learningObservations"]
+
+                                    let legacyExpected =
+                                        expected
+                                        |> Set.remove "workspaceId"
+                                        |> Set.remove "learningSnapshotSchema"
+                                        |> Set.remove "learningObservations"
+
+                                    let learningSnapshot = exactNames snapshot expected
 
                                     match property "selection" snapshot, property "store" snapshot with
                                     | Some selection, Some store when
-                                        exactNames snapshot expected
+                                        (learningSnapshot || exactNames snapshot legacyExpected)
+                                        && (not learningSnapshot
+                                            || (text "learningSnapshotSchema" snapshot = Some "fsgg.telemetry.learn-item-detail/3"
+                                                && text "workspaceId" snapshot = text "workspaceId" envelope))
                                         && (text "mode" selection
                                             |> Option.exists (fun mode -> mode = "all" || mode = "item"))
                                         && property "complete" selection
@@ -688,6 +705,12 @@ module DashboardProjection =
                                                     "complications"
                                                     "reviews"
                                                 ]
+
+                                            let arrayNames =
+                                                if learningSnapshot then
+                                                    "learningObservations" :: arrayNames
+                                                else
+                                                    arrayNames
 
                                             let allArrays = arrayNames |> List.map (fun n -> array n snapshot)
 

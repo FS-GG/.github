@@ -311,6 +311,23 @@ module TelemetryStore =
         | ActivitySpan of ActivitySpan
         | ActivityUsageAttribution of ActivityUsageAttribution
         | Complication of Complication
+        | LearnTaskSnapshot of
+            snapshotId: string * rubricVersion: string * snapshotDigest: string * capturedAt: string
+        | LearnContextManifest of
+            recipeId: string * recipeDigest: string * manifestId: string * manifestDigest: string
+        | LearnExperimentAssignment of
+            windowId: string * policyId: string * arm: string * assignedAt: string * deviation: string option
+        | LearnAccountingInventory of
+            inventoryId: string * windowId: string * policyId: string * cutoffAt: string *
+            capturedAt: string * ciApplicability: string * expectedDispatchIds: string * expectedSharedCostIds: string * sourceDigest: string
+        | RuntimeNativeInventory of
+            inventoryId: string * originalItemId: string * invocationId: string * page: int64 * pages: int64 *
+            expectedTurnIds: string * expectedProvider: string * requestedModel: string * requestedEffort: string *
+            followupBaseline: int64 * capturedAt: string * sourceDigest: string
+        | RuntimeNativeInventorySource of
+            inventoryId: string * originalItemId: string * invocationId: string * sourceDigest: string * sourceBinding: string
+        | LearnSharedCost of
+            nativeCostId: string * provider: string * providerTotalTokens: int64 * allocations: string * sourceDigest: string
 
     type Fact =
         {
@@ -518,6 +535,128 @@ module TelemetryStore =
             | None -> CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(value.GetRawText()))
         | true, value when value.ValueKind = JsonValueKind.Array -> Error $"%s{label}.%s{name} exceeds 8 entries"
         | _ -> Error $"%s{label}.%s{name} must be an array"
+
+    let private requiredUniqueTextRoster (label: string) (node: JsonElement) (name: string) =
+        match node.TryGetProperty name with
+        | true, value when value.ValueKind = JsonValueKind.Array && value.GetArrayLength() <= 256 ->
+            let entries =
+                value.EnumerateArray()
+                |> Seq.mapi (fun index item ->
+                    if item.ValueKind <> JsonValueKind.String then
+                        Error $"%s{label}.%s{name}[%d{index}] must be a string"
+                    else
+                        nonEmpty $"%s{label}.%s{name}[%d{index}]" (item.GetString())
+                        |> Result.bind (boundedText $"%s{label}.%s{name}[%d{index}]" 128))
+                |> Seq.toList
+
+            match sequence entries with
+            | Error errors -> Error(String.concat "; " errors)
+            | Ok texts when texts.Length <> (texts |> Set.ofList |> Set.count) ->
+                Error $"%s{label}.%s{name} contains duplicate identities"
+            | Ok _ -> CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(value.GetRawText()))
+        | true, value when value.ValueKind = JsonValueKind.Array ->
+            Error $"%s{label}.%s{name} exceeds 256 entries"
+        | _ -> Error $"%s{label}.%s{name} must be an array"
+
+    let private requiredAllocations (label: string) (node: JsonElement) (name: string) =
+        match node.TryGetProperty name with
+        | true, value when value.ValueKind = JsonValueKind.Array && value.GetArrayLength() > 0 && value.GetArrayLength() <= 64 ->
+            let entries =
+                value.EnumerateArray()
+                |> Seq.mapi (fun index item ->
+                    let itemLabel = $"%s{label}.%s{name}[%d{index}]"
+                    if item.ValueKind <> JsonValueKind.Object then
+                        Error $"%s{itemLabel} must be an object"
+                    else
+                        match closed itemLabel (Set [ "originalItemId"; "tokens" ]) item,
+                              requiredText itemLabel item "originalItemId",
+                              requiredInt itemLabel item "tokens" with
+                        | Ok(), Ok original, Ok tokens -> Ok(original, tokens)
+                        | values -> Error(sprintf "%A" values))
+                |> Seq.toList
+
+            match sequence entries with
+            | Error errors -> Error(String.concat "; " errors)
+            | Ok allocations when
+                allocations.Length <> (allocations |> List.map fst |> Set.ofList |> Set.count) ->
+                Error $"%s{label}.%s{name} contains duplicate original-item identities"
+            | Ok allocations ->
+                match
+                    allocations
+                    |> List.map snd
+                    |> List.fold (fun state count -> state |> Result.bind (fun total -> checkedAdd label total count)) (Ok 0L)
+                with
+                | Error reason -> Error reason
+                | Ok total ->
+                    CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(value.GetRawText()))
+                    |> Result.map (fun canonical -> canonical, total)
+        | true, value when value.ValueKind = JsonValueKind.Array ->
+            Error $"%s{label}.%s{name} must contain between 1 and 64 entries"
+        | _ -> Error $"%s{label}.%s{name} must be an array"
+
+    let private requiredNativeSourceBinding
+        (label: string)
+        (node: JsonElement)
+        (name: string)
+        (invocation: string)
+        (revision: int64)
+        =
+        match node.TryGetProperty name with
+        | true, envelope when envelope.ValueKind = JsonValueKind.Object ->
+            let envelopeLabel = $"%s{label}.%s{name}"
+            match
+                closed envelopeLabel (Set [ "schema"; "producerIdentity"; "sha256"; "bytesBase64" ]) envelope,
+                requiredText envelopeLabel envelope "schema",
+                requiredText envelopeLabel envelope "producerIdentity",
+                requiredText envelopeLabel envelope "sha256",
+                requiredText envelopeLabel envelope "bytesBase64"
+            with
+            | Ok(), Ok schema, Ok producer, Ok digest, Ok encoded when
+                schema = "fsgg.telemetry.native-inventory-source-binding/1"
+                && producer = "fsgg-work-roadmap-native-collector/1"
+                && Regex.IsMatch(digest, "^[0-9a-f]{64}$")
+                ->
+                try
+                    let bytes = Convert.FromBase64String encoded
+                    if bytes.Length = 0 || bytes.Length > 16384 || CanonicalJson.sha256 bytes <> digest then
+                        Error $"%s{envelopeLabel} bytes or digest are invalid"
+                    else
+                        use document = JsonDocument.Parse bytes
+                        let binding = document.RootElement
+                        let fields =
+                            Set [ "schema"; "producerIdentity"; "capturedAt"; "hostSource"; "rootInvocationId";
+                                  "invocationId"; "parentThreadId"; "threadId"; "orderedTurnIds"; "revision" ]
+                        match
+                            closed $"%s{envelopeLabel}.bytes" fields binding,
+                            requiredText envelopeLabel binding "schema",
+                            requiredText envelopeLabel binding "producerIdentity",
+                            requiredTimestamp envelopeLabel binding "capturedAt",
+                            requiredText envelopeLabel binding "hostSource",
+                            requiredText envelopeLabel binding "rootInvocationId",
+                            requiredText envelopeLabel binding "invocationId",
+                            requiredText envelopeLabel binding "parentThreadId",
+                            requiredText envelopeLabel binding "threadId",
+                            requiredUniqueTextRoster envelopeLabel binding "orderedTurnIds",
+                            requiredInt envelopeLabel binding "revision",
+                            CanonicalJson.canonicalize bytes
+                        with
+                        | Ok(), Ok bindingSchema, Ok bindingProducer, Ok _, Ok hostSource, Ok _, Ok bindingInvocation,
+                          Ok parentThread, Ok thread, Ok _, Ok bindingRevision, Ok canonical when
+                            canonical = Encoding.UTF8.GetString bytes
+                            && bindingSchema = schema
+                            && bindingProducer = producer
+                            && hostSource = "codex-app-server:thread/turns/list"
+                            && bindingInvocation = invocation
+                            && bindingRevision = revision
+                            && Regex.IsMatch(parentThread, "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+                            && Regex.IsMatch(thread, "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+                            -> CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(envelope.GetRawText()))
+                        | _ -> Error $"%s{envelopeLabel} canonical bytes are malformed or unbound"
+                with
+                | :? FormatException
+                | :? JsonException -> Error $"%s{envelopeLabel} bytes are malformed"
+            | _ -> Error $"%s{envelopeLabel} is malformed"
+        | _ -> Error $"%s{label}.%s{name} must be an object"
 
     let private requiredEvidence (label: string) (node: JsonElement) (name: string) =
         match node.TryGetProperty name with
@@ -1851,6 +1990,147 @@ module TelemetryStore =
                                 Evidence = evidence
                             })
                 | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has unsupported trigger or cause"
+                | values -> Error(sprintf "%A" values)
+            | "learn-task-snapshot" ->
+                match
+                    requiredText label node "snapshotId",
+                    requiredText label node "rubricVersion",
+                    requiredText label node "snapshotDigest",
+                    requiredTimestamp label node "capturedAt"
+                with
+                | Ok snapshot, Ok rubric, Ok digest, Ok captured when itemId.IsSome && Regex.IsMatch(digest, "^[0-9a-f]{64}$") ->
+                    make
+                        [ "snapshotId"; "rubricVersion"; "snapshotDigest"; "capturedAt" ]
+                        (LearnTaskSnapshot(snapshot, rubric, digest, captured))
+                | Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label}.snapshotDigest must be 64 lowercase hexadecimal characters"
+                | values -> Error(sprintf "%A" values)
+            | "learn-context-manifest" ->
+                match
+                    requiredText label node "recipeId",
+                    requiredText label node "recipeDigest",
+                    requiredText label node "manifestId",
+                    requiredText label node "manifestDigest"
+                with
+                | Ok recipe, Ok recipeDigest, Ok manifest, Ok manifestDigest when itemId.IsSome
+                    &&
+                    Regex.IsMatch(recipeDigest, "^[0-9a-f]{64}$")
+                    && Regex.IsMatch(manifestDigest, "^[0-9a-f]{64}$")
+                    ->
+                    make
+                        [ "recipeId"; "recipeDigest"; "manifestId"; "manifestDigest" ]
+                        (LearnContextManifest(recipe, recipeDigest, manifest, manifestDigest))
+                | Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} recipe and manifest digests must be 64 lowercase hexadecimal characters"
+                | values -> Error(sprintf "%A" values)
+            | "learn-experiment-assignment" ->
+                match
+                    requiredText label node "windowId",
+                    requiredText label node "policyId",
+                    requiredText label node "arm",
+                    requiredTimestamp label node "assignedAt",
+                    optionalText label node "deviation"
+                with
+                | Ok window, Ok policy, Ok arm, Ok assigned, Ok deviation when itemId.IsSome
+                    && (arm = "current" || arm = "focused")
+                    && (deviation |> Option.forall (fun value -> value.Length <= 512))
+                    ->
+                    make
+                        [ "windowId"; "policyId"; "arm"; "assignedAt"; "deviation" ]
+                        (LearnExperimentAssignment(window, policy, arm, assigned, deviation))
+                | Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has invalid arm or deviation"
+                | values -> Error(sprintf "%A" values)
+            | "learn-accounting-inventory/1" ->
+                match
+                    requiredText label node "inventoryId",
+                    requiredText label node "windowId",
+                    requiredText label node "policyId",
+                    requiredText label node "scope",
+                    requiredTimestamp label node "cutoffAt",
+                    requiredTimestamp label node "capturedAt",
+                    requiredText label node "ciApplicability",
+                    requiredUniqueTextRoster label node "expectedDispatchIds",
+                    requiredUniqueTextRoster label node "expectedSharedCostIds",
+                    requiredText label node "sourceKind",
+                    requiredText label node "sourceDigest"
+                with
+                | Ok inventory, Ok window, Ok policy, Ok scope, Ok cutoff, Ok captured, Ok ci, Ok dispatches, Ok shared, Ok source, Ok digest
+                    when itemId.IsSome && scope = "whole-original-item"
+                        && (ci = "required" || ci = "not-applicable")
+                        && source = "prospective-independent-roster"
+                        && Regex.IsMatch(digest, "^[0-9a-f]{64}$") && digest <> String('0', 64) ->
+                    make
+                        [ "inventoryId"; "windowId"; "policyId"; "scope"; "cutoffAt"; "capturedAt"; "ciApplicability"; "expectedDispatchIds";
+                          "expectedSharedCostIds"; "sourceKind"; "sourceDigest" ]
+                        (LearnAccountingInventory(inventory, window, policy, cutoff, captured, ci, dispatches, shared, digest))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
+                    Error $"%s{label} has unsupported scope, CI applicability, source kind, or digest"
+                | values -> Error(sprintf "%A" values)
+            | "runtime-native-inventory/1" ->
+                match
+                    requiredText label node "inventoryId",
+                    requiredText label node "originalItemId",
+                    requiredText label node "invocationId",
+                    requiredInt label node "page",
+                    requiredInt label node "pages",
+                    requiredUniqueTextRoster label node "expectedTurnIds",
+                    requiredText label node "expectedProvider",
+                    requiredText label node "requestedModel",
+                    requiredText label node "requestedEffort",
+                    requiredText label node "support",
+                    requiredInt label node "followupBaseline",
+                    requiredTimestamp label node "capturedAt",
+                    requiredText label node "sourceKind",
+                    requiredText label node "sourceDigest"
+                with
+                | Ok inventory, Ok original, Ok invocation, Ok page, Ok pages, Ok turns, Ok provider,
+                  Ok model, Ok effort, Ok support, Ok followups, Ok captured, Ok source, Ok digest
+                    when itemId.IsSome && page > 0L && pages > 0L && page <= pages
+                        && support = "provider-native-final-turn-counters"
+                        && source = "provider-capability-and-dispatch-roster"
+                        && Regex.IsMatch(digest, "^[0-9a-f]{64}$") && digest <> String('0', 64) ->
+                    make
+                        [ "inventoryId"; "originalItemId"; "invocationId"; "page"; "pages"; "expectedTurnIds";
+                          "expectedProvider"; "requestedModel"; "requestedEffort"; "support"; "followupBaseline";
+                          "capturedAt"; "sourceKind"; "sourceDigest" ]
+                        (RuntimeNativeInventory(inventory, original, invocation, page, pages, turns, provider, model, effort,
+                                                followups, captured, digest))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
+                    Error $"%s{label} has invalid paging, support, source kind, or digest"
+                | values -> Error(sprintf "%A" values)
+            | "runtime-native-inventory-source/1" ->
+                match
+                    requiredText label node "inventoryId",
+                    requiredText label node "originalItemId",
+                    requiredText label node "invocationId",
+                    requiredText label node "sourceDigest"
+                with
+                | Ok inventory, Ok original, Ok invocation, Ok digest when itemId.IsSome
+                    && Regex.IsMatch(digest, "^[0-9a-f]{64}$") && digest <> String('0', 64) ->
+                    requiredNativeSourceBinding label node "sourceBinding" invocation revision
+                    |> Result.bind (fun binding ->
+                        make
+                            [ "inventoryId"; "originalItemId"; "invocationId"; "sourceDigest"; "sourceBinding" ]
+                            (RuntimeNativeInventorySource(inventory, original, invocation, digest, binding)))
+                | Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has invalid source digest"
+                | values -> Error(sprintf "%A" values)
+            | "learn-shared-cost/1" ->
+                match
+                    requiredText label node "nativeCostId",
+                    requiredText label node "provider",
+                    requiredInt label node "providerTotalTokens",
+                    requiredAllocations label node "allocations",
+                    requiredText label node "sourceKind",
+                    requiredText label node "sourceDigest"
+                with
+                | Ok cost, Ok provider, Ok total, Ok(allocations, allocated), Ok source, Ok digest
+                    when itemId.IsSome && source = "native-shared-cost"
+                        && Regex.IsMatch(digest, "^[0-9a-f]{64}$") && digest <> String('0', 64) ->
+                    if allocated <> total then
+                        Error $"%s{label}.allocations must sum to providerTotalTokens"
+                    else
+                        make
+                            [ "nativeCostId"; "provider"; "providerTotalTokens"; "allocations"; "sourceKind"; "sourceDigest" ]
+                            (LearnSharedCost(cost, provider, total, allocations, digest))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has invalid source kind or digest"
                 | values -> Error(sprintf "%A" values)
             | _ -> Error $"%s{label}.kind is unsupported"
         | values -> Error(sprintf "%A" values)

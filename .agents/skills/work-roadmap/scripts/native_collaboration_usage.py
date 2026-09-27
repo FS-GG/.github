@@ -6,22 +6,73 @@ retained. Conversation items and other rollout entries are never decoded.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import os
 import pathlib
 import re
 import select
+import stat
 import subprocess
 import time
 from collections import defaultdict
+from datetime import datetime, timezone
 
 
 UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
 COUNTS = ("input_tokens", "cached_input_tokens", "output_tokens", "reasoning_output_tokens", "total_tokens")
+TERMINAL_TURN_STATUSES = frozenset({"completed", "failed", "interrupted"})
+INVENTORY_PROVENANCE = "codex-app-server-thread-turns-list"
+USAGE_PROVENANCE = "codex-native-token-usage-record"
+INVENTORY_HOST_SOURCE = "codex-app-server:thread/turns/list"
+COLLECTOR_PRODUCER = "fsgg-work-roadmap-native-collector/1"
+SOURCE_BINDING_SCHEMA = "fsgg.telemetry.native-inventory-source-binding/1"
+MAX_EVIDENCE_BYTES = 512 * 1024
 
 
 class HostUnavailable(Exception):
     """The host cannot prove an exact child identity or final usage."""
+
+
+def inventory_digest(thread_id: str, inventory: list[dict[str, object]]) -> str:
+    roster = [{key: row[key] for key in ("turnId", "turnSequence", "status", "terminal")}
+              for row in inventory]
+    projection = json.dumps({"threadId": thread_id, "turnInventory": roster}, sort_keys=True,
+                            separators=(",", ":"), ensure_ascii=True).encode("ascii")
+    return hashlib.sha256(projection).hexdigest()
+
+
+def source_binding_bytes(*, captured_at: str, root_invocation_id: str, invocation_id: str,
+                         parent_thread_id: str, thread_id: str, ordered_turn_ids: list[str],
+                         revision: int) -> bytes:
+    if (not all(isinstance(value, str) and value and len(value) <= 256
+                for value in (root_invocation_id, invocation_id)) or
+            not UUID.fullmatch(parent_thread_id) or not UUID.fullmatch(thread_id) or
+            type(revision) is not int or revision < 0 or
+            any(not isinstance(value, str) or not UUID.fullmatch(value) for value in ordered_turn_ids) or
+            len(set(ordered_turn_ids)) != len(ordered_turn_ids)):
+        raise HostUnavailable("native source binding identity is malformed")
+    return json.dumps({
+        "schema": SOURCE_BINDING_SCHEMA,
+        "producerIdentity": COLLECTOR_PRODUCER,
+        "capturedAt": captured_at,
+        "hostSource": INVENTORY_HOST_SOURCE,
+        "rootInvocationId": root_invocation_id,
+        "invocationId": invocation_id,
+        "parentThreadId": parent_thread_id,
+        "threadId": thread_id,
+        "orderedTurnIds": ordered_turn_ids,
+        "revision": revision,
+    }, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+
+
+def exact_evidence_digest(chunks: list[bytes], binding: bytes) -> str:
+    digest = hashlib.sha256()
+    for chunk in [binding, *chunks]:
+        digest.update(len(chunk).to_bytes(8, "big"))
+        digest.update(chunk)
+    return digest.hexdigest()
 
 
 def counts(value: object) -> dict[str, int]:
@@ -45,23 +96,27 @@ class AppServer:
         try:
             self.process = subprocess.Popen(
                 [command, "app-server"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL, text=True, bufsize=1,
+                stderr=subprocess.DEVNULL, text=False, bufsize=0,
             )
             self.request(1, "initialize", {
                 "clientInfo": {"name": "fsgg_telemetry", "title": "FS-GG Telemetry", "version": "1"},
                 "capabilities": {"experimentalApi": True},
             })
             assert self.process.stdin is not None
-            self.process.stdin.write('{"method":"initialized","params":{}}\n')
+            self.process.stdin.write(b'{"method":"initialized","params":{}}\n')
             self.process.stdin.flush()
         except (OSError, ValueError, AssertionError, HostUnavailable) as error:
             self.close()
             raise HostUnavailable("Codex App Server is unavailable") from error
 
-    def request(self, request_id: int, method: str, params: dict[str, object]) -> dict[str, object]:
+    def request_with_evidence(self, request_id: int, method: str,
+                              params: dict[str, object]) -> tuple[dict[str, object], bytes, bytes]:
         if self.process.stdin is None or self.process.stdout is None:
             raise HostUnavailable("Codex App Server stream is unavailable")
-        self.process.stdin.write(json.dumps({"id": request_id, "method": method, "params": params}, separators=(",", ":")) + "\n")
+        request_bytes = json.dumps(
+            {"id": request_id, "method": method, "params": params},
+            separators=(",", ":")).encode("utf-8") + b"\n"
+        self.process.stdin.write(request_bytes)
         self.process.stdin.flush()
         deadline = time.monotonic() + 8
         while time.monotonic() < deadline:
@@ -72,14 +127,17 @@ class AppServer:
                 break
             try:
                 response = json.loads(line)
-            except json.JSONDecodeError:
+            except (UnicodeError, json.JSONDecodeError):
                 continue
             if response.get("id") == request_id:
                 result = response.get("result")
                 if not isinstance(result, dict) or response.get("error") is not None:
                     raise HostUnavailable("Codex App Server refused a read-only usage request")
-                return result
+                return result, request_bytes, line
         raise HostUnavailable("Codex App Server read timed out")
+
+    def request(self, request_id: int, method: str, params: dict[str, object]) -> dict[str, object]:
+        return self.request_with_evidence(request_id, method, params)[0]
 
     def close(self) -> None:
         process = getattr(self, "process", None)
@@ -99,12 +157,45 @@ class AppServer:
         self.close()
 
 
-def page(server: AppServer, method: str, request_id: int, params: dict[str, object]) -> list[dict[str, object]]:
+def request_with_evidence(server: AppServer, request_id: int, method: str,
+                          params: dict[str, object]) -> tuple[dict[str, object], bytes, bytes]:
+    exact = getattr(server, "request_with_evidence", None)
+    if callable(exact):
+        return exact(request_id, method, params)
+    result = server.request(request_id, method, params)
+    # Test doubles use this deterministic wire representation. Production is
+    # always AppServer.request_with_evidence and retains the exact line read.
+    request_raw = json.dumps({"id": request_id, "method": method, "params": params},
+                             separators=(",", ":"), ensure_ascii=True).encode("ascii") + b"\n"
+    response_raw = json.dumps({"id": request_id, "result": result},
+                              separators=(",", ":"), ensure_ascii=True).encode("ascii") + b"\n"
+    return result, request_raw, response_raw
+
+
+def app_evidence_record(method: str, params: dict[str, object], request_raw: bytes,
+                        response_raw: bytes) -> dict[str, object]:
+    return {"method": method, "threadId": params.get("threadId"),
+            "requestCursor": params.get("cursor"),
+            "requestSha256": hashlib.sha256(request_raw).hexdigest(),
+            "requestBytesBase64": base64.b64encode(request_raw).decode("ascii"),
+            "responseSha256": hashlib.sha256(response_raw).hexdigest(),
+            "responseBytesBase64": base64.b64encode(response_raw).decode("ascii")}
+
+
+def page_with_evidence(server: AppServer, method: str, request_id: int,
+                       params: dict[str, object]) -> tuple[list[dict[str, object]], list[dict[str, object]], list[dict[str, object]]]:
     rows: list[dict[str, object]] = []
+    paging: list[dict[str, object]] = []
+    evidence: list[dict[str, object]] = []
     cursor: str | None = None
+    seen_cursors: set[str] = set()
     for offset in range(10):
         request = dict(params, cursor=cursor, limit=100)
-        result = server.request(request_id + offset, method, request)
+        result, request_raw, response_raw = request_with_evidence(server, request_id + offset, method, request)
+        evidence.append(app_evidence_record(method, request, request_raw, response_raw))
+        if sum(len(base64.b64decode(row["requestBytesBase64"])) +
+               len(base64.b64decode(row["responseBytesBase64"])) for row in evidence) > MAX_EVIDENCE_BYTES:
+            raise HostUnavailable("native App Server evidence exceeds the bound")
         data = result.get("data")
         if not isinstance(data, list) or any(not isinstance(row, dict) for row in data):
             raise HostUnavailable("Codex App Server returned malformed pagination")
@@ -112,21 +203,76 @@ def page(server: AppServer, method: str, request_id: int, params: dict[str, obje
         if len(rows) > 1000:
             raise HostUnavailable("native child inventory exceeds the bound")
         next_cursor = result.get("nextCursor")
+        paging.append({"page": offset + 1, "requestCursor": cursor,
+                       "nextCursor": next_cursor, "rowCount": len(data)})
         if next_cursor is None:
-            return rows
-        if not isinstance(next_cursor, str) or not next_cursor or next_cursor == cursor:
+            return rows, paging, evidence
+        if (not isinstance(next_cursor, str) or not next_cursor or next_cursor == cursor or
+                next_cursor in seen_cursors):
             raise HostUnavailable("Codex App Server pagination is invalid")
+        seen_cursors.add(next_cursor)
         cursor = next_cursor
     raise HostUnavailable("Codex App Server pagination exceeds the bound")
 
 
-def rollout_usage(path: str, thread_id: str, turn_ids: set[str], codex_home: pathlib.Path) -> dict[str, list[dict[str, object]]]:
-    source = pathlib.Path(path)
-    root = (codex_home / "sessions").resolve()
-    if source.is_symlink() or not source.is_file() or not source.resolve().is_relative_to(root) or source.stat().st_size > 128 * 1024 * 1024:
+def page(server: AppServer, method: str, request_id: int,
+         params: dict[str, object]) -> list[dict[str, object]]:
+    """Retain the original list-returning helper contract for existing callers."""
+    return page_with_evidence(server, method, request_id, params)[0]
+
+
+def _open_directory_chain(path: pathlib.Path) -> int:
+    absolute = pathlib.Path(os.path.abspath(path))
+    descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        for component in absolute.parts[1:]:
+            next_descriptor = os.open(
+                component, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
+                dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except (OSError, ValueError):
+        os.close(descriptor)
+        raise
+
+
+def _open_rollout(path: str, codex_home: pathlib.Path):
+    source = pathlib.Path(os.path.abspath(path))
+    sessions = pathlib.Path(os.path.abspath(codex_home / "sessions"))
+    try:
+        relative = source.absolute().relative_to(sessions)
+    except ValueError as error:
+        raise HostUnavailable("native usage rollout is unavailable or outside the private host") from error
+    if not relative.parts:
         raise HostUnavailable("native usage rollout is unavailable or outside the private host")
+    descriptors: list[int] = []
+    try:
+        current = _open_directory_chain(sessions)
+        descriptors.append(current)
+        for component in relative.parts[:-1]:
+            current = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
+                              dir_fd=current)
+            descriptors.append(current)
+        file_descriptor = os.open(relative.parts[-1], os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+                                  dir_fd=current)
+        opened = os.fstat(file_descriptor)
+        if not stat.S_ISREG(opened.st_mode) or opened.st_size > 128 * 1024 * 1024:
+            os.close(file_descriptor)
+            raise HostUnavailable("native usage rollout is unavailable or outside the private host")
+        return os.fdopen(file_descriptor, "rb", closefd=True)
+    except (OSError, ValueError) as error:
+        raise HostUnavailable("native usage rollout is unavailable or outside the private host") from error
+    finally:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+
+
+def rollout_usage(path: str, thread_id: str, turn_ids: set[str], codex_home: pathlib.Path
+                  ) -> tuple[dict[str, list[dict[str, object]]], list[bytes]]:
     records: dict[str, list[dict[str, object]]] = defaultdict(list)
-    with source.open("rb") as stream:
+    evidence: list[bytes] = []
+    with _open_rollout(path, codex_home) as stream:
         for line in stream:
             if len(line) > 1024 * 1024 or not re.search(rb'"type"\s*:\s*"token_usage_record"', line[:256]):
                 continue
@@ -141,25 +287,38 @@ def rollout_usage(path: str, thread_id: str, turn_ids: set[str], codex_home: pat
             response = value.get("response_id")
             if value.get("thread_id") != thread_id or turn not in turn_ids or not isinstance(response, str) or not response:
                 raise HostUnavailable("native usage record belongs to another thread or turn")
+            evidence.append(line)
+            if sum(map(len, evidence)) > MAX_EVIDENCE_BYTES:
+                raise HostUnavailable("native rollout evidence exceeds the bound")
             records[turn].append({"response": response, "usage": counts(value.get("usage")),
                                   "turnTotal": counts(value.get("turn_token_usage"))})
-    return records
+    return records, evidence
 
 
-def collect(parent_thread_id: str, native_id: str, *, command: str = "codex",
+def collect(parent_thread_id: str, native_id: str, *, root_invocation_id: str,
+            invocation_id: str, revision: int, command: str = "codex",
             codex_home: pathlib.Path | None = None) -> dict[str, object]:
     if not UUID.fullmatch(parent_thread_id) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", native_id):
         raise HostUnavailable("native parent or child identity is unavailable")
     home = codex_home or pathlib.Path(os.environ.get("CODEX_HOME", pathlib.Path.home() / ".codex"))
     with AppServer(command) as server:
-        children = page(server, "thread/list", 100, {"parentThreadId": parent_thread_id,
-                                                     "sourceKinds": ["subAgent", "subAgentThreadSpawn"]})
+        children, _, app_evidence = page_with_evidence(
+            server, "thread/list", 100, {"parentThreadId": parent_thread_id,
+                                         "sourceKinds": ["subAgent", "subAgentThreadSpawn"]})
         matches = []
         for child in children:
             child_id = child.get("id")
             if not isinstance(child_id, str) or not UUID.fullmatch(child_id):
                 continue
-            thread = server.request(200, "thread/read", {"threadId": child_id, "includeTurns": False}).get("thread")
+            thread_params = {"threadId": child_id, "includeTurns": False}
+            thread_result, thread_request, thread_raw = request_with_evidence(
+                server, 200, "thread/read", thread_params)
+            app_evidence.append(app_evidence_record(
+                "thread/read", thread_params, thread_request, thread_raw))
+            if sum(len(base64.b64decode(row["requestBytesBase64"])) +
+                   len(base64.b64decode(row["responseBytesBase64"])) for row in app_evidence) > MAX_EVIDENCE_BYTES:
+                raise HostUnavailable("native App Server evidence exceeds the bound")
+            thread = thread_result.get("thread")
             if not isinstance(thread, dict):
                 raise HostUnavailable("native child thread metadata is unavailable")
             spawn = ((thread.get("source") or {}).get("subAgent") or {}).get("thread_spawn")
@@ -172,19 +331,63 @@ def collect(parent_thread_id: str, native_id: str, *, command: str = "codex",
             raise HostUnavailable("native child identity is missing or ambiguous")
         thread = matches[0]
         thread_id = thread["id"]
-        turns = page(server, "thread/turns/list", 300, {"threadId": thread_id,
-                                                       "sortDirection": "asc", "itemsView": "notLoaded"})
-    if not turns:
-        return {"threadId": thread_id, "turns": [], "allTurnIds": [], "complete": False, "model": thread.get("model"),
-                "effort": thread.get("reasoningEffort")}
+        turns, inventory_paging, turn_evidence = page_with_evidence(
+            server, "thread/turns/list", 300,
+            {"threadId": thread_id, "sortDirection": "asc", "itemsView": "notLoaded"})
+        app_evidence.extend(turn_evidence)
+        if sum(len(base64.b64decode(row["requestBytesBase64"])) +
+               len(base64.b64decode(row["responseBytesBase64"])) for row in app_evidence) > MAX_EVIDENCE_BYTES:
+            raise HostUnavailable("native App Server evidence exceeds the bound")
+        inventory_captured_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    provider = thread.get("modelProvider")
+    if provider is not None and (not isinstance(provider, str) or provider != provider.strip() or
+                                 not provider or len(provider) > 128):
+        raise HostUnavailable("native provider metadata is malformed")
+    provider_provenance = "codex-app-server-thread.modelProvider" if provider is not None else None
+    model, effort = thread.get("model"), thread.get("reasoningEffort")
+    profile_available = all(isinstance(value, str) and value == value.strip() and value and len(value) <= 128
+                            for value in (provider, model, effort))
+    app_records = app_evidence
+    app_bytes = [raw for row in app_records for raw in (
+        base64.b64decode(row["requestBytesBase64"]), base64.b64decode(row["responseBytesBase64"]))]
     ids = [turn.get("id") for turn in turns]
     if len(set(ids)) != len(ids) or any(not isinstance(value, str) or not UUID.fullmatch(value) for value in ids):
         raise HostUnavailable("native turn identities are malformed")
-    records = rollout_usage(str(thread.get("path")), thread_id, set(ids), home)
+    binding = source_binding_bytes(
+        captured_at=inventory_captured_at, root_invocation_id=root_invocation_id,
+        invocation_id=invocation_id, parent_thread_id=parent_thread_id,
+        thread_id=thread_id, ordered_turn_ids=ids, revision=revision)
+    binding_record = {
+        "schema": SOURCE_BINDING_SCHEMA,
+        "producerIdentity": COLLECTOR_PRODUCER,
+        "sha256": hashlib.sha256(binding).hexdigest(),
+        "bytesBase64": base64.b64encode(binding).decode("ascii"),
+    }
+    if not turns:
+        inventory = []
+        roster_digest = inventory_digest(thread_id, inventory)
+        evidence_digest = exact_evidence_digest(app_bytes, binding)
+        return {"threadId": thread_id, "turns": [], "allTurnIds": [], "turnInventory": inventory,
+                "inventoryProvenance": INVENTORY_PROVENANCE, "usageProvenance": USAGE_PROVENANCE,
+                "inventoryHostSource": INVENTORY_HOST_SOURCE, "inventoryPaging": inventory_paging,
+                "inventoryCapturedAt": inventory_captured_at, "inventoryRosterDigest": roster_digest,
+                "inventorySourceDigest": evidence_digest,
+                "complete": False, "provider": provider, "providerProvenance": provider_provenance,
+                "model": model, "effort": effort, "collectorProducer": COLLECTOR_PRODUCER,
+                "sourceBinding": binding_record,
+                "appServerResponses": app_records, "rolloutRecords": []}
+    records, rollout_evidence = rollout_usage(str(thread.get("path")), thread_id, set(ids), home)
     observations = []
-    complete = True
+    inventory = []
+    complete = profile_available and len(inventory_paging) == 1
     for sequence, turn in enumerate(turns, 1):
-        if turn.get("status") not in {"completed", "failed", "interrupted"}:
+        status = turn.get("status")
+        if not isinstance(status, str) or not status or len(status) > 64:
+            raise HostUnavailable("native turn status is malformed")
+        row = {"turnId": turn["id"], "turnSequence": sequence, "status": status,
+               "terminal": status in TERMINAL_TURN_STATUSES, "usageAvailable": False}
+        inventory.append(row)
+        if status not in TERMINAL_TURN_STATUSES:
             complete = False
             continue
         rows = records.get(turn["id"], [])
@@ -192,14 +395,27 @@ def collect(parent_thread_id: str, native_id: str, *, command: str = "codex",
             complete = False
             continue
         responses = {}
-        for row in rows:
+        for usage_row in rows:
             # A later native record may correct the same response. Its final
             # counters replace the earlier observation, never add to it.
-            responses[row["response"]] = row["usage"]
+            responses[usage_row["response"]] = usage_row["usage"]
         total = {key: sum(value[key] for value in responses.values()) for key in COUNTS}
         if total != rows[-1]["turnTotal"]:
             complete = False
             continue
+        row["usageAvailable"] = True
         observations.append({"turnId": turn["id"], "turnSequence": sequence, "usage": total})
-    return {"threadId": thread_id, "turns": observations, "allTurnIds": ids, "complete": complete,
-            "model": thread.get("model"), "effort": thread.get("reasoningEffort")}
+    roster_digest = inventory_digest(thread_id, inventory)
+    evidence_digest = exact_evidence_digest(app_bytes + rollout_evidence, binding)
+    rollout_records = [{"sha256": hashlib.sha256(raw).hexdigest(),
+                        "bytesBase64": base64.b64encode(raw).decode("ascii")} for raw in rollout_evidence]
+    return {"threadId": thread_id, "turns": observations, "allTurnIds": ids,
+            "turnInventory": inventory, "inventoryProvenance": INVENTORY_PROVENANCE,
+            "usageProvenance": USAGE_PROVENANCE, "complete": complete,
+            "inventoryHostSource": INVENTORY_HOST_SOURCE, "inventoryPaging": inventory_paging,
+            "inventoryCapturedAt": inventory_captured_at, "inventoryRosterDigest": roster_digest,
+            "inventorySourceDigest": evidence_digest,
+            "provider": provider, "providerProvenance": provider_provenance,
+            "model": model, "effort": effort, "collectorProducer": COLLECTOR_PRODUCER,
+            "sourceBinding": binding_record,
+            "appServerResponses": app_records, "rolloutRecords": rollout_records}

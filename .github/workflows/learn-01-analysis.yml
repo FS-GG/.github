@@ -5,17 +5,33 @@ on:
     paths:
       - '.github/workflows/learn-01-analysis.yml'
       - 'docs/research/learn-01-current-focused-contract.md'
+      - 'docs/research/learn-01-observation-contract.md'
+      - 'docs/research/learn-01-native-source-contract.md'
       - 'policy/learn-01-current-focused-v1.json'
       - 'tools/learn-01-analysis.py'
       - 'tests/learn-01-analysis/**'
+      - 'tests/learn-01-native-source/**'
+      - 'tools/learn-01-native-source.py'
+      - 'tools/learn_01_native_source.py'
+      - 'src/FS.GG.Coord.Core/TelemetryStore.fs*'
+      - 'src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs'
+      - 'tests/FS.GG.Telemetry.Tests/RemoteTelemetryTests.fs'
   push:
     branches: [main]
     paths:
       - '.github/workflows/learn-01-analysis.yml'
       - 'docs/research/learn-01-current-focused-contract.md'
+      - 'docs/research/learn-01-observation-contract.md'
+      - 'docs/research/learn-01-native-source-contract.md'
       - 'policy/learn-01-current-focused-v1.json'
       - 'tools/learn-01-analysis.py'
       - 'tests/learn-01-analysis/**'
+      - 'tests/learn-01-native-source/**'
+      - 'tools/learn-01-native-source.py'
+      - 'tools/learn_01_native_source.py'
+      - 'src/FS.GG.Coord.Core/TelemetryStore.fs*'
+      - 'src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs'
+      - 'tests/FS.GG.Telemetry.Tests/RemoteTelemetryTests.fs'
   workflow_dispatch:
 
 permissions:
@@ -35,3 +51,4 @@ jobs:
         with:
           python-version: "3.x"
       - run: bash tests/learn-01-analysis/run.sh
+      - run: bash tests/learn-01-native-source/run.sh

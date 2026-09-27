@@ -303,6 +303,23 @@ module TelemetryStore =
         | ActivitySpan of ActivitySpan
         | ActivityUsageAttribution of ActivityUsageAttribution
         | Complication of Complication
+        | LearnTaskSnapshot of
+            snapshotId: string * rubricVersion: string * snapshotDigest: string * capturedAt: string
+        | LearnContextManifest of
+            recipeId: string * recipeDigest: string * manifestId: string * manifestDigest: string
+        | LearnExperimentAssignment of
+            windowId: string * policyId: string * arm: string * assignedAt: string * deviation: string option
+        | LearnAccountingInventory of
+            inventoryId: string * windowId: string * policyId: string * cutoffAt: string *
+            capturedAt: string * ciApplicability: string * expectedDispatchIds: string * expectedSharedCostIds: string * sourceDigest: string
+        | RuntimeNativeInventory of
+            inventoryId: string * originalItemId: string * invocationId: string * page: int64 * pages: int64 *
+            expectedTurnIds: string * expectedProvider: string * requestedModel: string * requestedEffort: string *
+            followupBaseline: int64 * capturedAt: string * sourceDigest: string
+        | RuntimeNativeInventorySource of
+            inventoryId: string * originalItemId: string * invocationId: string * sourceDigest: string * sourceBinding: string
+        | LearnSharedCost of
+            nativeCostId: string * provider: string * providerTotalTokens: int64 * allocations: string * sourceDigest: string
 
     type Fact =
         {

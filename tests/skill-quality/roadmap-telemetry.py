@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import importlib.util
+import copy
+import hashlib
 import json
 import os
 import pathlib
@@ -25,7 +27,194 @@ SPEC.loader.exec_module(MODULE)
 DEFAULTS = sys.modules["fsgg_telemetry_defaults"]
 
 
+def native_snapshot(thread, identifiers, turns, *, complete=True, provider="openai",
+                    model="gpt-6-astra", effort="high", root_invocation="root-invocation",
+                    invocation="invocation", parent_thread="11111111-1111-4111-8111-111111111111",
+                    revision=0):
+    observed = {row["turnId"] for row in turns}
+    inventory = [{"turnId": turn, "turnSequence": sequence,
+                  "status": "completed", "terminal": True,
+                  "usageAvailable": turn in observed}
+                 for sequence, turn in enumerate(identifiers, 1)]
+    roster = [{key: row[key] for key in ("turnId", "turnSequence", "status", "terminal")}
+              for row in inventory]
+    roster_digest = hashlib.sha256(json.dumps(
+        {"threadId": thread, "turnInventory": roster}, sort_keys=True,
+        separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()
+    paging = [{"page": 1, "requestCursor": None, "nextCursor": None,
+               "rowCount": len(inventory)}]
+    captured_at = "2026-09-27T12:00:00Z"
+    app_values = [
+        {"id": 100, "result": {"data": [{"id": thread, "status": "completed"}], "nextCursor": None}},
+        {"id": 200, "result": {"thread": {"id": thread, "modelProvider": provider,
+          "model": model, "reasoningEffort": effort}}},
+        {"id": 300, "result": {"data": [{"id": row["turnId"], "status": row["status"]}
+                                            for row in inventory], "nextCursor": None}},
+    ]
+    requests = [
+        {"id": 100, "method": "thread/list", "params": {"cursor": None, "limit": 100}},
+        {"id": 200, "method": "thread/read", "params": {"threadId": thread, "includeTurns": False}},
+        {"id": 300, "method": "thread/turns/list",
+         "params": {"threadId": thread, "cursor": None, "limit": 100}},
+    ]
+    request_raw = [json.dumps(value, separators=(",", ":")).encode() + b"\n" for value in requests]
+    app_raw = [json.dumps(value, separators=(",", ":")).encode() + b"\n" for value in app_values]
+    rollout_raw = [json.dumps({"type": "token_usage_record", "payload": {
+        "thread_id": thread, "turn_id": row["turnId"], "response_id": "fixture-response",
+        "usage": row["usage"], "turn_token_usage": row["usage"]}},
+        sort_keys=True, separators=(",", ":")).encode() + b"\n" for row in turns]
+    source = hashlib.sha256()
+    binding_document = {
+        "schema": "fsgg.telemetry.native-inventory-source-binding/1",
+        "producerIdentity": "fsgg-work-roadmap-native-collector/1",
+        "capturedAt": captured_at,
+        "hostSource": "codex-app-server:thread/turns/list",
+        "rootInvocationId": root_invocation,
+        "invocationId": invocation,
+        "parentThreadId": parent_thread,
+        "threadId": thread,
+        "orderedTurnIds": list(identifiers),
+        "revision": revision,
+    }
+    binding = json.dumps(binding_document, sort_keys=True, separators=(",", ":")).encode()
+    app_chunks = [raw for pair in zip(request_raw, app_raw) for raw in pair]
+    for raw in [binding, *app_chunks, *rollout_raw]:
+        source.update(len(raw).to_bytes(8, "big"))
+        source.update(raw)
+    source_digest = source.hexdigest()
+    records = lambda rows: [{"sha256": hashlib.sha256(raw).hexdigest(),
+                             "bytesBase64": MODULE.base64.b64encode(raw).decode()} for raw in rows]
+    app_records = [{"method": request["method"], "threadId": request["params"].get("threadId"),
+                    "requestCursor": request["params"].get("cursor"),
+                    "requestSha256": hashlib.sha256(request_bytes).hexdigest(),
+                    "requestBytesBase64": MODULE.base64.b64encode(request_bytes).decode(),
+                    "responseSha256": hashlib.sha256(response_bytes).hexdigest(),
+                    "responseBytesBase64": MODULE.base64.b64encode(response_bytes).decode()}
+                   for request, request_bytes, response_bytes in zip(requests, request_raw, app_raw)]
+    return {"threadId": thread, "allTurnIds": list(identifiers), "turnInventory": inventory,
+            "inventoryProvenance": "codex-app-server-thread-turns-list",
+            "inventoryHostSource": "codex-app-server:thread/turns/list",
+            "inventoryPaging": paging, "inventoryCapturedAt": captured_at,
+            "inventoryRosterDigest": roster_digest, "inventorySourceDigest": source_digest,
+            "usageProvenance": "codex-native-token-usage-record",
+            "collectorProducer": "fsgg-work-roadmap-native-collector/1",
+            "sourceBinding": {
+                "schema": binding_document["schema"],
+                "producerIdentity": binding_document["producerIdentity"],
+                "sha256": hashlib.sha256(binding).hexdigest(),
+                "bytesBase64": MODULE.base64.b64encode(binding).decode(),
+            },
+            "appServerResponses": app_records, "rolloutRecords": records(rollout_raw),
+            "provider": provider,
+            "providerProvenance": ("codex-app-server-thread.modelProvider"
+                                   if provider is not None else None),
+            "model": model, "effort": effort, "complete": complete, "turns": turns}
+
+
+def bound_collector(snapshot_or_factory):
+    def collect(parent_thread, _native_id, *, root_invocation_id, invocation_id, revision):
+        source = snapshot_or_factory() if callable(snapshot_or_factory) else snapshot_or_factory
+        snapshot = copy.deepcopy(source)
+        document = {
+            "schema": "fsgg.telemetry.native-inventory-source-binding/1",
+            "producerIdentity": snapshot["collectorProducer"],
+            "capturedAt": snapshot["inventoryCapturedAt"],
+            "hostSource": snapshot["inventoryHostSource"],
+            "rootInvocationId": root_invocation_id,
+            "invocationId": invocation_id,
+            "parentThreadId": parent_thread,
+            "threadId": snapshot["threadId"],
+            "orderedTurnIds": snapshot["allTurnIds"],
+            "revision": revision,
+        }
+        binding = json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
+        snapshot["sourceBinding"] = {
+            "schema": document["schema"], "producerIdentity": document["producerIdentity"],
+            "sha256": hashlib.sha256(binding).hexdigest(),
+            "bytesBase64": MODULE.base64.b64encode(binding).decode(),
+        }
+        digest = hashlib.sha256()
+        chunks = [binding, *[MODULE.base64.b64decode(record[field])
+                              for record in snapshot["appServerResponses"]
+                              for field in ("requestBytesBase64", "responseBytesBase64")],
+                  *[MODULE.base64.b64decode(record["bytesBase64"])
+                    for record in snapshot["rolloutRecords"]]]
+        for value in chunks:
+            digest.update(len(value).to_bytes(8, "big")); digest.update(value)
+        snapshot["inventorySourceDigest"] = digest.hexdigest()
+        return snapshot
+    return collect
+
+
+def rewrite_source_binding(snapshot, **changes):
+    document = json.loads(MODULE.base64.b64decode(snapshot["sourceBinding"]["bytesBase64"]))
+    document.update(changes)
+    binding = json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
+    snapshot["sourceBinding"]["sha256"] = hashlib.sha256(binding).hexdigest()
+    snapshot["sourceBinding"]["bytesBase64"] = MODULE.base64.b64encode(binding).decode()
+    digest = hashlib.sha256()
+    chunks = [binding, *[MODULE.base64.b64decode(record[field])
+                          for record in snapshot["appServerResponses"]
+                          for field in ("requestBytesBase64", "responseBytesBase64")],
+              *[MODULE.base64.b64decode(record["bytesBase64"])
+                for record in snapshot["rolloutRecords"]]]
+    for value in chunks:
+        digest.update(len(value).to_bytes(8, "big")); digest.update(value)
+    snapshot["inventorySourceDigest"] = digest.hexdigest()
+
+
 class RoadmapTelemetryTests(unittest.TestCase):
+    def test_native_source_binding_refuses_order_and_durable_identity_substitution(self):
+        thread = "22222222-2222-4222-8222-222222222222"
+        turn = "33333333-3333-4333-8333-333333333333"
+        reordered = native_snapshot(thread, [turn], [], complete=False)
+        rewrite_source_binding(reordered, orderedTurnIds=[])
+        with self.assertRaisesRegex(MODULE.ConfigurationError, "source binding is malformed"):
+            MODULE.native_snapshot(reordered)
+
+        state = {
+            "rootInvocationId": "root-invocation", "invocationId": "invocation",
+            "hostParentThreadId": "11111111-1111-4111-8111-111111111111",
+        }
+        for field, changed in (("rootInvocationId", "foreign-root"),
+                               ("invocationId", "foreign-invocation")):
+            candidate = native_snapshot(thread, [turn], [], complete=False)
+            rewrite_source_binding(candidate, **{field: changed})
+            candidate = MODULE.native_snapshot(candidate)
+            with self.subTest(field=field), self.assertRaisesRegex(
+                    MODULE.ConfigurationError, "differs from durable dispatch identity"):
+                MODULE._publish_turn_roster(None, state, candidate, [turn])
+
+        revised = native_snapshot(thread, [turn], [], complete=False, revision=1)
+        revised = MODULE.native_snapshot(revised)
+        with self.assertRaisesRegex(MODULE.ConfigurationError, "differs from durable dispatch identity"):
+            MODULE._publish_turn_roster(None, state, revised, [turn])
+
+    def test_thread_list_status_is_not_a_turn_and_exact_terminal_cursor_is_required(self):
+        thread = "22222222-2222-4222-8222-222222222222"
+        turn = "33333333-3333-4333-8333-333333333333"
+        snapshot = native_snapshot(thread, [turn], [], complete=False)
+        # The fixture's thread/list row deliberately has the real Thread.status
+        # shape; only the method-bound thread/turns/list row belongs to the roster.
+        self.assertEqual(MODULE.native_snapshot(snapshot)["allTurnIds"], [turn])
+
+        response = json.loads(MODULE.base64.b64decode(
+            snapshot["appServerResponses"][2]["responseBytesBase64"]))
+        response["result"]["nextCursor"] = "missing-page"
+        raw = json.dumps(response, separators=(",", ":")).encode() + b"\n"
+        snapshot["appServerResponses"][2]["responseSha256"] = hashlib.sha256(raw).hexdigest()
+        snapshot["appServerResponses"][2]["responseBytesBase64"] = MODULE.base64.b64encode(raw).decode()
+        binding = MODULE.base64.b64decode(snapshot["sourceBinding"]["bytesBase64"])
+        digest = hashlib.sha256()
+        for value in [binding, *[MODULE.base64.b64decode(record[field])
+                                  for record in snapshot["appServerResponses"]
+                                  for field in ("requestBytesBase64", "responseBytesBase64")]]:
+            digest.update(len(value).to_bytes(8, "big"))
+            digest.update(value)
+        snapshot["inventorySourceDigest"] = digest.hexdigest()
+        with self.assertRaisesRegex(MODULE.ConfigurationError, "paging chain is incomplete"):
+            MODULE.native_snapshot(snapshot)
+
     def test_repository_environment_precedence_avoids_checkout_discovery(self):
         with mock.patch.dict(os.environ, {
             "FSGG_TELEMETRY_REPOSITORY": "FS-GG/explicit",
@@ -365,16 +554,16 @@ class RoadmapTelemetryTests(unittest.TestCase):
             usage = {"input_tokens": 100, "cached_input_tokens": 60, "output_tokens": 20,
                      "reasoning_output_tokens": 5, "total_tokens": 120}
             def observation():
-                return {"threadId": native_thread, "model": "gpt-6-astra", "effort": "high",
-                        "complete": True, "turns": [{"turnId": turn, "turnSequence": 1, "usage": dict(usage)}]}
+                return native_snapshot(native_thread, [turn], [
+                    {"turnId": turn, "turnSequence": 1, "usage": dict(usage)}])
             with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": parent_thread}), \
                  mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
-                 mock.patch.object(MODULE, "collect_native_usage", side_effect=lambda *args: observation()) as collector:
+                 mock.patch.object(MODULE, "collect_native_usage", side_effect=bound_collector(observation)) as collector:
                 root = begin("root")
                 start(root, "root")
                 child = begin("child", "--parent-token", root, "--relation", "child")
                 start(child, "child_1")
-                self.assertEqual(finish(child)["coverage"], "native-collaboration-usage-complete")
+                self.assertEqual(finish(child)["coverage"], "native-collaboration-usage-unknown")
                 MODULE.usage_reconcile(config, MODULE.parser().parse_args(["usage-reconcile", "--token", child]))
                 usage["input_tokens"] = 105
                 usage["total_tokens"] = 125
@@ -387,6 +576,19 @@ class RoadmapTelemetryTests(unittest.TestCase):
             self.assertEqual([fact["input"] for fact in facts], [100, 105])
             self.assertEqual(facts[0]["identity"], facts[1]["identity"])
             self.assertEqual(facts[0]["invocationId"], MODULE.read_state(config, child)["invocationId"])
+            integration = MODULE.read_state(config, child)["nativeInventoryIntegration"]
+            self.assertEqual(integration["status"], "published")
+            self.assertEqual(integration["fact"]["kind"], "runtime-native-inventory/1")
+            self.assertEqual(integration["sourceFact"]["kind"], "runtime-native-inventory-source/1")
+            self.assertEqual(integration["fact"]["expectedProvider"], "openai")
+            self.assertEqual(integration["fact"]["expectedTurnIds"], [turn])
+            self.assertEqual(integration["sourceBinding"]["sha256"],
+                             MODULE.read_state(config, child)["nativeInventoryBindingDigest"])
+            authority = [fact for batch in batches for fact in batch["events"]
+                         if fact["kind"] in {"runtime-native-inventory/1",
+                                             "runtime-native-inventory-source/1"}]
+            self.assertEqual([fact["kind"] for fact in authority],
+                             ["runtime-native-inventory/1", "runtime-native-inventory-source/1"])
             self.assertEqual(len([fact for batch in batches for fact in batch["events"]
                                   if fact["kind"] == "runtime-start" and fact["phase"] == "thread"]), 1)
             self.assertNotIn("native-collaboration-usage-unsupported", [fact["code"] for batch in batches
@@ -403,14 +605,13 @@ class RoadmapTelemetryTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "{}", "")
             parent_thread = "11111111-1111-4111-8111-111111111111"
             turns = ["33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"]
-            def usage(*_):
-                return {"threadId": "22222222-2222-4222-8222-222222222222", "allTurnIds": turns[:],
-                        "model": "gpt-6-astra", "effort": "high", "complete": True,
-                        "turns": [{"turnId": turn, "turnSequence": index + 1,
+            def usage():
+                return native_snapshot("22222222-2222-4222-8222-222222222222", turns[:],
+                        [{"turnId": turn, "turnSequence": index + 1,
                                    "usage": {"input_tokens": 10, "cached_input_tokens": 5,
                                              "output_tokens": 2, "reasoning_output_tokens": 1,
                                              "total_tokens": 12}}
-                                  for index, turn in enumerate(turns)]}
+                                  for index, turn in enumerate(turns)])
             def begin(attempt, *extra):
                 return MODULE.begin(config, MODULE.parser().parse_args([
                     "begin", "--feature", "F", "--item", "F.1", "--attempt", attempt,
@@ -421,7 +622,7 @@ class RoadmapTelemetryTests(unittest.TestCase):
                 MODULE.finish(config, MODULE.parser().parse_args(["finish", "--token", token, "--outcome", "completed"]))
             with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": parent_thread}), \
                  mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
-                 mock.patch.object(MODULE, "collect_native_usage", side_effect=usage):
+                 mock.patch.object(MODULE, "collect_native_usage", side_effect=bound_collector(usage)):
                 root = begin("root")
                 start(root, "root")
                 child = begin("child", "--parent-token", root, "--relation", "child")
@@ -429,7 +630,11 @@ class RoadmapTelemetryTests(unittest.TestCase):
                 turns.pop()
                 finish(child)
                 followup = begin("followup", "--parent-token", child, "--relation", "follow-up")
-                self.assertEqual(MODULE.read_state(config, followup)["baselineTurnIds"], turns)
+                followup_state = MODULE.read_state(config, followup)
+                self.assertEqual(followup_state["baselineTurnIds"], turns)
+                self.assertEqual(followup_state["baselineHostSource"],
+                                 "codex-app-server:thread/turns/list")
+                self.assertRegex(followup_state["baselineSourceDigest"], r"^[0-9a-f]{64}$")
                 start(followup, "worker")
                 turns.append("44444444-4444-4444-8444-444444444444")
                 finish(followup)
@@ -459,15 +664,15 @@ class RoadmapTelemetryTests(unittest.TestCase):
                     "--model", "gpt-6-astra", "--effort", "high", *extra]))["token"]
             def start(token, native):
                 MODULE.started(config, MODULE.parser().parse_args(["started", "--token", token, "--native-id", native]))
-            native = {"threadId": "22222222-2222-4222-8222-222222222222", "complete": True,
-                      "model": "gpt-6-astra", "effort": "high", "turns": [{
+            native = native_snapshot("22222222-2222-4222-8222-222222222222",
+                      ["33333333-3333-4333-8333-333333333333"], [{
                           "turnId": "33333333-3333-4333-8333-333333333333", "turnSequence": 1,
                           "usage": {"input_tokens": 10, "cached_input_tokens": 5,
                                     "output_tokens": 2, "reasoning_output_tokens": 1,
-                                    "total_tokens": 12}}]}
+                                    "total_tokens": 12}}])
             with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": "11111111-1111-4111-8111-111111111111"}), \
                  mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
-                 mock.patch.object(MODULE, "collect_native_usage", return_value=native):
+                 mock.patch.object(MODULE, "collect_native_usage", side_effect=bound_collector(native)):
                 root = begin("root")
                 start(root, "root")
                 child = begin("child", "--parent-token", root, "--relation", "child")
@@ -480,8 +685,244 @@ class RoadmapTelemetryTests(unittest.TestCase):
                 self.assertEqual(state["usageLedger"], {})
                 second = MODULE.usage_reconcile(config, MODULE.parser().parse_args([
                     "usage-reconcile", "--token", child]))
-                self.assertEqual(second["coverage"], "native-collaboration-usage-complete")
+                self.assertEqual(second["coverage"], "native-collaboration-usage-unknown")
                 self.assertEqual(revisions, [0, 0])
+
+    def test_partial_inventory_publishes_exact_roster_but_never_claims_complete(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            config = self.config(pathlib.Path(scratch))
+            batches = []
+            def fake_run(command, **_):
+                if "publish" in command:
+                    batches.append(json.loads(pathlib.Path(command[command.index("--input") + 1]).read_text()))
+                return subprocess.CompletedProcess(command, 0, "{}", "")
+            parent = "11111111-1111-4111-8111-111111111111"
+            thread = "22222222-2222-4222-8222-222222222222"
+            turns = ["33333333-3333-4333-8333-333333333333",
+                     "44444444-4444-4444-8444-444444444444"]
+            usage = {"input_tokens": 10, "cached_input_tokens": 5, "output_tokens": 2,
+                     "reasoning_output_tokens": 1, "total_tokens": 12}
+            partial = native_snapshot(thread, turns, [
+                {"turnId": turns[0], "turnSequence": 1, "usage": usage}], complete=False)
+            with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": parent}), \
+                 mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
+                 mock.patch.object(MODULE, "collect_native_usage", side_effect=bound_collector(partial)):
+                root = MODULE.begin(config, MODULE.parser().parse_args([
+                    "begin", "--feature", "F", "--item", "F.1", "--attempt", "root",
+                    "--model", "gpt-6-astra", "--effort", "high"]))["token"]
+                MODULE.started(config, MODULE.parser().parse_args([
+                    "started", "--token", root, "--native-id", "root"]))
+                child = MODULE.begin(config, MODULE.parser().parse_args([
+                    "begin", "--feature", "F", "--item", "F.1", "--attempt", "child",
+                    "--parent-token", root, "--relation", "child",
+                    "--model", "gpt-6-astra", "--effort", "high"]))["token"]
+                MODULE.started(config, MODULE.parser().parse_args([
+                    "started", "--token", child, "--native-id", "worker"]))
+                result = MODULE.finish(config, MODULE.parser().parse_args([
+                    "finish", "--token", child, "--outcome", "completed"]))
+            self.assertEqual(result["coverage"], "native-collaboration-usage-unknown")
+            facts = [fact for batch in batches for fact in batch["events"]]
+            roster = [fact for fact in facts if fact["kind"] == "runtime-start" and fact["phase"] == "turn"]
+            observed = [fact for fact in facts if fact["kind"] == "runtime-turn-usage"]
+            self.assertEqual([fact["turnId"] for fact in roster], turns)
+            self.assertEqual([fact["turnId"] for fact in observed], turns[:1])
+            self.assertEqual(observed[0]["provider"], "openai")
+            state = MODULE.read_state(config, child)
+            self.assertEqual(state["expectedTurnRoster"], turns)
+            self.assertEqual(state["turnRosterPublishedCount"], len(turns))
+            self.assertEqual(state["nativeInventoryProducerStream"], "roadmap-orchestrator")
+            self.assertEqual(state["nativeInventoryHostSource"],
+                             "codex-app-server:thread/turns/list")
+            self.assertRegex(state["nativeInventoryBindingDigest"], r"^[0-9a-f]{64}$")
+
+    def test_roster_publication_is_bounded_to_store_batch_limit(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            config = self.config(pathlib.Path(scratch))
+            batches = []
+            def fake_run(command, **_):
+                if "publish" in command:
+                    batches.append(json.loads(pathlib.Path(command[command.index("--input") + 1]).read_text()))
+                return subprocess.CompletedProcess(command, 0, "{}", "")
+            parent = "11111111-1111-4111-8111-111111111111"
+            thread = "22222222-2222-4222-8222-222222222222"
+            turns = [f"00000000-0000-4000-8000-{number:012x}" for number in range(1, 66)]
+            partial = native_snapshot(thread, turns, [], complete=False)
+            with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": parent}), \
+                 mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
+                 mock.patch.object(MODULE, "collect_native_usage", side_effect=bound_collector(partial)):
+                root = MODULE.begin(config, MODULE.parser().parse_args([
+                    "begin", "--feature", "F", "--item", "I", "--attempt", "root",
+                    "--model", "m", "--effort", "e"]))["token"]
+                MODULE.started(config, MODULE.parser().parse_args([
+                    "started", "--token", root, "--native-id", "root"]))
+                child = MODULE.begin(config, MODULE.parser().parse_args([
+                    "begin", "--feature", "F", "--item", "I", "--attempt", "child",
+                    "--parent-token", root, "--relation", "child", "--model", "m", "--effort", "e"]))["token"]
+                MODULE.started(config, MODULE.parser().parse_args([
+                    "started", "--token", child, "--native-id", "worker"]))
+                result = MODULE.finish(config, MODULE.parser().parse_args([
+                    "finish", "--token", child, "--outcome", "completed"]))
+            roster_batches = [batch for batch in batches
+                              if any(event.get("phase") == "turn" for event in batch["events"])]
+            self.assertEqual(result["coverage"], "native-collaboration-usage-unknown")
+            self.assertEqual([batch["eventCount"] for batch in roster_batches], [64, 1])
+            state_path = MODULE.state_path(config, child)
+            self.assertLessEqual(state_path.stat().st_size, 262144)
+            self.assertEqual(MODULE.read_state(config, child)["turnRosterPublishedCount"], 65)
+
+    def test_interrupted_roster_publication_replays_exact_batch(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            config = self.config(pathlib.Path(scratch))
+            roster_batches = []
+            refused = False
+            def fake_run(command, **_):
+                nonlocal refused
+                if "publish" in command:
+                    batch = json.loads(pathlib.Path(command[command.index("--input") + 1]).read_text())
+                    if any(fact.get("phase") == "turn" for fact in batch["events"]):
+                        roster_batches.append(batch)
+                        if not refused:
+                            refused = True
+                            return subprocess.CompletedProcess(command, 1, "", "unacknowledged publication")
+                return subprocess.CompletedProcess(command, 0, "{}", "")
+            parent = "11111111-1111-4111-8111-111111111111"
+            thread = "22222222-2222-4222-8222-222222222222"
+            turn = "33333333-3333-4333-8333-333333333333"
+            usage = {"input_tokens": 10, "cached_input_tokens": 5, "output_tokens": 2,
+                     "reasoning_output_tokens": 1, "total_tokens": 12}
+            complete = native_snapshot(thread, [turn], [
+                {"turnId": turn, "turnSequence": 1, "usage": usage}], model="m", effort="e")
+            with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": parent}), \
+                 mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
+                 mock.patch.object(MODULE, "collect_native_usage", side_effect=bound_collector(complete)):
+                root = MODULE.begin(config, MODULE.parser().parse_args([
+                    "begin", "--feature", "F", "--item", "I", "--attempt", "root",
+                    "--model", "m", "--effort", "e"]))["token"]
+                MODULE.started(config, MODULE.parser().parse_args([
+                    "started", "--token", root, "--native-id", "root"]))
+                child = MODULE.begin(config, MODULE.parser().parse_args([
+                    "begin", "--feature", "F", "--item", "I", "--attempt", "child",
+                    "--parent-token", root, "--relation", "child", "--model", "m", "--effort", "e"]))["token"]
+                MODULE.started(config, MODULE.parser().parse_args([
+                    "started", "--token", child, "--native-id", "worker"]))
+                first = MODULE.finish(config, MODULE.parser().parse_args([
+                    "finish", "--token", child, "--outcome", "completed"]))
+                self.assertEqual(first["coverage"], "native-collaboration-usage-unknown")
+                state = MODULE.read_state(config, child)
+                self.assertTrue(state.get("rosterIntent"))
+                self.assertTrue(state.get("pendingPublication"))
+                self.assertEqual(state["nativeInventoryIntegration"]["status"], "published")
+                retained_digest = state["nativeInventorySourceDigest"]
+                retained_responses = state["nativeInventoryAppServerResponses"]
+                second = MODULE.usage_reconcile(config, MODULE.parser().parse_args([
+                    "usage-reconcile", "--token", child]))
+            self.assertEqual(second["coverage"], "native-collaboration-usage-unknown")
+            self.assertEqual(len(roster_batches), 2)
+            self.assertEqual(roster_batches[0], roster_batches[1])
+            replayed = MODULE.read_state(config, child)
+            self.assertEqual(replayed["nativeInventorySourceDigest"], retained_digest)
+            self.assertEqual(replayed["nativeInventoryAppServerResponses"], retained_responses)
+
+    def test_followup_duplicate_or_nonprefix_baseline_stays_unknown(self):
+        thread = "22222222-2222-4222-8222-222222222222"
+        one = "33333333-3333-4333-8333-333333333333"
+        two = "44444444-4444-4444-8444-444444444444"
+        duplicate = native_snapshot(thread, [one], [], complete=False)
+        duplicate["allTurnIds"] = [one, one]
+        duplicate["turnInventory"] = duplicate["turnInventory"] * 2
+        with self.assertRaisesRegex(MODULE.ConfigurationError, "snapshot is malformed"):
+            MODULE.native_snapshot(duplicate)
+
+        malformed_evidence = native_snapshot(thread, [one], [], complete=False)
+        malformed_evidence["inventoryPaging"][0]["rowCount"] = 0
+        with self.assertRaisesRegex(MODULE.ConfigurationError, "paging evidence disagrees"):
+            MODULE.native_snapshot(malformed_evidence)
+
+        wrong_digest = native_snapshot(thread, [one], [], complete=False)
+        wrong_digest["inventorySourceDigest"] = "0" * 64
+        with self.assertRaisesRegex(MODULE.ConfigurationError, "source digest disagrees"):
+            MODULE.native_snapshot(wrong_digest)
+
+        def replace_record(snapshot, collection, index, document):
+            raw = json.dumps(document, separators=(",", ":")).encode() + b"\n"
+            if collection == "appServerResponses":
+                snapshot[collection][index]["responseSha256"] = hashlib.sha256(raw).hexdigest()
+                snapshot[collection][index]["responseBytesBase64"] = MODULE.base64.b64encode(raw).decode()
+            else:
+                snapshot[collection][index] = {
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "bytesBase64": MODULE.base64.b64encode(raw).decode(),
+                }
+            digest = hashlib.sha256()
+            binding = MODULE.base64.b64decode(snapshot["sourceBinding"]["bytesBase64"])
+            digest.update(len(binding).to_bytes(8, "big"))
+            digest.update(binding)
+            for record in snapshot["appServerResponses"]:
+                for field in ("requestBytesBase64", "responseBytesBase64"):
+                    value = MODULE.base64.b64decode(record[field])
+                    digest.update(len(value).to_bytes(8, "big"))
+                    digest.update(value)
+            for record in snapshot["rolloutRecords"]:
+                value = MODULE.base64.b64decode(record["bytesBase64"])
+                digest.update(len(value).to_bytes(8, "big"))
+                digest.update(value)
+            snapshot["inventorySourceDigest"] = digest.hexdigest()
+
+        forged_provider = native_snapshot(thread, [one], [], complete=False)
+        response = json.loads(MODULE.base64.b64decode(
+            forged_provider["appServerResponses"][1]["responseBytesBase64"]))
+        response["result"]["thread"]["modelProvider"] = "foreign"
+        replace_record(forged_provider, "appServerResponses", 1, response)
+        with self.assertRaisesRegex(MODULE.ConfigurationError, "provider/profile"):
+            MODULE.native_snapshot(forged_provider)
+
+        nonterminal_page = native_snapshot(thread, [one], [], complete=False)
+        response = json.loads(MODULE.base64.b64decode(
+            nonterminal_page["appServerResponses"][2]["responseBytesBase64"]))
+        response["result"]["nextCursor"] = "unretained-next-page"
+        replace_record(nonterminal_page, "appServerResponses", 2, response)
+        with self.assertRaisesRegex(MODULE.ConfigurationError, "paging chain is incomplete"):
+            MODULE.native_snapshot(nonterminal_page)
+
+        forged_usage = native_snapshot(thread, [one], [{
+            "turnId": one, "turnSequence": 1,
+            "usage": {"input_tokens": 10, "cached_input_tokens": 5, "output_tokens": 2,
+                      "reasoning_output_tokens": 1, "total_tokens": 12}}])
+        record = json.loads(MODULE.base64.b64decode(forged_usage["rolloutRecords"][0]["bytesBase64"]))
+        record["payload"]["usage"]["input_tokens"] = 11
+        record["payload"]["usage"]["total_tokens"] = 13
+        record["payload"]["turn_token_usage"] = dict(record["payload"]["usage"])
+        replace_record(forged_usage, "rolloutRecords", 0, record)
+        with self.assertRaisesRegex(MODULE.ConfigurationError, "does not match retained rollout bytes"):
+            MODULE.native_snapshot(forged_usage)
+
+        malformed_usage = native_snapshot(thread, [one], [{
+            "turnId": one, "turnSequence": 1,
+            "usage": {"input_tokens": 2, "cached_input_tokens": 0, "output_tokens": 1,
+                      "reasoning_output_tokens": 0, "total_tokens": 99}}])
+        with self.assertRaisesRegex(MODULE.ConfigurationError, "counters are malformed"):
+            MODULE.native_snapshot(malformed_usage)
+
+        current = native_snapshot(thread, [one, two], [], complete=False)
+        state = {"phase": "terminal", "hostParentThreadId": "11111111-1111-4111-8111-111111111111",
+                 "nativeId": "worker", "usageBaselineKnown": True, "baselineTurnIds": [two],
+                 "baselineThreadId": thread, "pendingPublication": None}
+        with tempfile.TemporaryDirectory() as scratch:
+            config = self.config(pathlib.Path(scratch))
+            state["rootInvocationId"] = "root-invocation"
+            with mock.patch.object(MODULE, "collect_native_usage", side_effect=bound_collector(current)), \
+                 mock.patch.object(MODULE, "_resume_native_publication"), \
+                 mock.patch.object(MODULE, "publish"):
+                # Thread publication precedes the overlap check in ordinary state;
+                # pin it as already published for this focused boundary probe.
+                state.update({"nativeThreadId": thread, "nativeThreadPublished": True,
+                              "usageLedger": {}, "invocationId": "inv", "itemId": "I",
+                              "model": "m", "effort": "e", "sequence": 0,
+                              "producerStream": "p", "associationProducer": None,
+                              "associationDigest": None})
+                self.assertEqual(MODULE.reconcile_usage(config, state),
+                                 "native-collaboration-usage-unknown")
+                self.assertNotIn("expectedTurnRoster", state)
 
     def test_private_host_config_is_discovered_without_embedding_an_instance_in_source(self):
         with tempfile.TemporaryDirectory() as scratch:
