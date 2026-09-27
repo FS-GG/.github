@@ -55,13 +55,16 @@ module IntakeTransactionTests =
         | Ok value -> value
         | Error message -> failwith message
 
+    let private entry state identity =
+        IntakeTransaction.find state identity |> get |> Option.get
+
     [<Fact>]
     let ``unknown outcome retains InFlight and repeated intent cannot recreate`` () =
         let binding = intent ()
         let state = IntakeTransaction.apply None (IntakeTransaction.Intent binding) |> get
         let inFlight = IntakeTransaction.apply (Some state) (IntakeTransaction.InFlight binding) |> get
         let unknown = IntakeTransaction.apply (Some inFlight) (IntakeTransaction.Unknown binding) |> get
-        Assert.Equal("InFlight", unknown.Phase)
+        Assert.Equal("InFlight", (entry unknown identity).Phase)
         Assert.True(IntakeTransaction.apply (Some unknown) (IntakeTransaction.Intent binding) |> Result.isError)
         Assert.True(IntakeTransaction.apply None (IntakeTransaction.InFlight binding) |> Result.isError)
 
@@ -72,7 +75,7 @@ module IntakeTransactionTests =
         let inFlight = IntakeTransaction.apply (Some state) (IntakeTransaction.InFlight binding) |> get
         let event = IntakeTransaction.Bound(binding, issue, receipt binding.DraftDigest)
         let bound = IntakeTransaction.apply (Some inFlight) event |> get
-        Assert.Equal("Bound", bound.Phase)
+        Assert.Equal("Bound", (entry bound identity).Phase)
         Assert.Equal(bound, IntakeTransaction.apply (Some bound) event |> get)
         let other = { issue with Number = 124; NodeId = "I_other" }
         Assert.True(IntakeTransaction.apply (Some bound) (IntakeTransaction.Bound(binding, other, receipt binding.DraftDigest)) |> Result.isError)
@@ -107,7 +110,7 @@ module IntakeTransactionTests =
         match event with
         | IntakeTransaction.Intent binding ->
             binding.RequestBytes[0] <- 0uy
-            Assert.Equal(byte 'r', state.Binding.RequestBytes[0])
+            Assert.Equal(byte 'r', (entry state identity).Binding.RequestBytes[0])
         | _ -> failwith "wrong phase"
 
     [<Fact>]
@@ -143,5 +146,57 @@ module IntakeTransactionTests =
         let state = IntakeTransaction.apply None (IntakeTransaction.Intent binding) |> get
         let inFlight = IntakeTransaction.apply (Some state) (IntakeTransaction.InFlight binding) |> get
         let bound = IntakeTransaction.apply (Some inFlight) (IntakeTransaction.Bound(binding, issue, receipt predecessor)) |> get
-        Assert.Equal(Some issue, bound.Issue)
+        Assert.Equal(Some issue, (entry bound identity).Issue)
         Assert.True(IntakeTransaction.apply (Some bound) (IntakeTransaction.Bound(binding, issue, receipt binding.DraftDigest)) |> Result.isError)
+
+    [<Fact>]
+    let ``shared aggregate interleaves drafts and keeps bound terminal per key`` () =
+        let first = intent ()
+        let secondDraft = { draft with Id = "Draft-B"; Title = "Other issue" }
+        let secondIdentity = { identity with DraftId = secondDraft.Id }
+        let second =
+            match IntakeTransaction.prepareIntent secondIdentity secondDraft (Encoding.UTF8.GetBytes "second request") |> get with
+            | IntakeTransaction.Intent binding -> binding
+            | _ -> failwith "wrong phase"
+        let secondIssue = { issue with NodeId = "I_second"; Number = 124 }
+        let secondReceipt = { receipt second.DraftDigest with DraftId = secondDraft.Id; IssueNumber = secondIssue.Number }
+        let events =
+            [ IntakeTransaction.Intent first
+              IntakeTransaction.Intent second
+              IntakeTransaction.InFlight second
+              IntakeTransaction.InFlight first
+              IntakeTransaction.Bound(second, secondIssue, secondReceipt)
+              IntakeTransaction.Unknown first ]
+        let replay events =
+            events
+            |> List.map (IntakeTransaction.encodeEvent >> get >> IntakeTransaction.decodeEvent >> get)
+            |> List.fold (fun state event -> IntakeTransaction.apply state event |> get |> Some) None
+            |> Option.get
+        let state = replay events
+        Assert.Equal(2, state.Entries.Count)
+        Assert.Equal("InFlight", (entry state identity).Phase)
+        Assert.Equal("Bound", (entry state secondIdentity).Phase)
+        Assert.Equal(Some secondIssue, (entry state secondIdentity).Issue)
+        Assert.Equal(state, replay events)
+        Assert.True(IntakeTransaction.apply (Some state) (IntakeTransaction.Intent second) |> Result.isError)
+        Assert.True(IntakeTransaction.apply (Some state) (IntakeTransaction.Unknown second) |> Result.isError)
+        let firstBound = IntakeTransaction.apply (Some state) (IntakeTransaction.Bound(first, issue, receipt first.DraftDigest)) |> get
+        Assert.Equal("Bound", (entry firstBound identity).Phase)
+        Assert.Equal(Some secondIssue, (entry firstBound secondIdentity).Issue)
+
+    [<Fact>]
+    let ``same key refuses changed valid binding without disturbing another draft`` () =
+        let first = intent ()
+        let secondDraft = { draft with Id = "Draft-B" }
+        let secondIdentity = { identity with DraftId = secondDraft.Id }
+        let second =
+            match IntakeTransaction.prepareIntent secondIdentity secondDraft (Encoding.UTF8.GetBytes "second request") |> get with
+            | IntakeTransaction.Intent binding -> binding
+            | _ -> failwith "wrong phase"
+        let state = IntakeTransaction.apply None (IntakeTransaction.Intent first) |> get
+        let state = IntakeTransaction.apply (Some state) (IntakeTransaction.Intent second) |> get
+        let changed = { first with Owner = "Changed" }
+        Assert.True(IntakeTransaction.apply (Some state) (IntakeTransaction.Intent changed) |> Result.isError)
+        Assert.True(IntakeTransaction.apply (Some state) (IntakeTransaction.InFlight changed) |> Result.isError)
+        Assert.Equal(second, (entry state secondIdentity).Binding)
+        Assert.True(IntakeTransaction.find state { identity with DraftId = "missing" } |> get |> Option.isNone)

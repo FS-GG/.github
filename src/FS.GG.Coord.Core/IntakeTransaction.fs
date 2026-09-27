@@ -32,11 +32,12 @@ module IntakeTransaction =
         | InFlight of Binding
         | Unknown of Binding
         | Bound of Binding * NativeIssue * IntakeReceipt.Receipt
-    type State =
+    type Entry =
         { Phase: string
           Binding: Binding
           Issue: NativeIssue option
           Receipt: IntakeReceipt.Receipt option }
+    type State = { Entries: Map<string, Entry> }
 
     let private sha (bytes: byte[]) =
         SHA256.HashData(bytes) |> Convert.ToHexString |> fun s -> s.ToLowerInvariant()
@@ -129,20 +130,29 @@ module IntakeTransaction =
         && receipt.Repository = binding.Repository
         && List.contains receipt.DraftDigest binding.CompatibleDigests
 
+    let find state identity =
+        key identity |> Result.map (fun transactionKey -> Map.tryFind transactionKey state.Entries)
+
     let apply prior event =
         let binding = bindingOf event
         if not (validBinding binding) then Error "invalid or changed intake binding"
-        elif prior |> Option.exists (fun old -> not (sameBinding old.Binding binding)) then Error "intake binding changed"
         else
-            match prior, event with
-            | None, Intent _ -> Ok { Phase = "Intent"; Binding = { binding with RequestBytes = Array.copy binding.RequestBytes }; Issue = None; Receipt = None }
-            | Some old, InFlight _ when old.Phase = "Intent" ->
-                Ok { old with Phase = "InFlight" }
-            | Some old, Unknown _ when old.Phase = "InFlight" -> Ok old
-            | Some old, Bound(_, issue, receipt) when old.Phase = "InFlight" && validBound binding issue receipt ->
-                Ok { old with Phase = "Bound"; Issue = Some issue; Receipt = Some receipt }
-            | Some old, Bound(_, issue, receipt) when old.Phase = "Bound" && old.Issue = Some issue && old.Receipt = Some receipt -> Ok old
-            | _ -> Error "wrong intake predecessor or incompatible native binding"
+            let transactionKey = key binding.Identity |> Result.defaultValue ""
+            let entries = prior |> Option.map (fun state -> state.Entries) |> Option.defaultValue Map.empty
+            let current = Map.tryFind transactionKey entries
+            if current |> Option.exists (fun old -> not (sameBinding old.Binding binding)) then Error "intake binding changed"
+            else
+                let next =
+                    match current, event with
+                    | None, Intent _ ->
+                        Ok { Phase = "Intent"; Binding = { binding with RequestBytes = Array.copy binding.RequestBytes }; Issue = None; Receipt = None }
+                    | Some old, InFlight _ when old.Phase = "Intent" -> Ok { old with Phase = "InFlight" }
+                    | Some old, Unknown _ when old.Phase = "InFlight" -> Ok old
+                    | Some old, Bound(_, issue, receipt) when old.Phase = "InFlight" && validBound binding issue receipt ->
+                        Ok { old with Phase = "Bound"; Issue = Some issue; Receipt = Some receipt }
+                    | Some old, Bound(_, issue, receipt) when old.Phase = "Bound" && old.Issue = Some issue && old.Receipt = Some receipt -> Ok old
+                    | _ -> Error "wrong intake predecessor or incompatible native binding"
+                next |> Result.map (fun entry -> { Entries = Map.add transactionKey entry entries })
 
     let private phaseOf = function
         | Intent _ -> "Intent"
