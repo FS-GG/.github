@@ -437,10 +437,64 @@ module LiveHandlers =
 
                         Ok(Some evidence)
 
+    /// Append a prospective obligation receipt only for this worker's claimed item and its
+    /// exact closing PR. The producer performs the head/obligation/evidence and readback fences.
+    let private deliveryReceipt (ctx: Context) (opts: Options) raw id evidence =
+        match worker opts, opts.Pr with
+        | Error code, _ -> code
+        | _, None ->
+            eprint "fsgg-coord-engine: delivery receipt requires --pr N"
+            ExitError
+        | Ok w, Some pr ->
+            match parseRef ctx raw with
+            | Error reason ->
+                eprint $"fsgg-coord-engine: delivery receipt: {reason}"
+                ExitError
+            | Ok item ->
+                let authorize () =
+                    Reads.markerScan ctx.Transport item.Owner item.Repo item.Number
+                    |> Result.bind (Reads.requireCompleteMarkerScan item.Short)
+                    |> Result.bind (fun markers ->
+                        authorizedMarker opts.LeaseMinutes markers (fun () ->
+                            Reads.prAlive ctx.Transport item.Owner item.Repo item.Number))
+                    |> Result.bind (function
+                        | Some held when held.Worker.Value = w.Id -> Ok()
+                        | _ -> Error(Errors.Malformed(item.Short, "the current worker has no live claim")))
+                    |> Result.bind (fun () -> Reads.prClosingRef ctx.Transport item.Owner item.Repo pr)
+                    |> Result.bind (function
+                        | Some closing when closing = item -> Ok()
+                        | _ -> Error(Errors.Malformed(item.Short, "the pull request does not close this claimed item")))
+                    |> Result.mapError Errors.explain
+
+                let result =
+                    authorize ()
+                    |> Result.bind (fun () ->
+                        Reads.prHeadSha ctx.Transport item.Owner item.Repo pr
+                        |> Result.mapError Errors.explain)
+                    |> Result.bind (fun head ->
+                        let target = { item with Number = pr }
+                        DeliveryReceiptProducer.produceLive ctx.Transport target authorize
+                            { PullRequest = pr; HeadSha = head; ObligationId = id; Evidence = evidence })
+
+                match result with
+                | Error reason ->
+                    eprint $"fsgg-coord-engine: delivery receipt refused: {reason}"
+                    ExitNoVerdict
+                | Ok outcome ->
+                    let verdict =
+                        match outcome with
+                        | DeliveryReceiptProducer.Written -> "written"
+                        | DeliveryReceiptProducer.AlreadyPresent -> "alreadyPresent"
+                    match opts.Render with
+                    | Json ->
+                        printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-receipt/1"; verdict = verdict; pullRequest = pr; obligationId = id; evidence = evidence |})
+                    | Text -> printfn "delivery receipt %s for PR #%d %s" verdict pr id
+                    ExitGreen
+
     /// Read a claimed item's delivery facts again immediately before producing the next lifecycle action.
     /// The board scan gives the status/touch-set projection; the marker scan is deliberately repeated over
     /// REST because a cached or earlier scheduler observation cannot authorize a claim-bound transition.
-    let delivery
+    let private deliveryMain
         (completeDelivery: Delivery.Snapshot -> Delivery.Transition -> Context -> Options -> int)
         (deliveryPathClassifier: Context -> Ref -> TouchSet -> string list -> Delivery.PathClassification list)
         (projectPathVerdict: Delivery.PathClassification list -> bool)
@@ -961,6 +1015,14 @@ module LiveHandlers =
 
                                 ExitNoVerdict
                             | _ -> DeliveryApplication.renderWithPostMergeVerification opts postMergeVerification facts
+
+    let delivery completeDelivery deliveryPathClassifier projectPathVerdict requireCurrentDeliveryRoute scanAndDecide ctx opts =
+        match opts.Args with
+        | [ raw; "receipt"; id; evidence ] when not opts.Apply && not opts.Flip ->
+            deliveryReceipt ctx opts raw id evidence
+        | _ ->
+            deliveryMain completeDelivery deliveryPathClassifier projectPathVerdict
+                requireCurrentDeliveryRoute scanAndDecide ctx opts
 
     /// The live `review <ref> --pr N` adapter (.github#2175) — matches `delivery <ref> [--pr N]`'s shape
     /// rather than inventing a parallel spelling, and reuses the SAME live reads that function already

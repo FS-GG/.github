@@ -438,6 +438,10 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              --flip performs the terminal parent roll-up after typed receipt
                                              creation and the issue/board completion projections
   delivery --snapshot FILE [--json|--text]   the pure, IO-free form — see DECISION above
+  delivery <ref> receipt <id> <https-evidence-url> --pr N [--json|--text]
+                                             append or confirm one prospective, head-bound obligation
+                                             receipt on this worker's claimed item's exact closing PR;
+                                             read back the authoritative PR comment ledger
   self-host verify <receipt> <candidate> [--text]
                                              stable shared verifier for a candidate-engine receipt;
   self-host mint <proposal> <candidate> <snapshot> <output>
