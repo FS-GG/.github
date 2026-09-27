@@ -6,6 +6,7 @@ retained. Conversation items and other rollout entries are never decoded.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import pathlib
@@ -14,14 +15,35 @@ import select
 import subprocess
 import time
 from collections import defaultdict
+from datetime import datetime, timezone
 
 
 UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
 COUNTS = ("input_tokens", "cached_input_tokens", "output_tokens", "reasoning_output_tokens", "total_tokens")
+TERMINAL_TURN_STATUSES = frozenset({"completed", "failed", "interrupted"})
+INVENTORY_PROVENANCE = "codex-app-server-thread-turns-list"
+USAGE_PROVENANCE = "codex-native-token-usage-record"
+INVENTORY_HOST_SOURCE = "codex-app-server:thread/turns/list"
 
 
 class HostUnavailable(Exception):
     """The host cannot prove an exact child identity or final usage."""
+
+
+def inventory_digest(thread_id: str, inventory: list[dict[str, object]]) -> str:
+    roster = [{key: row[key] for key in ("turnId", "turnSequence", "status", "terminal")}
+              for row in inventory]
+    projection = json.dumps({"threadId": thread_id, "turnInventory": roster}, sort_keys=True,
+                            separators=(",", ":"), ensure_ascii=True).encode("ascii")
+    return hashlib.sha256(projection).hexdigest()
+
+
+def source_digest(roster_digest: str, paging: list[dict[str, object]], captured_at: str) -> str:
+    projection = json.dumps(
+        {"hostSource": INVENTORY_HOST_SOURCE, "paging": paging, "capturedAt": captured_at,
+         "rosterDigest": roster_digest}, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=True).encode("ascii")
+    return hashlib.sha256(projection).hexdigest()
 
 
 def counts(value: object) -> dict[str, int]:
@@ -99,9 +121,12 @@ class AppServer:
         self.close()
 
 
-def page(server: AppServer, method: str, request_id: int, params: dict[str, object]) -> list[dict[str, object]]:
+def page_with_evidence(server: AppServer, method: str, request_id: int,
+                       params: dict[str, object]) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     rows: list[dict[str, object]] = []
+    paging: list[dict[str, object]] = []
     cursor: str | None = None
+    seen_cursors: set[str] = set()
     for offset in range(10):
         request = dict(params, cursor=cursor, limit=100)
         result = server.request(request_id + offset, method, request)
@@ -112,12 +137,22 @@ def page(server: AppServer, method: str, request_id: int, params: dict[str, obje
         if len(rows) > 1000:
             raise HostUnavailable("native child inventory exceeds the bound")
         next_cursor = result.get("nextCursor")
+        paging.append({"page": offset + 1, "requestCursor": cursor,
+                       "nextCursor": next_cursor, "rowCount": len(data)})
         if next_cursor is None:
-            return rows
-        if not isinstance(next_cursor, str) or not next_cursor or next_cursor == cursor:
+            return rows, paging
+        if (not isinstance(next_cursor, str) or not next_cursor or next_cursor == cursor or
+                next_cursor in seen_cursors):
             raise HostUnavailable("Codex App Server pagination is invalid")
+        seen_cursors.add(next_cursor)
         cursor = next_cursor
     raise HostUnavailable("Codex App Server pagination exceeds the bound")
+
+
+def page(server: AppServer, method: str, request_id: int,
+         params: dict[str, object]) -> list[dict[str, object]]:
+    """Retain the original list-returning helper contract for existing callers."""
+    return page_with_evidence(server, method, request_id, params)[0]
 
 
 def rollout_usage(path: str, thread_id: str, turn_ids: set[str], codex_home: pathlib.Path) -> dict[str, list[dict[str, object]]]:
@@ -172,19 +207,41 @@ def collect(parent_thread_id: str, native_id: str, *, command: str = "codex",
             raise HostUnavailable("native child identity is missing or ambiguous")
         thread = matches[0]
         thread_id = thread["id"]
-        turns = page(server, "thread/turns/list", 300, {"threadId": thread_id,
-                                                       "sortDirection": "asc", "itemsView": "notLoaded"})
+        turns, inventory_paging = page_with_evidence(
+            server, "thread/turns/list", 300,
+            {"threadId": thread_id, "sortDirection": "asc", "itemsView": "notLoaded"})
+        inventory_captured_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    provider = thread.get("modelProvider")
+    if provider is not None and (not isinstance(provider, str) or provider != provider.strip() or
+                                 not provider or len(provider) > 128):
+        raise HostUnavailable("native provider metadata is malformed")
+    provider_provenance = "codex-app-server-thread.modelProvider" if provider is not None else None
     if not turns:
-        return {"threadId": thread_id, "turns": [], "allTurnIds": [], "complete": False, "model": thread.get("model"),
-                "effort": thread.get("reasoningEffort")}
+        inventory = []
+        roster_digest = inventory_digest(thread_id, inventory)
+        evidence_digest = source_digest(roster_digest, inventory_paging, inventory_captured_at)
+        return {"threadId": thread_id, "turns": [], "allTurnIds": [], "turnInventory": inventory,
+                "inventoryProvenance": INVENTORY_PROVENANCE, "usageProvenance": USAGE_PROVENANCE,
+                "inventoryHostSource": INVENTORY_HOST_SOURCE, "inventoryPaging": inventory_paging,
+                "inventoryCapturedAt": inventory_captured_at, "inventoryRosterDigest": roster_digest,
+                "inventorySourceDigest": evidence_digest,
+                "complete": False, "provider": provider, "providerProvenance": provider_provenance,
+                "model": thread.get("model"), "effort": thread.get("reasoningEffort")}
     ids = [turn.get("id") for turn in turns]
     if len(set(ids)) != len(ids) or any(not isinstance(value, str) or not UUID.fullmatch(value) for value in ids):
         raise HostUnavailable("native turn identities are malformed")
     records = rollout_usage(str(thread.get("path")), thread_id, set(ids), home)
     observations = []
+    inventory = []
     complete = True
     for sequence, turn in enumerate(turns, 1):
-        if turn.get("status") not in {"completed", "failed", "interrupted"}:
+        status = turn.get("status")
+        if not isinstance(status, str) or not status or len(status) > 64:
+            raise HostUnavailable("native turn status is malformed")
+        row = {"turnId": turn["id"], "turnSequence": sequence, "status": status,
+               "terminal": status in TERMINAL_TURN_STATUSES, "usageAvailable": False}
+        inventory.append(row)
+        if status not in TERMINAL_TURN_STATUSES:
             complete = False
             continue
         rows = records.get(turn["id"], [])
@@ -192,14 +249,23 @@ def collect(parent_thread_id: str, native_id: str, *, command: str = "codex",
             complete = False
             continue
         responses = {}
-        for row in rows:
+        for usage_row in rows:
             # A later native record may correct the same response. Its final
             # counters replace the earlier observation, never add to it.
-            responses[row["response"]] = row["usage"]
+            responses[usage_row["response"]] = usage_row["usage"]
         total = {key: sum(value[key] for value in responses.values()) for key in COUNTS}
         if total != rows[-1]["turnTotal"]:
             complete = False
             continue
+        row["usageAvailable"] = True
         observations.append({"turnId": turn["id"], "turnSequence": sequence, "usage": total})
-    return {"threadId": thread_id, "turns": observations, "allTurnIds": ids, "complete": complete,
+    roster_digest = inventory_digest(thread_id, inventory)
+    evidence_digest = source_digest(roster_digest, inventory_paging, inventory_captured_at)
+    return {"threadId": thread_id, "turns": observations, "allTurnIds": ids,
+            "turnInventory": inventory, "inventoryProvenance": INVENTORY_PROVENANCE,
+            "usageProvenance": USAGE_PROVENANCE, "complete": complete,
+            "inventoryHostSource": INVENTORY_HOST_SOURCE, "inventoryPaging": inventory_paging,
+            "inventoryCapturedAt": inventory_captured_at, "inventoryRosterDigest": roster_digest,
+            "inventorySourceDigest": evidence_digest,
+            "provider": provider, "providerProvenance": provider_provenance,
             "model": thread.get("model"), "effort": thread.get("reasoningEffort")}

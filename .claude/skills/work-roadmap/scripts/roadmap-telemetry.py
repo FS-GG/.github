@@ -179,6 +179,8 @@ def publish_pending(config: HostConfig, state: dict[str, object]) -> bool:
             del state["pendingPublication"]
             if str(pending["operation"]).startswith("native-usage:"):
                 state.pop("usageIntent", None)
+            if str(pending["operation"]).startswith("native-roster:"):
+                state.pop("rosterIntent", None)
             save_state(config, state)
         raise ConfigurationError(message)
     if pending["operation"] == "population-only":
@@ -363,6 +365,113 @@ def prospective_coverage(state: dict[str, object]) -> str:
             else "native-collaboration-usage-unsupported")
 
 
+def native_snapshot(value: object) -> dict[str, object]:
+    """Validate the complete bounded collector projection before retaining it."""
+    if not isinstance(value, dict):
+        raise ConfigurationError("native usage snapshot is malformed")
+    thread_id = value.get("threadId")
+    identifiers = value.get("allTurnIds")
+    inventory = value.get("turnInventory")
+    turns = value.get("turns")
+    paging = value.get("inventoryPaging")
+    captured_at = value.get("inventoryCapturedAt")
+    roster_digest = value.get("inventoryRosterDigest")
+    source_digest = value.get("inventorySourceDigest")
+    if (not isinstance(thread_id, str) or not re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", thread_id) or
+            not isinstance(identifiers, list) or len(identifiers) > 1000 or
+            any(not isinstance(turn, str) or not re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", turn)
+                for turn in identifiers) or len(set(identifiers)) != len(identifiers) or
+            not isinstance(inventory, list) or len(inventory) != len(identifiers) or
+            not isinstance(turns, list) or len(turns) > len(identifiers) or
+            value.get("inventoryProvenance") != "codex-app-server-thread-turns-list" or
+            value.get("inventoryHostSource") != "codex-app-server:thread/turns/list" or
+            value.get("usageProvenance") != "codex-native-token-usage-record" or
+            type(value.get("complete")) is not bool):
+        raise ConfigurationError("native usage snapshot is malformed")
+    if (not isinstance(paging, list) or not 1 <= len(paging) <= 10 or
+            not isinstance(captured_at, str) or len(captured_at) > 40 or not captured_at.endswith("Z") or
+            not isinstance(roster_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", roster_digest) or
+            not isinstance(source_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", source_digest)):
+        raise ConfigurationError("native inventory evidence is malformed")
+    try:
+        if datetime.fromisoformat(captured_at.replace("Z", "+00:00")).utcoffset() is None:
+            raise ValueError
+    except ValueError as error:
+        raise ConfigurationError("native inventory evidence is malformed") from error
+    previous_cursor = None
+    for number, page_row in enumerate(paging, 1):
+        if (not isinstance(page_row, dict) or
+                set(page_row) != {"page", "requestCursor", "nextCursor", "rowCount"} or
+                page_row.get("page") != number or page_row.get("requestCursor") != previous_cursor or
+                type(page_row.get("rowCount")) is not int or not 0 <= page_row["rowCount"] <= 100 or
+                (page_row.get("nextCursor") is not None and
+                 (not isinstance(page_row["nextCursor"], str) or not page_row["nextCursor"] or
+                  len(page_row["nextCursor"]) > 1024))):
+            raise ConfigurationError("native inventory paging evidence is malformed")
+        if number < len(paging) and page_row["nextCursor"] is None:
+            raise ConfigurationError("native inventory paging evidence is incomplete")
+        previous_cursor = page_row["nextCursor"]
+    if paging[-1]["nextCursor"] is not None or sum(row["rowCount"] for row in paging) != len(inventory):
+        raise ConfigurationError("native inventory paging evidence disagrees with the roster")
+    for sequence, row in enumerate(inventory, 1):
+        if (not isinstance(row, dict) or
+                set(row) != {"turnId", "turnSequence", "status", "terminal", "usageAvailable"} or
+                row.get("turnId") != identifiers[sequence - 1] or row.get("turnSequence") != sequence or
+                not isinstance(row.get("status"), str) or not row["status"] or
+                type(row.get("terminal")) is not bool or
+                row["terminal"] != (row["status"] in {"completed", "failed", "interrupted"}) or
+                type(row.get("usageAvailable")) is not bool):
+            raise ConfigurationError("native turn inventory is malformed")
+    observed = []
+    usage_fields = {"input_tokens", "cached_input_tokens", "output_tokens",
+                    "reasoning_output_tokens", "total_tokens"}
+    for row in turns:
+        if (not isinstance(row, dict) or set(row) != {"turnId", "turnSequence", "usage"} or
+                row.get("turnId") not in identifiers or
+                row.get("turnSequence") != identifiers.index(row["turnId"]) + 1 or
+                row["turnId"] in observed or not isinstance(row.get("usage"), dict)):
+            raise ConfigurationError("native turn usage inventory is malformed")
+        usage = row["usage"]
+        if (set(usage) != usage_fields or
+                any(type(usage.get(field)) is not int or usage[field] < 0 for field in usage_fields) or
+                usage["cached_input_tokens"] > usage["input_tokens"] or
+                usage["reasoning_output_tokens"] > usage["output_tokens"] or
+                usage["input_tokens"] + usage["output_tokens"] != usage["total_tokens"]):
+            raise ConfigurationError("native turn usage counters are malformed")
+        observed.append(row["turnId"])
+    for row in inventory:
+        if row["usageAvailable"] != (row["turnId"] in observed) or (row["usageAvailable"] and not row["terminal"]):
+            raise ConfigurationError("native turn inventory and usage disagree")
+    roster = [{key: row[key] for key in ("turnId", "turnSequence", "status", "terminal")}
+              for row in inventory]
+    projected = json.dumps({"threadId": thread_id, "turnInventory": roster}, sort_keys=True,
+                           separators=(",", ":"), ensure_ascii=True).encode("ascii")
+    if hashlib.sha256(projected).hexdigest() != roster_digest:
+        raise ConfigurationError("native inventory roster digest disagrees with the roster")
+    source_projection = json.dumps(
+        {"hostSource": value["inventoryHostSource"], "paging": paging, "capturedAt": captured_at,
+         "rosterDigest": roster_digest}, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=True).encode("ascii")
+    if hashlib.sha256(source_projection).hexdigest() != source_digest:
+        raise ConfigurationError("native inventory source digest disagrees with its evidence")
+    derived_complete = bool(identifiers) and all(row["terminal"] and row["usageAvailable"] for row in inventory)
+    if value["complete"] != derived_complete:
+        raise ConfigurationError("native usage completeness is inconsistent")
+    provider = value.get("provider")
+    provider_provenance = value.get("providerProvenance")
+    if ((provider is None) != (provider_provenance is None) or
+            (provider is not None and (not isinstance(provider, str) or provider != provider.strip() or
+                                       not provider or len(provider) > 128)) or
+            (provider_provenance is not None and provider_provenance != "codex-app-server-thread.modelProvider")):
+        raise ConfigurationError("native provider observation is malformed")
+    for field in ("model", "effort"):
+        label = value.get(field)
+        if label is not None and (not isinstance(label, str) or label != label.strip() or
+                                  not label or len(label) > 128):
+            raise ConfigurationError(f"native {field} observation is malformed")
+    return value
+
+
 def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
     feature = validate_identity("feature", args.feature)
     item = validate_identity("item", args.item)
@@ -421,12 +530,24 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         raise ConfigurationError("parent dispatch must be started before a child is expected")
     baseline_ids: list[str] = []
     baseline_known = relation != "follow-up"
+    baseline_thread = baseline_provenance = None
+    baseline_evidence: dict[str, object] = {}
     if relation == "follow-up" and host_parent and parent.get("hostParentThreadId") == host_parent:
         try:
-            prior = collect_native_usage(host_parent, str(parent["nativeId"]))
+            prior = native_snapshot(collect_native_usage(host_parent, str(parent["nativeId"])))
             baseline_ids = list(prior["allTurnIds"])
+            baseline_thread = prior["threadId"]
+            baseline_provenance = prior["inventoryProvenance"]
+            baseline_evidence = {
+                "baselineHostSource": prior["inventoryHostSource"],
+                "baselinePaging": prior["inventoryPaging"],
+                "baselineCapturedAt": prior["inventoryCapturedAt"],
+                "baselineRosterDigest": prior["inventoryRosterDigest"],
+                "baselineSourceDigest": prior["inventorySourceDigest"],
+                "baselineProducerStream": parent["producerStream"],
+            }
             baseline_known = True
-        except (HostUnavailable, OSError, subprocess.SubprocessError):
+        except (HostUnavailable, ConfigurationError, OSError, subprocess.SubprocessError):
             pass
     token, activation, dispatch, invocation = (uuid.uuid4().hex for _ in range(4))
     root_invocation = invocation
@@ -459,6 +580,9 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
         "nativeId": None,
         "hostParentThreadId": host_parent,
         "baselineTurnIds": baseline_ids,
+        "baselineThreadId": baseline_thread,
+        "baselineProvenance": baseline_provenance,
+        **baseline_evidence,
         "usageBaselineKnown": baseline_known,
         "associationProducer": config.producer,
         "associationDigest": config.binding_digest,
@@ -533,17 +657,123 @@ def started(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
             "coverage": prospective_coverage(state)}
 
 
+def _finish_roster_intent(config: HostConfig, state: dict[str, object]) -> None:
+    intent = state.get("rosterIntent")
+    if not isinstance(intent, dict):
+        return
+    roster = state.get("expectedTurnRoster")
+    published = state.get("turnRosterPublishedCount", 0)
+    entries = intent.get("entries")
+    if (not isinstance(roster, list) or type(published) is not int or published < 0 or
+            not isinstance(entries, list) or intent.get("offset") != published):
+        raise ConfigurationError("native turn roster intent is malformed")
+    thread_id = state.get("nativeThreadId")
+    provenance = state.get("expectedTurnRosterProvenance")
+    baseline = state.get("baselineTurnIds", [])
+    if (not isinstance(thread_id, str) or provenance != "codex-app-server-thread-turns-list" or
+            not isinstance(baseline, list)):
+        raise ConfigurationError("native turn roster intent is malformed")
+    for position, entry in enumerate(entries, published + 1):
+        if not isinstance(entry, dict) or set(entry) != {"turnId", "turnSequence", "hash"}:
+            raise ConfigurationError("native turn roster intent is malformed")
+        sequence = len(baseline) + position
+        fingerprint = hashlib.sha256(json.dumps(
+            [thread_id, entry.get("turnId"), sequence, provenance],
+            separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()
+        if (position > len(roster) or entry["turnId"] != roster[position - 1] or
+                entry.get("turnSequence") != sequence or entry.get("hash") != fingerprint):
+            raise ConfigurationError("native turn roster intent differs from expected population")
+    state["turnRosterPublishedCount"] = published + len(entries)
+    del state["rosterIntent"]
+    save_state(config, state)
+
+
+def _resume_native_publication(config: HostConfig, state: dict[str, object]) -> None:
+    pending = state.get("pendingPublication")
+    if not isinstance(pending, dict):
+        return
+    operation = pending.get("operation")
+    try:
+        publish_pending(config, state)
+    except ConfigurationError:
+        if not state.get("pendingPublication"):
+            if isinstance(operation, str) and operation.startswith("native-roster:"):
+                state.pop("rosterIntent", None)
+            save_state(config, state)
+        raise
+    if operation == "native-thread":
+        state["nativeThreadPublished"] = True
+        save_state(config, state)
+    elif isinstance(operation, str) and operation.startswith("native-roster:"):
+        _finish_roster_intent(config, state)
+
+
+def _publish_turn_roster(config: HostConfig, state: dict[str, object], native: dict[str, object],
+                         eligible_ids: list[str]) -> None:
+    old = state.get("expectedTurnRoster", [])
+    if (not isinstance(old, list) or any(not isinstance(value, str) for value in old) or
+            eligible_ids[:len(old)] != old):
+        raise ConfigurationError("native expected turn roster changed or reordered")
+    state["expectedTurnRoster"] = eligible_ids
+    state["expectedTurnRosterProvenance"] = native["inventoryProvenance"]
+    state["nativeInventoryHostSource"] = native["inventoryHostSource"]
+    state["nativeInventoryPaging"] = native["inventoryPaging"]
+    state["nativeInventoryCapturedAt"] = native["inventoryCapturedAt"]
+    state["nativeInventoryRosterDigest"] = native["inventoryRosterDigest"]
+    state["nativeInventorySourceDigest"] = native["inventorySourceDigest"]
+    state["nativeInventoryProducerStream"] = state["producerStream"]
+    state["nativeInventoryBindingDigest"] = hashlib.sha256(json.dumps(
+        [native["inventorySourceDigest"], state["producerStream"], state["invocationId"]],
+        separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()
+    observed_provider = native.get("provider")
+    observed_provider_provenance = native.get("providerProvenance")
+    if (state.get("nativeProvider") is not None and
+            (state["nativeProvider"] != observed_provider or
+             state.get("nativeProviderProvenance") != observed_provider_provenance)):
+        raise ConfigurationError("native provider observation changed for a thread")
+    if observed_provider is not None or "nativeProvider" not in state:
+        state["nativeProvider"] = observed_provider
+        state["nativeProviderProvenance"] = observed_provider_provenance
+    save_state(config, state)
+    published = state.setdefault("turnRosterPublishedCount", 0)
+    if type(published) is not int or published < 0 or published > len(eligible_ids):
+        raise ConfigurationError("native turn roster publication cursor is malformed")
+    inventory = {row["turnId"]: row for row in native["turnInventory"]}
+    missing = eligible_ids[published:]
+    for offset in range(0, len(missing), 64):
+        entries = []
+        events = []
+        for turn_id in missing[offset:offset + 64]:
+            row = inventory[turn_id]
+            fingerprint = hashlib.sha256(json.dumps(
+                [native["threadId"], turn_id, row["turnSequence"], native["inventoryProvenance"]],
+                separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()
+            entries.append({"turnId": turn_id, "turnSequence": row["turnSequence"], "hash": fingerprint})
+            events.append(event(
+                "runtime-start", digest("runtime-turn-", str(state["invocationId"]), turn_id),
+                str(state["itemId"]), invocationId=state["invocationId"], threadId=native["threadId"],
+                turnId=turn_id, turnSequence=row["turnSequence"], processId=0, phase="turn"))
+        state["rosterIntent"] = {"offset": state["turnRosterPublishedCount"], "entries": entries}
+        operation = "native-roster:" + hashlib.sha256(json.dumps(entries, sort_keys=True).encode()).hexdigest()
+        # Preparation persists the roster intent and exact batch together. A
+        # restart therefore either replays pending bytes or finalizes an intent
+        # whose acknowledged publication already cleared pendingPublication.
+        prepare_publication(config, state, operation, str(state["phase"]), events)
+        publish_pending(config, state)
+        _finish_roster_intent(config, state)
+
+
 def reconcile_usage(config: HostConfig, state: dict[str, object]) -> str:
-    """Publish only verified native turns; retain missing coverage as unknown."""
+    """Retain and publish the exact native turn population before its usage."""
     if state.get("phase") != "terminal" or not state.get("hostParentThreadId"):
         return "native-collaboration-usage-unsupported"
     if not state.get("usageBaselineKnown", state.get("relation") != "follow-up"):
         return "native-collaboration-usage-unknown"
-    pending = state.get("pendingPublication")
-    if isinstance(pending, dict) and pending.get("operation") == "native-thread":
-        publish_pending(config, state)
-        state["nativeThreadPublished"] = True
-        save_state(config, state)
+    _resume_native_publication(config, state)
+    if isinstance(state.get("rosterIntent"), dict):
+        # No pending batch means publish_pending durably recorded an
+        # acknowledgement before the process stopped.
+        _finish_roster_intent(config, state)
     intent = state.get("usageIntent")
     if isinstance(intent, dict):
         if state.get("pendingPublication"):
@@ -559,8 +789,8 @@ def reconcile_usage(config: HostConfig, state: dict[str, object]) -> str:
         del state["usageIntent"]
         save_state(config, state)
     try:
-        native = collect_native_usage(str(state["hostParentThreadId"]), str(state["nativeId"]))
-    except (HostUnavailable, OSError, subprocess.SubprocessError):
+        native = native_snapshot(collect_native_usage(str(state["hostParentThreadId"]), str(state["nativeId"])))
+    except (HostUnavailable, ConfigurationError, OSError, subprocess.SubprocessError):
         return "native-collaboration-usage-unknown"
     ledger = state.setdefault("usageLedger", {})
     if not isinstance(ledger, dict):
@@ -577,11 +807,21 @@ def reconcile_usage(config: HostConfig, state: dict[str, object]) -> str:
                                       processId=0, phase="thread")], operation="native-thread")
         state["nativeThreadPublished"] = True
         save_state(config, state)
-    eligible = [turn for turn in native["turns"] if turn["turnId"] not in state.get("baselineTurnIds", [])]
+    baseline = state.get("baselineTurnIds", [])
+    if (not isinstance(baseline, list) or len(set(baseline)) != len(baseline) or
+            native["allTurnIds"][:len(baseline)] != baseline or
+            (state.get("baselineThreadId") and state["baselineThreadId"] != native["threadId"])):
+        return "native-collaboration-usage-unknown"
+    eligible_ids = list(native["allTurnIds"][len(baseline):])
+    _publish_turn_roster(config, state, native, eligible_ids)
+    eligible_set = set(eligible_ids)
+    eligible = [turn for turn in native["turns"] if turn["turnId"] in eligible_set]
     for turn in eligible:
         usage = turn["usage"]
         turn_id = str(turn["turnId"])
-        fingerprint = hashlib.sha256(json.dumps([turn["turnSequence"], usage], sort_keys=True).encode()).hexdigest()
+        fields = [turn["turnSequence"], state.get("nativeProvider"), state.get("nativeProviderProvenance"),
+                  native.get("model"), native.get("effort"), native["usageProvenance"], usage]
+        fingerprint = hashlib.sha256(json.dumps(fields, sort_keys=True).encode()).hexdigest()
         previous = ledger.get(turn_id)
         if previous and previous.get("hash") == fingerprint:
             continue
@@ -589,20 +829,25 @@ def reconcile_usage(config: HostConfig, state: dict[str, object]) -> str:
         observation = event("runtime-turn-usage", digest("runtime-turn-usage-", str(state["invocationId"]), turn_id),
                             str(state["itemId"]), invocationId=state["invocationId"],
                             threadId=native["threadId"], turnId=turn_id, turnSequence=turn["turnSequence"],
-                            provider="openai", requestedModel=state["model"], observedModel=native.get("model"),
-                            requestedEffort=state["effort"], observedEffort=native.get("effort"),
-                            backend="codex-collaboration", scope="turn", provenance="codex-native-token-usage-record",
-                            input=usage["input_tokens"], cachedInput=usage["cached_input_tokens"],
-                            output=usage["output_tokens"], reasoning=usage["reasoning_output_tokens"],
-                            total=usage["total_tokens"])
+                            provider=state.get("nativeProvider"), requestedModel=state["model"],
+                            observedModel=native.get("model"), requestedEffort=state["effort"],
+                            observedEffort=native.get("effort"), backend="codex-collaboration", scope="turn",
+                            provenance=native["usageProvenance"], input=usage["input_tokens"],
+                            cachedInput=usage["cached_input_tokens"], output=usage["output_tokens"],
+                            reasoning=usage["reasoning_output_tokens"], total=usage["total_tokens"])
         observation["revision"] = revision
         state["usageIntent"] = {"turnId": turn_id, "revision": revision, "hash": fingerprint}
-        save_state(config, state)
-        publish(config, state, [observation], operation=f"native-usage:{turn_id}:{revision}")
+        prepare_publication(config, state, f"native-usage:{turn_id}:{revision}",
+                            str(state["phase"]), [observation])
+        publish_pending(config, state)
         ledger[turn_id] = {"revision": revision, "hash": fingerprint}
         del state["usageIntent"]
         save_state(config, state)
-    return ("native-collaboration-usage-complete" if native["complete"] and eligible
+    observed_ids = [turn["turnId"] for turn in eligible]
+    return ("native-collaboration-usage-complete"
+            if native["complete"] and bool(eligible_ids) and observed_ids == eligible_ids
+            and set(ledger) == set(eligible_ids)
+            and state.get("turnRosterPublishedCount") == len(eligible_ids)
             else "native-collaboration-usage-unknown")
 
 
