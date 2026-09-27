@@ -163,10 +163,10 @@ def validate_observations(corpus: dict, observations: dict) -> dict:
     for identity, revisions in revisions_by_identity.items():
         versions = list(revisions.values())
         kinds = {event["kind"] for event in versions}
-        if "learn-experiment-assignment" in kinds and len(versions) > 1:
-            raise Refusal("experiment assignment cannot be redrawn on retry")
         if len(kinds) != 1:
             raise Refusal("observation identity cannot change kind across revisions")
+        if len(versions) > 1:
+            raise Refusal("learning pre-dispatch fact is immutable after persistence")
         corrections += len(versions) - 1
         by_identity[identity] = revisions[max(revisions)]
 

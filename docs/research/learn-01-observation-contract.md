@@ -13,9 +13,10 @@ dashboard snapshot. No execution intent is copied into a separate journal.
 | `runtime-native-inventory/1` | Invocation/original item, exact paged native-turn roster, provider/profile, affirmative support, follow-up baseline, and source digest |
 | `learn-shared-cost/1` | Stable native cost identity, provider total, exact integer allocation by original item, and source digest |
 
-Each kind is unique per original item. Exact receipt replay is idempotent. Assignments and the three versioned
-inventory/cost facts cannot be revised or redrawn after persistence. A changed roster or allocation requires a
-later versioned prospective contract/window; the current store does not claim correction semantics for these facts.
+Each kind is unique per original item. Exact receipt replay is idempotent. All six learning facts are immutable
+after persistence: a changed higher revision is refused for task snapshots, context manifests, assignments,
+inventories, and shared costs. A changed snapshot, manifest, roster, or allocation requires a later identity and
+versioned prospective contract/window; the current store does not claim correction semantics for these facts.
 The facts remain in `ingest_facts`, preserving schema-10 stores without migration,
 and the bounded private dashboard read exposes them as `learningObservations`. The containing item-detail/2
 envelope carries the negotiated `fsgg.telemetry.learn-item-detail/3` marker inside its hashed private bytes.
@@ -27,8 +28,7 @@ contribute to the public `factCount`.
 canonical snapshot revision, then derives assignment, expected-invocation coverage and provider totals solely
 from that immutable private snapshot. It refuses a second corpus input on this route. The synthetic source
 fixture remains a separate contract test. Exact duplicates and input ordering do not change the observation
-digest. Non-assignment observations that already have established store revision semantics continue to use those
-semantics; Package A's inventory and shared-cost facts are immutable.
+digest. Changed revisions of every Package A learning fact are refused consistently by ingest and analysis.
 Children, retries, reviews, rescues, and repairs remain costs of the canonical original item.
 Provider mismatch, unsupported usage, missing child usage, incomplete CI, and open invocations keep the affected
 issue incomplete. Missing provider/profile/support evidence never defaults to complete. Late facts become visible

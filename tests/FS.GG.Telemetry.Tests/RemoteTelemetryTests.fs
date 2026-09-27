@@ -171,6 +171,33 @@ module RemoteTelemetryTests =
         Assert.True(TelemetryStore.parseBatch bytes |> Result.isError)
 
     [<Fact>]
+    let ``LEARN task snapshot and context manifest revisions are refused by the schema-10 store`` () =
+        let root = Path.Combine(Path.GetTempPath(), "learn-predispatch-immutable-" + Guid.NewGuid().ToString("N"))
+        let original =
+            Encoding.UTF8.GetBytes
+                """{"schema":"fsgg.telemetry.ingest/1","ingestId":"learn-pre-1","sourceIdentity":"producer","generation":"g1","cursor":"1","eventCount":2,"events":[{"kind":"learn-task-snapshot","identity":"snapshot-1","itemId":"LEARN-01.2","revision":1,"snapshotId":"task-1","rubricVersion":"rubric-v1","snapshotDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","capturedAt":"2026-09-27T08:00:00Z"},{"kind":"learn-context-manifest","identity":"manifest-1","itemId":"LEARN-01.2","revision":1,"recipeId":"recipe-v1","recipeDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","manifestId":"manifest-v1","manifestDigest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}]}"""
+        let snapshotRevision =
+            Encoding.UTF8.GetBytes
+                """{"schema":"fsgg.telemetry.ingest/1","ingestId":"learn-pre-2","sourceIdentity":"producer","generation":"g1","cursor":"2","eventCount":1,"events":[{"kind":"learn-task-snapshot","identity":"snapshot-1","itemId":"LEARN-01.2","revision":2,"snapshotId":"task-1","rubricVersion":"rubric-v1","snapshotDigest":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","capturedAt":"2026-09-27T08:00:00Z"}]}"""
+        let manifestRevision =
+            Encoding.UTF8.GetBytes
+                """{"schema":"fsgg.telemetry.ingest/1","ingestId":"learn-pre-3","sourceIdentity":"producer","generation":"g1","cursor":"3","eventCount":1,"events":[{"kind":"learn-context-manifest","identity":"manifest-1","itemId":"LEARN-01.2","revision":2,"recipeId":"recipe-v1","recipeDigest":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","manifestId":"manifest-v1","manifestDigest":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}]}"""
+
+        try
+            TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
+            |> Result.defaultWith (String.concat "; " >> failwith)
+            |> ignore
+            Assert.True(TelemetryStoreApplication.ingest root TelemetryStore.ApprovedLocalDurable original |> Result.isOk)
+            Assert.True(TelemetryStoreApplication.ingest root TelemetryStore.ApprovedLocalDurable original |> Result.isOk)
+
+            for changed, label in [ snapshotRevision, "snapshot"; manifestRevision, "manifest" ] do
+                match TelemetryStoreApplication.ingest root TelemetryStore.ApprovedLocalDurable changed with
+                | Error errors -> Assert.Contains("immutable after pre-dispatch persistence", String.concat "; " errors)
+                | Ok _ -> Assert.Fail $"{label} revision must be refused"
+        finally
+            if Directory.Exists root then Directory.Delete(root, true)
+
+    [<Fact>]
     let ``LEARN v3 accounting facts are closed typed and immutable in schema 10`` () =
         let root = Path.Combine(Path.GetTempPath(), "learn-v3-" + Guid.NewGuid().ToString("N"))
         let exported = Path.Combine(Path.GetTempPath(), "learn-v3-public-" + Guid.NewGuid().ToString("N") + ".json")

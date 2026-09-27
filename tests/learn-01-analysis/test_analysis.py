@@ -349,15 +349,15 @@ class Learn01ContractTests(unittest.TestCase):
         self.assertEqual(1, result["duplicateFactsIgnored"])
         self.assertEqual(18, result["observationFacts"])
 
-    def test_non_assignment_correction_selects_newest_revision(self):
+    def test_non_assignment_correction_is_refused(self):
         observations = copy.deepcopy(OBSERVATIONS)
         correction = copy.deepcopy(next(event for event in observations["events"] if event["identity"] == "snapshot-001"))
         correction.update({"revision": 2, "snapshotDigest": "9" * 64})
         observations["events"].append(correction)
-        result = MODULE.validate_observations(CORPUS, observations)
-        self.assertEqual(1, result["correctedFacts"])
+        with self.assertRaisesRegex(MODULE.Refusal, "immutable after persistence"):
+            MODULE.validate_observations(CORPUS, observations)
 
-    def test_correction_selection_is_independent_of_revision_order(self):
+    def test_non_assignment_correction_refusal_is_independent_of_revision_order(self):
         forward = copy.deepcopy(OBSERVATIONS)
         original = next(event for event in forward["events"] if event["identity"] == "snapshot-001")
         correction = copy.deepcopy(original)
@@ -366,10 +366,9 @@ class Learn01ContractTests(unittest.TestCase):
         reversed_order = copy.deepcopy(OBSERVATIONS)
         original_index = next(index for index, event in enumerate(reversed_order["events"]) if event["identity"] == "snapshot-001")
         reversed_order["events"].insert(original_index, copy.deepcopy(correction))
-        expected = MODULE.validate_observations(CORPUS, forward)
-        actual = MODULE.validate_observations(CORPUS, reversed_order)
-        self.assertEqual(expected["observationDigest"], actual["observationDigest"])
-        self.assertEqual(1, actual["correctedFacts"])
+        for observations in (forward, reversed_order):
+            with self.assertRaisesRegex(MODULE.Refusal, "immutable after persistence"):
+                MODULE.validate_observations(CORPUS, observations)
 
     def test_boolean_revision_is_rejected(self):
         observations = copy.deepcopy(OBSERVATIONS)
@@ -382,7 +381,7 @@ class Learn01ContractTests(unittest.TestCase):
         redraw = copy.deepcopy(next(event for event in observations["events"] if event["identity"] == "assignment-001"))
         redraw.update({"revision": 2, "arm": "focused"})
         observations["events"].append(redraw)
-        with self.assertRaisesRegex(MODULE.Refusal, "cannot be redrawn"):
+        with self.assertRaisesRegex(MODULE.Refusal, "immutable after persistence"):
             MODULE.validate_observations(CORPUS, observations)
 
     def test_cross_item_or_missing_observation_is_rejected(self):
