@@ -14,6 +14,25 @@ open System.Threading.Tasks
 open System.Runtime.InteropServices
 open Microsoft.Win32.SafeHandles
 
+module internal SkillPrivateDurability =
+    [<DllImport("libc", EntryPoint = "open", SetLastError = true)>]
+    extern int private Open(string path, int flags)
+
+    [<DllImport("libc", EntryPoint = "fsync", SetLastError = true)>]
+    extern int private Fsync(int descriptor)
+
+    [<DllImport("libc", EntryPoint = "close", SetLastError = true)>]
+    extern int private Close(int descriptor)
+
+    let syncDirectory path =
+        if not (OperatingSystem.IsWindows()) then
+            let descriptor = Open(path, 0)
+            if descriptor < 0 then raise (IOException("private directory sync could not open the directory"))
+            try
+                if Fsync descriptor <> 0 then raise (IOException("private directory sync failed"))
+            finally
+                Close descriptor |> ignore
+
 module SkillTelemetryReaders =
     type Coverage =
         | Unknown
@@ -374,11 +393,10 @@ module SkillTelemetryReaders =
             then
                 failure "telemetry workspace credential association is missing or ambiguous"
             else
-                let matches = ResizeArray<string>()
+                let matches = ResizeArray<JsonElement>()
 
                 for association in associations.EnumerateArray() do
                     let mutable repositories = Unchecked.defaultof<JsonElement>
-                    let mutable destination = Unchecked.defaultof<JsonElement>
 
                     if
                         Json.stringProperty "producerId" association = Some producer
@@ -387,15 +405,18 @@ module SkillTelemetryReaders =
                         && (repositories.EnumerateArray()
                             |> Seq.exists (fun value ->
                                 value.ValueKind = JsonValueKind.String && value.GetString() = repository))
-                        && association.TryGetProperty("destination", &destination)
-                        && destination.ValueKind = JsonValueKind.Object
                     then
-                        match Json.stringProperty "credentialReference" destination with
-                        | Some value when Regex.IsMatch(value, "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$") -> matches.Add value
-                        | _ -> ()
+                        matches.Add(association.Clone())
 
                 if matches.Count = 1 then
-                    Ok(CredentialReference matches[0])
+                    let mutable destination = Unchecked.defaultof<JsonElement>
+                    if matches[0].TryGetProperty("destination", &destination) && destination.ValueKind = JsonValueKind.Object then
+                        match Json.stringProperty "credentialReference" destination with
+                        | Some value when Regex.IsMatch(value, "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$") ->
+                            Ok(CredentialReference value)
+                        | _ -> failure "telemetry workspace credential association is missing or ambiguous"
+                    else
+                        failure "telemetry workspace credential association is missing or ambiguous"
                 else
                     failure "telemetry workspace credential association is missing or ambiguous"
 
@@ -651,10 +672,17 @@ module SkillTelemetryReaders =
                 | _ -> failure "assignment identity is unavailable"
 
         let private ensurePrivateDirectory directory =
-            Directory.CreateDirectory directory |> ignore
-
-            if not (OperatingSystem.IsWindows()) then
-                File.SetUnixFileMode(directory, enum<UnixFileMode> 0o700)
+            if Directory.Exists directory then
+                let info = DirectoryInfo directory
+                if not (String.IsNullOrEmpty info.LinkTarget) then
+                    raise (IOException("private telemetry directory must not be a symlink"))
+                if not (OperatingSystem.IsWindows()) &&
+                   (File.GetUnixFileMode directory &&& enum<UnixFileMode> 0o077) <> enum<UnixFileMode> 0 then
+                    raise (IOException("private telemetry directory permissions must exclude group and other"))
+            else
+                Directory.CreateDirectory directory |> ignore
+                if not (OperatingSystem.IsWindows()) then
+                    File.SetUnixFileMode(directory, enum<UnixFileMode> 0o700)
 
         let createCiAssignment config feature item attempt parentAttempt producer =
             match
@@ -682,12 +710,17 @@ module SkillTelemetryReaders =
                             producerStream = value.ProducerStream
                         |}
 
-                    File.WriteAllText(temporary, JsonSerializer.Serialize(payload) + "\n", UTF8Encoding(false))
-
-                    if not (OperatingSystem.IsWindows()) then
-                        File.SetUnixFileMode(temporary, enum<UnixFileMode> 0o600)
-
-                    File.Move(temporary, target, true)
+                    try
+                        use stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+                        if not (OperatingSystem.IsWindows()) then
+                            File.SetUnixFileMode(temporary, enum<UnixFileMode> 0o600)
+                        let bytes = UTF8Encoding(false).GetBytes(JsonSerializer.Serialize(payload) + "\n")
+                        stream.Write bytes
+                        stream.Flush true
+                        File.Move(temporary, target, true)
+                        SkillPrivateDurability.syncDirectory directory
+                    finally
+                        if File.Exists temporary then File.Delete temporary
                     Ok target
                 with error ->
                     failure $"private assignment is unavailable: {error.Message}"
@@ -756,6 +789,21 @@ module SkillTelemetryReaders =
             if length > 0 && raw[length - 1] = byte '\n' then length <- length - 1
             if length > 0 && raw[length - 1] = byte '\r' then length <- length - 1
             UTF8Encoding(false, true).GetString(raw, 0, length)
+
+        let private isNativeUsageRecordPrefix (raw: byte array) =
+            try
+                let mutable reader = Utf8JsonReader(ReadOnlySpan<byte>(raw, 0, min 256 raw.Length), false, JsonReaderState())
+                let mutable awaitingType = false
+                let mutable decided = false
+                let mutable matched = false
+                while not decided && reader.Read() do
+                    if awaitingType then
+                        matched <- reader.TokenType = JsonTokenType.String && reader.GetString() = "token_usage_record"
+                        decided <- true
+                    elif reader.TokenType = JsonTokenType.PropertyName && reader.CurrentDepth = 1 && reader.GetString() = "type" then
+                        awaitingType <- true
+                matched
+            with :? JsonException -> false
 
         let coverageForParent (parent: Guid option) =
             match parent with
@@ -1196,13 +1244,8 @@ module SkillTelemetryReaders =
 
                     while next.IsSome && failed.IsNone do
                         let bytes = next.Value
-                        let line = decodedLine bytes
-
-                        if
-                            line.Length > 0
-                            && bytes.Length <= 1024 * 1024
-                            && line[.. min 255 (line.Length - 1)].Contains("\"token_usage_record\"")
-                        then
+                        if bytes.Length > 0 && isNativeUsageRecordPrefix bytes then
+                            let line = decodedLine bytes
                             match Json.parse (Encoding.UTF8.GetBytes line) with
                             | Error _ ->
                                 failed <-

@@ -3,6 +3,9 @@ namespace FS.GG.Coord.Cli
 open System
 open System.Text.Json
 
+module internal SkillPrivateDurability =
+    val syncDirectory: string -> unit
+
 module SkillTelemetryReaders =
     type Coverage =
         | Unknown

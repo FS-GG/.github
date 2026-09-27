@@ -163,6 +163,7 @@ module TelemetryApplication =
                 []
                 args
         | "telemetry" :: "dashboard" :: "status" :: args -> shape [ "--config"; "--repository" ] [] args
+        | "telemetry" :: "dashboard" :: "publisher-event" :: args -> shape [ "--config" ] [] args
         | "telemetry" :: "dashboard" :: "serve" :: args -> shape [ "--config"; "--repository" ] [ "--no-open" ] args
         | "telemetry" :: "runtime" :: "status" :: args ->
             shape [ "--store-root"; "--config"; "--repository" ] [] args
@@ -1045,6 +1046,15 @@ module TelemetryApplication =
 
     let tryRun argv =
         match argv with
+        | "telemetry" :: "dashboard" :: "publisher-event" :: args ->
+            Some(
+                validated
+                    "telemetry dashboard"
+                    [ "--config" ]
+                    []
+                    args
+                    (TelemetryDashboardApplication.run "publisher-event")
+            )
         | "telemetry" :: "dashboard" :: "status" :: args ->
             Some(
                 validated

@@ -166,6 +166,7 @@ module SkillTelemetryAdapter =
             stream.Flush true
             File.Move(temporary, path, true)
             if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(path, enum<UnixFileMode> 0o600)
+            SkillPrivateDurability.syncDirectory directory
             path
         finally
             if File.Exists temporary then File.Delete temporary
@@ -790,14 +791,24 @@ module SkillTelemetryAdapter =
                     "native-collaboration-usage-unknown"
 
     let private dashboard config =
-        let completed = execute 60 8192 [ config.Engine; "telemetry"; "dashboard"; "publisher-event"; "--config"; config.Path ]
-        if completed.Code <> 0 then jsonObject [ "status", node "advisory-failure"; "reason", node "publisher-event-subprocess-failed" ]
-        else
-            try
+        let failed reason = jsonObject [ "status", node "advisory-failure"; "reason", node reason ]
+        try
+            let completed = execute 60 8192 [ config.Engine; "telemetry"; "dashboard"; "publisher-event"; "--config"; config.Path ]
+            if completed.Code <> 0 then failed "publisher-event-subprocess-failed"
+            else
                 let health = JsonNode.Parse completed.Stdout
-                if health["schema"].GetValue<string>() <> "fsgg.telemetry.dashboard-event-health/1" then fail "invalid"
-                jsonObject [ "status", node "observed"; "health", health ]
-            with _ -> jsonObject [ "status", node "advisory-failure"; "reason", node "publisher-event-result-invalid" ]
+                let expected = Set [ "schema"; "status"; "reason"; "observedAt"; "publicRevision"; "commit" ]
+                match health with
+                | :? JsonObject as value when (value |> Seq.map (fun field -> field.Key) |> Set.ofSeq) = expected &&
+                                              optionalString "schema" value = Some "fsgg.telemetry.dashboard-event-health/1" ->
+                    jsonObject [ "status", node "observed"; "health", health ]
+                | _ -> failed "publisher-event-result-invalid"
+        with
+        | AdapterError _ -> failed "publisher-event-subprocess-failed"
+        | :? IOException -> failed "publisher-event-subprocess-failed"
+        | :? UnauthorizedAccessException -> failed "publisher-event-subprocess-failed"
+        | :? JsonException -> failed "publisher-event-result-invalid"
+        | _ -> failed "publisher-event-subprocess-failed"
 
     let private finish config token outcome explicitExitCode =
         if not (Set [ "completed"; "failed"; "cancelled"; "blocked" ] |> Set.contains outcome) then fail "outcome is invalid"

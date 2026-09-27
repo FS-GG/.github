@@ -39,8 +39,12 @@ module Program =
             Console.Out.WriteLine("{\"schema\":\"fsgg.telemetry.workspace-binding/1\",\"configPath\":\"" + configPath.Replace("\\", "\\\\") + "\",\"repository\":\"" + repository + "\",\"producerId\":\"fixture-association\",\"bindingDigest\":\"" + String.replicate 64 "a" + "\",\"destination\":\"remote\",\"privateStateRoot\":\"" + stateRoot.Replace("\\", "\\\\") + "\"}")
             0
         elif Array.contains "publisher-event" args then
-            Console.Out.WriteLine "{\"schema\":\"fsgg.telemetry.dashboard-event-health/1\",\"status\":\"ready\",\"reason\":null,\"observedAt\":\"2026-09-27T00:00:00Z\",\"publicRevision\":null,\"commit\":null}"
-            0
+            match Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_DASHBOARD_MODE" with
+            | "failure" -> Console.Error.WriteLine "synthetic advisory failure"; 1
+            | "invalid" -> Console.Out.WriteLine "{}"; 0
+            | _ ->
+                Console.Out.WriteLine "{\"schema\":\"fsgg.telemetry.dashboard-event-health/1\",\"status\":\"ready\",\"reason\":null,\"observedAt\":\"2026-09-27T00:00:00Z\",\"publicRevision\":null,\"commit\":null}"
+                0
         elif Array.contains "submit" args then
             Console.Out.WriteLine "applied"
             0
@@ -97,7 +101,19 @@ module Program =
         File.WriteAllText(review, "{\"schema\":\"fsgg.telemetry.process-review-input/1\",\"revision\":0,\"outcomeSynopsis\":\"fixture\",\"wentWell\":[],\"problems\":[],\"avoidableDelayOrRework\":[],\"processObservations\":[],\"remainingRisks\":[],\"concreteImprovements\":[],\"evidence\":[],\"evidenceCoverage\":\"fixture\",\"populationCoverage\":\"unknown\",\"confidence\":\"high\",\"reviewerModel\":\"fixture\",\"reviewerEffort\":\"fixture\",\"reviewedAt\":\"2026-09-27T00:00:01Z\",\"durationSeconds\":1}")
         for path in [ activity; complication; usage; review ] do
             if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(path, enum<UnixFileMode> 0o600)
-        let commands = [ Activity(token, FileInfo activity); Complication(token, FileInfo complication); UsageAttribution(token, FileInfo usage); Review(token, "attempt", FileInfo review) ]
+        let observed = run (Some host) (Activity(token, FileInfo activity))
+        require (observed.ExitCode = 0 &&
+                 (resultJson observed).GetProperty("dashboardPublication").GetProperty("status").GetString() = "observed") "dashboard publication hook was not observed"
+        Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_DASHBOARD_MODE", "invalid")
+        let invalidDashboard = run (Some host) (Activity(token, FileInfo activity))
+        require (invalidDashboard.ExitCode = 0 &&
+                 (resultJson invalidDashboard).GetProperty("dashboardPublication").GetProperty("reason").GetString() = "publisher-event-result-invalid") "malformed dashboard health changed the telemetry result"
+        Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_DASHBOARD_MODE", "failure")
+        let failedDashboard = run (Some host) (Activity(token, FileInfo activity))
+        require (failedDashboard.ExitCode = 0 &&
+                 (resultJson failedDashboard).GetProperty("dashboardPublication").GetProperty("reason").GetString() = "publisher-event-subprocess-failed") "dashboard subprocess failure changed the telemetry result"
+        Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_DASHBOARD_MODE", null)
+        let commands = [ Complication(token, FileInfo complication); UsageAttribution(token, FileInfo usage); Review(token, "attempt", FileInfo review) ]
         commands |> List.iter (fun command -> let result = run (Some host) command in require (result.ExitCode = 0) (text result.Stderr))
         File.WriteAllText(activity, "{\"schema\":\"fsgg.telemetry.activity-span-input/1\",\"revision\":0}")
         let refused = run (Some host) (Activity(token, FileInfo activity))

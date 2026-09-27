@@ -209,6 +209,27 @@ def test_workspace_credentials_and_assignment():
                             "parentAttemptId": None, "producerStream": "fixture-producer"},
                 "CI assignment payload changed")
 
+        assignment_directory = assignment_path.parent
+        assignment_directory.chmod(0o755)
+        refused = probe("ci", config, "SKILL-FS-01", "SKILL-FS-01.2", "another-attempt",
+                        environment=environment)
+        require(not refused["ok"] and "permissions" in refused["error"] and
+                (assignment_directory.stat().st_mode & 0o777) == 0o755 and
+                not (assignment_directory / "fixture-producer-SKILL-FS-01.2-another-attempt.json").exists(),
+                "existing public assignment directory was changed or accepted")
+        assignment_directory.chmod(0o700)
+
+        original = json.loads(config.read_text())
+        mixed = json.loads(config.read_text())
+        invalid = json.loads(json.dumps(mixed["associations"][0]))
+        invalid["destination"]["credentialReference"] = "invalid/reference"
+        mixed["associations"].append(invalid)
+        config.write_text(json.dumps(mixed))
+        refused = probe("discover", config, environment=environment)
+        require(not refused["ok"] and "missing or ambiguous" in refused["error"],
+                "mixed valid and invalid matching associations were treated as unique")
+        config.write_text(json.dumps(original))
+
         ambiguous = json.loads(config.read_text())
         ambiguous["associations"].append(ambiguous["associations"][0])
         config.write_text(json.dumps(ambiguous))
@@ -240,6 +261,19 @@ def test_native(native):
         comparable = {key: actual[key] for key in projection}
         require(comparable == projection, f"native differential mismatch: {comparable} != {projection}")
         require(actual["turns"][0]["total"] == 18, "duplicate response correction was added instead of replaced")
+
+        unrelated = sessions / "unrelated-label.jsonl"
+        unrelated.write_bytes(
+            b'{"type":"event_msg","label":"token_usage_record"}\n'
+            b'{"payload":{"type":"token_usage_record"},"type":"event_msg"}\n'
+            + rollout.read_bytes())
+        environment["SKILL_FS_01_ROLLOUT"] = str(unrelated)
+        ignored = probe("native", FAKE_CODEX, home, PARENT, "child_1", "root-1",
+                        "invocation-unrelated-label", 0, environment=environment)
+        require(ignored["ok"] and ignored["complete"] and len(ignored["turns"]) == 2 and
+                len(ignored["rolloutRecords"]) == len(actual["rolloutRecords"]),
+                "unrelated event_msg label was treated as native usage evidence")
+        environment["SKILL_FS_01_ROLLOUT"] = str(rollout)
 
         original_rollout = rollout.read_bytes()
         for wire_mode in ("crlf", "eof-final"):

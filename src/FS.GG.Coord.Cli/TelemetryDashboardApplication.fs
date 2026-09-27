@@ -68,6 +68,64 @@ module TelemetryDashboardApplication =
                     emitStatus "unavailable" binding.WorkspaceId binding.Repository (List.toArray errors)
                     red
 
+    let private publisherScript () =
+        let explicitPath = Environment.GetEnvironmentVariable "FSGG_TELEMETRY_DASHBOARD_SCRIPT"
+        if not (String.IsNullOrWhiteSpace explicitPath) then
+            if Path.IsPathFullyQualified explicitPath && File.Exists explicitPath then Some explicitPath else None
+        else
+            [ AppContext.BaseDirectory ]
+            |> Seq.collect (fun initial ->
+                let rec ancestors path =
+                    seq {
+                        yield path
+                        let parent = Directory.GetParent path
+                        if not (isNull parent) then yield! ancestors parent.FullName
+                    }
+                ancestors initial)
+            |> Seq.map (fun directory -> Path.Combine(directory, "tools", "telemetry-dashboard.py"))
+            |> Seq.tryFind File.Exists
+
+    let private publisherEvent args =
+        match publisherScript () with
+        | None ->
+            Console.Error.WriteLine("fsgg-coord-engine: telemetry dashboard: publisher-event script unavailable")
+            red
+        | Some script ->
+            try
+                let start = ProcessStartInfo("python3")
+                start.UseShellExecute <- false
+                start.RedirectStandardOutput <- true
+                start.RedirectStandardError <- true
+                start.ArgumentList.Add script
+                start.ArgumentList.Add "publisher-event"
+                option "--config" args |> Option.iter (fun path ->
+                    start.ArgumentList.Add "--config"
+                    start.ArgumentList.Add path)
+                use child = new Process(StartInfo = start)
+                if not (child.Start()) then
+                    Console.Error.WriteLine("fsgg-coord-engine: telemetry dashboard: publisher-event launch failed")
+                    red
+                else
+                    let stdout = child.StandardOutput.ReadToEndAsync()
+                    let stderr = child.StandardError.ReadToEndAsync()
+                    if not (child.WaitForExit(60000)) then
+                        try child.Kill(true) with _ -> ()
+                        Console.Error.WriteLine("fsgg-coord-engine: telemetry dashboard: publisher-event timed out")
+                        red
+                    else
+                        let output = stdout.GetAwaiter().GetResult()
+                        let errors = stderr.GetAwaiter().GetResult()
+                        if child.ExitCode <> 0 || Encoding.UTF8.GetByteCount output > 8192 then
+                            Console.Error.WriteLine("fsgg-coord-engine: telemetry dashboard: publisher-event failed")
+                            if not (String.IsNullOrWhiteSpace errors) then Console.Error.WriteLine(errors.Trim())
+                            red
+                        else
+                            Console.Out.Write output
+                            green
+            with _ ->
+                Console.Error.WriteLine("fsgg-coord-engine: telemetry dashboard: publisher-event launch failed")
+                red
+
     let private openBrowser (url: Uri) =
         try
             let info = ProcessStartInfo()
@@ -173,6 +231,7 @@ module TelemetryDashboardApplication =
     let run action args =
         match action with
         | "status" -> status args
+        | "publisher-event" -> publisherEvent args
         | "serve" -> serve args
         | _ ->
             Console.Error.WriteLine("fsgg-coord-engine: telemetry dashboard: unsupported action")
