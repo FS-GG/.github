@@ -57,7 +57,8 @@ class NativeUsageTests(unittest.TestCase):
                                          {"id": turn2, "status": "completed"}], "nextCursor": None}
                     raise AssertionError(method)
             with mock.patch.object(native, "AppServer", FakeServer):
-                result = native.collect(parent, "worker", codex_home=home)
+                result = native.collect(parent, "worker", root_invocation_id="root-invocation",
+                                        invocation_id="invocation", revision=0, codex_home=home)
             self.assertTrue(result["complete"])
             self.assertEqual([row["usage"]["total_tokens"] for row in result["turns"]], [51, 13])
             self.assertEqual(result["turns"][0]["usage"]["cached_input_tokens"], 24)
@@ -71,6 +72,17 @@ class NativeUsageTests(unittest.TestCase):
             self.assertRegex(result["inventoryCapturedAt"], r"Z$")
             self.assertRegex(result["inventoryRosterDigest"], r"^[0-9a-f]{64}$")
             self.assertRegex(result["inventorySourceDigest"], r"^[0-9a-f]{64}$")
+            binding = result["sourceBinding"]
+            binding_bytes = native.base64.b64decode(binding["bytesBase64"], validate=True)
+            binding_document = json.loads(binding_bytes)
+            self.assertEqual(binding["producerIdentity"], native.COLLECTOR_PRODUCER)
+            self.assertEqual(binding["sha256"], native.hashlib.sha256(binding_bytes).hexdigest())
+            self.assertEqual(binding_document["rootInvocationId"], "root-invocation")
+            self.assertEqual(binding_document["invocationId"], "invocation")
+            self.assertEqual(binding_document["parentThreadId"], parent)
+            self.assertEqual(binding_document["threadId"], child)
+            self.assertEqual(binding_document["orderedTurnIds"], [turn, turn2])
+            self.assertEqual(binding_document["revision"], 0)
             self.assertEqual(result["provider"], "openai")
             self.assertEqual(result["providerProvenance"], "codex-app-server-thread.modelProvider")
             self.assertGreaterEqual(len(result["appServerResponses"]), 3)
@@ -84,7 +96,8 @@ class NativeUsageTests(unittest.TestCase):
                         result["thread"].pop("modelProvider")
                     return result
             with mock.patch.object(native, "AppServer", NoProviderServer):
-                no_provider = native.collect(parent, "worker", codex_home=home)
+                no_provider = native.collect(parent, "worker", root_invocation_id="root-invocation",
+                                             invocation_id="invocation", revision=0, codex_home=home)
             self.assertFalse(no_provider["complete"])
 
             class MultiPageServer(FakeServer):
@@ -95,12 +108,14 @@ class NativeUsageTests(unittest.TestCase):
                         return {"data": [{"id": turn2, "status": "completed"}], "nextCursor": None}
                     return super().request(request_id, method, params)
             with mock.patch.object(native, "AppServer", MultiPageServer):
-                multi_page = native.collect(parent, "worker", codex_home=home)
+                multi_page = native.collect(parent, "worker", root_invocation_id="root-invocation",
+                                            invocation_id="invocation", revision=0, codex_home=home)
             self.assertFalse(multi_page["complete"])
             self.assertEqual(len(multi_page["inventoryPaging"]), 2)
             path.write_text(json.dumps(record("a", one, one)) + "\n")
             with mock.patch.object(native, "AppServer", FakeServer):
-                partial = native.collect(parent, "worker", codex_home=home)
+                partial = native.collect(parent, "worker", root_invocation_id="root-invocation",
+                                         invocation_id="invocation", revision=0, codex_home=home)
             self.assertFalse(partial["complete"])
             self.assertEqual(len(partial["turns"]), 1)
             self.assertEqual(partial["allTurnIds"], [turn, turn2])
@@ -125,12 +140,14 @@ class NativeUsageTests(unittest.TestCase):
                     return {"data": [], "nextCursor": None}
                 raise AssertionError(method)
         with mock.patch.object(native, "AppServer", lambda *_: ProviderServer("azure-openai")):
-            result = native.collect("11111111-1111-4111-8111-111111111111", "worker")
+            result = native.collect("11111111-1111-4111-8111-111111111111", "worker",
+                                    root_invocation_id="root-invocation", invocation_id="invocation", revision=0)
         self.assertEqual(result["provider"], "azure-openai")
         self.assertEqual(result["providerProvenance"], "codex-app-server-thread.modelProvider")
         with mock.patch.object(native, "AppServer", lambda *_: ProviderServer({"name": "invented"})), \
              self.assertRaisesRegex(native.HostUnavailable, "provider metadata"):
-            native.collect("11111111-1111-4111-8111-111111111111", "worker")
+            native.collect("11111111-1111-4111-8111-111111111111", "worker",
+                           root_invocation_id="root-invocation", invocation_id="invocation", revision=0)
 
         class CyclingServer:
             def request(self, _id, _method, params):

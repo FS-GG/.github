@@ -46,12 +46,19 @@ reopen is a prospectively rostered new dispatch/invocation rather than a correct
 
 Schema 10 retains each fact's canonical bytes, but it does not retain a binding from those bytes to independently
 captured source bytes and producer identity. The same caller can currently submit the outcomes, inventories and
-their claimed source digests in one receipt. Shared allocation facts likewise have no independently retained
-expected authority. Consequently every v3 issue remains `tokenComparisonQualified: false` with explicit
-`independent-inventory-source-unavailable` and `independent-shared-cost-authority-unavailable` reasons. The report
-may describe structurally validated observations, but it does not publish them as complete token totals. A future
-producer contract must retain the independent bytes, producer identity and capture ordering before qualification
-can become true; labels or self-hashed caller bytes are insufficient.
+their claimed source digests in one receipt. The roadmap native collector now retains a canonical producer-owned
+binding beside the exact App Server and rollout bytes. Those bound bytes name the producer, root invocation,
+invocation, native parent/thread, ordered turn roster and immutable inventory revision; the roadmap adapter
+recomputes their digest and checks them against durable dispatch state before retaining the pending inventory
+packet. This closes the local producer/verifier seam, but schema-10 storage and private-snapshot analysis do not yet
+consume that independent capture as authority.
+
+Shared allocation facts likewise have no independently retained expected authority. Consequently every v3 issue
+remains `tokenComparisonQualified: false` with explicit `independent-inventory-source-unavailable` and
+`independent-shared-cost-authority-unavailable` reasons. The report may describe structurally validated
+observations, but it does not publish them as complete token totals. A later store/read integration must preserve
+the producer capture binding, and shared-cost authority needs its own producer contract before qualification can
+become true; labels or self-hashed caller bytes are insufficient.
 
 The private snapshot counts learning rows before it emits `selection.complete`. More than 10,000 matching rows are
 refused rather than truncated or described as complete.

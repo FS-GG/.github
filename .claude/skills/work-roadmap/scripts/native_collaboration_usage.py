@@ -27,6 +27,7 @@ INVENTORY_PROVENANCE = "codex-app-server-thread-turns-list"
 USAGE_PROVENANCE = "codex-native-token-usage-record"
 INVENTORY_HOST_SOURCE = "codex-app-server:thread/turns/list"
 COLLECTOR_PRODUCER = "fsgg-work-roadmap-native-collector/1"
+SOURCE_BINDING_SCHEMA = "fsgg.telemetry.native-inventory-source-binding/1"
 MAX_EVIDENCE_BYTES = 512 * 1024
 
 
@@ -42,11 +43,32 @@ def inventory_digest(thread_id: str, inventory: list[dict[str, object]]) -> str:
     return hashlib.sha256(projection).hexdigest()
 
 
-def exact_evidence_digest(chunks: list[bytes], captured_at: str) -> str:
+def source_binding_bytes(*, captured_at: str, root_invocation_id: str, invocation_id: str,
+                         parent_thread_id: str, thread_id: str, ordered_turn_ids: list[str],
+                         revision: int) -> bytes:
+    if (not all(isinstance(value, str) and value and len(value) <= 256
+                for value in (root_invocation_id, invocation_id)) or
+            not UUID.fullmatch(parent_thread_id) or not UUID.fullmatch(thread_id) or
+            type(revision) is not int or revision < 0 or
+            any(not isinstance(value, str) or not UUID.fullmatch(value) for value in ordered_turn_ids) or
+            len(set(ordered_turn_ids)) != len(ordered_turn_ids)):
+        raise HostUnavailable("native source binding identity is malformed")
+    return json.dumps({
+        "schema": SOURCE_BINDING_SCHEMA,
+        "producerIdentity": COLLECTOR_PRODUCER,
+        "capturedAt": captured_at,
+        "hostSource": INVENTORY_HOST_SOURCE,
+        "rootInvocationId": root_invocation_id,
+        "invocationId": invocation_id,
+        "parentThreadId": parent_thread_id,
+        "threadId": thread_id,
+        "orderedTurnIds": ordered_turn_ids,
+        "revision": revision,
+    }, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+
+
+def exact_evidence_digest(chunks: list[bytes], binding: bytes) -> str:
     digest = hashlib.sha256()
-    binding = json.dumps({"collectorProducer": COLLECTOR_PRODUCER,
-                          "capturedAt": captured_at, "hostSource": INVENTORY_HOST_SOURCE},
-                         sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
     for chunk in [binding, *chunks]:
         digest.update(len(chunk).to_bytes(8, "big"))
         digest.update(chunk)
@@ -273,7 +295,8 @@ def rollout_usage(path: str, thread_id: str, turn_ids: set[str], codex_home: pat
     return records, evidence
 
 
-def collect(parent_thread_id: str, native_id: str, *, command: str = "codex",
+def collect(parent_thread_id: str, native_id: str, *, root_invocation_id: str,
+            invocation_id: str, revision: int, command: str = "codex",
             codex_home: pathlib.Path | None = None) -> dict[str, object]:
     if not UUID.fullmatch(parent_thread_id) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", native_id):
         raise HostUnavailable("native parent or child identity is unavailable")
@@ -327,10 +350,23 @@ def collect(parent_thread_id: str, native_id: str, *, command: str = "codex",
     app_records = app_evidence
     app_bytes = [raw for row in app_records for raw in (
         base64.b64decode(row["requestBytesBase64"]), base64.b64decode(row["responseBytesBase64"]))]
+    ids = [turn.get("id") for turn in turns]
+    if len(set(ids)) != len(ids) or any(not isinstance(value, str) or not UUID.fullmatch(value) for value in ids):
+        raise HostUnavailable("native turn identities are malformed")
+    binding = source_binding_bytes(
+        captured_at=inventory_captured_at, root_invocation_id=root_invocation_id,
+        invocation_id=invocation_id, parent_thread_id=parent_thread_id,
+        thread_id=thread_id, ordered_turn_ids=ids, revision=revision)
+    binding_record = {
+        "schema": SOURCE_BINDING_SCHEMA,
+        "producerIdentity": COLLECTOR_PRODUCER,
+        "sha256": hashlib.sha256(binding).hexdigest(),
+        "bytesBase64": base64.b64encode(binding).decode("ascii"),
+    }
     if not turns:
         inventory = []
         roster_digest = inventory_digest(thread_id, inventory)
-        evidence_digest = exact_evidence_digest(app_bytes, inventory_captured_at)
+        evidence_digest = exact_evidence_digest(app_bytes, binding)
         return {"threadId": thread_id, "turns": [], "allTurnIds": [], "turnInventory": inventory,
                 "inventoryProvenance": INVENTORY_PROVENANCE, "usageProvenance": USAGE_PROVENANCE,
                 "inventoryHostSource": INVENTORY_HOST_SOURCE, "inventoryPaging": inventory_paging,
@@ -338,10 +374,8 @@ def collect(parent_thread_id: str, native_id: str, *, command: str = "codex",
                 "inventorySourceDigest": evidence_digest,
                 "complete": False, "provider": provider, "providerProvenance": provider_provenance,
                 "model": model, "effort": effort, "collectorProducer": COLLECTOR_PRODUCER,
+                "sourceBinding": binding_record,
                 "appServerResponses": app_records, "rolloutRecords": []}
-    ids = [turn.get("id") for turn in turns]
-    if len(set(ids)) != len(ids) or any(not isinstance(value, str) or not UUID.fullmatch(value) for value in ids):
-        raise HostUnavailable("native turn identities are malformed")
     records, rollout_evidence = rollout_usage(str(thread.get("path")), thread_id, set(ids), home)
     observations = []
     inventory = []
@@ -372,7 +406,7 @@ def collect(parent_thread_id: str, native_id: str, *, command: str = "codex",
         row["usageAvailable"] = True
         observations.append({"turnId": turn["id"], "turnSequence": sequence, "usage": total})
     roster_digest = inventory_digest(thread_id, inventory)
-    evidence_digest = exact_evidence_digest(app_bytes + rollout_evidence, inventory_captured_at)
+    evidence_digest = exact_evidence_digest(app_bytes + rollout_evidence, binding)
     rollout_records = [{"sha256": hashlib.sha256(raw).hexdigest(),
                         "bytesBase64": base64.b64encode(raw).decode("ascii")} for raw in rollout_evidence]
     return {"threadId": thread_id, "turns": observations, "allTurnIds": ids,
@@ -383,4 +417,5 @@ def collect(parent_thread_id: str, native_id: str, *, command: str = "codex",
             "inventorySourceDigest": evidence_digest,
             "provider": provider, "providerProvenance": provider_provenance,
             "model": model, "effort": effort, "collectorProducer": COLLECTOR_PRODUCER,
+            "sourceBinding": binding_record,
             "appServerResponses": app_records, "rolloutRecords": rollout_records}

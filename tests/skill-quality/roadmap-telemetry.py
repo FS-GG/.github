@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import copy
 import hashlib
 import json
 import os
@@ -27,7 +28,9 @@ DEFAULTS = sys.modules["fsgg_telemetry_defaults"]
 
 
 def native_snapshot(thread, identifiers, turns, *, complete=True, provider="openai",
-                    model="gpt-6-astra", effort="high"):
+                    model="gpt-6-astra", effort="high", root_invocation="root-invocation",
+                    invocation="invocation", parent_thread="11111111-1111-4111-8111-111111111111",
+                    revision=0):
     observed = {row["turnId"] for row in turns}
     inventory = [{"turnId": turn, "turnSequence": sequence,
                   "status": "completed", "terminal": True,
@@ -61,10 +64,19 @@ def native_snapshot(thread, identifiers, turns, *, complete=True, provider="open
         "usage": row["usage"], "turn_token_usage": row["usage"]}},
         sort_keys=True, separators=(",", ":")).encode() + b"\n" for row in turns]
     source = hashlib.sha256()
-    binding = json.dumps({"collectorProducer": "fsgg-work-roadmap-native-collector/1",
-                          "capturedAt": captured_at,
-                          "hostSource": "codex-app-server:thread/turns/list"},
-                         sort_keys=True, separators=(",", ":")).encode()
+    binding_document = {
+        "schema": "fsgg.telemetry.native-inventory-source-binding/1",
+        "producerIdentity": "fsgg-work-roadmap-native-collector/1",
+        "capturedAt": captured_at,
+        "hostSource": "codex-app-server:thread/turns/list",
+        "rootInvocationId": root_invocation,
+        "invocationId": invocation,
+        "parentThreadId": parent_thread,
+        "threadId": thread,
+        "orderedTurnIds": list(identifiers),
+        "revision": revision,
+    }
+    binding = json.dumps(binding_document, sort_keys=True, separators=(",", ":")).encode()
     app_chunks = [raw for pair in zip(request_raw, app_raw) for raw in pair]
     for raw in [binding, *app_chunks, *rollout_raw]:
         source.update(len(raw).to_bytes(8, "big"))
@@ -86,6 +98,12 @@ def native_snapshot(thread, identifiers, turns, *, complete=True, provider="open
             "inventoryRosterDigest": roster_digest, "inventorySourceDigest": source_digest,
             "usageProvenance": "codex-native-token-usage-record",
             "collectorProducer": "fsgg-work-roadmap-native-collector/1",
+            "sourceBinding": {
+                "schema": binding_document["schema"],
+                "producerIdentity": binding_document["producerIdentity"],
+                "sha256": hashlib.sha256(binding).hexdigest(),
+                "bytesBase64": MODULE.base64.b64encode(binding).decode(),
+            },
             "appServerResponses": app_records, "rolloutRecords": records(rollout_raw),
             "provider": provider,
             "providerProvenance": ("codex-app-server-thread.modelProvider"
@@ -93,7 +111,85 @@ def native_snapshot(thread, identifiers, turns, *, complete=True, provider="open
             "model": model, "effort": effort, "complete": complete, "turns": turns}
 
 
+def bound_collector(snapshot_or_factory):
+    def collect(parent_thread, _native_id, *, root_invocation_id, invocation_id, revision):
+        source = snapshot_or_factory() if callable(snapshot_or_factory) else snapshot_or_factory
+        snapshot = copy.deepcopy(source)
+        document = {
+            "schema": "fsgg.telemetry.native-inventory-source-binding/1",
+            "producerIdentity": snapshot["collectorProducer"],
+            "capturedAt": snapshot["inventoryCapturedAt"],
+            "hostSource": snapshot["inventoryHostSource"],
+            "rootInvocationId": root_invocation_id,
+            "invocationId": invocation_id,
+            "parentThreadId": parent_thread,
+            "threadId": snapshot["threadId"],
+            "orderedTurnIds": snapshot["allTurnIds"],
+            "revision": revision,
+        }
+        binding = json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
+        snapshot["sourceBinding"] = {
+            "schema": document["schema"], "producerIdentity": document["producerIdentity"],
+            "sha256": hashlib.sha256(binding).hexdigest(),
+            "bytesBase64": MODULE.base64.b64encode(binding).decode(),
+        }
+        digest = hashlib.sha256()
+        chunks = [binding, *[MODULE.base64.b64decode(record[field])
+                              for record in snapshot["appServerResponses"]
+                              for field in ("requestBytesBase64", "responseBytesBase64")],
+                  *[MODULE.base64.b64decode(record["bytesBase64"])
+                    for record in snapshot["rolloutRecords"]]]
+        for value in chunks:
+            digest.update(len(value).to_bytes(8, "big")); digest.update(value)
+        snapshot["inventorySourceDigest"] = digest.hexdigest()
+        return snapshot
+    return collect
+
+
+def rewrite_source_binding(snapshot, **changes):
+    document = json.loads(MODULE.base64.b64decode(snapshot["sourceBinding"]["bytesBase64"]))
+    document.update(changes)
+    binding = json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
+    snapshot["sourceBinding"]["sha256"] = hashlib.sha256(binding).hexdigest()
+    snapshot["sourceBinding"]["bytesBase64"] = MODULE.base64.b64encode(binding).decode()
+    digest = hashlib.sha256()
+    chunks = [binding, *[MODULE.base64.b64decode(record[field])
+                          for record in snapshot["appServerResponses"]
+                          for field in ("requestBytesBase64", "responseBytesBase64")],
+              *[MODULE.base64.b64decode(record["bytesBase64"])
+                for record in snapshot["rolloutRecords"]]]
+    for value in chunks:
+        digest.update(len(value).to_bytes(8, "big")); digest.update(value)
+    snapshot["inventorySourceDigest"] = digest.hexdigest()
+
+
 class RoadmapTelemetryTests(unittest.TestCase):
+    def test_native_source_binding_refuses_order_and_durable_identity_substitution(self):
+        thread = "22222222-2222-4222-8222-222222222222"
+        turn = "33333333-3333-4333-8333-333333333333"
+        reordered = native_snapshot(thread, [turn], [], complete=False)
+        rewrite_source_binding(reordered, orderedTurnIds=[])
+        with self.assertRaisesRegex(MODULE.ConfigurationError, "source binding is malformed"):
+            MODULE.native_snapshot(reordered)
+
+        state = {
+            "rootInvocationId": "root-invocation", "invocationId": "invocation",
+            "hostParentThreadId": "11111111-1111-4111-8111-111111111111",
+        }
+        for field, changed in (("rootInvocationId", "foreign-root"),
+                               ("invocationId", "foreign-invocation")):
+            candidate = native_snapshot(thread, [turn], [], complete=False)
+            rewrite_source_binding(candidate, **{field: changed})
+            candidate = MODULE.native_snapshot(candidate)
+            with self.subTest(field=field), self.assertRaisesRegex(
+                    MODULE.ConfigurationError, "differs from durable dispatch identity"):
+                MODULE._publish_turn_roster(None, state, candidate, [turn])
+
+        revised = native_snapshot(thread, [turn], [], complete=False, revision=1)
+        revised = MODULE.native_snapshot(revised)
+        with self.assertRaisesRegex(MODULE.ConfigurationError, "differs from durable dispatch identity"):
+            MODULE._publish_turn_roster(None, state, revised, [turn])
+
     def test_thread_list_status_is_not_a_turn_and_exact_terminal_cursor_is_required(self):
         thread = "22222222-2222-4222-8222-222222222222"
         turn = "33333333-3333-4333-8333-333333333333"
@@ -108,10 +204,7 @@ class RoadmapTelemetryTests(unittest.TestCase):
         raw = json.dumps(response, separators=(",", ":")).encode() + b"\n"
         snapshot["appServerResponses"][2]["responseSha256"] = hashlib.sha256(raw).hexdigest()
         snapshot["appServerResponses"][2]["responseBytesBase64"] = MODULE.base64.b64encode(raw).decode()
-        binding = json.dumps({"collectorProducer": snapshot["collectorProducer"],
-                              "capturedAt": snapshot["inventoryCapturedAt"],
-                              "hostSource": snapshot["inventoryHostSource"]},
-                             sort_keys=True, separators=(",", ":")).encode()
+        binding = MODULE.base64.b64decode(snapshot["sourceBinding"]["bytesBase64"])
         digest = hashlib.sha256()
         for value in [binding, *[MODULE.base64.b64decode(record[field])
                                   for record in snapshot["appServerResponses"]
@@ -465,7 +558,7 @@ class RoadmapTelemetryTests(unittest.TestCase):
                     {"turnId": turn, "turnSequence": 1, "usage": dict(usage)}])
             with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": parent_thread}), \
                  mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
-                 mock.patch.object(MODULE, "collect_native_usage", side_effect=lambda *args: observation()) as collector:
+                 mock.patch.object(MODULE, "collect_native_usage", side_effect=bound_collector(observation)) as collector:
                 root = begin("root")
                 start(root, "root")
                 child = begin("child", "--parent-token", root, "--relation", "child")
@@ -488,6 +581,8 @@ class RoadmapTelemetryTests(unittest.TestCase):
             self.assertEqual(integration["fact"]["kind"], "runtime-native-inventory/1")
             self.assertEqual(integration["fact"]["expectedProvider"], "openai")
             self.assertEqual(integration["fact"]["expectedTurnIds"], [turn])
+            self.assertEqual(integration["sourceBinding"]["sha256"],
+                             MODULE.read_state(config, child)["nativeInventoryBindingDigest"])
             self.assertEqual(len([fact for batch in batches for fact in batch["events"]
                                   if fact["kind"] == "runtime-start" and fact["phase"] == "thread"]), 1)
             self.assertNotIn("native-collaboration-usage-unsupported", [fact["code"] for batch in batches
@@ -504,7 +599,7 @@ class RoadmapTelemetryTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "{}", "")
             parent_thread = "11111111-1111-4111-8111-111111111111"
             turns = ["33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444"]
-            def usage(*_):
+            def usage():
                 return native_snapshot("22222222-2222-4222-8222-222222222222", turns[:],
                         [{"turnId": turn, "turnSequence": index + 1,
                                    "usage": {"input_tokens": 10, "cached_input_tokens": 5,
@@ -521,7 +616,7 @@ class RoadmapTelemetryTests(unittest.TestCase):
                 MODULE.finish(config, MODULE.parser().parse_args(["finish", "--token", token, "--outcome", "completed"]))
             with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": parent_thread}), \
                  mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
-                 mock.patch.object(MODULE, "collect_native_usage", side_effect=usage):
+                 mock.patch.object(MODULE, "collect_native_usage", side_effect=bound_collector(usage)):
                 root = begin("root")
                 start(root, "root")
                 child = begin("child", "--parent-token", root, "--relation", "child")
@@ -571,7 +666,7 @@ class RoadmapTelemetryTests(unittest.TestCase):
                                     "total_tokens": 12}}])
             with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": "11111111-1111-4111-8111-111111111111"}), \
                  mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
-                 mock.patch.object(MODULE, "collect_native_usage", return_value=native):
+                 mock.patch.object(MODULE, "collect_native_usage", side_effect=bound_collector(native)):
                 root = begin("root")
                 start(root, "root")
                 child = begin("child", "--parent-token", root, "--relation", "child")
@@ -605,7 +700,7 @@ class RoadmapTelemetryTests(unittest.TestCase):
                 {"turnId": turns[0], "turnSequence": 1, "usage": usage}], complete=False)
             with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": parent}), \
                  mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
-                 mock.patch.object(MODULE, "collect_native_usage", return_value=partial):
+                 mock.patch.object(MODULE, "collect_native_usage", side_effect=bound_collector(partial)):
                 root = MODULE.begin(config, MODULE.parser().parse_args([
                     "begin", "--feature", "F", "--item", "F.1", "--attempt", "root",
                     "--model", "gpt-6-astra", "--effort", "high"]))["token"]
@@ -648,7 +743,7 @@ class RoadmapTelemetryTests(unittest.TestCase):
             partial = native_snapshot(thread, turns, [], complete=False)
             with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": parent}), \
                  mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
-                 mock.patch.object(MODULE, "collect_native_usage", return_value=partial):
+                 mock.patch.object(MODULE, "collect_native_usage", side_effect=bound_collector(partial)):
                 root = MODULE.begin(config, MODULE.parser().parse_args([
                     "begin", "--feature", "F", "--item", "I", "--attempt", "root",
                     "--model", "m", "--effort", "e"]))["token"]
@@ -693,7 +788,7 @@ class RoadmapTelemetryTests(unittest.TestCase):
                 {"turnId": turn, "turnSequence": 1, "usage": usage}], model="m", effort="e")
             with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": parent}), \
                  mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
-                 mock.patch.object(MODULE, "collect_native_usage", return_value=complete):
+                 mock.patch.object(MODULE, "collect_native_usage", side_effect=bound_collector(complete)):
                 root = MODULE.begin(config, MODULE.parser().parse_args([
                     "begin", "--feature", "F", "--item", "I", "--attempt", "root",
                     "--model", "m", "--effort", "e"]))["token"]
@@ -753,10 +848,7 @@ class RoadmapTelemetryTests(unittest.TestCase):
                     "bytesBase64": MODULE.base64.b64encode(raw).decode(),
                 }
             digest = hashlib.sha256()
-            binding = json.dumps({"collectorProducer": snapshot["collectorProducer"],
-                                  "capturedAt": snapshot["inventoryCapturedAt"],
-                                  "hostSource": snapshot["inventoryHostSource"]},
-                                 sort_keys=True, separators=(",", ":")).encode()
+            binding = MODULE.base64.b64decode(snapshot["sourceBinding"]["bytesBase64"])
             digest.update(len(binding).to_bytes(8, "big"))
             digest.update(binding)
             for record in snapshot["appServerResponses"]:
@@ -811,7 +903,8 @@ class RoadmapTelemetryTests(unittest.TestCase):
                  "baselineThreadId": thread, "pendingPublication": None}
         with tempfile.TemporaryDirectory() as scratch:
             config = self.config(pathlib.Path(scratch))
-            with mock.patch.object(MODULE, "collect_native_usage", return_value=current), \
+            state["rootInvocationId"] = "root-invocation"
+            with mock.patch.object(MODULE, "collect_native_usage", side_effect=bound_collector(current)), \
                  mock.patch.object(MODULE, "_resume_native_publication"), \
                  mock.patch.object(MODULE, "publish"):
                 # Thread publication precedes the overlap check in ordinary state;

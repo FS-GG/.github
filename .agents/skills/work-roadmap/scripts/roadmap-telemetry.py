@@ -500,10 +500,41 @@ def native_snapshot(value: object) -> dict[str, object]:
             rollout_raws.append(raw)
     except (TypeError, ValueError) as error:
         raise ConfigurationError("native source byte evidence is malformed") from error
+    source_binding = value.get("sourceBinding")
+    binding_fields = {"schema", "producerIdentity", "sha256", "bytesBase64"}
+    try:
+        if (not isinstance(source_binding, dict) or set(source_binding) != binding_fields or
+                source_binding.get("schema") != "fsgg.telemetry.native-inventory-source-binding/1" or
+                source_binding.get("producerIdentity") != value["collectorProducer"]):
+            raise ConfigurationError("native source binding is malformed")
+        binding = base64.b64decode(source_binding["bytesBase64"], validate=True)
+        binding_document = json.loads(binding)
+        expected_binding_fields = {"schema", "producerIdentity", "capturedAt", "hostSource",
+                                   "rootInvocationId", "invocationId", "parentThreadId", "threadId",
+                                   "orderedTurnIds", "revision"}
+        if (not binding or len(binding) > 16384 or
+                source_binding["sha256"] != hashlib.sha256(binding).hexdigest() or
+                not isinstance(binding_document, dict) or set(binding_document) != expected_binding_fields or
+                json.dumps(binding_document, sort_keys=True, separators=(",", ":"),
+                           ensure_ascii=True).encode("ascii") != binding or
+                binding_document["schema"] != source_binding["schema"] or
+                binding_document["producerIdentity"] != source_binding["producerIdentity"] or
+                binding_document["capturedAt"] != captured_at or
+                binding_document["hostSource"] != value["inventoryHostSource"] or
+                binding_document["threadId"] != thread_id or
+                binding_document["orderedTurnIds"] != identifiers or
+                not isinstance(binding_document["rootInvocationId"], str) or
+                not binding_document["rootInvocationId"] or len(binding_document["rootInvocationId"]) > 256 or
+                not isinstance(binding_document["invocationId"], str) or
+                not binding_document["invocationId"] or len(binding_document["invocationId"]) > 256 or
+                not isinstance(binding_document["parentThreadId"], str) or
+                not re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}",
+                                 binding_document["parentThreadId"]) or
+                type(binding_document["revision"]) is not int or binding_document["revision"] < 0):
+            raise ConfigurationError("native source binding is malformed")
+    except (KeyError, TypeError, ValueError, UnicodeError, json.JSONDecodeError) as error:
+        raise ConfigurationError("native source binding is malformed") from error
     exact_digest = hashlib.sha256()
-    binding = json.dumps({"collectorProducer": value["collectorProducer"],
-                          "capturedAt": captured_at, "hostSource": value["inventoryHostSource"]},
-                         sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
     for raw in [binding, *evidence_chunks]:
         exact_digest.update(len(raw).to_bytes(8, "big"))
         exact_digest.update(raw)
@@ -666,7 +697,10 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
     baseline_evidence: dict[str, object] = {}
     if relation == "follow-up" and host_parent and parent.get("hostParentThreadId") == host_parent:
         try:
-            prior = native_snapshot(collect_native_usage(host_parent, str(parent["nativeId"])))
+            prior = native_snapshot(collect_native_usage(
+                host_parent, str(parent["nativeId"]),
+                root_invocation_id=str(parent["rootInvocationId"]),
+                invocation_id=str(parent["invocationId"]), revision=0))
             baseline_ids = list(prior["allTurnIds"])
             baseline_thread = prior["threadId"]
             baseline_provenance = prior["inventoryProvenance"]
@@ -676,6 +710,7 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
                 "baselineCapturedAt": prior["inventoryCapturedAt"],
                 "baselineRosterDigest": prior["inventoryRosterDigest"],
                 "baselineSourceDigest": prior["inventorySourceDigest"],
+                "baselineSourceBinding": prior["sourceBinding"],
                 "baselineProducerStream": parent["producerStream"],
                 "baselineCollectorProducer": prior["collectorProducer"],
                 "baselineAppServerResponses": prior["appServerResponses"],
@@ -845,6 +880,15 @@ def _resume_native_publication(config: HostConfig, state: dict[str, object]) -> 
 
 def _publish_turn_roster(config: HostConfig, state: dict[str, object], native: dict[str, object],
                          eligible_ids: list[str]) -> None:
+    binding_record = native.get("sourceBinding")
+    binding = json.loads(base64.b64decode(binding_record["bytesBase64"], validate=True))
+    if (binding.get("rootInvocationId") != state.get("rootInvocationId") or
+            binding.get("invocationId") != state.get("invocationId") or
+            binding.get("parentThreadId") != state.get("hostParentThreadId") or
+            binding.get("threadId") != native.get("threadId") or
+            binding.get("orderedTurnIds") != native.get("allTurnIds") or
+            binding.get("revision") != 0):
+        raise ConfigurationError("native source binding differs from durable dispatch identity")
     old = state.get("expectedTurnRoster", [])
     if (not isinstance(old, list) or any(not isinstance(value, str) for value in old) or
             eligible_ids[:len(old)] != old):
@@ -857,9 +901,8 @@ def _publish_turn_roster(config: HostConfig, state: dict[str, object], native: d
     state["nativeInventoryRosterDigest"] = native["inventoryRosterDigest"]
     state["nativeInventorySourceDigest"] = native["inventorySourceDigest"]
     state["nativeInventoryProducerStream"] = state["producerStream"]
-    state["nativeInventoryBindingDigest"] = hashlib.sha256(json.dumps(
-        [native["inventorySourceDigest"], state["producerStream"], state["invocationId"]],
-        separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()
+    state["nativeInventoryBindingDigest"] = binding_record["sha256"]
+    state["nativeInventorySourceBinding"] = binding_record
     state["nativeInventoryCollectorProducer"] = native["collectorProducer"]
     state["nativeInventoryAppServerResponses"] = native["appServerResponses"]
     state["nativeInventoryRolloutRecords"] = native["rolloutRecords"]
@@ -885,6 +928,7 @@ def _publish_turn_roster(config: HostConfig, state: dict[str, object], native: d
                    "provider/profile provenance or a stable single-page inventory is unavailable"),
         "collectorProducer": native["collectorProducer"],
         "sourceDigest": native["inventorySourceDigest"],
+        "sourceBinding": binding_record,
         "fact": event(
             "runtime-native-inventory/1",
             digest("runtime-native-inventory-", str(state["invocationId"])),
@@ -953,7 +997,10 @@ def reconcile_usage(config: HostConfig, state: dict[str, object]) -> str:
         del state["usageIntent"]
         save_state(config, state)
     try:
-        native = native_snapshot(collect_native_usage(str(state["hostParentThreadId"]), str(state["nativeId"])))
+        native = native_snapshot(collect_native_usage(
+            str(state["hostParentThreadId"]), str(state["nativeId"]),
+            root_invocation_id=str(state["rootInvocationId"]),
+            invocation_id=str(state["invocationId"]), revision=0))
     except (HostUnavailable, ConfigurationError, OSError, subprocess.SubprocessError):
         return "native-collaboration-usage-unknown"
     ledger = state.setdefault("usageLedger", {})
