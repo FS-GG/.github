@@ -1636,6 +1636,7 @@ PRAGMA user_version=10;
             if count <> 1L then
                 invalidOp $"%s{fact.Kind} must be unique per item"
         | TelemetryStore.RuntimeNativeInventory _
+        | TelemetryStore.RuntimeNativeInventorySource _
         | TelemetryStore.LearnSharedCost _ -> ()
 
         match fact.ItemId, fact.Payload with
@@ -2546,7 +2547,8 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                 | Some(_, _, revision) when fact.Revision <= revision ->
                                     invalidOp $"native fact identity conflict: %s{fact.Kind}/%s{fact.Identity}"
                                 | Some(oldKind, _, _) when oldKind.StartsWith("learn-", StringComparison.Ordinal)
-                                    || oldKind = "runtime-native-inventory/1" ->
+                                    || oldKind = "runtime-native-inventory/1"
+                                    || oldKind = "runtime-native-inventory-source/1" ->
                                     invalidOp $"%s{oldKind} is immutable after pre-dispatch persistence"
                                 | Some(oldKind, oldDigest, revision) ->
                                     use correction = connection.CreateCommand()
@@ -4218,7 +4220,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
             ItemId = itemId
             FactCount =
                 runtimeScalar
-                    "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','learn-shared-cost/1');"
+                    "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1');"
             UsageObservations = usageCount
             DeliveryObservations = count "delivery_observations"
             Input = sum "input_count" + runtimeSum "input_count"
@@ -4626,7 +4628,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                             use learningCount = connection.CreateCommand()
                             learningCount.Transaction <- transaction
                             learningCount.CommandText <-
-                                $"SELECT count(*) FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','learn-shared-cost/1')%s{learningItemFilter};"
+                                $"SELECT count(*) FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1')%s{learningItemFilter};"
                             itemId |> Option.iter (parameter learningCount "$selected")
 
                             if Convert.ToInt64(learningCount.ExecuteScalar()) > 10000L then
@@ -4714,7 +4716,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                 "reviews", table "process_reviews" "item_id,scope,attempt_id,fact_revision"
                                 "learningObservations",
                                 rows
-                                    ($"SELECT identity,kind,item_id,revision,content_digest,canonical FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','learn-shared-cost/1')%s{learningItemFilter} ORDER BY item_id,kind,identity LIMIT 10001;")
+                                    ($"SELECT identity,kind,item_id,revision,content_digest,canonical FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1')%s{learningItemFilter} ORDER BY item_id,kind,identity LIMIT 10001;")
                             ]
                             |> List.iter (fun (name, value) -> content[name] <- value)
 
@@ -5537,7 +5539,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                         use command = connection.CreateCommand()
 
                         command.CommandText <-
-                            "SELECT DISTINCT item_id FROM ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','learn-shared-cost/1') ORDER BY item_id;"
+                            "SELECT DISTINCT item_id FROM ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1') ORDER BY item_id;"
 
                         use reader = command.ExecuteReader()
                         let items = ResizeArray<string>()

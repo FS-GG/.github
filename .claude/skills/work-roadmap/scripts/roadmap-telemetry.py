@@ -874,7 +874,39 @@ def _resume_native_publication(config: HostConfig, state: dict[str, object]) -> 
     if operation == "native-thread":
         state["nativeThreadPublished"] = True
         save_state(config, state)
+    elif operation == "native-inventory-authority":
+        state["nativeInventoryPublished"] = True
+        if isinstance(state.get("nativeInventoryIntegration"), dict):
+            state["nativeInventoryIntegration"]["status"] = "published"
+        save_state(config, state)
     elif isinstance(operation, str) and operation.startswith("native-roster:"):
+        _finish_roster_intent(config, state)
+
+
+def _publish_roster_entries(config: HostConfig, state: dict[str, object], native: dict[str, object],
+                            eligible_ids: list[str]) -> None:
+    published = state.setdefault("turnRosterPublishedCount", 0)
+    if type(published) is not int or published < 0 or published > len(eligible_ids):
+        raise ConfigurationError("native turn roster publication cursor is malformed")
+    inventory = {row["turnId"]: row for row in native["turnInventory"]}
+    missing = eligible_ids[published:]
+    for offset in range(0, len(missing), 64):
+        entries = []
+        events = []
+        for turn_id in missing[offset:offset + 64]:
+            row = inventory[turn_id]
+            fingerprint = hashlib.sha256(json.dumps(
+                [native["threadId"], turn_id, row["turnSequence"], native["inventoryProvenance"]],
+                separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()
+            entries.append({"turnId": turn_id, "turnSequence": row["turnSequence"], "hash": fingerprint})
+            events.append(event(
+                "runtime-start", digest("runtime-turn-", str(state["invocationId"]), turn_id),
+                str(state["itemId"]), invocationId=state["invocationId"], threadId=native["threadId"],
+                turnId=turn_id, turnSequence=row["turnSequence"], processId=0, phase="turn"))
+        state["rosterIntent"] = {"offset": state["turnRosterPublishedCount"], "entries": entries}
+        operation = "native-roster:" + hashlib.sha256(json.dumps(entries, sort_keys=True).encode()).hexdigest()
+        prepare_publication(config, state, operation, str(state["phase"]), events)
+        publish_pending(config, state)
         _finish_roster_intent(config, state)
 
 
@@ -893,6 +925,11 @@ def _publish_turn_roster(config: HostConfig, state: dict[str, object], native: d
     if (not isinstance(old, list) or any(not isinstance(value, str) for value in old) or
             eligible_ids[:len(old)] != old):
         raise ConfigurationError("native expected turn roster changed or reordered")
+    if state.get("nativeInventoryPublished"):
+        if eligible_ids != old:
+            raise ConfigurationError("published native inventory roster cannot change")
+        _publish_roster_entries(config, state, native, eligible_ids)
+        return
     state["expectedTurnRoster"] = eligible_ids
     state["expectedTurnRosterProvenance"] = native["inventoryProvenance"]
     state["nativeInventoryHostSource"] = native["inventoryHostSource"]
@@ -917,58 +954,42 @@ def _publish_turn_roster(config: HostConfig, state: dict[str, object], native: d
         state["nativeProviderProvenance"] = observed_provider_provenance
     fact_ready = (observed_provider is not None and native.get("model") == state.get("model") and
                   native.get("effort") == state.get("effort") and len(native["inventoryPaging"]) == 1)
-    # This checkout's schema-10 parser does not yet accept the Package A fact.
-    # Persist the exact wire packet beside its private source bytes so a later
-    # integration can publish those same fields. Do not send an unknown kind
-    # and then mistake a rejected batch for durable observation.
+    inventory_id = digest("native-inventory-", str(state["invocationId"]))
+    inventory_fact = event(
+        "runtime-native-inventory/1",
+        digest("runtime-native-inventory-", str(state["invocationId"])),
+        str(state["itemId"]), inventoryId=inventory_id,
+        originalItemId=state["originalItemId"], invocationId=state["invocationId"],
+        page=1, pages=1, expectedTurnIds=eligible_ids,
+        expectedProvider=observed_provider, requestedModel=state["model"],
+        requestedEffort=state["effort"], support="provider-native-final-turn-counters",
+        followupBaseline=len(state.get("baselineTurnIds", [])),
+        capturedAt=native["inventoryCapturedAt"],
+        sourceKind="provider-capability-and-dispatch-roster",
+        sourceDigest=native["inventorySourceDigest"]) if fact_ready else None
+    source_fact = event(
+        "runtime-native-inventory-source/1",
+        digest("runtime-native-inventory-source-", str(state["invocationId"])),
+        str(state["itemId"]), inventoryId=inventory_id,
+        originalItemId=state["originalItemId"], invocationId=state["invocationId"],
+        sourceDigest=native["inventorySourceDigest"], sourceBinding=binding_record) if fact_ready else None
     state["nativeInventoryIntegration"] = {
-        "status": "pending-store-contract" if fact_ready else "incomplete-source-provenance",
-        "reason": ("runtime-native-inventory/1 is not accepted by this branch's telemetry store"
-                   if fact_ready else
+        "status": "ready" if fact_ready else "incomplete-source-provenance",
+        "reason": (None if fact_ready else
                    "provider/profile provenance or a stable single-page inventory is unavailable"),
         "collectorProducer": native["collectorProducer"],
         "sourceDigest": native["inventorySourceDigest"],
         "sourceBinding": binding_record,
-        "fact": event(
-            "runtime-native-inventory/1",
-            digest("runtime-native-inventory-", str(state["invocationId"])),
-            str(state["itemId"]), inventoryId=digest("native-inventory-", str(state["invocationId"])),
-            originalItemId=state["originalItemId"], invocationId=state["invocationId"],
-            page=1, pages=1, expectedTurnIds=eligible_ids,
-            expectedProvider=observed_provider, requestedModel=state["model"],
-            requestedEffort=state["effort"], support="provider-native-final-turn-counters",
-            followupBaseline=len(state.get("baselineTurnIds", [])),
-            capturedAt=native["inventoryCapturedAt"],
-            sourceKind="provider-capability-and-dispatch-roster",
-            sourceDigest=native["inventorySourceDigest"]) if fact_ready else None,
+        "fact": inventory_fact,
+        "sourceFact": source_fact,
     }
     save_state(config, state)
-    published = state.setdefault("turnRosterPublishedCount", 0)
-    if type(published) is not int or published < 0 or published > len(eligible_ids):
-        raise ConfigurationError("native turn roster publication cursor is malformed")
-    inventory = {row["turnId"]: row for row in native["turnInventory"]}
-    missing = eligible_ids[published:]
-    for offset in range(0, len(missing), 64):
-        entries = []
-        events = []
-        for turn_id in missing[offset:offset + 64]:
-            row = inventory[turn_id]
-            fingerprint = hashlib.sha256(json.dumps(
-                [native["threadId"], turn_id, row["turnSequence"], native["inventoryProvenance"]],
-                separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()
-            entries.append({"turnId": turn_id, "turnSequence": row["turnSequence"], "hash": fingerprint})
-            events.append(event(
-                "runtime-start", digest("runtime-turn-", str(state["invocationId"]), turn_id),
-                str(state["itemId"]), invocationId=state["invocationId"], threadId=native["threadId"],
-                turnId=turn_id, turnSequence=row["turnSequence"], processId=0, phase="turn"))
-        state["rosterIntent"] = {"offset": state["turnRosterPublishedCount"], "entries": entries}
-        operation = "native-roster:" + hashlib.sha256(json.dumps(entries, sort_keys=True).encode()).hexdigest()
-        # Preparation persists the roster intent and exact batch together. A
-        # restart therefore either replays pending bytes or finalizes an intent
-        # whose acknowledged publication already cleared pendingPublication.
-        prepare_publication(config, state, operation, str(state["phase"]), events)
-        publish_pending(config, state)
-        _finish_roster_intent(config, state)
+    if fact_ready:
+        publish(config, state, [inventory_fact, source_fact], operation="native-inventory-authority")
+        state["nativeInventoryPublished"] = True
+        state["nativeInventoryIntegration"]["status"] = "published"
+        save_state(config, state)
+    _publish_roster_entries(config, state, native, eligible_ids)
 
 
 def reconcile_usage(config: HostConfig, state: dict[str, object]) -> str:
@@ -1060,9 +1081,6 @@ def reconcile_usage(config: HostConfig, state: dict[str, object]) -> str:
         and set(ledger) == set(eligible_ids)
         and state.get("turnRosterPublishedCount") == len(eligible_ids))
     save_state(config, state)
-    # Package B cannot observe an applied runtime-native-inventory/1 receipt on
-    # this branch. Local reconciliation is diagnostic and never upgrades the
-    # telemetry coverage claim.
     return "native-collaboration-usage-unknown"
 
 

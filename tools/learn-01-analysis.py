@@ -235,7 +235,8 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
 
     observation_kinds = {"learn-task-snapshot", "learn-context-manifest", "learn-experiment-assignment"}
     supported_kinds = observation_kinds | {
-        "learn-accounting-inventory/1", "runtime-native-inventory/1", "learn-shared-cost/1"
+        "learn-accounting-inventory/1", "runtime-native-inventory/1",
+        "runtime-native-inventory-source/1", "learn-shared-cost/1"
     }
     unknown_kinds = {event.get("kind") for event in events} - supported_kinds
     if unknown_kinds:
@@ -296,6 +297,7 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
         invocations[invocation] = (original, row)
 
     lineage_by_dispatch = {}
+    root_by_invocation = {}
     for row in content.get("lineage", []):
         dispatch = row.get("dispatch_id")
         invocation = row.get("invocation_id")
@@ -308,6 +310,11 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
             if admitted is not None and admitted[0] != original:
                 raise Refusal("invocation lineage crosses original-item identity")
             lineage_by_dispatch[dispatch] = value
+            root = row.get("root_invocation_id")
+            if isinstance(root, str) and root:
+                prior_root = root_by_invocation.setdefault(invocation, root)
+                if prior_root != root:
+                    raise Refusal("invocation has conflicting root lineage")
         else:
             raise Refusal("invocation lineage is not bound to an assigned original item")
     dispatch_original = {}
@@ -368,6 +375,7 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
     observed_usage = Counter()
     observed_providers = defaultdict(set)
     observed_turns = defaultdict(set)
+    observed_threads = defaultdict(set)
     seen_usage = set()
     for row in content.get("usage", []):
         identity = row.get("identity")
@@ -389,6 +397,11 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
                 raise Refusal("duplicate native turn identity: " + turn_id)
             else:
                 observed_turns[invocation].add(turn_id)
+            thread_id = row.get("thread_id")
+            if not isinstance(thread_id, str) or not thread_id:
+                incomplete[original].add("missing-native-thread-identity:" + identity)
+            else:
+                observed_threads[invocation].add(thread_id)
         total = row.get("total")
         provider = row.get("provider")
         requested_model = row.get("requested_model")
@@ -443,6 +456,7 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
                                       all(character in "0123456789abcdef" for character in value))
         accounting_by_original = {}
         native_pages = defaultdict(dict)
+        native_sources = {}
         shared_by_cost = {}
         for event in events:
             kind = event.get("kind")
@@ -492,6 +506,43 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
                 if page in native_pages[invocation]:
                     raise Refusal("duplicate native inventory page")
                 native_pages[invocation][page] = event
+            elif kind == "runtime-native-inventory-source/1":
+                invocation = event.get("invocationId")
+                original = event.get("originalItemId")
+                if (invocation not in invocations or original != original_by_item.get(event.get("itemId")) or
+                        invocations[invocation][0] != original or invocation in native_sources or
+                        not valid_digest(event.get("sourceDigest"))):
+                    raise Refusal("native inventory source crosses identity or is duplicated")
+                source_binding = event.get("sourceBinding")
+                if (not isinstance(source_binding, dict) or set(source_binding) != {
+                        "schema", "producerIdentity", "sha256", "bytesBase64"} or
+                        source_binding.get("schema") != "fsgg.telemetry.native-inventory-source-binding/1" or
+                        source_binding.get("producerIdentity") != "fsgg-work-roadmap-native-collector/1" or
+                        not valid_digest(source_binding.get("sha256"))):
+                    raise Refusal("native inventory source binding envelope is malformed")
+                try:
+                    binding_bytes = base64.b64decode(source_binding["bytesBase64"], validate=True)
+                    binding = json.loads(binding_bytes)
+                except (TypeError, ValueError, UnicodeError, json.JSONDecodeError) as error:
+                    raise Refusal("native inventory source binding bytes are malformed") from error
+                fields = {"schema", "producerIdentity", "capturedAt", "hostSource", "rootInvocationId",
+                          "invocationId", "parentThreadId", "threadId", "orderedTurnIds", "revision"}
+                if (not binding_bytes or len(binding_bytes) > 16384 or not isinstance(binding, dict) or
+                        set(binding) != fields or hashlib.sha256(binding_bytes).hexdigest() != source_binding["sha256"] or
+                        json.dumps(binding, separators=(",", ":"), sort_keys=True).encode("ascii") != binding_bytes or
+                        binding.get("schema") != source_binding["schema"] or
+                        binding.get("producerIdentity") != source_binding["producerIdentity"] or
+                        binding.get("hostSource") != "codex-app-server:thread/turns/list" or
+                        binding.get("invocationId") != invocation or
+                        binding.get("revision") != event.get("revision") or
+                        not isinstance(binding.get("rootInvocationId"), str) or not binding["rootInvocationId"] or
+                        not isinstance(binding.get("parentThreadId"), str) or not binding["parentThreadId"] or
+                        not isinstance(binding.get("threadId"), str) or not binding["threadId"] or
+                        not isinstance(binding.get("orderedTurnIds"), list) or
+                        len(binding["orderedTurnIds"]) != len(set(binding["orderedTurnIds"])) or
+                        not all(isinstance(turn, str) and turn for turn in binding["orderedTurnIds"])):
+                    raise Refusal("native inventory source binding is not canonical or internally bound")
+                native_sources[invocation] = (event, binding)
             elif kind == "learn-shared-cost/1":
                 cost = event.get("nativeCostId")
                 if not isinstance(cost, str) or not cost or cost in shared_by_cost:
@@ -535,7 +586,7 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
                 incomplete[original].add("incomplete-native-inventory-pages:" + invocation)
                 continue
             first = pages[1]
-            stable = ("inventoryId", "originalItemId", "invocationId", "expectedProvider", "requestedModel",
+            stable = ("revision", "inventoryId", "originalItemId", "invocationId", "expectedProvider", "requestedModel",
                       "requestedEffort", "support", "followupBaseline", "capturedAt", "sourceKind", "sourceDigest")
             if any(any(event.get(name) != first.get(name) for name in stable) for event in pages.values()):
                 raise Refusal("native inventory pages disagree on stable provenance")
@@ -574,8 +625,27 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
                 incomplete[original].add("requested-profile-mismatch:" + invocation)
             followups = sum(1 for dispatch, owner in dispatch_original.items()
                             if owner == original and dispatch_relation.get(dispatch) == "follow-up")
-            if first.get("followupBaseline") != followups:
+            baseline = first.get("followupBaseline")
+            if not isinstance(baseline, int) or isinstance(baseline, bool) or baseline < 0:
+                raise Refusal("native inventory follow-up baseline is malformed")
+            if baseline != followups:
                 incomplete[original].add("followup-baseline-mismatch:" + invocation)
+            authority = native_sources.get(invocation)
+            if authority is None:
+                incomplete[original].add("independent-inventory-source-unavailable")
+            else:
+                source, binding = authority
+                if (source.get("inventoryId") != first.get("inventoryId") or
+                        source.get("sourceDigest") != first.get("sourceDigest") or
+                        source.get("revision") != first.get("revision") or
+                        binding.get("capturedAt") != first.get("capturedAt") or
+                        binding.get("orderedTurnIds", [])[baseline:] != expected_turns or
+                        root_by_invocation.get(invocation) != binding.get("rootInvocationId") or
+                        observed_threads[invocation] != {binding.get("threadId")}):
+                    raise Refusal("native inventory source authority disagrees with inventory, lineage, or usage")
+
+        for invocation in native_sources.keys() - native_pages.keys():
+            raise Refusal("native inventory source has no matching inventory: " + invocation)
 
         expected_all_shared = set().union(*(
             set(event["expectedSharedCostIds"]) for event in accounting_by_original.values()
@@ -606,15 +676,11 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
             if allocated != total:
                 raise Refusal(cost + ": shared allocations do not equal provider total")
 
-        # Schema 10 retains canonical fact bytes but has no fact-to-independent-producer
-        # or retained source-byte binding. Source labels and digests inside those same
-        # caller supplied facts therefore cannot prove whole-item closure or allocation
-        # authority. Preserve the structurally checked data as descriptive evidence.
+        # Native source authority is a distinct canonical producer binding. Shared-cost
+        # allocation still has no corresponding independent authority, so the comparison
+        # remains fenced even when every invocation has a verified source binding.
         for original in assignments:
-            incomplete[original].update({
-                "independent-inventory-source-unavailable",
-                "independent-shared-cost-authority-unavailable",
-            })
+            incomplete[original].add("independent-shared-cost-authority-unavailable")
 
     arms = {item: assignment.get("arm") for item, assignment in assignments.items()}
     arm_totals = {arm: [] for arm in ("current", "focused")}

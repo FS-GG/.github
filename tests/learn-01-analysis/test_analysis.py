@@ -35,6 +35,31 @@ def private_envelope(content, workspace="workspace-a", version=2):
 
 
 class Learn01ContractTests(unittest.TestCase):
+    def native_source_event(self):
+        binding = {
+            "schema": "fsgg.telemetry.native-inventory-source-binding/1",
+            "producerIdentity": "fsgg-work-roadmap-native-collector/1",
+            "capturedAt": "2026-01-01T00:00:01Z",
+            "hostSource": "codex-app-server:thread/turns/list",
+            "rootInvocationId": "inv-I-001",
+            "invocationId": "inv-I-001",
+            "parentThreadId": "parent-thread-I-001",
+            "threadId": "thread-I-001",
+            "orderedTurnIds": ["turn-I-001"],
+            "revision": 1,
+        }
+        raw = json.dumps(binding, separators=(",", ":"), sort_keys=True).encode("ascii")
+        return {
+            "kind": "runtime-native-inventory-source/1", "identity": "native-source-I-001",
+            "itemId": "I-001", "revision": 1, "inventoryId": "native-I-001",
+            "originalItemId": "I-001", "invocationId": "inv-I-001", "sourceDigest": "b" * 64,
+            "sourceBinding": {
+                "schema": binding["schema"], "producerIdentity": binding["producerIdentity"],
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "bytesBase64": base64.b64encode(raw).decode("ascii"),
+            },
+        }
+
     def complete_v3_content(self):
         events = [copy.deepcopy(event) for event in OBSERVATIONS["events"] if event.get("itemId") == "I-001"]
         events.extend([
@@ -78,10 +103,12 @@ class Learn01ContractTests(unittest.TestCase):
             }],
             "lineage": [{
                 "item_id": "I-001", "dispatch_id": "dispatch-I-001", "invocation_id": "inv-I-001",
+                "root_invocation_id": "inv-I-001",
             }],
             "usage": [{
                 "identity": "usage-I-001", "item_id": "I-001", "invocation_id": "inv-I-001",
                 "turn_id": "turn-I-001", "provider": "openai", "requested_model": "gpt-fixed",
+                "thread_id": "thread-I-001",
                 "observed_model": "gpt-fixed", "requested_effort": "medium", "observed_effort": "medium",
                 "total": 100,
             }],
@@ -166,6 +193,33 @@ class Learn01ContractTests(unittest.TestCase):
         })
         reopened_result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(reopened, version=3))
         self.assertIn("expected-dispatch-roster-mismatch", reopened_result["incompleteTokenReasons"]["I-001"])
+
+    def test_native_source_authority_is_consumed_but_shared_cost_stays_unqualified(self):
+        content = self.complete_v3_content()
+        source = self.native_source_event()
+        content["learningObservations"].append({
+            "canonical": json.dumps(source, separators=(",", ":"), sort_keys=True)
+        })
+        result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content, version=3))
+        self.assertFalse(result["tokenComparisonQualified"])
+        self.assertEqual(["independent-shared-cost-authority-unavailable"],
+                         result["incompleteTokenReasons"]["I-001"])
+
+        for field, changed in (("rootInvocationId", "foreign-root"),
+                               ("orderedTurnIds", ["foreign-turn"]),
+                               ("revision", 2)):
+            tampered = copy.deepcopy(content)
+            event = copy.deepcopy(source)
+            binding = json.loads(base64.b64decode(event["sourceBinding"]["bytesBase64"]))
+            binding[field] = changed
+            raw = json.dumps(binding, separators=(",", ":"), sort_keys=True).encode("ascii")
+            event["sourceBinding"]["sha256"] = hashlib.sha256(raw).hexdigest()
+            event["sourceBinding"]["bytesBase64"] = base64.b64encode(raw).decode("ascii")
+            tampered["learningObservations"][-1] = {
+                "canonical": json.dumps(event, separators=(",", ":"), sort_keys=True)
+            }
+            with self.subTest(field=field), self.assertRaises(MODULE.Refusal):
+                MODULE.analyze_private_snapshot(CONTRACT, private_envelope(tampered, version=3))
 
     def test_v3_refuses_foreign_terminal_future_capture_and_zero_digest(self):
         foreign = self.complete_v3_content()

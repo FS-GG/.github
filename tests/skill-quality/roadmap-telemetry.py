@@ -577,12 +577,18 @@ class RoadmapTelemetryTests(unittest.TestCase):
             self.assertEqual(facts[0]["identity"], facts[1]["identity"])
             self.assertEqual(facts[0]["invocationId"], MODULE.read_state(config, child)["invocationId"])
             integration = MODULE.read_state(config, child)["nativeInventoryIntegration"]
-            self.assertEqual(integration["status"], "pending-store-contract")
+            self.assertEqual(integration["status"], "published")
             self.assertEqual(integration["fact"]["kind"], "runtime-native-inventory/1")
+            self.assertEqual(integration["sourceFact"]["kind"], "runtime-native-inventory-source/1")
             self.assertEqual(integration["fact"]["expectedProvider"], "openai")
             self.assertEqual(integration["fact"]["expectedTurnIds"], [turn])
             self.assertEqual(integration["sourceBinding"]["sha256"],
                              MODULE.read_state(config, child)["nativeInventoryBindingDigest"])
+            authority = [fact for batch in batches for fact in batch["events"]
+                         if fact["kind"] in {"runtime-native-inventory/1",
+                                             "runtime-native-inventory-source/1"}]
+            self.assertEqual([fact["kind"] for fact in authority],
+                             ["runtime-native-inventory/1", "runtime-native-inventory-source/1"])
             self.assertEqual(len([fact for batch in batches for fact in batch["events"]
                                   if fact["kind"] == "runtime-start" and fact["phase"] == "thread"]), 1)
             self.assertNotIn("native-collaboration-usage-unsupported", [fact["code"] for batch in batches
@@ -805,7 +811,7 @@ class RoadmapTelemetryTests(unittest.TestCase):
                 state = MODULE.read_state(config, child)
                 self.assertTrue(state.get("rosterIntent"))
                 self.assertTrue(state.get("pendingPublication"))
-                self.assertEqual(state["nativeInventoryIntegration"]["status"], "pending-store-contract")
+                self.assertEqual(state["nativeInventoryIntegration"]["status"], "published")
                 retained_digest = state["nativeInventorySourceDigest"]
                 retained_responses = state["nativeInventoryAppServerResponses"]
                 second = MODULE.usage_reconcile(config, MODULE.parser().parse_args([

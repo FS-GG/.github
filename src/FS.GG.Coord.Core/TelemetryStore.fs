@@ -324,6 +324,8 @@ module TelemetryStore =
             inventoryId: string * originalItemId: string * invocationId: string * page: int64 * pages: int64 *
             expectedTurnIds: string * expectedProvider: string * requestedModel: string * requestedEffort: string *
             followupBaseline: int64 * capturedAt: string * sourceDigest: string
+        | RuntimeNativeInventorySource of
+            inventoryId: string * originalItemId: string * invocationId: string * sourceDigest: string * sourceBinding: string
         | LearnSharedCost of
             nativeCostId: string * provider: string * providerTotalTokens: int64 * allocations: string * sourceDigest: string
 
@@ -591,6 +593,70 @@ module TelemetryStore =
         | true, value when value.ValueKind = JsonValueKind.Array ->
             Error $"%s{label}.%s{name} must contain between 1 and 64 entries"
         | _ -> Error $"%s{label}.%s{name} must be an array"
+
+    let private requiredNativeSourceBinding
+        (label: string)
+        (node: JsonElement)
+        (name: string)
+        (invocation: string)
+        (revision: int64)
+        =
+        match node.TryGetProperty name with
+        | true, envelope when envelope.ValueKind = JsonValueKind.Object ->
+            let envelopeLabel = $"%s{label}.%s{name}"
+            match
+                closed envelopeLabel (Set [ "schema"; "producerIdentity"; "sha256"; "bytesBase64" ]) envelope,
+                requiredText envelopeLabel envelope "schema",
+                requiredText envelopeLabel envelope "producerIdentity",
+                requiredText envelopeLabel envelope "sha256",
+                requiredText envelopeLabel envelope "bytesBase64"
+            with
+            | Ok(), Ok schema, Ok producer, Ok digest, Ok encoded when
+                schema = "fsgg.telemetry.native-inventory-source-binding/1"
+                && producer = "fsgg-work-roadmap-native-collector/1"
+                && Regex.IsMatch(digest, "^[0-9a-f]{64}$")
+                ->
+                try
+                    let bytes = Convert.FromBase64String encoded
+                    if bytes.Length = 0 || bytes.Length > 16384 || CanonicalJson.sha256 bytes <> digest then
+                        Error $"%s{envelopeLabel} bytes or digest are invalid"
+                    else
+                        use document = JsonDocument.Parse bytes
+                        let binding = document.RootElement
+                        let fields =
+                            Set [ "schema"; "producerIdentity"; "capturedAt"; "hostSource"; "rootInvocationId";
+                                  "invocationId"; "parentThreadId"; "threadId"; "orderedTurnIds"; "revision" ]
+                        match
+                            closed $"%s{envelopeLabel}.bytes" fields binding,
+                            requiredText envelopeLabel binding "schema",
+                            requiredText envelopeLabel binding "producerIdentity",
+                            requiredTimestamp envelopeLabel binding "capturedAt",
+                            requiredText envelopeLabel binding "hostSource",
+                            requiredText envelopeLabel binding "rootInvocationId",
+                            requiredText envelopeLabel binding "invocationId",
+                            requiredText envelopeLabel binding "parentThreadId",
+                            requiredText envelopeLabel binding "threadId",
+                            requiredUniqueTextRoster envelopeLabel binding "orderedTurnIds",
+                            requiredInt envelopeLabel binding "revision",
+                            CanonicalJson.canonicalize bytes
+                        with
+                        | Ok(), Ok bindingSchema, Ok bindingProducer, Ok _, Ok hostSource, Ok _, Ok bindingInvocation,
+                          Ok parentThread, Ok thread, Ok _, Ok bindingRevision, Ok canonical when
+                            canonical = Encoding.UTF8.GetString bytes
+                            && bindingSchema = schema
+                            && bindingProducer = producer
+                            && hostSource = "codex-app-server:thread/turns/list"
+                            && bindingInvocation = invocation
+                            && bindingRevision = revision
+                            && Regex.IsMatch(parentThread, "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+                            && Regex.IsMatch(thread, "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+                            -> CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(envelope.GetRawText()))
+                        | _ -> Error $"%s{envelopeLabel} canonical bytes are malformed or unbound"
+                with
+                | :? FormatException
+                | :? JsonException -> Error $"%s{envelopeLabel} bytes are malformed"
+            | _ -> Error $"%s{envelopeLabel} is malformed"
+        | _ -> Error $"%s{label}.%s{name} must be an object"
 
     let private requiredEvidence (label: string) (node: JsonElement) (name: string) =
         match node.TryGetProperty name with
@@ -2029,6 +2095,22 @@ module TelemetryStore =
                                                 followups, captured, digest))
                 | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
                     Error $"%s{label} has invalid paging, support, source kind, or digest"
+                | values -> Error(sprintf "%A" values)
+            | "runtime-native-inventory-source/1" ->
+                match
+                    requiredText label node "inventoryId",
+                    requiredText label node "originalItemId",
+                    requiredText label node "invocationId",
+                    requiredText label node "sourceDigest"
+                with
+                | Ok inventory, Ok original, Ok invocation, Ok digest when itemId.IsSome
+                    && Regex.IsMatch(digest, "^[0-9a-f]{64}$") && digest <> String('0', 64) ->
+                    requiredNativeSourceBinding label node "sourceBinding" invocation revision
+                    |> Result.bind (fun binding ->
+                        make
+                            [ "inventoryId"; "originalItemId"; "invocationId"; "sourceDigest"; "sourceBinding" ]
+                            (RuntimeNativeInventorySource(inventory, original, invocation, digest, binding)))
+                | Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has invalid source digest"
                 | values -> Error(sprintf "%A" values)
             | "learn-shared-cost/1" ->
                 match

@@ -239,6 +239,53 @@ module RemoteTelemetryTests =
             if File.Exists exported then File.Delete exported
 
     [<Fact>]
+    let ``LEARN native inventory source binding is canonical durable and closed`` () =
+        let root = Path.Combine(Path.GetTempPath(), "learn-native-source-" + Guid.NewGuid().ToString("N"))
+        let binding =
+            """{"capturedAt":"2026-09-27T08:00:00Z","hostSource":"codex-app-server:thread/turns/list","invocationId":"invocation-1","orderedTurnIds":["turn-1"],"parentThreadId":"11111111-1111-4111-8111-111111111111","producerIdentity":"fsgg-work-roadmap-native-collector/1","revision":1,"rootInvocationId":"invocation-1","schema":"fsgg.telemetry.native-inventory-source-binding/1","threadId":"22222222-2222-4222-8222-222222222222"}"""
+        let encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes binding)
+        let digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes binding)).ToLowerInvariant()
+        let batch invocation revision bindingDigest bindingBytes =
+            Encoding.UTF8.GetBytes
+                $"""{{"schema":"fsgg.telemetry.ingest/1","ingestId":"native-source-{invocation}-{revision}","sourceIdentity":"roadmap","generation":"g1","cursor":"{revision}","eventCount":1,"events":[{{"kind":"runtime-native-inventory-source/1","identity":"native-source-1","itemId":"LEARN-01.2","revision":{revision},"inventoryId":"native-v1","originalItemId":"LEARN-01.2","invocationId":"{invocation}","sourceDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","sourceBinding":{{"schema":"fsgg.telemetry.native-inventory-source-binding/1","producerIdentity":"fsgg-work-roadmap-native-collector/1","sha256":"{bindingDigest}","bytesBase64":"{bindingBytes}"}}}}]}}"""
+
+        let valid = batch "invocation-1" 1 digest encoded
+        match TelemetryStore.parseBatch valid with
+        | Ok parsed ->
+            Assert.Single(parsed.Facts) |> ignore
+            match parsed.Facts.Head.Payload with
+            | TelemetryStore.RuntimeNativeInventorySource _ -> ()
+            | _ -> Assert.Fail "native source fact parsed to the wrong payload"
+        | Error errors -> Assert.Fail(String.concat "; " errors)
+
+        Assert.True(batch "foreign-invocation" 1 digest encoded |> TelemetryStore.parseBatch |> Result.isError)
+        Assert.True(batch "invocation-1" 2 digest encoded |> TelemetryStore.parseBatch |> Result.isError)
+        Assert.True(batch "invocation-1" 1 (String('0', 64)) encoded |> TelemetryStore.parseBatch |> Result.isError)
+        let noncanonical = binding + " "
+        let noncanonicalBytes = Convert.ToBase64String(Encoding.UTF8.GetBytes noncanonical)
+        let noncanonicalDigest =
+            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes noncanonical)).ToLowerInvariant()
+        Assert.True(batch "invocation-1" 1 noncanonicalDigest noncanonicalBytes |> TelemetryStore.parseBatch |> Result.isError)
+        try
+            TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.ingest root TelemetryStore.ApprovedLocalDurable valid
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            let snapshot =
+                TelemetryStoreApplication.dashboardSnapshot root TelemetryStore.ApprovedLocalDurable (Some "LEARN-01.2")
+                |> Result.defaultWith (String.concat "; " >> failwith)
+            use envelope = JsonDocument.Parse snapshot
+            let compressed = Convert.FromBase64String(envelope.RootElement.GetProperty("canonicalSnapshotGzip").GetString())
+            use input = new MemoryStream(compressed)
+            use gzip = new GZipStream(input, CompressionMode.Decompress)
+            use canonical = JsonDocument.Parse gzip
+            let observations = canonical.RootElement.GetProperty("learningObservations")
+            Assert.Equal(1, observations.GetArrayLength())
+            Assert.Equal("runtime-native-inventory-source/1", observations[0].GetProperty("kind").GetString())
+        finally
+            if Directory.Exists root then Directory.Delete(root, true)
+
+    [<Fact>]
     let ``LEARN assignment replay is idempotent and redraw is refused by the schema-10 store`` () =
         let root = Path.Combine(Path.GetTempPath(), "learn-observation-" + Guid.NewGuid().ToString("N"))
         let batch ingest revision arm =
@@ -320,6 +367,7 @@ module RemoteTelemetryTests =
     [<Fact>]
     let ``LEARN one receipt cannot self attest independent inventory authority`` () =
         let root = Path.Combine(Path.GetTempPath(), "learn-v3-e2e-" + Guid.NewGuid().ToString("N"))
+        let authorityRoot = Path.Combine(Path.GetTempPath(), "learn-v3-authority-" + Guid.NewGuid().ToString("N"))
         let foreignRoot = Path.Combine(Path.GetTempPath(), "learn-v3-foreign-" + Guid.NewGuid().ToString("N"))
         let futureRoot = Path.Combine(Path.GetTempPath(), "learn-v3-future-" + Guid.NewGuid().ToString("N"))
         let ciRoot = Path.Combine(Path.GetTempPath(), "learn-v3-ci-" + Guid.NewGuid().ToString("N"))
@@ -370,6 +418,46 @@ module RemoteTelemetryTests =
             Assert.Contains("independent-inventory-source-unavailable", reasons)
             Assert.Contains("independent-shared-cost-authority-unavailable", reasons)
             Assert.Equal(0L, report.RootElement.GetProperty("providerTotalTokensByArm").GetProperty("current").GetInt64())
+
+            let nativeThread = "22222222-2222-4222-8222-222222222222"
+            let binding =
+                $"""{{"capturedAt":"2026-01-01T00:00:01Z","hostSource":"codex-app-server:thread/turns/list","invocationId":"inv-v3","orderedTurnIds":["turn-v3"],"parentThreadId":"11111111-1111-4111-8111-111111111111","producerIdentity":"fsgg-work-roadmap-native-collector/1","revision":1,"rootInvocationId":"inv-v3","schema":"fsgg.telemetry.native-inventory-source-binding/1","threadId":"{nativeThread}"}}"""
+            let bindingBytes = Encoding.UTF8.GetBytes binding
+            let bindingDigest = Convert.ToHexString(SHA256.HashData bindingBytes).ToLowerInvariant()
+            let sourceEvent =
+                $"""{{"kind":"runtime-native-inventory-source/1","identity":"native-source-v3","itemId":"I-001","revision":1,"inventoryId":"native-v1","originalItemId":"I-001","invocationId":"inv-v3","sourceDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","sourceBinding":{{"schema":"fsgg.telemetry.native-inventory-source-binding/1","producerIdentity":"fsgg-work-roadmap-native-collector/1","sha256":"{bindingDigest}","bytesBase64":"{Convert.ToBase64String bindingBytes}"}}}}"""
+            let withAuthority =
+                Encoding.UTF8.GetString(bytes)
+                    .Replace("\"eventCount\":10", "\"eventCount\":11")
+                    .Replace("thread-v3", nativeThread)
+                    .Replace("{\"kind\":\"runtime-admission\"", sourceEvent + ",{\"kind\":\"runtime-admission\"")
+                |> Encoding.UTF8.GetBytes
+            TelemetryStoreApplication.initialize authorityRoot TelemetryStore.ApprovedLocalDurable
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.enrollReceiptProducer authorityRoot TelemetryStore.ApprovedLocalDurable privateScope
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.submitReceipt authorityRoot TelemetryStore.ApprovedLocalDurable privateScope withAuthority
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.drainReceipts authorityRoot TelemetryStore.ApprovedLocalDurable privateScope.Workspace
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.scopedDashboardSnapshot authorityRoot TelemetryStore.ApprovedLocalDurable privateScope.Workspace None
+            |> Result.defaultWith (String.concat "; " >> failwith)
+            |> fun value -> File.WriteAllText(snapshotPath, value)
+            use authorityProcess = Process.Start start
+            let authorityOutput = authorityProcess.StandardOutput.ReadToEnd()
+            let authorityErrors = authorityProcess.StandardError.ReadToEnd()
+            authorityProcess.WaitForExit()
+            Assert.True(authorityProcess.ExitCode = 0, authorityErrors)
+            use authorityReport = JsonDocument.Parse authorityOutput
+            Assert.False(authorityReport.RootElement.GetProperty("tokenComparisonQualified").GetBoolean())
+            let authorityReasons =
+                authorityReport.RootElement.GetProperty("incompleteTokenReasons").GetProperty("I-001").EnumerateArray()
+                |> Seq.map _.GetString()
+                |> Set.ofSeq
+            let expectedAuthorityReasons =
+                Set.ofList [ "independent-shared-cost-authority-unavailable" ]
+
+            Assert.Equal<Set<string>>(expectedAuthorityReasons, authorityReasons)
 
             let foreignTerminal =
                 Encoding.UTF8.GetString(bytes)
@@ -441,6 +529,7 @@ module RemoteTelemetryTests =
             Assert.Contains("missing-ci-population-coverage", ciReasons)
         finally
             if Directory.Exists root then Directory.Delete(root, true)
+            if Directory.Exists authorityRoot then Directory.Delete(authorityRoot, true)
             if Directory.Exists foreignRoot then Directory.Delete(foreignRoot, true)
             if Directory.Exists futureRoot then Directory.Delete(futureRoot, true)
             if Directory.Exists ciRoot then Directory.Delete(ciRoot, true)
