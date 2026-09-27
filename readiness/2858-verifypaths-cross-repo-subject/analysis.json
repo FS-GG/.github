@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2858-verifypaths-cross-repo-subject/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "bf0db9dc572dde3fc584d90151006c6dddfa8140de6da8db2e7b2379f329f1e4"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2858-verifypaths-cross-repo-subject/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -506,7 +516,7 @@
     {
       "path": "readiness/2858-verifypaths-cross-repo-subject/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],
