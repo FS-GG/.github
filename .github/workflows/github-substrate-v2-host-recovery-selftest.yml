@@ -1,0 +1,43 @@
+name: GitHub substrate v2 host recovery self-test
+
+on:
+  pull_request:
+    paths:
+      - "scripts/gs2-09-7-host-*.py"
+      - "tests/gs2-09-7-host-*/**"
+      - ".github/workflows/github-substrate-v2-host-recovery-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/gs2-09-7-host-*.py"
+      - "tests/gs2-09-7-host-*/**"
+      - ".github/workflows/github-substrate-v2-host-recovery-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-substrate-v2-host-recovery-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Exercise host recovery boundaries
+        run: |
+          python3 tests/gs2-09-7-host-run-binding/test_host_run_binding.py
+          python3 tests/gs2-09-7-host-token-release/test_host_token_release.py
+          python3 tests/gs2-09-7-host-claim-authority/test_host_claim_authority.py
+          python3 tests/gs2-09-7-host-refusal-finalizer/test_host_refusal_finalizer.py
+          python3 tests/gs2-09-7-host-pending-census/test_host_pending_census.py
+          python3 tests/gs2-09-7-host-boundary-adversarial/test_boundary_adversarial.py
+          python3 tests/gs2-09-7-host-recovery-scheduler/test_host_recovery_scheduler.py
+          python3 tests/gs2-09-7-host-recovery-worker/test_host_recovery_worker.py
+          python3 tests/gs2-09-7-host-recovery-store/test_atomic_store.py
+          python3 tests/gs2-09-7-host-joint-seal/test_joint_seal.py
+          python3 tests/gs2-09-7-host-head-floor/test_head_floor.py

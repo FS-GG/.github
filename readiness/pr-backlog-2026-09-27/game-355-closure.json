@@ -1,0 +1,14 @@
+{
+  "baseRefName": "main",
+  "closedAt": "2026-09-27T09:16:25Z",
+  "headRefName": "renovate/fs.gg.audio.host-0.x",
+  "headRefOid": "687145fc76ef6353c95b7553396609f9cd36bf74",
+  "mergedAt": null,
+  "number": 355,
+  "reason": "Superseded by merged Game #643 at 4169122b115bde21a8f2d3693eee94053dfbe75f; current main contains both Audio Core and Host 0.6.0 pins.",
+  "repository": "FS-GG/FS.GG.Game",
+  "retainedHeadRefOid": "687145fc76ef6353c95b7553396609f9cd36bf74",
+  "schema": "fsgg-pr-backlog-closure/v1",
+  "state": "closed",
+  "url": "https://github.com/FS-GG/FS.GG.Game/pull/355"
+}

@@ -493,7 +493,7 @@ let ``.github#2535 the connection windows in the documents agree with the guards
     Assert.Equal(Sources.literal boardText "ProjectItemsWindow", List.head projectItemWindows)
 
     let fieldWindows = Sources.windowsOf boardText "fields"
-    Assert.Equal<int list>([ 50 ], fieldWindows)
+    Assert.Equal<int list>([ 50; 50 ], fieldWindows)
     Assert.Equal(Sources.literal boardText "FieldsWindow", List.head fieldWindows)
 
     let closingRefWindows = Sources.windowsOf readsText "closingIssuesReferences"

@@ -1,0 +1,112 @@
+{
+  "capturedAt": "2026-09-27T08:14:42.949223Z",
+  "mainOid": "c48cfec7446843e39871a8f479f4e8d664a793f5",
+  "pullRequests": [
+    {
+      "baseRefName": "main",
+      "createdAt": "2026-09-25T09:24:12Z",
+      "headRefName": "routine/fsc06-audio-skill-policy",
+      "headRefOid": "219512e16456d9b5d9e89dc58edc4130f2c9891f",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "mergeable": "MERGEABLE",
+      "number": 313,
+      "title": "FSC-06: add provisional F# Audio skill policy reducer",
+      "updatedAt": "2026-09-25T10:25:54Z",
+      "url": "https://github.com/FS-GG/FS.GG.Audio/pull/313"
+    },
+    {
+      "baseRefName": "main",
+      "createdAt": "2026-09-25T09:25:35Z",
+      "headRefName": "renovate/fs.gg.kit-0.x",
+      "headRefOid": "3bf722677b2ef44345a037d6e59b7ba444113503",
+      "isDraft": false,
+      "mergeStateStatus": "UNSTABLE",
+      "mergeable": "MERGEABLE",
+      "number": 314,
+      "title": "chore(deps): update dependency fs.gg.kit to 0.91.4",
+      "updatedAt": "2026-09-25T09:25:38Z",
+      "url": "https://github.com/FS-GG/FS.GG.Audio/pull/314"
+    },
+    {
+      "baseRefName": "routine/fsc06-audio-skill-policy",
+      "createdAt": "2026-09-25T09:49:43Z",
+      "headRefName": "routine/fsc06-audio-staging-plan",
+      "headRefOid": "8d821703526bc72ab360a18d93cb27a8fde8e3c8",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "mergeable": "MERGEABLE",
+      "number": 315,
+      "title": "feat: prepare read-only Audio skill staging plan",
+      "updatedAt": "2026-09-25T10:28:39Z",
+      "url": "https://github.com/FS-GG/FS.GG.Audio/pull/315"
+    },
+    {
+      "baseRefName": "routine/fsc06-audio-staging-plan",
+      "createdAt": "2026-09-25T10:59:50Z",
+      "headRefName": "routine/fsc06-audio-readonly-stage-adapter",
+      "headRefOid": "8cd4c99f572d88ba12a1a8aabeff5c7f785b86c7",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "mergeable": "MERGEABLE",
+      "number": 316,
+      "title": "feat: stage read-only Audio source enumeration adapter",
+      "updatedAt": "2026-09-25T11:09:47Z",
+      "url": "https://github.com/FS-GG/FS.GG.Audio/pull/316"
+    },
+    {
+      "baseRefName": "routine/fsc06-audio-readonly-stage-adapter",
+      "createdAt": "2026-09-25T11:36:37Z",
+      "headRefName": "routine/fsc06-audio-linux-pinned-capture",
+      "headRefOid": "757a4b9a10cd864dba645f7712dfb0b8a99f43f3",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "mergeable": "MERGEABLE",
+      "number": 317,
+      "title": "Capture Audio skill sources through Linux no-follow descriptors",
+      "updatedAt": "2026-09-25T11:36:37Z",
+      "url": "https://github.com/FS-GG/FS.GG.Audio/pull/317"
+    },
+    {
+      "baseRefName": "routine/fsc06-audio-linux-pinned-capture",
+      "createdAt": "2026-09-25T14:20:58Z",
+      "headRefName": "routine/fsc06-audio-roster-stability",
+      "headRefOid": "ed17d5334ee8e780c2214ea4bac944466166d6fd",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "mergeable": "MERGEABLE",
+      "number": 318,
+      "title": "Refuse observed Audio source roster mutations",
+      "updatedAt": "2026-09-25T14:20:58Z",
+      "url": "https://github.com/FS-GG/FS.GG.Audio/pull/318"
+    },
+    {
+      "baseRefName": "routine/fsc06-audio-roster-stability",
+      "createdAt": "2026-09-25T14:24:49Z",
+      "headRefName": "routine/fsc06-audio-content-stability",
+      "headRefOid": "902750955c10b23a09402cf503ef482bd24b1948",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "mergeable": "MERGEABLE",
+      "number": 319,
+      "title": "Refuse observed Audio source content mutations",
+      "updatedAt": "2026-09-25T14:24:49Z",
+      "url": "https://github.com/FS-GG/FS.GG.Audio/pull/319"
+    },
+    {
+      "baseRefName": "routine/fsc06-audio-content-stability",
+      "createdAt": "2026-09-25T14:29:47Z",
+      "headRefName": "routine/fsc06-audio-manifest-custody",
+      "headRefOid": "2173710c0cc13ba1477cac07683b26f5f6a462dc",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "mergeable": "MERGEABLE",
+      "number": 320,
+      "title": "Bind Audio source plan to pinned physical manifest",
+      "updatedAt": "2026-09-25T14:29:47Z",
+      "url": "https://github.com/FS-GG/FS.GG.Audio/pull/320"
+    }
+  ],
+  "repository": "FS-GG/FS.GG.Audio",
+  "schema": "fsgg.local.pr-backlog-snapshot/1"
+}

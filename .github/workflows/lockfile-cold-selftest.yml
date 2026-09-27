@@ -47,7 +47,7 @@ jobs:
       # caches per leg regardless, but the omission is deliberate — do not "optimise" it back in.
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "10.0.301"
+          dotnet-version: "10.0.401"
 
       # LEG 6 lifts the ADR-0032 report step out of lockfile-sync.yml and RUNS it, under the shell
       # GitHub itself would give it. Parsing the workflow — rather than re-typing the script into the

@@ -1,0 +1,22 @@
+{
+  "accepted312PathsByteIdenticalToBase": true,
+  "aggregatePatchByteIdenticalToPreRebase": true,
+  "aggregatePatchSha256": "2a0e7872dcfff9cd0b46d36d0ec6bf16dd4fe19df0a0ac9eeb9ddaf300ced40d",
+  "baseOid": "5fb981307e23f687d5927d0f7b37f956db2cc3d9",
+  "baseTree": "5f448d1e9ea04d881ee98430e7306ed3ca0cd85c",
+  "branch": "routine/fsc06-audio-consolidated-20260927",
+  "candidateHeadOid": "806b479816b7b89caf43bf87957422d94bac50ce",
+  "candidateTree": "381ce1b2be82441d9864a8f5d13859d7ebf57817",
+  "capturedAt": "2026-09-27T08:24:39.124044Z",
+  "commitCount": 11,
+  "preRebaseHeadOid": "2173710c0cc13ba1477cac07683b26f5f6a462dc",
+  "schema": "fsgg.local.audio-fsc06-consolidation/1",
+  "tests": {
+    "linuxPinnedCaptureControls": 52,
+    "skillPolicyControls": 36,
+    "skillsPackageVerify": "passed",
+    "stagingAdapterCases": 13,
+    "stagingPlanControls": 29
+  },
+  "worktree": "/home/developer/projects/FS.GG.Audio-fsc06-consolidated-20260927"
+}

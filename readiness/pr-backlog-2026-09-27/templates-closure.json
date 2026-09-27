@@ -1,0 +1,900 @@
+{
+  "capturedAt": "2026-09-27T08:31:24.190138+00:00",
+  "repository": "FS-GG/FS.GG.Templates",
+  "candidateHeads": {
+    "provider": "168f302352c629b53e43583f805d52353d22566c",
+    "svg": "63fe1a6adad4e60e0b360bd693d13056a8cc41be",
+    "floor": "90d5152816296b3635f2fe0e8d67240569f763f0"
+  },
+  "sourceHeadsPreserved": 111,
+  "closures": [
+    {
+      "number": 497,
+      "head": "1a8f3ae59da10c03da2b53edfa44ccc7687bb8fc",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 498,
+      "head": "9128ba2f07ab3ae211c0601f20bd2feed9c4cb46",
+      "candidate": "floor",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 499,
+      "head": "eb5b6657d1d9dacefc4c04378a265672cdc2da73",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 500,
+      "head": "8f2da971cbce745ac21e0d46aebf58b762526d9a",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 501,
+      "head": "bf75c44433e077e95b606b7b72322599681aae81",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 502,
+      "head": "a45d3d764464cc1ba6f945074eddc5a9b5235c2d",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 503,
+      "head": "f5297e67542e40b3d65f9caf192e8713405afc0d",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 504,
+      "head": "7883db796d007599137b81b6eeed4eb1a598dc77",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 505,
+      "head": "a85d821db10d87217a64c68c29c6a1cc75873a8d",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 506,
+      "head": "808a86fa25a588aa99a29b053407a9e9fbb9ef0c",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 507,
+      "head": "3449c92cd931c9b8f518c2dc5d3067c8e60fd19a",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 508,
+      "head": "e1ff44075e13f1f2226ab0d7ca91c7ad231cc583",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 509,
+      "head": "0c352eadc5290b625ae51663c562d7680fac83d5",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 510,
+      "head": "21f668f95c69f3c50b5f11de5708b240dacb1998",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 511,
+      "head": "f8f462511aa6d1841415ae06479c8fd1425b2cb1",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 512,
+      "head": "e25e535f286342566bb81860b613487def0cf8d6",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 513,
+      "head": "2a009ad89c52306c7ea69b0bddaf5875e073e49b",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 514,
+      "head": "37f7a7304e89e899144a7a0c8a1b5743719bced6",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 515,
+      "head": "71d23df0ef64ccdfb50f1858111bf43c51f8c00c",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 516,
+      "head": "9e1f90273b613670da5a1c0c981eb572f9c9b7aa",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 517,
+      "head": "1acf9ddc7b51ff3117ebce0f8738946b27547ce3",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 518,
+      "head": "326eddff12e60618368b45eb8f5d4f2d24a8d56a",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 519,
+      "head": "6ea92d7cafe632b7e701625372f7ed1cb7d824c1",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 520,
+      "head": "026736425a5cbb47aaf9578ae665f099f02a41e6",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 521,
+      "head": "0984370fddedc3635a7e34f11f67e6950b315281",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 522,
+      "head": "fce8dabbb26021571e6989bf863154d4579260b5",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 523,
+      "head": "25adb157be0ca42293f031a6ffccc29e9d967546",
+      "candidate": "svg",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 524,
+      "head": "fb9c6915d11141293d9f62d866eeedfb77a869de",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 525,
+      "head": "317228fa3514f4894b767f14b32c62552fbb7af5",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 526,
+      "head": "40c411ce1e3dfb26a4107ae0bd0f629c05f54322",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 527,
+      "head": "e6bd1a7bff48ad8e0cfced718b4de006b08d69ac",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 528,
+      "head": "4ede575fa1a30e574a0228e0f37f11aee254b82b",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 529,
+      "head": "390254b1842e351640948598e5c946b2bacbf970",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 530,
+      "head": "f55277efa88f5e029f949267d9fa9b5af1ea08ac",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 531,
+      "head": "3b0c74e08bc0401f19ca6523b468486dfc1139e5",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 532,
+      "head": "73efcfb699d83e70c4a50a4d8628c325b8c34572",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 533,
+      "head": "f32b27087113759e0c0999867acf5071dca3881f",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 534,
+      "head": "6b9ed5f5bd0d0d7749206c923292e7a37c0cb1fb",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 535,
+      "head": "a4ee7709e2848d60f1772405270b2e267a3e6245",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 536,
+      "head": "02471320fc404c30f252c845f2ba6c78f9620b0c",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 537,
+      "head": "09f444f503fbdb9731a7d30ed2d0a4f7e9a3f442",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 538,
+      "head": "fd94d1e74144bdd9771ada4a86122831f92eb5e5",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 539,
+      "head": "676a7e4ba38d7d37085a49cf37db665d19e45dee",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 540,
+      "head": "e70d4bfd46a221d454becfc75801e2b97c619950",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 541,
+      "head": "0c24d31d37b26a327f55c6b82fdc9138dda82300",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 542,
+      "head": "73fff64f399a384a887e80b8b2fe877f397b9e2d",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 543,
+      "head": "b0d904ddded0d6070edb601f809b1f289def998a",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 544,
+      "head": "5aa7daf29317284abb56bfe8e344e452eef38882",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 545,
+      "head": "48a34ed62a0eecc3a09b633a0f8756f545098a5c",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 546,
+      "head": "40a321d4847a80af82d58a2742d73584934c8767",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 547,
+      "head": "cd0753d5f4cc7a20155b24f29eb58c6567442363",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 548,
+      "head": "030cf73b572e2c3760beb648b72769b9d84cae0e",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 549,
+      "head": "b3b3b9622e78ced0839a60b0dfd7c61625978a23",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 550,
+      "head": "e272ae4288a6941f46fbcfb57a9032837851cfed",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 551,
+      "head": "38f0a162d42983f377c3e62d17f8a38090ae7f7b",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 552,
+      "head": "0eb690ce4a7699ae3ffe235dc32047936d2a83be",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 553,
+      "head": "09130c225779c76be33d1e8c050c6e91d34f84ae",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 554,
+      "head": "504708895bcc059decfdd0068580fa02bb550127",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 555,
+      "head": "543471e0aa4a7b040ed959031d192788e966cb02",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 556,
+      "head": "645bdb25de8af49a1bac95a38c271030e9260ef0",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 557,
+      "head": "2c0d8c311440bfd6c4776277534e64896ed8df07",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 558,
+      "head": "d62c008c6827283952e9dda8442cd95d53ddde5d",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 559,
+      "head": "ca78ca177cb73fc2fec80e02717e372700066399",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 560,
+      "head": "4088d8367bbb253df0b2f76c9ae52ba4591652d1",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 561,
+      "head": "5877040fb77560468aa520455b5858c70187531e",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 562,
+      "head": "4bc07cac34d69fad7f97145c2c48e363c7982937",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 563,
+      "head": "22cc8438eaf3f06f44a73c6ad52cbc985a61dde5",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 564,
+      "head": "db3c80c5167deb28e093b6e9dffc774f1a18248c",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 565,
+      "head": "882ba0ab2ff60d51bd220b8017f959593696acf0",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 566,
+      "head": "a3bfd59de6934656a72e2c16e91b8da35041e134",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 567,
+      "head": "e54e992cc790b670f4e26d6591b0cfdf9f78d927",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 568,
+      "head": "57bca74b4175a70bb4719f3a0fd1f42a3c4551df",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 569,
+      "head": "3e7d7ecc3167eb263ee9a53c42c13a55b60dad4d",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 570,
+      "head": "7c0bcde8a253116dcc5e113a83fab0ba156cfdb0",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 571,
+      "head": "5f79c3451525dc10f2d0fd6ec83f218ea210c57e",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 572,
+      "head": "8a8094d503073f4489e27699709c46e3ad0f0937",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 573,
+      "head": "3827c9ebfda7feef59058d326b7b3fa4a8f9a84a",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 574,
+      "head": "cb460fc9c1a4185f7da412ee6f972deb85c14bd1",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 575,
+      "head": "9a102feeddf679acc08a96a82ed9721d6dbccfda",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 576,
+      "head": "245e0ffbe955557cc63952ad74d2b4624846d5ea",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 577,
+      "head": "77d1ef9219552f2bd440eb1891a6164ed7822173",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 578,
+      "head": "9e29cd0573d3cde787a20e9cb44b190a2d9bc4b1",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 579,
+      "head": "ab392ae799c24f2be8b6e32d63d3c3bbc762577f",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 580,
+      "head": "840f32f4be5db240e61da0d5a4bf98fb91926f90",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 581,
+      "head": "8f8252a7588a0079fa7653b65614dc64010782e5",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 582,
+      "head": "9dc235eb69778c0e74740fe24fc9675ab74f1141",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 583,
+      "head": "6f65af89837b6da010a5a5983be247490de07b1f",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 584,
+      "head": "1fa5d682b7c864948ea9c216f04a8ea5ceba4865",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 585,
+      "head": "519603fa4c4bb46755dc28b221005de0f251083f",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 586,
+      "head": "1e80421fcec60f95824ce64508d4858fc03f962c",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 587,
+      "head": "028e1ab32f87113acfdbba9de808a43f2d15470e",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 588,
+      "head": "f3692ddbbabd11ec089826f360bc0429fc208b18",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 589,
+      "head": "177d8a53f5b2e48d25b5dab4b9979fdf0cb48979",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 590,
+      "head": "a6b25cf6f7bfb0448cd01491be7aa1224faf2fb2",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 591,
+      "head": "298a18acf89cf393df0d6a17aaa14460e2661f16",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 592,
+      "head": "82acf2df0a0966b6c37ef26216402fecf6b3e6de",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 593,
+      "head": "61e7d9662022ca0d2cc565881eaf3785d5d880b9",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 594,
+      "head": "2dc44dfe6904ce8896488f442a074612a8276e95",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 595,
+      "head": "a4d677eb2b9b2621f1a58c2b7233d9928ed98f41",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 596,
+      "head": "94a1da296f4d4501f3b65c2cfb489443fb948e17",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 597,
+      "head": "121d7ede52104d5e82c2e45016f9bd0878ad0c0d",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 598,
+      "head": "4b100241196e89f212dac56a5e24420ef0141b8a",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 599,
+      "head": "6c954a672e3a9b61bb37d418e8190f6e51a834ca",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 600,
+      "head": "69c9ab48d91febe3ce97115ad51ecddf6f9cee3d",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 601,
+      "head": "02d79fae35373ba629b50e10b5c99c3861fad43e",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 602,
+      "head": "8f3e53e17ce1c6cca67efad36279f73faedd764b",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 603,
+      "head": "35a699e010004eed6d18b0d30e71797f38153252",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 604,
+      "head": "430a70b352250c948682b43cfe2840529ea2b8e9",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 605,
+      "head": "41bca4f7c277ca00aa0003e368b352ed9e09421e",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 606,
+      "head": "ef4dba9eb530ee48d4c0f64641f3e5a83c99f284",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 607,
+      "head": "a51fd30d309e1ef7b06187581614532bb4a4e245",
+      "candidate": "provider",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    }
+  ]
+}

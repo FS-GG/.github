@@ -1,0 +1,171 @@
+{
+  "capturedAt": "2026-09-27T08:14:16Z",
+  "repository": "FS-GG/FsQuint",
+  "prs": [
+    {
+      "baseRefName": "routine/fsc08-readback-tag-stability",
+      "createdAt": "2026-09-25T13:58:55Z",
+      "headRefName": "routine/fsc08-readback-nonempty-payload",
+      "headRefOid": "0e35a57bd5516199336c1f79fab579f55e1faf76",
+      "isDraft": true,
+      "number": 26,
+      "title": "Refuse FsQuint archives without payload members",
+      "updatedAt": "2026-09-25T13:58:55Z",
+      "url": "https://github.com/FS-GG/FsQuint/pull/26"
+    },
+    {
+      "baseRefName": "routine/fsc08-readback-commit-source",
+      "createdAt": "2026-09-25T13:55:08Z",
+      "headRefName": "routine/fsc08-readback-tag-stability",
+      "headRefOid": "f1da82063860b6de89cc45e2390f0605616764c6",
+      "isDraft": true,
+      "number": 25,
+      "title": "Recheck FsQuint source tag during readback",
+      "updatedAt": "2026-09-25T13:55:08Z",
+      "url": "https://github.com/FS-GG/FsQuint/pull/25"
+    },
+    {
+      "baseRefName": "routine/fsc08-readback-nuspec-xml",
+      "createdAt": "2026-09-25T13:51:04Z",
+      "headRefName": "routine/fsc08-readback-commit-source",
+      "headRefOid": "6dbeb9063d5ea7b7dfbe861e0d5c42868990cb50",
+      "isDraft": true,
+      "number": 24,
+      "title": "Bind FsQuint readback commit to version tag source",
+      "updatedAt": "2026-09-25T13:51:04Z",
+      "url": "https://github.com/FS-GG/FsQuint/pull/24"
+    },
+    {
+      "baseRefName": "routine/fsc08-readback-nuspec-root",
+      "createdAt": "2026-09-25T13:45:35Z",
+      "headRefName": "routine/fsc08-readback-nuspec-xml",
+      "headRefOid": "851103037bf592a8ddddd604076aa3514192b34f",
+      "isDraft": true,
+      "number": 23,
+      "title": "Validate FsQuint readback nuspec XML identity",
+      "updatedAt": "2026-09-25T13:45:35Z",
+      "url": "https://github.com/FS-GG/FsQuint/pull/23"
+    },
+    {
+      "baseRefName": "routine/fsc08-readback-case-alias",
+      "createdAt": "2026-09-25T13:39:20Z",
+      "headRefName": "routine/fsc08-readback-nuspec-root",
+      "headRefOid": "a02ad8d8456564c35a4d4fa4f8080be308f283e1",
+      "isDraft": true,
+      "number": 22,
+      "title": "Require exact root nuspec in FsQuint readback source",
+      "updatedAt": "2026-09-25T13:39:20Z",
+      "url": "https://github.com/FS-GG/FsQuint/pull/22"
+    },
+    {
+      "baseRefName": "routine/fsc08-readback-member-guards",
+      "createdAt": "2026-09-25T13:34:23Z",
+      "headRefName": "routine/fsc08-readback-case-alias",
+      "headRefOid": "80e73c4f60cf045d9030e57795205ba3c7b175eb",
+      "isDraft": true,
+      "number": 21,
+      "title": "Reject ASCII case-alias ZIP members in FsQuint readers",
+      "updatedAt": "2026-09-25T13:34:23Z",
+      "url": "https://github.com/FS-GG/FsQuint/pull/21"
+    },
+    {
+      "baseRefName": "routine/fsc08-readback-mode-policy",
+      "createdAt": "2026-09-25T13:29:25Z",
+      "headRefName": "routine/fsc08-readback-member-guards",
+      "headRefOid": "c1e692282bd7cc324393907c5ba3359e382b85cd",
+      "isDraft": true,
+      "number": 20,
+      "title": "Reject unsafe ZIP members in FsQuint readback source",
+      "updatedAt": "2026-09-25T13:29:25Z",
+      "url": "https://github.com/FS-GG/FsQuint/pull/20"
+    },
+    {
+      "baseRefName": "routine/fsc08-nuspec-commit-boundary",
+      "createdAt": "2026-09-25T13:24:54Z",
+      "headRefName": "routine/fsc08-readback-mode-policy",
+      "headRefOid": "903524f912308543c30e941670d26c898277882a",
+      "isDraft": true,
+      "number": 19,
+      "title": "Align FsQuint archive mode equality with readback policy",
+      "updatedAt": "2026-09-25T13:24:54Z",
+      "url": "https://github.com/FS-GG/FsQuint/pull/19"
+    },
+    {
+      "baseRefName": "routine/fsc08-nuspec-identity",
+      "createdAt": "2026-09-25T11:42:42Z",
+      "headRefName": "routine/fsc08-nuspec-commit-boundary",
+      "headRefOid": "dd1e6d457a62ba5a7c75bf393dadd7e582719b3a",
+      "isDraft": true,
+      "number": 18,
+      "title": "Require exact nuspec release commit boundaries",
+      "updatedAt": "2026-09-25T11:42:42Z",
+      "url": "https://github.com/FS-GG/FsQuint/pull/18"
+    },
+    {
+      "baseRefName": "routine/fsc08-packed-characterization",
+      "createdAt": "2026-09-25T11:05:17Z",
+      "headRefName": "routine/fsc08-nuspec-identity",
+      "headRefOid": "174032a8912208bb83556fb5609e83b433368dbb",
+      "isDraft": true,
+      "number": 17,
+      "title": "Prepare FsQuint source-only nuspec identity validation",
+      "updatedAt": "2026-09-25T11:05:17Z",
+      "url": "https://github.com/FS-GG/FsQuint/pull/17"
+    },
+    {
+      "baseRefName": "routine/fsc08-readback-primitive",
+      "createdAt": "2026-09-25T10:33:11Z",
+      "headRefName": "routine/fsc08-packed-characterization",
+      "headRefOid": "0eb1b6ad9e0db85db1d26c286e1832d1bb134e76",
+      "isDraft": true,
+      "number": 16,
+      "title": "Characterize FsQuint packed archive fingerprints offline",
+      "updatedAt": "2026-09-25T10:33:11Z",
+      "url": "https://github.com/FS-GG/FsQuint/pull/16"
+    },
+    {
+      "baseRefName": "main",
+      "createdAt": "2026-09-25T09:18:25Z",
+      "headRefName": "routine/fsc08-readback-primitive",
+      "headRefOid": "abe846a88c3fe6ae5bc5de5168ac7d5654b63d49",
+      "isDraft": true,
+      "number": 15,
+      "title": "feat: add F# archive fingerprint source pilot",
+      "updatedAt": "2026-09-25T10:10:43Z",
+      "url": "https://github.com/FS-GG/FsQuint/pull/15"
+    },
+    {
+      "baseRefName": "main",
+      "createdAt": "2026-09-18T08:06:02Z",
+      "headRefName": "renovate/major-github-artifact-actions",
+      "headRefOid": "8e8c3c47d7d6b92cb32672e927e4ab6e08a31fc1",
+      "isDraft": false,
+      "number": 10,
+      "title": "Update actions/upload-artifact action to v7",
+      "updatedAt": "2026-09-26T16:11:26Z",
+      "url": "https://github.com/FS-GG/FsQuint/pull/10"
+    },
+    {
+      "baseRefName": "main",
+      "createdAt": "2026-09-18T07:53:27Z",
+      "headRefName": "renovate/actions-checkout-7.x",
+      "headRefOid": "a3e29083e78ea1b17b6d38e74da427867da4a01d",
+      "isDraft": false,
+      "number": 7,
+      "title": "Update actions/checkout action to v7",
+      "updatedAt": "2026-09-26T16:11:21Z",
+      "url": "https://github.com/FS-GG/FsQuint/pull/7"
+    },
+    {
+      "baseRefName": "main",
+      "createdAt": "2026-09-18T07:53:21Z",
+      "headRefName": "renovate/dotnet-monorepo",
+      "headRefOid": "ad9567add3039294dee8bebaed712114e15cd09b",
+      "isDraft": false,
+      "number": 6,
+      "title": "Update dependency FSharp.Core to 10.1.401",
+      "updatedAt": "2026-09-26T16:11:17Z",
+      "url": "https://github.com/FS-GG/FsQuint/pull/6"
+    }
+  ]
+}

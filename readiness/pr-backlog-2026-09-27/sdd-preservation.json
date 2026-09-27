@@ -1,0 +1,1556 @@
+{
+  "additionalCandidatePaths": [
+    "specs/126-fsc04-work-model-source-policy/plan.md",
+    "specs/126-fsc04-work-model-source-policy/spec.md",
+    "specs/126-fsc04-work-model-source-policy/tasks.md",
+    "tests/FS.GG.SDD.Artifacts.Tests/WorkModelSourcePolicyTests.fs",
+    "tests/FS.GG.SDD.Commands.Tests/WorkModelSourceSelectionTests.fs"
+  ],
+  "allPrHeadsMatchRemoteRefs": true,
+  "candidateBranch": "audit/fsc04-preserve-full",
+  "candidateCommitCount": 66,
+  "candidateTipOid": "fccf81618628d26f0ea2aacafab760d5d520f89a",
+  "capturedAtUtc": "2026-09-27T08:26:39.323177+00:00",
+  "commitMap": [
+    {
+      "candidate": "09708478aaa0003754ff06dcb88a8724e638e29d",
+      "source": "ac63bac309a767a22fa058fb9db1a17181c40773",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "2754a9a95ad724b7fb44cd992f8995535b5ae50c",
+      "source": "43325eaf55f4f2c8320c66afa77f990e78d12dbf",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "5df4a672355213014121850a249d77e82705881f",
+      "source": "10d0d25982f9d6802099a6814163e0b9d6fd588e",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "0efca69b78f26fcb1f257c7e32d9239ef3d0277a",
+      "source": "2dda03fe41337bb4c2c5fe83bf8a847268f8a4f7",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "ab0015967947a563b1b224f5e67a6210e39198dc",
+      "source": "b7beddff0398332ccee4a11becad5fb48a5a44be",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "abd0921198692d8d112df1e0420fef9dc7af8957",
+      "source": "c204042e42b748fc35a202227398d9c54417c9c1",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "9d6d2b6b03a4564132e61af6963ab45a841cf996",
+      "source": "87534251e3b47a7b89d2aaae9a56794d95d82093",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "5311678a60d91f24ad6fe2ec13358607ff00a4e8",
+      "source": "8cdbd66ef448b32de83dd4a3d06b80586e8dd40b",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "f5f26be49cc84ddc6e459dd63f6b18bc17943789",
+      "source": "e3e2c79f1a243982a11e24254bf21417b642aeb3",
+      "stablePatchIdMatch": false
+    },
+    {
+      "candidate": "ea25293765955354357a28502191d62c1ae9f608",
+      "source": "19a70a76c0bbfbf51f59551b12f9c5464912ea01",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "c804da54a578d83677971c166edb3693c65ba43d",
+      "source": "b2659b446448e07714379549ebd1846adcd4c103",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "baa975e9232d692b6399b694900b847b1602aadc",
+      "source": "3eda418033870f994ed675e3b9092f2abd66efbf",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "c708e1c1b05a3e6b5913c8f3678459665612826f",
+      "source": "f7b51b98c819fca77b662e462ac53e5d2b5d2402",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "12ad29f9b415a0a583dd40959ca7cee73bd717b7",
+      "source": "72403386611af4f942ee9055bb75f3a684422351",
+      "stablePatchIdMatch": false
+    },
+    {
+      "candidate": "5ddfb2fc7f6bdd924e9040325b95096a1d0edfeb",
+      "source": "f19d2b7307b280d632a9b6b7e7b379dd750a5ee3",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "8d9361a396e4776c0419c85856c7e50e78d15e54",
+      "source": "ace5c52d2fcfd7bb090e669b2337c3a0e64de8ff",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "3687ca800a0d5d55a7823f12a3c4be8699b152be",
+      "source": "685b42fb149055d2b82445139b34f5b7dba16150",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "6759e9cdd1317dfe3b3b5576afb6f8b7f12e1d29",
+      "source": "8ae58f5027d3778ae1d34b108c5ff9a414f3bbda",
+      "stablePatchIdMatch": false
+    },
+    {
+      "candidate": "46b4eba6b351bb84889fceb4fad4c351c73904ce",
+      "source": "8c0e641d66136665fe46c4a5c35c656e727b4d19",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "c875d83c9dea6adcca431fbfa336a07f8613887e",
+      "source": "29cd0dd40fdefde6afba2139708ed9956b1ef3ae",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "acffe416a474f48898a3cf2a6d1cde2578d5a1bb",
+      "source": "d7b14134251a19561c7c3d819058c2fc3f782c3e",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "6bb1fa6161d0254a1834adcded10cf0d69137af8",
+      "source": "6d12c523bcb02cd1644fe7e4429bd1ed82818a4c",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "eb522d698a788cfd1179c6a6117921148733a04b",
+      "source": "773a91d1c3be1026e86c36300c7adc58b5b61b5d",
+      "stablePatchIdMatch": false
+    },
+    {
+      "candidate": "24b8a116e4cde46fcb1ae27c6c845b9410f699e5",
+      "source": "7e7582a28ecf5d465f24a1ba94161343c6b0b5fa",
+      "stablePatchIdMatch": false
+    },
+    {
+      "candidate": "5d2ed323512c52ce9055c6b3a22dc6ea2eaf2dc4",
+      "source": "a2d1d3b4bce34f40f5dd283fd663cfbda3f6a60d",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "3ec858258b7aa2dcf7b8e24c764246c8cb1c69ff",
+      "source": "d69de00bee0f5ce47420343724e9f897d5e6d631",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "bb903d24dcca55c9d14cb3cd5b8e43fa076df4e4",
+      "source": "da2650c0bf404adfcd46bc2890db63393e30dd23",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "15cabff3c5da018bf09f2b190a461fd7ef32eac4",
+      "source": "901df809e74e473e329d1cc324366b72d88a815d",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "260bfcb1b49c6053c10a2908cf50d996855da399",
+      "source": "2cee1a8a71f75751bd878be72b8c8eee0bfec051",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "486018b16e9107e5eb0d3e589283bc67d0c01c0c",
+      "source": "cf92c80f45580f6ed818a5a058417b8fa6a0cb94",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "a9c6f3f9f4fd5a2b1b9219ebe452f310abb8d630",
+      "source": "bbb2ba2e3d0ce802ce413a8bdf5ff3a0ec713c33",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "fad300094376d45a4e05c32bfd8a3ceb487ac65e",
+      "source": "8952bae1acac51eca771c1a8b273bd821b73c03f",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "00a673a40579b2cdcae331ea6133675a2ea72484",
+      "source": "6a835e74169174b9de229ec824955e83dbabcb41",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "357b81411b091054487d6ee0a109b2d81e992301",
+      "source": "7b7bd46354ac6c2d2781ac0e069bd1c4f1bd3dcc",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "3d8b0798675f1c48c614190ecd0a48b4633455d5",
+      "source": "2a2a1e1aa97698560553927ef427f50914f2e518",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "8a1a8aa4b4dee96d19ccbac0ac8d5c9af7fa434c",
+      "source": "d2b509adc253583b1c355136833721bdef79f638",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "445fff3551e1d467858d85a46a2c84cbe68bac01",
+      "source": "c3d482fc331b05c160b3098fa874139e2db9d5b0",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "4ddd5017db94e426e8753aefabff44c9ef4aa276",
+      "source": "03c196a8f90a0c1a68c65a3d196aebe433a25b1b",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "e61c9ddf6436898a7fcb2cc2c15080f5c7ab5334",
+      "source": "4ca06d9a6ed535110883b0ac3986c353290d841c",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "65b9c081714afb67120bb2da0f53042672566595",
+      "source": "ed9b4c6e88e16a4e5414580e47cafb280b077fab",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "c1613dba540e9277e1bfd860155bd39becd329cf",
+      "source": "4e2b5bf0aa760154b006197beea9281cd60c84e2",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "f5604df6869e9bc51ddf1ad8b3d4f7b92efe53a6",
+      "source": "6ca4befec823793fcb6f585db7bfb8b48984b8ad",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "43b66f104a3774afa749ccd51e0a5a4c8a0e38d9",
+      "source": "38e48ef03bda4a52528aa5a4941e27e181ae24e8",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "a5debe3850c9bdf23c619089309845d76f9de4ff",
+      "source": "1bab7cdc32635a2b6d45b8c7457313907f740f71",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "524d62b614bbe856e8c3f6c2d1a7c8d7e0fc016a",
+      "source": "2079be649681c496629b5af11c3760026ae7486b",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "38c14ba1b3eb1c3460e1d251df65a82806c8256b",
+      "source": "161e07ad766d2e92f7c720c60da6563f00aef577",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "f77b7e18698239e9e53bf77cfa89e54af49085e8",
+      "source": "70b76458a97d0a530f7885afa406288bf45ece4f",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "2c336338a7fd14c80849c6ac88453ebd94d03f0e",
+      "source": "ec4637bda6c52ef8001c62ed154f2d90961229c1",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "9cd5ddb41ae60c6993e3285b186008f51e4701a7",
+      "source": "ff8215ec6125ffafc058b24b5cfa7439dabd31da",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "5417b94834cb3675b98149719e0da7f5de14118e",
+      "source": "f5434a4d6be635b8ce080e6707e67bbf4c65101b",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "8c00dc823e36b0a7facb5ee5a114858955a3e039",
+      "source": "83229e3e10b2f56bc428921826654ccf585929cf",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "cae0608e97d1d5c4126ebad8260c03bf097da65a",
+      "source": "55ecb160c23fdfc17b85ce36c0e29daa6dd709a5",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "ac33ddb7fde0a0becb3d660fddcab3884dcc37e1",
+      "source": "d1bcc2aed975a47668c68e9ab59b7c61b80cbff1",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "2ca74d29369a12a3ac811d139e8cb6d8ba3bbfe4",
+      "source": "58132088a92426a036c98545c73c042e82d1fb25",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "b08965b3ebc6c4d6525f4dd4e6cf3c28e656e572",
+      "source": "7b7880f93faf6f521e7bde20e27d976a6d4290b1",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "d767fcc33f4eed2c631d3151cd56db537ad4dfc7",
+      "source": "cace956fa195a2f694de3a606ec7f0f3f7bec368",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "3150c00646e0436ef1bb7e9cbe57055397856666",
+      "source": "1baeca54dd237eb55c8d618f7505e1baf90e8e21",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "4fc8afe3a39135b9c857f9a070f28b6ebd944fb0",
+      "source": "6703cd874bcb7869d30d21c8a628281f91348a87",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "89a129ca54a731738dfe93e8d09740791b1e36b4",
+      "source": "cfcff12730097e490d4c75bb5ca3117abe02454a",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "ae7019223897c6d84fd9ee7923c8913a02f88434",
+      "source": "8125ded842937f581289e9acd19b044f63f34759",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "f467d0e4ddf221752d02b7df64ae69be7a02cb23",
+      "source": "4af526e286f10db87e57b9198387181bc5ecacfc",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "afc1e8928cfa7bf7372665ff737fec84a59cff8e",
+      "source": "36228b2381dcee180db2519b1f80266e6fc67bd2",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "7e18bcbfbe6c67b5a74ff9f282c0ad8b39805533",
+      "source": "df537506e3a79db5ee268c1468398a85429297fd",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "107a88f78d21be20d66fe659d9f9eb16cc9d763d",
+      "source": "d78f403a58d3fc3b053a77fcdaf1aafd8c0312f1",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "a2b18657f3a8edb32f80d66d7d8506e61f3d2b6d",
+      "source": "ba38076d81e664ae87527cf82f0e6bb7a953eee6",
+      "stablePatchIdMatch": true
+    },
+    {
+      "candidate": "fccf81618628d26f0ea2aacafab760d5d520f89a",
+      "source": "cb67bd0d4aeb0b519668feedc0226b51d09fccc0",
+      "stablePatchIdMatch": true
+    }
+  ],
+  "currentMainOid": "db0536ae546fa403da8cd88cd0b3f6e83a048ec3",
+  "draftPrCount": 63,
+  "notes": [
+    "#1003 is a sibling of #1004 and is explicitly inserted after #1002 in candidate history.",
+    "The current-main gate.yml retirement is inherited from #1063.",
+    "The two test project files add #1003 compile entries; all other original-chain blobs are identical.",
+    "No remote PR or branch was modified by this preservation work."
+  ],
+  "originalChainBaseOid": "cb89bcafb95efa1d11ecd29c21ca4108cd30a2cf",
+  "originalChainTipOid": "cb67bd0d4aeb0b519668feedc0226b51d09fccc0",
+  "originalPathBlobDifferences": [
+    ".github/workflows/gate.yml",
+    "tests/FS.GG.SDD.Artifacts.Tests/FS.GG.SDD.Artifacts.Tests.fsproj",
+    "tests/FS.GG.SDD.Commands.Tests/FS.GG.SDD.Commands.Tests.fsproj"
+  ],
+  "patchIdMatches": 61,
+  "patchIdMismatches": [
+    {
+      "candidate": "f5f26be49cc84ddc6e459dd63f6b18bc17943789",
+      "nonProjectPatchByteIdentical": true,
+      "source": "e3e2c79f1a243982a11e24254bf21417b642aeb3",
+      "stablePatchIdMatch": false
+    },
+    {
+      "candidate": "12ad29f9b415a0a583dd40959ca7cee73bd717b7",
+      "nonProjectPatchByteIdentical": true,
+      "source": "72403386611af4f942ee9055bb75f3a684422351",
+      "stablePatchIdMatch": false
+    },
+    {
+      "candidate": "6759e9cdd1317dfe3b3b5576afb6f8b7f12e1d29",
+      "nonProjectPatchByteIdentical": true,
+      "source": "8ae58f5027d3778ae1d34b108c5ff9a414f3bbda",
+      "stablePatchIdMatch": false
+    },
+    {
+      "candidate": "eb522d698a788cfd1179c6a6117921148733a04b",
+      "nonProjectPatchByteIdentical": true,
+      "source": "773a91d1c3be1026e86c36300c7adc58b5b61b5d",
+      "stablePatchIdMatch": false
+    },
+    {
+      "candidate": "24b8a116e4cde46fcb1ae27c6c845b9410f699e5",
+      "nonProjectPatchByteIdentical": true,
+      "source": "7e7582a28ecf5d465f24a1ba94161343c6b0b5fa",
+      "stablePatchIdMatch": false
+    }
+  ],
+  "prs": [
+    {
+      "baseRefName": "main",
+      "candidateCommits": [
+        "09708478aaa0003754ff06dcb88a8724e638e29d",
+        "2754a9a95ad724b7fb44cd992f8995535b5ae50c",
+        "5df4a672355213014121850a249d77e82705881f"
+      ],
+      "candidateTipOid": "5df4a672355213014121850a249d77e82705881f",
+      "headRefName": "routine/fsc04-artifact-path-guard",
+      "headRefOid": "10d0d25982f9d6802099a6814163e0b9d6fd588e",
+      "isDraft": true,
+      "mergeStateStatus": "UNSTABLE",
+      "number": 1000,
+      "sourceBaseOid": "cb89bcafb95efa1d11ecd29c21ca4108cd30a2cf",
+      "sourceCommits": [
+        "ac63bac309a767a22fa058fb9db1a17181c40773",
+        "43325eaf55f4f2c8320c66afa77f990e78d12dbf",
+        "10d0d25982f9d6802099a6814163e0b9d6fd588e"
+      ],
+      "title": "Require complete generation source identities",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1000"
+    },
+    {
+      "baseRefName": "routine/fsc04-artifact-path-guard",
+      "candidateCommits": [
+        "0efca69b78f26fcb1f257c7e32d9239ef3d0277a"
+      ],
+      "candidateTipOid": "0efca69b78f26fcb1f257c7e32d9239ef3d0277a",
+      "headRefName": "routine/fsc04-physical-source-snapshot",
+      "headRefOid": "2dda03fe41337bb4c2c5fe83bf8a847268f8a4f7",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1001,
+      "sourceBaseOid": "10d0d25982f9d6802099a6814163e0b9d6fd588e",
+      "sourceCommits": [
+        "2dda03fe41337bb4c2c5fe83bf8a847268f8a4f7"
+      ],
+      "title": "Prepare closed physical generation source snapshots",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1001"
+    },
+    {
+      "baseRefName": "routine/fsc04-physical-source-snapshot",
+      "candidateCommits": [
+        "ab0015967947a563b1b224f5e67a6210e39198dc",
+        "abd0921198692d8d112df1e0420fef9dc7af8957"
+      ],
+      "candidateTipOid": "abd0921198692d8d112df1e0420fef9dc7af8957",
+      "headRefName": "routine/fsc04-generation-source-contract",
+      "headRefOid": "c204042e42b748fc35a202227398d9c54417c9c1",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1002,
+      "sourceBaseOid": "2dda03fe41337bb4c2c5fe83bf8a847268f8a4f7",
+      "sourceCommits": [
+        "b7beddff0398332ccee4a11becad5fb48a5a44be",
+        "c204042e42b748fc35a202227398d9c54417c9c1"
+      ],
+      "title": "FSC-04: select and verify versioned generation source contract",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1002"
+    },
+    {
+      "baseRefName": "routine/fsc04-generation-source-contract",
+      "candidateCommits": [
+        "9d6d2b6b03a4564132e61af6963ab45a841cf996"
+      ],
+      "candidateTipOid": "9d6d2b6b03a4564132e61af6963ab45a841cf996",
+      "headRefName": "routine/fsc04-work-model-source-policy",
+      "headRefOid": "87534251e3b47a7b89d2aaae9a56794d95d82093",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1003,
+      "sourceBaseOid": "c204042e42b748fc35a202227398d9c54417c9c1",
+      "sourceCommits": [
+        "87534251e3b47a7b89d2aaae9a56794d95d82093"
+      ],
+      "title": "FSC-04: characterize work-model source policy before multi-root selection",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1003"
+    },
+    {
+      "baseRefName": "routine/fsc04-generation-source-contract",
+      "candidateCommits": [
+        "5311678a60d91f24ad6fe2ec13358607ff00a4e8"
+      ],
+      "candidateTipOid": "5311678a60d91f24ad6fe2ec13358607ff00a4e8",
+      "headRefName": "routine/fsc04-snapshot-ancestor-guard",
+      "headRefOid": "8cdbd66ef448b32de83dd4a3d06b80586e8dd40b",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1004,
+      "sourceBaseOid": "c204042e42b748fc35a202227398d9c54417c9c1",
+      "sourceCommits": [
+        "8cdbd66ef448b32de83dd4a3d06b80586e8dd40b"
+      ],
+      "title": "fix: refuse linked workspace ancestors in source snapshot",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1004"
+    },
+    {
+      "baseRefName": "routine/fsc04-snapshot-ancestor-guard",
+      "candidateCommits": [
+        "f5f26be49cc84ddc6e459dd63f6b18bc17943789"
+      ],
+      "candidateTipOid": "f5f26be49cc84ddc6e459dd63f6b18bc17943789",
+      "headRefName": "routine/fsc04-snapshot-race-characterization",
+      "headRefOid": "e3e2c79f1a243982a11e24254bf21417b642aeb3",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1005,
+      "sourceBaseOid": "8cdbd66ef448b32de83dd4a3d06b80586e8dd40b",
+      "sourceCommits": [
+        "e3e2c79f1a243982a11e24254bf21417b642aeb3"
+      ],
+      "title": "Characterize physical generation-source path swap",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1005"
+    },
+    {
+      "baseRefName": "routine/fsc04-snapshot-race-characterization",
+      "candidateCommits": [
+        "ea25293765955354357a28502191d62c1ae9f608"
+      ],
+      "candidateTipOid": "ea25293765955354357a28502191d62c1ae9f608",
+      "headRefName": "routine/fsc04-descriptor-pinned-reader",
+      "headRefOid": "19a70a76c0bbfbf51f59551b12f9c5464912ea01",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1006,
+      "sourceBaseOid": "e3e2c79f1a243982a11e24254bf21417b642aeb3",
+      "sourceCommits": [
+        "19a70a76c0bbfbf51f59551b12f9c5464912ea01"
+      ],
+      "title": "Pin Linux generation source reads to descriptors",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1006"
+    },
+    {
+      "baseRefName": "routine/fsc04-descriptor-pinned-reader",
+      "candidateCommits": [
+        "c804da54a578d83677971c166edb3693c65ba43d"
+      ],
+      "candidateTipOid": "c804da54a578d83677971c166edb3693c65ba43d",
+      "headRefName": "routine/fsc04-work-model-multi-root-characterization",
+      "headRefOid": "b2659b446448e07714379549ebd1846adcd4c103",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1007,
+      "sourceBaseOid": "19a70a76c0bbfbf51f59551b12f9c5464912ea01",
+      "sourceCommits": [
+        "b2659b446448e07714379549ebd1846adcd4c103"
+      ],
+      "title": "Characterize work-model multi-root source selection",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1007"
+    },
+    {
+      "baseRefName": "routine/fsc04-work-model-multi-root-characterization",
+      "candidateCommits": [
+        "baa975e9232d692b6399b694900b847b1602aadc"
+      ],
+      "candidateTipOid": "baa975e9232d692b6399b694900b847b1602aadc",
+      "headRefName": "routine/fsc04-source-roster-stability",
+      "headRefOid": "3eda418033870f994ed675e3b9092f2abd66efbf",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1008,
+      "sourceBaseOid": "b2659b446448e07714379549ebd1846adcd4c103",
+      "sourceCommits": [
+        "3eda418033870f994ed675e3b9092f2abd66efbf"
+      ],
+      "title": "Refuse observed generation source roster mutations",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1008"
+    },
+    {
+      "baseRefName": "routine/fsc04-source-roster-stability",
+      "candidateCommits": [
+        "c708e1c1b05a3e6b5913c8f3678459665612826f"
+      ],
+      "candidateTipOid": "c708e1c1b05a3e6b5913c8f3678459665612826f",
+      "headRefName": "routine/fsc04-source-content-stability",
+      "headRefOid": "f7b51b98c819fca77b662e462ac53e5d2b5d2402",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1009,
+      "sourceBaseOid": "3eda418033870f994ed675e3b9092f2abd66efbf",
+      "sourceCommits": [
+        "f7b51b98c819fca77b662e462ac53e5d2b5d2402"
+      ],
+      "title": "Refuse observed in-place generation source mutations",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1009"
+    },
+    {
+      "baseRefName": "routine/fsc04-source-content-stability",
+      "candidateCommits": [
+        "12ad29f9b415a0a583dd40959ca7cee73bd717b7"
+      ],
+      "candidateTipOid": "12ad29f9b415a0a583dd40959ca7cee73bd717b7",
+      "headRefName": "routine/fsc04-work-model-bundle-contract",
+      "headRefOid": "72403386611af4f942ee9055bb75f3a684422351",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1010,
+      "sourceBaseOid": "f7b51b98c819fca77b662e462ac53e5d2b5d2402",
+      "sourceCommits": [
+        "72403386611af4f942ee9055bb75f3a684422351"
+      ],
+      "title": "Bind selected work-model sources to captured bytes",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1010"
+    },
+    {
+      "baseRefName": "routine/fsc04-work-model-bundle-contract",
+      "candidateCommits": [
+        "5ddfb2fc7f6bdd924e9040325b95096a1d0edfeb"
+      ],
+      "candidateTipOid": "5ddfb2fc7f6bdd924e9040325b95096a1d0edfeb",
+      "headRefName": "routine/fsc04-work-model-performance-closure",
+      "headRefOid": "f19d2b7307b280d632a9b6b7e7b379dd750a5ee3",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1011,
+      "sourceBaseOid": "72403386611af4f942ee9055bb75f3a684422351",
+      "sourceCommits": [
+        "f19d2b7307b280d632a9b6b7e7b379dd750a5ee3"
+      ],
+      "title": "Close declared work-model performance source set",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1011"
+    },
+    {
+      "baseRefName": "routine/fsc04-work-model-performance-closure",
+      "candidateCommits": [
+        "8d9361a396e4776c0419c85856c7e50e78d15e54"
+      ],
+      "candidateTipOid": "8d9361a396e4776c0419c85856c7e50e78d15e54",
+      "headRefName": "routine/fsc04-performance-absence-disposition",
+      "headRefOid": "ace5c52d2fcfd7bb090e669b2337c3a0e64de8ff",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1012,
+      "sourceBaseOid": "f19d2b7307b280d632a9b6b7e7b379dd750a5ee3",
+      "sourceCommits": [
+        "ace5c52d2fcfd7bb090e669b2337c3a0e64de8ff"
+      ],
+      "title": "Disposition absent performance sources as non-authorizing",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1012"
+    },
+    {
+      "baseRefName": "routine/fsc04-performance-absence-disposition",
+      "candidateCommits": [
+        "3687ca800a0d5d55a7823f12a3c4be8699b152be"
+      ],
+      "candidateTipOid": "3687ca800a0d5d55a7823f12a3c4be8699b152be",
+      "headRefName": "routine/fsc04-performance-physical-root-closure",
+      "headRefOid": "685b42fb149055d2b82445139b34f5b7dba16150",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1013,
+      "sourceBaseOid": "ace5c52d2fcfd7bb090e669b2337c3a0e64de8ff",
+      "sourceCommits": [
+        "685b42fb149055d2b82445139b34f5b7dba16150"
+      ],
+      "title": "Characterize arbitrary performance parent closure",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1013"
+    },
+    {
+      "baseRefName": "routine/fsc04-performance-physical-root-closure",
+      "candidateCommits": [
+        "6759e9cdd1317dfe3b3b5576afb6f8b7f12e1d29"
+      ],
+      "candidateTipOid": "6759e9cdd1317dfe3b3b5576afb6f8b7f12e1d29",
+      "headRefName": "routine/fsc04-selected-performance-file-capture",
+      "headRefOid": "8ae58f5027d3778ae1d34b108c5ff9a414f3bbda",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1014,
+      "sourceBaseOid": "685b42fb149055d2b82445139b34f5b7dba16150",
+      "sourceCommits": [
+        "8ae58f5027d3778ae1d34b108c5ff9a414f3bbda"
+      ],
+      "title": "Capture selected source files through pinned Linux handles",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1014"
+    },
+    {
+      "baseRefName": "routine/fsc04-selected-performance-file-capture",
+      "candidateCommits": [
+        "46b4eba6b351bb84889fceb4fad4c351c73904ce"
+      ],
+      "candidateTipOid": "46b4eba6b351bb84889fceb4fad4c351c73904ce",
+      "headRefName": "routine/fsc04-performance-preoutput-guard",
+      "headRefOid": "8c0e641d66136665fe46c4a5c35c656e727b4d19",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1015,
+      "sourceBaseOid": "8ae58f5027d3778ae1d34b108c5ff9a414f3bbda",
+      "sourceCommits": [
+        "8c0e641d66136665fe46c4a5c35c656e727b4d19"
+      ],
+      "title": "Block work-model output when declared performance source is unavailable",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1015"
+    },
+    {
+      "baseRefName": "routine/fsc04-performance-preoutput-guard",
+      "candidateCommits": [
+        "c875d83c9dea6adcca431fbfa336a07f8613887e"
+      ],
+      "candidateTipOid": "c875d83c9dea6adcca431fbfa336a07f8613887e",
+      "headRefName": "routine/fsc04-performance-physical-join",
+      "headRefOid": "29cd0dd40fdefde6afba2139708ed9956b1ef3ae",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1016,
+      "sourceBaseOid": "8c0e641d66136665fe46c4a5c35c656e727b4d19",
+      "sourceCommits": [
+        "29cd0dd40fdefde6afba2139708ed9956b1ef3ae"
+      ],
+      "title": "Join pinned performance capture with work-model source bundle",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1016"
+    },
+    {
+      "baseRefName": "routine/fsc04-performance-physical-join",
+      "candidateCommits": [
+        "acffe416a474f48898a3cf2a6d1cde2578d5a1bb"
+      ],
+      "candidateTipOid": "acffe416a474f48898a3cf2a6d1cde2578d5a1bb",
+      "headRefName": "routine/fsc04-pinned-core-selection",
+      "headRefOid": "d7b14134251a19561c7c3d819058c2fc3f782c3e",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1017,
+      "sourceBaseOid": "29cd0dd40fdefde6afba2139708ed9956b1ef3ae",
+      "sourceCommits": [
+        "d7b14134251a19561c7c3d819058c2fc3f782c3e"
+      ],
+      "title": "Discover pinned core work-model sources independently of selection",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1017"
+    },
+    {
+      "baseRefName": "routine/fsc04-pinned-core-selection",
+      "candidateCommits": [
+        "6bb1fa6161d0254a1834adcded10cf0d69137af8"
+      ],
+      "candidateTipOid": "6bb1fa6161d0254a1834adcded10cf0d69137af8",
+      "headRefName": "routine/fsc04-generation-output-order",
+      "headRefOid": "6d12c523bcb02cd1644fe7e4429bd1ed82818a4c",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1018,
+      "sourceBaseOid": "d7b14134251a19561c7c3d819058c2fc3f782c3e",
+      "sourceCommits": [
+        "6d12c523bcb02cd1644fe7e4429bd1ed82818a4c"
+      ],
+      "title": "Characterize work-model output ordering before physical verification",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1018"
+    },
+    {
+      "baseRefName": "routine/fsc04-generation-output-order",
+      "candidateCommits": [
+        "eb522d698a788cfd1179c6a6117921148733a04b"
+      ],
+      "candidateTipOid": "eb522d698a788cfd1179c6a6117921148733a04b",
+      "headRefName": "routine/fsc04-typed-verification-wave",
+      "headRefOid": "773a91d1c3be1026e86c36300c7adc58b5b61b5d",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1019,
+      "sourceBaseOid": "6d12c523bcb02cd1644fe7e4429bd1ed82818a4c",
+      "sourceCommits": [
+        "773a91d1c3be1026e86c36300c7adc58b5b61b5d"
+      ],
+      "title": "Bind proposed work-model bytes in typed verification preview",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1019"
+    },
+    {
+      "baseRefName": "routine/fsc04-typed-verification-wave",
+      "candidateCommits": [
+        "24b8a116e4cde46fcb1ae27c6c845b9410f699e5"
+      ],
+      "candidateTipOid": "24b8a116e4cde46fcb1ae27c6c845b9410f699e5",
+      "headRefName": "routine/fsc04-exact-output-preview",
+      "headRefOid": "7e7582a28ecf5d465f24a1ba94161343c6b0b5fa",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1020,
+      "sourceBaseOid": "773a91d1c3be1026e86c36300c7adc58b5b61b5d",
+      "sourceCommits": [
+        "7e7582a28ecf5d465f24a1ba94161343c6b0b5fa"
+      ],
+      "title": "Verify exact generated work-model output and reject duplicate JSON keys",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1020"
+    },
+    {
+      "baseRefName": "routine/fsc04-exact-output-preview",
+      "candidateCommits": [
+        "5d2ed323512c52ce9055c6b3a22dc6ea2eaf2dc4"
+      ],
+      "candidateTipOid": "5d2ed323512c52ce9055c6b3a22dc6ea2eaf2dc4",
+      "headRefName": "routine/fsc04-temporal-capture-preview",
+      "headRefOid": "a2d1d3b4bce34f40f5dd283fd663cfbda3f6a60d",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1021,
+      "sourceBaseOid": "7e7582a28ecf5d465f24a1ba94161343c6b0b5fa",
+      "sourceCommits": [
+        "a2d1d3b4bce34f40f5dd283fd663cfbda3f6a60d"
+      ],
+      "title": "Refuse observed drift across repeated work-model captures",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1021"
+    },
+    {
+      "baseRefName": "routine/fsc04-temporal-capture-preview",
+      "candidateCommits": [
+        "3ec858258b7aa2dcf7b8e24c764246c8cb1c69ff"
+      ],
+      "candidateTipOid": "3ec858258b7aa2dcf7b8e24c764246c8cb1c69ff",
+      "headRefName": "routine/fsc04-joint-output-capture-preview",
+      "headRefOid": "d69de00bee0f5ce47420343724e9f897d5e6d631",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1022,
+      "sourceBaseOid": "a2d1d3b4bce34f40f5dd283fd663cfbda3f6a60d",
+      "sourceCommits": [
+        "d69de00bee0f5ce47420343724e9f897d5e6d631"
+      ],
+      "title": "Bind exact work-model output to repeated physical captures",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1022"
+    },
+    {
+      "baseRefName": "routine/fsc04-joint-output-capture-preview",
+      "candidateCommits": [
+        "bb903d24dcca55c9d14cb3cd5b8e43fa076df4e4"
+      ],
+      "candidateTipOid": "bb903d24dcca55c9d14cb3cd5b8e43fa076df4e4",
+      "headRefName": "routine/fsc04-current-generator-preview",
+      "headRefOid": "da2650c0bf404adfcd46bc2890db63393e30dd23",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1023,
+      "sourceBaseOid": "d69de00bee0f5ce47420343724e9f897d5e6d631",
+      "sourceCommits": [
+        "da2650c0bf404adfcd46bc2890db63393e30dd23"
+      ],
+      "title": "Bind work-model preview to assembly generator identity",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1023"
+    },
+    {
+      "baseRefName": "routine/fsc04-current-generator-preview",
+      "candidateCommits": [
+        "15cabff3c5da018bf09f2b190a461fd7ef32eac4"
+      ],
+      "candidateTipOid": "15cabff3c5da018bf09f2b190a461fd7ef32eac4",
+      "headRefName": "routine/fsc04-blocking-diagnostics-preview",
+      "headRefOid": "901df809e74e473e329d1cc324366b72d88a815d",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1024,
+      "sourceBaseOid": "da2650c0bf404adfcd46bc2890db63393e30dd23",
+      "sourceCommits": [
+        "901df809e74e473e329d1cc324366b72d88a815d"
+      ],
+      "title": "Mirror blocking work-model diagnostics in read-only preview",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1024"
+    },
+    {
+      "baseRefName": "routine/fsc04-blocking-diagnostics-preview",
+      "candidateCommits": [
+        "260bfcb1b49c6053c10a2908cf50d996855da399"
+      ],
+      "candidateTipOid": "260bfcb1b49c6053c10a2908cf50d996855da399",
+      "headRefName": "routine/fsc04-duplicate-work-id-boundary",
+      "headRefOid": "2cee1a8a71f75751bd878be72b8c8eee0bfec051",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1025,
+      "sourceBaseOid": "901df809e74e473e329d1cc324366b72d88a815d",
+      "sourceCommits": [
+        "2cee1a8a71f75751bd878be72b8c8eee0bfec051"
+      ],
+      "title": "Characterize duplicate work-ID producer boundary",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1025"
+    },
+    {
+      "baseRefName": "routine/fsc04-duplicate-work-id-boundary",
+      "candidateCommits": [
+        "486018b16e9107e5eb0d3e589283bc67d0c01c0c"
+      ],
+      "candidateTipOid": "486018b16e9107e5eb0d3e589283bc67d0c01c0c",
+      "headRefName": "routine/fsc04-candidate-inventory-preview",
+      "headRefOid": "cf92c80f45580f6ed818a5a058417b8fa6a0cb94",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1026,
+      "sourceBaseOid": "2cee1a8a71f75751bd878be72b8c8eee0bfec051",
+      "sourceCommits": [
+        "cf92c80f45580f6ed818a5a058417b8fa6a0cb94"
+      ],
+      "title": "Interpret supplied work candidate captures without effects",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1026"
+    },
+    {
+      "baseRefName": "routine/fsc04-candidate-inventory-preview",
+      "candidateCommits": [
+        "a9c6f3f9f4fd5a2b1b9219ebe452f310abb8d630"
+      ],
+      "candidateTipOid": "a9c6f3f9f4fd5a2b1b9219ebe452f310abb8d630",
+      "headRefName": "routine/fsc04-candidate-inventory-omission",
+      "headRefOid": "bbb2ba2e3d0ce802ce413a8bdf5ff3a0ec713c33",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1027,
+      "sourceBaseOid": "cf92c80f45580f6ed818a5a058417b8fa6a0cb94",
+      "sourceCommits": [
+        "bbb2ba2e3d0ce802ce413a8bdf5ff3a0ec713c33"
+      ],
+      "title": "Characterize omitted work candidate in supplied inventory",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1027"
+    },
+    {
+      "baseRefName": "routine/fsc04-candidate-inventory-omission",
+      "candidateCommits": [
+        "fad300094376d45a4e05c32bfd8a3ceb487ac65e"
+      ],
+      "candidateTipOid": "fad300094376d45a4e05c32bfd8a3ceb487ac65e",
+      "headRefName": "routine/fsc04-candidate-tree-late-addition",
+      "headRefOid": "8952bae1acac51eca771c1a8b273bd821b73c03f",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1028,
+      "sourceBaseOid": "bbb2ba2e3d0ce802ce413a8bdf5ff3a0ec713c33",
+      "sourceCommits": [
+        "8952bae1acac51eca771c1a8b273bd821b73c03f"
+      ],
+      "title": "Characterize late candidate in previously visited work directory",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1028"
+    },
+    {
+      "baseRefName": "routine/fsc04-candidate-tree-late-addition",
+      "candidateCommits": [
+        "00a673a40579b2cdcae331ea6133675a2ea72484"
+      ],
+      "candidateTipOid": "00a673a40579b2cdcae331ea6133675a2ea72484",
+      "headRefName": "routine/fsc04-repeated-candidate-tree",
+      "headRefOid": "6a835e74169174b9de229ec824955e83dbabcb41",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1029,
+      "sourceBaseOid": "8952bae1acac51eca771c1a8b273bd821b73c03f",
+      "sourceCommits": [
+        "6a835e74169174b9de229ec824955e83dbabcb41"
+      ],
+      "title": "FSC-04: repeat pinned candidate tree preview before acceptance",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1029"
+    },
+    {
+      "baseRefName": "routine/fsc04-repeated-candidate-tree",
+      "candidateCommits": [
+        "357b81411b091054487d6ee0a109b2d81e992301"
+      ],
+      "candidateTipOid": "357b81411b091054487d6ee0a109b2d81e992301",
+      "headRefName": "routine/fsc04-held-child-roster",
+      "headRefOid": "7b7bd46354ac6c2d2781ac0e069bd1c4f1bd3dcc",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1030,
+      "sourceBaseOid": "6a835e74169174b9de229ec824955e83dbabcb41",
+      "sourceCommits": [
+        "7b7bd46354ac6c2d2781ac0e069bd1c4f1bd3dcc"
+      ],
+      "title": "FSC-04: recheck held child rosters before candidate capture",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1030"
+    },
+    {
+      "baseRefName": "routine/fsc04-held-child-roster",
+      "candidateCommits": [
+        "3d8b0798675f1c48c614190ecd0a48b4633455d5"
+      ],
+      "candidateTipOid": "3d8b0798675f1c48c614190ecd0a48b4633455d5",
+      "headRefName": "routine/fsc04-held-directory-limit",
+      "headRefOid": "2a2a1e1aa97698560553927ef427f50914f2e518",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1031,
+      "sourceBaseOid": "7b7bd46354ac6c2d2781ac0e069bd1c4f1bd3dcc",
+      "sourceCommits": [
+        "2a2a1e1aa97698560553927ef427f50914f2e518"
+      ],
+      "title": "FSC-04: bound held directory descriptors in pinned capture",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1031"
+    },
+    {
+      "baseRefName": "routine/fsc04-held-directory-limit",
+      "candidateCommits": [
+        "8a1a8aa4b4dee96d19ccbac0ac8d5c9af7fa434c"
+      ],
+      "candidateTipOid": "8a1a8aa4b4dee96d19ccbac0ac8d5c9af7fa434c",
+      "headRefName": "routine/fsc04-pinned-file-cap",
+      "headRefOid": "d2b509adc253583b1c355136833721bdef79f638",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1032,
+      "sourceBaseOid": "2a2a1e1aa97698560553927ef427f50914f2e518",
+      "sourceCommits": [
+        "d2b509adc253583b1c355136833721bdef79f638"
+      ],
+      "title": "FSC-04: bound pinned regular-file byte passes",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1032"
+    },
+    {
+      "baseRefName": "routine/fsc04-pinned-file-cap",
+      "candidateCommits": [
+        "445fff3551e1d467858d85a46a2c84cbe68bac01"
+      ],
+      "candidateTipOid": "445fff3551e1d467858d85a46a2c84cbe68bac01",
+      "headRefName": "routine/fsc04-pinned-aggregate-cap",
+      "headRefOid": "c3d482fc331b05c160b3098fa874139e2db9d5b0",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1033,
+      "sourceBaseOid": "d2b509adc253583b1c355136833721bdef79f638",
+      "sourceCommits": [
+        "c3d482fc331b05c160b3098fa874139e2db9d5b0"
+      ],
+      "title": "FSC-04: bound aggregate raw bytes in pinned capture",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1033"
+    },
+    {
+      "baseRefName": "routine/fsc04-pinned-aggregate-cap",
+      "candidateCommits": [
+        "4ddd5017db94e426e8753aefabff44c9ef4aa276"
+      ],
+      "candidateTipOid": "4ddd5017db94e426e8753aefabff44c9ef4aa276",
+      "headRefName": "routine/fsc04-pinned-file-count",
+      "headRefOid": "03c196a8f90a0c1a68c65a3d196aebe433a25b1b",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1034,
+      "sourceBaseOid": "c3d482fc331b05c160b3098fa874139e2db9d5b0",
+      "sourceCommits": [
+        "03c196a8f90a0c1a68c65a3d196aebe433a25b1b"
+      ],
+      "title": "FSC-04: bound pinned complete-root captured file count",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1034"
+    },
+    {
+      "baseRefName": "routine/fsc04-pinned-file-count",
+      "candidateCommits": [
+        "e61c9ddf6436898a7fcb2cc2c15080f5c7ab5334"
+      ],
+      "candidateTipOid": "e61c9ddf6436898a7fcb2cc2c15080f5c7ab5334",
+      "headRefName": "routine/fsc04-pinned-path-cap",
+      "headRefOid": "4ca06d9a6ed535110883b0ac3986c353290d841c",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1035,
+      "sourceBaseOid": "03c196a8f90a0c1a68c65a3d196aebe433a25b1b",
+      "sourceCommits": [
+        "4ca06d9a6ed535110883b0ac3986c353290d841c"
+      ],
+      "title": "FSC-04: bound pinned relative source path length",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1035"
+    },
+    {
+      "baseRefName": "routine/fsc04-pinned-path-cap",
+      "candidateCommits": [
+        "65b9c081714afb67120bb2da0f53042672566595"
+      ],
+      "candidateTipOid": "65b9c081714afb67120bb2da0f53042672566595",
+      "headRefName": "routine/fsc04-pinned-second-pass",
+      "headRefOid": "ed9b4c6e88e16a4e5414580e47cafb280b077fab",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1036,
+      "sourceBaseOid": "4ca06d9a6ed535110883b0ac3986c353290d841c",
+      "sourceCommits": [
+        "ed9b4c6e88e16a4e5414580e47cafb280b077fab"
+      ],
+      "title": "FSC-04: compare pinned second pass with fixed buffer",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1036"
+    },
+    {
+      "baseRefName": "routine/fsc04-pinned-second-pass",
+      "candidateCommits": [
+        "c1613dba540e9277e1bfd860155bd39becd329cf"
+      ],
+      "candidateTipOid": "c1613dba540e9277e1bfd860155bd39becd329cf",
+      "headRefName": "routine/fsc04-pinned-first-pass",
+      "headRefOid": "4e2b5bf0aa760154b006197beea9281cd60c84e2",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1037,
+      "sourceBaseOid": "ed9b4c6e88e16a4e5414580e47cafb280b077fab",
+      "sourceCommits": [
+        "4e2b5bf0aa760154b006197beea9281cd60c84e2"
+      ],
+      "title": "FSC-04: reserve bounded first-pass pinned file buffer",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1037"
+    },
+    {
+      "baseRefName": "routine/fsc04-pinned-first-pass",
+      "candidateCommits": [
+        "f5604df6869e9bc51ddf1ad8b3d4f7b92efe53a6"
+      ],
+      "candidateTipOid": "f5604df6869e9bc51ddf1ad8b3d4f7b92efe53a6",
+      "headRefName": "routine/fsc04-pinned-owned-result",
+      "headRefOid": "6ca4befec823793fcb6f585db7bfb8b48984b8ad",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1038,
+      "sourceBaseOid": "4e2b5bf0aa760154b006197beea9281cd60c84e2",
+      "sourceCommits": [
+        "6ca4befec823793fcb6f585db7bfb8b48984b8ad"
+      ],
+      "title": "FSC-04: transfer owned pinned bytes into captured results",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1038"
+    },
+    {
+      "baseRefName": "routine/fsc04-pinned-owned-result",
+      "candidateCommits": [
+        "43b66f104a3774afa749ccd51e0a5a4c8a0e38d9"
+      ],
+      "candidateTipOid": "43b66f104a3774afa749ccd51e0a5a4c8a0e38d9",
+      "headRefName": "routine/fsc04-pinned-direct-read",
+      "headRefOid": "38e48ef03bda4a52528aa5a4941e27e181ae24e8",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1039,
+      "sourceBaseOid": "6ca4befec823793fcb6f585db7bfb8b48984b8ad",
+      "sourceCommits": [
+        "38e48ef03bda4a52528aa5a4941e27e181ae24e8"
+      ],
+      "title": "FSC-04: read pinned first pass into one owned array",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1039"
+    },
+    {
+      "baseRefName": "routine/fsc04-pinned-direct-read",
+      "candidateCommits": [
+        "a5debe3850c9bdf23c619089309845d76f9de4ff"
+      ],
+      "candidateTipOid": "a5debe3850c9bdf23c619089309845d76f9de4ff",
+      "headRefName": "routine/fsc04-pinned-unicode-alias",
+      "headRefOid": "1bab7cdc32635a2b6d45b8c7457313907f740f71",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1040,
+      "sourceBaseOid": "38e48ef03bda4a52528aa5a4941e27e181ae24e8",
+      "sourceCommits": [
+        "1bab7cdc32635a2b6d45b8c7457313907f740f71"
+      ],
+      "title": "Refuse Unicode aliases in pinned source selection",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1040"
+    },
+    {
+      "baseRefName": "routine/fsc04-pinned-unicode-alias",
+      "candidateCommits": [
+        "524d62b614bbe856e8c3f6c2d1a7c8d7e0fc016a"
+      ],
+      "candidateTipOid": "524d62b614bbe856e8c3f6c2d1a7c8d7e0fc016a",
+      "headRefName": "routine/fsc04-pinned-root-alias",
+      "headRefOid": "2079be649681c496629b5af11c3760026ae7486b",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1041,
+      "sourceBaseOid": "1bab7cdc32635a2b6d45b8c7457313907f740f71",
+      "sourceCommits": [
+        "2079be649681c496629b5af11c3760026ae7486b"
+      ],
+      "title": "Check aliases while selecting pinned source roots",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1041"
+    },
+    {
+      "baseRefName": "routine/fsc04-pinned-root-alias",
+      "candidateCommits": [
+        "38c14ba1b3eb1c3460e1d251df65a82806c8256b"
+      ],
+      "candidateTipOid": "38c14ba1b3eb1c3460e1d251df65a82806c8256b",
+      "headRefName": "routine/fsc04-pinned-candidate-discovery",
+      "headRefOid": "161e07ad766d2e92f7c720c60da6563f00aef577",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1042,
+      "sourceBaseOid": "2079be649681c496629b5af11c3760026ae7486b",
+      "sourceCommits": [
+        "161e07ad766d2e92f7c720c60da6563f00aef577"
+      ],
+      "title": "Discover complete work candidates through pinned traversal",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1042"
+    },
+    {
+      "baseRefName": "routine/fsc04-pinned-candidate-discovery",
+      "candidateCommits": [
+        "f77b7e18698239e9e53bf77cfa89e54af49085e8"
+      ],
+      "candidateTipOid": "f77b7e18698239e9e53bf77cfa89e54af49085e8",
+      "headRefName": "routine/fsc04-work-bundle-overlap",
+      "headRefOid": "70b76458a97d0a530f7885afa406288bf45ece4f",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1043,
+      "sourceBaseOid": "161e07ad766d2e92f7c720c60da6563f00aef577",
+      "sourceCommits": [
+        "70b76458a97d0a530f7885afa406288bf45ece4f"
+      ],
+      "title": "Join discovered work tree to selected bundle bytes",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1043"
+    },
+    {
+      "baseRefName": "routine/fsc04-work-bundle-overlap",
+      "candidateCommits": [
+        "2c336338a7fd14c80849c6ac88453ebd94d03f0e"
+      ],
+      "candidateTipOid": "2c336338a7fd14c80849c6ac88453ebd94d03f0e",
+      "headRefName": "routine/fsc04-repeated-joint-capture",
+      "headRefOid": "ec4637bda6c52ef8001c62ed154f2d90961229c1",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1044,
+      "sourceBaseOid": "70b76458a97d0a530f7885afa406288bf45ece4f",
+      "sourceCommits": [
+        "ec4637bda6c52ef8001c62ed154f2d90961229c1"
+      ],
+      "title": "Compare repeated joined source observations",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1044"
+    },
+    {
+      "baseRefName": "routine/fsc04-repeated-joint-capture",
+      "candidateCommits": [
+        "9cd5ddb41ae60c6993e3285b186008f51e4701a7"
+      ],
+      "candidateTipOid": "9cd5ddb41ae60c6993e3285b186008f51e4701a7",
+      "headRefName": "routine/fsc04-observation-only",
+      "headRefOid": "ff8215ec6125ffafc058b24b5cfa7439dabd31da",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1045,
+      "sourceBaseOid": "ec4637bda6c52ef8001c62ed154f2d90961229c1",
+      "sourceCommits": [
+        "ff8215ec6125ffafc058b24b5cfa7439dabd31da"
+      ],
+      "title": "Mark repeated source agreement as observational",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1045"
+    },
+    {
+      "baseRefName": "routine/fsc04-observation-only",
+      "candidateCommits": [
+        "5417b94834cb3675b98149719e0da7f5de14118e"
+      ],
+      "candidateTipOid": "5417b94834cb3675b98149719e0da7f5de14118e",
+      "headRefName": "routine/fsc04-mixed-instant-characterization",
+      "headRefOid": "f5434a4d6be635b8ce080e6707e67bbf4c65101b",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1046,
+      "sourceBaseOid": "ff8215ec6125ffafc058b24b5cfa7439dabd31da",
+      "sourceCommits": [
+        "f5434a4d6be635b8ce080e6707e67bbf4c65101b"
+      ],
+      "title": "Characterize repeated pinned mixed source instants",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1046"
+    },
+    {
+      "baseRefName": "routine/fsc04-mixed-instant-characterization",
+      "candidateCommits": [
+        "8c00dc823e36b0a7facb5ee5a114858955a3e039"
+      ],
+      "candidateTipOid": "8c00dc823e36b0a7facb5ee5a114858955a3e039",
+      "headRefName": "routine/fsc04-git-commit-custody",
+      "headRefOid": "83229e3e10b2f56bc428921826654ccf585929cf",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1047,
+      "sourceBaseOid": "f5434a4d6be635b8ce080e6707e67bbf4c65101b",
+      "sourceCommits": [
+        "83229e3e10b2f56bc428921826654ccf585929cf"
+      ],
+      "title": "Preview core config from one pinned Git commit",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1047"
+    },
+    {
+      "baseRefName": "routine/fsc04-git-commit-custody",
+      "candidateCommits": [
+        "cae0608e97d1d5c4126ebad8260c03bf097da65a"
+      ],
+      "candidateTipOid": "cae0608e97d1d5c4126ebad8260c03bf097da65a",
+      "headRefName": "routine/fsc04-git-dirty-refusal",
+      "headRefOid": "55ecb160c23fdfc17b85ce36c0e29daa6dd709a5",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1048,
+      "sourceBaseOid": "83229e3e10b2f56bc428921826654ccf585929cf",
+      "sourceCommits": [
+        "55ecb160c23fdfc17b85ce36c0e29daa6dd709a5"
+      ],
+      "title": "FSC-04: observe core working-tree bytes against pinned commit",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1048"
+    },
+    {
+      "baseRefName": "routine/fsc04-git-dirty-refusal",
+      "candidateCommits": [
+        "ac33ddb7fde0a0becb3d660fddcab3884dcc37e1"
+      ],
+      "candidateTipOid": "ac33ddb7fde0a0becb3d660fddcab3884dcc37e1",
+      "headRefName": "routine/fsc04-git-mode-observation",
+      "headRefOid": "d1bcc2aed975a47668c68e9ab59b7c61b80cbff1",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1049,
+      "sourceBaseOid": "55ecb160c23fdfc17b85ce36c0e29daa6dd709a5",
+      "sourceCommits": [
+        "d1bcc2aed975a47668c68e9ab59b7c61b80cbff1"
+      ],
+      "title": "FSC-04: observe pinned core executable modes against Git",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1049"
+    },
+    {
+      "baseRefName": "routine/fsc04-git-mode-observation",
+      "candidateCommits": [
+        "2ca74d29369a12a3ac811d139e8cb6d8ba3bbfe4"
+      ],
+      "candidateTipOid": "2ca74d29369a12a3ac811d139e8cb6d8ba3bbfe4",
+      "headRefName": "routine/fsc04-git-root-custody",
+      "headRefOid": "58132088a92426a036c98545c73c042e82d1fb25",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1050,
+      "sourceBaseOid": "d1bcc2aed975a47668c68e9ab59b7c61b80cbff1",
+      "sourceCommits": [
+        "58132088a92426a036c98545c73c042e82d1fb25"
+      ],
+      "title": "FSC-04: refuse enclosing Git repository for core preview",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1050"
+    },
+    {
+      "baseRefName": "routine/fsc04-git-root-custody",
+      "candidateCommits": [
+        "b08965b3ebc6c4d6525f4dd4e6cf3c28e656e572"
+      ],
+      "candidateTipOid": "b08965b3ebc6c4d6525f4dd4e6cf3c28e656e572",
+      "headRefName": "routine/fsc04-git-entry-custody",
+      "headRefOid": "7b7880f93faf6f521e7bde20e27d976a6d4290b1",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1051,
+      "sourceBaseOid": "58132088a92426a036c98545c73c042e82d1fb25",
+      "sourceCommits": [
+        "7b7880f93faf6f521e7bde20e27d976a6d4290b1"
+      ],
+      "title": "FSC-04: refuse unregistered Git worktree source roots",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1051"
+    },
+    {
+      "baseRefName": "routine/fsc04-git-entry-custody",
+      "candidateCommits": [
+        "d767fcc33f4eed2c631d3151cd56db537ad4dfc7"
+      ],
+      "candidateTipOid": "d767fcc33f4eed2c631d3151cd56db537ad4dfc7",
+      "headRefName": "routine/fsc04-git-registry-recheck",
+      "headRefOid": "cace956fa195a2f694de3a606ec7f0f3f7bec368",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1052,
+      "sourceBaseOid": "7b7880f93faf6f521e7bde20e27d976a6d4290b1",
+      "sourceCommits": [
+        "cace956fa195a2f694de3a606ec7f0f3f7bec368"
+      ],
+      "title": "FSC-04: recheck Git worktree registration after blob reads",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1052"
+    },
+    {
+      "baseRefName": "routine/fsc04-git-registry-recheck",
+      "candidateCommits": [
+        "3150c00646e0436ef1bb7e9cbe57055397856666"
+      ],
+      "candidateTipOid": "3150c00646e0436ef1bb7e9cbe57055397856666",
+      "headRefName": "routine/fsc04-git-alternate-refusal",
+      "headRefOid": "1baeca54dd237eb55c8d618f7505e1baf90e8e21",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1053,
+      "sourceBaseOid": "cace956fa195a2f694de3a606ec7f0f3f7bec368",
+      "sourceCommits": [
+        "1baeca54dd237eb55c8d618f7505e1baf90e8e21"
+      ],
+      "title": "FSC-04: refuse Git alternate object-store declarations",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1053"
+    },
+    {
+      "baseRefName": "routine/fsc04-git-alternate-refusal",
+      "candidateCommits": [
+        "4fc8afe3a39135b9c857f9a070f28b6ebd944fb0"
+      ],
+      "candidateTipOid": "4fc8afe3a39135b9c857f9a070f28b6ebd944fb0",
+      "headRefName": "routine/fsc04-git-object-symlink",
+      "headRefOid": "6703cd874bcb7869d30d21c8a628281f91348a87",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1054,
+      "sourceBaseOid": "1baeca54dd237eb55c8d618f7505e1baf90e8e21",
+      "sourceCommits": [
+        "6703cd874bcb7869d30d21c8a628281f91348a87"
+      ],
+      "title": "FSC-04: refuse redirected Git object directories",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1054"
+    },
+    {
+      "baseRefName": "routine/fsc04-git-object-symlink",
+      "candidateCommits": [
+        "89a129ca54a731738dfe93e8d09740791b1e36b4"
+      ],
+      "candidateTipOid": "89a129ca54a731738dfe93e8d09740791b1e36b4",
+      "headRefName": "routine/fsc04-git-no-lazy-fetch",
+      "headRefOid": "cfcff12730097e490d4c75bb5ca3117abe02454a",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1055,
+      "sourceBaseOid": "6703cd874bcb7869d30d21c8a628281f91348a87",
+      "sourceCommits": [
+        "cfcff12730097e490d4c75bb5ca3117abe02454a"
+      ],
+      "title": "FSC-04: disable lazy Git object fetch in custody preview",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1055"
+    },
+    {
+      "baseRefName": "routine/fsc04-git-no-lazy-fetch",
+      "candidateCommits": [
+        "ae7019223897c6d84fd9ee7923c8913a02f88434"
+      ],
+      "candidateTipOid": "ae7019223897c6d84fd9ee7923c8913a02f88434",
+      "headRefName": "routine/fsc04-git-pack-symlink",
+      "headRefOid": "8125ded842937f581289e9acd19b044f63f34759",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1056,
+      "sourceBaseOid": "cfcff12730097e490d4c75bb5ca3117abe02454a",
+      "sourceCommits": [
+        "8125ded842937f581289e9acd19b044f63f34759"
+      ],
+      "title": "FSC-04: refuse redirected Git pack directories",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1056"
+    },
+    {
+      "baseRefName": "routine/fsc04-git-pack-symlink",
+      "candidateCommits": [
+        "f467d0e4ddf221752d02b7df64ae69be7a02cb23"
+      ],
+      "candidateTipOid": "f467d0e4ddf221752d02b7df64ae69be7a02cb23",
+      "headRefName": "routine/fsc04-git-loose-fanout",
+      "headRefOid": "4af526e286f10db87e57b9198387181bc5ecacfc",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1057,
+      "sourceBaseOid": "8125ded842937f581289e9acd19b044f63f34759",
+      "sourceCommits": [
+        "4af526e286f10db87e57b9198387181bc5ecacfc"
+      ],
+      "title": "FSC-04: refuse redirected Git loose-object fanouts",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1057"
+    },
+    {
+      "baseRefName": "routine/fsc04-git-loose-fanout",
+      "candidateCommits": [
+        "afc1e8928cfa7bf7372665ff737fec84a59cff8e"
+      ],
+      "candidateTipOid": "afc1e8928cfa7bf7372665ff737fec84a59cff8e",
+      "headRefName": "routine/fsc04-git-loose-leaf",
+      "headRefOid": "36228b2381dcee180db2519b1f80266e6fc67bd2",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1058,
+      "sourceBaseOid": "4af526e286f10db87e57b9198387181bc5ecacfc",
+      "sourceCommits": [
+        "36228b2381dcee180db2519b1f80266e6fc67bd2"
+      ],
+      "title": "FSC-04: refuse redirected Git loose-object leaves",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1058"
+    },
+    {
+      "baseRefName": "routine/fsc04-git-loose-leaf",
+      "candidateCommits": [
+        "7e18bcbfbe6c67b5a74ff9f282c0ad8b39805533"
+      ],
+      "candidateTipOid": "7e18bcbfbe6c67b5a74ff9f282c0ad8b39805533",
+      "headRefName": "routine/fsc04-git-blob-integrity",
+      "headRefOid": "df537506e3a79db5ee268c1468398a85429297fd",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1059,
+      "sourceBaseOid": "36228b2381dcee180db2519b1f80266e6fc67bd2",
+      "sourceCommits": [
+        "df537506e3a79db5ee268c1468398a85429297fd"
+      ],
+      "title": "FSC-04: verify selected Git blob bytes against object IDs",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1059"
+    },
+    {
+      "baseRefName": "routine/fsc04-git-blob-integrity",
+      "candidateCommits": [
+        "107a88f78d21be20d66fe659d9f9eb16cc9d763d"
+      ],
+      "candidateTipOid": "107a88f78d21be20d66fe659d9f9eb16cc9d763d",
+      "headRefName": "routine/fsc04-git-commit-integrity",
+      "headRefOid": "d78f403a58d3fc3b053a77fcdaf1aafd8c0312f1",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1060,
+      "sourceBaseOid": "df537506e3a79db5ee268c1468398a85429297fd",
+      "sourceCommits": [
+        "d78f403a58d3fc3b053a77fcdaf1aafd8c0312f1"
+      ],
+      "title": "FSC-04: verify selected Git commit bytes against object ID",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1060"
+    },
+    {
+      "baseRefName": "routine/fsc04-git-commit-integrity",
+      "candidateCommits": [
+        "a2b18657f3a8edb32f80d66d7d8506e61f3d2b6d"
+      ],
+      "candidateTipOid": "a2b18657f3a8edb32f80d66d7d8506e61f3d2b6d",
+      "headRefName": "routine/fsc04-git-tree-integrity",
+      "headRefOid": "ba38076d81e664ae87527cf82f0e6bb7a953eee6",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1061,
+      "sourceBaseOid": "d78f403a58d3fc3b053a77fcdaf1aafd8c0312f1",
+      "sourceCommits": [
+        "ba38076d81e664ae87527cf82f0e6bb7a953eee6"
+      ],
+      "title": "FSC-04: verify selected Git tree object chain",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1061"
+    },
+    {
+      "baseRefName": "routine/fsc04-git-tree-integrity",
+      "candidateCommits": [
+        "fccf81618628d26f0ea2aacafab760d5d520f89a"
+      ],
+      "candidateTipOid": "fccf81618628d26f0ea2aacafab760d5d520f89a",
+      "headRefName": "routine/fsc04-git-pack-leaf",
+      "headRefOid": "cb67bd0d4aeb0b519668feedc0226b51d09fccc0",
+      "isDraft": true,
+      "mergeStateStatus": "CLEAN",
+      "number": 1062,
+      "sourceBaseOid": "ba38076d81e664ae87527cf82f0e6bb7a953eee6",
+      "sourceCommits": [
+        "cb67bd0d4aeb0b519668feedc0226b51d09fccc0"
+      ],
+      "title": "FSC-04: refuse redirected Git pack-file leaves",
+      "url": "https://github.com/FS-GG/FS.GG.SDD/pull/1062"
+    }
+  ],
+  "qualification": {
+    "artifactsTests": {
+      "command": "dotnet test tests/FS.GG.SDD.Artifacts.Tests/FS.GG.SDD.Artifacts.Tests.fsproj -c Release --verbosity minimal",
+      "failed": 0,
+      "passed": 653,
+      "skipped": 0
+    },
+    "commandsTests": {
+      "command": "dotnet test tests/FS.GG.SDD.Commands.Tests/FS.GG.SDD.Commands.Tests.fsproj -c Release --verbosity minimal",
+      "failed": 0,
+      "passed": 1596,
+      "skipped": 0
+    },
+    "diffCheck": "passed",
+    "originalSourceBlobPreservation": "All original-chain paths are present; only current-main gate.yml and two test project files differ. Five sibling-added files are present."
+  },
+  "repository": "FS-GG/FS.GG.SDD",
+  "schema": "fsgg-sdd-pr-preservation/v1",
+  "sourceCommitCount": 66,
+  "sourcePathsMissingFromCandidate": []
+}

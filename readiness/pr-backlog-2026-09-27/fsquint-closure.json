@@ -1,0 +1,95 @@
+{
+  "capturedAt": "2026-09-27T08:22:21.231040+00:00",
+  "repository": "FS-GG/FsQuint",
+  "replacement": {
+    "number": 28,
+    "head": "7209a9b353bf22fc9e0eee6958bc25c6d65ed791"
+  },
+  "sourceHeadsPreserved": 12,
+  "closures": [
+    {
+      "number": 15,
+      "head": "abe846a88c3fe6ae5bc5de5168ac7d5654b63d49",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 16,
+      "head": "0eb1b6ad9e0db85db1d26c286e1832d1bb134e76",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 17,
+      "head": "174032a8912208bb83556fb5609e83b433368dbb",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 18,
+      "head": "dd1e6d457a62ba5a7c75bf393dadd7e582719b3a",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 19,
+      "head": "903524f912308543c30e941670d26c898277882a",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 20,
+      "head": "c1e692282bd7cc324393907c5ba3359e382b85cd",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 21,
+      "head": "80e73c4f60cf045d9030e57795205ba3c7b175eb",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 22,
+      "head": "a02ad8d8456564c35a4d4fa4f8080be308f283e1",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 23,
+      "head": "851103037bf592a8ddddd604076aa3514192b34f",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 24,
+      "head": "6dbeb9063d5ea7b7dfbe861e0d5c42868990cb50",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 25,
+      "head": "f1da82063860b6de89cc45e2390f0605616764c6",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    },
+    {
+      "number": 26,
+      "head": "0e35a57bd5516199336c1f79fab579f55e1faf76",
+      "state": "closed",
+      "merged": false,
+      "branchRetained": true
+    }
+  ]
+}

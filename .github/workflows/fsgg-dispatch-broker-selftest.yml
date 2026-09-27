@@ -71,8 +71,6 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-          cache: true
-          cache-dependency-path: "**/packages.lock.json"
 
       - name: Run the dispatch-broker fixture
         run: bash tests/dispatch-broker/run.sh

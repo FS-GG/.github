@@ -82,6 +82,9 @@ module Board =
             Fields: Map<string, Field>
         }
 
+    /// Pinned organization project identity supplied by the caller.
+    type ExactProject = { Owner: string; Number: int; Title: string; Id: string }
+
     /// A dependency-edge value bound to the Projects-v2 item revision that produced it.
     type BlockedByObservation =
         {
@@ -123,13 +126,19 @@ module Board =
     /// named 'X' on this board. Known fields: …`, reciting the truncated list as if it were the board's own.
     val bootstrap: transport: IGitHubTransport -> owner: string -> title: string -> IoResult<BoardMap>
 
+    /// Dormant direct `organization.projectV2(number:)` lookup. Refuses any response whose owner,
+    /// number, title, or node id differs from the supplied pin, and refuses incomplete field maps.
+    /// This does not replace `bootstrapCached` or activate a runner path.
+    val bootstrapExactProject: transport: IGitHubTransport -> expected: ExactProject -> IoResult<BoardMap>
+
     /// The board map as JSON — the `board` command's machine contract, and the on-disk cache format. One
     /// codec serves both, so a board a human reads and a board `next` re-hydrates cannot drift.
     val boardToJson: board: BoardMap -> string
 
-    /// `bootstrap`, served from the day-cache (`Cache.getBoardMap`) when it is warm; resolves and stores it
-    /// on a miss. The budget win of #418 — two GraphQL points under every worker command, paid once a day
-    /// instead of once an invocation. A cached document we cannot parse is a miss, never a failure.
+    /// By default, `bootstrap` is served from the day-cache (`Cache.getBoardMap`) when it is warm and
+    /// resolves/stores on a miss. Explicit `FSGG_COORD_BOOTSTRAP_MODE=exact-project1` instead reads the
+    /// pinned FS-GG Coordination Project 1 directly on every call, bypassing title-cache and enumeration.
+    /// A wrong owner kind, owner, title, project identity, field map or unknown mode refuses with no fallback.
     val bootstrapCached: transport: IGitHubTransport -> owner: string -> title: string -> IoResult<BoardMap>
 
     /// The board item id for an issue. Issues owned outside the board owner are resolved from the
