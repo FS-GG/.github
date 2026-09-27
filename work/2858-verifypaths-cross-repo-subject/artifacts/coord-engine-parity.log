@@ -1,0 +1,632 @@
+PASS  #1751: the identity probe DETECTS a derived id when the ladder IS set — it is not a check that cannot fail
+PASS  #1751: ...and under THIS fixture's environment the engine derives NOTHING — the harness DECIDED, it did not inherit
+PASS  batch --json equals the corpus's certified answer (byte for byte)
+PASS  batch -n 1 --json honours the requested width
+PASS  batch: #71 is a LIVE-CLAIM overlap — 'overlaps in-flight work' (case 22)
+PASS  batch: #72 is UNDECLARED — 'no Paths: declared' (case 22)
+PASS  batch: #73 is a BATCH-MEMBER overlap — names its peer #70 (case 22)
+PASS  #1887: batch refuses a body-classed decision row with no human sentinel
+PASS  #428: a live-claim overlap and a batch-member overlap are DISTINGUISHABLE (same verdict, different instruction)
+PASS  #428: the live-claim overlap names the HOLDER (finch-a3f) — the fact a batch-member line has not got
+PASS  #428: the batch-member overlap names a peer item, not a worker — the two lines cannot be confused
+PASS  next returns the first schedulable item (FS.GG.SDD#70)
+PASS  take claims the first schedulable item and names the holder (case 22's certified line)
+PASS  #2137: missing route receipt refuses take with zero claim writes
+PASS  #2137: stale route receipt refuses take with zero claim writes
+PASS  #1887: take fixture first consumes ordinary candidate #70
+PASS  #1887: take fixture then consumes ordinary candidate #74
+PASS  #1887: blind take returns EX_NONE instead of claiming the remaining decision-class row
+PASS  #461: who over an unreadable claim marker FAILS CLOSED (non-zero)
+PASS  #461: ...and does NOT report 'nothing is in flight' — a failed read is not an empty one
+PASS  #461: ...and NAMES the unreadable read, rather than swallowing it
+PASS  #461: take REFUSES to schedule off an unreadable claim set (non-zero)
+PASS  #461: ...and claims NOTHING — no double-book
+PASS  #584: batch FAILS CLOSED on a faulted IN-FLIGHT marker read (not just the candidate read)
+PASS  #584: ...and #71 (which overlaps the unreadable in-flight claim) is not offered — no invisible-claim double-book
+PASS  #461: a SUCCESSFUL scan with no claims still reports an empty set (the guard does not over-fire)
+PASS  #476: a MERGED-PR blocker no longer blocks — #700 is offered
+PASS  #476: a closed-UNMERGED-PR blocker resolves too — #704 is offered
+PASS  #476: an OPEN-PR blocker still blocks — #702 is NOT offered
+PASS  #520: a CLOSED-but-Ready issue is NOT offered
+PASS  #520: ...and the reason names the issue state (closed)
+PASS  #488 A: a blocked candidate leaves a trace naming its blocker (not silently dropped)
+PASS  #488 A: the blocked item is not offered
+PASS  #488 A: a blocked queue is not reported as an empty one
+PASS  #488 B: a non-startable open item leaves a trace naming its column (starved, not empty)
+PASS  #488 B: the Done item is not a live candidate
+PASS  #488 C: a genuinely empty queue leaves no passed-over trace
+PASS  #488: a starved queue and an empty one are DISTINGUISHABLE (the defect #488 was filed on)
+PASS  #488 D: an unreadable board fails closed — a no-verdict, never an empty queue
+PASS  #312: two cross-repo candidates sharing only a repo-relative token BOTH schedule (byte-exact)
+PASS  #312: neither candidate is passed over for a cross-repo phantom
+PASS  #312: a genuine same-repo in-flight overlap is still caught (#422 ⇄ Audio#424)
+PASS  #312: a genuine same-repo batch-member overlap is still caught (#425 ⇄ Templates#420)
+PASS  #273: only the honestly-declared item schedules — the unmatchable one is not cleared into a double-book
+PASS  #273: the unmatchable item is never offered
+PASS  #273: ...and it is passed over WITH its reason — the token that matches nothing is NAMED
+PASS  #273: the unmatchable token is not reported DISJOINT — 'unschedulable beats mis-scheduled'
+PASS  #277: only the honestly-declared item schedules — a fenced quote is not a declaration
+PASS  #277: the fenced-only item is never offered
+PASS  #277: ...and #317 is passed over as an OMISSION — the fence was NOT read
+PASS  #277: #317 does not skip as an overlap — it reserved nothing, so it clashed with nothing
+PASS  #516: a worker who already holds an item cannot silently claim a second (fails, non-zero)
+PASS  #516: ...and the refusal NAMES the item they already hold (#870)
+PASS  #516: ...and says WHY it is not merely untidy (the touch-set stays reserved)
+PASS  #516: ...and the second item is not claimed (refused before the write)
+PASS  #516: ...but --force holds two deliberately (a rule with no escape hatch gets worked around)
+PASS  #516: a DIFFERENT worker claims #871 freely — the guard is one item per WORKER, not per repo
+PASS  #418: take on an exhausted GraphQL budget exits EX_RATE (75) — the back-off signal (case 40)
+PASS  #418: ...and it names the budget, not a protocol error or a lost race
+PASS  #418: ...and it names GRAPHQL — the budget this scan actually spent
+PASS  #418: ...and it names the RESET from X-RateLimit-Reset, so the back-off is a time, not a shrug
+PASS  REST budget: issues on an exhausted REST budget exits EX_RATE (75), not a generic 1
+PASS  REST budget: ...and it names REST — the budget that ACTUALLY died
+PASS  REST budget: ...and it does NOT recommend REST-only work on a REST limit
+PASS  REST budget: ...and the SAME engine names GraphQL vs REST per X-RateLimit-Resource (read, not guessed)
+PASS  #585: a nothing-startable queue exits EX_NONE (5), not 0 — the engine agrees with bash [#480→#585]
+PASS  completion boundary: standalone done remains nonterminal and names typed delivery authority
+PASS  completion boundary: refusal RETAINS the worker's claim until delivery completes
+PASS  #533: ...but it must NOT delete a claim that is not ours — other-999's marker is left intact
+PASS  completion boundary: another holder cannot make legacy done terminal either
+PASS  ready --json is a JSON array — the machine contract, not the human table (the port gap closed)
+PASS  ready: excludes Done by default and keeps everything else (Ready/Backlog/In-progress), byte-exact
+PASS  ready: the Done item (#55) is excluded by default
+PASS  #520: a CLOSED-but-Ready row is SHOWN by ready, and reports its CLOSED state (the truth read)
+PASS  ready --status Done widens past the not-Done default to exactly the Done column (#55)
+PASS  ready --repo .github: its only item is Done, so the not-Done default makes it empty
+PASS  ready --all widens past the default — the Done #54 appears (a TRUTH read shows the whole board)
+PASS  ready --repo scopes — a cross-repo namesake column is not shown
+PASS  #962: ready --repo sdd names the same queue as the bare repo name ([99,127,200,201])
+PASS  #962: ready --repo SDD names the same queue as the bare repo name ([99,127,200,201])
+PASS  #962: ready --repo FS-GG/FS.GG.SDD names the same queue as the bare repo name ([99,127,200,201])
+PASS  #962: a bare 'ready --all' stays ORG-WIDE (3 repos) — resolution did not import the #480 checkout default
+PASS  ready --text still renders the human table (JSON is the default, text is opt-in — as batch is)
+PASS  who --json is a JSON array — the machine contract, not the human table (the sibling port gap to ready)
+fsgg-coord-engine: WARNING — FS.GG.SDD#60 is In progress with NO claim marker (someone is working outside the protocol).
+PASS  #1369: every non-empty who JSON row makes the repository scope explicit
+PASS  #1369: who --all-repos is explicit, global, and keeps the JSON claims contract
+PASS  who: lists exactly the in-flight items (held/stale/unclaimed), never the Ready candidates
+PASS  who: a live marker is 'held' and names its worker (finch-a3f) — case 20's holder
+PASS  who: ...and carries the touch-set the claim reserves (src/Audio), read from the item body
+PASS  who: a marker past its lease is 'stale' (still a lock only reap breaks) and still names its holder
+PASS  who --json: an In-progress item with no marker is 'unclaimed' with a NULL worker (case 20)
+PASS  who: ...and a markerless item's touch-set still resolves (the files something is evidently editing)
+PASS  who (text default): names the worker holding each item (finch-a3f) — JSON is opt-in, unlike ready
+PASS  who (text): flags a claim past its lease as STALE (the row the old who filtered out)
+PASS  who (text): flags In-progress work with NO marker as UNCLAIMED (the row the old who never had)
+PASS  who: warns on stderr that someone is working outside the protocol (case 20)
+PASS  who: a Ready candidate nobody claimed is not in flight — who reports the lock, not the column
+PASS  child: links the issue as a sub-issue and names the edge (case 15's certified line)
+PASS  #266: child POSTs the child's REST id (1047) as a JSON NUMBER, not its number and not a string
+PASS  child: re-linking an already-attached child is idempotent SUCCESS (keyed by id)
+PASS  child: ...and an idempotent re-link POSTs nothing — the edge already exists
+PASS  #320: an unreachable existing-links read fails closed (non-zero)
+PASS  #320: ...and it NAMES the refusal — an unreachable read is not an absent edge
+PASS  #320: ...and it POSTs NOTHING while it cannot tell (no 422-and-blame-the-token)
+PASS  child: a failed link reports the API's own error (422), not a guessed cause
+PASS  child: refuses a missing argument (both refs are required)
+PASS  room open: creates the room and reports it (ADR-0051)
+PASS  room open: the room issue is created ONCE, off-board (Paths: none)
+PASS  room open: writes a Rooms: #220 back-ref onto BOTH members
+PASS  room open: a member already in the room is NOT re-PATCHed (idempotent per member)
+PASS  room open: refuses a cross-repo cluster (intra-repo only, ADR-0027 §5)
+PASS  room open: ...and creates NO room when the cluster is cross-repo
+PASS  room open: a failed room-create refuses (non-zero), never a half-open room
+PASS  room open: ...and writes NO back-ref when there is no room to reference
+PASS  inbox widening: a message on a REFERENCED room (in a repo arm B never scans) is delivered (ADR-0051)
+PASS  #440: take does not recite the guessed 'every candidate is blocked/claimed/...' list (case 41 §4)
+PASS  #440: ...and names the OBSERVED per-item reason (#301 blocked by #999), not a guess
+PASS  #440: ...under the honest headline (the shape batch/decide already emit)
+PASS  #440: next does not recite the guessed list — the same honest #440 contract as take
+PASS  #440: ...and next names the observed reason too
+PASS  .github#1562: ...and it says ALL of it on STDERR — stdout is EMPTY at exit 0, so $(…) reads no ref rather than a sentence
+PASS  #440: a non-startable-column queue names its OWN reason, not the guess
+PASS  #440: ...naming #302 and its column (In review) — the reason a worker acts on
+PASS  #448: THREE fields cost exactly ONE GraphQL mutation request (the count, one transport over)
+PASS  #448: ...emitted as ONE aliased document — f0 and f2 ride the SAME mutation
+PASS  #448: SINGLE_SELECT routes 'P2 SDD' to singleSelectOptionId (opt_p2)
+PASS  #448: DATE routes to date, TEXT routes to text — each value to its field's own shape
+PASS  #448: the resolved board item id is carried on every alias
+PASS  #448: the batch does NOT fall back to N per-field writes (count stays 1, not 3)
+PASS  #448: an empty value emits clearProjectV2ItemFieldValue, not an empty update
+PASS  #448: Field=Value splits on the FIRST '=' (a value may legitimately contain one)
+PASS  #448: an unknown field is refused (exit 1) and sends ZERO field mutations — nothing is half-written
+PASS  #448: an unknown single-select OPTION sends ZERO field mutations too (the build aborts, not the value)
+PASS  #448: ...and the reason names the OPTION, not a GraphQL parse error
+PASS  #448: a per-alias failure is EX_PARTIAL (9), not success and not a generic error
+PASS  #448: ...it says PARTIALLY APPLIED and that the board is half-written
+PASS  #448: ...naming the field that WAS written (Phase)
+PASS  #448: ...and the field that FAILED (Target), carrying the API's own reason
+PASS  #448: a PARTIAL batch is NEVER queued — replaying it would rewrite what already landed
+PASS  #448: an exhausted budget exits EX_RATE (75), the back-off signal — not a generic 1
+PASS  #448: ...and QUEUES every pair (nothing was applied, so nothing is lost)
+PASS  #1032: a bad ref is refused AS A REF — 'unrecognised issue ref', exit 1
+PASS  #1032: ...and NOT as a value refusal — the ordering #611/#1024 were filed about holds
+PASS  #1032: a GOOD ref with the same prose value DOES reach the value refusal — (a) is not vacuous
+PASS  #1032: a bad ref beats the unknown-FIELD refusal too — the ordering is the parser's, not one field's
+PASS  #1032: set-field --batch parses the ref first too — the two surfaces cannot diverge
+PASS  #1032: a refused ref spends ZERO GraphQL — no read is paid for a ref that can never be used
+PASS  #1032: the 'Blocked by' value gate spends ZERO GraphQL too — it also precedes the board read
+PASS  #1032: an unknown FIELD on a good ref DOES read the board first — so ref-first is what saves that read
+PASS  #1369: claim --json freshly confirms the winning marker and board Status before work starts
+PASS  #481: the claim RECORDS the column it overwrote (prev=Backlog) in its own marker, over HTTP
+PASS  #481/#1369: a win spends one pre-claim Status read and one postcondition readback, never a board scan
+PASS  #481: release RESTORES Backlog (writes opt_backlog), instead of promoting it to Ready
+PASS  #481: ...and the lease is dropped (the marker is deleted)
+PASS  #1369: deferred Status writes are explicit and cannot masquerade as board convergence
+PASS  #1369: failed Status readback stays explicit and non-converged
+PASS  #481: a Status with a space is percent-encoded into the marker (prev=In%20review)
+PASS  #481: ...and decodes back to the real column, resolving opt_review (not a no-op, not 'In')
+PASS  #481: a heartbeat rewrites the marker and CARRIES the recorded column forward (prev=Backlog)
+PASS  #481: ...so a long-running claim still restores Backlog
+PASS  #481: a marker minted BEFORE #481 (no prev=) still falls back to Ready (opt_ready)
+PASS  #481: a recorded 'In progress' is a footprint, not a column — release falls back to Ready
+PASS  #867: release --status Blocked writes opt_blocked — the named column BEATS the recorded restore (prev=Backlog)
+PASS  #867: ...and stdout NAMES the column it landed in (the bare 'released <ref>' is what hid the no-op)
+PASS  #867: ...and the lease is still dropped (the marker is deleted)
+PASS  #867: release --status with an unknown column is REFUSED (non-zero), not silently defaulted
+PASS  #867: ...and the lock is STILL HELD — the refusal lands before the marker is dropped
+PASS  #331: a column set DURING the lease is PRESERVED — release adds NO Status write (not even a matching one)
+PASS  #331: ...and stdout says the column was LEFT, never claiming release put it there
+PASS  #331: ...and the lease is still dropped (the marker is deleted)
+PASS  #331/#266: an UNREADABLE column is left ALONE — release writes nothing rather than guessing
+PASS  #331: ...and the lease is STILL dropped — a board we cannot read never strands a lock
+PASS  #331: ...and it SAYS so, naming the repair (a silent leave-alone is indistinguishable from a preserve)
+PASS  #331: an item with NO column set gets no write — there is no footprint to reset
+PASS  #331: ...and release SAYS so, rather than a bare 'released <ref>' that reads as a failed write
+PASS  #331/#418: release --status spends ZERO item-Status reads — the caller stated the end state, so no default is derived
+PASS  #331/#867: ...and it still lands the named column, beating the live column AND the recorded one
+PASS  #331: reap PRESERVES a column chosen during the lease — it collects a lease, not a decision
+PASS  #331: ...and the stale marker is still collected (the lock is broken; only the column is spared)
+PASS  #418: a claim that LOSES to a live holder spends ZERO pre-claim reads — the read is on the win path only
+PASS  #480: a bare 'next' from an FS.GG.SDD checkout picks THAT repo's item (FS.GG.SDD#127)
+PASS  #480: ...and never reaches into Templates or Game — the org-wide default is gone
+PASS  #480: an explicit '--repo templates' wins over the SDD checkout AND resolves the short-id (#381)
+PASS  #480: a bare 'next' from a Templates checkout (ssh remote) picks Templates#99 — the scope is the remote
+PASS  #480: a bare 'batch --json' from the SDD checkout schedules only SDD's item
+PASS  #480: 'take' outside a checkout REFUSES ('--repo required'), never scans the whole org
+PASS  #480: a bare 'ready --all' from a checkout stays ORG-WIDE (all 3 repos) — /check-board depends on it
+PASS  #480/.github#1562: 'next --repo nope' says nothing schedulable ON STDERR, names no item, and leaves stdout EMPTY — never another repo's queue, and never prose a $(…) reads as a ref
+PASS  Blocked by: a full owner/repo#n ref writes as-is (canonical --text, one transport over)
+PASS  Blocked by: a bare #n adopts the blocked item's repo (#33 -> FS-GG/FS.GG.SDD#33)
+PASS  Blocked by: a list canonicalizes EVERY form (repo#n + URL), in order
+PASS  Blocked by: refs that canonicalize alike are de-duped (#8 == FS-GG/FS.GG.SDD#8)
+PASS  Blocked by: an empty value CLEARS the field (clearProjectV2ItemFieldValue, not an empty update)
+PASS  Blocked by: a refused write (a delivery log) is rejected AND spends ZERO GraphQL (validation precedes resolution)
+PASS  Blocked by: the inverted 'blocks X' edge is refused (wrong direction)
+PASS  Blocked by: prose TRAILING a valid ref is refused — the anchored match will not swallow it
+PASS  Blocked by: the prose refusal names Status as the right home for 'is blocked'
+PASS  Blocked by: a '-'/'none' placeholder is refused TOWARD the explicit --clear intent
+PASS  Blocked by: the gate is SCOPED — Contract (and every other TEXT field) still takes free-form text
+PASS  #641: 'issues sdd' emits genuine issues only — the PR (777) is filtered out
+PASS  #641: ...and the §4 duplicate-check never sees a PR as an already-filed issue
+PASS  #446: 'issues sdd' reads FS-GG/FS.GG.SDD over REST — the short-id resolves like --repo does
+PASS  #446: 'issues game' resolves to FS-GG/FS.GG.Game (the short-id that once 404'd as repos/FS-GG/game)
+PASS  #446: ...and 'FS-GG/game' NEVER reaches the fixture — the 404 (and the gh-issue-list fallback) is gone
+PASS  #446: an explicit owner/repo ('FS-GG/FS.GG.Game') passes through untouched
+PASS  #446/#381: 'issues audio' resolves across the whole roster (not just the original four repos)
+PASS  #418: a repeat 'issues sdd' sends the ETag and is served a 304 from cache — the budget-free read
+PASS  #446: --state and --label shape the REST listing (state=closed, labels=bug)
+PASS  #446: 'issues' with no repo REFUSES (a repo is required) — never a silent org-wide read
+PASS  verify-paths: a PR inside its touch-set is OK and exits 0 (case 23)
+PASS  verify-paths: drift is reported and exits non-zero by default (case 23)
+PASS  verify-paths: DRIFT names the offending file (src/Audio/Mixer.fs) (case 23)
+PASS  verify-paths: DRIFT points at the remedy (widen) (case 23)
+PASS  verify-paths --warn: reports the drift but exits 0 (case 23)
+PASS  verify-paths: an unlinked PR is SKIP (cannot tell which issue), not OK (case 23)
+PASS  verify-paths: an undeclared touch-set is SKIP (declares no 'Paths:') (case 23)
+PASS  #322: an unreadable head ref reaches NO verdict and fails closed by default (case 23)
+PASS  #322: ...and it fails closed under --warn too — --warn cannot downgrade a read that never happened (case 23)
+PASS  verify-paths --issue: a same-repo named issue is checked directly → OK (case 24)
+PASS  #479: a cross-repo --repo/--issue straddle reaches NO verdict and fails by default (case 23)
+PASS  #479: ...and names the other repo it was asked to straddle (case 23)
+PASS  #479: ...and says the touch-set was NOT checked (case 23)
+PASS  #479: ...and it fails closed under --warn too — a straddle is never advisory (case 23)
+PASS  #2858: explicit Coordination issue checks PR-repo files and names the declaration
+PASS  #2858: positional ref wins over a conventionally named branch, with inversion
+PASS  #2858: undeclared cross-repo namespace refuses before verdict
+PASS  #2858: ambiguous cross-repo declaration refuses before verdict
+PASS  #2858: same-repo --issue without --repo remains valid
+PASS  #2858: --warn cannot downgrade undeclared cross-repo refusal
+PASS  #2858: --warn cannot downgrade ambiguous cross-repo refusal
+PASS  #2858: two explicit subjects refuse before a verdict
+PASS  #2858: a .github generated path does not exempt target-repo drift
+PASS  #494: SDD#494 (Scene) declares the PR's files → OK (case 24)
+PASS  #494: Rendering#494 — same number, other repo — does NOT: DRIFT (case 24)
+PASS  verify-paths --issue: a registry short-id --repo agrees with the issue's repo (case 24)
+PASS  verify-paths --issue: a differently-cased --repo is not a conflict (case 24)
+PASS  verify-paths --issue: a bare-repo --issue (owner defaults) is not a conflict (case 24)
+PASS  verify-paths --issue: the issue decides the repo when --repo is absent (case 23)
+PASS  verify-paths --issue: bypasses the head-ref read — OK even when the PR read fails (case 23)
+PASS  #430: a bare verify-paths (no --repo/--issue) from an SDD checkout reaches OK — repo off the remote (case 23)
+PASS  #430: ...and the PR is read from FS.GG.SDD — the repo the git remote named (case 23)
+PASS  #430: ...and resolved the repo with NO GraphQL — a dead budget can never be blamed on the checkout (case 23)
+PASS  #430: no remote + no flag REFUSES with the earned 'not inside a checkout' + the --repo remedy (case 23)
+PASS  #430: ...and reaches NO FSGG-PATHS verdict — a repo it could not name is a subject it never looked at (case 23)
+PASS  verify-paths: a PR closing ANOTHER repo's issue is SKIP, not a verdict (case 24)
+PASS  verify-paths: ...and names the other repo it would have straddled (case 24)
+PASS  verify-paths: ...reaching no OK/DRIFT across the repo boundary (case 24)
+PASS  verify-paths: a PR that closes NOTHING is still the unlinked SKIP — the PR-keyed arm did not swallow it (case 24)
+PASS  #2858: an implicit Coordination closing ref cannot authorize a cross-repo verdict
+PASS  #419: whoami --mint prints EXACTLY one line on stdout (eval-safe — no prose to execute) (case 44)
+PASS  #419: ...and it is an eval-able 'export FSGG_WORKER=' (case 44)
+PASS  #419: successive mints do NOT collide — both halves are CSPRNG, not a pid+time seed (case 44)
+PASS  #419: the minted id is the one eval takes effect as (round-trips through whoami) (case 44)
+PASS  #419: the shared-id warning points at the MINT command (case 44)
+PASS  #419: ...and tells the worker not to invent one (case 44)
+PASS  #419: ...and offers NO literal id to copy (no 'finch-a3f' attractor) (case 44)
+PASS  #419: claim REFUSES a marker with our id but another session (non-zero) (case 44)
+PASS  #419: ...naming it as two workers sharing one id (case 44)
+PASS  #419: ...and reporting the OTHER session (79b9e347) (case 44)
+PASS  #419: ...and offering the mint as the way out (case 44)
+PASS  #419: ...and the twin's marker is left intact — no second marker posted (case 44)
+PASS  #419: --force does NOT override the twin refusal (case 44)
+PASS  #419: ...so --force left the twin's marker alone (case 44)
+PASS  #419: a SESSIONLESS marker with our id is still ours — the claim SUCCEEDS, not refused (case 44)
+PASS  #419: the SAME session re-claiming its own marker SUCCEEDS (a heartbeat, not a twin) (case 44)
+PASS  #1031: release REFUSES a twin's marker — our id, another session (case 44)
+PASS  #1031: ...naming the shared-id hazard, as claim does (case 44)
+PASS  #1031: ...and reporting the OTHER session (case 44)
+PASS  #1031: ...and the twin's marker SURVIVES the refused release (case 44)
+PASS  #1031: heartbeat REFUSES a twin's marker (case 44)
+PASS  #1031: ...as a shared IDENTITY (case 44)
+PASS  #1031: ...and does NOT misreport it as an EXPIRED lease (the #1031 defect) (case 44)
+PASS  #1031: ...and never offers --force, which would steal the twin's lock (case 44)
+PASS  #1031: a SESSIONLESS marker with our id still RELEASES — not refused (case 44)
+PASS  #1031: ...and the release really dropped it (case 44)
+PASS  case10: bootstrap costs exactly TWO GraphQL calls, projects + fields (#418)
+PASS  case10: board number cached (12)
+PASS  case10: board node id cached (PVT_coord)
+PASS  case10: Phase is SINGLE_SELECT
+PASS  case10: Phase option id cached (opt_p2)
+PASS  case10: Target is DATE
+PASS  case10: field-id Phase from cache (PVTSSF_phase)
+PASS  case10: option-id Phase 'P2 SDD' (opt_p2)
+PASS  case10: board/field-id/option-id add ZERO GraphQL calls
+PASS  case10: item-id resolves the Coordination item (PVTI_coord123)
+PASS  case10: item-id costs exactly ONE GraphQL call
+PASS  case10: item-id again is served from cache (zero calls)
+PASS  case10: item-id accepts owner/repo#n form
+PASS  case10: item-id accepts a full URL
+PASS  case10: set-field SINGLE_SELECT routes to the resolved option id (opt_p2 on PVTSSF_phase)
+PASS  case10: set-field DATE routes to date
+PASS  case10: set-field TEXT routes to text
+PASS  case10: set-field empty value CLEARS via the clear mutation (not an empty set)
+PASS  case10: bootstrap --refresh drops the cache and re-resolves (2 more gql)
+PASS  #1901: SEVERITY-UNSET fires end-to-end on exactly the open, non-Done untriaged row
+PASS  case14: NO-TOUCH-SET fires on EXACTLY the unschedulable items (#420, #421)
+PASS  case14: NO-TOUCH-SET says nobody can ever pick it up (#420)
+PASS  case14: NO-TOUCH-SET offers the 'Paths: none' sentinel by name
+PASS  case14: a FENCED-only Paths: line is no declaration at all (fails closed, #277)
+PASS  case14: 'Paths: none' suppresses NO-TOUCH-SET — the sentinel is the whole point
+PASS  case14: a decision item declaring 'Paths: none' is clean
+PASS  case14: an item with a real touch-set is clean
+PASS  case14: NO-TOUCH-SET is scoped to Ready/Backlog — not items in flight
+PASS  case14: NO-TOUCH-SET does not fire on a closed issue
+PASS  #646: BAD-TOUCH-SET fires on the ALL-unmatchable item (#430) AND the PARTIAL one (#431)
+PASS  case14: BAD-TOUCH-SET names the unmatchable token (#430)
+PASS  case14: the ALL-unmatchable detail says nobody can ever pick it up (#430)
+PASS  #646: the PARTIAL item's detail names the unmatchable token (#431)
+PASS  #646: ...and does NOT flag the matchable subtree (src/Partial/**) — only the offending subset
+PASS  #646: ...and explains WHY a partial declaration is worse (silent reservation → double-book)
+PASS  case14: no scratch field leaks into --json (schema is code/severity/id/status/url/detail)
+PASS  case14: the text line is 'FSGG-LINT <SEV>  <CODE>  <short-id>  — <detail>'
+PASS  case14: lint over a board with errors fails the gate (exit 1)
+PASS  case14: lint --repo sdd (has errors) exits 1 — the short-id resolves and scopes
+PASS  case14: lint --repo game (clean) exits 0 — scoped away from the SDD errors
+PASS  case14: ...and that clean scope produced zero findings (a real item, really scanned)
+PASS  #2907: production lint requests the open/In-progress #423 body
+PASS  #2907: an unreadable #423 body aborts lint instead of returning a partial findings array
+PASS  #1588: CLASS-UNSET fires on exactly the Ready/Backlog OPEN rows whose text declares no class
+PASS  #1588: an explicit 'Class:' body line is a declaration — CLASS-UNSET is silent
+PASS  #1588: a '[decision]' title prefix derives 'decision' with no body line (AC3)
+PASS  #1588: ADR-0045's human/decision sentinel derives 'decision' — no second line (AC5)
+PASS  #1588/#1651: an unrecognised class word is refused — and reported as CLASS-INVALID, not as a missing line
+PASS  #1651: the invalid-value diagnostic does not claim the row records no Class: line
+PASS  #1651 AC3: the invalid-value diagnostic quotes the offending value back
+PASS  #1651 AC4: a case/whitespace variant of a legal value is ACCEPTED
+PASS  #1588: the class rules are errors — untriaged severity is as invisible as an untriaged status
+PASS  #1588: CLASS-UNSET's detail names all three body-line values by name
+PASS  #1651 AC3: ...and so does CLASS-INVALID's — both render the same derived menu
+PASS  case14: EPIC-NO-CHILDREN fires on an open [epic] with zero sub-issues (#440)
+PASS  case14: EPIC-CHILDREN-TRUNCATED fires on the epic whose graph is truncated (#404)
+PASS  case14: ...and names the total vs the visible count (5 sub-issues, only 2 visible)
+PASS  case14: EPIC-DONE-OPEN-CHILD fires on a board-Done epic over an open child (#450)
+PASS  case14: ...and names the open child (#451)
+PASS  case14: DONE-STATUS-OPEN-ISSUE (note) fires on every board-Done-but-open issue (#450, #460, #480)
+PASS  case14: EPIC-UNLINKED-CHILD fires on exactly the epic that has one (#409)
+PASS  case14: ...and names the declared-but-unlinked child, and ONLY it (#414)
+PASS  case14: a PR ref is dropped (#346), a prose mention and a linked child are not unlinked
+PASS  case14: a truncated epic (#404) yields no unlinked-child verdict (#266)
+PASS  case14: the PR-probe scratch field is not exposed in --json
+PASS  case14: a healthy epic (linked children, complete graph) yields no ERROR (#470)
+PASS  case14: EPIC-NO-STATED-ACCEPTANCE fires on exactly the bodies with NO task lines (#440, #450)
+PASS  case14: no epic carries BOTH acceptance findings — they partition the task lines
+PASS  case14: EPIC-ROLLUP-READY fires on exactly the epic whose every child is resolved (#470)
+tests/coord-engine-parity/run.sh: line 3071: forall: command not found
+PASS  case14: ...and NOT on the childless (#440) or truncated (#404) epic —  is vacuously true over both
+PASS  case14: ...and it is a NOTE — a candidate for a human, not a defect (#614)
+PASS  case14: an unresolvable PR-probe ref is KEPT, not silently dropped (fail closed, #266)
+PASS  case14: --repo rendering scopes to only #404's finding (EPIC-CHILDREN-TRUNCATED)
+PASS  case14: lint --repo game (a note, no error) passes the gate (exit 0)
+PASS  case14: lint --repo game --strict makes the note fatal (exit 1)
+PASS  case34: overlap --active — a same-named path in ANOTHER repo is not a collision (#353)
+PASS  case34: overlap --active names no cross-repo holder (#353)
+PASS  case34: overlap --active exits 0 when the only namesake claim is in another repo (#353)
+PASS  case34: overlap a b — different repos are DISJOINT even on a same-named token (#353)
+PASS  case34: overlap a b names no cross-repo collision (#353)
+PASS  case34: overlap a b exits 0 for a cross-repo pair (#353)
+PASS  case34: overlap a b — a real SAME-repo overlap is STILL detected (#353)
+PASS  case34: ...and a real same-repo overlap exits NON-ZERO (engine ExitContended=6; bash's code disposed)
+PASS  case34: overlap --active — a genuine same-repo live claim is STILL detected (#353)
+PASS  case34: ...and names the colliding same-repo item (#403)
+PASS  case34: ...and names the holder it queues behind (sdd-sib) (#353)
+PASS  case34: ...and exits NON-ZERO (engine ExitContended=6; bash's code disposed on the record)
+PASS  case24(k): a failed touch-set read refuses to schedule against an unknown touch-set
+PASS  case24(k): a failed read is not mis-diagnosed as an empty declaration (#266 fail-open avoided)
+PASS  case24(k): a failed read never reads as DISJOINT (fails closed, not open)
+PASS  #1794: openIssues CROSSES THE PAGE BOUNDARY — a live claim on page 2 is seen
+PASS  #1794: ...and names the page-2 item (#503), not merely 'something'
+PASS  #1794: ...and names the holder whose tree it would otherwise have been handed
+PASS  #1794: ...and exits NON-ZERO (ExitContended=6), so a caller in a loop stops
+PASS  #1794: a live page-1 claim on unrelated paths is NOT reported — the token filter still runs
+PASS  #1794 CONTROL: withhold the Link header and the SAME command answers DISJOINT — the boundary is real, and crossing it is what the leg above proves
+PASS  #1794/#2250: the collision scan costs 3 cold GraphQL reads (bootstrap plus one board page)
+PASS  #1794: a HELD row with an unreadable body (absent) never reads as DISJOINT — it fails closed
+PASS  #1794: ...and SAYS SO (absent) — the refusal names the unread touch-set, not a generic error
+PASS  #1794: ...and names WHICH row it could not read (absent), so an operator can go and look
+PASS  #1794: ...and exits non-zero (absent)
+PASS  #1794: a HELD row with an unreadable body (illtyped) never reads as DISJOINT — it fails closed
+PASS  #1794: ...and SAYS SO (illtyped) — the refusal names the unread touch-set, not a generic error
+PASS  #1794: ...and names WHICH row it could not read (illtyped), so an operator can go and look
+PASS  #1794: ...and exits non-zero (illtyped)
+PASS  #1794: an unidentifiable element REFUSES the read — it is never reported as DISJOINT
+PASS  #1794: ...and is never silently dropped so the scan reaches a COLLISION verdict without it
+PASS  #1794: ...and locates it as 'element 2 of 4' — which is also the merged length, so the refusal is over the PAGINATED array
+PASS  #1794: an unreadable body on an UNHELD row does not red the scan — the real page-2 collision is still reported
+PASS  #1794: ...and the verdict is still the COLLISION (6), not a refusal — fail-closed did not become fail-loud-everywhere
+PASS  #1794×#1792: a LAPSED claim whose touch-set could not be read still refuses — a lapsed lease over an UNKNOWN surface reserves an unknown surface
+PASS  #1794×#1792: ...and refuses for the RIGHT reason (the unread touch-set), not merely by erroring
+PASS  #1794×#1792 CONTROL: a LAPSED claim with a READABLE body is a plain OVERLAP — the refusal above is caused by the unread body, not by the lapse
+PASS  #1794×#1792 CONTROL: ...and exits ExitContended=6, not a read failure
+PASS  case34: widen lands the re-declaration (#353)
+PASS  case34: widen — a same-named path in ANOTHER repo is not a collision (#353)
+PASS  case34: widen names no cross-repo holder (#353)
+PASS  case34: widen exits 0 when the only namesake claim is in another repo (#353)
+PASS  case34: widen leaves the cross-repo bystander #402 uncommented (#353)
+PASS  case34: widen — a genuine SAME-repo overlap is STILL detected, naming #403 (#353)
+PASS  case34: ...and NOTIFIES the same-repo worker sdd-sib on their own issue (#353)
+PASS  case34: ...and a real same-repo collision exits NON-ZERO (engine ExitContended=6; bash's 1 disposed)
+PASS  case34: the notify lands as exactly one comment on #403 (#353)
+PASS  #523: widen exits EX_RATE (75) when the pre-PATCH collision scan hits the budget
+PASS  #523: ...and names the budget, not a protocol error or a lost race
+PASS  #523: ...and the body is UNTOUCHED — no PATCH landed before the verdict (the core of #523)
+PASS  #523: ...and no notify was posted (there was no verdict to notify from)
+PASS  #651: batch offers the markerless-no-PR item (#701) and SKIPS the markerless-open-PR item (#700)
+PASS  #651: ...and the #700 skip names it as an implementation ALREADY IN FLIGHT (its open PR)
+PASS  #651: ...naming the PR (#812), so the refusal is checkable
+PASS  #651: next returns #701 — a markerless item with NO PR is STILL startable (the control)
+PASS  reap: a bare reap is a DRY RUN — 'would reap …' names the item and its dead worker (case 25)
+PASS  reap: ...and the DRY RUN deletes NOTHING (the break is gated behind --apply)
+PASS  #581: an expired claim with NO open PR is reaped, naming the item + dead worker (case 26)
+PASS  #581: ...and the marker (comment 880) is actually DELETED — the lock released (case 26)
+PASS  reap: an OFF-BOARD claim's reset is 'not on board (nothing to reset)' — none invented (case 25)
+PASS  #581: reap REFUSES a claim whose PR is open — the lease lapsed, the WORK did not (case 26)
+PASS  #581: ...and names the PR (#433), so the refusal is checkable (case 26)
+PASS  #581: ...and the claim SURVIVES — nothing deleted (the leg that reaped live work TWICE) (case 26)
+PASS  #480: a bare 'reap' from an SDD checkout names THAT repo's claim (FS.GG.SDD#301)
+PASS  #480: ...and never names a Rendering/Templates/… claim — the org-wide default #480 deletes is gone
+PASS  #480: ...and only SDD's /issues was fetched, never Rendering's (scope proven at the transport)
+PASS  #480: a bare 'reap' from a Rendering checkout (ssh remote) picks Rendering#302 — the scope is the remote
+PASS  #480: an explicit '--repo rendering' wins over the SDD checkout AND resolves the short-id (#381)
+PASS  #480: 'reap' outside a checkout REFUSES ('--repo required'), never scans the whole org (the destructive default)
+PASS  #480: ...and across every scope leg NOTHING was deleted (dry runs + a refusal, never a break)
+PASS  who: reports every in-flight item WHEREVER the board thinks it is — never the chatty #217 (case 25)
+PASS  who: an OFF-BOARD claim is HELD and names its worker (case 25 — the board never knew about #215)
+PASS  who: ...and carries its touch-set, read from the issue body (case 25)
+PASS  who: a claim whose board Status flip FAILED is HELD, not free — who reads the lock (case 25)
+PASS  who: an In-progress markerless item is UNCLAIMED with a null worker, even amid off-board claims (case 25)
+PASS  #581: who carries the proof of life on the STALE row — livePr '#433 item/890-live-work' (case 26)
+PASS  #581: a stale claim with NO open PR is a BARE stale (livePr null) — a reaper may collect it (case 26)
+PASS  #581: ...and the human row says STALE (#433 OPEN), not a bare STALE (case 26)
+PASS  #581: ...and #216, whose work is dead, is a BARE STALE (no PR to name) (case 26)
+PASS  who: the open-issue scan PAGINATES — page 2 is fetched (a lock has no 100-issue limit) (case 25)
+PASS  who: ...and is NEVER a conditional request — no If-None-Match may let a 304 hide a marker (case 25)
+PASS  batch: schedules only the item no live marker touches — reserves the off-board claim (case 25)
+PASS  batch: skips a Ready item a marker actually holds — names the worker (case 25)
+PASS  batch: ...and names the lease window, not just the holder (#428)
+PASS  batch: refuses to schedule over an OFF-BOARD claim's touch-set (case 25)
+PASS  batch: ...and names the OFF-BOARD holder and its item (#428, #461)
+PASS  batch: ...and the off-board claim's lease window (#428)
+PASS  batch: ...and still shows WHICH paths collided (case 25)
+PASS  next: shares batch's off-board reservation — hands out the free item, not the collision (case 25)
+PASS  batch: the candidate scan PAGINATES — page 2 is fetched, so a claim past page 1 is not missed (case 25)
+PASS  batch: ...and is NEVER conditional — no 304 may serve a pre-marker comments:0 (case 25)
+PASS  #428: a starved queue schedules NOTHING — the locks still hold (case 25)
+PASS  #428: the starved queue is called BUSY and names every holder (case 25)
+PASS  #428: ...and says plainly this is not an empty backlog (case 25)
+PASS  #428: the soonest lease is named — an EXPIRED one frees now (case 25)
+PASS  #428: ...and an expired lease is a REAP, with the exact command (case 25)
+PASS  #428: an EXPIRED lease is a reap, never a wait — named on the item too (case 25)
+PASS  #428: a markerless In-progress item is a reserver, not a holder (case 25)
+PASS  #428: ...and it says there is no lease to wait out (case 25)
+PASS  #428: an unnameable reserver never appears as a holder named '—' (case 25)
+PASS  #428: a queue that handed out work prints NO starved-queue banner (case 25)
+PASS  inbox: delivers a message posted on an OFF-BOARD claim (case 25 — #215 is not on the board)
+PASS  inbox: delivers a broadcast (to=*) (case 22)
+PASS  inbox: names the item the message rode in on (case 22)
+PASS  inbox: the cursor advanced — nothing new on a second read (case 22)
+PASS  inbox: a worker does not see its OWN messages (case 22)
+PASS  inbox --peek: shows new mail (case 22)
+PASS  inbox --peek: did NOT advance the cursor — the mail is still new (case 22)
+PASS  say: a mis-cased --to is normalized to the worker id (case 24 n)
+PASS  say: ...and the marker addresses the slug, so inbox matches it (case 24 n)
+PASS  #2854 inversion precondition: fixture review ledger parses as open changes-required (case 30)
+PASS  #2854: landable refuses that same CI-green changes-required PR (pending, exit 7) (case 30)
+PASS  #2854: who reports green checks but defers the landing verdict to landable (case 30)
+PASS  #2854: ...and points at the authoritative review-aware query (case 30)
+PASS  #2854 inversion: open changes-required review is never called finished or told to land (case 30)
+PASS  #697: a mergeable PR whose checks are RUNNING is 'checks running', not LAND IT (case 30)
+PASS  #697: who --json carries prState 'green' on the finished orphan (case 30)
+PASS  #697: ...and 'pending' on the one whose CI has not settled (case 30)
+PASS  #697: reap REFUSES a claim whose PR is green and mergeable (case 30)
+PASS  #2854: reap distinguishes green checks from review-ready work (case 30)
+PASS  #2854: reap defers to the authoritative review-aware verdict (case 30)
+PASS  #2854 inversion: reap never calls changes-required work finished or recommends adoption/landing (case 30)
+PASS  #697: reap must NEVER advise closing a GREEN, mergeable PR — that is the loaded gun (case 30)
+PASS  #697: reap REFUSES a PR whose checks are still RUNNING — pending is not passing (case 30)
+PASS  #697: ...it says the work is UNFINISHED, and to look again — 'Do NOT close it' (case 30)
+PASS  #697: both claims SURVIVE the refusals — reap deleted NOTHING (case 30)
+PASS  #697: adopt REFUSES a conflicted PR — rebasing is authoring, not landing (case 30)
+PASS  #697: ...and does NOT take the lock on it (case 30)
+PASS  #697/#606: a mergeable PR with ZERO check runs is NOT green — adopt refuses it (case 30)
+PASS  #697/#606: ...and does NOT take the lock on untested work (case 30)
+PASS  #697: adopt REFUSES a LIVE claim — a worker that is alive is not an orphan (case 30)
+PASS  #697: ...and the live worker keeps its lock (case 30)
+PASS  #697: adopt REFUSES an item with no open PR — there is no finished work to land (case 30)
+PASS  #697: ...and leaves the dead claim for reap (case 30)
+PASS  #697: a null `mergeable` is re-read, and the PR's REAL state (conflicted) is seen (case 30)
+PASS  #697: ...and the lock is not taken on a PR we misread as landable (case 30)
+PASS  #697: adopt refuses a PR whose checks are still RUNNING — pending is not passing (case 30)
+PASS  #697: ...and does NOT take the lock on unfinished work (case 30)
+PASS  #2854: adopt refuses a CI-green PR whose review still requires changes (case 30)
+PASS  #2854: ...and defers to landable rather than a direct merge (case 30)
+PASS  #2854 inversion: adopt never calls changes-required work finished or emits a direct merge (case 30)
+PASS  #2854: ...and leaves the stale claim untouched when review is not accepted (case 30)
+PASS  #2854: adopt requires CI and exact-head host acceptance before transfer (case 30)
+PASS  #2854: adopt hands the worker to typed delivery, not a raw merge (case 30)
+PASS  #2854: accepted orphan recovery still emits no direct GitHub merge command (case 30)
+PASS  #697: adopt TRANSFERS the claim — the adopter's marker is posted under the CAS (case 30)
+PASS  #720: a cancelled run REPLACED by a later run of its own group is superseded — the PR is GREEN (case 31)
+PASS  #720: a cancelled run with NO later run of its group is still RED — the drop is not a hole (case 31)
+PASS  #720: a workflow_dispatch run does NOT supersede the pull_request run it shares a SHA with — still RED (case 31)
+PASS  #720/#606: ZERO workflow runs is a FINDING, not a pass — the rewrite does not fail open (case 31)
+PASS  #720: an in-flight run is PENDING, never green (case 31)
+PASS  #720: a FAILING third-party check still reds the PR — the Actions rollup does not go blind (case 31)
+PASS  #720: a startup_failure run reds the PR — even with NO check runs, and a green sibling workflow (case 31)
+PASS  #720: a FAILED check-run reds the PR even though its workflow run concluded success (case 31)
+PASS  #720: a REAL-SIZED payload still rolls up GREEN — the engine reads JSON, never argv (128KB cap absent) (case 31)
+PASS  #720: landable exits 0 on green (case 31)
+PASS  #720: landable exits 7 on pending — the ONLY verdict worth retrying (bash 3, disposed) (case 31)
+PASS  #720: landable exits 3 on red — do not merge, and do not wait (bash 1, disposed) (case 31)
+PASS  #724: --wait returns GREEN (exit 0) on a settled, superseded-but-green PR (case 31)
+PASS  #724: zero runs is 'CI has not started', not 'CI failed' — but if they never register, RED (exit 3) (case 31)
+PASS  #724: --wait does NOT believe an early all-green — it waits for the run set to STOP GROWING (exit 3) (case 31)
+PASS  #724: --wait returns CONFLICTED immediately (exit 3) — no amount of waiting fixes a conflict (case 31)
+PASS  #737: --require is satisfied by a green check of that name -> green (case 32)
+PASS  #737: WITHOUT --require, a PR whose subject never reported is GREEN — the #606 hole (case 32)
+PASS  #737: WITH --require, the SAME world is PENDING — an absent check is never a green (case 32)
+PASS  #737: an unmet --require exits 7 (pending), never 0 (case 32)
+PASS  #737: a RED check outranks a missing required one — a finding is not a 'not yet' (case 32)
+PASS  #737: a SUPERSEDED copy of the required check does NOT satisfy it (case 32)
+PASS  #737: WITHOUT --sha, a lagging PR object scores the PREVIOUS commit's green checks (case 32)
+PASS  #737: WITH --sha, a PR that still names another head is PENDING, never green (case 32)
+PASS  #737: --sha that AGREES with the PR's head changes nothing (case 32)
+PASS  #737: a pending on an unmet assertion NAMES it on stderr (case 32)
+PASS  #1575: a PR GitHub reports as BLOCKED is PENDING, not green (case 33)
+PASS  #1575: ...and it exits 7 (pending), never 0 — the exit code §5 merges on (case 33)
+PASS  #1575: the SAME world reported CLEAN is GREEN — work must still land (case 33)
+PASS  #1575: the pending NAMES the context that never reported (case 33)
+PASS  #1575: ...and says the BASE BRANCH requires it — not that the caller asked for it (case 33)
+PASS  #1575: ...and that it did NOT fail — there is no red check to go and read (AC2) (case 33)
+PASS  #1575: ...and says when --wait cannot help — a context that can never report (AC5) (case 33)
+PASS  #1575: a policy we may NOT READ still refuses — pending, never a no-verdict (#463) (case 33)
+PASS  #1575: ...and exits 7, not 4 — the verdict never rested on the unreadable read (case 33)
+PASS  #1575: ...and SAYS the reason is missing rather than the verdict (case 33)
+PASS  #1575: a RULESET-required context is named exactly as a classic one is (case 33)
+PASS  #1575: UNSTABLE is not a refusal — GitHub takes that merge (case 33)
+PASS  #1575: an ABSENT mergeable_state is no opinion, not a refusal (case 33)
+PASS  #1575: BEHIND refuses — a strict base the branch has fallen behind (case 33)
+PASS  #1575: DRAFT refuses — no check set makes a draft mergeable (case 33)
+PASS  case24(e): a marker quoted inside a message does NOT hold the item — it is still claimable
+PASS  case24(f): a malformed marker BLOCKS the item (claim fails closed, non-zero)
+PASS  case24(f): ...and the refusal names the unparseable marker (bash 'unparsed-marker', disposed)
+PASS  case24(c): an expired worker cannot resurrect its claim under a NEW holder (heartbeat refused)
+PASS  case24(c): ...it names the worker that now holds it (heron-b71) and says STOP working it
+PASS  case24(c): the refused renew patched NOTHING (no comment PATCH reached the fixture)
+PASS  case24(d): an expired lease cannot be renewed in place (heartbeat refused)
+PASS  case24(d): ...it says the lease EXPIRED and points at a PLAIN re-claim, never --force (.github#1620)
+PASS  case24(g): a failed CAS re-read is a LOSS (claim exits non-zero — nothing was claimed)
+PASS  case24(g): ...and it REMOVED our own marker — no orphan survives the failed re-read (a DELETE fired)
+PASS  case24(i): an empty CAS re-read is a LOSS, not a win (claim exits non-zero)
+PASS  case24(i): ...it says the marker vanished
+PASS  case24(i): ...and it does NOT announce a lock it cannot show
+PASS  case24(a): claim COLLECTS the stale marker it claims over (names the evicted worker)
+PASS  case24(a): ...and exactly ONE marker survives — the stale one is gone
+PASS  case24(a): ...and the collected worker is TOLD, not silently evicted (a fsgg:msg to=ghost-111)
+PASS  case24(b): a worker whose OWN marker went stale ends with ONE marker (a renew, not a duplicate)
+PASS  case24(b): ...and it does NOT announce collecting its own marker (no self-eviction)
+PASS  case24(l): a 404 collecting an already-gone stale marker is NOT fatal — the claim wins
+PASS  case24(l): ...and 'already gone' leaves exactly the new holder
+PASS  case24(j): a re-claim of our own live marker RENEWS it in place (lease renewed)
+PASS  case24(j): ...and WARNS it never ran the CAS (adopted ITS lock)
+PASS  case24(j): ...and names the shared-id hazard (may not be unique to this worker)
+PASS  case24(j): ...and still exactly ONE marker (a renew, not a duplicate)
+PASS  case24(h): reap RE-VERIFIES — a claim renewed between the scan and the delete is SKIPPED
+PASS  case24(h): ...and its marker SURVIVES the reap (finch-a3f still holds #91)
+PASS  case24(h): ...and reap DELETED nothing on the renewed claim (no 816 in /_deletes)
+PASS  case24(m): reap reports a failed delete ('FAILED'), it is not swallowed
+PASS  case24(m): ...and a failed delete leaves the marker in place (ghost-555 still holds #96)
+PASS  case24(m): ...and does NOT tell the worker it was released (no fsgg:msg to=ghost-555)
+PASS  case24(n): reap REFUSES a stale claim whose item/97-* branch is pushed but has no PR (#1055)
+PASS  case24(n): ...and the branch-pushed claim's marker SURVIVES (swan-b7c still holds #97)
+PASS  case24(n): ...and reap DELETED nothing on the branch-pushed claim (no 822 in /_deletes)
+PASS  #563: a lock that MATCHES must NOT warn — the obligation is met (case 43)
+PASS  #469: widen NAMES a kit source whose digest is now STALE (case 43)
+PASS  #469: ...naming the stale source itself (case 43)
+PASS  #469: ...and prints the CURRENT regenerate command (case 43)
+PASS  #469: ...and says which gate will red main (case 43)
+PASS  #469: ...and says NOT to reserve the generated lock (#309/#527) (case 43)
+PASS  #588: the advice does NOT name the no-op repos.sh digest (case 43)
+PASS  #469: ...while STILL widening (advisory, not fatal) (case 43)
+PASS  #563: declaring registry/repos.yml must NOT silence a genuinely stale lock (case 43)
+PASS  #469: a SKILL source is content-addressed too, and is named (case 43)
+PASS  #563: diverged skill roots are NAMED (case 43)
+PASS  #563: ...with the mirror command that fixes it (case 43)
+PASS  #469: a CLIENT kit is NOT told to mirror skill roots (case 43)
+PASS  #647: repo-local skills are NOT the kit's business — no roots warning on a green tree (case 43)
+PASS  #647: a repo-local skill differing across BOTH roots is not named (case 43)
+PASS  #610: a repo-local skill absent from .agents is not named — absent is not diverged (case 43)
+PASS  #647: ...while a genuinely diverged KIT skill IS still named, beside them (case 43)
+PASS  #647: a receiver holding the kit in ONE root is not told to create the other (case 43)
+PASS  #647: ...while a mirror MISSING from a root the tree does keep is still named (case 43)
+PASS  #647: the remedy copies FROM the declared source root, reversing with it (case 43)
+PASS  #647: ...and NEVER copies the mirror back over the declared source (case 43)
+PASS  #469: no lock to read -> silent (receiver repos have no registry) (case 43)
+PASS  #497: the fixture candidate set really exceeds MAX_ARG_STRLEN (150285 > 131072 bytes) (case 43)
+PASS  #497: a claim set over the arg cap is still READ, not died (structurally absent in the engine) (case 43)
+PASS  #497: ...and the claim inside that oversized set is reported, with its holder (case 43)
+PASS  #497: ...and chatty markerless issues in that set are still not claims (case 43)
+PASS  #966: flush --dry-run over a mixed queue exits 0 (a dry run reports; it never replays)
+PASS  #966: flush --dry-run names the board a flush HERE would write
+PASS  #966: ...and marks the cross-board entry as one a flush here would SKIP, naming ITS board
+PASS  #966: ...and gives the remedy that fixes it (re-point the board), not 'flush again here'
+PASS  #966: an entry queued against this board is not marked — the signal means something
+PASS  #966: a legacy entry with no recorded board is named as such, not silently defaulted
+PASS  #966: ...and a queue with no cross-board entry says nothing about re-pointing
+PASS  #1823: the control board starts as stated — #903 In progress, #905 Ready, #902/#904/#906 unset
+PASS  #1823 AC5: lint reports STATUS-UNSET on exactly the columnless rows (#902, #904, #906)
+PASS  #1823 AC5: ...and lint reports NOTHING AT ALL about the two rows that have a column
+PASS  #1823: add exits 0 — the row is boarded, and the column is a note about a row that is
+PASS  #1823 AC1: a newly boarded row lands in Backlog — the BOARD says so, not the CLI
+PASS  #1823 AC1: ...and add SAYS so — it names Backlog and that the row is NOT startable yet
+PASS  #1823: an on-board row with NO Status is repaired to Backlog by the same add that files it
+PASS  #1823 AC4: re-adding a row held at 'In progress' LEAVES the column alone
+PASS  #1823 AC4: ...and sends NO Status write at all for it — nothing to race, nothing to undo
+PASS  #1823 AC4: ...and still exits 0 — already-on-board is a success (#861), not a refusal
+PASS  #1823 AC2: --status names the column and the default stands aside
+PASS  #1823 AC2: ...and over a column somebody SET — the default defers, an instruction does not
+PASS  #1823: 'add --status <not a column>' is REFUSED (non-zero), not reported green
+PASS  #1823: ...and names the columns this board actually has, so the value can be fixed
+PASS  #1823: ...and wrote NOTHING — #902 still holds the column the earlier leg gave it
+PASS  #1823: with NO identity derivable, add still BOARDS the row and prints its id — no refusal
+PASS  #1823: ...and says by NAME why the column was not written, rather than going quiet
+PASS  #1823: ...and the column really is untouched — the note is not decoration over a write
+PASS  #1823: MUTATION PROOF — empty #903's column in the fixture and the same probe flips to 'wrote Backlog', so AC4's absence is an observation
+PASS  #1823/#266: a Status that could NOT BE READ is left alone, never defaulted over
+PASS  #1823/#266: ...and says the column was UNREAD rather than reporting it clean
+PASS  #1823/#266: ...and add still exits 0 — the row IS boarded, which is what add promised
+
+coord-engine parity: 626 assertion(s), 626 passed, 0 failed
+coord-engine parity: 0 not measured
+green — the engine matches the corpus's certified answer, with no bash in the pipeline.
