@@ -40,3 +40,11 @@ Five Renovate onboarding PRs were closed with exact-head readback and retained s
 SDD #929 was closed unmerged at exact head `780b656c8ab83b10340f8f0258cf0e5568f78102`: its Go 1.27.1 bump fails the Q1-qualified Go 1.24.1 binary hash, so a future compiler change needs a new governed toolchain qualification. Its branch remains retained. SDD #919 merged from exact head `734b9d36fd43b2ba5c38422f409d3c9140049677` at `0dbf5ce9e42d18ddec45dd66b706f8c2984b7184`. Its merge is incorporated into the refreshed local FSC-04 first source cut.
 
 A live complete organization search at 2026-09-27 08:48 UTC reported 77 open PRs. This is a moving count; new bot PRs can offset closures. Rendering #1343 remains in hosted qualification with its deterministic gate in progress.
+
+## 08:58 UTC continuation
+
+SDD #1065 (Fantomas 8.0.5) merged from exact green head `a581e32d949b91a55f299ecfbbb961352056c72f` at `36fb1ceaf0b7c5db2d17958840cf2fa886592c39`. Rendering #1343 merged from exact green head `5404494364b1d82c5eedae7562be8039a432d118` at `0aea2cdbd7288ee96413d14db22178cac8f0bfb3`; its release-preflight source is delivered, while publication and receiver adoption remain separate gates. Both post-merge push suites are still running at this checkpoint.
+
+Templates #473 closed unmerged at exact head `a3a996759651a3547c274c14c9966a036d429b98`, with `chore/bump-fs-gg-ui-template` retained at that SHA. Current main already has the exact 0.31.0 README/provider pin and completed release history. The old PR would reintroduce a `PIN HISTORY ENTRY REQUIRED` stub and had failed composition. Closure was read back as closed and unmerged; the retained branch was rechecked.
+
+Locally prepared, source-preserving next cuts are the SDD FSC-04 first cut, Templates provider cut (body in `templates-provider-first-cut-pr-body.md`), Game staging and pin cuts, and Rendering's characterized FSC-06/FSC-08 successors. Their source-only checks are recorded in the respective worktrees; none is counted as delivered until guarded admission, exact-head hosted qualification, and merge. The live complete organization search after these three PR dispositions counted 74 open PRs.
