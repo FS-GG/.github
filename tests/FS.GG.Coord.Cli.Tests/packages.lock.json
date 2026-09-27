@@ -157,7 +157,8 @@
           "FS.GG.Telemetry.Client": "[1.0.0, )",
           "FS.GG.Telemetry.Dashboard": "[1.0.0, )",
           "FS.GG.Telemetry.Store": "[1.0.0, )",
-          "FSharp.Core": "[10.1.401, )"
+          "FSharp.Core": "[10.1.401, )",
+          "YamlDotNet": "[18.1.0, )"
         }
       },
       "fs.gg.coord.cli.boardops": {
@@ -249,6 +250,12 @@
           "SQLite": "3.53.4",
           "SQLitePCLRaw.config.e_sqlite3": "3.0.5"
         }
+      },
+      "YamlDotNet": {
+        "type": "CentralTransitive",
+        "requested": "[18.1.0, )",
+        "resolved": "18.1.0",
+        "contentHash": "5K+9KFg2TdTl7VXv88Qzi/0lqK6JFoNP3lRuImPYGRV7K/QYklDyTrj4+A+KAki1JsQi6qKY+hDyY7d6WRqjrw=="
       }
     }
   }
