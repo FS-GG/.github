@@ -1,6 +1,6 @@
 # SKILL-FS-01 — Replace skill Python with packaged F# commands
 
-Backlink: [Unified Development Roadmap `9.8](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index)
+Backlink: [Unified Development Roadmap section 9.8](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index)
 
 Status: planned. This plan does not claim a converted command, published package, or receiver adoption.
 
