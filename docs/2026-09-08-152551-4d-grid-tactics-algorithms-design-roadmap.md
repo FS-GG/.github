@@ -4,9 +4,9 @@ category: FS.GG
 categoryindex: 6
 index: 38
 description: A grid-based squad tactics foundation with four spatial coordinates, dimension-aware movement, visibility, cover, combat, AI and readable battlefield views.
-status: proposed
+status: active
 document-type: research-design-and-roadmap
-last-updated: 2026-09-08
+last-updated: 2026-09-27
 ---
 
 # Four-spatial-dimensional grid tactics
@@ -40,9 +40,11 @@ retail campaign, strategic base layer, content catalogue or multiplayer service.
 consumers is the recommended implementation direction given the existing workspace, but the rules
 do not require Unity, a native-game shim or custom WASM. Those belong to separate proposals.
 
-All types, formulas, tuning values, algorithms and milestones below are proposals. No game algorithm,
-package, template default or installed contract is changed by this document. Existing source was
-inspected and primary research consulted; no playable 4D prototype or player study was executed.
+The initial design treated all types, formulas, tuning values, algorithms and milestones below as
+proposals. Subsequent `FS.GG.FourD` source work adopted the contracts recorded for FOURD-01.1–.3.
+No package, template default or installed contract is established by that source delivery. The
+initial research executed no playable 4D prototype or player study; the current source encounter and
+remaining player evaluation are recorded in section 16.
 
 This is an independent section 15 product/algorithm track in the
 [Unified Development Roadmap](2026-09-07-154210-fs-gg-unified-development-roadmap.md), indexed under
@@ -847,8 +849,8 @@ new dimension-aware kernel on its actual semantics.
 
 ### 15.2 Product-first ownership
 
-Name one original-game product workspace when implementation begins; its repository/name is not
-assigned by this document. Keep the first grid model, query kernel, turn reducer, tactical rules,
+The private `FS.GG.FourD` repository is the original-game product workspace. Keep the first grid
+model, query kernel, turn reducer, tactical rules,
 authored maps, AI and browser inspector together under that owner. Separate pure rule source from
 rendering and I/O, with the same intended rules compiled for .NET and Fable and independently checked.
 
@@ -875,10 +877,9 @@ this feature's completion requirements.
 ## 16. Six-milestone development roadmap
 
 The roadmap was developed with a fresh `gpt-6-astra` high-effort feature planner and integrated with
-the geometry/gameplay design above. Use the **routine** route for future delivery. Only the first
-two milestones are detailed now; expand the later horizon after those results and early interaction
-evidence exist. Implementation needs an actual product owner/workspace and a request to begin it.
-This document does not start that implementation or any publication.
+the geometry/gameplay design above. Use the **routine** route for future delivery. FOURD-01.1–.3 are
+source delivered in the private `FS.GG.FourD` product workspace. The initial document did not itself
+start implementation or publication; publication and installed adoption remain separate.
 
 ### 16.1 FOURD-01.1 — Grid, support and movement kernel
 
@@ -940,9 +941,19 @@ combat hides geometric mistakes. This is not yet a complete tactical encounter.
 
 ### 16.3 Later outcome horizon
 
+**FOURD-01.3 source closure:** The deterministic tactical encounter was delivered in private
+[FourD PR #3](https://github.com/FS-GG/FS.GG.FourD/pull/3), followed by the browser-readiness repair in
+[PR #4](https://github.com/FS-GG/FS.GG.FourD/pull/4). The resulting `main` revision is
+`6e8cd359d781517470949ed25281df412b59c33e`; exact-main
+[`verify`](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36314732410) passed. The product-owned
+[implementation and evidence](https://github.com/FS-GG/FS.GG.FourD/blob/6e8cd359d781517470949ed25281df412b59c33e/docs/FOURD-01.3.md)
+records the reducer, knowledge-limited AI, per-step reactions, radial breach, win/loss, canonical
+save/replay and controls-driven browser journeys. This is product source evidence. It does not
+complete FOURD-01.4–.6, publish an artifact or establish installed adoption.
+
 | Milestone | Outcome | Entry evidence and completion examples |
 |---|---|---|
-| **FOURD-01.3 — Play one deterministic tactical encounter** | Squad, simple opposing AI, move/shoot/overwatch/end-turn, cover, one 4D area effect and a win/loss objective | .1–.2 correct queries and minimally usable views; pin AP/chance/RNG policy. Prove per-step reactions, death/occupancy, hidden-state-limited AI, one bounded terrain-change case and exact save/replay across qualified runtimes |
+| **FOURD-01.3 — Play one deterministic tactical encounter** | Source delivered: squad, knowledge-limited opposing AI, move/shoot/overwatch/end-turn, cover, one 4D radial breach effect and win/loss objectives | .NET, emitted Fable/Node and Chromium verification covers per-step reactions, death/occupancy, bounded terrain change and canonical save/replay; exact source evidence is linked above |
 | **FOURD-01.4 — Teach and evaluate fourth-axis tactics** | A short tutorial suite and complete mouse/keyboard interaction support intentional dimensional play | Playable .3 build. Compare views on matched tasks with a small formative player group; record correct predictions, coordinate mistakes and explanations. Players deliberately use at least two fourth-axis tactics. Set acceptance criteria before the evaluated round; repair clustered failures |
 | **FOURD-01.5 — Qualify the tactical vertical slice** | Correct and responsive route/shot/AI queries, coherent observations, usable views and reproducible encounters at a measured map/unit budget | .3–.4 outcomes determine the real load and usability limits. Measure the proposed benchmark on named devices/browsers, retain correctness oracles through optimization, test restart/save/replay and invalidation after terrain changes |
 | **FOURD-01.6 — Deliver the foundation and decide optional reuse** | Documented supported encounter, algorithms, tests, measurements and source/product handoff; evidence-based extraction decision | .5 evidence and chosen distribution. Identify proven candidates for Game/Rendering and whether a maintained Fable template sample is wanted. Publication and installed adoption remain separately evidenced if selected; they are not speculative prerequisites to the vertical-slice result |
@@ -952,11 +963,11 @@ bounded encounter work; players can perceive and deliberately exploit the extra 
 .NET/browser rule behavior is qualified; and scope, performance and reproducibility are documented.
 It does not mean a full campaign, arbitrary 4D physics, multiplayer, mod support or retail polish.
 
-The first executable window is .1–.2. Future implementation should use the owning `work-roadmap`
-process with a `gpt-5.6-sol` medium worker. Reuse the valid plan and expand the next window from
-observed results. Replan for a material change to grid, gravity, information or numeric/geometry rules,
-not an ordinary failed test or source revision change. Completing the ready window is distinct from
-delivering the whole foundation.
+The .1–.3 source window is delivered. Future implementation should use the owning `work-roadmap`
+process with a `gpt-5.6-sol` medium worker. Reuse the valid plan and expand .4 from observed results.
+Replan for a material change to grid, gravity, information or numeric/geometry rules, not an ordinary
+failed test or source revision change. Completing this source window is distinct from delivering the
+whole foundation.
 
 ## 17. Workspace effect and optional publication
 
