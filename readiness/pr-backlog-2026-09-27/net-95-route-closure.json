@@ -1,0 +1,16 @@
+{
+  "closedAt": "2026-09-27T09:25:42Z",
+  "headRefName": "item/49-consolidate-ready-dependencies",
+  "headRefOid": "54b7de145a1dcaa9c98daa1d7f6bc7102b0f37f1",
+  "mergedAt": null,
+  "number": 95,
+  "reason": "The item/ branch prefix requires native fsgg:pr-authorization for a claimed board item; this source-preserving consolidation has routine authority and was readmitted on a routine/ branch.",
+  "replacementHeadRefName": "routine/net-ready-dependencies-20260927",
+  "replacementHeadRefOid": "54b7de145a1dcaa9c98daa1d7f6bc7102b0f37f1",
+  "replacementPullRequest": 96,
+  "repository": "FS-GG/FS.GG.Net",
+  "retainedHeadRefOid": "54b7de145a1dcaa9c98daa1d7f6bc7102b0f37f1",
+  "schema": "fsgg-pr-backlog-closure/v1",
+  "state": "closed",
+  "url": "https://github.com/FS-GG/FS.GG.Net/pull/95"
+}
