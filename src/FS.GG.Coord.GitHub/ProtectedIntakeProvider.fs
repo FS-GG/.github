@@ -11,6 +11,10 @@ module ProtectedIntakeProvider =
         { ProtectedGenesisVerified: bool
           RestUpdateRefHasExpectedHead: bool
           GraphQlPreservesProposalCommit: bool
+          ReceivePackHasExpectedHead: bool
+          ReceivePackPreservesProposalObjects: bool
+          DeclaredWriterAppId: int64
+          JournalContractWriterAppIds: int64 list
           ResponseUnknownReconciliationDefined: bool
           Reasons: string list }
 
@@ -22,6 +26,19 @@ module ProtectedIntakeProvider =
         | ProvenAbsent of Snapshot
         | ForeignHead of Snapshot
         | Indeterminate of string
+
+    type ReceivePackPlan =
+        { Ref: string
+          ExpectedOldObjectId: string
+          ProposedObjectId: string
+          Refspec: string
+          ForceWithLease: string
+          Objects: Objects }
+
+    [<Literal>]
+    let private DeclaredProductionWriterAppId = 5064713L
+
+    let private JournalContractWriterAppIds = [ 4166418L ]
 
     let private gitOid kind (bytes: byte[]) =
         let header = Encoding.ASCII.GetBytes($"{kind} {bytes.Length}\u0000")
@@ -37,14 +54,21 @@ module ProtectedIntakeProvider =
             // createCommitOnBranch has expectedHeadOid, but GitHub authors (and may sign) that commit;
             // it cannot publish the proposal's exact commit bytes and object id. Combining separate
             // object uploads with either surface would therefore weaken the journal's atomic boundary.
+            // Receive-pack does carry exact old/new OIDs and the supplied object pack, but the current
+            // journal contract accepts only App 4166418 while the protected workflow declares 5064713.
             Unsupported
                 { ProtectedGenesisVerified = true
                   RestUpdateRefHasExpectedHead = false
                   GraphQlPreservesProposalCommit = false
+                  ReceivePackHasExpectedHead = true
+                  ReceivePackPreservesProposalObjects = true
+                  DeclaredWriterAppId = DeclaredProductionWriterAppId
+                  JournalContractWriterAppIds = JournalContractWriterAppIds
                   ResponseUnknownReconciliationDefined = true
                   Reasons =
                     [ "github-rest-update-ref-lacks-expected-old-head"
                       "github-graphql-cas-does-not-preserve-proposal-commit"
+                      "protected-intake-journal-contract-does-not-accept-declared-app:5064713"
                       "installed-protected-intake-write-authority-unavailable" ] })
 
     let private proposalHasExactObjectCustody (proposal: Proposal) =
@@ -67,6 +91,18 @@ module ProtectedIntakeProvider =
         && objects.EventBytes = proposed.Event.Bytes
         && objects.HeadBytes = proposed.HeadBytes
         && ShardedJournalAdapter.sha256 objects.EventBytes = proposed.Event.Digest
+
+    let planReceivePack proposal =
+        if proposalHasExactObjectCustody proposal then
+            Ok
+                { Ref = address.Ref
+                  ExpectedOldObjectId = proposal.Cas.ObservedObjectId
+                  ProposedObjectId = proposal.Cas.ProposedCommit.CommitOid
+                  Refspec = proposal.Cas.Refspec
+                  ForceWithLease = proposal.Cas.ForceWithLease
+                  Objects = proposal.Objects }
+        else
+            Error "protected-intake-proposal-custody-invalid"
 
     let private proposalIsExactCurrentHead (proposal: Proposal) (read: Read) (snapshot: Snapshot) =
         let proposed = proposal.Cas.ProposedCommit
