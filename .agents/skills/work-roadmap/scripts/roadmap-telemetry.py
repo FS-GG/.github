@@ -13,6 +13,7 @@ import re
 import subprocess
 import sys
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
 
 sys.dont_write_bytecode = True
@@ -386,6 +387,7 @@ def native_snapshot(value: object) -> dict[str, object]:
             value.get("inventoryProvenance") != "codex-app-server-thread-turns-list" or
             value.get("inventoryHostSource") != "codex-app-server:thread/turns/list" or
             value.get("usageProvenance") != "codex-native-token-usage-record" or
+            value.get("collectorProducer") != "fsgg-work-roadmap-native-collector/1" or
             type(value.get("complete")) is not bool):
         raise ConfigurationError("native usage snapshot is malformed")
     if (not isinstance(paging, list) or not 1 <= len(paging) <= 10 or
@@ -448,15 +450,38 @@ def native_snapshot(value: object) -> dict[str, object]:
                            separators=(",", ":"), ensure_ascii=True).encode("ascii")
     if hashlib.sha256(projected).hexdigest() != roster_digest:
         raise ConfigurationError("native inventory roster digest disagrees with the roster")
-    source_projection = json.dumps(
-        {"hostSource": value["inventoryHostSource"], "paging": paging, "capturedAt": captured_at,
-         "rosterDigest": roster_digest}, sort_keys=True, separators=(",", ":"),
-        ensure_ascii=True).encode("ascii")
-    if hashlib.sha256(source_projection).hexdigest() != source_digest:
-        raise ConfigurationError("native inventory source digest disagrees with its evidence")
-    derived_complete = bool(identifiers) and all(row["terminal"] and row["usageAvailable"] for row in inventory)
-    if value["complete"] != derived_complete:
-        raise ConfigurationError("native usage completeness is inconsistent")
+    evidence_chunks = []
+    decoded_collections = []
+    for collection in (value.get("appServerResponses"), value.get("rolloutRecords")):
+        if not isinstance(collection, list) or len(collection) > 1024:
+            raise ConfigurationError("native source byte evidence is malformed")
+        total_bytes = 0
+        decoded = []
+        for record in collection:
+            if not isinstance(record, dict) or set(record) != {"sha256", "bytesBase64"}:
+                raise ConfigurationError("native source byte evidence is malformed")
+            try:
+                raw = base64.b64decode(record["bytesBase64"], validate=True)
+            except (TypeError, ValueError) as error:
+                raise ConfigurationError("native source byte evidence is malformed") from error
+            total_bytes += len(raw)
+            if (total_bytes > 512 * 1024 or not raw or
+                    record.get("sha256") != hashlib.sha256(raw).hexdigest()):
+                raise ConfigurationError("native source byte evidence is malformed")
+            evidence_chunks.append(raw)
+            decoded.append(raw)
+        decoded_collections.append(decoded)
+    if len(value["appServerResponses"]) < 3:
+        raise ConfigurationError("native App Server source evidence is incomplete")
+    exact_digest = hashlib.sha256()
+    binding = json.dumps({"collectorProducer": value["collectorProducer"],
+                          "capturedAt": captured_at, "hostSource": value["inventoryHostSource"]},
+                         sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+    for raw in [binding, *evidence_chunks]:
+        exact_digest.update(len(raw).to_bytes(8, "big"))
+        exact_digest.update(raw)
+    if exact_digest.hexdigest() != source_digest:
+        raise ConfigurationError("native inventory source digest disagrees with retained bytes")
     provider = value.get("provider")
     provider_provenance = value.get("providerProvenance")
     if ((provider is None) != (provider_provenance is None) or
@@ -469,6 +494,74 @@ def native_snapshot(value: object) -> dict[str, object]:
         if label is not None and (not isinstance(label, str) or label != label.strip() or
                                   not label or len(label) > 128):
             raise ConfigurationError(f"native {field} observation is malformed")
+    app_documents = []
+    try:
+        app_documents = [json.loads(raw) for raw in decoded_collections[0]]
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise ConfigurationError("retained App Server bytes are malformed") from error
+    thread_sources = [document.get("result", {}).get("thread") for document in app_documents
+                      if isinstance(document, dict) and isinstance(document.get("result"), dict)]
+    if not any(isinstance(thread, dict) and thread.get("id") == thread_id and
+               thread.get("modelProvider") == provider and thread.get("model") == value.get("model") and
+               thread.get("reasoningEffort") == value.get("effort") for thread in thread_sources):
+        raise ConfigurationError("native provider/profile does not match retained App Server bytes")
+    retained_turns = []
+    for document in app_documents:
+        result = document.get("result") if isinstance(document, dict) else None
+        data = result.get("data") if isinstance(result, dict) else None
+        if isinstance(data, list) and data and all(isinstance(row, dict) and "status" in row for row in data):
+            retained_turns.extend(data)
+    if [(row.get("id"), row.get("status")) for row in retained_turns] != [
+            (row["turnId"], row["status"]) for row in inventory]:
+        raise ConfigurationError("native turn inventory does not match retained App Server bytes")
+    native_records = defaultdict(list)
+    try:
+        for raw in decoded_collections[1]:
+            document = json.loads(raw)
+            payload = document.get("payload") if isinstance(document, dict) else None
+            if not isinstance(document, dict) or document.get("type") != "token_usage_record" or not isinstance(payload, dict) or \
+                    payload.get("thread_id") != thread_id or payload.get("turn_id") not in identifiers:
+                raise ConfigurationError("retained rollout bytes cross thread or turn identity")
+            native_records[payload["turn_id"]].append(payload)
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise ConfigurationError("retained rollout bytes are malformed") from error
+    observations_by_turn = {observation["turnId"]: observation for observation in turns}
+
+    def retained_counts(candidate):
+        if (not isinstance(candidate, dict) or set(candidate) != usage_fields or
+                any(type(candidate.get(field)) is not int or candidate[field] < 0 for field in usage_fields) or
+                candidate["cached_input_tokens"] > candidate["input_tokens"] or
+                candidate["reasoning_output_tokens"] > candidate["output_tokens"] or
+                candidate["input_tokens"] + candidate["output_tokens"] != candidate["total_tokens"]):
+            raise ConfigurationError("retained rollout usage is malformed")
+        return candidate
+
+    for inventory_row in inventory:
+        responses = {}
+        turn_id = inventory_row["turnId"]
+        rows = native_records[turn_id]
+        for row in rows:
+            response = row.get("response_id")
+            if not isinstance(response, str) or not response or not isinstance(row.get("usage"), dict):
+                raise ConfigurationError("retained rollout usage is malformed")
+            responses[response] = retained_counts(row["usage"])
+            retained_counts(row.get("turn_token_usage"))
+        if rows:
+            derived = {field: sum(response[field] for response in responses.values())
+                       for field in usage_fields}
+            available = rows[-1].get("turn_token_usage") == derived
+        else:
+            derived, available = None, False
+        observation = observations_by_turn.get(turn_id)
+        if inventory_row["usageAvailable"] != available or \
+                (available and (observation is None or observation["usage"] != derived)) or \
+                (not available and observation is not None):
+            raise ConfigurationError("native usage does not match retained rollout bytes")
+    derived_complete = (bool(identifiers) and len(paging) == 1 and provider is not None and
+                        value.get("model") is not None and value.get("effort") is not None and
+                        all(row["terminal"] and row["usageAvailable"] for row in inventory))
+    if value["complete"] != derived_complete:
+        raise ConfigurationError("native usage completeness is inconsistent")
     return value
 
 
@@ -545,6 +638,9 @@ def begin(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:
                 "baselineRosterDigest": prior["inventoryRosterDigest"],
                 "baselineSourceDigest": prior["inventorySourceDigest"],
                 "baselineProducerStream": parent["producerStream"],
+                "baselineCollectorProducer": prior["collectorProducer"],
+                "baselineAppServerResponses": prior["appServerResponses"],
+                "baselineRolloutRecords": prior["rolloutRecords"],
             }
             baseline_known = True
         except (HostUnavailable, ConfigurationError, OSError, subprocess.SubprocessError):
@@ -725,6 +821,9 @@ def _publish_turn_roster(config: HostConfig, state: dict[str, object], native: d
     state["nativeInventoryBindingDigest"] = hashlib.sha256(json.dumps(
         [native["inventorySourceDigest"], state["producerStream"], state["invocationId"]],
         separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()
+    state["nativeInventoryCollectorProducer"] = native["collectorProducer"]
+    state["nativeInventoryAppServerResponses"] = native["appServerResponses"]
+    state["nativeInventoryRolloutRecords"] = native["rolloutRecords"]
     observed_provider = native.get("provider")
     observed_provider_provenance = native.get("providerProvenance")
     if (state.get("nativeProvider") is not None and
@@ -734,6 +833,32 @@ def _publish_turn_roster(config: HostConfig, state: dict[str, object], native: d
     if observed_provider is not None or "nativeProvider" not in state:
         state["nativeProvider"] = observed_provider
         state["nativeProviderProvenance"] = observed_provider_provenance
+    fact_ready = (observed_provider is not None and native.get("model") == state.get("model") and
+                  native.get("effort") == state.get("effort") and len(native["inventoryPaging"]) == 1)
+    # This checkout's schema-10 parser does not yet accept the Package A fact.
+    # Persist the exact wire packet beside its private source bytes so a later
+    # integration can publish those same fields. Do not send an unknown kind
+    # and then mistake a rejected batch for durable observation.
+    state["nativeInventoryIntegration"] = {
+        "status": "pending-store-contract" if fact_ready else "incomplete-source-provenance",
+        "reason": ("runtime-native-inventory/1 is not accepted by this branch's telemetry store"
+                   if fact_ready else
+                   "provider/profile provenance or a stable single-page inventory is unavailable"),
+        "collectorProducer": native["collectorProducer"],
+        "sourceDigest": native["inventorySourceDigest"],
+        "fact": event(
+            "runtime-native-inventory/1",
+            digest("runtime-native-inventory-", str(state["invocationId"])),
+            str(state["itemId"]), inventoryId=digest("native-inventory-", str(state["invocationId"])),
+            originalItemId=state["originalItemId"], invocationId=state["invocationId"],
+            page=1, pages=1, expectedTurnIds=eligible_ids,
+            expectedProvider=observed_provider, requestedModel=state["model"],
+            requestedEffort=state["effort"], support="provider-native-final-turn-counters",
+            followupBaseline=len(state.get("baselineTurnIds", [])),
+            capturedAt=native["inventoryCapturedAt"],
+            sourceKind="provider-capability-and-dispatch-roster",
+            sourceDigest=native["inventorySourceDigest"]) if fact_ready else None,
+    }
     save_state(config, state)
     published = state.setdefault("turnRosterPublishedCount", 0)
     if type(published) is not int or published < 0 or published > len(eligible_ids):
@@ -844,11 +969,15 @@ def reconcile_usage(config: HostConfig, state: dict[str, object]) -> str:
         del state["usageIntent"]
         save_state(config, state)
     observed_ids = [turn["turnId"] for turn in eligible]
-    return ("native-collaboration-usage-complete"
-            if native["complete"] and bool(eligible_ids) and observed_ids == eligible_ids
-            and set(ledger) == set(eligible_ids)
-            and state.get("turnRosterPublishedCount") == len(eligible_ids)
-            else "native-collaboration-usage-unknown")
+    state["nativeInventoryIntegration"]["locallyReconciled"] = (
+        native["complete"] and bool(eligible_ids) and observed_ids == eligible_ids
+        and set(ledger) == set(eligible_ids)
+        and state.get("turnRosterPublishedCount") == len(eligible_ids))
+    save_state(config, state)
+    # Package B cannot observe an applied runtime-native-inventory/1 receipt on
+    # this branch. Local reconciliation is diagnostic and never upgrades the
+    # telemetry coverage claim.
+    return "native-collaboration-usage-unknown"
 
 
 def finish(config: HostConfig, args: argparse.Namespace) -> dict[str, object]:

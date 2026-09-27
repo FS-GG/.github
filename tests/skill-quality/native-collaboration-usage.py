@@ -50,7 +50,8 @@ class NativeUsageTests(unittest.TestCase):
                         return {"thread": {"id": child, "parentThreadId": parent,
                                 "source": {"subAgent": {"thread_spawn": {"parent_thread_id": parent,
                                            "agent_path": "/root/worker"}}}, "path": str(path),
-                                "model": "gpt-6-astra", "reasoningEffort": "high"}}
+                                "modelProvider": "openai", "model": "gpt-6-astra",
+                                "reasoningEffort": "high"}}
                     if method == "thread/turns/list":
                         return {"data": [{"id": turn, "status": "completed"},
                                          {"id": turn2, "status": "completed"}], "nextCursor": None}
@@ -70,8 +71,31 @@ class NativeUsageTests(unittest.TestCase):
             self.assertRegex(result["inventoryCapturedAt"], r"Z$")
             self.assertRegex(result["inventoryRosterDigest"], r"^[0-9a-f]{64}$")
             self.assertRegex(result["inventorySourceDigest"], r"^[0-9a-f]{64}$")
-            self.assertIsNone(result["provider"])
-            self.assertIsNone(result["providerProvenance"])
+            self.assertEqual(result["provider"], "openai")
+            self.assertEqual(result["providerProvenance"], "codex-app-server-thread.modelProvider")
+            self.assertGreaterEqual(len(result["appServerResponses"]), 3)
+            self.assertEqual(len(result["rolloutRecords"]), 4)
+            class NoProviderServer(FakeServer):
+                def request(self, request_id, method, params):
+                    result = super().request(request_id, method, params)
+                    if method == "thread/read":
+                        result["thread"].pop("modelProvider")
+                    return result
+            with mock.patch.object(native, "AppServer", NoProviderServer):
+                no_provider = native.collect(parent, "worker", codex_home=home)
+            self.assertFalse(no_provider["complete"])
+
+            class MultiPageServer(FakeServer):
+                def request(self, request_id, method, params):
+                    if method == "thread/turns/list":
+                        if params["cursor"] is None:
+                            return {"data": [{"id": turn, "status": "completed"}], "nextCursor": "page-2"}
+                        return {"data": [{"id": turn2, "status": "completed"}], "nextCursor": None}
+                    return super().request(request_id, method, params)
+            with mock.patch.object(native, "AppServer", MultiPageServer):
+                multi_page = native.collect(parent, "worker", codex_home=home)
+            self.assertFalse(multi_page["complete"])
+            self.assertEqual(len(multi_page["inventoryPaging"]), 2)
             path.write_text(json.dumps(record("a", one, one)) + "\n")
             with mock.patch.object(native, "AppServer", FakeServer):
                 partial = native.collect(parent, "worker", codex_home=home)
@@ -122,6 +146,38 @@ class NativeUsageTests(unittest.TestCase):
             path.write_text("")
             with self.assertRaises(native.HostUnavailable):
                 native.rollout_usage(str(path), "thread", set(), pathlib.Path(scratch))
+
+    def test_rollout_open_is_descriptor_anchored_against_symlink_swap(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            home = pathlib.Path(scratch)
+            sessions = home / "sessions"
+            sessions.mkdir()
+            source = sessions / "fixture.jsonl"
+            outside = home / "outside.jsonl"
+            source.write_text("{}\n")
+            outside.write_text("{}\n")
+            real_open = native.os.open
+            swapped = False
+
+            def racing_open(path, flags, *args, **kwargs):
+                nonlocal swapped
+                if path == "fixture.jsonl" and not swapped:
+                    swapped = True
+                    source.unlink()
+                    source.symlink_to(outside)
+                return real_open(path, flags, *args, **kwargs)
+
+            with mock.patch.object(native.os, "open", side_effect=racing_open), \
+                 self.assertRaisesRegex(native.HostUnavailable, "outside the private host"):
+                native.rollout_usage(str(source), "thread", set(), home)
+            self.assertTrue(swapped)
+
+            outside_dir = home / "outside-directory"
+            outside_dir.mkdir()
+            (outside_dir / "fixture.jsonl").write_text("{}\n")
+            (sessions / "linked").symlink_to(outside_dir, target_is_directory=True)
+            with self.assertRaisesRegex(native.HostUnavailable, "outside the private host"):
+                native.rollout_usage(str(sessions / "linked" / "fixture.jsonl"), "thread", set(), home)
 
 
 if __name__ == "__main__":
