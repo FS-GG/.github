@@ -4621,6 +4621,17 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                             let table name order =
                                 rows ($"SELECT * FROM %s{name}%s{itemFilter} ORDER BY %s{order} LIMIT 10001;")
 
+                            // Establish bounded completeness before writing selection.complete.
+                            // LIMIT alone cannot distinguish an exact boundary from truncation.
+                            use learningCount = connection.CreateCommand()
+                            learningCount.Transaction <- transaction
+                            learningCount.CommandText <-
+                                $"SELECT count(*) FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','learn-shared-cost/1')%s{learningItemFilter};"
+                            itemId |> Option.iter (parameter learningCount "$selected")
+
+                            if Convert.ToInt64(learningCount.ExecuteScalar()) > 10000L then
+                                raise (InvalidOperationException("learning observation snapshot row bound exceeded"))
+
                             let summaries = JsonArray()
 
                             for selected in selectedItems do

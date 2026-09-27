@@ -42,7 +42,8 @@ class Learn01ContractTests(unittest.TestCase):
                 "kind": "learn-accounting-inventory/1", "identity": "accounting-I-001", "itemId": "I-001",
                 "revision": 1, "inventoryId": "accounting-v1", "windowId": "window-2026-01",
                 "policyId": "learn-01-current-focused-v1", "scope": "whole-original-item",
-                "cutoffAt": "2026-02-02T00:00:00Z", "expectedDispatchIds": ["dispatch-I-001"],
+                "cutoffAt": "2026-02-02T00:00:00Z", "capturedAt": "2025-12-31T23:59:30Z",
+                "ciApplicability": "not-applicable", "expectedDispatchIds": ["dispatch-I-001"],
                 "expectedSharedCostIds": ["shared-I-001"], "sourceKind": "prospective-independent-roster",
                 "sourceDigest": "a" * 64,
             },
@@ -53,7 +54,7 @@ class Learn01ContractTests(unittest.TestCase):
                 "expectedTurnIds": ["turn-I-001"], "expectedProvider": "openai",
                 "requestedModel": "gpt-fixed", "requestedEffort": "medium",
                 "support": "provider-native-final-turn-counters", "followupBaseline": 0,
-                "capturedAt": "2025-12-31T23:59:30Z",
+                "capturedAt": "2026-01-01T00:00:01Z",
                 "sourceKind": "provider-capability-and-dispatch-roster", "sourceDigest": "b" * 64,
             },
             {
@@ -88,11 +89,15 @@ class Learn01ContractTests(unittest.TestCase):
             "runtimeGaps": [], "ciRuns": [], "ciPopulationCoverage": [],
         }
 
-    def test_complete_v3_private_snapshot_qualifies_from_typed_rosters(self):
+    def test_complete_v3_structure_remains_unqualified_without_independent_sources(self):
         content = self.complete_v3_content()
         result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content, version=3))
-        self.assertTrue(result["tokenComparisonQualified"])
-        self.assertEqual({"current": 120, "focused": 0}, result["providerTotalTokensByArm"])
+        self.assertFalse(result["tokenComparisonQualified"])
+        self.assertEqual(
+            ["independent-inventory-source-unavailable", "independent-shared-cost-authority-unavailable"],
+            result["incompleteTokenReasons"]["I-001"],
+        )
+        self.assertEqual({"current": 0, "focused": 0}, result["providerTotalTokensByArm"])
 
         missing = copy.deepcopy(content)
         missing["learningObservations"] = [
@@ -161,6 +166,49 @@ class Learn01ContractTests(unittest.TestCase):
         })
         reopened_result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(reopened, version=3))
         self.assertIn("expected-dispatch-roster-mismatch", reopened_result["incompleteTokenReasons"]["I-001"])
+
+    def test_v3_refuses_foreign_terminal_future_capture_and_zero_digest(self):
+        foreign = self.complete_v3_content()
+        foreign["terminals"][0]["item_id"] = "foreign"
+        with self.assertRaisesRegex(MODULE.Refusal, "terminal crosses original-item identity"):
+            MODULE.analyze_private_snapshot(CONTRACT, private_envelope(foreign, version=3))
+
+        future = self.complete_v3_content()
+        native = next(json.loads(row["canonical"]) for row in future["learningObservations"]
+                      if json.loads(row["canonical"])["kind"] == "runtime-native-inventory/1")
+        native["capturedAt"] = "2027-01-01T00:00:00Z"
+        future["learningObservations"] = [
+            {"canonical": json.dumps(native, separators=(",", ":"), sort_keys=True)}
+            if json.loads(row["canonical"])["kind"] == "runtime-native-inventory/1" else row
+            for row in future["learningObservations"]
+        ]
+        with self.assertRaisesRegex(MODULE.Refusal, "capture must fall between assignment and cutoff"):
+            MODULE.analyze_private_snapshot(CONTRACT, private_envelope(future, version=3))
+
+        zero = self.complete_v3_content()
+        accounting = next(json.loads(row["canonical"]) for row in zero["learningObservations"]
+                          if json.loads(row["canonical"])["kind"] == "learn-accounting-inventory/1")
+        accounting["sourceDigest"] = "0" * 64
+        zero["learningObservations"] = [
+            {"canonical": json.dumps(accounting, separators=(",", ":"), sort_keys=True)}
+            if json.loads(row["canonical"])["kind"] == "learn-accounting-inventory/1" else row
+            for row in zero["learningObservations"]
+        ]
+        with self.assertRaisesRegex(MODULE.Refusal, "disagrees with persisted assignment"):
+            MODULE.analyze_private_snapshot(CONTRACT, private_envelope(zero, version=3))
+
+    def test_v3_requires_explicit_ci_coverage_when_applicable(self):
+        content = self.complete_v3_content()
+        accounting = next(json.loads(row["canonical"]) for row in content["learningObservations"]
+                          if json.loads(row["canonical"])["kind"] == "learn-accounting-inventory/1")
+        accounting["ciApplicability"] = "required"
+        content["learningObservations"] = [
+            {"canonical": json.dumps(accounting, separators=(",", ":"), sort_keys=True)}
+            if json.loads(row["canonical"])["kind"] == "learn-accounting-inventory/1" else row
+            for row in content["learningObservations"]
+        ]
+        result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content, version=3))
+        self.assertIn("missing-ci-population-coverage", result["incompleteTokenReasons"]["I-001"])
 
     def test_observation_snapshot_is_order_independent_and_bounded(self):
         first = MODULE.validate_observations(CORPUS, OBSERVATIONS)
@@ -275,7 +323,7 @@ class Learn01ContractTests(unittest.TestCase):
             "provider": None, "requested_model": "gpt-fixed", "observed_model": "gpt-fixed",
             "requested_effort": "medium", "observed_effort": "medium", "total": 100,
         } for index in range(1, 7)]
-        terminals = [{"invocation_id": f"private-{index}"} for index in range(1, 7)]
+        terminals = [{"item_id": f"I-{index:03d}", "invocation_id": f"private-{index}"} for index in range(1, 7)]
         result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope({
             "learningObservations": rows, "populations": [], "admissions": admissions,
             "expectedDispatches": [], "lineage": [], "usage": usage, "terminals": terminals,

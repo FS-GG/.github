@@ -311,7 +311,7 @@ module TelemetryStore =
             windowId: string * policyId: string * arm: string * assignedAt: string * deviation: string option
         | LearnAccountingInventory of
             inventoryId: string * windowId: string * policyId: string * cutoffAt: string *
-            expectedDispatchIds: string * expectedSharedCostIds: string * sourceDigest: string
+            capturedAt: string * ciApplicability: string * expectedDispatchIds: string * expectedSharedCostIds: string * sourceDigest: string
         | RuntimeNativeInventory of
             inventoryId: string * originalItemId: string * invocationId: string * page: int64 * pages: int64 *
             expectedTurnIds: string * expectedProvider: string * requestedModel: string * requestedEffort: string *

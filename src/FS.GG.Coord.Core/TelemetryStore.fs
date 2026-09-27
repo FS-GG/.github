@@ -319,7 +319,7 @@ module TelemetryStore =
             windowId: string * policyId: string * arm: string * assignedAt: string * deviation: string option
         | LearnAccountingInventory of
             inventoryId: string * windowId: string * policyId: string * cutoffAt: string *
-            expectedDispatchIds: string * expectedSharedCostIds: string * sourceDigest: string
+            capturedAt: string * ciApplicability: string * expectedDispatchIds: string * expectedSharedCostIds: string * sourceDigest: string
         | RuntimeNativeInventory of
             inventoryId: string * originalItemId: string * invocationId: string * page: int64 * pages: int64 *
             expectedTurnIds: string * expectedProvider: string * requestedModel: string * requestedEffort: string *
@@ -1979,21 +1979,24 @@ module TelemetryStore =
                     requiredText label node "policyId",
                     requiredText label node "scope",
                     requiredTimestamp label node "cutoffAt",
+                    requiredTimestamp label node "capturedAt",
+                    requiredText label node "ciApplicability",
                     requiredUniqueTextRoster label node "expectedDispatchIds",
                     requiredUniqueTextRoster label node "expectedSharedCostIds",
                     requiredText label node "sourceKind",
                     requiredText label node "sourceDigest"
                 with
-                | Ok inventory, Ok window, Ok policy, Ok scope, Ok cutoff, Ok dispatches, Ok shared, Ok source, Ok digest
+                | Ok inventory, Ok window, Ok policy, Ok scope, Ok cutoff, Ok captured, Ok ci, Ok dispatches, Ok shared, Ok source, Ok digest
                     when itemId.IsSome && scope = "whole-original-item"
+                        && (ci = "required" || ci = "not-applicable")
                         && source = "prospective-independent-roster"
-                        && Regex.IsMatch(digest, "^[0-9a-f]{64}$") ->
+                        && Regex.IsMatch(digest, "^[0-9a-f]{64}$") && digest <> String('0', 64) ->
                     make
-                        [ "inventoryId"; "windowId"; "policyId"; "scope"; "cutoffAt"; "expectedDispatchIds";
+                        [ "inventoryId"; "windowId"; "policyId"; "scope"; "cutoffAt"; "capturedAt"; "ciApplicability"; "expectedDispatchIds";
                           "expectedSharedCostIds"; "sourceKind"; "sourceDigest" ]
-                        (LearnAccountingInventory(inventory, window, policy, cutoff, dispatches, shared, digest))
-                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
-                    Error $"%s{label} has unsupported scope, source kind, or digest"
+                        (LearnAccountingInventory(inventory, window, policy, cutoff, captured, ci, dispatches, shared, digest))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
+                    Error $"%s{label} has unsupported scope, CI applicability, source kind, or digest"
                 | values -> Error(sprintf "%A" values)
             | "runtime-native-inventory/1" ->
                 match
@@ -2017,7 +2020,7 @@ module TelemetryStore =
                     when itemId.IsSome && page > 0L && pages > 0L && page <= pages
                         && support = "provider-native-final-turn-counters"
                         && source = "provider-capability-and-dispatch-roster"
-                        && Regex.IsMatch(digest, "^[0-9a-f]{64}$") ->
+                        && Regex.IsMatch(digest, "^[0-9a-f]{64}$") && digest <> String('0', 64) ->
                     make
                         [ "inventoryId"; "originalItemId"; "invocationId"; "page"; "pages"; "expectedTurnIds";
                           "expectedProvider"; "requestedModel"; "requestedEffort"; "support"; "followupBaseline";
@@ -2038,7 +2041,7 @@ module TelemetryStore =
                 with
                 | Ok cost, Ok provider, Ok total, Ok(allocations, allocated), Ok source, Ok digest
                     when itemId.IsSome && source = "native-shared-cost"
-                        && Regex.IsMatch(digest, "^[0-9a-f]{64}$") ->
+                        && Regex.IsMatch(digest, "^[0-9a-f]{64}$") && digest <> String('0', 64) ->
                     if allocated <> total then
                         Error $"%s{label}.allocations must sum to providerTotalTokens"
                     else

@@ -345,7 +345,17 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
                 "usage-support-unproven",
             })
 
-    terminal = {row.get("invocation_id") for row in content.get("terminals", [])}
+    terminal = set()
+    for row in content.get("terminals", []):
+        invocation = row.get("invocation_id")
+        admitted = invocations.get(invocation)
+        if not isinstance(invocation, str) or admitted is None:
+            raise Refusal("runtime terminal has no expected admitted invocation")
+        if original_by_item.get(row.get("item_id")) != admitted[0]:
+            raise Refusal("runtime terminal crosses original-item identity")
+        if invocation in terminal:
+            raise Refusal("duplicate runtime terminal invocation")
+        terminal.add(invocation)
     gaps = defaultdict(set)
     for row in content.get("runtimeGaps", []):
         invocation = row.get("invocation_id")
@@ -417,6 +427,7 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
             raise Refusal("CI run is not bound to an assigned original item")
         if row.get("status") != "completed":
             incomplete[original].add("incomplete-ci-run:" + str(row.get("run_id")))
+    ci_coverage = Counter()
     for row in content.get("ciPopulationCoverage", []):
         original = original_by_item.get(row.get("item_id"))
         if original is None:
@@ -424,9 +435,11 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
         dimensions = ("actions", "checks", "attempts", "jobs", "terminal", "timestamps")
         if any(row.get(name) != "complete" for name in dimensions) or row.get("continuation") != "none":
             incomplete[original].add("incomplete-ci-population")
+        ci_coverage[original] += 1
 
     if is_v3:
         valid_digest = lambda value: (isinstance(value, str) and len(value) == 64 and
+                                      value != "0" * 64 and
                                       all(character in "0123456789abcdef" for character in value))
         accounting_by_original = {}
         native_pages = defaultdict(dict)
@@ -450,13 +463,18 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
                         not isinstance(shared, list) or len(shared) != len(set(shared)) or
                         not all(isinstance(value, str) and value for value in shared)):
                     raise Refusal(f"{original}: accounting inventory rosters are malformed")
+                ci = event.get("ciApplicability")
+                if ci not in ("required", "not-applicable"):
+                    raise Refusal(f"{original}: accounting inventory lacks explicit CI applicability")
                 try:
                     assigned = datetime.fromisoformat(assignments[original]["assignedAt"].replace("Z", "+00:00"))
                     cutoff = datetime.fromisoformat(event["cutoffAt"].replace("Z", "+00:00"))
+                    captured = datetime.fromisoformat(event["capturedAt"].replace("Z", "+00:00"))
                 except (KeyError, AttributeError, ValueError) as error:
-                    raise Refusal(f"{original}: accounting inventory cutoff is malformed") from error
-                if assigned.tzinfo is None or cutoff.tzinfo is None or cutoff <= assigned:
-                    raise Refusal(f"{original}: accounting cutoff must follow assignment")
+                    raise Refusal(f"{original}: accounting inventory timestamps are malformed") from error
+                if (assigned.tzinfo is None or cutoff.tzinfo is None or captured.tzinfo is None or
+                        captured > assigned or cutoff <= assigned):
+                    raise Refusal(f"{original}: accounting capture must precede assignment and cutoff must follow it")
                 accounting_by_original[original] = event
             elif kind == "runtime-native-inventory/1":
                 invocation = event.get("invocationId")
@@ -498,6 +516,10 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
             }
             if expected_shared != observed_shared:
                 incomplete[original].add("expected-shared-cost-roster-mismatch")
+            if inventory["ciApplicability"] == "required" and ci_coverage[original] == 0:
+                incomplete[original].add("missing-ci-population-coverage")
+            if inventory["ciApplicability"] == "not-applicable" and ci_coverage[original] != 0:
+                incomplete[original].add("unexpected-ci-population-coverage")
 
         expected_invocations = {lineage_by_dispatch[dispatch][0] for dispatch in dispatch_original if dispatch in lineage_by_dispatch}
         if expected_invocations != set(invocations):
@@ -520,6 +542,18 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
             if (first.get("support") != "provider-native-final-turn-counters" or
                     first.get("sourceKind") != "provider-capability-and-dispatch-roster"):
                 incomplete[original].add("usage-support-unproven:" + invocation)
+            accounting = accounting_by_original.get(original)
+            if accounting is None:
+                incomplete[original].add("native-inventory-cutoff-unavailable:" + invocation)
+                continue
+            try:
+                captured = datetime.fromisoformat(first["capturedAt"].replace("Z", "+00:00"))
+                assigned = datetime.fromisoformat(assignments[original]["assignedAt"].replace("Z", "+00:00"))
+                cutoff = datetime.fromisoformat(accounting["cutoffAt"].replace("Z", "+00:00"))
+            except (KeyError, AttributeError, ValueError) as error:
+                raise Refusal("native inventory capture timestamp is malformed") from error
+            if captured.tzinfo is None or captured < assigned or captured > cutoff:
+                raise Refusal("native inventory capture must fall between assignment and cutoff")
             expected_turns = []
             for page in sorted(pages):
                 turns = pages[page].get("expectedTurnIds")
@@ -572,6 +606,16 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
             if allocated != total:
                 raise Refusal(cost + ": shared allocations do not equal provider total")
 
+        # Schema 10 retains canonical fact bytes but has no fact-to-independent-producer
+        # or retained source-byte binding. Source labels and digests inside those same
+        # caller supplied facts therefore cannot prove whole-item closure or allocation
+        # authority. Preserve the structurally checked data as descriptive evidence.
+        for original in assignments:
+            incomplete[original].update({
+                "independent-inventory-source-unavailable",
+                "independent-shared-cost-authority-unavailable",
+            })
+
     arms = {item: assignment.get("arm") for item, assignment in assignments.items()}
     arm_totals = {arm: [] for arm in ("current", "focused")}
     for item, arm in arms.items():
@@ -598,7 +642,8 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
         "incompleteTokenReasons": {item: sorted(incomplete[item]) for item in incomplete_items},
         "tokenComparisonQualified": not incomplete_items,
         "qualificationPrerequisite": None if not incomplete_items else (
-            "complete verified v3 accounting, native-turn, shared-cost, provider, profile, and support evidence"
+            "complete verified evidence plus retained source bytes and producer identity for independent "
+            "whole-item inventories and shared-cost allocation authority"
         ),
         "claim": "private-snapshot-analysis-no-efficiency-result",
     }
