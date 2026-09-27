@@ -271,6 +271,8 @@ the standing safety advisories carry forward.
     <Compile Include="SkillTelemetryAdapter.fs" />
     <Compile Include="SkillPreflight.fsi" />
     <Compile Include="SkillPreflight.fs" />
+    <Compile Include="SkillCommandApplication.fsi" />
+    <Compile Include="SkillCommandApplication.fs" />
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
