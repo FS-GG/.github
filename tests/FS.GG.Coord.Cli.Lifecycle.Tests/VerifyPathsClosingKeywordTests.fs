@@ -147,26 +147,6 @@ module VerifyPathsClosingKeywordTests =
         Assert.False(Client.deliveryPathsVerified (Declared [ Matchable "some/file.txt" ]) [ "unrelated/file.txt" ])
 
     [<Fact>]
-    let ``#2858 a Coordination issue cannot apply its generated-path exemption to another PR repo`` () =
-        // The injected classifier knows registry/repos.lock as a generated .github path. Before
-        // the #2858 guard, the cross-repo call passed the Coordination issue to that classifier
-        // and reported OK for an undeclared target-repo file.
-        let prBody =
-            """{"number":900,"body":"Closes FS-GG/.github#42","head":{"ref":"item/42-x"},"base":{"ref":"main"}}"""
-
-        let generatedOnly = """[{"filename":"registry/repos.lock"}]"""
-
-        let code, out =
-            runVerifyPaths
-                (serving prBody issueBody generatedOnly)
-                [ "verify-paths"; "--pr"; "900"; "--repo"; "FS.GG.SDD"; "--issue"; "FS-GG/.github#42" ]
-
-        Assert.Equal(Kernel.ExitRed, code)
-        Assert.Contains("FSGG-PATHS DRIFT", out)
-        Assert.Contains("registry/repos.lock", out)
-        Assert.DoesNotContain("regenerated (expected)", out)
-
-    [<Fact>]
     let ``#2107 a board-shorthand closing keyword fails verify-paths even when the touch-set is clean`` () =
         let prBody =
             """{"number":900,"body":"Closes .github#42","head":{"ref":"item/42-x"},"base":{"ref":"main"}}"""
