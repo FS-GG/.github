@@ -288,10 +288,22 @@ def test_native(native):
         oversized_rollout = sessions / "oversize.jsonl"
         oversized_rollout.write_bytes(b'{"type":"token_usage_record"}' + b" " * (1024 * 1024) + b"\n")
         environment["SKILL_FS_01_ROLLOUT"] = str(oversized_rollout)
-        refused = probe("native", FAKE_CODEX, home, PARENT, "child_1", "root-1",
+        skipped = probe("native", FAKE_CODEX, home, PARENT, "child_1", "root-1",
                         "invocation-oversize-rollout", 0, environment=environment)
-        require(not refused["ok"] and "1 MiB" in refused["error"],
-                "oversized rollout byte line was accepted")
+        require(skipped["ok"] and not skipped["complete"] and skipped["rolloutRecords"] == [],
+                "oversized rollout byte line was retained or treated as fatal")
+        unrelated = sessions / "huge-unrelated.jsonl"
+        unrelated.write_bytes(b'{"type":"event_msg","payload":"' + b"x" * (2 * 1024 * 1024) +
+                              b'"}\r\n' + original_rollout)
+        environment["SKILL_FS_01_ROLLOUT"] = str(unrelated)
+        continued = probe("native", FAKE_CODEX, home, PARENT, "child_1", "root-1",
+                          "invocation-huge-unrelated", 0, environment=environment)
+        require(continued["ok"] and continued["complete"] and len(continued["turns"]) == 2,
+                "large unrelated rollout row prevented later usage collection")
+        retained = [base64.b64decode(row["bytesBase64"]) for row in continued["rolloutRecords"]]
+        expected = [row for row in original_rollout.splitlines(keepends=True)
+                    if b'"token_usage_record"' in row]
+        require(retained == expected, "large unrelated row entered retained source evidence")
         environment["SKILL_FS_01_ROLLOUT"] = str(rollout)
 
         environment["SKILL_FS_01_MODE"] = "missing-profile"

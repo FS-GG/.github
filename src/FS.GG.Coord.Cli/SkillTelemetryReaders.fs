@@ -697,17 +697,18 @@ module SkillTelemetryReaders =
         let private maximumEvidenceBytes = 512 * 1024
         let private maximumLineBytes = 1024 * 1024
 
-        /// Keeps the exact wire line, including CRLF or an EOF without a terminator.
+        /// Keeps bounded wire lines exactly; rollout callers may discard oversized rows.
         type private ExactLines(source: Stream) =
             let buffer = Array.zeroCreate<byte> 8192
             let mutable offset = 0
             let mutable count = 0
             let mutable eof = false
 
-            member _.ReadLine(timeoutMilliseconds: int option) =
+            member _.ReadLine(timeoutMilliseconds: int option, discardOversized: bool) =
                 use retained = new MemoryStream()
                 let deadline = Stopwatch.StartNew()
                 let mutable complete = false
+                let mutable discarding = false
 
                 while not complete && not eof do
                     if offset = count then
@@ -734,14 +735,21 @@ module SkillTelemetryReaders =
                         let endOffset = if newline >= 0 then newline + 1 else count
                         let length = endOffset - offset
 
-                        if retained.Length + int64 length > int64 maximumLineBytes then
-                            raise (IOException("native byte line exceeds 1 MiB"))
-
-                        retained.Write(buffer, offset, length)
+                        if not discarding then
+                            if retained.Length + int64 length > int64 maximumLineBytes then
+                                if discardOversized then
+                                    discarding <- true
+                                    retained.SetLength(0L)
+                                else
+                                    raise (IOException("native byte line exceeds 1 MiB"))
+                            else
+                                retained.Write(buffer, offset, length)
                         offset <- endOffset
                         complete <- newline >= 0
 
-                if retained.Length = 0L then None else Some(retained.ToArray())
+                if discarding then Some(Array.empty)
+                elif retained.Length = 0L then None
+                else Some(retained.ToArray())
 
         let private decodedLine (raw: byte array) =
             let mutable length = raw.Length
@@ -846,7 +854,7 @@ module SkillTelemetryReaders =
                 while found.IsNone && errorMessage.IsNone && deadline.ElapsedMilliseconds < 8000L do
                     let remaining = max 1 (8000 - int deadline.ElapsedMilliseconds)
                     let received =
-                        try outputLines.Value.ReadLine(Some remaining)
+                        try outputLines.Value.ReadLine(Some remaining, false)
                         with
                         | :? TimeoutException
                         | :? OperationCanceledException ->
@@ -1184,7 +1192,7 @@ module SkillTelemetryReaders =
                     use sourceStream = source
                     let lines = ExactLines(sourceStream)
                     let mutable failed = None
-                    let mutable next = lines.ReadLine(None)
+                    let mutable next = lines.ReadLine(None, true)
 
                     while next.IsSome && failed.IsNone do
                         let bytes = next.Value
@@ -1278,7 +1286,7 @@ module SkillTelemetryReaders =
                                                     Coverage = Unknown
                                                 }
 
-                        if failed.IsNone then next <- lines.ReadLine(None)
+                        if failed.IsNone then next <- lines.ReadLine(None, true)
 
                     match failed with
                     | Some error -> Error error
