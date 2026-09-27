@@ -187,7 +187,10 @@ module SkillPreflight =
                             refuse "Costs exceed supported numeric range"
                         let breakEven =
                             if margin > 0.0 then
-                                Some(Math.Ceiling(fixedCost / margin).ToString("F0", CultureInfo.InvariantCulture))
+                                let runs = fixedCost / margin
+                                if not (Double.IsFinite runs) then
+                                    refuse "Costs exceed supported numeric range"
+                                Some(Math.Ceiling(runs).ToString("F0", CultureInfo.InvariantCulture))
                             else None
                         net, margin, breakEven
 

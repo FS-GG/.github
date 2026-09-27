@@ -62,6 +62,9 @@ match assess (bytes insufficient) with
 | other -> fail $"insufficient estimate: {other}"
 
 expectRefusal "nonfinite estimate" "finite nonnegative" (assess (bytes (positiveEstimate.Replace("\"setup_cost\": 20", "\"setup_cost\": 1e999"))))
+let overflowingBreakEven =
+    """{"horizon_runs":100,"setup_cost":1e308,"maintenance_cost":0,"defect_probability_low":1,"defect_probability_high":1,"detection_probability":1e-308,"avoidable_runner_minutes":1,"runner_cost_per_minute":1,"preflight_runner_minutes":0,"false_block_probability":0,"triage_cost":0,"assumptions":"Synthetic division overflow."}"""
+expectRefusal "break-even division overflow" "Costs exceed supported numeric range" (assess (bytes overflowingBreakEven))
 expectRefusal "duplicate estimate field" "Duplicate JSON key" (assess (bytes "{\"horizon_runs\":1,\"horizon_runs\":2}"))
 expectRefusal "negative estimate" "finite nonnegative" (assess (bytes (positiveEstimate.Replace("\"setup_cost\": 20", "\"setup_cost\": -1"))))
 expectRefusal "fractional horizon" "horizon_runs must be an integer" (assess (bytes (positiveEstimate.Replace("\"horizon_runs\": 100", "\"horizon_runs\": 1.5"))))
