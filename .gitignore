@@ -48,3 +48,4 @@ obj/
 # files remain tracked until their recoverable M6 migration; this prevents new copies.
 **/test-results/
 TestResults/
+**/*.trx

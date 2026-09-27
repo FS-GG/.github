@@ -217,7 +217,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005]
     obligationRefs: [EV010]
-    artifacts: [work/2858-verifypaths-cross-repo-subject/artifacts/coord-engine-parity.log, work/2858-verifypaths-cross-repo-subject/artifacts/verify-paths-focused.trx]
+    artifacts: [work/2858-verifypaths-cross-repo-subject/artifacts/coord-engine-parity.log, work/2858-verifypaths-cross-repo-subject/artifacts/verify-paths-focused.test-report.txt]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Cli.Lifecycle.Tests/VerifyPathsClosingKeywordTests.fs
@@ -226,14 +226,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2858-verifypaths-cross-repo-subject/artifacts/verify-paths-focused.trx
-      digest: "sha256:cac2a0caa07bba15c4a3b27851c4ea56b6000909c62b63488bb9a9d93ab7ca9f"
+      source: work/2858-verifypaths-cross-repo-subject/artifacts/verify-paths-focused.test-report.txt
+      digest: "sha256:9fba2d51232c8f5b3144a943b2957f975e1a80e153268e61d702a212d486b55b"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 5
       failed: 0
       skipped: 0
-    notes: ["Focused command-boundary tests 5/5 and compiled-engine parity 626/626 passed locally; no hosted or protected review verdict is implied."]
+    notes: ["Fresh focused console run passed 5/5 command-boundary tests and the retained compiled-engine parity report records 626/626; no hosted or protected review verdict is implied."]
   - id: EV011
     kind: missing
     subject:
