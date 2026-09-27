@@ -10,7 +10,7 @@ description: "A researched successor plan from the current v2 frontier: process 
 Short name: **Unified Roadmap**. In FS-GG development discussions, **“the roadmap”**, **“current roadmap”**
 and **“compacted roadmap”** refer to this document unless another roadmap is explicitly named.
 
-Authored: **2026-09-07 15:42:10 UTC**. Evidence reconciliation: **2026-09-24**; product source closure readback: **2026-09-27**.
+Authored: **2026-09-07 15:42:10 UTC**. Section 0 evidence reconciliation: **2026-09-27**.
 Status: **active programme; V2 migration implementation and rehearsal remain the critical path**.
 
 **Start from completed development simplification and the existing v2 implementation. Finish and qualify
@@ -49,12 +49,12 @@ reviewed public aggregate releases on GitHub.
 ## 0. Current progress report
 
 **Current frontier: callable v2 is qualified for its isolated scope; GS2-09.1–.6 migration contracts are
-accepted; new GS2-09.7 and GS2-09.9 source is merged, while their protected qualification and GS2-09.8
+accepted; GS2-09.7 and GS2-09.9 source slices are merged, while their protected qualification and GS2-09.8
 omission proof remain open.** Fleet production `OpenV2`, Q4 and `OperatingV2` are not established by those results.
 The protected OperatingV1 admission *genesis* is now installed and independently read back; post-genesis
 admission CAS, copy-specific effect authority and ordinary CLI enablement remain separate open gates.
 
-The GS2 source frontier was updated from protected merges on **2026-09-27**. The broader
+The source and publication frontier was updated from protected evidence on **2026-09-27**. The broader
 [code audit](reports/2026-09-24-v2-roadmap-code-audit.md) records its 2026-09-24 revisions, implementation boundaries,
 limitations and corrections. The [dependency graph and parallel lanes](#91-dependencies-and-parallelism)
 identify executable work; the [feature index](#98-feature-parts-and-subroadmap-index) links its owners.
@@ -78,10 +78,10 @@ retain detailed milestone history in the owning plan. CI ticks and intermediate 
 
 | Stage | Verified position | Remaining exit and owner |
 |---|---|---|
-| **V0 — Simplified baseline and v2 binding** | Routine is the adopted source-delivery default. Governance routing/reuse primitives and telemetry sources exist; their presence does not prove the complete installed routine-v2 profile or efficiency. | `.github`, Coordination, Governance and receivers bind the effective routine obligations and R5 receiving population before candidate freeze. R2/R4/R5 measurement gaps remain separately attributed. |
+| **V0 — Simplified baseline and v2 binding** | Routine is the adopted source-delivery default. [`.github` #3695](https://github.com/FS-GG/.github/pull/3695) merged the ambiguous routine merge-effect guard at protected main `057e5801`. Governance routing/reuse primitives and telemetry sources exist; their presence does not prove the complete installed routine-v2 profile or efficiency. | `.github`, Coordination, Governance and receivers bind the effective routine obligations and R5 receiving population before candidate freeze. R2/R4/R5 measurement gaps remain separately attributed. |
 | **V1 — Events, queue and incumbent fence** | GS2-07.1–.8 and GS2-08.1–.9 retain accepted native evidence. The exact 0.90.0 bridge and residual-writer retirement are reusable inputs. | Preserve the accepted fence and census through new source and receiver changes. Do not reopen completed units or infer Q4. |
 | **I1 — Unattended CI credential interlude** | Milestones 01–06 are complete: source policy and Coordination 0.1.2 were delivered, the two-job path passed isolated hosted refusal, recovery and readback, and its exact receiver profile was selected for GS2-10. [Installed qualification](operations/v2-ci-i1-installed-qualification.md) records the evidence and bounded timing. | Production credential execution remains inactive at `OperatingV1`; GS2-10 candidate qualification and a separate protected `OpenV2` decision precede activation. The measured cohort does not establish a production bureaucracy percentage. |
-| **V2 — Callable path and migration rehearsal** | V2-CALL-01.1–.5 complete at their bounded callable boundary. Package 0.1.1, native isolated effect/recovery, cleanup and discovery handoff are evidenced. GS2-09.1–.6 accept pure migration contracts. [GS2-09.7 migration source](https://github.com/FS-GG/FS.GG.Coordination/pull/847), [host source](https://github.com/FS-GG/.github/pull/3879), [direct-session source](https://github.com/FS-GG/FS.GG.Coordination/pull/848), and [GS2-09.9 source](https://github.com/FS-GG/FS.GG.Coordination/pull/846) are merged. Protected OperatingV1 admission genesis is installed with exact typed readback. | GS2-09.9 still needs versioned operator/contract/gate rotation and protected Q3/Q6 acceptance. Coordination then qualifies provider capture, migration execution and isolated representative rehearsal (.7), followed by independent omission/idempotency proof and parent closure (.8). Post-genesis append and copy-specific effect authority remain separate joins. |
+| **V2 — Callable path and migration rehearsal** | V2-CALL-01.1–.5 complete at their bounded callable boundary. Package 0.1.1, native isolated effect/recovery, cleanup and discovery handoff are evidenced. GS2-09.1–.6 accept pure migration contracts. [GS2-09.7 migration source](https://github.com/FS-GG/FS.GG.Coordination/pull/847), [claim/event parser source](https://github.com/FS-GG/FS.GG.Coordination/pull/852), [host source](https://github.com/FS-GG/.github/pull/3879), [direct-session source](https://github.com/FS-GG/FS.GG.Coordination/pull/848), and [GS2-09.9 source](https://github.com/FS-GG/FS.GG.Coordination/pull/846) are merged. Protected OperatingV1 admission genesis is installed with exact typed readback. | GS2-09.9 still needs versioned operator/contract/gate rotation and protected Q3/Q6 acceptance. Coordination then qualifies complete provider capture, migration execution and isolated representative rehearsal (.7), followed by independent omission/idempotency proof and parent closure (.8). Merged parsers lack delivery/intake/done producers and canonical claim/event authority. Post-genesis append and copy-specific effect authority remain separate joins. |
 | **V3 — Exact candidate and receivers** | Not accepted. Existing publication, provider, tool and receiver evidence can support preparation. | GS2-10 freezes exact inputs, qualifies the complete candidate and clean/retained receivers, rehearses the cutover, and closes concurrent changes. |
 | **V4 — Closed switch** | Not entered by this audit. | GS2-11–12: authorized freeze/drain, exact switch, verification, and executable rollback while still closed. |
 | **V5 — Open and ordinary use** | No fleet production `OpenV2` acceptance identified. The synthetic callable target is not the fleet. | GS2-13 owns irreversible open, permanent v1 fence, real ordinary journeys and `ObservingV2`. |
@@ -91,9 +91,9 @@ retain detailed milestone history in the owning plan. CI ticks and intermediate 
 
 #### Product source milestone projection
 
-SC2C-01.1 and SC2C-01.2 are source delivered in the private [SC2 Client PR #2](https://github.com/FS-GG/FS.GG.SC2.Client/pull/2) and [PR #3](https://github.com/FS-GG/FS.GG.SC2.Client/pull/3), merged at `c90c07fc32c9c17374ecfef9d1df1b019e973f2a` and `d17e6b4943d112b127ce8fb8d0f95ff53450e0cb`. SC2C-01.3a's live contracts and serialized native session owner are source delivered in private [PR #4](https://github.com/FS-GG/FS.GG.SC2.Client/pull/4), merged at `dad6d257af488f6668f8f2dd076b2dde5899ce03`; its exact-main [`verify`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36314544918) passed. SC2C-01.3b's injected-owner paired gateway core is source delivered in private [PR #5](https://github.com/FS-GG/FS.GG.SC2.Client/pull/5) at exact head `118f2ab1ce1234877a49cac4aa4133bbecbaf3a1`, merged at `819e1bb535324fcd3fb5c352ad625267d06af932`; its exact-main [`verify`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36316009310) passed. This remains scripted source preparation: executable launcher and gateway lifecycle composition plus the browser/guest journey (.3c), real StarCraft II/data/map qualification (.3d), the parent SC2C-01.3 outcome and installed operation remain open.
+SC2C-01.1 and SC2C-01.2 are source delivered in the private [SC2 Client PR #2](https://github.com/FS-GG/FS.GG.SC2.Client/pull/2) and [PR #3](https://github.com/FS-GG/FS.GG.SC2.Client/pull/3), merged at `c90c07fc32c9c17374ecfef9d1df1b019e973f2a` and `d17e6b4943d112b127ce8fb8d0f95ff53450e0cb`. SC2C-01.3a's live contracts and serialized native session owner are source delivered in private [PR #4](https://github.com/FS-GG/FS.GG.SC2.Client/pull/4), merged at `dad6d257af488f6668f8f2dd076b2dde5899ce03`; its exact-main [`verify`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36314544918) passed. SC2C-01.3b's injected-owner paired gateway core is source delivered in private [PR #5](https://github.com/FS-GG/FS.GG.SC2.Client/pull/5), merged at `819e1bb535324fcd3fb5c352ad625267d06af932`; its exact-main [`verify`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36316009310) passed. SC2C-01.3c's executable gateway and browser journey are source delivered in [PR #6](https://github.com/FS-GG/FS.GG.SC2.Client/pull/6), merged at `7a3f6eaec37fa4da071cb1251ebc2525c79b9e60`; its exact-main [`verify`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36324212682) passed. Real StarCraft II/data/map qualification (.3d), the parent SC2C-01.3 outcome and installed operation remain open.
 
-FOURD-01.1 and FOURD-01.2 are source delivered in the private [FourD PR #1](https://github.com/FS-GG/FS.GG.FourD/pull/1) and [PR #2](https://github.com/FS-GG/FS.GG.FourD/pull/2), merged at `5661d85ce62264b84a56a4fb32716cd1350408ff` and `8096fd19431a74fff7366217142908c4bf226496`. FOURD-01.3's deterministic tactical encounter was delivered in private [PR #3](https://github.com/FS-GG/FS.GG.FourD/pull/3), followed by the browser-readiness repair in [PR #4](https://github.com/FS-GG/FS.GG.FourD/pull/4). The resulting `main` revision is `6e8cd359d781517470949ed25281df412b59c33e`, and its exact-main [`verify`](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36314732410) passed. This establishes the product source encounter; FOURD-01.4–.6, publication and installed adoption remain open.
+FOURD-01.1 and FOURD-01.2 are source delivered in the private [FourD PR #1](https://github.com/FS-GG/FS.GG.FourD/pull/1) and [PR #2](https://github.com/FS-GG/FS.GG.FourD/pull/2), merged at `5661d85ce62264b84a56a4fb32716cd1350408ff` and `8096fd19431a74fff7366217142908c4bf226496`. FOURD-01.3's deterministic tactical encounter was delivered in private [PR #3](https://github.com/FS-GG/FS.GG.FourD/pull/3), followed by the browser-readiness repair in [PR #4](https://github.com/FS-GG/FS.GG.FourD/pull/4). FOURD-01.4's browser teaching and local evaluation source merged in [PR #5](https://github.com/FS-GG/FS.GG.FourD/pull/5) at `f3b16d748b67ee665c8ca521ebf93aa9da607d45`; its exact-main [`verify`](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36320371608) passed. Consenting-player evaluation (.4-E), FOURD-01.5–.6, publication and installed adoption remain open.
 
 #### SVG milestone projection
 
@@ -120,6 +120,13 @@ The former “0.91.0 publication blocked” status is superseded: the
 records publication/readback and later successor work. Read its current promoted artifact and the operator's
 installed receipt separately. A public package or dashboard source commit does not identify a running Host.
 
+The coherent [Kit, Drivers and Coord.Cli 0.91.5 release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.91.5)
+is public from exact source `941a82c0e06c9afe9db4c88fc29997d7627a5895`; the [protected publisher run](https://github.com/FS-GG/.github/actions/runs/36330319790)
+verified GitHub Packages and nuget.org readback. Publication does not establish a specific receiver's
+installed version. [Cross-repository `verify-paths` #3894](https://github.com/FS-GG/.github/pull/3894)
+merged on protected main at `b583fa65`; [SKILL-FS-01 #3893](https://github.com/FS-GG/.github/pull/3893)
+remains an open source PR. The F# caller switch, Python retirement and updated CLI adoption remain separate work.
+
 Prospective telemetry can join native usage only where the configured runtime exposes a verifiable record.
 Missing parent/child population, terminal usage, CI attribution or Host acknowledgment remains an explicit
 gap. Private stores and credentials remain private; public projection keeps its closed allowlist.
@@ -135,7 +142,9 @@ This audit neither requalified a live Host nor measured an efficiency cohort.
 | [GS2-09.1–.6 receipts](https://github.com/FS-GG/FS.GG.Coordination/tree/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/accepted) | Discovery, manifest, transforms, live-operation dispositions, sealed history and rollback **contracts**. | Fresh nine-authority provider capture, effect execution and actual representative rollback. |
 | [Replay/omission source controls, PR #507](https://github.com/FS-GG/FS.GG.Coordination/pull/507) | Exact manifest replay, added-subject refusal and every rollback receipt prefix under controlled tests. | Live interruption/retry, complete copy population and independent .7/.8 acceptance. |
 | [GS2-09.7 source PR #847](https://github.com/FS-GG/FS.GG.Coordination/pull/847) and [host PR #3879](https://github.com/FS-GG/.github/pull/3879) | Migration and host source are delivered on protected main, preserving the earlier implementation stack. | The registered isolated cohort, full nine-authority capture, Q5/Q6, interruption/rollback, cleanup and independent protected acceptance are still open. |
+| [GS2-09.7 claim/event parser PR #852](https://github.com/FS-GG/FS.GG.Coordination/pull/852) | Protected merge `fed499d500299cf7a4daa00cf63da48ea4e7809b` adds audited intake, historical claim and legacy receipt parsers as source only. | `RosterComplete=false`: delivery, protected intake and legacy done producers, exhaustive reserved-prefix registry, canonical authority, provider outcome and Q5/Q6 acceptance remain open. |
 | [GS2-09.9 source PRs #845](https://github.com/FS-GG/FS.GG.Coordination/pull/845) and [#846](https://github.com/FS-GG/FS.GG.Coordination/pull/846) | The closed v2/v5 effect source and readback controls are delivered; proposed workflows remain disabled and grant no protected effect. | The [#545 qualification hold](https://github.com/FS-GG/FS.GG.Coordination/pull/545) still requires versioned operator, contract/proposal, validator and typed-index rotation, fresh registered Q3/Q6, and protected acceptance. Merged negative source tests alone do not clear it. |
+| [GS2-09.9 `/5` candidate PR #851](https://github.com/FS-GG/FS.GG.Coordination/pull/851) | Protected merge `92a77486ed0f753f3d3a20f3be8056c3823b58f5` delivers the internal runtime, protected adapter and read-only candidate workflow as source only. | No hosted candidate, installed authority, protected journal CAS or native `/5` acceptance is established. |
 
 ### 0.4 Active work and immediate critical path
 
@@ -147,8 +156,9 @@ This audit neither requalified a live Host nor measured an efficiency cohort.
    owes the scoped append/CAS path, incumbent inventory, identity and one-shot issuer controls, provider
    reconciliation and copy-specific effect authority; ordinary CLI writes remain fenced. Read-only
    research, controlled source tests, receiver inventory and omission controls can proceed independently.
-3. **Qualify GS2-09.7 on the registered cohort.** Use the merged migration and host source, complete
-   copy-specific discovery, manifest, journal, effects, archive and rollback, then execute all interruption
+3. **Qualify GS2-09.7 on the registered cohort.** Use the merged migration, parser and host source; complete
+   the missing claim/event producers and copy-specific discovery, manifest, journal, effects, archive and
+   rollback, then execute all interruption
    cuts, cleanup and a second round under the protected Q5/Q6 controls.
 4. **Prove no omission and close GS2-09.** Establish independent .8 idempotency/no-omission evidence and
    parent closure from the representative .7 result.
