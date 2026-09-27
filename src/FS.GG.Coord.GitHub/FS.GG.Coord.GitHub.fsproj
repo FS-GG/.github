@@ -51,6 +51,8 @@
     <Compile Include="Generated/Coordination/V1AdmissionRegistry.fs" />
     <Compile Include="V1Admission.fsi" />
     <Compile Include="V1Admission.fs" />
+    <Compile Include="ProtectedIntakeJournal.fsi" />
+    <Compile Include="ProtectedIntakeJournal.fs" />
     <Compile Include="GraphQlEnvelope.fsi" />
     <Compile Include="GraphQlEnvelope.fs" />
     <Compile Include="Budget.fsi" />
