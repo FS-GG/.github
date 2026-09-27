@@ -51,13 +51,22 @@ def main() -> int:
             lowered = blob.lower()
             # The size cap is for checked-in evidence, not implementation source whose module name
             # happens to contain "Telemetry". Raw markers and unsafe suffixes still apply everywhere.
-            implementation_source = normalized.startswith(("/src/", "/tests/")) or normalized == "/tools/telemetry-dashboard.py"
+            implementation_source = normalized.startswith((
+                "/src/", "/tests/", "/.agents/skills/", "/.claude/skills/",
+            )) or normalized == "/tools/telemetry-dashboard.py"
             roadmap_prose = normalized.startswith("/docs/roadmaps/") and normalized.endswith(".md")
             telemetry_evidence = not implementation_source and any(
                 word in normalized for word in ("telemetry", "usage", "receipt"))
             if telemetry_evidence and not roadmap_prose and len(blob) > MAX_PUBLIC_EVIDENCE:
                 raise ValueError("telemetry-evidence-too-large")
-            if any(marker in lowered for marker in RAW_MARKERS):
+            # F# test sources contain synthetic ingest JSON literals. Keep the
+            # raw marker gate for every other marker and every non-test blob.
+            synthetic_ingest_source = normalized.startswith("/tests/") and normalized.endswith(".fs")
+            if any(
+                marker in lowered
+                for marker in RAW_MARKERS
+                if not (synthetic_ingest_source and b"fsgg.telemetry.ingest/1" in marker)
+            ):
                 raise ValueError("raw-telemetry-content")
     except (RuntimeError, ValueError) as error:
         print(f"telemetry-git-safety: refused ({error})")
