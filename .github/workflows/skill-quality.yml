@@ -40,6 +40,7 @@ on:
       - "tests/FS.GG.Coord.Cli.Kernel.Tests/**"
       - "tests/FS.GG.Coord.Cli.BoardOps.Tests/**"
       - "tests/skill-quality/**"
+      - "tests/skill-fsharp/**"
       - "tests/pipeline-preflight/**"
       - ".github/workflows/coord-engine.yml"
       - ".github/workflows/callable-isolated-operation-authorize.yml"
@@ -93,6 +94,7 @@ on:
       - "tests/FS.GG.Coord.Cli.Kernel.Tests/**"
       - "tests/FS.GG.Coord.Cli.BoardOps.Tests/**"
       - "tests/skill-quality/**"
+      - "tests/skill-fsharp/**"
       - "tests/pipeline-preflight/**"
       - ".github/workflows/coord-engine.yml"
       - ".github/workflows/callable-isolated-operation-authorize.yml"
@@ -116,6 +118,8 @@ jobs:
   semantic-skill-quality:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -130,5 +134,13 @@ jobs:
         run: python3 -m pip install -r requirements-test.txt
       - name: Check pipeline preflight helpers and actual dependency binding
         run: python3 tests/pipeline-preflight/run.py
+      - name: Check compiled skill conversion contracts and process behavior
+        run: |
+          set -euo pipefail
+          python3 tests/skill-fsharp/contracts/run.py
+          python3 tests/skill-fsharp/readers/run.py
+          bash tests/skill-fsharp/adapter/run.sh
+          bash tests/skill-fsharp/preflight/run.sh
+          python3 tests/skill-fsharp/cli/run.py
       - name: Validate semantic skill quality and its rejection paths
         run: bash tests/skill-quality/run.sh

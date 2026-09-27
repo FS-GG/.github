@@ -47,7 +47,7 @@ publish-before-flip principles without restoring removed routine phase or receip
 
 ## First executable window
 
-- [ ] **SKILL-FS-01.1 — Freeze contracts and migration seams — routine.** Depends on: none.
+- [x] **SKILL-FS-01.1 — Freeze contracts and migration seams — routine.** Depends on: none.
   Scope: fixture corpus, command inventory and caller/receiver map in `.github`. Record all current commands,
   flags, defaults, exit codes, stdout/stderr shapes and contracted bytes, including `population-only`,
   `ci-assignment`, `review`, `activity`, `usage-attribution` and `complication`. Inventory skill references,
@@ -57,14 +57,14 @@ publish-before-flip principles without restoring removed routine phase or receip
   Acceptance: every existing positive fixture and refusal mutation maps to a command or caller; no live
   private submissions are needed for the differential corpus. Unknown installed pins remain unknown.
 
-- [ ] **SKILL-FS-01.2 — Typed configuration and native usage readers — routine.** Depends on: .1.
+- [x] **SKILL-FS-01.2 — Typed configuration and native usage readers — routine.** Depends on: .1.
   Scope: new typed reader modules and dedicated fixtures, behind the existing tool package.
   Acceptance: differential tests preserve repository/credential validation, configuration precedence,
   bounded parsing and timeouts, read-only GitHub lookups, lineage, deduplication and explicit unsupported or
   unavailable coverage. Fixtures exclude private conversation content. Missing usage never becomes zero or
   measured usage. The Python entry points remain the production oracle during source qualification.
 
-- [ ] **SKILL-FS-01.3 — Packaged telemetry adapter and caller interface — routine.** Depends on: .1;
+- [x] **SKILL-FS-01.3 — Packaged telemetry adapter and caller interface — routine.** Depends on: .1;
   final composition consumes .2. Scope: new adapter modules and tests; integrator owns CLI registration.
   Acceptance: full frozen command corpus passes with contracted success bytes and equivalent refusal/exit
   behavior. Preserve durable dispatch tokens, identity/digest construction, sequence counters, pending
@@ -74,7 +74,7 @@ publish-before-flip principles without restoring removed routine phase or receip
   cannot resend with a new identity or discard a pending batch. Define rollback or refuse incompatible
   state before writes. No new activation or submission authority is inferred from a successful conversion.
 
-- [ ] **SKILL-FS-01.4 — Packaged preflight commands — routine.** Depends on: .1; independent of .2/.3.
+- [x] **SKILL-FS-01.4 — Packaged preflight commands — routine.** Depends on: .1; independent of .2/.3.
   Scope: new preflight modules and dedicated fixtures; integrator owns CLI/package registration.
   Acceptance: preserve advisory estimate outcomes, unknown inputs, finite-number checks and explicit rates.
   `graph` checks actual YAML literal `needs` ordering against independent requirements. Preserve the 2 MiB
@@ -87,6 +87,11 @@ publish-before-flip principles without restoring removed routine phase or receip
 The first ready assignment is .1. After its interface freeze, .2 and .4 can run concurrently; .3 can build
 against the frozen interface while .2 proceeds, but its acceptance waits for .2. A mismatch in current source,
 state schema or receiver support revises the affected contract before the dependent work continues.
+
+The .1–.4 source candidate passes the frozen reader differential, adapter, CLI process and preflight suites,
+including retained-state, executable lookup, strict identity, dashboard and durable-write controls. The
+production CLI builds with zero warnings. These checkboxes record the source window at merge; coherent
+publication, receiver adoption and Python retirement remain .5–.6 work.
 
 ## Parallel ownership and qualification
 

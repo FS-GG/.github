@@ -1,0 +1,55 @@
+{
+  "review": {
+    "schema": "fsgg.telemetry.process-review-input/1",
+    "revision": 0,
+    "outcomeSynopsis": "Synthetic completed fixture.",
+    "wentWell": ["Replay preserved bytes."],
+    "problems": [],
+    "avoidableDelayOrRework": [],
+    "processObservations": ["No private host was contacted."],
+    "remainingRisks": ["Installed receiver pin remains unknown."],
+    "concreteImprovements": ["Run the frozen corpus in each implementation lane."],
+    "evidence": ["tests/skill-fsharp/contracts/run.py"],
+    "evidenceCoverage": "fixture-only",
+    "populationCoverage": "unknown",
+    "confidence": "high",
+    "reviewerModel": "fixture-model",
+    "reviewerEffort": "fixture-effort",
+    "reviewedAt": "2026-09-27T00:00:00Z",
+    "durationSeconds": 1
+  },
+  "activity": {
+    "schema": "fsgg.telemetry.activity-span-input/1",
+    "revision": 0,
+    "activityId": "fixture-activity",
+    "category": "validation",
+    "startedAt": "2026-09-27T00:00:00Z",
+    "endedAt": "2026-09-27T00:00:01Z",
+    "clockProvenance": "fixture-clock",
+    "evidence": ["tests/skill-fsharp/contracts/run.py"],
+    "summary": "Synthetic contract validation."
+  },
+  "usage-attribution": {
+    "schema": "fsgg.telemetry.activity-usage-attribution-input/1",
+    "revision": 0,
+    "usageIdentity": "fixture-usage",
+    "activityId": "fixture-activity",
+    "classification": "unknown",
+    "input": 0,
+    "cachedInput": 0,
+    "output": 0,
+    "reasoning": 0,
+    "total": 0
+  },
+  "complication": {
+    "schema": "fsgg.telemetry.complication-input/1",
+    "revision": 0,
+    "complicationId": "fixture-complication",
+    "activityId": "fixture-activity",
+    "trigger": "parser-unavailable",
+    "cause": "PyYAML is absent from the current environment.",
+    "occurredAt": "2026-09-27T00:00:01Z",
+    "synopsis": "Parser-backed graph qualification remains a coverage gap.",
+    "evidence": ["tests/pipeline-preflight/run.py"]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "horizon_runs": 100,
+  "setup_cost": 20,
+  "maintenance_cost": 0,
+  "defect_probability_low": 0.5,
+  "defect_probability_high": 0.75,
+  "detection_probability": 1,
+  "avoidable_runner_minutes": 4,
+  "runner_cost_per_minute": 1,
+  "preflight_runner_minutes": 1,
+  "false_block_probability": 0,
+  "triage_cost": 0,
+  "assumptions": "Synthetic public fixture with explicit rates."
+}

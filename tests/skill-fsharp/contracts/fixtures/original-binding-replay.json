@@ -1,0 +1,14 @@
+{
+  "schema": "fsgg.telemetry.original-binding-state/1",
+  "token": "TOKEN_DERIVED_BY_TEST",
+  "featureId": "SKILL-FS-01",
+  "itemId": "SKILL-FS-01.2",
+  "originalItemId": "SKILL-FS-01",
+  "producerStream": "roadmap-orchestrator",
+  "associationProducer": "fixture-association",
+  "associationDigest": "fixture-binding-digest",
+  "originalAssignmentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "phase": "pending",
+  "sequence": 1,
+  "invocationId": "TOKEN_DERIVED_BY_TEST"
+}

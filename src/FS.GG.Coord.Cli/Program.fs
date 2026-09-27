@@ -721,21 +721,26 @@ let main argv =
                         (Handlers.roadmapUnitAccept QualificationApplication.runBoundToTree)
                         { opts with Args = "seal" :: args }
             | _ ->
-                match TelemetryApplication.tryRun arguments with
+                match SkillCommandApplication.tryRun arguments with
                 | Some exitCode ->
-                    invoked <- "telemetry"
+                    invoked <- "skill"
                     exitCode
                 | None ->
-                    match Options.parse arguments with
-                    | Error message ->
-                        eprint $"fsgg-coord-engine: %s{message}"
-                        eprint ""
-                        eprint Options.usage
-                        ExitError
+                    match TelemetryApplication.tryRun arguments with
+                    | Some exitCode ->
+                        invoked <- "telemetry"
+                        exitCode
+                    | None ->
+                        match Options.parse arguments with
+                        | Error message ->
+                            eprint $"fsgg-coord-engine: %s{message}"
+                            eprint ""
+                            eprint Options.usage
+                            ExitError
 
-                    | Ok opts ->
-                        invoked <- Options.commandName opts.Command
-                        commandHandlers[opts.Command] opts
+                        | Ok opts ->
+                            invoked <- Options.commandName opts.Command
+                            commandHandlers[opts.Command] opts
 
         with e ->
             // A DEFECT IS ITS OWN EXIT CODE, and it is not `1`. The client must be able to tell "the engine

@@ -1,0 +1,35 @@
+{
+  "schema": "fsgg.telemetry.roadmap-dispatch-state/1",
+  "token": "11111111111111111111111111111111",
+  "phase": "begin-pending",
+  "sequence": 1,
+  "featureId": "SKILL-FS-01",
+  "itemId": "SKILL-FS-01.1",
+  "originalItemId": "SKILL-FS-01.1",
+  "attemptId": "fixture-attempt",
+  "producerStream": "fixture-producer",
+  "invocationId": "22222222222222222222222222222222",
+  "associationProducer": null,
+  "associationDigest": null,
+  "pendingPublication": {
+    "operation": "begin",
+    "nextPhase": "expected",
+    "batch": {
+      "schema": "synthetic-ingest-schema",
+      "ingestId": "22222222222222222222222222222222-000001",
+      "sourceIdentity": "fixture-producer",
+      "generation": "22222222222222222222222222222222",
+      "cursor": "1",
+      "eventCount": 1,
+      "events": [
+        {
+          "kind": "expected-dispatch",
+          "identity": "expected-dispatch-33333333333333333333333333333333",
+          "itemId": "SKILL-FS-01.1",
+          "revision": 0,
+          "dispatchId": "33333333333333333333333333333333"
+        }
+      ]
+    }
+  }
+}
