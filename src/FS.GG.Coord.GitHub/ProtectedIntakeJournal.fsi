@@ -41,6 +41,7 @@ module ProtectedIntakeJournal =
 
     type AppendResult =
         | Appended of Snapshot
+        | ObservedWithoutGrant of Snapshot
         | Conflict of Snapshot option
         | DefiniteRefusal of string
         | Indeterminate of string
@@ -51,7 +52,7 @@ module ProtectedIntakeJournal =
     val restore: Read -> Result<Snapshot, string>
     /// Plans one legal event against a fresh, stable snapshot; no journal creation is implied.
     val planAppend: operationId: string -> Read -> IntakeTransaction.Event -> Result<Proposal, string>
-    /// Rereads after CAS. A response with no exact committed proposal remains indeterminate.
+    /// Only a confirmed CAS win with exact readback grants this append attempt.
     val append: Port -> operationId: string -> IntakeTransaction.Event -> Result<AppendResult, string>
 
     type StrongAbsence =
@@ -65,4 +66,4 @@ module ProtectedIntakeJournal =
     /// The provider port must perform a fresh authoritative read. Evidence must name the exact retained
     /// original request. Unknown or missing evidence never authorizes another native create.
     val originalRequestAfterStrongAbsence:
-        Snapshot -> ProviderReconciliation -> Result<byte[], string>
+        Snapshot -> IntakeTransaction.Identity -> ProviderReconciliation -> Result<byte[], string>

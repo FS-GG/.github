@@ -37,6 +37,7 @@ module ProtectedIntakeJournal =
           Head: JournalSnapshot }
     type AppendResult =
         | Appended of Snapshot
+        | ObservedWithoutGrant of Snapshot
         | Conflict of Snapshot option
         | DefiniteRefusal of string
         | Indeterminate of string
@@ -92,21 +93,26 @@ module ProtectedIntakeJournal =
             stream.Write(raw, 0, raw.Length)
         stream.ToArray()
 
+    let private genesisBytes =
+        ShardedJournalAdapter.canonicalJson "{\"intakeGenesis\":\"fsgg.coord.intake-transaction/v1\"}"
+        |> Result.defaultWith invalidOp
+
     let private rawObjectsValid (read: Read) (commit: JournalCommit) =
         match Map.tryFind commit.CommitOid read.CommitBytes, Map.tryFind commit.TreeOid read.TreeBytes with
         | Some commitBytes, Some tree ->
-            let lines = Encoding.UTF8.GetString(commitBytes).Split('\n')
-            let parentLine = commit.ParentOid |> Option.map (fun parent -> "parent " + parent)
-            let headerValid =
-                lines.Length >= 4
-                && lines[0] = "tree " + commit.TreeOid
-                && (match parentLine with
-                    | Some expected -> lines[1] = expected
-                    | None -> lines[1].StartsWith("author ", StringComparison.Ordinal))
+            let expected =
+                String.concat "\n"
+                    [ "tree " + commit.TreeOid
+                      yield! commit.ParentOid |> Option.map (fun parent -> "parent " + parent) |> Option.toList
+                      "author FS.GG Coordination <coordination@fs.gg> 0 +0000"
+                      "committer FS.GG Coordination <coordination@fs.gg> 0 +0000"
+                      ""
+                      "fsgg intake " + commit.OperationId
+                      "" ]
             gitOid "commit" commitBytes = commit.CommitOid
             && gitOid "tree" tree = commit.TreeOid
             && tree = treeBytes (gitOid "blob" commit.Event.Bytes) (gitOid "blob" commit.HeadBytes)
-            && headerValid
+            && commitBytes = Encoding.UTF8.GetBytes expected
         | _ -> false
 
     let restore (read: Read) =
@@ -136,11 +142,18 @@ module ProtectedIntakeJournal =
                                 unwrapEvent commit.Event.Bytes
                                 |> Result.bind (IntakeTransaction.apply state)
                                 |> Result.map Some)
-                        head.Commits
-                        |> List.fold folder (Ok None)
-                        |> Result.bind (function
-                            | Some state -> Ok { State = state; Head = head }
-                            | None -> Error "intake-journal-empty")))
+                        match head.Commits with
+                        | genesis :: rest when
+                            genesis.Event.Bytes = genesisBytes
+                            && genesis.Head.Generation = 1L
+                            && genesis.OperationId = "preinstalled-empty-genesis"
+                            && not genesis.Head.Terminal ->
+                            rest
+                            |> List.fold folder (Ok None)
+                            |> Result.map (fun state ->
+                                { State = state |> Option.defaultValue { Entries = Map.empty }
+                                  Head = head })
+                        | _ -> Error "intake-journal-genesis-invalid"))
 
     let private commitBytes treeOid parentOid operationId =
         Encoding.UTF8.GetBytes(
@@ -172,7 +185,7 @@ module ProtectedIntakeJournal =
                           Generation = prior.Head.Generation + 1L
                           EventDigest = eventDigest
                           SnapshotDigest = None
-                          Terminal = (match event with IntakeTransaction.Bound _ -> true | _ -> false)
+                          Terminal = false
                           PriorHeadDigest = Some prior.Head.HeadDigest
                           HeadDigest = String.replicate 64 "0" }
                     let head =
@@ -229,7 +242,12 @@ module ProtectedIntakeJournal =
             let after = port.Read address
             let restored = restore after
             match restored with
-            | Ok snapshot when proposalObserved proposal snapshot -> Appended snapshot
+            | Ok snapshot when proposalObserved proposal snapshot ->
+                match outcome with
+                | Won -> Appended snapshot
+                | ResponseUnknown -> ObservedWithoutGrant snapshot
+                | ParentConflict -> Conflict(Some snapshot)
+                | Refused reason -> DefiniteRefusal reason
             | _ ->
                 match outcome with
                 | ParentConflict -> Conflict(Result.toOption restored)
@@ -242,20 +260,21 @@ module ProtectedIntakeJournal =
         && value.Length = 64
         && value |> Seq.forall (fun c -> c >= '0' && c <= '9' || c >= 'a' && c <= 'f')
 
-    let originalRequestAfterStrongAbsence (snapshot: Snapshot) (provider: ProviderReconciliation) =
-        let binding = snapshot.State.Binding
-        if snapshot.State.Phase <> "InFlight" then
-            Error "intake-is-not-in-flight"
-        elif ShardedJournalAdapter.sha256 binding.RequestBytes <> binding.RequestSha256 then
-            Error "retained-original-request-digest-mismatch"
-        else
-            provider.Read binding.Identity (Array.copy binding.RequestBytes)
-            |> Result.bind (function
-                | Some proof when
-                    validDigest proof.EvidenceDigest
-                    && proof.OriginalRequestSha256 = binding.RequestSha256
-                    && List.contains proof.Kind
-                        [ "idempotency-key-excluded"; "conditional-fence-excluded"; "original-request-retired" ]
-                    ->
-                    Ok(Array.copy binding.RequestBytes)
-                | _ -> Error "strong-absence-proof-does-not-bind-original-request")
+    let originalRequestAfterStrongAbsence (snapshot: Snapshot) identity (provider: ProviderReconciliation) =
+        IntakeTransaction.find snapshot.State identity
+        |> Result.bind (function
+            | Some entry when entry.Phase = "InFlight" ->
+                let binding = entry.Binding
+                if ShardedJournalAdapter.sha256 binding.RequestBytes <> binding.RequestSha256 then
+                    Error "retained-original-request-digest-mismatch"
+                else
+                    provider.Read binding.Identity (Array.copy binding.RequestBytes)
+                    |> Result.bind (function
+                        | Some proof when
+                            validDigest proof.EvidenceDigest
+                            && proof.OriginalRequestSha256 = binding.RequestSha256
+                            && List.contains proof.Kind
+                                [ "idempotency-key-excluded"; "conditional-fence-excluded"; "original-request-retired" ]
+                            -> Ok(Array.copy binding.RequestBytes)
+                        | _ -> Error "strong-absence-proof-does-not-bind-original-request")
+            | _ -> Error "intake-is-not-in-flight")
