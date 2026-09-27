@@ -32,3 +32,11 @@ Rendering #1343 is the single open managed replacement at this checkpoint. It us
 The parent integrator admits no more than two actively qualifying heads across the programme, one managed PR per dependency chain and at most two managed PRs per repository. Intermediate source batches remain local. Existing ready PRs are merged only after exact-head checks and current-main integration review. The nine September 13 queued runs identified in the census could not be canceled: both normal and force-cancel GitHub requests returned HTTP 409, so no capacity was inferred from them.
 
 SDD, Templates, Rendering, and Game preserved candidates remain distinct from merged source, publication, installed receiver adoption, and roadmap acceptance. Net #57 needs the #53 protobuf-net.Grpc version plus repaired lockfiles; a local combined candidate passes locked restore and 29 tests. SDD and Templates source cuts and Game batches are being prepared against current main. Protected `.github` #3695 and Coordination #545 holds were not bypassed.
+
+## 08:48 UTC continuation
+
+Five Renovate onboarding PRs were closed with exact-head readback and retained source refs: Coordination.Authority #1, GitHub.Substrate.Sandbox #3, and #1 in each of the SVG qualification-clean, public-clean and public-retained fixtures. Their six-line `renovate.json` proposals would activate dependency bot queues in retained qualification/sandbox fixtures; the two public SVG PRs also had failing protected browser builds. Row-level evidence is in `renovate-onboarding-closures.json`.
+
+SDD #929 was closed unmerged at exact head `780b656c8ab83b10340f8f0258cf0e5568f78102`: its Go 1.27.1 bump fails the Q1-qualified Go 1.24.1 binary hash, so a future compiler change needs a new governed toolchain qualification. Its branch remains retained. SDD #919 merged from exact head `734b9d36fd43b2ba5c38422f409d3c9140049677` at `0dbf5ce9e42d18ddec45dd66b706f8c2984b7184`. Its merge is incorporated into the refreshed local FSC-04 first source cut.
+
+A live complete organization search at 2026-09-27 08:48 UTC reported 77 open PRs. This is a moving count; new bot PRs can offset closures. Rendering #1343 remains in hosted qualification with its deterministic gate in progress.
