@@ -13,14 +13,18 @@ dashboard snapshot. No execution intent is copied into a separate journal.
 Each kind is unique per original item. Exact receipt replay is idempotent. Assignments cannot be revised or
 redrawn after persistence. The facts remain in `ingest_facts`, preserving schema-10 stores without migration,
 and the bounded private dashboard read exposes them as `learningObservations`. Public projections remain
-unchanged.
+unchanged: learning-only item identities are excluded from public enumeration and learning facts do not
+contribute to the public `factCount`.
 
-`tools/learn-01-analysis.py --observations <snapshot>` selects facts by stable identity and revision, sorts the
-selection before hashing, and derives one whole-issue report. Exact duplicates and input ordering do not change
-the digest or totals. A later non-assignment correction supersedes an earlier revision; assignment corrections
-are refused. Children, retries, reviews, rescues, and repairs remain costs of the canonical original item.
+`tools/learn-01-analysis.py <contract> --observations <private-item-detail>` verifies the retained workspace and
+canonical snapshot revision, then derives assignment, expected-invocation coverage and provider totals solely
+from that immutable private snapshot. It refuses a second corpus input on this route. The synthetic source
+fixture remains a separate contract test. Exact duplicates and input ordering do not change the observation
+digest. A later non-assignment correction supersedes an earlier revision; assignment corrections are refused.
+Children, retries, reviews, rescues, and repairs remain costs of the canonical original item.
 Provider mismatch, unsupported usage, missing child usage, incomplete CI, and open invocations keep the affected
-issue incomplete. Late facts become visible only on a new analysis of a new immutable input snapshot.
+issue incomplete. Missing provider/profile/support evidence never defaults to complete. Late facts become visible
+only on a new analysis of a new immutable input snapshot.
 
 The synthetic fixture proves source behavior only. Telemetry configuration, publication, installation, live
 collection, and any efficiency conclusion remain pending. Current native usage is `not-configured`, so no live

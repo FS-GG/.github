@@ -73,36 +73,57 @@ def validate_contract(contract: dict) -> None:
         raise Refusal("LEARN-01.1 cannot claim publication, operation, observation or feature exit")
 
 
+def decode_private_snapshot(observations: dict) -> tuple[dict, str]:
+    """Authenticate the immutable bytes and workspace carried by an item-detail snapshot."""
+    encoded = observations.get("canonicalSnapshotGzip")
+    workspace = observations.get("workspaceId")
+    revision = observations.get("revision")
+    if not isinstance(encoded, str):
+        raise Refusal("telemetry snapshot lacks canonicalSnapshotGzip")
+    if not isinstance(workspace, str) or not workspace:
+        raise Refusal("telemetry snapshot lacks retained workspace provenance")
+    try:
+        compressed = base64.b64decode(encoded, validate=True)
+        if len(compressed) > 1024 * 1024:
+            raise Refusal("compressed telemetry snapshot exceeds analysis bound")
+        maximum = 4 * 1024 * 1024
+        raw = bytearray()
+        with gzip.GzipFile(fileobj=io.BytesIO(compressed), mode="rb") as stream:
+            while len(raw) <= maximum:
+                chunk = stream.read(min(64 * 1024, maximum + 1 - len(raw)))
+                if not chunk:
+                    break
+                raw.extend(chunk)
+        if len(raw) > maximum:
+            raise Refusal("telemetry snapshot exceeds analysis bound")
+        digest = hashlib.sha256(raw).hexdigest()
+        if revision != digest:
+            raise Refusal("telemetry snapshot revision does not bind canonical bytes")
+        content = json.loads(raw)
+    except Refusal:
+        raise
+    except (ValueError, TypeError, OSError, EOFError, json.JSONDecodeError) as error:
+        raise Refusal("telemetry snapshot is malformed") from error
+    if content.get("workspaceId") != workspace:
+        raise Refusal("telemetry snapshot workspace provenance disagrees with canonical bytes")
+    selection = content.get("selection")
+    if not isinstance(selection, dict) or selection.get("complete") is not True:
+        raise Refusal("telemetry snapshot selection is incomplete")
+    return content, workspace
+
+
 def validate_observations(corpus: dict, observations: dict) -> dict:
     """Select a stable pre-dispatch fact set from a bounded telemetry snapshot."""
     if observations.get("schema") == "fsgg.telemetry.item-detail/2":
-        encoded = observations.get("canonicalSnapshotGzip")
-        if not isinstance(encoded, str):
-            raise Refusal("telemetry snapshot lacks canonicalSnapshotGzip")
+        content, workspace = decode_private_snapshot(observations)
         try:
-            compressed = base64.b64decode(encoded, validate=True)
-            if len(compressed) > 1024 * 1024:
-                raise Refusal("compressed telemetry snapshot exceeds analysis bound")
-            maximum = 4 * 1024 * 1024
-            raw = bytearray()
-            with gzip.GzipFile(fileobj=io.BytesIO(compressed), mode="rb") as stream:
-                while len(raw) <= maximum:
-                    chunk = stream.read(min(64 * 1024, maximum + 1 - len(raw)))
-                    if not chunk:
-                        break
-                    raw.extend(chunk)
-            if len(raw) > maximum:
-                raise Refusal("telemetry snapshot exceeds analysis bound")
-            content = json.loads(raw)
             rows = content.get("learningObservations", [])
             events = [json.loads(row["canonical"]) for row in rows]
-        except Refusal:
-            raise
-        except (ValueError, KeyError, TypeError, OSError, EOFError, json.JSONDecodeError) as error:
+        except (ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
             raise Refusal("telemetry snapshot learning observations are malformed") from error
         observations = {
             "schema": "fsgg.learn.observation-snapshot/v1",
-            "workspaceId": "authenticated-scoped-dashboard",
+            "workspaceId": workspace,
             "events": events,
         }
     if observations.get("schema") != "fsgg.learn.observation-snapshot/v1":
@@ -201,6 +222,178 @@ def validate_observations(corpus: dict, observations: dict) -> dict:
         "observationFacts": len(by_identity),
         "duplicateFactsIgnored": duplicates,
         "correctedFacts": corrections,
+    }
+
+
+def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
+    """Derive assigned-treatment token coverage only from one retained private snapshot."""
+    content, workspace = decode_private_snapshot(envelope)
+    try:
+        events = [json.loads(row["canonical"]) for row in content.get("learningObservations", [])]
+    except (KeyError, TypeError, json.JSONDecodeError) as error:
+        raise Refusal("telemetry snapshot learning observations are malformed") from error
+
+    assignments = {
+        event.get("itemId"): event
+        for event in events
+        if event.get("kind") == "learn-experiment-assignment"
+    }
+    if not assignments or None in assignments:
+        raise Refusal("private snapshot has no stable experiment assignments")
+    roots = [
+        {
+            "itemId": item,
+            "originalItemId": item,
+            "parentItemId": None,
+            "assignedArm": assignment.get("arm"),
+            "assignedAt": assignment.get("assignedAt"),
+        }
+        for item, assignment in assignments.items()
+    ]
+    observation_result = validate_observations(
+        {"contractId": contract.get("contractId"), "items": roots},
+        {"schema": "fsgg.learn.observation-snapshot/v1", "workspaceId": workspace, "events": events},
+    )
+
+    original_by_item = {item: item for item in assignments}
+    for row in content.get("populations", []):
+        item = row.get("item_id")
+        original = row.get("original_item_id")
+        if isinstance(item, str) and isinstance(original, str):
+            if original not in assignments:
+                raise Refusal(f"{item}: population references an unassigned original item")
+            prior = original_by_item.setdefault(item, original)
+            if prior != original:
+                raise Refusal(f"{item}: conflicting original-item population")
+
+    incomplete = defaultdict(set)
+    totals = defaultdict(int)
+    invocations = {}
+    for row in content.get("admissions", []):
+        invocation = row.get("invocation_id")
+        item = row.get("item_id")
+        original = original_by_item.get(item)
+        if not isinstance(invocation, str) or not invocation or original is None:
+            raise Refusal("runtime admission is not bound to an assigned original item")
+        if invocation in invocations:
+            raise Refusal("duplicate runtime admission invocation")
+        invocations[invocation] = (original, row)
+
+    lineage_by_dispatch = {}
+    for row in content.get("lineage", []):
+        dispatch = row.get("dispatch_id")
+        invocation = row.get("invocation_id")
+        if isinstance(dispatch, str) and isinstance(invocation, str):
+            if dispatch in lineage_by_dispatch and lineage_by_dispatch[dispatch] != invocation:
+                raise Refusal("dispatch has conflicting invocation lineage")
+            lineage_by_dispatch[dispatch] = invocation
+    for row in content.get("expectedDispatches", []):
+        dispatch = row.get("dispatch_id")
+        item = row.get("item_id")
+        original = original_by_item.get(item)
+        if original is None or not isinstance(dispatch, str):
+            raise Refusal("expected dispatch is not bound to an assigned original item")
+        invocation = lineage_by_dispatch.get(dispatch)
+        if invocation is None:
+            incomplete[original].add("missing-expected-invocation:" + dispatch)
+        elif invocation not in invocations:
+            incomplete[original].add("missing-expected-admission:" + invocation)
+
+    admitted_originals = {original for original, _ in invocations.values()}
+    for original in assignments:
+        if original not in admitted_originals:
+            incomplete[original].add("missing-root-admission")
+
+    terminal = {row.get("invocation_id") for row in content.get("terminals", [])}
+    gaps = defaultdict(set)
+    for row in content.get("runtimeGaps", []):
+        invocation = row.get("invocation_id")
+        code = row.get("code")
+        if isinstance(invocation, str):
+            gaps[invocation].add(str(code) if code is not None else "unknown")
+        else:
+            raise Refusal("runtime usage gap lacks invocation identity")
+
+    observed_usage = Counter()
+    seen_usage = set()
+    for row in content.get("usage", []):
+        identity = row.get("identity")
+        invocation = row.get("invocation_id")
+        if not isinstance(identity, str) or not identity or identity in seen_usage:
+            raise Refusal("runtime usage identities must be unique non-empty strings")
+        seen_usage.add(identity)
+        if invocation not in invocations:
+            raise Refusal(f"{identity}: usage has no expected admitted invocation")
+        original, admission = invocations[invocation]
+        observed_usage[invocation] += 1
+        total = row.get("total")
+        provider = row.get("provider")
+        requested_model = row.get("requested_model")
+        observed_model = row.get("observed_model")
+        requested_effort = row.get("requested_effort")
+        observed_effort = row.get("observed_effort")
+        if not isinstance(total, int) or isinstance(total, bool) or total < 0:
+            incomplete[original].add("invalid-provider-total:" + identity)
+        elif not all(isinstance(value, str) and value for value in
+                     (provider, requested_model, observed_model, requested_effort, observed_effort)):
+            incomplete[original].add("missing-provider-or-profile:" + identity)
+        elif (requested_model != observed_model or requested_effort != observed_effort or
+              admission.get("requested_model") != requested_model or
+              admission.get("requested_effort") != requested_effort):
+            incomplete[original].add("provider-profile-mismatch:" + identity)
+        else:
+            totals[original] += total
+
+    for invocation, (original, _) in invocations.items():
+        if invocation not in terminal:
+            incomplete[original].add("nonterminal-invocation:" + invocation)
+        if observed_usage[invocation] == 0:
+            incomplete[original].add("missing-provider-usage:" + invocation)
+        for code in gaps[invocation]:
+            incomplete[original].add("unsupported-usage:" + code)
+    for invocation in gaps.keys() - invocations.keys():
+        raise Refusal("runtime usage gap has no expected admitted invocation: " + invocation)
+
+    for row in content.get("ciRuns", []):
+        original = original_by_item.get(row.get("item_id"))
+        if original is None:
+            raise Refusal("CI run is not bound to an assigned original item")
+        if row.get("status") != "completed":
+            incomplete[original].add("incomplete-ci-run:" + str(row.get("run_id")))
+    for row in content.get("ciPopulationCoverage", []):
+        original = original_by_item.get(row.get("item_id"))
+        if original is None:
+            raise Refusal("CI population coverage is not bound to an assigned original item")
+        dimensions = ("actions", "checks", "attempts", "jobs", "terminal", "timestamps")
+        if any(row.get(name) != "complete" for name in dimensions) or row.get("continuation") != "none":
+            incomplete[original].add("incomplete-ci-population")
+
+    arms = {item: assignment.get("arm") for item, assignment in assignments.items()}
+    arm_totals = {arm: [] for arm in ("current", "focused")}
+    for item, arm in arms.items():
+        if arm not in arm_totals:
+            raise Refusal(f"{item}: invalid persisted assignment arm")
+        if not incomplete[item]:
+            arm_totals[arm].append(totals[item])
+    incomplete_items = sorted(item for item in assignments if incomplete[item])
+    return {
+        "schema": "fsgg.learn.private-snapshot-summary/v1",
+        "contractId": contract["contractId"],
+        "workspaceId": workspace,
+        "snapshotRevision": envelope["revision"],
+        **observation_result,
+        "assignedOriginalItemsByArm": {
+            arm: sum(1 for value in arms.values() if value == arm) for arm in ("current", "focused")
+        },
+        "completeTokenItemsByArm": {arm: len(values) for arm, values in arm_totals.items()},
+        "providerTotalTokensByArm": {arm: sum(values) for arm, values in arm_totals.items()},
+        "providerTotalTokensByOriginalItem": {
+            item: totals[item] for item in sorted(assignments) if not incomplete[item]
+        },
+        "incompleteTokenOriginalItems": incomplete_items,
+        "incompleteTokenReasons": {item: sorted(incomplete[item]) for item in incomplete_items},
+        "tokenComparisonQualified": not incomplete_items,
+        "claim": "private-snapshot-analysis-no-efficiency-result",
     }
 
 
@@ -390,7 +583,13 @@ def validate_corpus(contract: dict, corpus: dict) -> dict:
         amount = cost.get("providerTotalTokens")
         expected_provider = cost.get("expectedProvider")
         observed_provider = cost.get("observedProvider")
-        usage_support = cost.get("usageSupport", "supported")
+        usage_support = cost.get("usageSupport")
+        if not isinstance(expected_provider, str) or not expected_provider:
+            raise Refusal(f"{cost_id}: expected provider evidence is required")
+        if not isinstance(observed_provider, str) or not observed_provider:
+            raise Refusal(f"{cost_id}: observed provider evidence is required")
+        if not isinstance(usage_support, str) or not usage_support:
+            raise Refusal(f"{cost_id}: usage support evidence is required")
         if completeness == "complete" and (not isinstance(amount, int) or isinstance(amount, bool) or amount < 0):
             raise Refusal(f"{cost_id}: complete provider total must be a non-negative integer")
         if completeness == "unknown-unbounded" and amount is not None:
@@ -413,7 +612,7 @@ def validate_corpus(contract: dict, corpus: dict) -> dict:
                 totals[item] += amount * float(fraction)
             else:
                 incomplete_reasons[item].add("unknown-unbounded-usage")
-            if expected_provider is not None and observed_provider != expected_provider:
+            if observed_provider != expected_provider:
                 incomplete_reasons[item].add("provider-mismatch")
             if usage_support != "supported":
                 incomplete_reasons[item].add("unsupported-usage:" + str(usage_support))
@@ -488,17 +687,25 @@ def validate_corpus(contract: dict, corpus: dict) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("contract", type=pathlib.Path)
-    parser.add_argument("corpus", type=pathlib.Path)
+    parser.add_argument("corpus", type=pathlib.Path, nargs="?")
     parser.add_argument("--observations", type=pathlib.Path)
     parser.add_argument("--output", type=pathlib.Path)
     args = parser.parse_args(argv)
     try:
         contract = load(args.contract)
         validate_contract(contract)
-        corpus = load(args.corpus)
-        result = validate_corpus(contract, corpus)
-        if args.observations:
-            result.update(validate_observations(corpus, load(args.observations)))
+        observation_input = load(args.observations) if args.observations else None
+        if observation_input and observation_input.get("schema") == "fsgg.telemetry.item-detail/2":
+            if args.corpus is not None:
+                raise Refusal("private snapshot analysis refuses a second unbound corpus input")
+            result = analyze_private_snapshot(contract, observation_input)
+        else:
+            if args.corpus is None:
+                raise Refusal("synthetic analysis requires a corpus")
+            corpus = load(args.corpus)
+            result = validate_corpus(contract, corpus)
+            if observation_input:
+                result.update(validate_observations(corpus, observation_input))
     except (OSError, json.JSONDecodeError, Refusal) as error:
         print(f"refused: {error}", file=sys.stderr)
         return 2

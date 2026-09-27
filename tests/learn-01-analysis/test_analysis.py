@@ -1,6 +1,7 @@
 import copy
 import base64
 import gzip
+import hashlib
 import importlib.util
 import json
 import pathlib
@@ -16,6 +17,19 @@ CORPUS = json.loads((ROOT / "tests/learn-01-analysis/fixtures/synthetic.json").r
 OBSERVATIONS = json.loads((ROOT / "tests/learn-01-analysis/fixtures/observations.json").read_text())
 
 
+def private_envelope(content, workspace="workspace-a"):
+    body = copy.deepcopy(content)
+    body["workspaceId"] = workspace
+    body.setdefault("selection", {"mode": "all", "complete": True})
+    canonical = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
+    return {
+        "schema": "fsgg.telemetry.item-detail/2",
+        "workspaceId": workspace,
+        "revision": hashlib.sha256(canonical).hexdigest(),
+        "canonicalSnapshotGzip": base64.b64encode(gzip.compress(canonical)).decode(),
+    }
+
+
 class Learn01ContractTests(unittest.TestCase):
     def test_observation_snapshot_is_order_independent_and_bounded(self):
         first = MODULE.validate_observations(CORPUS, OBSERVATIONS)
@@ -27,17 +41,79 @@ class Learn01ContractTests(unittest.TestCase):
 
     def test_existing_bounded_dashboard_snapshot_is_a_reproducible_input(self):
         rows = [{"canonical": json.dumps(event, separators=(",", ":"), sort_keys=True)} for event in OBSERVATIONS["events"]]
-        canonical = json.dumps({"learningObservations": rows}, separators=(",", ":"), sort_keys=True).encode()
-        envelope = {
-            "schema": "fsgg.telemetry.item-detail/2",
-            "canonicalSnapshotGzip": base64.b64encode(gzip.compress(canonical)).decode(),
-        }
+        envelope = private_envelope({"learningObservations": rows})
         result = MODULE.validate_observations(CORPUS, envelope)
         self.assertEqual(18, result["observationFacts"])
+
+    def test_private_snapshot_itself_drives_assignment_coverage_and_totals(self):
+        rows = [{"canonical": json.dumps(event, separators=(",", ":"), sort_keys=True)} for event in OBSERVATIONS["events"]]
+        admissions = []
+        usage = []
+        terminals = []
+        for index in range(1, 7):
+            item = f"I-{index:03d}"
+            invocation = f"private-{index}"
+            admissions.append({
+                "identity": f"admission-{index}", "item_id": item, "invocation_id": invocation,
+                "requested_model": "gpt-fixed", "requested_effort": "medium", "backend": "codex",
+            })
+            usage.append({
+                "identity": f"usage-{index}", "item_id": item, "invocation_id": invocation,
+                "provider": "openai", "requested_model": "gpt-fixed", "observed_model": "gpt-fixed",
+                "requested_effort": "medium", "observed_effort": "medium", "total": index * 100,
+            })
+            terminals.append({"identity": f"terminal-{index}", "item_id": item, "invocation_id": invocation})
+        envelope = private_envelope({
+            "learningObservations": rows, "populations": [], "admissions": admissions,
+            "expectedDispatches": [], "lineage": [], "usage": usage, "terminals": terminals,
+            "runtimeGaps": [],
+        })
+        result = MODULE.analyze_private_snapshot(CONTRACT, envelope)
+        self.assertEqual({"current": 3, "focused": 3}, result["assignedOriginalItemsByArm"])
+        self.assertEqual({"current": 900, "focused": 1200}, result["providerTotalTokensByArm"])
+        self.assertTrue(result["tokenComparisonQualified"])
+
+        changed = copy.deepcopy(envelope)
+        changed["workspaceId"] = "workspace-b"
+        with self.assertRaisesRegex(MODULE.Refusal, "workspace provenance disagrees"):
+            MODULE.analyze_private_snapshot(CONTRACT, changed)
+
+        content = json.loads(gzip.decompress(base64.b64decode(envelope["canonicalSnapshotGzip"])))
+        content["admissions"] = [row for row in content["admissions"] if row["item_id"] != "I-001"]
+        content["usage"] = [row for row in content["usage"] if row["item_id"] != "I-001"]
+        content["terminals"] = [row for row in content["terminals"] if row["item_id"] != "I-001"]
+        missing_root = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content))
+        self.assertIn("missing-root-admission", missing_root["incompleteTokenReasons"]["I-001"])
+
+        content["ciRuns"] = [{"item_id": "I-002", "run_id": 42, "status": "in_progress"}]
+        incomplete_ci = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content))
+        self.assertIn("incomplete-ci-run:42", incomplete_ci["incompleteTokenReasons"]["I-002"])
+
+    def test_private_snapshot_refuses_missing_provider_evidence(self):
+        rows = [{"canonical": json.dumps(event, separators=(",", ":"), sort_keys=True)} for event in OBSERVATIONS["events"]]
+        admissions = [{
+            "identity": f"admission-{index}", "item_id": f"I-{index:03d}", "invocation_id": f"private-{index}",
+            "requested_model": "gpt-fixed", "requested_effort": "medium", "backend": "codex",
+        } for index in range(1, 7)]
+        usage = [{
+            "identity": f"usage-{index}", "item_id": f"I-{index:03d}", "invocation_id": f"private-{index}",
+            "provider": None, "requested_model": "gpt-fixed", "observed_model": "gpt-fixed",
+            "requested_effort": "medium", "observed_effort": "medium", "total": 100,
+        } for index in range(1, 7)]
+        terminals = [{"invocation_id": f"private-{index}"} for index in range(1, 7)]
+        result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope({
+            "learningObservations": rows, "populations": [], "admissions": admissions,
+            "expectedDispatches": [], "lineage": [], "usage": usage, "terminals": terminals,
+            "runtimeGaps": [],
+        }))
+        self.assertEqual(6, len(result["incompleteTokenOriginalItems"]))
+        self.assertFalse(result["tokenComparisonQualified"])
 
     def test_dashboard_gzip_expansion_is_stopped_at_output_bound(self):
         envelope = {
             "schema": "fsgg.telemetry.item-detail/2",
+            "workspaceId": "workspace-a",
+            "revision": "0" * 64,
             "canonicalSnapshotGzip": base64.b64encode(gzip.compress(b"x" * (4 * 1024 * 1024 + 1))).decode(),
         }
         with self.assertRaisesRegex(MODULE.Refusal, "exceeds analysis bound"):
@@ -205,6 +281,12 @@ class Learn01ContractTests(unittest.TestCase):
         self.assertIn("provider-mismatch", result["incompleteTokenReasons"]["I-001"])
         self.assertIn("unsupported-usage:native-join-unsupported", result["incompleteTokenReasons"]["I-001"])
 
+    def test_provider_and_usage_support_evidence_cannot_default_to_complete(self):
+        corpus = copy.deepcopy(CORPUS)
+        corpus["costs"][0].pop("expectedProvider")
+        with self.assertRaisesRegex(MODULE.Refusal, "expected provider evidence is required"):
+            MODULE.validate_corpus(CONTRACT, corpus)
+
     def test_late_usage_changes_only_coverage_when_reanalyzed(self):
         corpus = copy.deepcopy(CORPUS)
         corpus["costs"] = [cost for cost in corpus["costs"] if cost["costId"] != "usage-root-001"]
@@ -223,6 +305,7 @@ class Learn01ContractTests(unittest.TestCase):
         corpus["costs"].append({
             "costId": "usage-reopen-001", "kind": "invocation", "invocationId": "inv-reopen-001",
             "turnId": "turn-reopen-001", "completeness": "complete", "providerTotalTokens": 50,
+            "expectedProvider": "openai", "observedProvider": "openai", "usageSupport": "supported",
             "allocations": [{"originalItemId": "I-001", "fraction": 1.0}],
         })
         result = MODULE.validate_corpus(CONTRACT, corpus)

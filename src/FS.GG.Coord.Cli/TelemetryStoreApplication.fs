@@ -4212,7 +4212,9 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
 
         {
             ItemId = itemId
-            FactCount = count "ingest_facts"
+            FactCount =
+                runtimeScalar
+                    "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment');"
             UsageObservations = usageCount
             DeliveryObservations = count "delivery_observations"
             Input = sum "input_count" + runtimeSum "input_count"
@@ -4626,6 +4628,16 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                             let content = JsonObject()
                             let selectionMode = if itemId.IsSome then "item" else "all"
 
+                            // Bind retained private snapshots to the store's actual workspace.
+                            // An unprovisioned legacy store remains available for ordinary local
+                            // inspection, but cannot be mistaken for an experiment input.
+                            let snapshotWorkspace =
+                                scalarText
+                                    connection
+                                    "SELECT coalesce((SELECT value FROM store_metadata WHERE key='receiptWorkspace'),'');"
+
+                            content["workspaceId"] <- JsonValue.Create(snapshotWorkspace)
+
                             content["selection"] <-
                                 JsonSerializer.SerializeToNode
                                     {|
@@ -4701,6 +4713,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                             let revision = CanonicalJson.sha256 canonicalBytes
                             let envelope = JsonObject()
                             envelope["schema"] <- JsonValue.Create("fsgg.telemetry.item-detail/2")
+                            envelope["workspaceId"] <- JsonValue.Create(snapshotWorkspace)
                             envelope["observedAt"] <- JsonValue.Create(DateTimeOffset.UtcNow.ToString("O"))
                             envelope["revision"] <- JsonValue.Create(revision)
 
@@ -5507,7 +5520,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                         use command = connection.CreateCommand()
 
                         command.CommandText <-
-                            "SELECT DISTINCT item_id FROM ingest_facts WHERE item_id IS NOT NULL ORDER BY item_id;"
+                            "SELECT DISTINCT item_id FROM ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment') ORDER BY item_id;"
 
                         use reader = command.ExecuteReader()
                         let items = ResizeArray<string>()

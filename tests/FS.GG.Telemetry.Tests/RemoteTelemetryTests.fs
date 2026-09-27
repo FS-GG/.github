@@ -193,6 +193,62 @@ module RemoteTelemetryTests =
             if Directory.Exists root then Directory.Delete(root, true)
 
     [<Fact>]
+    let ``LEARN private snapshot retains workspace provenance and public export excludes private facts`` () =
+        let root = Path.Combine(Path.GetTempPath(), "learn-private-" + Guid.NewGuid().ToString("N"))
+        let exported = Path.Combine(Path.GetTempPath(), "learn-public-" + Guid.NewGuid().ToString("N") + ".json")
+        let directExport = Path.Combine(Path.GetTempPath(), "learn-direct-" + Guid.NewGuid().ToString("N") + ".json")
+        let privateScope =
+            { scope with
+                Workspace = "workspace-private"
+                Producer = "producer-private"
+            }
+        let bytes =
+            Encoding.UTF8.GetBytes
+                """{"schema":"fsgg.telemetry.envelope/1","workspaceId":"workspace-private","producerId":"producer-private","streamId":"runtime","batchId":"learn-private-batch","payload":{"schema":"fsgg.telemetry.ingest/1","ingestId":"ignored-by-receipt-boundary","sourceIdentity":"producer","generation":"g1","cursor":"1","eventCount":3,"events":[{"kind":"learn-task-snapshot","identity":"snapshot-private","itemId":"private-item","revision":1,"snapshotId":"task-1","rubricVersion":"rubric-v1","snapshotDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","capturedAt":"2026-09-27T08:00:00Z"},{"kind":"learn-context-manifest","identity":"manifest-private","itemId":"private-item","revision":1,"recipeId":"recipe-v1","recipeDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","manifestId":"manifest-v1","manifestDigest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},{"kind":"learn-experiment-assignment","identity":"assignment-private","itemId":"private-item","revision":1,"windowId":"window-v1","policyId":"learn-01-current-focused-v1","arm":"focused","assignedAt":"2026-09-27T08:01:00Z","deviation":null}]}}"""
+
+        try
+            TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
+            |> Result.defaultWith (String.concat "; " >> failwith)
+            |> ignore
+            TelemetryStoreApplication.enrollReceiptProducer root TelemetryStore.ApprovedLocalDurable privateScope
+            |> Result.defaultWith (String.concat "; " >> failwith)
+            |> ignore
+            TelemetryStoreApplication.submitReceipt root TelemetryStore.ApprovedLocalDurable privateScope bytes
+            |> Result.defaultWith (String.concat "; " >> failwith)
+            |> ignore
+            TelemetryStoreApplication.drainReceipts root TelemetryStore.ApprovedLocalDurable privateScope.Workspace
+            |> Result.defaultWith (String.concat "; " >> failwith)
+            |> ignore
+
+            let snapshot =
+                TelemetryStoreApplication.dashboardSnapshot root TelemetryStore.ApprovedLocalDurable None
+                |> Result.defaultWith (String.concat "; " >> failwith)
+            use envelope = JsonDocument.Parse snapshot
+            Assert.Equal("workspace-private", envelope.RootElement.GetProperty("workspaceId").GetString())
+            let compressed = Convert.FromBase64String(envelope.RootElement.GetProperty("canonicalSnapshotGzip").GetString())
+            use input = new MemoryStream(compressed)
+            use gzip = new GZipStream(input, CompressionMode.Decompress)
+            use canonical = JsonDocument.Parse gzip
+            Assert.Equal("workspace-private", canonical.RootElement.GetProperty("workspaceId").GetString())
+            Assert.Equal(3, canonical.RootElement.GetProperty("learningObservations").GetArrayLength())
+
+            TelemetryStoreApplication.exportPublic root TelemetryStore.ApprovedLocalDurable None exported
+            |> Result.defaultWith (String.concat "; " >> failwith)
+            |> ignore
+            use publicDocument = JsonDocument.Parse(File.ReadAllText exported)
+            Assert.Equal(0, publicDocument.RootElement.GetProperty("items").GetArrayLength())
+
+            TelemetryStoreApplication.exportPublic root TelemetryStore.ApprovedLocalDurable (Some "private-item") directExport
+            |> Result.defaultWith (String.concat "; " >> failwith)
+            |> ignore
+            use directDocument = JsonDocument.Parse(File.ReadAllText directExport)
+            Assert.Equal(0L, directDocument.RootElement.GetProperty("factCount").GetInt64())
+        finally
+            if Directory.Exists root then Directory.Delete(root, true)
+            if File.Exists exported then File.Delete exported
+            if File.Exists directExport then File.Delete directExport
+
+    [<Fact>]
     let ``client accepts only a complete bound receipt`` () =
         task {
             use client =
