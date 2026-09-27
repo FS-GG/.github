@@ -12,6 +12,8 @@
     <Compile Include="../FS.GG.Coord.Cli/Snapshot.fs" Link="Snapshot.fs" />
     <Compile Include="DeliveryApplication.fsi" />
     <Compile Include="DeliveryApplication.fs" />
+    <Compile Include="DeliveryReceiptProducer.fsi" />
+    <Compile Include="DeliveryReceiptProducer.fs" />
     <Compile Include="ReviewApplication.fsi" />
     <Compile Include="ReviewApplication.fs" />
     <Compile Include="DeliveryRouteApplication.fsi" />

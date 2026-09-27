@@ -139,6 +139,12 @@ the typed review chain and exact evidence comment, immutable SDD artifacts, merg
 and protected main. Only after those observations agree does it emit the atomic,
 self-digested accepted bundle consumed by `roadmap close` without schema translation.
 
+`delivery <ref> receipt <id> <https-evidence-url> --pr N` writes a prospective ordinary delivery
+obligation receipt only while the current worker owns the item's claim and the PR closes that item.
+It checks the exact PR head, declared obligation, evidence URL, and durable comment readback. This
+source integration is not an installed protected GS2-09.7 producer, a Q5/Q6 result, or canonical
+unit acceptance; those require their separate protected qualification and acceptance boundaries.
+
 `roadmap close inspect|render|verify` is likewise a pure candidate projection: it consumes an evidence manifest whose relative artifact paths bind an
 accepted unit receipt, delivery receipt, schema-v3 critique, schema-v2 feedback report and audit, feedback
 binding, cycle update, and one or more check receipts. Every machine receipt is canonical and self-digested;

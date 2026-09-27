@@ -12,6 +12,7 @@
     <Compile Include="HandlerRegistrationTests.fs" />
     <Compile Include="CompletionDependencyTests.fs" />
     <Compile Include="DeliveryApplicationTests.fs" />
+    <Compile Include="DeliveryReceiptProducerTests.fs" />
     <Compile Include="ReviewApplicationTests.fs" />
     <Compile Include="DeliveryRouteCliTests.fs" />
     <Compile Include="LandableNotOpenTests.fs" />

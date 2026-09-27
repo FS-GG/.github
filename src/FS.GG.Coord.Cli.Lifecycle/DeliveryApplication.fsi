@@ -47,6 +47,9 @@ module DeliveryApplication =
         comments: FS.GG.Coord.Driver.ReviewComment list ->
             Result<FS.GG.Coord.Delivery.Obligation list, string>
 
+    /// Canonical leading-line receipt for a declared obligation and an absolute HTTPS evidence URL.
+    val formatProspectiveReceipt: id: string -> headSha: string -> evidence: string -> Result<string, string>
+
     /// One `fsgg:merge-election` marker as it sits on the item (.github#2395, design slice 3 of
     /// .github#1858).
     ///

@@ -263,6 +263,22 @@ module DeliveryApplication =
             RegexOptions.Compiled
         )
 
+    let formatProspectiveReceipt (id: string) (headSha: string) (evidence: string) =
+        let valid pattern (value: string) =
+            not (String.IsNullOrWhiteSpace value) && Regex.IsMatch(value, pattern, RegexOptions.CultureInvariant)
+
+        let uri =
+            match Uri.TryCreate(evidence, UriKind.Absolute) with
+            | true, parsed when parsed.Scheme = Uri.UriSchemeHttps && not (String.IsNullOrWhiteSpace parsed.Host) -> true
+            | _ -> false
+
+        // `$` also matches before a final newline in .NET regexes. The prospective marker must bind
+        // the entire supplied value, including its final byte, before it can become a comment line.
+        if not (valid $@"\A{obligationId}\z" id) then Error "delivery receipt id is malformed"
+        elif not (valid @"\A[0-9a-f]{40}\z" headSha) then Error "delivery receipt head is malformed"
+        elif not uri || not (valid @"\A[^\s<>]+\z" evidence) then Error "delivery receipt evidence must be an absolute HTTPS URL without marker delimiters"
+        else Ok $"<!-- fsgg:delivery-receipt id={id} head={headSha} evidence={evidence} -->"
+
     // THE LEADING-LINE RULE (.github#2347), applying `.github#2221`'s established correction
     // ("a marker is evidence only as a WHOLE LINE inside the comment's LEADING MARKER BLOCK", never
     // the comment's entire body) to the three delivery markers, which never received it. A delivery
@@ -469,9 +485,13 @@ module DeliveryApplication =
                     match parsedReceipts |> firstError with
                     | Some error -> Error error
                     | None ->
-                        let receipts = parsedReceipts |> List.choose Result.toOption |> Map.ofList
+                        let receiptRows = parsedReceipts |> List.choose Result.toOption
+                        let receiptIds = receiptRows |> List.map fst
+                        let receipts = receiptRows |> Map.ofList
 
-                        if receipts |> Map.exists (fun id _ -> not (List.contains id ids)) then
+                        if receiptIds |> List.distinct |> List.length <> receiptIds.Length then
+                            Error "delivery obligation receipt ids must be unique; duplicate or conflicting receipts are refused"
+                        elif receipts |> Map.exists (fun id _ -> not (List.contains id ids)) then
                             Error "a delivery obligation receipt names no declared obligation"
                         else
                             declarations
