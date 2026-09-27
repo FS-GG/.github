@@ -54,6 +54,7 @@ class SeedExecutionBindingTests(unittest.TestCase):
             "GITHUB_REPOSITORY": binding.HOST_REPOSITORY,
             "GITHUB_REF": binding.WORKFLOW_REF,
             "GITHUB_WORKFLOW_REF": f"{binding.HOST_REPOSITORY}/{binding.WORKFLOW_PATH}@{binding.WORKFLOW_REF}",
+            "GITHUB_WORKFLOW_SHA": self.workflow_sha,
             "GITHUB_SHA": self.workflow_sha,
             "FSGG_PROTECTED_SHA": self.workflow_sha,
             "GITHUB_RUN_ID": "12345",
@@ -70,19 +71,27 @@ class SeedExecutionBindingTests(unittest.TestCase):
             "FSGG_SANDBOX_MINT_PROOF": str(self.mint),
             "FSGG_SANDBOX_TOKEN": self.token,
             "FSGG_SEED_EXECUTION_BINDING": str(self.output),
-            "GITHUB_WORKSPACE": str(ROOT),
+        }
+        self.provenance = {
+            "checkoutHead": self.workflow_sha,
+            "builder": {"path": binding.BUILDER_PATH, "sha256": "1" * 64},
+            "workflow": {"path": binding.WORKFLOW_PATH, "sha256": "2" * 64},
         }
 
     def installed(self):
         return mock.patch.multiple(
             binding,
             INSTALLATION_STATUS="installed-fixed-main-workflow",
-            PINNED_WORKFLOW_SHA=self.workflow_sha,
             PINNED_JOURNAL_IDENTITY=self.journal,
         )
 
+    def protected_checkout(self):
+        return mock.patch.object(binding, "checked_out_provenance",
+                                 return_value=self.provenance)
+
     def build(self):
         with mock.patch.dict(os.environ, self.environment, clear=True), self.installed(), \
+                self.protected_checkout(), \
                 mock.patch.object(binding, "utc_now", return_value=self.now):
             return binding.build_document()
 
@@ -90,7 +99,8 @@ class SeedExecutionBindingTests(unittest.TestCase):
         self.assertEqual({
             "schema": binding.STATUS_SCHEMA,
             "installation": "source-only-uninstalled",
-            "protectedWorkflowPinConfigured": False,
+            "protectedProvenance": "workflow-sha-event-sha-checkout-head-and-git-blobs",
+            "installationJoin": "set-installed-status-and-journal-pin-in-fixed-main-workflow",
             "journalPinConfigured": False,
             "writesEnabled": False,
             "authority": "unavailable",
@@ -120,6 +130,7 @@ class SeedExecutionBindingTests(unittest.TestCase):
     def test_context_spoof_wrong_project_candidate_and_nonce_refuse(self):
         cases = [
             ("FSGG_WORKFLOW_SHA", self.workflow_sha, "caller-context-spoof"),
+            ("GITHUB_WORKFLOW_SHA", "e" * 40, "protected-context"),
             ("FSGG_SANDBOX_PROJECT_NODE_ID", "PVT_wrong", "protected-context"),
             ("FSGG_CANDIDATE_SHA", "C" * 40, "protected-context"),
             ("FSGG_SANDBOX_RUN_NONCE", "spoofed", "protected-context"),
@@ -128,6 +139,7 @@ class SeedExecutionBindingTests(unittest.TestCase):
             with self.subTest(name=name):
                 changed = {**self.environment, name: value}
                 with mock.patch.dict(os.environ, changed, clear=True), self.installed(), \
+                        self.protected_checkout(), \
                         mock.patch.object(binding, "utc_now", return_value=self.now):
                     with self.assertRaisesRegex(binding.Refused, reason):
                         binding.build_document()
@@ -135,6 +147,7 @@ class SeedExecutionBindingTests(unittest.TestCase):
     def test_wrong_token_mint_proof_and_expiry_refuse(self):
         changed = {**self.environment, "FSGG_SANDBOX_TOKEN": self.token + "x"}
         with mock.patch.dict(os.environ, changed, clear=True), self.installed(), \
+                self.protected_checkout(), \
                 mock.patch.object(binding, "utc_now", return_value=self.now):
             with self.assertRaisesRegex(binding.Refused, "mint-proof-digest"):
                 binding.build_document()
@@ -144,6 +157,9 @@ class SeedExecutionBindingTests(unittest.TestCase):
             self.build()
         self.mint.write_bytes(original.replace(b'"installationId":143110413',
                                                b'"installationId":143110414'))
+        with self.assertRaisesRegex(binding.Refused, "mint-proof-identity"):
+            self.build()
+        self.mint.write_bytes(original.replace(b'"metadata":"read",', b''))
         with self.assertRaisesRegex(binding.Refused, "mint-proof-identity"):
             self.build()
         self.mint.write_bytes(original.replace(b"2026-09-28T09:00:00Z", b"2026-09-28T07:00:00Z"))
@@ -162,12 +178,14 @@ class SeedExecutionBindingTests(unittest.TestCase):
         raw = self.build()
         self.output.write_bytes(raw)
         with mock.patch.dict(os.environ, self.environment, clear=True), self.installed(), \
+                self.protected_checkout(), \
                 mock.patch.object(binding, "utc_now", return_value=self.now):
             binding.verify_document(self.output)
             with self.assertRaisesRegex(binding.Refused, "ambiguous-output"):
                 binding.write_new(self.output, raw)
         self.plan.write_bytes(b'{"plan":"changed"}\n')
         with mock.patch.dict(os.environ, self.environment, clear=True), self.installed(), \
+                self.protected_checkout(), \
                 mock.patch.object(binding, "utc_now", return_value=self.now):
             with self.assertRaisesRegex(binding.Refused, "execution-binding-mismatch"):
                 binding.verify_document(self.output)
@@ -175,6 +193,7 @@ class SeedExecutionBindingTests(unittest.TestCase):
         changed = {**self.environment, "FSGG_CANDIDATE_SHA": "e" * 40,
                    "FSGG_SANDBOX_RUN_NONCE": f'12345-2-{"e" * 40}'}
         with mock.patch.dict(os.environ, changed, clear=True), self.installed(), \
+                self.protected_checkout(), \
                 mock.patch.object(binding, "utc_now", return_value=self.now):
             with self.assertRaisesRegex(binding.Refused, "execution-binding-mismatch"):
                 binding.verify_document(self.output)
@@ -183,16 +202,38 @@ class SeedExecutionBindingTests(unittest.TestCase):
             raw = original_read(path, limit)
             return raw + b"\n" if path == SCRIPT else raw
         with mock.patch.dict(os.environ, self.environment, clear=True), self.installed(), \
+                self.protected_checkout(), \
                 mock.patch.object(binding, "utc_now", return_value=self.now), \
                 mock.patch.object(binding, "read_regular", side_effect=changed_source):
             with self.assertRaisesRegex(binding.Refused, "execution-binding-mismatch"):
                 binding.verify_document(self.output)
+
+    def test_checkout_head_builder_and_workflow_drift_refuse(self):
+        with mock.patch.object(binding, "git_bytes", return_value=b"e" * 40 + b"\n"):
+            with self.assertRaisesRegex(binding.Refused, "protected-checkout-head"):
+                binding.checked_out_provenance(self.workflow_sha)
+
+        current_builder = b"builder"
+        current_workflow = b"workflow"
+        with mock.patch.object(binding, "git_bytes", side_effect=[
+                    self.workflow_sha.encode() + b"\n", b"changed-builder"]), \
+                mock.patch.object(binding, "read_regular", return_value=current_builder):
+            with self.assertRaisesRegex(binding.Refused, "protected-builder-drift"):
+                binding.checked_out_provenance(self.workflow_sha)
+
+        with mock.patch.object(binding, "git_bytes", side_effect=[
+                    self.workflow_sha.encode() + b"\n", current_builder, b"changed-workflow"]), \
+                mock.patch.object(binding, "read_regular",
+                                  side_effect=[current_builder, current_workflow]):
+            with self.assertRaisesRegex(binding.Refused, "protected-workflow-drift"):
+                binding.checked_out_provenance(self.workflow_sha)
 
     def test_duplicate_json_and_noncanonical_binding_refuse(self):
         with self.assertRaisesRegex(binding.Refused, "duplicate-json-member"):
             binding.strict_json(b'{"schema":"x","schema":"y"}')
         self.output.write_bytes(self.build().replace(b'"activation":false', b'"activation": false'))
         with mock.patch.dict(os.environ, self.environment, clear=True), self.installed(), \
+                self.protected_checkout(), \
                 mock.patch.object(binding, "utc_now", return_value=self.now):
             with self.assertRaisesRegex(binding.Refused, "execution-binding-mismatch"):
                 binding.verify_document(self.output)

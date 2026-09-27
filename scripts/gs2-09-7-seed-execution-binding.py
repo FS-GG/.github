@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Source-only Q4 S2 binding for a protected sandbox seed execution.
 
-No workflow calls this helper. Its protected-workflow and journal installation
-pins are deliberately empty, so build and verify remain unavailable until a
-separate protected-main join installs both before any seed write.
+No workflow calls this helper. Its installation state and journal pin remain
+deliberately closed, so build and verify remain unavailable until a separate
+protected-main join installs both before any seed write. That join must export
+``GITHUB_WORKFLOW_SHA`` from ``github.workflow_sha``; provenance is then proven
+against the checked-out commit and its exact workflow and helper Git blobs.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 import sys
 from pathlib import Path
 
@@ -41,6 +44,10 @@ REQUIRED_GRANTS = {
     "organization_projects": "write",
     "pull_requests": "write",
 }
+# The protected mint requests the five write grants in this set. GitHub's response
+# fixture also returns the implicit metadata:read grant. Preserve that exact
+# observed contract and refuse any missing or additional grant until the mint
+# producer is deliberately revised and requalified.
 ALLOWED_EFFECT_KINDS = [
     "CreateNonceIssue",
     "AddProjectMembership",
@@ -51,11 +58,12 @@ HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 MAX_JSON_BYTES = 1024 * 1024
 MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
+GIT = "/usr/bin/git"
 
-# These values can only be installed with the fixed protected-main workflow
-# and its protected journal. Environment or CLI values never substitute.
+# These values can only be installed by a later change to the fixed
+# protected-main workflow and its protected journal. No commit SHA is embedded:
+# such a pin would be self-referential when this source changes to installed.
 INSTALLATION_STATUS = "source-only-uninstalled"
-PINNED_WORKFLOW_SHA = ""
 PINNED_JOURNAL_IDENTITY = ""
 
 FORBIDDEN_CONTEXT_ENV = {
@@ -125,6 +133,39 @@ def read_regular(path: Path, limit: int) -> bytes:
     return raw
 
 
+def git_bytes(checkout: Path, arguments: list[str], limit: int) -> bytes:
+    require(Path(GIT).is_file(), "protected-checkout-git")
+    try:
+        result = subprocess.run(
+            [GIT, "-C", str(checkout), *arguments],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise Refused("protected-checkout-git") from error
+    require(result.returncode == 0 and 0 < len(result.stdout) <= limit,
+            "protected-checkout-git")
+    return result.stdout
+
+
+def checked_out_provenance(workflow_sha: str) -> dict:
+    checkout = Path(__file__).resolve().parents[1]
+    require(checkout.is_absolute(), "protected-checkout")
+    head = git_bytes(checkout, ["rev-parse", "--verify", "HEAD^{commit}"], 128).strip().decode("ascii")
+    require(HEX40.fullmatch(head) is not None and head == workflow_sha,
+            "protected-checkout-head")
+    blobs = {}
+    for label, relative in (("builder", BUILDER_PATH), ("workflow", WORKFLOW_PATH)):
+        current = read_regular(checkout / relative, MAX_JSON_BYTES)
+        committed = git_bytes(checkout, ["show", f"{head}:{relative}"], MAX_JSON_BYTES)
+        require(current == committed, f"protected-{label}-drift")
+        blobs[label] = {"path": relative, "sha256": sha256(current)}
+    return {"checkoutHead": head, **blobs}
+
+
 def retained_artifact(evidence_dir: Path, env_name: str, label: str) -> tuple[dict, bytes]:
     raw_path = os.environ.get(env_name, "")
     require(bool(raw_path), f"{label}-path")
@@ -149,7 +190,8 @@ def source_status() -> dict:
     return {
         "schema": STATUS_SCHEMA,
         "installation": INSTALLATION_STATUS,
-        "protectedWorkflowPinConfigured": bool(HEX40.fullmatch(PINNED_WORKFLOW_SHA)),
+        "protectedProvenance": "workflow-sha-event-sha-checkout-head-and-git-blobs",
+        "installationJoin": "set-installed-status-and-journal-pin-in-fixed-main-workflow",
         "journalPinConfigured": bool(PINNED_JOURNAL_IDENTITY),
         "writesEnabled": False,
         "authority": "unavailable",
@@ -158,14 +200,13 @@ def source_status() -> dict:
 
 def protected_context() -> dict:
     require(INSTALLATION_STATUS == "installed-fixed-main-workflow", "execution-binding-uninstalled")
-    require(HEX40.fullmatch(PINNED_WORKFLOW_SHA) is not None, "protected-workflow-pin")
     require(bool(PINNED_JOURNAL_IDENTITY)
             and PINNED_JOURNAL_IDENTITY.strip() == PINNED_JOURNAL_IDENTITY
             and len(PINNED_JOURNAL_IDENTITY) <= 256, "journal-identity-pin")
     require(not any(name in os.environ for name in FORBIDDEN_CONTEXT_ENV), "caller-context-spoof")
     required = {
         "GITHUB_ACTIONS", "CI", "GITHUB_EVENT_NAME", "GITHUB_REPOSITORY", "GITHUB_REF",
-        "GITHUB_WORKFLOW_REF", "GITHUB_SHA", "FSGG_PROTECTED_SHA", "GITHUB_RUN_ID",
+        "GITHUB_WORKFLOW_REF", "GITHUB_WORKFLOW_SHA", "GITHUB_SHA", "FSGG_PROTECTED_SHA", "GITHUB_RUN_ID",
         "GITHUB_RUN_ATTEMPT", "FSGG_CANDIDATE_SHA", "FSGG_SANDBOX_RUN_NONCE",
         "FSGG_SANDBOX_REPOSITORY_ID", "FSGG_SANDBOX_REPOSITORY_NODE_ID",
         "FSGG_SANDBOX_PROJECT_NODE_ID", "FSGG_SEED_JOURNAL_IDENTITY",
@@ -178,6 +219,7 @@ def protected_context() -> dict:
     except ValueError as error:
         raise Refused("protected-context-number") from error
     workflow_sha = os.environ["GITHUB_SHA"]
+    provider_workflow_sha = os.environ["GITHUB_WORKFLOW_SHA"]
     candidate_sha = os.environ["FSGG_CANDIDATE_SHA"]
     nonce = f"{run_id}-{run_attempt}-{candidate_sha}"
     expected_workflow_ref = f"{HOST_REPOSITORY}/{WORKFLOW_PATH}@{WORKFLOW_REF}"
@@ -187,7 +229,7 @@ def protected_context() -> dict:
             and os.environ["GITHUB_REF"] == WORKFLOW_REF
             and os.environ["GITHUB_WORKFLOW_REF"] == expected_workflow_ref
             and HEX40.fullmatch(workflow_sha) is not None
-            and workflow_sha == PINNED_WORKFLOW_SHA
+            and provider_workflow_sha == workflow_sha
             and os.environ["FSGG_PROTECTED_SHA"] == workflow_sha
             and run_id > 0 and run_attempt > 0
             and HEX40.fullmatch(candidate_sha) is not None
@@ -197,16 +239,19 @@ def protected_context() -> dict:
             and os.environ["FSGG_SANDBOX_PROJECT_NODE_ID"] == PROJECT_NODE
             and os.environ["FSGG_SEED_JOURNAL_IDENTITY"] == PINNED_JOURNAL_IDENTITY,
             "protected-context")
+    provenance = checked_out_provenance(workflow_sha)
     return {
         "workflowRepository": HOST_REPOSITORY,
         "workflowPath": WORKFLOW_PATH,
         "workflowRef": WORKFLOW_REF,
         "workflowRefPath": expected_workflow_ref,
         "workflowSha": workflow_sha,
+        "providerWorkflowSha": provider_workflow_sha,
         "runId": run_id,
         "runAttempt": run_attempt,
         "candidateSha": candidate_sha,
         "runNonce": nonce,
+        "protectedCheckout": provenance,
     }
 
 
@@ -273,10 +318,7 @@ def build_document() -> bytes:
     require(len(mint_relative.parts) == 1, "mint-proof-path")
     mint_raw = read_regular(mint_path, MAX_JSON_BYTES)
     mint = validate_mint(mint_raw, os.environ.get("FSGG_SANDBOX_TOKEN", ""), utc_now())
-    workspace_text = os.environ.get("GITHUB_WORKSPACE", "")
-    require(bool(workspace_text), "workspace")
-    workspace = Path(workspace_text)
-    builder = workspace / BUILDER_PATH
+    builder = Path(__file__).resolve().parents[1] / BUILDER_PATH
     builder_raw = read_regular(builder, MAX_JSON_BYTES)
     binding = {
         "schema": SCHEMA,
