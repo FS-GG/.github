@@ -70,8 +70,33 @@ class Learn01ContractTests(unittest.TestCase):
         })
         result = MODULE.analyze_private_snapshot(CONTRACT, envelope)
         self.assertEqual({"current": 3, "focused": 3}, result["assignedOriginalItemsByArm"])
-        self.assertEqual({"current": 900, "focused": 1200}, result["providerTotalTokensByArm"])
-        self.assertTrue(result["tokenComparisonQualified"])
+        self.assertEqual({"current": 0, "focused": 0}, result["providerTotalTokensByArm"])
+        self.assertFalse(result["tokenComparisonQualified"])
+        for reason in (
+            "expected-dispatch-population-unproven",
+            "expected-native-turn-inventory-unavailable",
+            "expected-shared-cost-inventory-unavailable",
+            "expected-provider-unavailable",
+            "usage-support-unproven",
+        ):
+            self.assertIn(reason, result["incompleteTokenReasons"]["I-001"])
+
+        fabricated = json.loads(gzip.decompress(base64.b64decode(envelope["canonicalSnapshotGzip"])))
+        fabricated.update({
+            "expectedTurnInventoryComplete": True,
+            "expectedSharedCostInventoryComplete": True,
+            "usageSupport": "supported",
+            "expectedProvider": "openai",
+        })
+        still_incomplete = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(fabricated))
+        self.assertFalse(still_incomplete["tokenComparisonQualified"])
+
+        provider_drift = json.loads(gzip.decompress(base64.b64decode(envelope["canonicalSnapshotGzip"])))
+        second_turn = copy.deepcopy(provider_drift["usage"][0])
+        second_turn.update({"identity": "usage-provider-drift", "provider": "foreign"})
+        provider_drift["usage"].append(second_turn)
+        drift_result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(provider_drift))
+        self.assertIn("provider-mismatch", drift_result["incompleteTokenReasons"]["I-001"])
 
         changed = copy.deepcopy(envelope)
         changed["workspaceId"] = "workspace-b"
@@ -88,6 +113,25 @@ class Learn01ContractTests(unittest.TestCase):
         content["ciRuns"] = [{"item_id": "I-002", "run_id": 42, "status": "in_progress"}]
         incomplete_ci = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content))
         self.assertIn("incomplete-ci-run:42", incomplete_ci["incompleteTokenReasons"]["I-002"])
+
+    def test_private_snapshot_refuses_cross_original_dispatch_lineage(self):
+        rows = [{"canonical": json.dumps(event, separators=(",", ":"), sort_keys=True)} for event in OBSERVATIONS["events"]]
+        admissions = [
+            {"identity": "admission-1", "item_id": "I-001", "invocation_id": "inv-1",
+             "requested_model": "gpt-fixed", "requested_effort": "medium"},
+            {"identity": "admission-2", "item_id": "I-002", "invocation_id": "inv-2",
+             "requested_model": "gpt-fixed", "requested_effort": "medium"},
+        ]
+        envelope = private_envelope({
+            "learningObservations": rows,
+            "populations": [],
+            "admissions": admissions,
+            "expectedDispatches": [{"item_id": "I-001", "dispatch_id": "dispatch-1"}],
+            "lineage": [{"item_id": "I-002", "dispatch_id": "dispatch-1", "invocation_id": "inv-2"}],
+            "usage": [], "terminals": [], "runtimeGaps": [],
+        })
+        with self.assertRaisesRegex(MODULE.Refusal, "dispatch lineage crosses original-item"):
+            MODULE.analyze_private_snapshot(CONTRACT, envelope)
 
     def test_private_snapshot_refuses_missing_provider_evidence(self):
         rows = [{"canonical": json.dumps(event, separators=(",", ":"), sort_keys=True)} for event in OBSERVATIONS["events"]]

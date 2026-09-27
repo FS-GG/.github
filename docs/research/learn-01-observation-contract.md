@@ -26,6 +26,11 @@ Provider mismatch, unsupported usage, missing child usage, incomplete CI, and op
 issue incomplete. Missing provider/profile/support evidence never defaults to complete. Late facts become visible
 only on a new analysis of a new immutable input snapshot.
 
+Schema 10 does not contain affirmative closure facts for the expected dispatch population, expected native turns,
+expected shared costs, expected provider or supported native join. Private-snapshot analysis therefore reports
+those coverage dimensions incomplete and cannot qualify a token comparison. Completing that boundary requires a
+separately versioned producer contract; absence of a gap, observed usage, or caller-added fields is not closure.
+
 The synthetic fixture proves source behavior only. Telemetry configuration, publication, installation, live
 collection, and any efficiency conclusion remain pending. Current native usage is `not-configured`, so no live
 token total is claimed.

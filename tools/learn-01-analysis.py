@@ -283,26 +283,47 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
     for row in content.get("lineage", []):
         dispatch = row.get("dispatch_id")
         invocation = row.get("invocation_id")
-        if isinstance(dispatch, str) and isinstance(invocation, str):
-            if dispatch in lineage_by_dispatch and lineage_by_dispatch[dispatch] != invocation:
+        original = original_by_item.get(row.get("item_id"))
+        if isinstance(dispatch, str) and isinstance(invocation, str) and original is not None:
+            value = (invocation, original)
+            if dispatch in lineage_by_dispatch and lineage_by_dispatch[dispatch] != value:
                 raise Refusal("dispatch has conflicting invocation lineage")
-            lineage_by_dispatch[dispatch] = invocation
+            admitted = invocations.get(invocation)
+            if admitted is not None and admitted[0] != original:
+                raise Refusal("invocation lineage crosses original-item identity")
+            lineage_by_dispatch[dispatch] = value
+        else:
+            raise Refusal("invocation lineage is not bound to an assigned original item")
     for row in content.get("expectedDispatches", []):
         dispatch = row.get("dispatch_id")
         item = row.get("item_id")
         original = original_by_item.get(item)
         if original is None or not isinstance(dispatch, str):
             raise Refusal("expected dispatch is not bound to an assigned original item")
-        invocation = lineage_by_dispatch.get(dispatch)
-        if invocation is None:
+        lineage = lineage_by_dispatch.get(dispatch)
+        if lineage is None:
             incomplete[original].add("missing-expected-invocation:" + dispatch)
-        elif invocation not in invocations:
+        else:
+            invocation, lineage_original = lineage
+            if lineage_original != original:
+                raise Refusal("dispatch lineage crosses original-item identity")
+        if lineage is not None and invocation not in invocations:
             incomplete[original].add("missing-expected-admission:" + invocation)
 
     admitted_originals = {original for original, _ in invocations.values()}
     for original in assignments:
         if original not in admitted_originals:
             incomplete[original].add("missing-root-admission")
+        # Schema 10 has no affirmative producer facts closing these inventories.
+        # Snapshot query completeness and absence of a gap are not evidence that the
+        # expected population, native turns, shared costs, provider, or support are complete.
+        incomplete[original].update({
+            "expected-dispatch-population-unproven",
+            "expected-native-turn-inventory-unavailable",
+            "expected-shared-cost-inventory-unavailable",
+            "expected-provider-unavailable",
+            "usage-support-unproven",
+        })
 
     terminal = {row.get("invocation_id") for row in content.get("terminals", [])}
     gaps = defaultdict(set)
@@ -315,6 +336,7 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
             raise Refusal("runtime usage gap lacks invocation identity")
 
     observed_usage = Counter()
+    observed_providers = defaultdict(set)
     seen_usage = set()
     for row in content.get("usage", []):
         identity = row.get("identity")
@@ -343,6 +365,7 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
             incomplete[original].add("provider-profile-mismatch:" + identity)
         else:
             totals[original] += total
+            observed_providers[original].add(provider)
 
     for invocation, (original, _) in invocations.items():
         if invocation not in terminal:
@@ -351,6 +374,9 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
             incomplete[original].add("missing-provider-usage:" + invocation)
         for code in gaps[invocation]:
             incomplete[original].add("unsupported-usage:" + code)
+    for original, providers in observed_providers.items():
+        if len(providers) > 1:
+            incomplete[original].add("provider-mismatch")
     for invocation in gaps.keys() - invocations.keys():
         raise Refusal("runtime usage gap has no expected admitted invocation: " + invocation)
 
@@ -393,6 +419,10 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
         "incompleteTokenOriginalItems": incomplete_items,
         "incompleteTokenReasons": {item: sorted(incomplete[item]) for item in incomplete_items},
         "tokenComparisonQualified": not incomplete_items,
+        "qualificationPrerequisite": (
+            "versioned producer facts for complete expected dispatch and native-turn inventories, "
+            "complete shared-cost inventory, expected provider, and affirmative usage support"
+        ),
         "claim": "private-snapshot-analysis-no-efficiency-result",
     }
 
