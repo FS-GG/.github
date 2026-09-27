@@ -3305,14 +3305,6 @@ module LiveHandlers =
             | Result.Error m ->
                 eprint $"fsgg-coord-engine: verify-paths issue ref: %s{m}"
                 ExitError
-            | Ok(Some ir) when
-                opts.Repo.IsNone
-                && String.Equals(ir.Repo, ".github", StringComparison.OrdinalIgnoreCase)
-                ->
-                eprint
-                    "fsgg-coord-engine: verify-paths: a Coordination issue needs --repo <PR-repo> to name the Paths: namespace; the touch-set was NOT checked."
-
-                ExitNoVerdict
             | Ok issueRef ->
 
                 // The repo the PR is in: `--repo` (a registry short-id / owner/repo / literal name, reduced the
@@ -3532,7 +3524,18 @@ module LiveHandlers =
                                             | Error e -> fail e
                                             | Ok files ->
                                                 let classifications =
-                                                    deliveryPathClassifier ctx issue (Declared tokens) files
+                                                    if crossesRepo issue then
+                                                        // The shared classifier binds generated-path authority to the
+                                                        // ISSUE repo. For a Coordination declaration, the changed files
+                                                        // belong to the PR repo instead. Neither this checkout's generated
+                                                        // roster nor the issue's SDD package can exempt target-repo files.
+                                                        Delivery.classifyPaths
+                                                            (Declared tokens)
+                                                            (Delivery.AuthorityKnown("cross-repo:no-generated-exemption", Set.empty))
+                                                            (Delivery.AuthorityKnown("cross-repo:no-sdd-exemption", []))
+                                                            files
+                                                    else
+                                                        deliveryPathClassifier ctx issue (Declared tokens) files
 
                                                 // #498/ADR-0044: the generated, CI-gated artifacts this PR REGENERATED are drift
                                                 // by the letter of the touch-set and are not a finding — §1 forbids declaring

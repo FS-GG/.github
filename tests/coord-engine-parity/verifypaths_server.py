@@ -51,6 +51,8 @@ PRS = {
     9: {"ref": "chore/no-linked-issue", "files": ["README.md"]},
     10: {"ref": "item/72-no-touch-set-declared", "files": ["src/Whatever.fs"]},
     11: {"ref": "chore/closes-another-repo", "files": ["src/Scene/Graph.fs"]},
+    12: {"ref": "item/70-generated-control", "files": ["registry/driver-skill-manifest.json"]},
+    13: {"ref": "chore/closes-coordination", "files": ["src/Scene/Graph.fs"]},
 }
 
 # Closing-ref answers, keyed by PR number (`Reads.prClosingRef` sends the PR in the GraphQL variables). PR 9
@@ -59,6 +61,7 @@ PRS = {
 # not the PR's own repo (FS.GG.SDD), and SKIPs green, naming the other repo — never a verdict across the line.
 CLOSES = {
     11: [{"number": 70, "repository": {"nameWithOwner": "FS-GG/FS.GG.Rendering"}}],
+    13: [{"number": 2845, "repository": {"nameWithOwner": "FS-GG/.github"}}],
 }
 
 # Issue bodies — the touch-sets the PRs are checked against, keyed by (repo, number). #70 is case 22's

@@ -2293,17 +2293,40 @@ if [ -z "$VP_PORT" ]; then bad "verify-paths --issue fixture bound a port"; else
     && ok "#2858: positional ref wins over a conventionally named branch, with inversion" \
     || bad "#2858 positional inversion" "rc=$c2rc: $c2"
   c3="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2847)"; c3rc=$?
-  { [ "$c3rc" -ne 0 ] && ! printf '%s' "$c3" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+  { [ "$c3rc" -ne 0 ] && printf '%s' "$c3" | grep -q "declares no 'Paths:'" \
+      && ! printf '%s' "$c3" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
     && ok "#2858: undeclared cross-repo namespace refuses before verdict" \
     || bad "#2858 undeclared refusal" "rc=$c3rc: $c3"
   c4="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2848)"; c4rc=$?
-  { [ "$c4rc" -ne 0 ] && ! printf '%s' "$c4" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+  { [ "$c4rc" -ne 0 ] && printf '%s' "$c4" | grep -q 'ambiguous or unmatchable tokens' \
+      && ! printf '%s' "$c4" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
     && ok "#2858: ambiguous cross-repo declaration refuses before verdict" \
     || bad "#2858 ambiguous refusal" "rc=$c4rc: $c4"
   c5="$(vpi --pr 7 --issue FS-GG/.github#2845)"; c5rc=$?
-  { [ "$c5rc" -ne 0 ] || ! printf '%s' "$c5" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
-    && ok "#2858: absent explicit PR repository cannot authorize cross-repo comparison" \
-    || bad "#2858 missing target namespace" "rc=$c5rc: $c5"
+  { [ "$c5rc" -eq 0 ] && printf '%s' "$c5" | grep -q 'FSGG-PATHS OK'; } \
+    && ok "#2858: same-repo --issue without --repo remains valid" \
+    || bad "#2858 same-repo --issue regression" "rc=$c5rc: $c5"
+  c6="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2847 --warn)"; c6rc=$?
+  { [ "$c6rc" -ne 0 ] && printf '%s' "$c6" | grep -q "declares no 'Paths:'" \
+      && ! printf '%s' "$c6" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+    && ok "#2858: --warn cannot downgrade undeclared cross-repo refusal" \
+    || bad "#2858 undeclared --warn refusal" "rc=$c6rc: $c6"
+  c7="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2848 --warn)"; c7rc=$?
+  { [ "$c7rc" -ne 0 ] && printf '%s' "$c7" | grep -q 'ambiguous or unmatchable tokens' \
+      && ! printf '%s' "$c7" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+    && ok "#2858: --warn cannot downgrade ambiguous cross-repo refusal" \
+    || bad "#2858 ambiguous --warn refusal" "rc=$c7rc: $c7"
+  c8="$(vpi FS-GG/.github#2845 --pr 7 --repo FS.GG.SDD --issue FS-GG/.github#2846)"; c8rc=$?
+  { [ "$c8rc" -ne 0 ] && printf '%s' "$c8" | grep -q 'name the issue once' \
+      && ! printf '%s' "$c8" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+    && ok "#2858: two explicit subjects refuse before a verdict" \
+    || bad "#2858 conflicting subjects" "rc=$c8rc: $c8"
+  c9="$(vpi --pr 12 --repo FS.GG.SDD --issue FS-GG/.github#2845)"; c9rc=$?
+  { [ "$c9rc" -ne 0 ] && printf '%s' "$c9" | grep -q 'FSGG-PATHS DRIFT' \
+      && printf '%s' "$c9" | grep -q 'registry/driver-skill-manifest.json' \
+      && ! printf '%s' "$c9" | grep -q 'regenerated (expected)'; } \
+    && ok "#2858: a .github generated path does not exempt target-repo drift" \
+    || bad "#2858 cross-repo generated inversion" "rc=$c9rc: $c9"
 
   # 3. #494: the issue read is repo-qualified — same PR, same issue NUMBER, opposite verdict by repo
   #    (case 24 lines 56-62). SDD#494 (Scene) → OK; Rendering#494 (Audio) → DRIFT on PR 7's Scene files.
@@ -2429,6 +2452,12 @@ if [ -z "$VP_PORT" ]; then bad "verify-paths closing-ref fixture bound a port"; 
   printf '%s' "$x9" | grep -q 'FSGG-PATHS SKIP' \
     && ok "verify-paths: a PR that closes NOTHING is still the unlinked SKIP — the PR-keyed arm did not swallow it (case 24)" \
     || bad "unlinked SKIP must survive the closing-ref arm" "$x9"
+  x13="$(vpx --pr 13 --repo FS.GG.SDD)"; x13rc=$?
+  { [ "$x13rc" -eq 0 ] && printf '%s' "$x13" | grep -q 'FSGG-PATHS SKIP' \
+      && printf '%s' "$x13" | grep -q 'FS-GG/.github#2845' \
+      && ! printf '%s' "$x13" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+    && ok "#2858: an implicit Coordination closing ref cannot authorize a cross-repo verdict" \
+    || bad "#2858 implicit Coordination close" "rc=$x13rc: $x13"
   kill "$VP_SRV" 2>/dev/null
 fi
 
