@@ -113,6 +113,8 @@
     <Compile Include="Intake.fs" />
     <Compile Include="IntakeReceipt.fsi" />
     <Compile Include="IntakeReceipt.fs" />
+    <Compile Include="IntakeTransaction.fsi" />
+    <Compile Include="IntakeTransaction.fs" />
     <Compile Include="Kind.fsi" />
     <Compile Include="Kind.fs" />
     <Compile Include="Rooms.fsi" />

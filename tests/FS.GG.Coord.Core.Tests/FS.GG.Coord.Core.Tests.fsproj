@@ -52,6 +52,7 @@
     <Compile Include="KitTests.fs" />
     <Compile Include="RegistryPredicateTests.fs" />
     <Compile Include="IntakeTests.fs" />
+    <Compile Include="IntakeTransactionTests.fs" />
     <Compile Include="DeliveryRouteTests.fs" />
     <Compile Include="StructuredDecisionTests.fs" />
     <!-- OpKeyTests (.github#2311) drives the new pure Operation module — the operation key, its closed
