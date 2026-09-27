@@ -4,28 +4,28 @@ category: FS.GG
 categoryindex: 6
 index: 35
 description: Proposed browser tactical client, native StarCraft II gateway, portable WASM controller boundary, mouse and keyboard interaction, and staged product delivery.
-status: proposed
+status: active
 document-type: design-and-roadmap
-last-updated: 2026-09-08
+last-updated: 2026-09-27
 ---
 
 # Fable SC2 client with custom WASM control — design and roadmap
 
-**Feature: SC2C-01. Status: proposed product design; implementation has not started.**
+**Feature: SC2C-01. Status: active product roadmap; SC2C-01.1–.2 and the .3a source slice are delivered.**
 This document recommends a browser-first Fable/Elmish tactical client connected to a native
 StarCraft II process through an F# gateway. Custom WebAssembly modules receive game data and
 normalized user input, then return command intentions which the host and gateway validate before
 sending SC2 actions. A bundled manual controller follows exactly that module path.
 
-The requested work is this design, roadmap and documentation PR. Merging it does not publish an
-ABI, create a product repository, install SC2, deploy a service, or change an existing template.
-All message names, signatures, limits, package boundaries and acceptance criteria below describe
-the proposed product. They become implementation contracts only through subsequent product work.
+The initial design and documentation merge did not publish an ABI, create a product repository,
+install SC2, deploy a service or change an existing template. Subsequent source work created the
+private `FS.GG.SC2.Client` product repository and delivered the milestones recorded below. Proposed
+message names, signatures, limits, package boundaries and acceptance criteria become implementation
+contracts only where that product source or later qualification evidence adopts them.
 
-Proposed product name: **FS.GG.SC2.Client**, subject to selection when implementation begins.
-There is no new repository behind that name yet. Until one exists, this is the feature's planning
-home. It belongs to the independent product portfolio in section 15 of the
-[Unified Roadmap](2026-09-07-154210-fs-gg-unified-development-roadmap.md), indexed from
+The selected product and source owner is the private **FS.GG.SC2.Client** repository. This document
+remains the feature's programme planning home. It belongs to the independent product portfolio in
+section 15 of the [Unified Roadmap](2026-09-07-154210-fs-gg-unified-development-roadmap.md), indexed from
 [section 9.8](2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
 It does not become a prerequisite for the V0–V6 coordination sequence.
 
@@ -821,8 +821,7 @@ installation, data volume and command-coverage evidence.
 - [x] **SC2C-01.1 — Reproducible product baseline and contract corpus — route: routine.**
 
 **Source closure:** [SC2 Client PR #2](https://github.com/FS-GG/FS.GG.SC2.Client/pull/2) merged at `c90c07fc32c9c17374ecfef9d1df1b019e973f2a`; exact-main `verify` passed. This closes the source baseline only; live SC2 and installed operation remain later gates.
-  **Depends on:** a subsequent implementation request identifying/authorizing the actual product
-  workspace; inspection of selected current template/tool/package releases. No other roadmap feature
+  **Depends on:** inspection of selected current template/tool/package releases. No other roadmap feature
   is a prerequisite for read-only planning.
   **Scope:** scaffold from the current Fable game provider; isolate/remove its arena simulation;
   establish native SC2 adapter and browser boundaries; qualify FS.GG.Net released-package consumption;
@@ -853,6 +852,7 @@ installation, data volume and command-coverage evidence.
   **Handoff:** usable offline demonstration, input mapping, measured fixture costs and failure taxonomy.
 
 - [ ] **SC2C-01.3 — First playable local SC2 vertical slice — route: routine.**
+  **Source progress:** SC2C-01.3a is delivered in private [SC2 Client PR #4](https://github.com/FS-GG/FS.GG.SC2.Client/pull/4), merged at `dad6d257af488f6668f8f2dd076b2dde5899ce03`; exact-main [`verify`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36314544918) passed. The delivered source provides the 2.0 live observation/feedback contracts, expanded native response adapter, actionable asset preflight and serialized lifecycle/session owner against a scripted WebSocket peer. The product-owned [bounded .3 plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/dad6d257af488f6668f8f2dd076b2dde5899ce03/docs/SC2C-01.3-plan.md) retains .3b–.3d. No real StarCraft II binary, data package or map was exercised, so this source cut does not complete SC2C-01.3 or establish installed operation.
   **Depends on:** SC2C-01.2; access to the chosen legal SC2 installation and compatible map.
   **Scope:** harden the existing native handshake path into product create/join/observe/action/step/end;
   load real metadata, pair the local browser, and run one participant against the built-in computer
@@ -917,14 +917,15 @@ restart completed work or convert this feature into a parallel overall FS-GG roa
 
 ## 14. Workspace impact and programme accounting
 
-This PR changes only proposed design prose and its navigation links. It changes no generated
-workspace, public ABI, template package, installed tool, lifecycle/default selection, renderer,
-runtime behavior or protected deployment. It creates no product execution claim.
+The initial design PR changed only proposed design prose and its navigation links. The product source
+milestones recorded above still change no generated workspace, template package, installed tool,
+lifecycle/default selection or protected deployment. Their product contracts and runtime source do
+not establish installed or live-SC2 execution.
 
-SC2C-01.1 would create the first selected product workspace from the current Fable provider and
-record the actual published template/tool identities. SC2C-01.3 would enable the first actual SC2
-session. These do not alter other generated Fable products. There is no provider publication or
-existing-workspace upgrade in this documentation delivery.
+SC2C-01.1 created the selected product workspace from the current Fable provider and recorded its
+template/tool identities. SC2C-01.3a adds scripted source preparation; .3d remains the first gate that
+can establish an actual SC2 session. These do not alter other generated Fable products. No provider
+publication or existing-workspace upgrade is established.
 
 If a later reusable capability moves into Net, Rendering, Game or Templates, its owner publishes a
 qualified release and the product explicitly adopts it. Fresh-creation checks use the published
