@@ -589,8 +589,11 @@
   <!-- 0.91.3 -> 0.91.4 (UTEL-GROUP): PATCH release for prospective roadmap member
        originals and canonical completed-group projection. The CLI, Drivers and Kit move
        together; a reviewed assignment and real delivery remain required for live evidence. -->
+  <!-- 0.91.4 -> 0.91.5: PATCH coherent successor. Rebuild the CLI against the
+       centrally pinned FSharp.Core 10.1.401 required by FCS 43.12.401, and ship
+       accumulated compatible telemetry and driver updates in all three members. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.91.4</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.91.5</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

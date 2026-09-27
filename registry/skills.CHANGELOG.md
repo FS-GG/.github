@@ -34,6 +34,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-09-27** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 2 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
+
 - **2026-09-26** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
 - **2026-09-24** — GS2-10.6 REGISTRY RECONCILE (owners FS.GG.SDD and `.github`; SDD#987, .github#2965/#299/#1200): added `fs-gg-sdd-typed-correspond` and `-typed-reconcile` from SDD's current schema-v2 manifest, then reconciled five stale body digests (`-typed-author`, `-typed-migrate`, `work-roadmap`, `work-board`, `publishing-and-deployment`) with `fsgg-skill-registry-check --write`. Rebound the declaration-only v1 writer census source identity without changing its classification. No schema or materialization predicate changed; registry = manifest = bytes at the recorded producer heads.
