@@ -18,6 +18,7 @@ module CrossRepositoryDeliveryTests =
     let private worker = WorkerId "smew-f1e2"
     let private head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     let private files = [ "src/Delivery.fs"; "tests/DeliveryTests.fs" ]
+    let private touchSet = Declared [ Matchable "src/**"; Matchable "tests/**" ]
 
     let private scope () =
         DeliveryApplication.deliveryScope "FS-GG" (Some receiver) item |> Result.defaultWith failwith
@@ -89,16 +90,22 @@ module CrossRepositoryDeliveryTests =
         | ChangedBodyLinkage
         | ChangedGraphLinkage
         | ChangedPaths
+        | ChangedDeclaration
+        | RemovedDeclaration
+        | PatchChangedHead
+        | PatchChangedHolder
         | CurrentMarker
 
     type private World =
         {
             mutable Requests: (string * string) list
             mutable Patches: string list
+            mutable Body: string
+            mutable Patched: bool
+            mutable CommentReads: int
         }
 
     let private transport drift =
-        let world = { Requests = []; Patches = [] }
         let canonicalBody = $"Implements delivery.\n\nCloses %s{item.Canonical}"
         let currentBody =
             if drift = CurrentMarker then
@@ -112,20 +119,42 @@ module CrossRepositoryDeliveryTests =
                     head
             else canonicalBody
 
+        let world =
+            {
+                Requests = []
+                Patches = []
+                Body = currentBody
+                Patched = false
+                CommentReads = 0
+            }
+
         let recorder =
             Fake.Recorder(fun req ->
                 let path = req.Path.Trim('/')
                 world.Requests <- world.Requests @ [ req.Method, path ]
                 match req.Method, path, req.Body with
                 | "GET", "repos/FS-GG/.github/issues/2845/comments", _ ->
+                    world.CommentReads <- world.CommentReads + 1
                     match drift with
                     | MissingHolder -> response (noClaimComments ())
                     | WrongHolder -> response (comments generation "other-a1b2")
                     | ChangedGeneration -> response (comments (generation + 1L) "smew-f1e2")
+                    | PatchChangedHolder when world.Patched -> response (comments generation "other-a1b2")
                     | _ -> response (comments generation "smew-f1e2")
+                | "GET", "repos/FS-GG/.github/issues/2845", _ ->
+                    let body =
+                        match drift with
+                        | ChangedDeclaration -> "Paths: docs/**"
+                        | RemovedDeclaration -> "No path declaration remains."
+                        | _ -> "Paths: src/**, tests/**"
+                    response (JsonSerializer.Serialize {| body = body |})
                 | "GET", "repos/FS-GG/FS.GG.SDD/pulls/908", _ ->
-                    let liveHead = if drift = ChangedHead then String.replicate 40 "b" else head
-                    let body = if drift = ChangedBodyLinkage then "Closes #2845" else currentBody
+                    let liveHead =
+                        if drift = ChangedHead || (drift = PatchChangedHead && world.Patched) then
+                            String.replicate 40 "b"
+                        else
+                            head
+                    let body = if drift = ChangedBodyLinkage then "Closes #2845" else world.Body
                     response (prJson liveHead body)
                 | "GET", "repos/FS-GG/FS.GG.SDD/pulls/908/files", _ ->
                     let current = if drift = ChangedPaths then files @ [ "src/Unexpected.fs" ] else files
@@ -137,6 +166,9 @@ module CrossRepositoryDeliveryTests =
                         response (closingJson item.Number $"%s{item.Owner}/%s{item.Repo}")
                 | "PATCH", "repos/FS-GG/FS.GG.SDD/pulls/908", Json body ->
                     world.Patches <- world.Patches @ [ body ]
+                    use doc = JsonDocument.Parse body
+                    world.Body <- doc.RootElement.GetProperty("body").GetString()
+                    world.Patched <- true
                     response "{}"
                 | method', path', _ -> Error(Errors.NotFound $"unexpected cross-repo request: %s{method'} %s{path'}"))
         recorder, world
@@ -150,7 +182,7 @@ module CrossRepositoryDeliveryTests =
             ChoreLocks = []
         }
 
-    let private authorize drift =
+    let private authorizeWithPathsVerified drift pathsVerified =
         let recorder, world = transport drift
         let result =
             FS.GG.Coord.Cli.Lifecycle.LiveHandlers.ensureCrossRepositoryAuthorization
@@ -160,8 +192,12 @@ module CrossRepositoryDeliveryTests =
                 marker
                 pr
                 head
+                touchSet
                 files
+                pathsVerified
         result, recorder, world
+
+    let private authorize drift = authorizeWithPathsVerified drift true
 
     [<Fact>]
     let ``#2845 scope requires a local unambiguous receiver and preserves same-repo defaults`` () =
@@ -170,6 +206,8 @@ module CrossRepositoryDeliveryTests =
         Assert.True(DeliveryApplication.deliveryScope "FS-GG" (Some "Other/Repo") item |> Result.isError)
         let foreign = { item with Owner = "Other" }
         Assert.True(DeliveryApplication.deliveryScope "FS-GG" (Some receiver) foreign |> Result.isError)
+        let nonCoordination = { item with Repo = "FS.GG.Rendering" }
+        Assert.True(DeliveryApplication.deliveryScope "FS-GG" (Some receiver) nonCoordination |> Result.isError)
 
     [<Fact>]
     let ``#2845 cross-repo apply and flip refuse at the effect preflight`` () =
@@ -205,6 +243,13 @@ module CrossRepositoryDeliveryTests =
         Assert.DoesNotContain(("PATCH", "repos/FS-GG/.github/pulls/908"), world.Requests)
         Assert.True(recorder.Count("comment-list FS-GG/.github 2845") >= 2)
 
+    [<Fact>]
+    let ``#2845 failed inspected path verdict refuses before election or PATCH effects`` () =
+        let result, _, world = authorizeWithPathsVerified Stable false
+        Assert.True(Result.isError result)
+        Assert.Empty(world.Requests)
+        Assert.Empty(world.Patches)
+
     [<Theory>]
     [<InlineData("missing")>]
     [<InlineData("wrong-holder")>]
@@ -213,6 +258,8 @@ module CrossRepositoryDeliveryTests =
     [<InlineData("body-link")>]
     [<InlineData("graph-link")>]
     [<InlineData("paths")>]
+    [<InlineData("declaration")>]
+    [<InlineData("removed-declaration")>]
     let ``#2845 mutable authority drift refuses before receiver PATCH`` kind =
         let drift =
             match kind with
@@ -223,10 +270,21 @@ module CrossRepositoryDeliveryTests =
             | "body-link" -> ChangedBodyLinkage
             | "graph-link" -> ChangedGraphLinkage
             | "paths" -> ChangedPaths
+            | "declaration" -> ChangedDeclaration
+            | "removed-declaration" -> RemovedDeclaration
             | other -> failwith other
         let result, _, world = authorize drift
         Assert.True(Result.isError result, $"%s{kind} unexpectedly authorized")
         Assert.Empty(world.Patches)
+
+    [<Theory>]
+    [<InlineData("head")>]
+    [<InlineData("holder")>]
+    let ``#2845 PATCH-time authority change is detected by final readback`` kind =
+        let drift = if kind = "head" then PatchChangedHead else PatchChangedHolder
+        let result, _, world = authorize drift
+        Assert.True(Result.isError result, $"%s{kind} unexpectedly survived final readback")
+        Assert.Single(world.Patches) |> ignore
 
     [<Fact>]
     let ``#2845 a current receiver marker is idempotent and never duplicated`` () =

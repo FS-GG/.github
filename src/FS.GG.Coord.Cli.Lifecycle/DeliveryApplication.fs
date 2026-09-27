@@ -29,13 +29,19 @@ module DeliveryApplication =
             | Some repo when String.IsNullOrWhiteSpace repo || repo.Contains('/') || repo.Contains('#') ->
                 Error $"receiver repository '%s{repo}' is ambiguous or foreign; pass a repository name such as FS.GG.SDD"
             | Some repo ->
-                Ok
-                    {
-                        Item = item
-                        ReceiverOwner = owner
-                        ReceiverRepo = repo
-                        CrossRepository = not (String.Equals(item.Repo, repo, StringComparison.OrdinalIgnoreCase))
-                    }
+                let crosses = not (String.Equals(item.Repo, repo, StringComparison.OrdinalIgnoreCase))
+
+                if crosses && not (String.Equals(item.Repo, ".github", StringComparison.OrdinalIgnoreCase)) then
+                    Error
+                        $"cross-repository delivery is limited to an explicit Coordination item in %s{owner}/.github; '%s{item.Canonical}' is outside that authority"
+                else
+                    Ok
+                        {
+                            Item = item
+                            ReceiverOwner = owner
+                            ReceiverRepo = repo
+                            CrossRepository = crosses
+                        }
             | None ->
                 Ok
                     {

@@ -442,21 +442,18 @@ module LiveHandlers =
         (marker: Reads.Marker)
         (pr: int)
         (inspectedHead: string)
+        (inspectedTouchSet: TouchSet)
         (inspectedFiles: string list)
+        (pathsVerified: bool)
         : Errors.IoResult<unit> =
         if not scope.CrossRepository then
             Error(Errors.Malformed(scope.Item.Short, "cross-repository authorization requires distinct item and receiver repositories"))
+        elif not pathsVerified then
+            Error(Errors.Malformed(scope.Item.Short, "cross-repository Paths: verification did not pass; authorization was not attempted"))
         else
             let gen = string marker.Id
 
-            electionGroundingForReceiver
-                ctx
-                scope.Item
-                scope.ReceiverOwner
-                scope.ReceiverRepo
-                gen
-                pr
-            |> Result.bind (fun (opkey, grant) ->
+            let readAuthority () =
                 let currentMarker =
                     Reads.markerScan ctx.Transport scope.Item.Owner scope.Item.Repo scope.Item.Number
                     |> Result.bind (Reads.requireCompleteMarkerScan scope.Item.Short)
@@ -466,29 +463,95 @@ module LiveHandlers =
 
                 match
                     currentMarker,
+                    Reads.issueBody ctx.Transport scope.Item.Owner scope.Item.Repo scope.Item.Number,
                     Reads.prHeadSha ctx.Transport scope.ReceiverOwner scope.ReceiverRepo pr,
                     Reads.prBody ctx.Transport scope.ReceiverOwner scope.ReceiverRepo pr,
                     Reads.prClosingRef ctx.Transport scope.ReceiverOwner scope.ReceiverRepo pr,
                     Reads.prFiles ctx.Transport scope.ReceiverOwner scope.ReceiverRepo pr
                 with
-                | Error error, _, _, _, _
-                | _, Error error, _, _, _
-                | _, _, Error error, _, _
-                | _, _, _, Error error, _
-                | _, _, _, _, Error error -> Error error
-                | Ok None, _, _, _, _ ->
-                    Error(Errors.Malformed(scope.Item.Short, "the item has no current holder at authorization readback"))
-                | Ok(Some current), _, _, _, _ when current.Id <> marker.Id || current.Worker <> marker.Worker ->
-                    Error(Errors.Malformed(scope.Item.Short, "the item holder or claim generation changed before authorization"))
-                | Ok(Some _), Ok head, _, _, _ when head <> inspectedHead ->
-                    Error(Errors.Malformed(scope.Item.Short, "the receiver pull request head changed before authorization"))
-                | Ok(Some _), _, Ok body, _, _ when not (DeliveryApplication.hasCanonicalClosingLinkage scope.Item body) ->
-                    Error(Errors.Malformed(scope.Item.Short, "the receiver pull request lost its explicit canonical closing linkage"))
-                | Ok(Some _), _, _, Ok closing, _ when closing <> Some scope.Item ->
-                    Error(Errors.Malformed(scope.Item.Short, "the receiver pull request closing authority no longer names the item"))
-                | Ok(Some _), _, _, _, Ok files when files <> inspectedFiles ->
-                    Error(Errors.Malformed(scope.Item.Short, "the receiver pull request changed paths before authorization"))
-                | Ok(Some _), Ok head, Ok body, Ok _, Ok _ ->
+                | Error error, _, _, _, _, _
+                | _, Error error, _, _, _, _
+                | _, _, Error error, _, _, _
+                | _, _, _, Error error, _, _
+                | _, _, _, _, Error error, _
+                | _, _, _, _, _, Error error -> Error error
+                | Ok current, Ok itemBody, Ok head, Ok body, Ok closing, Ok files ->
+                    Ok(current, TouchSet.parse itemBody, head, body, closing, files)
+
+            let validateAuthority
+                (phase: string)
+                (currentMarker: Reads.Marker option,
+                 touchSet: TouchSet,
+                 head: string,
+                 body: string,
+                 closing: Ref option,
+                 files: string list)
+                =
+                match currentMarker with
+                | None ->
+                    Error(Errors.Malformed(scope.Item.Short, $"the item has no current holder at %s{phase} readback"))
+                | Some current when current.Id <> marker.Id || current.Worker <> marker.Worker ->
+                    Error(
+                        Errors.Malformed(
+                            scope.Item.Short,
+                            $"the item holder or claim generation changed at %s{phase} readback"
+                        )
+                    )
+                | Some _ when head <> inspectedHead ->
+                    Error(
+                        Errors.Malformed(
+                            scope.Item.Short,
+                            $"the receiver pull request head changed at %s{phase} readback"
+                        )
+                    )
+                | Some _ when touchSet <> inspectedTouchSet ->
+                    Error(Errors.Malformed(scope.Item.Short, $"the item Paths: declaration changed at %s{phase} readback"))
+                | Some _ when not (DeliveryApplication.hasCanonicalClosingLinkage scope.Item body) ->
+                    Error(
+                        Errors.Malformed(
+                            scope.Item.Short,
+                            $"the receiver pull request lost its explicit canonical closing linkage at %s{phase} readback"
+                        )
+                    )
+                | Some _ when closing <> Some scope.Item ->
+                    Error(
+                        Errors.Malformed(
+                            scope.Item.Short,
+                            $"the receiver pull request closing authority no longer names the item at %s{phase} readback"
+                        )
+                    )
+                | Some _ when files <> inspectedFiles ->
+                    Error(
+                        Errors.Malformed(
+                            scope.Item.Short,
+                            $"the receiver pull request changed paths at %s{phase} readback"
+                        )
+                    )
+                | Some _ ->
+                    DeliveryApplication.classifyReceiverPaths scope touchSet files (fun () -> [])
+                    |> Result.mapError (fun reason -> Errors.Malformed(scope.Item.Short, reason))
+                    |> Result.bind (fun classifications ->
+                        if Delivery.pathsVerified classifications then
+                            Ok(head, body)
+                        else
+                            Error(
+                                Errors.Malformed(
+                                    scope.Item.Short,
+                                    $"the receiver paths are outside the current item declaration at %s{phase} readback"
+                                )
+                            ))
+
+            electionGroundingForReceiver
+                ctx
+                scope.Item
+                scope.ReceiverOwner
+                scope.ReceiverRepo
+                gen
+                pr
+            |> Result.bind (fun (opkey, grant) ->
+                readAuthority ()
+                |> Result.bind (validateAuthority "pre-PATCH")
+                |> Result.bind (fun (head, body) ->
                     writeAuthorization
                         ctx
                         scope.Item
@@ -499,7 +562,28 @@ module LiveHandlers =
                         opkey
                         grant
                         head
-                        body)
+                        body
+                    |> Result.bind (fun () ->
+                        readAuthority ()
+                        |> Result.bind (validateAuthority "post-PATCH")
+                        |> Result.bind (fun (finalHead, finalBody) ->
+                            match
+                                rebindAuthorization
+                                    finalBody
+                                    scope.Item.Canonical
+                                    gen
+                                    opkey
+                                    grant
+                                    finalHead
+                            with
+                            | AuthorizationCurrent -> Ok()
+                            | AuthorizationRebound _ ->
+                                Error(
+                                    Errors.Malformed(
+                                        scope.Item.Short,
+                                        "the receiver pull request authorization marker was absent, duplicated, or stale at post-PATCH readback"
+                                    )
+                                )))))
 
     // Prove that moving from an accepted base to the current base preserves the reviewed candidate
     // delta. Both `landable` and the final guarded merge call this same function, so the merge boundary
@@ -854,7 +938,9 @@ module LiveHandlers =
                                                  held
                                                  prNumber
                                                  head
+                                                 deliveryTouchSet
                                                  files
+                                                 pathsVerified
                                          | _ -> Ok()
                                      else
                                          ensureAuthorization ctx target marker pr head merged)

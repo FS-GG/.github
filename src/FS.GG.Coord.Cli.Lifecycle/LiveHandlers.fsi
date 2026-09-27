@@ -205,7 +205,9 @@ module LiveHandlers =
         marker: FS.GG.Coord.GitHub.Reads.Marker ->
         pr: int ->
         inspectedHead: string ->
+        inspectedTouchSet: FS.GG.Coord.Types.TouchSet ->
         inspectedFiles: string list ->
+        pathsVerified: bool ->
             FS.GG.Coord.GitHub.Errors.IoResult<unit>
 
     /// `review` — the resumable review/repair protocol (.github#2175) as one typed answer, and `review record`
