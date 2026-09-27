@@ -152,10 +152,10 @@ run "$R" "$F"
 must_fail "a wire-surface commit after the tag is RED" "WIRE SURFACE has outrun the feed"
 # The message must name the remedy, not merely the fault: a gate that reds without naming the fix is
 # one the next worker routes around.
-if grep -q 'push the matching coord-engine/v<version> tag' <<<"$out"; then
-  ok "the RED names the remedy (bump + tag)"
+if grep -q 'start the protected coherent-set release saga' <<<"$out"; then
+  ok "the RED names the remedy (bump + coherent-set saga)"
 else
-  bad "the RED names the remedy (bump + tag)" "$out"
+  bad "the RED names the remedy (bump + coherent-set saga)" "$out"
 fi
 
 # ---------------------------------------------------------------------------------------------
@@ -264,6 +264,23 @@ R="$WORK/notag"; make_repo "$R"
 F="$WORK/feed-notag.json"; feed "$F" 0.9.9
 run "$R" "$F"
 must_fail "an untagged feed version is an ERROR, not 'current'" "has no tag"
+
+# 0.91.0 migrated the published three-package set to one promoted coherent-set identity. The engine
+# baseline must follow the same tag the receiver resolves, while preserving component tags below the
+# cutover. A stray successor-era component tag is not the canonical identity and cannot green it.
+R="$WORK/successor"; make_repo "$R"
+git_ -C "$R" tag "coherent-set/v0.91.0"
+F="$WORK/feed-successor.json"; feed "$F" 0.91.0
+run "$R" "$F"
+must_pass "a successor release resolves its coherent-set identity" \
+  "no engine commits since coherent-set/v0.91.0"
+
+R="$WORK/successor-component-only"; make_repo "$R"
+git_ -C "$R" tag "coord-engine/v0.91.0"
+F="$WORK/feed-successor-component-only.json"; feed "$F" 0.91.0
+run "$R" "$F"
+must_fail "a successor component tag cannot replace the coherent-set identity" \
+  "has no tag 'coherent-set/v0.91.0'"
 
 # ---------------------------------------------------------------------------------------------
 # 8. FAIL CLOSED — the feed has no such package / zero versions / only prereleases.

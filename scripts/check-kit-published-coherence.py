@@ -173,6 +173,12 @@ tag deleted or force-moved AFTER publication silently recreates the exact defect
 the reporter resolves a rule out of a tree that is not that release, or refuses on a version that is
 on the feed. `release-kit.yml`'s gate is PUBLISH-TIME ONLY and cannot see that.
 
+The protected successor rail changed that identity at `0.91.0`. Kit, Drivers and Coord.Cli now
+share `coherent-set/v<version>`, and receiver materialization validates that tag plus the promoted
+release manifest. Their component tags remain canonical only through `0.90.x`. This arm applies the
+same cutover to all three package artifacts; treating the deliberately absent successor component
+tags as required would disagree with the release and receiver contracts it is meant to protect.
+
 THE COMPARAND IS THE ARTIFACT, NOT A LIST. The interesting question is not "does the tag exist" —
 that is checkable against memory, and memory is what went wrong. It is **"does the tag still resolve
 to the commit that produced the published package?"**, and the published package answers it itself.
@@ -185,7 +191,7 @@ be measured against, and the measurement needs no record anyone has to maintain.
 
     for every version nuget.org serves, in every release namespace below:
         the nuspec must bind a 40-hex commit in THIS repository,
-        the tag `<prefix><version>` must exist,
+        the canonical tag for that package version must exist,
         and `git ls-remote` (peeled) must resolve it to exactly that commit.
 
 WHY THE KIT'S CLEAN RESULT IS WHAT MAKES THE WIDENING WORTH ANYTHING (.github#1790). Measured on
@@ -820,12 +826,32 @@ class TagNamespace:
     package: str | None  # the nuget.org id whose nuspec anchors it, or None = no anchor
     grammar: str         # BARE_TRIPLE or NUGET_VERSION — which version literals are refs at all
     note: str            # what resolves this namespace, i.e. what a moved tag would break
+    successor_prefix: str | None = None
+    successor_since: str | None = None
+
+    def tag_prefix(self, version: str) -> str:
+        if (
+            self.successor_prefix is not None
+            and self.successor_since is not None
+            and parse_version(version) >= parse_version(self.successor_since)
+        ):
+            return self.successor_prefix
+        return self.prefix
+
+    def tag_name(self, version: str) -> str:
+        return f"{self.tag_prefix(version)}{version}"
 
     @property
-    def ref_pattern(self) -> re.Pattern[str]:
-        return re.compile(
-            r"\Arefs/tags/" + re.escape(self.prefix) + r"(" + self.grammar + r")(\^\{\})?\Z"
-        )
+    def tag_prefixes(self) -> tuple[str, ...]:
+        if self.successor_prefix:
+            return tuple(dict.fromkeys((self.prefix, self.successor_prefix)))
+        return (self.prefix,)
+
+    @property
+    def identity_label(self) -> str:
+        if self.successor_prefix and self.successor_since:
+            return f"{self.prefix}* / {self.successor_prefix}* since {self.successor_since}"
+        return f"{self.prefix}*"
 
 
 # EVERY release-tag namespace this repository publishes from. A namespace absent from this table is
@@ -837,21 +863,27 @@ RELEASE_NAMESPACES: tuple[TagNamespace, ...] = (
         package="FS.GG.Kit",
         grammar=BARE_TRIPLE,
         note="the receiver-side `materialize / kit-bump-shape` reporter resolves the RULE it runs "
-        "from this tag, peeled to a commit (.github#1772)",
+        "from the component tag through 0.90.x and the promoted coherent-set identity from 0.91.0",
+        successor_prefix="coherent-set/v",
+        successor_since="0.91.0",
     ),
     TagNamespace(
         prefix="coord-engine/v",
         package="FS.GG.Coord.Cli",
         grammar=NUGET_VERSION,
-        note="scripts/check-engine-freshness.py resolves `coord-engine/v<newest on the feed>` and "
-        "counts wire-surface commits since it — a moved tag moves that baseline (.github#1075)",
+        note="scripts/check-engine-freshness.py resolves the component tag through 0.90.x and the "
+        "promoted coherent-set identity from 0.91.0, then counts wire-surface commits since it",
+        successor_prefix="coherent-set/v",
+        successor_since="0.91.0",
     ),
     TagNamespace(
         prefix="drivers/v",
         package="FS.GG.Drivers",
         grammar=NUGET_VERSION,
         note="the driver skill bytes the SDD CLI pins and materializes at scaffold time (ADR-0054); "
-        "the tag is the only record of which tree produced a given driver payload",
+        "the component tag applies through 0.90.x and the coherent-set identity from 0.91.0",
+        successor_prefix="coherent-set/v",
+        successor_since="0.91.0",
     ),
     TagNamespace(
         prefix="new-sdd-workspace/v",
@@ -1045,18 +1077,19 @@ def remote_release_tags(remote: str, ns: TagNamespace) -> dict[str, str]:
     """
     try:
         result = subprocess.run(
-            ["git", "ls-remote", "--tags", remote, f"refs/tags/{ns.prefix}*"],
+            ["git", "ls-remote", "--tags", remote,
+             *(f"refs/tags/{prefix}*" for prefix in ns.tag_prefixes)],
             text=True,
             capture_output=True,
             check=False,
             timeout=120,
         )
     except (OSError, subprocess.SubprocessError) as e:
-        raise GateError(f"cannot list {ns.prefix}* tags on {remote!r}: {e}") from e
+        raise GateError(f"cannot list {ns.identity_label} tags on {remote!r}: {e}") from e
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
         raise GateError(
-            f"cannot list {ns.prefix}* tags on {remote!r}"
+            f"cannot list {ns.identity_label} tags on {remote!r}"
             + (f": {detail}" if detail else "")
             + " — a tag set this gate cannot read is an UNRESOLVED verdict for every published "
             "version, never a passing one (#266)."
@@ -1077,7 +1110,6 @@ def parse_ls_remote_tags(text: str, ns: TagNamespace) -> dict[str, str]:
     with that namespace's refspec would answer, so a row for a DIFFERENT namespace is skipped here
     for the same reason the live read never sees it.
     """
-    pattern = ns.ref_pattern
     direct: dict[str, str] = {}
     peeled: dict[str, str] = {}
     for lineno, raw in enumerate(text.splitlines(), 1):
@@ -1089,9 +1121,19 @@ def parse_ls_remote_tags(text: str, ns: TagNamespace) -> dict[str, str]:
         sha, ref = parts[0].strip().lower(), parts[1].strip()
         if not _HEX40.match(sha):
             raise GateError(f"ls-remote line {lineno} carries a non-sha object id {sha!r}")
-        match = pattern.match(ref)
-        if not match:
+        selected: tuple[str, re.Match[str]] | None = None
+        for prefix in ns.tag_prefixes:
+            pattern = re.compile(
+                r"\Arefs/tags/" + re.escape(prefix) + r"(" + ns.grammar + r")(\^\{\})?\Z"
+            )
+            if match := pattern.match(ref):
+                selected = (prefix, match)
+                break
+        if selected is None:
             continue  # outside this namespace's grammar — no consumer can resolve it.
+        prefix, match = selected
+        if ns.tag_prefix(match.group(1)) != prefix:
+            continue  # a non-canonical identity on the other side of the versioned cutover.
         (peeled if match.group(2) else direct)[match.group(1)] = sha
     return {**direct, **peeled}
 
@@ -1197,7 +1239,7 @@ def classify_namespace(
             # Two DIFFERENT commits under one canonical version is not a normalisation question, it
             # is an ambiguity: nothing can say which one a pin would resolve. Unresolved, never a pass.
             raise GateError(
-                f"{ns.prefix}{literal} and {ns.prefix}{keyed_tags[key][0]} are the same NuGet "
+                f"{ns.tag_name(literal)} and {ns.tag_name(keyed_tags[key][0])} are the same NuGet "
                 f"version but resolve to different commits ({sha} vs {keyed_tags[key][1]}). Nothing "
                 f"can say which one a pin resolves, so this is unresolved, not a pass."
             )
@@ -1386,15 +1428,23 @@ def render_tag_arm(verdicts: list[NamespaceVerdict], repository: str) -> tuple[i
             )
 
         for version, commit in v.missing:
-            problems.append(
-                f"    MISSING  {ns.prefix}{version} — published, but no such tag. Its artifact was "
-                f"packed from {commit}; create it with:\n"
-                f"        git tag {ns.prefix}{version} {commit} && "
-                f"git push origin {ns.prefix}{version}"
-            )
+            tag = ns.tag_name(version)
+            if ns.successor_prefix and ns.tag_prefix(version) == ns.successor_prefix:
+                problems.append(
+                    f"    MISSING  {tag} — published, but no such canonical coherent-set tag. Its "
+                    f"artifact was packed from {commit}; recover the protected coherent-set release "
+                    f"for that exact source through release-saga-start.yml."
+                )
+            else:
+                problems.append(
+                    f"    MISSING  {tag} — published, but no such tag. Its artifact was packed from "
+                    f"{commit}; create it with:\n"
+                    f"        git tag {tag} {commit} && git push origin {tag}"
+                )
         for version, resolved, commit in v.moved:
+            tag = ns.tag_name(version)
             problems.append(
-                f"    MOVED    {ns.prefix}{version} resolves to {resolved}, but the published "
+                f"    MOVED    {tag} resolves to {resolved}, but the published "
                 f".nuspec was packed from {commit}. The tag was changed after publication."
             )
 

@@ -730,6 +730,34 @@ must_pass "the declared repository's ssh remote is accepted" "every tag resolves
 must_pass "every published version's tag resolves to its artifact's commit" \
   "every tag resolves (peeled) to its artifact's commit"
 
+# The protected successor rail consolidated Kit, Drivers and Coord.Cli under one promoted release
+# identity beginning at 0.91.0. Preserve the component identity below the cutover and require the
+# shared identity at and above it, matching the receiver-side resolver.
+{
+  printf '0.90.0\t%s\n' "$C1"
+  printf '0.91.0\t%s\n' "$C2"
+} > "$TAGPUB"
+{
+  printf '%s\trefs/tags/kit/v0.90.0\n' "$C1"
+  printf '%s\trefs/tags/coherent-set/v0.91.0\n' "$C2"
+} > "$TAGREFS"
+tagarm
+must_pass "the Kit identity follows the 0.91 coherent-set cutover" \
+  "every tag resolves (peeled) to its artifact's commit"
+
+{
+  printf '%s\trefs/tags/kit/v0.90.0\n' "$C1"
+  printf '%s\trefs/tags/kit/v0.91.0\n' "$C2"
+} > "$TAGREFS"
+tagarm
+must_fail "a successor-era component tag cannot replace the coherent-set identity" \
+  "MISSING  coherent-set/v0.91.0"
+
+{
+  printf '0.16.0\t%s\n' "$C1"
+  printf '0.17.0\t%s\n' "$C2"
+} > "$TAGPUB"
+
 # PEELING IS LOAD-BEARING, not a detail. An ANNOTATED tag's own object id is not the commit the #1772
 # resolver checks the rule out at; comparing the wrong one would red every annotated release — 8 of
 # the 23 live tags are annotated. `refs/tags/X^{}` must beat `refs/tags/X`.
@@ -3081,7 +3109,7 @@ cut_mutant_run mutant-vacuous-inventory "$WORK/empty-tags.txt"
 must_pass "INVERSION M13: with the empty-inventory refusal deleted, a read of NOTHING greens the arm" \
   "No kit/v0.58.1 tag is cut"
 
-EXPECTED_LEGS=271
+EXPECTED_LEGS=273
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \

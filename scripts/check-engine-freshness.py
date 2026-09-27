@@ -17,7 +17,7 @@ The scalars are equal BECAUSE the defect is happening. So this gate counts COMMI
 
 WHAT IT ASSERTS.
 
-    tag   = coord-engine/v<the newest version LIVE ON THE FEED>
+    tag   = the canonical release tag for the newest version LIVE ON THE FEED
     drift = git log <tag>..HEAD -- <the engine's source trees>
 
 A TAG IS NOT A PUBLISH, which is why the comparison point is derived from the FEED and the tag is
@@ -63,8 +63,8 @@ current" must never share an exit code. Every one of these is an ERROR, not a sk
 "no drift":
 
   * the feed is unreachable, unauthorised, returns unparsable JSON, or serves zero versions;
-  * the feed's newest version has NO matching `coord-engine/v<version>` tag (a publish with no tag,
-    or a tag scheme that moved — either way the comparison point is unknown, not "current");
+  * the feed's newest version has NO matching canonical tag (`coord-engine/v<version>` through
+    0.90.x, `coherent-set/v<version>` from 0.91.0); either way the comparison point is unknown;
   * GitHub's associated-PR / closing-issue metadata is unreadable, partial, or malformed;
   * the tag exists but git cannot read it, or the repo has no commits;
   * the wire-surface file does not exist at the path this gate names (the protocol moved, and a
@@ -136,13 +136,27 @@ from fsgg_feed import (  # noqa: E402  (path shim above must run first)
     feed_versions,
     is_prerelease,
     newest,
+    parse_version,
 )
 
 # The package the fleet restores and `scripts/fsgg-coord` execs (ADR-0034 §4.4).
 PACKAGE = "FS.GG.Coord.Cli"
 
-# `release-coord-engine.yml` releases on `coord-engine/v<version>` matching the fsproj <Version>.
-TAG_PREFIX = "coord-engine/v"
+# Releases through 0.90.x used the component tag. The protected successor rail consolidated the
+# three-package set under one promoted `coherent-set/v<version>` identity beginning at 0.91.0; this
+# is also the identity receiver materialization resolves for those versions.
+LEGACY_TAG_PREFIX = "coord-engine/v"
+SUCCESSOR_TAG_PREFIX = "coherent-set/v"
+SUCCESSOR_SINCE = "0.91.0"
+
+
+def release_tag(version: str) -> str:
+    prefix = (
+        SUCCESSOR_TAG_PREFIX
+        if parse_version(version) >= parse_version(SUCCESSOR_SINCE)
+        else LEGACY_TAG_PREFIX
+    )
+    return f"{prefix}{version}"
 
 # The trees whose commits ship in that package. A commit outside them cannot change the engine the
 # fleet runs, so counting it would be noise with a gate's authority behind it.
@@ -202,7 +216,7 @@ def _assert_exists(repo: str, ref: str, path: str, what: str) -> None:
 
 def resolve_tag(repo: str, version: str) -> str:
     """The tag for `version`. An absent tag is an ERROR: a publish whose commit we cannot name."""
-    tag = f"{TAG_PREFIX}{version}"
+    tag = release_tag(version)
     try:
         git(repo, "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}")
     except GateError as e:
@@ -210,7 +224,8 @@ def resolve_tag(repo: str, version: str) -> str:
             f"the feed's newest {PACKAGE} is {version!r}, but this repo has no tag {tag!r} — so the "
             f"commit that produced the package the fleet restores cannot be named, and the drift "
             f"cannot be measured. This is an ERROR, not 'no drift': either the release published "
-            f"without its tag, the tag was deleted, or the tag scheme moved. ({e})"
+            f"without its canonical release identity, the tag was deleted, or the versioned tag "
+            f"scheme moved. ({e})"
         ) from e
     return tag
 
@@ -540,8 +555,8 @@ def main(argv: list[str]) -> int:
             f"this repo's OWN exit-code tables into every worker-facing SKILL.md from that file, so "
             f"main now documents a verb contract the fleet's engine does not implement: a worker "
             f"reading the recipe and being refused by the binary is this state. Release the engine "
-            f"— bump <Version> in src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj and push the matching "
-            f"{TAG_PREFIX}<version> tag (release-coord-engine.yml does the rest).",
+            f"— bump <Version> in src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj and start the protected "
+            f"coherent-set release saga from the exact accepted source commit.",
             file=sys.stderr,
         )
     if defect_drift:
