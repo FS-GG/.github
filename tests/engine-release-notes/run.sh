@@ -434,8 +434,8 @@ else
 fi
 printf 'NUGET_ORG_RELEASE_NOTES_LIMIT = %s\n' "$LIMIT" \
   > "$scan_fixture/scripts/duplicate-release-limit.py"
-if secondary_limit_occurrences "$scan_fixture" \
-    | grep -q '^scripts/duplicate-release-limit.py:'; then
+duplicate_occurrences="$(secondary_limit_occurrences "$scan_fixture")"
+if grep -q '^scripts/duplicate-release-limit.py:' <<<"$duplicate_occurrences"; then
   ok "an executable duplicate limit still fails the scan"
 else
   bad "an executable duplicate limit must fail the scan"
