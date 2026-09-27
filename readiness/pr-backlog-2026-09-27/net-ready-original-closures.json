@@ -1,0 +1,67 @@
+{
+  "closures": [
+    {
+      "closedAt": "2026-09-27T09:28:30Z",
+      "headRefName": "renovate/grpc.tools-2.x",
+      "headRefOid": "e3e9204f3c3de31cb27269f2779b6ee824374a1c",
+      "mergedAt": null,
+      "number": 49,
+      "retainedHeadRefOid": "e3e9204f3c3de31cb27269f2779b6ee824374a1c",
+      "state": "closed",
+      "url": "https://github.com/FS-GG/FS.GG.Net/pull/49"
+    },
+    {
+      "closedAt": "2026-09-27T09:28:34Z",
+      "headRefName": "renovate/grpc-dotnet-monorepo",
+      "headRefOid": "2bce3ebf086ef09eb05d1b56099e773bba05c611",
+      "mergedAt": null,
+      "number": 44,
+      "retainedHeadRefOid": "2bce3ebf086ef09eb05d1b56099e773bba05c611",
+      "state": "closed",
+      "url": "https://github.com/FS-GG/FS.GG.Net/pull/44"
+    },
+    {
+      "closedAt": "2026-09-27T09:28:37Z",
+      "headRefName": "renovate/protobuf-monorepo",
+      "headRefOid": "66613a6ff59f70e93f48a11c28f2dda3633eaaa6",
+      "mergedAt": null,
+      "number": 43,
+      "retainedHeadRefOid": "66613a6ff59f70e93f48a11c28f2dda3633eaaa6",
+      "state": "closed",
+      "url": "https://github.com/FS-GG/FS.GG.Net/pull/43"
+    },
+    {
+      "closedAt": "2026-09-27T09:28:40Z",
+      "headRefName": "renovate/dotnet-wcf-monorepo",
+      "headRefOid": "04fc734abd83deb2e16a29976383cdac0a041c21",
+      "mergedAt": null,
+      "number": 41,
+      "retainedHeadRefOid": "04fc734abd83deb2e16a29976383cdac0a041c21",
+      "state": "closed",
+      "url": "https://github.com/FS-GG/FS.GG.Net/pull/41"
+    },
+    {
+      "closedAt": "2026-09-27T09:28:43Z",
+      "headRefName": "renovate/protobuf-net-fsharp-0.x",
+      "headRefOid": "3475d99fd3a2fc5509760dcc3fcc1eea251efd9f",
+      "mergedAt": null,
+      "number": 52,
+      "retainedHeadRefOid": "3475d99fd3a2fc5509760dcc3fcc1eea251efd9f",
+      "state": "closed",
+      "url": "https://github.com/FS-GG/FS.GG.Net/pull/52"
+    }
+  ],
+  "mainVersions": {
+    "Google.Protobuf": "3.36.2",
+    "Grpc.Net.Client": "2.84.0",
+    "Grpc.Tools": "2.84.0",
+    "System.ServiceModel.Primitives": "8.1.2",
+    "YoloDev.Expecto.TestSdk": "0.16.1",
+    "protobuf-net-fsharp": "0.2.1"
+  },
+  "replacementHeadRefOid": "54b7de145a1dcaa9c98daa1d7f6bc7102b0f37f1",
+  "replacementMergeOid": "5b76131772c62606cb3082b7a646d487c33bd0f8",
+  "replacementPullRequest": 96,
+  "repository": "FS-GG/FS.GG.Net",
+  "schema": "fsgg-pr-backlog-closures/v1"
+}
