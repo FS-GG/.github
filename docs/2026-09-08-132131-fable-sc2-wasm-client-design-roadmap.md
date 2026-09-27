@@ -11,7 +11,7 @@ last-updated: 2026-09-27
 
 # Fable SC2 client with custom WASM control — design and roadmap
 
-**Feature: SC2C-01. Status: active product roadmap; SC2C-01.1–.2 and the .3a source slice are delivered.**
+**Feature: SC2C-01. Status: active product roadmap; SC2C-01.1–.2 and the .3a–.3b source slices are delivered.**
 This document recommends a browser-first Fable/Elmish tactical client connected to a native
 StarCraft II process through an F# gateway. Custom WebAssembly modules receive game data and
 normalized user input, then return command intentions which the host and gateway validate before
@@ -852,7 +852,7 @@ installation, data volume and command-coverage evidence.
   **Handoff:** usable offline demonstration, input mapping, measured fixture costs and failure taxonomy.
 
 - [ ] **SC2C-01.3 — First playable local SC2 vertical slice — route: routine.**
-  **Source progress:** SC2C-01.3a is delivered in private [SC2 Client PR #4](https://github.com/FS-GG/FS.GG.SC2.Client/pull/4), merged at `dad6d257af488f6668f8f2dd076b2dde5899ce03`; exact-main [`verify`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36314544918) passed. The delivered source provides the 2.0 live observation/feedback contracts, expanded native response adapter, actionable asset preflight and serialized lifecycle/session owner against a scripted WebSocket peer. The product-owned [bounded .3 plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/dad6d257af488f6668f8f2dd076b2dde5899ce03/docs/SC2C-01.3-plan.md) retains .3b–.3d. No real StarCraft II binary, data package or map was exercised, so this source cut does not complete SC2C-01.3 or establish installed operation.
+  **Source progress:** SC2C-01.3a is delivered in private [SC2 Client PR #4](https://github.com/FS-GG/FS.GG.SC2.Client/pull/4), merged at `dad6d257af488f6668f8f2dd076b2dde5899ce03`; exact-main [`verify`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36314544918) passed. The source provides the 2.0 live observation/feedback contracts, expanded native response adapter, actionable asset preflight and serialized lifecycle/session owner against a scripted WebSocket peer. SC2C-01.3b's injected-owner paired gateway core is delivered in private [PR #5](https://github.com/FS-GG/FS.GG.SC2.Client/pull/5) at exact head `118f2ab1ce1234877a49cac4aa4133bbecbaf3a1`, merged at `819e1bb535324fcd3fb5c352ad625267d06af932`; exact-main [`verify`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36316009310) passed. The product-owned [bounded .3 plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/819e1bb535324fcd3fb5c352ad625267d06af932/docs/SC2C-01.3-plan.md) retains the executable launcher and gateway lifecycle composition plus browser/guest journey in .3c and real StarCraft II/data/map qualification in .3d. The parent SC2C-01.3 outcome and installed operation remain open.
   **Depends on:** SC2C-01.2; access to the chosen legal SC2 installation and compatible map.
   **Scope:** harden the existing native handshake path into product create/join/observe/action/step/end;
   load real metadata, pair the local browser, and run one participant against the built-in computer
@@ -923,9 +923,11 @@ lifecycle/default selection or protected deployment. Their product contracts and
 not establish installed or live-SC2 execution.
 
 SC2C-01.1 created the selected product workspace from the current Fable provider and recorded its
-template/tool identities. SC2C-01.3a adds scripted source preparation; .3d remains the first gate that
-can establish an actual SC2 session. These do not alter other generated Fable products. No provider
-publication or existing-workspace upgrade is established.
+template/tool identities. SC2C-01.3a adds the scripted native session owner, and .3b adds the paired
+gateway core around an injected, already-started owner. The executable launcher/lifecycle and browser
+journey remain .3c; .3d remains the first gate that can establish an actual SC2 session with selected
+data and map assets. These do not alter other generated Fable products. No provider publication or
+existing-workspace upgrade is established.
 
 If a later reusable capability moves into Net, Rendering, Game or Templates, its owner publishes a
 qualified release and the product explicitly adopts it. Fresh-creation checks use the published
