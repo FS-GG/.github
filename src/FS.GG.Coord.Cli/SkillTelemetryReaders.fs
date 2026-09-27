@@ -695,6 +695,59 @@ module SkillTelemetryReaders =
     module NativeUsage =
         let private terminalStatuses = Set.ofList [ "completed"; "failed"; "interrupted" ]
         let private maximumEvidenceBytes = 512 * 1024
+        let private maximumLineBytes = 1024 * 1024
+
+        /// Keeps the exact wire line, including CRLF or an EOF without a terminator.
+        type private ExactLines(source: Stream) =
+            let buffer = Array.zeroCreate<byte> 8192
+            let mutable offset = 0
+            let mutable count = 0
+            let mutable eof = false
+
+            member _.ReadLine(timeoutMilliseconds: int option) =
+                use retained = new MemoryStream()
+                let deadline = Stopwatch.StartNew()
+                let mutable complete = false
+
+                while not complete && not eof do
+                    if offset = count then
+                        let remaining =
+                            timeoutMilliseconds
+                            |> Option.map (fun timeout -> timeout - int deadline.ElapsedMilliseconds)
+
+                        if remaining |> Option.exists (fun milliseconds -> milliseconds <= 0) then
+                            raise (TimeoutException("native byte line read timed out"))
+
+                        use cancellation = new Threading.CancellationTokenSource()
+                        remaining |> Option.iter cancellation.CancelAfter
+                        let received =
+                            source.ReadAsync(buffer, 0, buffer.Length, cancellation.Token)
+                                .GetAwaiter().GetResult()
+
+                        if received = 0 then eof <- true
+                        else
+                            offset <- 0
+                            count <- received
+
+                    if offset < count then
+                        let newline = Array.IndexOf(buffer, byte '\n', offset, count - offset)
+                        let endOffset = if newline >= 0 then newline + 1 else count
+                        let length = endOffset - offset
+
+                        if retained.Length + int64 length > int64 maximumLineBytes then
+                            raise (IOException("native byte line exceeds 1 MiB"))
+
+                        retained.Write(buffer, offset, length)
+                        offset <- endOffset
+                        complete <- newline >= 0
+
+                if retained.Length = 0L then None else Some(retained.ToArray())
+
+        let private decodedLine (raw: byte array) =
+            let mutable length = raw.Length
+            if length > 0 && raw[length - 1] = byte '\n' then length <- length - 1
+            if length > 0 && raw[length - 1] = byte '\r' then length <- length - 1
+            UTF8Encoding(false, true).GetString(raw, 0, length)
 
         let coverageForParent (parent: Guid option) =
             match parent with
@@ -774,6 +827,7 @@ module SkillTelemetryReaders =
                 start.CreateNoWindow <- true
 
             let hostProcess = new Diagnostics.Process(StartInfo = start)
+            let outputLines = lazy (ExactLines(hostProcess.StandardOutput.BaseStream))
 
             let requestBytes id methodName parameters =
                 let request = Dictionary<string, obj>()
@@ -791,19 +845,24 @@ module SkillTelemetryReaders =
 
                 while found.IsNone && errorMessage.IsNone && deadline.ElapsedMilliseconds < 8000L do
                     let remaining = max 1 (8000 - int deadline.ElapsedMilliseconds)
-                    let pending = hostProcess.StandardOutput.ReadLineAsync()
-
-                    if not (pending.Wait remaining) then
-                        errorMessage <- Some "Codex App Server read timed out"
-                    else
-                        let line = pending.Result
-
-                        if isNull line || Encoding.UTF8.GetByteCount line > 1024 * 1024 then
+                    let received =
+                        try outputLines.Value.ReadLine(Some remaining)
+                        with
+                        | :? TimeoutException
+                        | :? OperationCanceledException ->
                             errorMessage <- Some "Codex App Server read timed out"
-                        else
-                            let bytes = Encoding.UTF8.GetBytes(line + "\n")
+                            None
+                        | :? IOException as error ->
+                            errorMessage <- Some error.Message
+                            None
 
-                            match Json.parse bytes with
+                    match received with
+                    | None when errorMessage.IsNone -> errorMessage <- Some "Codex App Server read timed out"
+                    | None -> ()
+                    | Some bytes ->
+                        try
+                            let line = decodedLine bytes
+                            match Json.parse (Encoding.UTF8.GetBytes line) with
                             | Ok value ->
                                 let mutable responseId = 0
                                 let mutable idProperty = Unchecked.defaultof<JsonElement>
@@ -826,6 +885,7 @@ module SkillTelemetryReaders =
                                     else
                                         errorMessage <- Some "Codex App Server refused a read-only usage request"
                             | Error _ -> ()
+                        with :? DecoderFallbackException -> errorMessage <- Some "Codex App Server returned invalid UTF-8"
 
                 match found, errorMessage with
                 | Some value, _ -> Ok value
@@ -1122,19 +1182,20 @@ module SkillTelemetryReaders =
                     let records = Dictionary<Guid, ResizeArray<UsageRecord>>()
                     let evidence = ResizeArray<byte array>()
                     use sourceStream = source
-                    use stream = new StreamReader(sourceStream, UTF8Encoding(false, true), true)
+                    let lines = ExactLines(sourceStream)
                     let mutable failed = None
+                    let mutable next = lines.ReadLine(None)
 
-                    while not stream.EndOfStream && failed.IsNone do
-                        let line = stream.ReadLine()
-                        let bytes = Encoding.UTF8.GetBytes(line + "\n")
+                    while next.IsSome && failed.IsNone do
+                        let bytes = next.Value
+                        let line = decodedLine bytes
 
                         if
                             line.Length > 0
                             && bytes.Length <= 1024 * 1024
                             && line[.. min 255 (line.Length - 1)].Contains("\"token_usage_record\"")
                         then
-                            match Json.parse bytes with
+                            match Json.parse (Encoding.UTF8.GetBytes line) with
                             | Error _ ->
                                 failed <-
                                     Some
@@ -1216,6 +1277,8 @@ module SkillTelemetryReaders =
                                                     Message = "native usage record belongs to another thread or turn"
                                                     Coverage = Unknown
                                                 }
+
+                        if failed.IsNone then next <- lines.ReadLine(None)
 
                     match failed with
                     | Some error -> Error error

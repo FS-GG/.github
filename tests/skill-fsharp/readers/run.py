@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import importlib.util
 import json
 import os
@@ -238,6 +240,59 @@ def test_native(native):
         comparable = {key: actual[key] for key in projection}
         require(comparable == projection, f"native differential mismatch: {comparable} != {projection}")
         require(actual["turns"][0]["total"] == 18, "duplicate response correction was added instead of replaced")
+
+        original_rollout = rollout.read_bytes()
+        for wire_mode in ("crlf", "eof-final"):
+            exact_rollout = sessions / f"{wire_mode}.jsonl"
+            raw = original_rollout.replace(b"\n", b"\r\n") if wire_mode == "crlf" else original_rollout.rstrip(b"\n")
+            exact_rollout.write_bytes(raw)
+            environment.update(SKILL_FS_01_ROLLOUT=str(exact_rollout),
+                               SKILL_FS_01_WIRE_MODE=wire_mode)
+            retained = probe("native", FAKE_CODEX, home, PARENT, "child_1", "root-1",
+                             f"invocation-{wire_mode}", 0, environment=environment)
+            require(retained["ok"], f"{wire_mode} native collection refused: {retained}")
+            responses = [base64.b64decode(row["responseBytesBase64"])
+                         for row in retained["appServerResponses"]]
+            if wire_mode == "crlf":
+                require(all(response.endswith(b"\r\n") for response in responses),
+                        "CRLF App Server response was normalized")
+            else:
+                require(responses[-1].endswith(b"}") and not responses[-1].endswith(b"\n") and
+                        all(response.endswith(b"\n") for response in responses[:-1]),
+                        "unterminated App Server response was given a terminator")
+            expected_rollout = [line for line in raw.splitlines(keepends=True)
+                                if b'"token_usage_record"' in line]
+            retained_rollout = [base64.b64decode(row["bytesBase64"])
+                                for row in retained["rolloutRecords"]]
+            require(retained_rollout == expected_rollout,
+                    f"{wire_mode} rollout bytes changed during retention")
+            chunks = [base64.b64decode(retained["sourceBinding"]["bytesBase64"])]
+            for record in retained["appServerResponses"]:
+                chunks.extend((base64.b64decode(record["requestBytesBase64"]),
+                               base64.b64decode(record["responseBytesBase64"])))
+            chunks.extend(retained_rollout)
+            source = hashlib.sha256()
+            for chunk in chunks:
+                source.update(len(chunk).to_bytes(8, "big"))
+                source.update(chunk)
+            require(source.hexdigest() == retained["sourceDigest"],
+                    f"{wire_mode} source digest did not bind the retained bytes")
+        environment.pop("SKILL_FS_01_WIRE_MODE")
+        environment["SKILL_FS_01_ROLLOUT"] = str(rollout)
+        environment["SKILL_FS_01_WIRE_MODE"] = "oversize"
+        refused = probe("native", FAKE_CODEX, home, PARENT, "child_1", "root-1",
+                        "invocation-oversize-response", 0, environment=environment)
+        require(not refused["ok"] and "1 MiB" in refused["error"],
+                "oversized App Server byte line was accepted")
+        environment.pop("SKILL_FS_01_WIRE_MODE")
+        oversized_rollout = sessions / "oversize.jsonl"
+        oversized_rollout.write_bytes(b'{"type":"token_usage_record"}' + b" " * (1024 * 1024) + b"\n")
+        environment["SKILL_FS_01_ROLLOUT"] = str(oversized_rollout)
+        refused = probe("native", FAKE_CODEX, home, PARENT, "child_1", "root-1",
+                        "invocation-oversize-rollout", 0, environment=environment)
+        require(not refused["ok"] and "1 MiB" in refused["error"],
+                "oversized rollout byte line was accepted")
+        environment["SKILL_FS_01_ROLLOUT"] = str(rollout)
 
         environment["SKILL_FS_01_MODE"] = "missing-profile"
         incomplete = probe("native", FAKE_CODEX, home, PARENT, "child_1", "root-1", "invocation-2", 0,

@@ -72,6 +72,9 @@ let nativeProjection (value: Readers.NativeInventory) =
         effort = value.Effort |> Option.toObj
         sourceDigest = value.SourceDigest
         rosterDigest = value.RosterDigest
+        appServerResponses = value.AppServerResponses
+        rolloutRecords = value.RolloutRecords
+        sourceBinding = value.SourceBinding
     |}
 
 [<EntryPoint>]

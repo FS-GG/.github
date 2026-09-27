@@ -12,8 +12,14 @@ TURN_1 = "33333333-3333-3333-3333-333333333333"
 TURN_2 = "44444444-4444-4444-4444-444444444444"
 
 
-def send(request_id, result):
-    print(json.dumps({"id": request_id, "result": result}, separators=(",", ":")), flush=True)
+def send(request_id, result, final=False):
+    mode = os.environ.get("SKILL_FS_01_WIRE_MODE", "lf")
+    terminator = b"" if final and mode == "eof-final" else b"\r\n" if mode == "crlf" else b"\n"
+    payload = json.dumps({"id": request_id, "result": result}, separators=(",", ":")).encode("utf-8")
+    if final and mode == "oversize":
+        payload += b" " * (1024 * 1024)
+    sys.stdout.buffer.write(payload + terminator)
+    sys.stdout.buffer.flush()
 
 
 def main():
@@ -50,7 +56,9 @@ def main():
             send(request_id, {"data": [
                 {"id": TURN_1, "status": "completed"},
                 {"id": TURN_2, "status": "failed"}
-            ], "nextCursor": None})
+            ], "nextCursor": None}, final=True)
+            if os.environ.get("SKILL_FS_01_WIRE_MODE") == "eof-final":
+                return 0
         else:
             print(json.dumps({"id": request_id, "error": {"message": "unsupported"}}), flush=True)
     return 0
