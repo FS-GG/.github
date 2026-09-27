@@ -1,0 +1,19 @@
+VerifyPathsClosingKeywordTests focused run
+Date: 2026-09-27
+Implementation under test: 2585a0bc94e9f8a9eda685a85f234a533508180b plus artifact-policy-only cleanup
+
+Restore:
+NUGET_PACKAGES=/tmp/pr3893-nuget.ger30a dotnet restore tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj --locked-mode --source https://api.nuget.org/v3/index.json
+
+Command:
+NUGET_PACKAGES=/tmp/pr3893-nuget.ger30a dotnet test tests/FS.GG.Coord.Cli.Lifecycle.Tests/FS.GG.Coord.Cli.Lifecycle.Tests.fsproj -c Release --no-restore --filter 'FullyQualifiedName~VerifyPathsClosingKeywordTests' --logger 'console;verbosity=normal'
+
+Runtime: .NET 10.0.12; xUnit.net VSTest Adapter 4.0.0+05679a7ab5
+Result: Test Run Successful. Total tests: 5. Passed: 5. Failed: 0. Skipped: 0.
+
+Passed tests:
+- #2264 delivery and verify-paths classify the generated registry lock outside authored Paths
+- #2107 the correct cross-repo owner/repo form also stays green
+- #2107 the correct same-repo form stays green
+- #2107 a board-shorthand closing keyword fails verify-paths even when the touch-set is clean
+- #2107 a board-shorthand defect turns an already-RED drift verdict red for the same reason, not silently
