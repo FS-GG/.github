@@ -882,7 +882,9 @@ This document does not start that implementation or any publication.
 
 ### 16.1 FOURD-01.1 — Grid, support and movement kernel
 
-- [ ] **FOURD-01.1 — Prove four-axis identity and affordable legal movement on .NET and Fable.**
+**Source closure:** [FourD PR #1](https://github.com/FS-GG/FS.GG.FourD/pull/1) merged at `5661d85ce62264b84a56a4fb32716cd1350408ff`; exact-main `verify` passed. Publication and installed use remain separate.
+
+- [x] **FOURD-01.1 — Prove four-axis identity and affordable legal movement on .NET and Fable.**
 
 **Dependencies:** chosen bounded map/numeric profile, confirmed grid/axis/support rules and named
 product workspace. No Unity integration or programme-wide migration prerequisite is required.
@@ -909,7 +911,9 @@ publication are not necessary to accept this milestone.
 
 ### 16.2 FOURD-01.2 — Ray, visibility and cover laboratory
 
-- [ ] **FOURD-01.2 — Prove four-dimensional obstruction and show why a shot is clear or blocked.**
+**Source closure:** [FourD PR #2](https://github.com/FS-GG/FS.GG.FourD/pull/2) merged at `8096fd19431a74fff7366217142908c4bf226496`; exact-main `verify` passed. Publication and installed use remain separate.
+
+- [x] **FOURD-01.2 — Prove four-dimensional obstruction and show why a shot is clear or blocked.**
 
 **Dependencies:** .1 plus explicit endpoint/contact, numeric-bound and sample policies from this design.
 

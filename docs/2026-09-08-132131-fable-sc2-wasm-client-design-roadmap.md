@@ -818,7 +818,9 @@ installation, data volume and command-coverage evidence.
 
 ### 12.2 First executable window
 
-- [ ] **SC2C-01.1 — Reproducible product baseline and contract corpus — route: routine.**
+- [x] **SC2C-01.1 — Reproducible product baseline and contract corpus — route: routine.**
+
+**Source closure:** [SC2 Client PR #2](https://github.com/FS-GG/FS.GG.SC2.Client/pull/2) merged at `c90c07fc32c9c17374ecfef9d1df1b019e973f2a`; exact-main `verify` passed. This closes the source baseline only; live SC2 and installed operation remain later gates.
   **Depends on:** a subsequent implementation request identifying/authorizing the actual product
   workspace; inspection of selected current template/tool/package releases. No other roadmap feature
   is a prerequisite for read-only planning.
