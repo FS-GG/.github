@@ -1,0 +1,14 @@
+{
+  "horizon_runs": 10,
+  "setup_cost": null,
+  "maintenance_cost": 1,
+  "defect_probability_low": 0.1,
+  "defect_probability_high": 0.2,
+  "detection_probability": 0.5,
+  "avoidable_runner_minutes": 2,
+  "runner_cost_per_minute": 1,
+  "preflight_runner_minutes": 1,
+  "false_block_probability": 0,
+  "triage_cost": 0,
+  "assumptions": "Synthetic fixture preserves unknown setup cost."
+}

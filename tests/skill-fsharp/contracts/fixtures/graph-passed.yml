@@ -1,0 +1,9 @@
+{
+  "name": "frozen-contract",
+  "jobs": {
+    "build": {},
+    "shard_a": {"needs": "build"},
+    "shard_b": {"needs": "build"},
+    "report": {"needs": ["shard_a", "shard_b"]}
+  }
+}

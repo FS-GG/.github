@@ -1,0 +1,66 @@
+{
+  "schema": "fsgg.skill-python-fsharp-contract/1",
+  "sourceCommit": "2da4baf23a68816e898f703638124d8ed915d737",
+  "implementations": {
+    "work-roadmap/scripts/fsgg_telemetry_defaults.py": "ba04813cf1688065cbe5e2c603bf4761480e9856b965fac130c1b24c1c97eb63",
+    "work-roadmap/scripts/native_collaboration_usage.py": "ef81137ff93c66b744c68a2f02a48fc18bcfade7cd7cc93f16005c1ed12059c8",
+    "work-roadmap/scripts/roadmap-telemetry.py": "a82e04b8fbdd1a1cfee93b5582bafb6d71f43ae966ce11ef04b5bbb3588c4e14",
+    "pipeline-preflight/scripts/preflight.py": "84f6917eaea1c3cb42f9abbef7e92802f02ba7fae891957fd587a6f87705c1f3"
+  },
+  "observationInputs": {
+    "review": {
+      "schema": "fsgg.telemetry.process-review-input/1",
+      "fields": ["revision", "outcomeSynopsis", "wentWell", "problems", "avoidableDelayOrRework", "processObservations", "remainingRisks", "concreteImprovements", "evidence", "evidenceCoverage", "populationCoverage", "confidence", "reviewerModel", "reviewerEffort", "reviewedAt", "durationSeconds"]
+    },
+    "activity": {
+      "schema": "fsgg.telemetry.activity-span-input/1",
+      "fields": ["revision", "activityId", "category", "startedAt", "endedAt", "clockProvenance", "evidence", "summary"]
+    },
+    "usage-attribution": {
+      "schema": "fsgg.telemetry.activity-usage-attribution-input/1",
+      "fields": ["revision", "usageIdentity", "activityId", "classification", "input", "cachedInput", "output", "reasoning", "total"]
+    },
+    "complication": {
+      "schema": "fsgg.telemetry.complication-input/1",
+      "fields": ["revision", "complicationId", "activityId", "trigger", "cause", "occurredAt", "synopsis", "evidence"]
+    }
+  },
+  "commands": [
+    "begin", "population-only", "started", "finish", "usage-reconcile", "ci-assignment",
+    "review", "activity", "usage-attribution", "complication", "status", "assess", "graph"
+  ],
+  "cases": [
+    {"id": "adapter-not-configured", "lane": "adapter", "command": "status", "kind": "positive-static"},
+    {"id": "adapter-lifecycle-oracle", "lane": "adapter", "command": "begin|started|finish", "kind": "positive-and-refusal-oracle"},
+    {"id": "adapter-usage-reconcile-oracle", "lane": "adapter", "command": "usage-reconcile", "kind": "positive-and-unknown-oracle"},
+    {"id": "adapter-ci-assignment-oracle", "lane": "adapter", "command": "ci-assignment", "kind": "positive-and-refusal-oracle"},
+    {"id": "adapter-review-input", "lane": "adapter", "command": "review", "kind": "positive-and-closed-shape-refusal"},
+    {"id": "adapter-activity-input", "lane": "adapter", "command": "activity", "kind": "positive-and-closed-shape-refusal"},
+    {"id": "adapter-attribution-input", "lane": "adapter", "command": "usage-attribution", "kind": "positive-and-closed-shape-refusal"},
+    {"id": "adapter-complication-input", "lane": "adapter", "command": "complication", "kind": "positive-and-closed-shape-refusal"},
+    {"id": "adapter-state-exact-replay", "lane": "adapter", "command": "begin", "kind": "positive-replay"},
+    {"id": "adapter-protected-original-mismatch", "lane": "adapter", "command": "population-only", "kind": "negative-refusal"},
+    {"id": "readers-repository-precedence", "lane": "readers", "caller": "Configuration.discoverRepository", "kind": "positive"},
+    {"id": "readers-credential-origin-refusal", "lane": "readers", "caller": "Configuration.canonicalRepository", "kind": "negative-refusal"},
+    {"id": "readers-native-complete", "lane": "readers", "caller": "NativeUsage.collect", "kind": "positive-oracle"},
+    {"id": "readers-native-host-unavailable", "lane": "readers", "caller": "NativeUsage.collect", "kind": "negative-unknown"},
+    {"id": "preflight-assess-positive", "lane": "preflight", "command": "assess", "kind": "positive-byte"},
+    {"id": "preflight-assess-insufficient", "lane": "preflight", "command": "assess", "kind": "positive-byte"},
+    {"id": "preflight-assess-nonfinite", "lane": "preflight", "command": "assess", "kind": "negative-refusal"},
+    {"id": "preflight-graph-passed", "lane": "preflight", "command": "graph", "kind": "positive-byte"},
+    {"id": "preflight-graph-blocked", "lane": "preflight", "command": "graph", "kind": "negative-block"},
+    {"id": "preflight-graph-duplicate", "lane": "preflight", "command": "graph", "kind": "negative-refusal"},
+    {"id": "preflight-graph-expression", "lane": "preflight", "command": "graph", "kind": "negative-refusal"},
+    {"id": "preflight-graph-cycle", "lane": "preflight", "command": "graph", "kind": "negative-refusal"},
+    {"id": "preflight-graph-unknown", "lane": "preflight", "command": "graph", "kind": "negative-refusal"},
+    {"id": "preflight-input-oversize", "lane": "preflight", "command": "graph", "kind": "negative-refusal"},
+    {"id": "preflight-job-bound", "lane": "preflight", "command": "graph", "kind": "negative-refusal"},
+    {"id": "preflight-parser-missing", "lane": "preflight", "command": "graph", "kind": "negative-refusal"},
+    {"id": "preflight-malformed-does-not-launch", "lane": "preflight", "command": "graph", "kind": "negative-launch-control"}
+  ],
+  "oracleSuites": {
+    "adapter": "tests/skill-quality/roadmap-telemetry.py",
+    "readers": "tests/skill-quality/native-collaboration-usage.py",
+    "preflight": "tests/pipeline-preflight/run.py"
+  }
+}
