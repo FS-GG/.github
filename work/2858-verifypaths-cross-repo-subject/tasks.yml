@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/2858-verifypaths-cross-repo-subject/plan.md
-    digest: 27382ea6baf2eb49a824b47a8db32539deb0133d404a93c8e22de9dec7392e33
+    digest: de2e71734b8edbe7b3a3051365d175fd86852686a16ebef23846bbda89af241c
     schemaVersion: 1
 tasks:
   - id: T001

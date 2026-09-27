@@ -230,7 +230,7 @@ PASS  #2858: same-repo --issue without --repo remains valid
 PASS  #2858: --warn cannot downgrade undeclared cross-repo refusal
 PASS  #2858: --warn cannot downgrade ambiguous cross-repo refusal
 PASS  #2858: two explicit subjects refuse before a verdict
-PASS  #2858: a .github generated path does not exempt target-repo drift
+PASS  #2858: cross-repo drift never consults the issue repo's generated/SDD exemptions
 PASS  #494: SDD#494 (Scene) declares the PR's files → OK (case 24)
 PASS  #494: Rendering#494 — same number, other repo — does NOT: DRIFT (case 24)
 PASS  verify-paths --issue: a registry short-id --repo agrees with the issue's repo (case 24)
@@ -343,7 +343,7 @@ PASS  case14: a healthy epic (linked children, complete graph) yields no ERROR (
 PASS  case14: EPIC-NO-STATED-ACCEPTANCE fires on exactly the bodies with NO task lines (#440, #450)
 PASS  case14: no epic carries BOTH acceptance findings — they partition the task lines
 PASS  case14: EPIC-ROLLUP-READY fires on exactly the epic whose every child is resolved (#470)
-tests/coord-engine-parity/run.sh: line 3071: forall: command not found
+tests/coord-engine-parity/run.sh: line 3076: forall: command not found
 PASS  case14: ...and NOT on the childless (#440) or truncated (#404) epic —  is vacuously true over both
 PASS  case14: ...and it is a NOTE — a candidate for a human, not a defect (#614)
 PASS  case14: an unresolvable PR-probe ref is KEPT, not silently dropped (fail closed, #266)

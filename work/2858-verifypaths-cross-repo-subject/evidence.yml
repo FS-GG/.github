@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2858-verifypaths-cross-repo-subject/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2858-verifypaths-cross-repo-subject/analysis.json
-    digest: 352d9c55cfe9738cbc18e1fa069b7653e60c1db255fdf93419e22882523e3377
+    digest: fd487f145d7083a94248d637663ee041ddc400a76c4046f20da03830edeae47b
     schemaVersion: 1
   - label: checklist
     path: work/2858-verifypaths-cross-repo-subject/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/2858-verifypaths-cross-repo-subject/plan.md
-    digest: 27382ea6baf2eb49a824b47a8db32539deb0133d404a93c8e22de9dec7392e33
+    digest: de2e71734b8edbe7b3a3051365d175fd86852686a16ebef23846bbda89af241c
     schemaVersion: 1
   - label: spec
     path: work/2858-verifypaths-cross-repo-subject/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/2858-verifypaths-cross-repo-subject/tasks.yml
-    digest: 9c98dfcb257819569e154ef8ba8e75a8164693874e606d04fb66ef43e733c3bf
+    digest: 17bae0f0346cd3a8227fdd954fd9a5ca74bfc5d9bfefff42f64c44a7c8db9c86
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -227,13 +227,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2858-verifypaths-cross-repo-subject/artifacts/verify-paths-focused.trx
-      digest: "sha256:2e9a8a279eb0eac6dfec2aa28ef516aaff143537014eef5f031997898aad0199"
+      digest: "sha256:cac2a0caa07bba15c4a3b27851c4ea56b6000909c62b63488bb9a9d93ab7ca9f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 5
       failed: 0
       skipped: 0
-    notes: ["Focused command-boundary tests 6/6 and compiled-engine parity 626/626 passed locally; no hosted or protected review verdict is implied."]
+    notes: ["Focused command-boundary tests 5/5 and compiled-engine parity 626/626 passed locally; no hosted or protected review verdict is implied."]
   - id: EV011
     kind: missing
     subject:
