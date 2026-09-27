@@ -38,9 +38,9 @@ module SkillTelemetryAdapter =
     let private runtime = "collaboration-spawn-agent"
     let private utf8 = UTF8Encoding(false)
     let private compact = JsonSerializerOptions(WriteIndented = false, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping)
-    let private identityPattern = Regex("^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}$", RegexOptions.CultureInvariant)
-    let private tokenPattern = Regex("^[0-9a-f]{32}$", RegexOptions.CultureInvariant)
-    let private assignmentDigestPattern = Regex("^[0-9a-f]{40}:[0-9a-f]{64}$", RegexOptions.CultureInvariant)
+    let private identityPattern = Regex("^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}\\z", RegexOptions.CultureInvariant)
+    let private tokenPattern = Regex("^[0-9a-f]{32}\\z", RegexOptions.CultureInvariant)
+    let private assignmentDigestPattern = Regex("^[0-9a-f]{40}:[0-9a-f]{64}\\z", RegexOptions.CultureInvariant)
 
     exception AdapterError of string
 
@@ -158,12 +158,13 @@ module SkillTelemetryAdapter =
         let path = Path.Combine(directory, name + ".json")
         let temporary = Path.Combine(directory, $".{name}.{Guid.NewGuid():N}.tmp")
         try
-            use stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
-            if not (OperatingSystem.IsWindows()) then
-                File.SetUnixFileMode(temporary, enum<UnixFileMode> 0o600)
-            stream.Write bytes
-            if bytes.Length = 0 || bytes[bytes.Length - 1] <> byte '\n' then stream.WriteByte(byte '\n')
-            stream.Flush true
+            do
+                use stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+                if not (OperatingSystem.IsWindows()) then
+                    File.SetUnixFileMode(temporary, enum<UnixFileMode> 0o600)
+                stream.Write bytes
+                if bytes.Length = 0 || bytes[bytes.Length - 1] <> byte '\n' then stream.WriteByte(byte '\n')
+                stream.Flush true
             File.Move(temporary, path, true)
             if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(path, enum<UnixFileMode> 0o600)
             SkillPrivateDurability.syncDirectory directory
@@ -324,7 +325,7 @@ module SkillTelemetryAdapter =
                 if reference["ref"].GetValue<string>() <> "refs/heads/main" || (reference["object"]["type"]).GetValue<string>() <> "commit" then
                     fail "protected original-item revision is malformed"
                 let value = (reference["object"]["sha"]).GetValue<string>()
-                if not (Regex.IsMatch(value, "^[0-9a-f]{40}$")) then fail "protected original-item revision is malformed"
+                if not (Regex.IsMatch(value, "^[0-9a-f]{40}\\z")) then fail "protected original-item revision is malformed"
                 value
             with _ -> fail "protected original-item revision is malformed"
         let content = read $"repos/FS-GG/.github/contents/docs/coordination/telemetry-original-item-assignments.json?ref={revision}"
@@ -360,7 +361,7 @@ module SkillTelemetryAdapter =
         if paths.Length > 4096 then fail "dispatch state inventory exceeds the recovery bound"
         let matching =
             paths
-            |> Array.filter (fun path -> Regex.IsMatch(Path.GetFileName path, "^[0-9a-f]{32}\\.json$"))
+            |> Array.filter (fun path -> Regex.IsMatch(Path.GetFileName path, "^[0-9a-f]{32}\\.json\\z"))
             |> Array.map (fun path -> readState config (Path.GetFileNameWithoutExtension path))
             |> Array.filter (fun state -> [ "featureId"; "itemId"; "attemptId" ] |> List.forall (fun name -> optionalString name state = optionalString name expected))
         if matching.Length > 1 then fail "dispatch identity is ambiguous in private state"

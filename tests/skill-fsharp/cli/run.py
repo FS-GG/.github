@@ -87,6 +87,12 @@ def configured_commands(root):
 
     invalid = telemetry(config, env, "started", "--token", "bad", "--native-id", "x")
     expect(invalid, 1, b"", b"fsgg roadmap telemetry: token must be the opaque 32-hex dispatch token\n")
+    trailing_token = telemetry(config, env, "started", "--token", token + "\n", "--native-id", "x")
+    expect(trailing_token, 1, b"", b"fsgg roadmap telemetry: token must be the opaque 32-hex dispatch token\n")
+    trailing_identity = telemetry(config, env, "begin", "--feature", "SKILL-FS-01",
+                                  "--item", "SKILL-FS-01.3", "--attempt", "attempt\n",
+                                  "--model", "gpt-6-sol", "--effort", "medium")
+    assert trailing_identity.returncode == 1 and b"attempt" in trailing_identity.stderr, trailing_identity
 
     publications = (root / "published.log").read_text(encoding="ascii").splitlines()
     assert len(publications) >= 3 and all(base64.b64decode(row).startswith(b'{"schema":"fsgg.telemetry.ingest/1"')

@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -191,6 +192,19 @@ def test_workspace_credentials_and_assignment():
         require(mutation == {"ok": True, "command": [str(FAKE_CREDENTIAL_CLIENT.resolve()), "exec",
                                                        "fixture-engine", "submit"]},
                 "unloaded credential did not use the owner-controlled client")
+        decoy_directory = root / "non-executable-client"
+        decoy_directory.mkdir()
+        decoy = decoy_directory / "fdev-telemetry"
+        decoy.write_text("#!/bin/sh\nexit 0\n")
+        decoy.chmod(0o600)
+        with_decoy = dict(environment, PATH=str(decoy_directory) + os.pathsep + environment["PATH"])
+        with mock.patch.dict(os.environ, with_decoy, clear=True):
+            require(Path(shutil.which("fdev-telemetry")).resolve() == FAKE_CREDENTIAL_CLIENT.resolve(),
+                    "Python executable lookup did not skip the mode 0600 decoy")
+        mutation = probe("mutation", config, environment=with_decoy)
+        require(mutation == {"ok": True, "command": [str(FAKE_CREDENTIAL_CLIENT.resolve()), "exec",
+                                                       "fixture-engine", "submit"]},
+                "non-executable PATH decoy prevented valid client discovery")
         FAKE_CREDENTIAL_CLIENT.chmod(0o777)
         refused = probe("mutation", config, environment=environment)
         require(not refused["ok"] and "owner-controlled" in refused["error"],
@@ -208,6 +222,10 @@ def test_workspace_credentials_and_assignment():
                             "itemId": "SKILL-FS-01.2", "attemptId": "fixture-attempt",
                             "parentAttemptId": None, "producerStream": "fixture-producer"},
                 "CI assignment payload changed")
+        newline_attempt = probe("ci", config, "SKILL-FS-01", "SKILL-FS-01.2", "attempt\n",
+                                environment=environment)
+        require(not newline_attempt["ok"] and not (assignment_path.parent / "fixture-producer-SKILL-FS-01.2-attempt_.json").exists(),
+                "trailing LF assignment identity was accepted or written")
 
         assignment_directory = assignment_path.parent
         assignment_directory.chmod(0o755)
@@ -228,6 +246,13 @@ def test_workspace_credentials_and_assignment():
         refused = probe("discover", config, environment=environment)
         require(not refused["ok"] and "missing or ambiguous" in refused["error"],
                 "mixed valid and invalid matching associations were treated as unique")
+        config.write_text(json.dumps(original))
+
+        newline_reference = json.loads(json.dumps(original))
+        newline_reference["associations"][0]["destination"]["credentialReference"] = "fixture-ref\n"
+        config.write_text(json.dumps(newline_reference))
+        refused = probe("discover", config, environment=environment)
+        require(not refused["ok"], "trailing LF credential reference was accepted")
         config.write_text(json.dumps(original))
 
         ambiguous = json.loads(config.read_text())

@@ -122,7 +122,7 @@ module SkillTelemetryReaders =
             }
 
     let private identityPattern =
-        Regex("^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}$", RegexOptions.CultureInvariant)
+        Regex("^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}\\z", RegexOptions.CultureInvariant)
 
     let private boundedIdentity (name: string) (optionalValue: string option) =
         match optionalValue with
@@ -247,13 +247,13 @@ module SkillTelemetryReaders =
         let private ciAssignmentSchema = "fsgg.telemetry.ci-assignment/1"
 
         let private ownerPattern =
-            Regex("^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38}[A-Za-z0-9])?$", RegexOptions.CultureInvariant)
+            Regex("^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38}[A-Za-z0-9])?\\z", RegexOptions.CultureInvariant)
 
         let private repositoryPattern =
-            Regex("^(?!\\.{1,2}$)[A-Za-z0-9_.-]{1,100}$", RegexOptions.CultureInvariant)
+            Regex("^(?!\\.{1,2}\\z)[A-Za-z0-9_.-]{1,100}\\z", RegexOptions.CultureInvariant)
 
         let private scpPattern =
-            Regex("^git@github\\.com:([^/]+)/([^/]+)$", RegexOptions.IgnoreCase ||| RegexOptions.CultureInvariant)
+            Regex("^git@github\\.com:([^/]+)/([^/]+)\\z", RegexOptions.IgnoreCase ||| RegexOptions.CultureInvariant)
 
         let repositoryValue (RepositoryIdentity value) = value
         let private credentialValue (CredentialReference value) = value
@@ -412,7 +412,7 @@ module SkillTelemetryReaders =
                     let mutable destination = Unchecked.defaultof<JsonElement>
                     if matches[0].TryGetProperty("destination", &destination) && destination.ValueKind = JsonValueKind.Object then
                         match Json.stringProperty "credentialReference" destination with
-                        | Some value when Regex.IsMatch(value, "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$") ->
+                        | Some value when Regex.IsMatch(value, "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}\\z") ->
                             Ok(CredentialReference value)
                         | _ -> failure "telemetry workspace credential association is missing or ambiguous"
                     else
@@ -586,6 +586,9 @@ module SkillTelemetryReaders =
         let private credentialEnvironmentName (reference: string) =
             "FSGG_TELEMETRY_CREDENTIAL_" + reference.Replace('-', '_').ToUpperInvariant()
 
+        [<DllImport("libc", SetLastError = true, EntryPoint = "access")>]
+        extern int private access(string path, int mode)
+
         let private findOnPath name =
             let path = Environment.GetEnvironmentVariable "PATH"
 
@@ -594,7 +597,8 @@ module SkillTelemetryReaders =
             else
                 path.Split Path.PathSeparator
                 |> Seq.map (fun directory -> Path.Combine(directory, name))
-                |> Seq.tryFind File.Exists
+                |> Seq.tryFind (fun candidate ->
+                    File.Exists candidate && (OperatingSystem.IsWindows() || access(candidate, 1) = 0))
 
         let private ownerControlled path =
             try
@@ -711,12 +715,13 @@ module SkillTelemetryReaders =
                         |}
 
                     try
-                        use stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
-                        if not (OperatingSystem.IsWindows()) then
-                            File.SetUnixFileMode(temporary, enum<UnixFileMode> 0o600)
-                        let bytes = UTF8Encoding(false).GetBytes(JsonSerializer.Serialize(payload) + "\n")
-                        stream.Write bytes
-                        stream.Flush true
+                        do
+                            use stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+                            if not (OperatingSystem.IsWindows()) then
+                                File.SetUnixFileMode(temporary, enum<UnixFileMode> 0o600)
+                            let bytes = UTF8Encoding(false).GetBytes(JsonSerializer.Serialize(payload) + "\n")
+                            stream.Write bytes
+                            stream.Flush true
                         File.Move(temporary, target, true)
                         SkillPrivateDurability.syncDirectory directory
                     finally
@@ -1424,7 +1429,7 @@ module SkillTelemetryReaders =
                 || String.IsNullOrEmpty invocationId
                 || invocationId.Length > 256
                 || revision < 0
-                || not (Regex.IsMatch(nativeAgentId, "^[A-Za-z0-9_-]{1,128}$"))
+                || not (Regex.IsMatch(nativeAgentId, "^[A-Za-z0-9_-]{1,128}\\z"))
             then
                 failure "native parent or child identity is unavailable"
             else

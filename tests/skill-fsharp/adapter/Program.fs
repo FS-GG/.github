@@ -381,6 +381,10 @@ module Program =
         if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(state, enum<UnixFileMode> 0o600)
         let refused = run (Some workspace) (PopulationOnly("F", "F.1", "F", "roadmap-orchestrator"))
         require (refused.ExitCode = 1 && (text refused.Stderr).Contains "protected identity") "retained protected original binding was rebound"
+        let malformed = File.ReadAllText(state).Replace("\"originalItemId\":\"OTHER\"", "\"originalItemId\":\"F\"").Replace(String.replicate 64 "c" + "\"", String.replicate 64 "c" + "\\n\"")
+        File.WriteAllText(state, malformed)
+        let newlineDigest = run (Some workspace) (PopulationOnly("F", "F.1", "F", "roadmap-orchestrator"))
+        require (newlineDigest.ExitCode = 1 && (text newlineDigest.Stderr).Contains "malformed") "trailing LF assignment digest was accepted"
 
     let private populationOnly root =
         let isolated = Path.Combine(root, "population")

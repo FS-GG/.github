@@ -4,6 +4,7 @@ open System
 open System.Diagnostics
 open System.IO
 open System.Runtime.InteropServices
+open System.Text.RegularExpressions
 open System.Text
 open System.Text.Json
 open System.Threading
@@ -68,22 +69,46 @@ module TelemetryDashboardApplication =
                     emitStatus "unavailable" binding.WorkspaceId binding.Repository (List.toArray errors)
                     red
 
+    let private gitOutput directory arguments =
+        try
+            let start = ProcessStartInfo("git")
+            start.UseShellExecute <- false
+            start.RedirectStandardOutput <- true
+            start.RedirectStandardError <- true
+            start.WorkingDirectory <- directory
+            for argument in arguments do start.ArgumentList.Add argument
+            use child = new Process(StartInfo = start)
+            if not (child.Start()) then None
+            else
+                let output = child.StandardOutput.ReadToEndAsync()
+                let error = child.StandardError.ReadToEndAsync()
+                if not (child.WaitForExit(5000)) then
+                    try child.Kill(true) with _ -> ()
+                    None
+                elif child.ExitCode = 0 then
+                    let value = output.Result.Trim()
+                    if value.Length <= 4096 then Some value else None
+                else None
+        with _ -> None
+
     let private publisherScript () =
         let explicitPath = Environment.GetEnvironmentVariable "FSGG_TELEMETRY_DASHBOARD_SCRIPT"
         if not (String.IsNullOrWhiteSpace explicitPath) then
             if Path.IsPathFullyQualified explicitPath && File.Exists explicitPath then Some explicitPath else None
         else
-            [ AppContext.BaseDirectory ]
-            |> Seq.collect (fun initial ->
-                let rec ancestors path =
-                    seq {
-                        yield path
-                        let parent = Directory.GetParent path
-                        if not (isNull parent) then yield! ancestors parent.FullName
-                    }
-                ancestors initial)
-            |> Seq.map (fun directory -> Path.Combine(directory, "tools", "telemetry-dashboard.py"))
-            |> Seq.tryFind File.Exists
+            let cwd = Environment.CurrentDirectory
+            match gitOutput cwd [ "rev-parse"; "--show-toplevel" ] with
+            | None -> None
+            | Some root ->
+                let origins = gitOutput root [ "config"; "--local"; "--get-all"; "remote.origin.url" ]
+                let trustedOrigin = origins |> Option.exists (fun origin ->
+                    Regex.IsMatch(origin, "\\A(?:https://github\\.com/FS-GG/\\.github|ssh://git@github\\.com/FS-GG/\\.github|git@github\\.com:FS-GG/\\.github)(?:\\.git)?\\z", RegexOptions.IgnoreCase))
+                if not trustedOrigin then None
+                elif gitOutput root [ "ls-files"; "--error-unmatch"; "--"; "tools/telemetry-dashboard.py" ] |> Option.isNone then None
+                else
+                    let script = Path.Combine(root, "tools", "telemetry-dashboard.py")
+                    let info = FileInfo script
+                    if info.Exists && isNull info.LinkTarget then Some script else None
 
     let private publisherEvent args =
         match publisherScript () with

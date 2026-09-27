@@ -2,6 +2,7 @@
 """Process regression for the production dashboard publisher-event CLI hook."""
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 
@@ -11,9 +12,9 @@ HEALTH = (b'{"schema":"fsgg.telemetry.dashboard-event-health/1","status":"ready"
           b'"reason":null,"observedAt":"2026-09-27T00:00:00Z","publicRevision":null,"commit":null}\n')
 
 
-def run(config, env):
-    return subprocess.run(["dotnet", str(ENGINE), "telemetry", "dashboard", "publisher-event",
-                           "--config", str(config)], cwd=ROOT, env=env, capture_output=True, check=False,
+def run(config, env, engine=ENGINE, cwd=ROOT):
+    return subprocess.run(["dotnet", str(engine), "telemetry", "dashboard", "publisher-event",
+                           "--config", str(config)], cwd=cwd, env=env, capture_output=True, check=False,
                           timeout=10)
 
 
@@ -39,6 +40,27 @@ def main():
         env["FSGG_TELEMETRY_DASHBOARD_SCRIPT"] = str(root / "missing.py")
         unavailable = run(config, env)
         assert unavailable.returncode == 1 and b"script unavailable" in unavailable.stderr, unavailable
+        installed = root / "installed-engine"
+        shutil.copytree(ENGINE.parent, installed)
+        checkout = root / "source-checkout"
+        (checkout / "tools").mkdir(parents=True)
+        tracked_script = checkout / "tools/telemetry-dashboard.py"
+        tracked_script.write_text("print('{\"schema\":\"fsgg.telemetry.dashboard-event-health/1\",\"status\":\"ready\",\"reason\":null,\"observedAt\":\"2026-09-27T00:00:00Z\",\"publicRevision\":null,\"commit\":null}')\n", encoding="utf-8")
+        subprocess.run(["git", "init", "-q", str(checkout)], check=True)
+        subprocess.run(["git", "-C", str(checkout), "remote", "add", "origin", "https://github.com/FS-GG/.github.git"], check=True)
+        subprocess.run(["git", "-C", str(checkout), "add", "tools/telemetry-dashboard.py"], check=True)
+        default_env = dict(os.environ)
+        default_env.pop("FSGG_TELEMETRY_DASHBOARD_SCRIPT", None)
+        installed_engine = installed / ENGINE.name
+        ready = run(config, default_env, installed_engine, checkout)
+        assert (ready.returncode, ready.stdout, ready.stderr) == (0, HEALTH, b""), ready
+        subprocess.run(["git", "-C", str(checkout), "remote", "set-url", "origin", "https://github.com/Other/repo.git"], check=True)
+        refused = run(config, default_env, installed_engine, checkout)
+        assert refused.returncode == 1 and b"script unavailable" in refused.stderr, refused
+        subprocess.run(["git", "-C", str(checkout), "remote", "set-url", "origin", "https://github.com/FS-GG/.github.git"], check=True)
+        subprocess.run(["git", "-C", str(checkout), "rm", "--cached", "-q", "tools/telemetry-dashboard.py"], check=True)
+        untracked = run(config, default_env, installed_engine, checkout)
+        assert untracked.returncode == 1 and b"script unavailable" in untracked.stderr, untracked
     print("production dashboard publisher-event hook: PASS")
 
 
