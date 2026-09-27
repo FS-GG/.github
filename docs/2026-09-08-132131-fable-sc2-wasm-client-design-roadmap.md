@@ -789,7 +789,7 @@ hosts require explicit worker/codec/input qualification before being listed as s
 
 ## 12. Feature roadmap — SC2C-01
 
-This section is the feature's single proposed execution outline. No checkbox is marked complete.
+This section is the feature's single execution outline. Source-delivered milestones are marked below.
 The detailed near-term window is SC2C-01.1–01.3; later outcomes have entry evidence and exit criteria
 without pretending their full task breakdown is already reliable. The first window proves a playable
 slice, not completion of all requested product capabilities.
@@ -837,7 +837,9 @@ installation, data volume and command-coverage evidence.
   supported feature/limit choices, and any unresolved installation assumption. Stop downstream work
   if browser codec or required native packages cannot satisfy that boundary.
 
-- [ ] **SC2C-01.2 — Complete interaction path with a fixture gateway — route: routine.**
+- [x] **SC2C-01.2 — Complete interaction path with a fixture gateway — route: routine.**
+
+**Source closure:** [SC2 Client PR #3](https://github.com/FS-GG/FS.GG.SC2.Client/pull/3) merged at `d17e6b4943d112b127ce8fb8d0f95ff53450e0cb`; exact-main `verify` passed. The browser interaction and fixture gateway are source delivered. Live StarCraft II and installed operation remain open.
   **Depends on:** SC2C-01.1's stable initial corpus and codec decisions.
   **Scope:** Fable/Elmish workspace, tactical projection, pointer/keyboard normalization, manual WASM
   controller, trusted worker supervisor, admission envelopes and an initial read-only trace view.

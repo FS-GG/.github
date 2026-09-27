@@ -91,7 +91,7 @@ retain detailed milestone history in the owning plan. CI ticks and intermediate 
 
 #### Product source milestone projection
 
-SC2C-01.1 is source delivered in the private [SC2 Client PR #2](https://github.com/FS-GG/FS.GG.SC2.Client/pull/2), merged at `c90c07fc32c9c17374ecfef9d1df1b019e973f2a` with its exact main verification passing. The reproducible workspace, native/WebSocket contract corpus and browser baseline are available for SC2C-01.2; worker interaction, live StarCraft II sessions and installed operation remain open.
+SC2C-01.1 and SC2C-01.2 are source delivered in the private [SC2 Client PR #2](https://github.com/FS-GG/FS.GG.SC2.Client/pull/2) and [PR #3](https://github.com/FS-GG/FS.GG.SC2.Client/pull/3), merged at `c90c07fc32c9c17374ecfef9d1df1b019e973f2a` and `d17e6b4943d112b127ce8fb8d0f95ff53450e0cb`; each exact main verification passed. The reproducible workspace, native/WebSocket contract corpus, browser interaction and fixture gateway are available for SC2C-01.3. Live StarCraft II sessions and installed operation remain open.
 
 FOURD-01.1 and FOURD-01.2 are source delivered in the private [FourD PR #1](https://github.com/FS-GG/FS.GG.FourD/pull/1) and [PR #2](https://github.com/FS-GG/FS.GG.FourD/pull/2), merged at `5661d85ce62264b84a56a4fb32716cd1350408ff` and `8096fd19431a74fff7366217142908c4bf226496`. Each exact main verification passed. The four-axis movement kernel and ray/cover laboratory are available for FOURD-01.3; tactical encounter, publication and installed use remain open.
 
