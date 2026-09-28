@@ -221,12 +221,13 @@ start; these rows are not current prerequisites. The active C0–C3 results are 
    protected activation, one settlement, independent Authority readback and the normal already-complete
    rerun are observed. The owning [Audio plan](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md)
    retains the exact evidence.
-2. **Prepare the next explicit C3 wave concurrently.** Preserve the in-flight Rendering CLI 0.1.4
-   publication. Combine the staged Net, Governance and Game profiles in one later immutable CLI release;
-   prepare their disabled receivers and dedicated credential custody in parallel. Activate at most three
-   separately after each repository's current checks and Authority binding are verified, then observe
-   its own settlement, independent journal readback and normal rerun. No repository inherits Audio's
-   activation. Independent SKILL-FS, LEARN and product work continues through its own boundaries.
+2. **Publish CLI 0.1.6, then activate the next explicit C3 wave.** Net, Governance and Game completed
+   their combined 0.1.5 wave. SDD and Templates have merged disabled receivers and independently
+   verified dedicated credential custody; the combined 0.1.6 source and preparation passed. Publish
+   that exact artifact to both feeds, verify immutable package identity, then activate each selected
+   receiver separately after its native checks and Authority binding. Observe each real settlement,
+   independent journal readback and normal rerun. Independent SKILL-FS, LEARN and product work continues
+   through its own boundaries.
 
 The [lane table](#91-dependencies-and-parallelism) names each owner, ready work and join condition.
 
@@ -1211,7 +1212,7 @@ flowchart TD
     Open --> Observe["V6 / GS2-14 baseline + 15 distinct items / contraction"]
     Observe --> Operating["OperatingV2"]
     Open -. actual routine population .-> R5["Separate R5 cohort and 30-day follow-up"]
-    Operating --> Lifecycle["Release D.5 lifecycle activation and receiver proof"]
+    Operating -. superseded by ADR-0091 .-> Lifecycle["Release D.5 lifecycle activation and receiver proof"]
     Foundations["Accepted O0-O3 / source-qualified Choreo"] -. reuse .-> Extensions["Optional E0/E1 / LEARN / F0-F3 preparation"]
     Extensions --> Canary["Separately selected E1 / F4 production canary"]
     Operating --> Canary
