@@ -7,7 +7,7 @@ from new_sdd_workspace_successor_execution import effects
 
 REPOSITORY = "FS-GG/.github"
 REPOSITORY_ID = 1269292704
-WORKFLOW = ".github/workflows/release-new-sdd-workspace-successor-publish.yml"
+WORKFLOW = ".github/workflows/release-new-sdd-workspace.yml"
 OPERATOR = "EHotwagner"
 
 

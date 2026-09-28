@@ -31,14 +31,27 @@
     },
     {
       "path": ".github/workflows/release-new-sdd-workspace.yml",
-      "sha256": "28bb782d48c1d0fbf4f71e1000dc73fb1517fda3a8b71942358c604855a2360f",
-      "disposition": "manual-local-pack-only",
-      "capabilityLoss": [
+      "sha256": "1ac232745859871cc50847c58eb91648f64eefc30d599b367b9038926b78e740",
+      "disposition": "exact-source-protected-journal-successor-only",
+      "successorAmendment": {
+        "unit": "SVG-D5-WIZARD-012",
+        "version": "0.12.0",
+        "reason": "The existing filename carries the NuGet Trusted Publishing identity. Its historical direct publisher remains retired; the 0.12.0 workflow delegates all publication effects to the admitted successor and restores no tag trigger.",
+        "sealedPredecessorSha256": "28bb782d48c1d0fbf4f71e1000dc73fb1517fda3a8b71942358c604855a2360f"
+      },
+      "historicalDisposition": "manual-local-pack-only",
+      "historicalCapabilityLoss": [
         "tag-trigger",
         "packages-write",
         "oidc-token",
         "github-package-publish",
         "nuget-package-publish"
+      ],
+      "capabilityLoss": [
+        "tag-trigger",
+        "direct-package-publish",
+        "repack-after-candidate",
+        "unadmitted-release-effects"
       ]
     },
     {

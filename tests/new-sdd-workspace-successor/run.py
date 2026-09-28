@@ -315,7 +315,7 @@ class WizardReleaseTests(unittest.TestCase):
                     return {"id": 1269292704, "full_name": "FS-GG/.github"}
                 if "/actions/runs/123" in path:
                     return {"repository": {"id": 1269292704},
-                            "path": ".github/workflows/release-new-sdd-workspace-successor-publish.yml",
+                            "path": ".github/workflows/release-new-sdd-workspace.yml",
                             "event": "workflow_dispatch", "head_branch": "main", "head_sha": "d" * 40,
                             "run_attempt": 1, "actor": {"login": self.actor}, "status": "in_progress"}
                 if path.endswith("/git/ref/heads/main"):
