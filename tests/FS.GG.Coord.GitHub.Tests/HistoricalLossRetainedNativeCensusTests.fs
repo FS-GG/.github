@@ -554,3 +554,44 @@ module HistoricalLossRetainedNativeCensusTests =
             Assert.True(loadPrivate path |> Result.isError)
         finally
             Directory.Delete(directory, true)
+
+    [<Fact>]
+    let ``private capture refuses symlink and non-regular target at opened descriptor`` () =
+        let fixture = Fixture()
+        let capture = match collectTwoPass fixture api approvedHorizon with Ok value -> value | Error error -> failwithf "%A" error
+        let directory = Path.Combine(Path.GetTempPath(), "fsgg-historical-nofollow-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory directory |> ignore
+        let path = Path.Combine(directory, "native.capture")
+        let link = Path.Combine(directory, "capture-link")
+        let sparse = Path.Combine(directory, "oversized.capture")
+        try
+            Assert.Equal(Ok(), savePrivate path capture)
+            File.CreateSymbolicLink(link, path) |> ignore
+            Assert.True(loadPrivate link |> Result.isError)
+            Assert.True(loadPrivate directory |> Result.isError)
+            do
+                use oversized = new FileStream(sparse, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+                oversized.SetLength(512L * 1024L * 1024L + 1L)
+                oversized.Flush true
+            File.SetUnixFileMode(sparse, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            Assert.True(loadPrivate sparse |> Result.isError)
+            Assert.True(loadPrivate path |> Result.isOk)
+        finally
+            Directory.Delete(directory, true)
+
+    [<Fact>]
+    let ``oversized raw page is refused before a private target is created`` () =
+        let fixture = Fixture()
+        let capture = match collectTwoPass fixture api approvedHorizon with Ok value -> value | Error error -> failwithf "%A" error
+        let directory = Path.Combine(Path.GetTempPath(), "fsgg-historical-size-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory directory |> ignore
+        let path = Path.Combine(directory, "native.capture")
+        try
+            let tooLarge = String.replicate (4 * 1024 * 1024 + 1) "x"
+            let firstPage = { capture.First.Pages.Head with Body = tooLarge; RawSha256 = shaText tooLarge }
+            let changed = { capture with First = { capture.First with Pages = firstPage :: capture.First.Pages.Tail } }
+            Assert.True(savePrivate path changed |> Result.isError)
+            Assert.False(File.Exists path)
+            Assert.Empty(Directory.GetFiles directory)
+        finally
+            Directory.Delete(directory, true)

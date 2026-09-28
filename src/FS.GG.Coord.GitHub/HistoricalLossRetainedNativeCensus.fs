@@ -6,6 +6,8 @@ module HistoricalLossRetainedNativeCensus =
     open System.Collections.Generic
     open System.Globalization
     open System.IO
+    open System.Runtime.InteropServices
+    open Microsoft.Win32.SafeHandles
     open System.Security.Cryptography
     open System.Text
     open System.Text.Json
@@ -841,9 +843,43 @@ module HistoricalLossRetainedNativeCensus =
     let private strictUtf8 = UTF8Encoding(false, true)
     let private maximumCaptureBytes = 512L * 1024L * 1024L
     let private maximumPages = 200000
+    let private maximumPageBodyBytes = 4 * 1024 * 1024
+
+    [<DllImport("libc", SetLastError = true, EntryPoint = "open")>]
+    extern int private unixOpen(string path, int flags)
+
+    [<DllImport("libc", SetLastError = true, EntryPoint = "fsync")>]
+    extern int private unixFsync(int fd)
+
+    [<DllImport("libc", SetLastError = true, EntryPoint = "statx")>]
+    extern int private unixStatx(int dirfd, string path, int flags, uint32 mask, nativeint buffer)
+
+    // Linux flags. The store intentionally refuses platforms without these descriptor guarantees.
+    let private oNoFollow = 0x20000
+    let private oCloseOnExec = 0x80000
+    let private oNonBlock = 0x800
+    let private oDirectory = 0x10000
+
+    let private openedRegularPrivateFile fd =
+        let buffer = Marshal.AllocHGlobal 256
+        try
+            // AT_EMPTY_PATH pins statx to the opened descriptor. statx mode is at offset 28,
+            // size at 40 in the Linux UAPI layout, independent of libc's struct stat layout.
+            if unixStatx(fd, "", 0x1000, 0x203u, buffer) <> 0 then false
+            else
+                let mode = int (uint16 (Marshal.ReadInt16(buffer, 28)))
+                let size = Marshal.ReadInt64(buffer, 40)
+                mode &&& 0xF000 = 0x8000
+                && mode &&& 0x1FF = 0x180
+                && size >= 0L && size <= maximumCaptureBytes
+        finally
+            Marshal.FreeHGlobal buffer
 
     let private writeText (writer: BinaryWriter) (value: string) =
         let bytes = strictUtf8.GetBytes value
+        if bytes.Length > maximumPageBodyBytes
+           || writer.BaseStream.Position + int64 bytes.Length + 4L > maximumCaptureBytes then
+            raise (InvalidDataException "private capture write exceeds bounds")
         writer.Write bytes.Length
         writer.Write bytes
 
@@ -940,12 +976,17 @@ module HistoricalLossRetainedNativeCensus =
         && pass.Pages.Length <= maximumPages
         && pass.Pages |> List.forall (fun page ->
             page.Pass = number && Set.contains page.Repository (Set.ofList repositories)
+            && Encoding.UTF8.GetByteCount page.Body <= maximumPageBodyBytes
             && page.RawSha256 = sha256 page.Body)
         && pass.RawEvidenceDigest = rawFingerprint pass.Pages
 
     let savePrivate path (capture: Capture) =
-        if OperatingSystem.IsWindows() then Error "private native capture requires Unix file modes"
-        elif String.IsNullOrWhiteSpace path || not (rawPassValid 1 capture.First && rawPassValid 2 capture.Second)
+        let totalBodyBytes =
+            capture.First.Pages @ capture.Second.Pages
+            |> List.sumBy (fun page -> int64 (Encoding.UTF8.GetByteCount page.Body))
+        if not (OperatingSystem.IsLinux()) then Error "private native capture requires Linux descriptor checks"
+        elif String.IsNullOrWhiteSpace path || totalBodyBytes > maximumCaptureBytes
+             || not (rawPassValid 1 capture.First && rawPassValid 2 capture.Second)
              || capture.First.Draft.ObservationHorizon <> capture.Second.Draft.ObservationHorizon then
             Error "private native capture is incomplete or inconsistent"
         else
@@ -967,11 +1008,18 @@ module HistoricalLossRetainedNativeCensus =
                     writeText writer pass.RawEvidenceDigest
                     writer.Write pass.Pages.Length
                     pass.Pages |> List.iter (writePage writer)
+                    if stream.Length > maximumCaptureBytes then
+                        raise (InvalidDataException "private capture write exceeds bounds")
                 writer.Flush()
-                stream.Flush true
                 if stream.Length > maximumCaptureBytes || File.GetUnixFileMode temporary <> privateMode then
                     raise (InvalidDataException "private capture exceeds limits")
+                stream.Flush true
                 File.Move(temporary, target, false)
+                let directory = Path.GetDirectoryName target
+                let directoryFd = unixOpen(directory, oDirectory ||| oNoFollow ||| oCloseOnExec)
+                if directoryFd < 0 then raise (IOException "private capture directory could not be opened")
+                use directoryHandle = new SafeFileHandle(nativeint directoryFd, true)
+                if unixFsync directoryFd <> 0 then raise (IOException "private capture directory could not be synced")
                 Ok()
             with _ ->
                 if temporary <> "" then
@@ -979,20 +1027,23 @@ module HistoricalLossRetainedNativeCensus =
                 Error "private native capture could not be saved"
 
     let loadPrivate path =
-        if OperatingSystem.IsWindows() then Error "private native capture requires Unix file modes"
+        if not (OperatingSystem.IsLinux()) then Error "private native capture requires Linux descriptor checks"
         elif String.IsNullOrWhiteSpace path then Error "private native capture path is invalid"
         else
             try
-                let file = FileInfo(Path.GetFullPath path)
-                if not file.Exists || file.LinkTarget <> null || File.GetUnixFileMode file.FullName <> privateMode
-                   || file.Length > maximumCaptureBytes then
+                let descriptor = unixOpen(Path.GetFullPath path, oNoFollow ||| oCloseOnExec ||| oNonBlock)
+                if descriptor < 0 then
                     Error "private native capture is missing, non-private, or too large"
                 else
-                    use stream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read)
-                    use reader = new BinaryReader(stream, strictUtf8, true)
-                    if reader.ReadBytes(captureMagic.Length) <> captureMagic then
-                        Error "private native capture format is invalid"
+                    use handle = new SafeFileHandle(nativeint descriptor, true)
+                    if not (openedRegularPrivateFile descriptor) then
+                        Error "private native capture is missing, non-private, or too large"
                     else
+                      use stream = new FileStream(handle, FileAccess.Read)
+                      use reader = new BinaryReader(stream, strictUtf8, true)
+                      if reader.ReadBytes(captureMagic.Length) <> captureMagic then
+                        Error "private native capture format is invalid"
+                      else
                         let horizon = readText reader 128
                         let draft =
                             { ObservationHorizon = horizon; Repositories = repositories; Subjects = []
