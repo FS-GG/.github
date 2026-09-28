@@ -743,7 +743,11 @@ module Operations =
 
                                     if invalidManifest then
                                         resultExit "backup-integrity-failed" (Error [ "backup manifest invalid" ])
-                                    elif not ((schemaMin = 9 && schemaMax = 9) || (schemaMin = 10 && schemaMax = 10)) then
+                                    elif not (
+                                        (schemaMin = 9 && schemaMax = 9)
+                                        || (schemaMin = 10 && schemaMax = 10)
+                                        || (schemaMin = 10 && schemaMax = 12)
+                                    ) then
                                         resultExit "restore-incompatible" (Error [ "backup schema is incompatible" ])
                                     else
                                         Directory.CreateDirectory temporary |> ignore
