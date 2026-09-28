@@ -1,0 +1,35 @@
+name: C3 Rendering ordinary enrollment bridge self-test
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/c3-rendering-ordinary-enrollment-bridge.yml"
+      - ".github/workflows/c3-rendering-ordinary-enrollment-bridge-selftest.yml"
+      - "tools/c3-rendering-ordinary-enrollment-bridge.py"
+      - "tools/c3-rendering-ordinary-enrollment-submit.py"
+      - "tests/c3-rendering-ordinary-enrollment-bridge/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/c3-rendering-ordinary-enrollment-bridge.yml"
+      - ".github/workflows/c3-rendering-ordinary-enrollment-bridge-selftest.yml"
+      - "tools/c3-rendering-ordinary-enrollment-bridge.py"
+      - "tools/c3-rendering-ordinary-enrollment-submit.py"
+      - "tests/c3-rendering-ordinary-enrollment-bridge/**"
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    name: c3-rendering-ordinary-enrollment-bridge-fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Exercise bridge and submission refusal controls
+        run: |
+          python3 tests/c3-rendering-ordinary-enrollment-bridge/run.py
+          python3 tests/c3-rendering-ordinary-enrollment-bridge/submit.py
