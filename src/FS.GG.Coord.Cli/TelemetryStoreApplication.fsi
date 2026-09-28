@@ -54,6 +54,12 @@ module TelemetryStoreApplication =
         scope: TelemetryReceipt.Scope ->
             Result<string, string list>
 
+    val enrollReceiptPrincipal:
+        path: string ->
+        assessment: TelemetryStore.DurabilityAssessment ->
+        principal: TelemetryReceipt.Principal ->
+            Result<string, string list>
+
     val submitReceiptWithHook:
         path: string ->
         assessment: TelemetryStore.DurabilityAssessment ->
@@ -62,10 +68,25 @@ module TelemetryStoreApplication =
         hook: (string -> unit) ->
             Result<string, string list>
 
+    val submitReceiptPrincipalWithHook:
+        path: string ->
+        assessment: TelemetryStore.DurabilityAssessment ->
+        principal: TelemetryReceipt.Principal ->
+        bytes: byte array ->
+        hook: (string -> unit) ->
+            Result<string, string list>
+
     val submitReceipt:
         path: string ->
         assessment: TelemetryStore.DurabilityAssessment ->
         scope: TelemetryReceipt.Scope ->
+        bytes: byte array ->
+            Result<string, string list>
+
+    val submitReceiptPrincipal:
+        path: string ->
+        assessment: TelemetryStore.DurabilityAssessment ->
+        principal: TelemetryReceipt.Principal ->
         bytes: byte array ->
             Result<string, string list>
 

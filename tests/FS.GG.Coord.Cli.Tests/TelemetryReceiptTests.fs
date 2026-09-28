@@ -131,6 +131,62 @@ module TelemetryReceiptTests =
             Assert.Equal("expired", status (TelemetryStoreApplication.lookupReceipt root approved scope "batch-a")))
 
     [<Fact>]
+    let ``protected collector admission is durable restricted and never upgrades first fact provenance`` () =
+        withStore (fun root ->
+            let collectorScope = { scope with Producer = "collector-a"; Stream = "native-inventory" }
+            let collector: TelemetryReceipt.Principal =
+                { Scope = collectorScope; Role = TelemetryReceipt.NativeCollector
+                  GrantId = Some "collector-grant"; GrantGeneration = Some 1L }
+            TelemetryStoreApplication.enrollReceiptPrincipal root approved collector |> unwrap |> ignore
+
+            let sharedEnvelope (who: TelemetryReceipt.Scope) batch identity =
+                Encoding.UTF8.GetBytes
+                    $"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"{who.Workspace}","producerId":"{who.Producer}","streamId":"{who.Stream}","batchId":"{batch}","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"ignored","sourceIdentity":"source","generation":"g1","cursor":"1","eventCount":1,"events":[{{"kind":"learn-shared-cost/1","identity":"{identity}","itemId":"I-001","revision":1,"nativeCostId":"cost-{identity}","provider":"openai","providerTotalTokens":0,"allocations":[{{"originalItemId":"I-001","tokens":0}}],"sourceKind":"native-shared-cost","sourceDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}]}}}}"""
+
+            let interrupted = sharedEnvelope collectorScope "collector-interrupted" "collector-fact"
+            let hook stage = if stage = "after-rename" then raise (IOException "injected")
+            Assert.True(TelemetryStoreApplication.submitReceiptPrincipalWithHook root approved collector interrupted hook |> Result.isError)
+            Assert.Equal("durably-received", status (TelemetryStoreApplication.submitReceiptPrincipal root approved collector interrupted))
+            TelemetryStoreApplication.drainReceipts root approved scope.Workspace |> unwrap |> ignore
+
+            use connection = new SqliteConnection($"Data Source={Path.Combine(root, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+            connection.Open()
+            use provenance = connection.CreateCommand()
+            provenance.CommandText <- "SELECT authority_role || ':' || grant_id || ':' || grant_generation FROM fact_admissions WHERE identity='collector-fact';"
+            Assert.Equal("native-collector:collector-grant:1", string (provenance.ExecuteScalar()))
+            connection.Close()
+
+            // Replaying identical native bytes through an ordinary credential cannot replace first admission.
+            let genericReplay = sharedEnvelope scope "generic-replay" "collector-fact"
+            TelemetryStoreApplication.submitReceipt root approved scope genericReplay |> unwrap |> ignore
+            TelemetryStoreApplication.drainReceipts root approved scope.Workspace |> unwrap |> ignore
+            use verify = new SqliteConnection($"Data Source={Path.Combine(root, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+            verify.Open()
+            use retained = verify.CreateCommand()
+            retained.CommandText <- "SELECT authority_role || ':' || grant_id || ':' || grant_generation FROM fact_admissions WHERE identity='collector-fact';"
+            Assert.Equal("native-collector:collector-grant:1", string (retained.ExecuteScalar()))
+
+            let genericFirst = sharedEnvelope scope "generic-first" "generic-fact"
+            TelemetryStoreApplication.submitReceipt root approved scope genericFirst |> unwrap |> ignore
+            TelemetryStoreApplication.drainReceipts root approved scope.Workspace |> unwrap |> ignore
+            let privilegedReplay = sharedEnvelope collectorScope "collector-replay" "generic-fact"
+            TelemetryStoreApplication.submitReceiptPrincipal root approved collector privilegedReplay |> unwrap |> ignore
+            TelemetryStoreApplication.drainReceipts root approved scope.Workspace |> unwrap |> ignore
+            use noUpgrade = verify.CreateCommand()
+            noUpgrade.CommandText <- "SELECT authority_role FROM fact_admissions WHERE identity='generic-fact';"
+            Assert.Equal("generic", string (noUpgrade.ExecuteScalar()))
+
+            let forbidden =
+                Encoding.UTF8.GetBytes
+                    $"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"{collectorScope.Workspace}","producerId":"{collectorScope.Producer}","streamId":"{collectorScope.Stream}","batchId":"collector-policy","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"ignored","sourceIdentity":"source","generation":"g1","cursor":"2","eventCount":1,"events":[{{"kind":"learn-experiment-assignment","identity":"forbidden-assignment","itemId":"I-001","revision":1,"windowId":"w","policyId":"p","arm":"current","assignedAt":"2026-01-01T00:00:00Z","deviation":null}}]}}}}"""
+            TelemetryStoreApplication.submitReceiptPrincipal root approved collector forbidden |> unwrap |> ignore
+            TelemetryStoreApplication.drainReceipts root approved scope.Workspace |> unwrap |> ignore
+            Assert.Equal("rejected", status (TelemetryStoreApplication.lookupReceipt root approved collectorScope "collector-policy"))
+            use rejected = verify.CreateCommand()
+            rejected.CommandText <- "SELECT count(*) FROM fact_admissions WHERE identity='forbidden-assignment';"
+            Assert.Equal(0L, Convert.ToInt64(rejected.ExecuteScalar())))
+
+    [<Fact>]
     let ``receipt lookup refuses an incompatible schema even for an applied batch`` () =
         withStore (fun root ->
             TelemetryStoreApplication.submitReceipt root approved scope (envelope scope "batch-a" 0)
@@ -141,7 +197,7 @@ module TelemetryReceiptTests =
             |> unwrap
             |> ignore
 
-            sql root "PRAGMA user_version=11;"
+            sql root "PRAGMA user_version=13;"
 
             Assert.Equal(
                 Error [ "unsupported-version" ],
@@ -420,7 +476,7 @@ module TelemetryReceiptTests =
 
             sql
                 root
-                "DELETE FROM schema_migrations WHERE version=10; DROP INDEX transport_pending; DROP TABLE transport_receipts; DROP TABLE receipt_producers; DELETE FROM schema_migrations WHERE version=9; PRAGMA user_version=8;"
+                "DROP TABLE fact_admissions; DROP TABLE receipt_admissions; ALTER TABLE receipt_producers DROP COLUMN grant_generation; ALTER TABLE receipt_producers DROP COLUMN grant_id; ALTER TABLE receipt_producers DROP COLUMN authority_role; DELETE FROM schema_migrations WHERE version=12; DROP TABLE learning_fact_order; DELETE FROM schema_migrations WHERE version=11; DELETE FROM schema_migrations WHERE version=10; DROP INDEX transport_pending; DROP TABLE transport_receipts; DROP TABLE receipt_producers; DELETE FROM schema_migrations WHERE version=9; PRAGMA user_version=8;"
 
             TelemetryStoreApplication.initialize root approved |> unwrap |> ignore
 

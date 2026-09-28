@@ -14,6 +14,9 @@ type CredentialConfig =
         WorkspaceId: string
         ProducerId: string
         StreamId: string
+        Role: string
+        GrantId: string
+        GrantGeneration: int64
         Revoked: bool
     }
 
@@ -43,7 +46,7 @@ type HostConfig =
 
 type AuthEntry =
     {
-        Scope: TelemetryReceipt.Scope
+        Principal: TelemetryReceipt.Principal
         TokenHash: byte array
         Revoked: bool
     }
@@ -76,9 +79,11 @@ module Runtime =
         member TryAcquireSlot: unit -> bool
         member ReleaseSlot: unit -> unit
 
-    val authenticate: Map<string, AuthEntry> -> string -> TelemetryReceipt.Scope option
+    val authenticate: Map<string, AuthEntry> -> string -> TelemetryReceipt.Principal option
     val recover: HostConfig -> Result<unit, string list>
     val submit: HostState -> TelemetryReceipt.Scope -> byte array -> CancellationToken -> Task<Reply>
+    val submitPrincipal: HostState -> TelemetryReceipt.Principal -> byte array -> CancellationToken -> Task<Reply>
     val lookup: HostState -> TelemetryReceipt.Scope -> string -> CancellationToken -> Task<Reply>
     val submitAcquired: HostState -> TelemetryReceipt.Scope -> byte array -> CancellationToken -> Task<Reply>
+    val submitPrincipalAcquired: HostState -> TelemetryReceipt.Principal -> byte array -> CancellationToken -> Task<Reply>
     val lookupAcquired: HostState -> TelemetryReceipt.Scope -> string -> CancellationToken -> Task<Reply>

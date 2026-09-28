@@ -10,6 +10,7 @@ import io
 import json
 import math
 import pathlib
+import re
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
@@ -228,15 +229,17 @@ def validate_observations(corpus: dict, observations: dict) -> dict:
 def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
     """Derive assigned-treatment token coverage only from one retained private snapshot."""
     content, workspace = decode_private_snapshot(envelope)
+    learning_rows = content.get("learningObservations", [])
     try:
-        events = [json.loads(row["canonical"]) for row in content.get("learningObservations", [])]
+        events = [json.loads(row["canonical"]) for row in learning_rows]
     except (KeyError, TypeError, json.JSONDecodeError) as error:
         raise Refusal("telemetry snapshot learning observations are malformed") from error
 
     observation_kinds = {"learn-task-snapshot", "learn-context-manifest", "learn-experiment-assignment"}
     supported_kinds = observation_kinds | {
         "learn-accounting-inventory/1", "runtime-native-inventory/1",
-        "runtime-native-inventory-source/1", "learn-shared-cost/1"
+        "runtime-native-inventory-source/1", "learn-shared-cost/1",
+        "learn-shared-cost-allocation/1", "learn-shared-cost-authority/1"
     }
     unknown_kinds = {event.get("kind") for event in events} - supported_kinds
     if unknown_kinds:
@@ -263,14 +266,52 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
         {"contractId": contract.get("contractId"), "items": roots},
         {"schema": "fsgg.learn.observation-snapshot/v1", "workspaceId": workspace, "events": observation_events},
     )
-    is_v3 = content.get("learningSnapshotSchema") == "fsgg.telemetry.learn-item-detail/3"
+    snapshot_schema = content.get("learningSnapshotSchema")
+    is_v3 = snapshot_schema in {
+        "fsgg.telemetry.learn-item-detail/3", "fsgg.telemetry.learn-item-detail/4"
+    }
+    is_v4 = snapshot_schema == "fsgg.telemetry.learn-item-detail/4"
+    ingest_order = {}
+    receipt_provenance = {}
     if is_v3:
-        for row in content.get("learningObservations", []):
+        seen_orders = set()
+        for row, event in zip(learning_rows, events):
             canonical = row.get("canonical")
             digest = row.get("content_digest")
+            order = row.get("ingest_order")
             if (not isinstance(canonical, str) or
                     digest != hashlib.sha256(canonical.encode()).hexdigest()):
                 raise Refusal("v3 learning fact digest does not bind canonical bytes")
+            if not isinstance(event.get("identity"), str) or not event["identity"]:
+                raise Refusal("v3 learning fact identity is malformed")
+            if order is not None:
+                if not isinstance(order, int) or isinstance(order, bool) or order < 1 or order in seen_orders:
+                    raise Refusal("v3 learning facts require unique retained ingest order")
+                seen_orders.add(order)
+            ingest_order[event["identity"]] = order
+            if is_v4:
+                fields = (
+                    row.get("receipt_producer"), row.get("receipt_stream"), row.get("receipt_role"),
+                    row.get("receipt_grant_id"), row.get("receipt_grant_generation"),
+                    row.get("receipt_key"), row.get("receipt_envelope_digest"),
+                )
+                if all(value is None for value in fields):
+                    receipt_provenance[event["identity"]] = None
+                else:
+                    producer, stream, role, grant, generation, receipt_key, envelope_digest = fields
+                    if (not all(isinstance(value, str) and value for value in
+                                (producer, stream, role, receipt_key, envelope_digest)) or
+                            role not in {"generic", "native-collector"} or
+                            not re.fullmatch(r"[0-9a-f]{64}", receipt_key) or
+                            not re.fullmatch(r"[0-9a-f]{64}", envelope_digest) or
+                            ((grant is None) != (generation is None)) or
+                            (grant is not None and
+                             (not isinstance(grant, str) or not grant or
+                              not isinstance(generation, int) or isinstance(generation, bool) or generation < 1))):
+                        raise Refusal("v4 learning fact receipt provenance is malformed")
+                    receipt_provenance[event["identity"]] = fields
+            else:
+                receipt_provenance[event["identity"]] = None
 
     original_by_item = {item: item for item in assignments}
     for row in content.get("populations", []):
@@ -285,6 +326,8 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
 
     incomplete = defaultdict(set)
     totals = defaultdict(int)
+    usage_totals = defaultdict(int)
+    invocation_providers = defaultdict(set)
     invocations = {}
     for row in content.get("admissions", []):
         invocation = row.get("invocation_id")
@@ -419,6 +462,8 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
             incomplete[original].add("provider-profile-mismatch:" + identity)
         else:
             totals[original] += total
+            usage_totals[invocation] += total
+            invocation_providers[invocation].add(provider)
             observed_providers[original].add(provider)
 
     for invocation, (original, _) in invocations.items():
@@ -458,6 +503,8 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
         native_pages = defaultdict(dict)
         native_sources = {}
         shared_by_cost = {}
+        shared_allocation_by_cost = {}
+        shared_authority_by_cost = {}
         for event in events:
             kind = event.get("kind")
             if kind == "learn-accounting-inventory/1":
@@ -550,6 +597,29 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
                 if event.get("sourceKind") != "native-shared-cost" or not valid_digest(event.get("sourceDigest")):
                     raise Refusal("shared native cost provenance is malformed")
                 shared_by_cost[cost] = event
+            elif kind == "learn-shared-cost-authority/1":
+                cost = event.get("nativeCostId")
+                if not isinstance(cost, str) or not cost or cost in shared_authority_by_cost:
+                    raise Refusal("shared cost authority identities must be unique")
+                if (event.get("sourceKind") != "retained-native-shared-cost-source" or
+                        not all(isinstance(event.get(name), str) and event[name] for name in
+                                ("sourceInventoryId", "sourceInvocationId")) or
+                        not valid_digest(event.get("sourceDigest"))):
+                    raise Refusal("shared cost authority is malformed")
+                shared_authority_by_cost[cost] = event
+            elif kind == "learn-shared-cost-allocation/1":
+                cost = event.get("nativeCostId")
+                if not isinstance(cost, str) or not cost or cost in shared_allocation_by_cost:
+                    raise Refusal("shared cost allocation identities must be unique")
+                roster = event.get("allocationRoster")
+                if (event.get("allocationRule") != "equal-largest-remainder-v1" or
+                        not isinstance(roster, list) or not roster or roster != sorted(roster) or
+                        len(roster) != len(set(roster)) or
+                        not all(isinstance(value, str) and value for value in roster) or
+                        not all(isinstance(event.get(name), str) and event[name] for name in
+                                ("policyId", "windowId", "frozenAt"))):
+                    raise Refusal("shared cost allocation is malformed")
+                shared_allocation_by_cost[cost] = event
 
         for original in assignments:
             inventory = accounting_by_original.get(original)
@@ -640,9 +710,10 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
                         source.get("revision") != first.get("revision") or
                         binding.get("capturedAt") != first.get("capturedAt") or
                         binding.get("orderedTurnIds", [])[baseline:] != expected_turns or
-                        root_by_invocation.get(invocation) != binding.get("rootInvocationId") or
-                        observed_threads[invocation] != {binding.get("threadId")}):
-                    raise Refusal("native inventory source authority disagrees with inventory, lineage, or usage")
+                        root_by_invocation.get(invocation) != binding.get("rootInvocationId")):
+                    raise Refusal("native inventory source authority disagrees with inventory or lineage")
+                if observed_threads[invocation] != {binding.get("threadId")}:
+                    incomplete[original].add("native-source-thread-mismatch:" + invocation)
 
         for invocation in native_sources.keys() - native_pages.keys():
             raise Refusal("native inventory source has no matching inventory: " + invocation)
@@ -653,6 +724,7 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
         if expected_all_shared != set(shared_by_cost):
             for original in assignments:
                 incomplete[original].add("shared-cost-population-mismatch")
+        used_shared_invocations = set()
         for cost, event in shared_by_cost.items():
             allocations = event.get("allocations")
             total = event.get("providerTotalTokens")
@@ -670,17 +742,112 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
                     raise Refusal(cost + ": shared allocation is malformed or crosses original-item identity")
                 seen_originals.add(original)
                 allocated += tokens
-                totals[original] += tokens
-                if observed_providers[original] and observed_providers[original] != {provider}:
-                    incomplete[original].add("shared-provider-mismatch:" + cost)
             if allocated != total:
                 raise Refusal(cost + ": shared allocations do not equal provider total")
+            authority = shared_authority_by_cost.get(cost)
+            allocation = shared_allocation_by_cost.get(cost)
+            if authority is None or allocation is None:
+                for original in seen_originals:
+                    incomplete[original].add("independent-shared-cost-authority-unavailable")
+                continue
+            roster = allocation["allocationRoster"]
+            if set(roster) != seen_originals:
+                raise Refusal(cost + ": frozen roster disagrees with allocations")
+            if (event.get("itemId") not in seen_originals or authority.get("itemId") not in seen_originals or
+                    allocation.get("itemId") not in seen_originals):
+                raise Refusal(cost + ": shared cost evidence is not retained by an allocated original item")
+            try:
+                frozen = datetime.fromisoformat(allocation["frozenAt"].replace("Z", "+00:00"))
+                assigned_times = {
+                    original: datetime.fromisoformat(assignments[original]["assignedAt"].replace("Z", "+00:00"))
+                    for original in roster
+                }
+            except (KeyError, AttributeError, ValueError) as error:
+                raise Refusal(cost + ": authority freeze time is malformed") from error
+            if frozen.tzinfo is None or any(assigned.tzinfo is None or frozen > assigned for assigned in assigned_times.values()):
+                raise Refusal(cost + ": allocation authority must be frozen before assignment")
+            allocation_order = ingest_order[allocation["identity"]]
+            assignment_orders = [ingest_order[assignments[original]["identity"]] for original in roster]
+            if allocation_order is None or any(order is None for order in assignment_orders):
+                for original in seen_originals:
+                    incomplete[original].add("prospective-allocation-order-unavailable")
+                continue
+            if any(allocation_order >= order for order in assignment_orders):
+                raise Refusal(cost + ": retained allocation was not persisted before assignment")
+            if any(assignments[original].get("policyId") != allocation["policyId"] or
+                   assignments[original].get("windowId") != allocation["windowId"] or
+                   cost not in accounting_by_original.get(original, {}).get("expectedSharedCostIds", [])
+                   for original in roster):
+                raise Refusal(cost + ": allocation authority disagrees with prospective accounting")
+            invocation = authority["sourceInvocationId"]
+            if invocation in used_shared_invocations:
+                raise Refusal("shared native invocation is allocated more than once: " + invocation)
+            used_shared_invocations.add(invocation)
+            admitted = invocations.get(invocation)
+            pages = native_pages.get(invocation, {})
+            source = native_sources.get(invocation)
+            if admitted is None or admitted[0] not in seen_originals or not pages or source is None:
+                for original in seen_originals:
+                    incomplete[original].add("independent-shared-cost-authority-unavailable")
+                continue
+            first = pages.get(1)
+            source_event, _ = source
+            source_order = ingest_order[source_event["identity"]]
+            authority_order = ingest_order[authority["identity"]]
+            cost_order = ingest_order[event["identity"]]
+            if source_order is None or authority_order is None or cost_order is None:
+                for original in seen_originals:
+                    incomplete[original].add("independent-shared-cost-authority-unavailable")
+                continue
+            if not (source_order < authority_order < cost_order):
+                raise Refusal(cost + ": retained native source, authority and cost are out of order")
+            if (first is None or authority["sourceInventoryId"] != first.get("inventoryId") or
+                    authority["sourceDigest"] != first.get("sourceDigest") or
+                    authority["sourceDigest"] != source_event.get("sourceDigest") or
+                    event.get("sourceDigest") != authority["sourceDigest"]):
+                raise Refusal(cost + ": authority does not bind the retained native source")
+            source_failures = {
+                reason for reason in incomplete[admitted[0]]
+                if invocation in reason or reason == "independent-inventory-source-unavailable"
+            }
+            if (invocation not in terminal or observed_usage[invocation] == 0 or gaps[invocation] or
+                    source_failures):
+                for original in seen_originals:
+                    incomplete[original].add("shared-source-incomplete:" + invocation)
+                continue
+            if invocation_providers[invocation] != {provider}:
+                raise Refusal(cost + ": authority provider disagrees with retained native usage")
+            source_total = usage_totals[invocation]
+            if source_total != total:
+                raise Refusal(cost + ": provider total disagrees with retained native usage")
+            quotient, remainder = divmod(total, len(roster))
+            expected_allocations = {
+                original: quotient + (1 if index < remainder else 0)
+                for index, original in enumerate(roster)
+            }
+            actual_allocations = {row["originalItemId"]: row["tokens"] for row in allocations}
+            if actual_allocations != expected_allocations:
+                raise Refusal(cost + ": allocations disagree with frozen equal allocation rule")
+            source_provenance = receipt_provenance[source_event["identity"]]
+            authority_provenance = receipt_provenance[authority["identity"]]
+            protected_collector = (
+                source_provenance is not None and authority_provenance is not None and
+                source_provenance[2] == "native-collector" and
+                authority_provenance[2] == "native-collector" and
+                source_provenance[3:5] == authority_provenance[3:5]
+            )
+            for original in seen_originals:
+                incomplete[original].add("independent-shared-cost-authority-unavailable")
+                incomplete[original].add("snapshot-origin-unverified")
+                if protected_collector:
+                    incomplete[original].add("native-source-verification-unavailable")
+                else:
+                    incomplete[original].add("collector-principal-unavailable")
 
-        # Native source authority is a distinct canonical producer binding. Shared-cost
-        # allocation still has no corresponding independent authority, so the comparison
-        # remains fenced even when every invocation has a verified source binding.
-        for original in assignments:
-            incomplete[original].add("independent-shared-cost-authority-unavailable")
+        for cost in shared_authority_by_cost.keys() - shared_by_cost.keys():
+            raise Refusal("shared cost authority has no matching cost: " + cost)
+        for cost in shared_allocation_by_cost.keys() - shared_by_cost.keys():
+            raise Refusal("shared cost allocation has no matching cost: " + cost)
 
     arms = {item: assignment.get("arm") for item, assignment in assignments.items()}
     arm_totals = {arm: [] for arm in ("current", "focused")}

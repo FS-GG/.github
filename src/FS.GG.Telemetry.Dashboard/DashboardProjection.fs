@@ -666,7 +666,8 @@ module DashboardProjection =
                                     | Some selection, Some store when
                                         (learningSnapshot || exactNames snapshot legacyExpected)
                                         && (not learningSnapshot
-                                            || (text "learningSnapshotSchema" snapshot = Some "fsgg.telemetry.learn-item-detail/3"
+                                            || ((text "learningSnapshotSchema" snapshot = Some "fsgg.telemetry.learn-item-detail/3"
+                                                 || text "learningSnapshotSchema" snapshot = Some "fsgg.telemetry.learn-item-detail/4")
                                                 && text "workspaceId" snapshot = text "workspaceId" envelope))
                                         && (text "mode" selection
                                             |> Option.exists (fun mode -> mode = "all" || mode = "item"))
@@ -674,7 +675,8 @@ module DashboardProjection =
                                            |> Option.exists (fun v -> v.ValueKind = JsonValueKind.True)
                                         ->
                                         match number "schemaVersion" store, text "journalMode" store with
-                                        | Some version, Some "wal" when version = 8L || version = 9L || version = 10L ->
+                                        | Some version, Some "wal" when
+                                            version = 8L || version = 9L || version = 10L || version = 11L || version = 12L ->
                                             let arrayNames =
                                                 [
                                                     "items"

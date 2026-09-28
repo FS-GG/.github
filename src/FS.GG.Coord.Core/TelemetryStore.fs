@@ -328,6 +328,11 @@ module TelemetryStore =
             inventoryId: string * originalItemId: string * invocationId: string * sourceDigest: string * sourceBinding: string
         | LearnSharedCost of
             nativeCostId: string * provider: string * providerTotalTokens: int64 * allocations: string * sourceDigest: string
+        | LearnSharedCostAllocation of
+            nativeCostId: string * policyId: string * windowId: string * frozenAt: string *
+            allocationRule: string * allocationRoster: string
+        | LearnSharedCostAuthority of
+            nativeCostId: string * sourceInventoryId: string * sourceInvocationId: string * sourceDigest: string
 
     type Fact =
         {
@@ -557,6 +562,11 @@ module TelemetryStore =
         | true, value when value.ValueKind = JsonValueKind.Array ->
             Error $"%s{label}.%s{name} exceeds 256 entries"
         | _ -> Error $"%s{label}.%s{name} must be an array"
+
+    let private canonicalRosterIsNonEmptySorted (canonical: string) =
+        use document = JsonDocument.Parse canonical
+        let values = document.RootElement.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+        not values.IsEmpty && values = List.sort values
 
     let private requiredAllocations (label: string) (node: JsonElement) (name: string) =
         match node.TryGetProperty name with
@@ -2131,6 +2141,41 @@ module TelemetryStore =
                             [ "nativeCostId"; "provider"; "providerTotalTokens"; "allocations"; "sourceKind"; "sourceDigest" ]
                             (LearnSharedCost(cost, provider, total, allocations, digest))
                 | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error $"%s{label} has invalid source kind or digest"
+                | values -> Error(sprintf "%A" values)
+            | "learn-shared-cost-allocation/1" ->
+                match
+                    requiredText label node "nativeCostId",
+                    requiredText label node "policyId",
+                    requiredText label node "windowId",
+                    requiredTimestamp label node "frozenAt",
+                    requiredText label node "allocationRule",
+                    requiredUniqueTextRoster label node "allocationRoster"
+                with
+                | Ok cost, Ok policy, Ok window, Ok frozen, Ok rule, Ok roster
+                    when itemId.IsSome && rule = "equal-largest-remainder-v1"
+                        && canonicalRosterIsNonEmptySorted roster ->
+                    make
+                        [ "nativeCostId"; "policyId"; "windowId"; "frozenAt"; "allocationRule"; "allocationRoster" ]
+                        (LearnSharedCostAllocation(cost, policy, window, frozen, rule, roster))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
+                    Error $"%s{label} has unsupported allocation rule or roster"
+                | values -> Error(sprintf "%A" values)
+            | "learn-shared-cost-authority/1" ->
+                match
+                    requiredText label node "nativeCostId",
+                    requiredText label node "sourceInventoryId",
+                    requiredText label node "sourceInvocationId",
+                    requiredText label node "sourceKind",
+                    requiredText label node "sourceDigest"
+                with
+                | Ok cost, Ok inventory, Ok invocation, Ok source, Ok digest
+                    when itemId.IsSome && source = "retained-native-shared-cost-source"
+                        && Regex.IsMatch(digest, "^[0-9a-f]{64}$") && digest <> String('0', 64) ->
+                    make
+                        [ "nativeCostId"; "sourceInventoryId"; "sourceInvocationId"; "sourceKind"; "sourceDigest" ]
+                        (LearnSharedCostAuthority(cost, inventory, invocation, digest))
+                | Ok _, Ok _, Ok _, Ok _, Ok _ ->
+                    Error $"%s{label} has unsupported source kind or digest"
                 | values -> Error(sprintf "%A" values)
             | _ -> Error $"%s{label}.kind is unsupported"
         | values -> Error(sprintf "%A" values)

@@ -320,6 +320,11 @@ module TelemetryStore =
             inventoryId: string * originalItemId: string * invocationId: string * sourceDigest: string * sourceBinding: string
         | LearnSharedCost of
             nativeCostId: string * provider: string * providerTotalTokens: int64 * allocations: string * sourceDigest: string
+        | LearnSharedCostAllocation of
+            nativeCostId: string * policyId: string * windowId: string * frozenAt: string *
+            allocationRule: string * allocationRoster: string
+        | LearnSharedCostAuthority of
+            nativeCostId: string * sourceInventoryId: string * sourceInvocationId: string * sourceDigest: string
 
     type Fact =
         {

@@ -32,7 +32,7 @@ module TelemetryStoreApplication =
     let private maxDrainBatches = 128
     let private maxDrainBytes = 8L * 1024L * 1024L
     let private maxPendingPerProducer = 128
-    let private currentSchemaVersion = 10
+    let private currentSchemaVersion = 12
 
     let private gzip (bytes: byte array) =
         use output = new MemoryStream()
@@ -216,6 +216,31 @@ PRAGMA user_version=10;
 
     let private migration10Digest =
         CanonicalJson.sha256 (Encoding.UTF8.GetBytes migration10Sql)
+
+    let private migration11Sql =
+        """
+CREATE TABLE learning_fact_order(sequence INTEGER PRIMARY KEY AUTOINCREMENT, identity TEXT NOT NULL UNIQUE REFERENCES ingest_facts(identity)) STRICT;
+PRAGMA user_version=11;
+"""
+
+    let private migration11Digest =
+        CanonicalJson.sha256 (Encoding.UTF8.GetBytes migration11Sql)
+
+    let private migration12Sql =
+        """
+ALTER TABLE receipt_producers ADD COLUMN authority_role TEXT NOT NULL DEFAULT 'generic' CHECK(authority_role IN ('generic','native-collector'));
+ALTER TABLE receipt_producers ADD COLUMN grant_id TEXT;
+ALTER TABLE receipt_producers ADD COLUMN grant_generation INTEGER;
+CREATE TABLE receipt_admissions(producer TEXT NOT NULL, batch TEXT NOT NULL, stream TEXT NOT NULL, authority_role TEXT NOT NULL CHECK(authority_role IN ('generic','native-collector')), grant_id TEXT, grant_generation INTEGER, receipt_key TEXT NOT NULL, envelope_digest TEXT NOT NULL, PRIMARY KEY(producer,batch), FOREIGN KEY(producer,batch) REFERENCES transport_receipts(producer,batch), CHECK((grant_id IS NULL AND grant_generation IS NULL) OR (grant_id IS NOT NULL AND grant_generation > 0))) STRICT;
+CREATE TABLE fact_admissions(identity TEXT PRIMARY KEY REFERENCES ingest_facts(identity), producer TEXT NOT NULL, stream TEXT NOT NULL, authority_role TEXT NOT NULL CHECK(authority_role IN ('generic','native-collector')), grant_id TEXT, grant_generation INTEGER, receipt_key TEXT NOT NULL, envelope_digest TEXT NOT NULL, CHECK((grant_id IS NULL AND grant_generation IS NULL) OR (grant_id IS NOT NULL AND grant_generation > 0))) STRICT;
+PRAGMA user_version=12;
+"""
+
+    let private migration12Digest = CanonicalJson.sha256 (Encoding.UTF8.GetBytes migration12Sql)
+
+    let private roleName = function
+        | TelemetryReceipt.Generic -> "generic"
+        | TelemetryReceipt.NativeCollector -> "native-collector"
 
     let private scalarText (connection: SqliteConnection) sql =
         use command = connection.CreateCommand()
@@ -779,10 +804,48 @@ PRAGMA user_version=10;
                                                                     then
                                                                         Error [ "migration checksum mismatch" ]
                                                                     else
-                                                                        fsyncDirectory root
-                                                                        fsyncDirectory (Path.GetDirectoryName root)
+                                                                        if Int32.Parse(scalarText connection "PRAGMA user_version;") = 10 then
+                                                                            beginImmediate connection
 
-                                                                        Ok(
+                                                                            try
+                                                                                execute connection migration11Sql
+                                                                                use migration = connection.CreateCommand()
+                                                                                migration.CommandText <-
+                                                                                    "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(11,$digest,$utc);"
+                                                                                parameter migration "$digest" migration11Digest
+                                                                                parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
+                                                                                migration.ExecuteNonQuery() |> ignore
+                                                                                execute connection "COMMIT;"
+                                                                            with error ->
+                                                                                rollback connection
+                                                                                raise error
+
+                                                                        if scalarText connection "SELECT digest FROM schema_migrations WHERE version=11;" <> migration11Digest then
+                                                                            Error [ "migration checksum mismatch" ]
+                                                                        else
+                                                                            if Int32.Parse(scalarText connection "PRAGMA user_version;") = 11 then
+                                                                                beginImmediate connection
+
+                                                                                try
+                                                                                    execute connection migration12Sql
+                                                                                    use migration = connection.CreateCommand()
+                                                                                    migration.CommandText <-
+                                                                                        "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(12,$digest,$utc);"
+                                                                                    parameter migration "$digest" migration12Digest
+                                                                                    parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
+                                                                                    migration.ExecuteNonQuery() |> ignore
+                                                                                    execute connection "COMMIT;"
+                                                                                with error ->
+                                                                                    rollback connection
+                                                                                    raise error
+
+                                                                            if scalarText connection "SELECT digest FROM schema_migrations WHERE version=12;" <> migration12Digest then
+                                                                                Error [ "migration checksum mismatch" ]
+                                                                            else
+                                                                                fsyncDirectory root
+                                                                                fsyncDirectory (Path.GetDirectoryName root)
+
+                                                                                Ok(
                                                                             JsonSerializer.Serialize
                                                                                 {|
                                                                                     schema = "fsgg.telemetry.store-status/1"
@@ -879,6 +942,11 @@ PRAGMA user_version=10;
                     elif
                         scalarText connection "SELECT digest FROM schema_migrations WHERE version=10;"
                         <> migration10Digest
+                    then
+                        Error [ "migration checksum mismatch" ]
+                    elif
+                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=12;"
+                        <> migration12Digest
                     then
                         Error [ "migration checksum mismatch" ]
                     else
@@ -1635,9 +1703,23 @@ PRAGMA user_version=10;
                     [ "$item", box item; "$kind", box fact.Kind ]
             if count <> 1L then
                 invalidOp $"%s{fact.Kind} must be unique per item"
+        | TelemetryStore.LearnSharedCostAllocation(_, _, _, _, _, roster) ->
+            use document = JsonDocument.Parse roster
+            let members = document.RootElement.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+            let retainedBy = fact.ItemId |> Option.defaultWith (fun () -> invalidOp "shared allocation requires itemId")
+            if not (members |> List.contains retainedBy) then
+                invalidOp "shared allocation must be retained by a rostered item"
+            for rosterItem in members do
+                let assigned =
+                    scalarCount
+                        "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind='learn-experiment-assignment';"
+                        [ "$item", box rosterItem ]
+                if assigned <> 0L then
+                    invalidOp $"shared allocation for %s{rosterItem} must be persisted before assignment"
         | TelemetryStore.RuntimeNativeInventory _
         | TelemetryStore.RuntimeNativeInventorySource _
-        | TelemetryStore.LearnSharedCost _ -> ()
+        | TelemetryStore.LearnSharedCost _
+        | TelemetryStore.LearnSharedCostAuthority _ -> ()
 
         match fact.ItemId, fact.Payload with
         | Some item,
@@ -2489,6 +2571,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
         beforeCommit
         reevaluateBudget
         finishReceipt
+        factAdmission
         (batch: TelemetryStore.Batch)
         =
         if not (File.Exists(Path.Combine(root, databaseFileName))) then
@@ -2513,6 +2596,15 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                         beginImmediate connection
 
                         try
+                            match factAdmission with
+                            | Some(admission: TelemetryReceipt.Admission) when admission.Principal.Role = TelemetryReceipt.NativeCollector ->
+                                let allowed =
+                                    set [ "runtime-native-inventory/1"; "runtime-native-inventory-source/1";
+                                          "learn-shared-cost/1"; "learn-shared-cost-authority/1" ]
+                                if batch.Facts |> List.exists (fun fact -> not (allowed.Contains fact.Kind)) then
+                                    invalidOp "invalid-request"
+                            | _ -> ()
+
                             use priorBatch = connection.CreateCommand()
                             priorBatch.CommandText <- "SELECT content_digest FROM ingest_batches WHERE ingest_id=$id;"
                             parameter priorBatch "$id" batch.IngestId
@@ -2600,7 +2692,28 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                     |> List.iter (fun (name, value) -> parameter insert name value)
 
                                     insert.ExecuteNonQuery() |> ignore
+                                    if fact.Kind.StartsWith("learn-", StringComparison.Ordinal)
+                                       || fact.Kind = "runtime-native-inventory/1"
+                                       || fact.Kind = "runtime-native-inventory-source/1" then
+                                        use order = connection.CreateCommand()
+                                        order.CommandText <- "INSERT INTO learning_fact_order(identity) VALUES($identity);"
+                                        parameter order "$identity" fact.Identity
+                                        order.ExecuteNonQuery() |> ignore
                                     insertTyped connection fact
+                                    match factAdmission with
+                                    | Some admission ->
+                                        let principal = admission.Principal
+                                        use provenance = connection.CreateCommand()
+                                        provenance.CommandText <-
+                                            "INSERT INTO fact_admissions(identity,producer,stream,authority_role,grant_id,grant_generation,receipt_key,envelope_digest) VALUES($identity,$producer,$stream,$role,$grant,$generation,$key,$digest);"
+                                        [ "$identity", box fact.Identity; "$producer", box principal.Scope.Producer
+                                          "$stream", box principal.Scope.Stream; "$role", box (roleName principal.Role)
+                                          "$grant", principal.GrantId |> Option.map box |> Option.defaultValue DBNull.Value
+                                          "$generation", principal.GrantGeneration |> Option.map box |> Option.defaultValue DBNull.Value
+                                          "$key", box admission.Envelope.Key; "$digest", box admission.Envelope.Digest ]
+                                        |> List.iter (fun (name, value) -> parameter provenance name value)
+                                        provenance.ExecuteNonQuery() |> ignore
+                                    | None -> ()
                                     accepted <- accepted + 1L
 
                             use source = connection.CreateCommand()
@@ -2665,7 +2778,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                 | error -> Error [ error.Message ]
 
     let private ingestBatchLocked root beforeCommit reevaluateBudget batch =
-        ingestBatchWithReceiptLocked root beforeCommit reevaluateBudget ignore batch
+        ingestBatchWithReceiptLocked root beforeCommit reevaluateBudget ignore None batch
 
     let publish path assessment bytes =
         match validateRoot path assessment, TelemetryStore.parseBatch bytes with
@@ -3145,8 +3258,36 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
             =
             1L
 
+    let private principalAuthorized connection (principal: TelemetryReceipt.Principal) =
+        receiptWorkspace connection = principal.Scope.Workspace
+        && Convert.ToInt64(
+            receiptScalar connection
+                "SELECT count(*) FROM receipt_producers WHERE producer=$p AND stream=$s AND authority_role=$role AND grant_id IS $grant AND grant_generation IS $generation;"
+                [ "$p", box principal.Scope.Producer; "$s", box principal.Scope.Stream; "$role", box (roleName principal.Role)
+                  "$grant", principal.GrantId |> Option.map box |> Option.defaultValue DBNull.Value
+                  "$generation", principal.GrantGeneration |> Option.map box |> Option.defaultValue DBNull.Value ]) = 1L
+
     let private receiptParameters (envelope: TelemetryReceipt.Envelope) =
         [ "$p", box envelope.Scope.Producer; "$b", box envelope.BatchId ]
+
+    let private admissionParameters (admission: TelemetryReceipt.Admission) =
+        let principal = admission.Principal
+        receiptParameters admission.Envelope
+        @ [ "$s", box principal.Scope.Stream; "$role", box (roleName principal.Role)
+            "$grant", principal.GrantId |> Option.map box |> Option.defaultValue DBNull.Value
+            "$generation", principal.GrantGeneration |> Option.map box |> Option.defaultValue DBNull.Value
+            "$key", box admission.Envelope.Key; "$digest", box admission.Envelope.Digest ]
+
+    let private admissionMatches connection (admission: TelemetryReceipt.Admission) =
+        Convert.ToInt64(
+            receiptScalar connection
+                "SELECT count(*) FROM receipt_admissions WHERE producer=$p AND batch=$b AND stream=$s AND authority_role=$role AND grant_id IS $grant AND grant_generation IS $generation AND receipt_key=$key AND envelope_digest=$digest;"
+                (admissionParameters admission)) = 1L
+
+    let private insertAdmission connection (admission: TelemetryReceipt.Admission) =
+        receiptExecute connection
+            "INSERT INTO receipt_admissions(producer,batch,stream,authority_role,grant_id,grant_generation,receipt_key,envelope_digest) VALUES($p,$b,$s,$role,$grant,$generation,$key,$digest);"
+            (admissionParameters admission)
 
     let private receiptPath root producer batch =
         Path.Combine(root, "receipt-inbox", TelemetryReceipt.key producer batch + ".ready")
@@ -3170,8 +3311,8 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                             Error [ "unsupported-version" ]
                         elif
                             scalarText connection "PRAGMA journal_mode;" <> "wal"
-                            || scalarText connection "SELECT digest FROM schema_migrations WHERE version=10;"
-                               <> migration10Digest
+                            || scalarText connection "SELECT digest FROM schema_migrations WHERE version=12;"
+                               <> migration12Digest
                         then
                             Error [ "storage-unavailable" ]
                         else
@@ -3210,10 +3351,12 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                         rollback connection
                         raise error)
 
-    let enrollReceiptProducer path assessment (scope: TelemetryReceipt.Scope) =
+    let enrollReceiptPrincipal path assessment (principal: TelemetryReceipt.Principal) =
+        let scope = principal.Scope
         if
             [ scope.Workspace; scope.Producer; scope.Stream ]
             |> List.exists (TelemetryReceipt.validId >> not)
+            || not (TelemetryReceipt.validPrincipal principal)
         then
             Error [ "invalid-request" ]
         else
@@ -3261,14 +3404,22 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
 
                             receiptExecute
                                 connection
-                                "INSERT OR IGNORE INTO receipt_producers(producer,stream) VALUES($p,$s);"
-                                [ "$p", box scope.Producer; "$s", box scope.Stream ]
+                                "INSERT OR IGNORE INTO receipt_producers(producer,stream,authority_role,grant_id,grant_generation) VALUES($p,$s,$role,$grant,$generation);"
+                                [ "$p", box scope.Producer; "$s", box scope.Stream; "$role", box (roleName principal.Role)
+                                  "$grant", principal.GrantId |> Option.map box |> Option.defaultValue DBNull.Value
+                                  "$generation", principal.GrantGeneration |> Option.map box |> Option.defaultValue DBNull.Value ]
+
+                            if not (principalAuthorized connection principal) then
+                                invalidOp "producer authority conflicts with protected enrollment"
 
                             execute connection "COMMIT;"
                             Ok "{\"schema\":\"fsgg.telemetry.enrollment/1\",\"status\":\"enrolled\"}\n"
                         with error ->
                             rollback connection
                             raise error)
+
+    let enrollReceiptProducer path assessment scope =
+        enrollReceiptPrincipal path assessment (TelemetryReceipt.genericPrincipal scope)
 
     let private receiptRead (root: string) connection (scope: TelemetryReceipt.Scope) batch now =
         use command =
@@ -3295,15 +3446,16 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                     if
                         not file.Exists
                         || not (isNull file.LinkTarget)
-                        || file.Length > int64 TelemetryReceipt.MaxEnvelopeBytes
+                        || file.Length > int64 TelemetryReceipt.MaxAdmissionBytes
                     then
                         false
                     else
-                        match TelemetryReceipt.parse (File.ReadAllBytes file.FullName) with
-                        | Ok envelope ->
-                            envelope.Scope = scope
-                            && envelope.BatchId = batch
-                            && envelope.Digest = reader.GetString(1)
+                        match TelemetryReceipt.parseAdmission (File.ReadAllBytes file.FullName) with
+                        | Ok admission ->
+                            admission.Envelope.Scope = scope
+                            && admission.Envelope.BatchId = batch
+                            && admission.Envelope.Digest = reader.GetString(1)
+                            && admissionMatches connection admission
                         | Error _ -> false
 
             if not recoverable then
@@ -3392,7 +3544,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
 
                 if
                     not (isNull info.LinkTarget)
-                    || info.Length > int64 TelemetryReceipt.MaxEnvelopeBytes
+                    || info.Length > int64 TelemetryReceipt.MaxAdmissionBytes
                 then
                     invalidOp "invalid receipt artifact"
 
@@ -3403,37 +3555,33 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                     if file <> receiptPath root producer batch then
                         invalidOp "invalid receipt binding"
 
-                    let bytes = File.ReadAllBytes file
+                    let admission =
+                        TelemetryReceipt.parseAdmission (File.ReadAllBytes file)
+                        |> Result.defaultWith (fun _ -> invalidOp "invalid receipt artifact")
 
-                    let actual =
-                        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData bytes).ToLowerInvariant()
-
-                    if actual <> digest || not (seen.Add key) then
+                    if not (seen.Add key) then
                         invalidOp "invalid receipt artifact"
 
-                    use document = JsonDocument.Parse bytes
-                    let envelope = document.RootElement
-                    let fields = envelope.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
-
-                    if
-                        envelope.ValueKind <> JsonValueKind.Object
-                        || fields.Length <> 6
-                        || fields |> Array.distinct |> Array.length <> 6
-                        || envelope.GetProperty("schema").GetString() <> "fsgg.telemetry.envelope/1"
-                        || envelope.GetProperty("workspaceId").GetString() <> workspace
-                        || envelope.GetProperty("producerId").GetString() <> producer
-                        || envelope.GetProperty("streamId").GetString() <> stream
-                        || envelope.GetProperty("batchId").GetString() <> batch
-                    then
+                    if admission.Envelope.Scope.Workspace <> workspace
+                       || admission.Envelope.Scope.Producer <> producer
+                       || admission.Envelope.Scope.Stream <> stream
+                       || admission.Envelope.BatchId <> batch
+                       || admission.Envelope.Digest <> digest then
                         invalidOp "invalid receipt binding"
+                    if not (admissionMatches connection admission) then
+                        // Schema-11 pending artifacts had no receiver-authored provenance. They remain generic.
+                        if admission.Principal <> TelemetryReceipt.genericPrincipal admission.Envelope.Scope then
+                            invalidOp "invalid receipt authority"
+                        insertAdmission connection admission
                 | false, _ ->
-                    let envelope =
-                        TelemetryReceipt.parse (File.ReadAllBytes file)
+                    let admission =
+                        TelemetryReceipt.parseAdmission (File.ReadAllBytes file)
                         |> Result.defaultWith (fun _ -> invalidOp "invalid receipt artifact")
+                    let envelope = admission.Envelope
 
                     if
                         file <> receiptPath root envelope.Scope.Producer envelope.BatchId
-                        || not (receiptAuthorized connection envelope.Scope)
+                        || not (principalAuthorized connection admission.Principal)
                     then
                         invalidOp "invalid receipt binding"
 
@@ -3449,17 +3597,21 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                         invalidOp "receipt identity conflict"
 
                     if isNull prior then
-                        receiptExecute
-                            connection
-                            "INSERT INTO transport_receipts(producer,batch,stream,digest,payload_bytes,state) VALUES($p,$b,$s,$d,$n,'durably-received');"
-                            (parameters
-                             @ [
-                                 "$s", box envelope.Scope.Stream
-                                 "$d", box envelope.Digest
-                                 "$n", box info.Length
-                             ])
-
-                        hook "index-committed"
+                        beginImmediate connection
+                        try
+                            receiptExecute
+                                connection
+                                "INSERT INTO transport_receipts(producer,batch,stream,digest,payload_bytes,state) VALUES($p,$b,$s,$d,$n,'durably-received');"
+                                (parameters
+                                 @ [ "$s", box envelope.Scope.Stream; "$d", box envelope.Digest; "$n", box info.Length ])
+                            insertAdmission connection admission
+                            execute connection "COMMIT;"
+                            hook "index-committed"
+                        with error ->
+                            rollback connection
+                            raise error
+                    elif not (admissionMatches connection admission) then
+                        invalidOp "receipt authority conflict"
 
                     let state =
                         string (
@@ -3483,7 +3635,8 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
         then
             invalidOp "missing accepted inbox"
 
-    let submitReceiptWithHook path assessment scope bytes hook =
+    let submitReceiptPrincipalWithHook path assessment (principal: TelemetryReceipt.Principal) bytes hook =
+        let scope = principal.Scope
         match TelemetryReceipt.parse bytes with
         | Error errors -> Error errors
         | Ok envelope ->
@@ -3491,11 +3644,17 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
             | Error errors -> Error errors
             | Ok() ->
                 receiptLocked path assessment (fun root connection ->
-                    if not (receiptAuthorized connection scope) then
+                    if not (principalAuthorized connection principal) then
                         Error [ "unauthorized-scope" ]
                     else
                         recoverReceiptIndex root connection hook
                         let parameters = receiptParameters envelope
+                        let admissionCanonical =
+                            TelemetryReceipt.encodeAdmission principal envelope
+                            |> Result.defaultWith (fun _ -> invalidOp "invalid receipt authority")
+                        let admission =
+                            TelemetryReceipt.parseAdmission (Encoding.UTF8.GetBytes admissionCanonical)
+                            |> Result.defaultWith (fun _ -> invalidOp "invalid receipt authority")
 
                         let prior =
                             receiptScalar
@@ -3506,13 +3665,15 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                         if not (isNull prior) then
                             if string prior <> envelope.Digest then
                                 Error [ "identity-conflict" ]
+                            elif not (admissionMatches connection admission) then
+                                Error [ "identity-conflict" ]
                             else
                                 receiptRead root connection scope envelope.BatchId DateTimeOffset.UtcNow
                         else
                             let count sql values =
                                 Convert.ToInt64(receiptScalar connection sql values)
 
-                            let size = int64 (Encoding.UTF8.GetByteCount envelope.Canonical)
+                            let size = int64 (Encoding.UTF8.GetByteCount admissionCanonical)
                             let p = [ "$p", box scope.Producer ]
 
                             if
@@ -3572,7 +3733,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                         )
 
                                     File.SetUnixFileMode(temporary, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
-                                    stream.Write(Encoding.UTF8.GetBytes envelope.Canonical)
+                                    stream.Write(Encoding.UTF8.GetBytes admissionCanonical)
                                     hook "before-file-sync"
                                     stream.Flush true
                                     hook "after-file-sync"
@@ -3586,6 +3747,12 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                 finally
                                     if File.Exists temporary then
                                         File.Delete temporary)
+
+    let submitReceiptWithHook path assessment scope bytes hook =
+        submitReceiptPrincipalWithHook path assessment (TelemetryReceipt.genericPrincipal scope) bytes hook
+
+    let submitReceiptPrincipal path assessment principal bytes =
+        submitReceiptPrincipalWithHook path assessment principal bytes ignore
 
     let submitReceipt path assessment scope bytes =
         submitReceiptWithHook path assessment scope bytes ignore
@@ -3606,8 +3773,8 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                         if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then
                             Error [ "unsupported-version" ]
                         elif
-                            scalarText connection "SELECT digest FROM schema_migrations WHERE version=10;"
-                            <> migration10Digest
+                            scalarText connection "SELECT digest FROM schema_migrations WHERE version=12;"
+                            <> migration12Digest
                         then
                             Error [ "storage-unavailable" ]
                         elif not (receiptAuthorized connection scope) then
@@ -3632,8 +3799,8 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                     if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then
                         Error [ "unsupported-version" ]
                     elif
-                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=10;"
-                        <> migration10Digest
+                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=12;"
+                        <> migration12Digest
                     then
                         Error [ "storage-unavailable" ]
                     else
@@ -3699,9 +3866,12 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                     if bytes + size <= maxDrainBytes then
                         bytes <- bytes + size
 
-                        let envelope =
-                            TelemetryReceipt.parse (File.ReadAllBytes file)
+                        let admission =
+                            TelemetryReceipt.parseAdmission (File.ReadAllBytes file)
                             |> Result.defaultWith (fun _ -> invalidOp "invalid receipt artifact")
+                        if not (admissionMatches connection admission) then
+                            invalidOp "invalid receipt authority"
+                        let envelope = admission.Envelope
                         // Only transport identities are adapted. Native fact identities/revisions remain unchanged.
                         let native =
                             { envelope.Batch with
@@ -3731,6 +3901,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                 (fun () -> hook "before-application-commit")
                                 true
                                 (fun db -> terminal db "applied" DBNull.Value)
+                                (Some admission)
                                 native
 
                         match result with
@@ -4230,7 +4401,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
             ItemId = itemId
             FactCount =
                 runtimeScalar
-                    "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1');"
+                    "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1');"
             UsageObservations = usageCount
             DeliveryObservations = count "delivery_observations"
             Input = sum "input_count" + runtimeSum "input_count"
@@ -4629,6 +4800,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
 
                             let itemFilter = whereItem "item_id"
                             let learningItemFilter = if itemId.IsSome then " AND item_id=$selected" else ""
+                            let learningFactItemFilter = if itemId.IsSome then " AND f.item_id=$selected" else ""
 
                             let table name order =
                                 rows ($"SELECT * FROM %s{name}%s{itemFilter} ORDER BY %s{order} LIMIT 10001;")
@@ -4638,7 +4810,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                             use learningCount = connection.CreateCommand()
                             learningCount.Transaction <- transaction
                             learningCount.CommandText <-
-                                $"SELECT count(*) FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1')%s{learningItemFilter};"
+                                $"SELECT count(*) FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1')%s{learningItemFilter};"
                             itemId |> Option.iter (parameter learningCount "$selected")
 
                             if Convert.ToInt64(learningCount.ExecuteScalar()) > 10000L then
@@ -4665,7 +4837,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
 
                             content["workspaceId"] <- JsonValue.Create(snapshotWorkspace)
                             content["learningSnapshotSchema"] <-
-                                JsonValue.Create("fsgg.telemetry.learn-item-detail/3")
+                                JsonValue.Create("fsgg.telemetry.learn-item-detail/4")
 
                             content["selection"] <-
                                 JsonSerializer.SerializeToNode
@@ -4726,7 +4898,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                 "reviews", table "process_reviews" "item_id,scope,attempt_id,fact_revision"
                                 "learningObservations",
                                 rows
-                                    ($"SELECT identity,kind,item_id,revision,content_digest,canonical FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1')%s{learningItemFilter} ORDER BY item_id,kind,identity LIMIT 10001;")
+                                    ($"SELECT o.sequence AS ingest_order,a.producer AS receipt_producer,a.stream AS receipt_stream,a.authority_role AS receipt_role,a.grant_id AS receipt_grant_id,a.grant_generation AS receipt_grant_generation,a.receipt_key,a.envelope_digest AS receipt_envelope_digest,f.identity,f.kind,f.item_id,f.revision,f.content_digest,f.canonical FROM ingest_facts f LEFT JOIN learning_fact_order o ON o.identity=f.identity LEFT JOIN fact_admissions a ON a.identity=f.identity WHERE f.kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1')%s{learningFactItemFilter} ORDER BY f.item_id,f.kind,f.identity LIMIT 10001;")
                             ]
                             |> List.iter (fun (name, value) -> content[name] <- value)
 
@@ -5549,7 +5721,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                         use command = connection.CreateCommand()
 
                         command.CommandText <-
-                            "SELECT DISTINCT item_id FROM ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1') ORDER BY item_id;"
+                            "SELECT DISTINCT item_id FROM ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1') ORDER BY item_id;"
 
                         use reader = command.ExecuteReader()
                         let items = ResizeArray<string>()
