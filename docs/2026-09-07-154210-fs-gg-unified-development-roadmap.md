@@ -11,7 +11,7 @@ Short name: **Unified Roadmap**. In FS-GG development discussions, **“the road
 and **“compacted roadmap”** refer to this document unless another roadmap is explicitly named.
 
 Authored: **2026-09-07 15:42:10 UTC**. Section 0 evidence reconciliation: **2026-09-28**.
-Status: **active programme; `.github` C0–C2 and the first selected Audio C3 ordinary-V2 adoption are complete**.
+Status: **active programme; `.github` C0–C2 and selected C3 ordinary-V2 adoptions, including Rendering, are complete**.
 
 **Start from completed development simplification and the existing v2 implementation. Keep the proven
 `.github` settlement active, then add explicitly selected repositories through checked source, dedicated
@@ -53,10 +53,10 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
-**Current frontier: ordinary V2 settlement is active in `.github`, Audio, Net, Governance, Game, SDD and Templates.**
-`.github` uses Coordination CLI 0.1.2, Audio uses 0.1.3, the first combined Net/Governance/Game
-wave uses 0.1.5, and SDD and Templates use 0.1.6. Checked source delivery, the shared `OpenV2` epoch and real settlement
-and normal rerun are observed for each selected receiver.
+**Current frontier: ordinary V2 settlement is active in `.github`, Audio, Rendering, Net, Governance, Game, SDD and Templates.**
+`.github` uses Coordination CLI 0.1.2, Audio uses 0.1.3, Rendering uses 0.1.4, the first combined
+Net/Governance/Game wave uses 0.1.5, and SDD and Templates use 0.1.6. Checked source delivery, the shared
+`OpenV2` epoch, real settlement and normal rerun are observed for each selected receiver.
 The earlier callable, GS2-09 and OperatingV1 evidence remains valid at its recorded scope but no longer
 forms the active dependency chain. No clean-start step may relabel that evidence as migration completion,
 `VerifiedV2`, or a human-run receipt.
@@ -98,6 +98,20 @@ readback found one complete entry under `refs/heads/fsgg/v2/journal/operation/9a
 the selected Audio adoption, not a fleet rollout or V1 migration. The owning
 [Audio readback plan PR #333](https://github.com/FS-GG/FS.GG.Audio/pull/333) is merged on protected main.
 
+Rendering's disabled receiver [PR #1361](https://github.com/FS-GG/FS.GG.Rendering/pull/1361)
+merged at `cd8f9472fe44dfa648a1b293be535bfb8b5e68a6`; activation
+[PR #1362](https://github.com/FS-GG/FS.GG.Rendering/pull/1362) merged at
+`c04e509413bc4362c67b20cf93c85b5cf5929fa6` through native required checks. The
+[published Coordination CLI 0.1.4](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.4)
+asset is pinned to SHA-256 `10a51295db43e454b7692196533cceda48508165a8023dc98e87639be89f5c50`;
+Rendering's `ordinary-v2` environment has dedicated three-secret custody and a `main`-only branch policy.
+[Run `36432736356`](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/36432736356) on that
+protected main returned `SettlementSucceeded` on attempt 1 and `SettlementAlreadyComplete` on the normal
+whole-run attempt 2, both binding receipt `d02f30b55baa7a07ae956902e1c9e470d8468272490095553cb98e04661e29ce`.
+Independent [Authority journal readback](https://github.com/FS-GG/FS.GG.Coordination.Authority/blob/00e1b26c63b150712d8cffbdc266b9711d3c2095/ordinary-v2/7eba1f934e32151d6c17f402afbca7325f4cba65c2836fc38d44f9a1d7b9e699.json)
+found the matching completed entry and effect at operation/7e. Rendering's selected C3 adoption is complete;
+this makes no fleet-wide or historical-migration claim.
+
 [Templates PR #635](https://github.com/FS-GG/FS.GG.Templates/pull/635) merged at
 `f3a7cd6ab6f035d4ba335d03fdc367db6164793f` after public installed Xantham clean and retained
 receiver proof and green protected composition, kit and materialization gates. Public Templates 0.14.0
@@ -128,7 +142,7 @@ retain detailed milestone history in the owning plan. CI ticks and intermediate 
 
 The active profile is **C0–C3**: C0 checked source delivery; C1 fresh `.github` V2 pilot; C2 one real
 journey plus one normal rerun; C3 explicit-repository rollout with repair forward. `.github`, Audio,
-Net, Governance and Game are now explicitly activated targets. Other repositories join by selection, and
+Rendering, Net, Governance, Game, SDD and Templates are now explicitly activated targets. Other repositories join by selection, and
 generated/scaffold defaults remain unchanged. The V0–V6 rows below preserve the superseded staged route
 for history and must not be used as clean-start prerequisites.
 
@@ -1447,8 +1461,8 @@ CLI 0.1.3 is published. Dedicated Audio credential custody, protected activation
 its normal already-complete replay are complete, with independent Authority journal readback. This
 does not activate the fleet.
 
-Rendering's CLI 0.1.4 remains a separate published candidate. The combined Net, Governance and Game
-CLI 0.1.5 release and all three protected receiver settlements are complete at the bounded clean-path
+Rendering's published CLI 0.1.4 and independent settlement are complete as recorded in section 0.
+The combined Net, Governance and Game CLI 0.1.5 release and all three protected receiver settlements are complete at the bounded clean-path
 boundary documented in [section 9.1](#91-dependencies-and-parallelism). SDD and Templates are the
 next selected wave: CLI 0.1.6 is publicly published at its protected source; SDD has separately
 settled with an unchanged normal rerun, while Templates activation and readback remain. The
