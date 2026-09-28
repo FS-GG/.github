@@ -127,6 +127,15 @@ pass and .1 identifies receiver support. The `.github` integrator uses the exist
 and exact pinned installed-tool proof. Publication authorization is checked at that effect. An unavailable
 publication prerequisite blocks publication and dependent adoption, not earlier source qualification.
 
+The first bounded .5 source window is complete in the candidate that adds
+`skill telemetry-config discover [--config PATH]`. It reuses the typed reader and exposes only the bounded
+configuration-discovery projection frozen in the contract. Focused process tests cover host and workspace
+results, explicit/environment/default precedence, absent/default versus explicit-missing behavior, malformed,
+oversized, insecure and symlink configs, workspace binding refusal with secret-bearing child stderr, response
+bounds, and absence of state writes or credential-wrapper invocation. It changes no caller, package version,
+published artifact, installed receiver, skill root or retirement state. Publication and every dependent switch
+remain pending.
+
 Use an additive capability release before changing callers that would otherwise run against an old tool.
 Then land the skill/tool caller switch, publish the changed Drivers/coherent set, and qualify installed
 receivers against that exact set. A local candidate package can prepare this proof but cannot establish

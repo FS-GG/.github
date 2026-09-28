@@ -1,0 +1,1 @@
+{"schema":"fsgg.telemetry.workspace-config/1","engine":"fixture-binding-engine","associations":[{"producerId":"fixture-producer","repositories":["FS-GG/.github"],"destination":{"credentialReference":"fixture-reference"}}],"retiredAssociations":[]}

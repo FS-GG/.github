@@ -71,6 +71,34 @@ closed schema. Credentials are represented only by a bounded reference. The inte
 credential material. Workspace mutations use an already-loaded named environment credential or an
 owner-controlled `fdev-telemetry exec` wrapper.
 
+## Configuration discovery process contract
+
+The first additive .5 capability is the read-only process command
+`fsgg-coord-engine skill telemetry-config discover [--config PATH]`. It delegates configuration selection and
+validation to the typed `Configuration.discover` reader without changing its precedence or workspace-binding
+rules. A configured result exits 0 and emits one compact JSON object plus LF with exactly these keys, in order:
+
+```json
+{"schema":"fsgg.telemetry.config-discovery/1","status":"configured","configPath":"/private/config.json","storeRoot":"/private/state","engine":"fsgg-coord-engine","repository":null,"workspace":false}
+```
+
+`schema` is `fsgg.telemetry.config-discovery/1`. `status` is `configured`; `configPath`, `storeRoot` and `engine`
+are the selected typed values. A host config returns `repository: null` and `workspace: false`; a workspace
+config returns its canonical `OWNER/REPO` and `workspace: true`. The whole response, including LF, is at most
+16 KiB. These paths are private operational results and are not public evidence.
+
+When no default config exists, the command emits exactly
+`{"schema":"fsgg.telemetry.config-discovery/1","status":"not-configured"}\n` on stdout, leaves stderr empty
+and exits 2. An explicitly selected missing config or any configured discovery failure exits 1 with empty stdout
+and the fixed diagnostic `fsgg skill telemetry-config: configuration discovery failed` plus LF. Syntax errors
+exit 2 with bounded fixed usage and never repeat caller input.
+
+The result excludes producer, binding digest, credential reference, association destinations and config
+contents. Reader and child-process diagnostics are not forwarded. Discovery does not create state or assignments,
+load credentials, invoke `fdev-telemetry`, submit telemetry, refresh a dashboard or otherwise write. The existing
+64 KiB config bound, absolute regular 0600 non-symlink requirement, repository identity rules and 20-second
+workspace-binding timeout remain authoritative.
+
 ## Durable state compatibility
 
 The production state schema is `fsgg.telemetry.roadmap-dispatch-state/1`. Files live under the selected private
