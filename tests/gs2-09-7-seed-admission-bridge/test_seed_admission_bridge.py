@@ -38,7 +38,7 @@ class BridgeTests(unittest.TestCase):
             "runId": 12345, "runAttempt": 2,
             "runNonce": "12345-2-" + candidate,
             "sourceManifestSha256": "c" * 64,
-            "approvedArtifactSourceSha256": "d" * 64,
+            "approvedArtifactSourceSha256": "c" * 64,
             "sandboxRepositoryId": 1353050537,
             "sandboxRepositoryNodeId": "R_kgDOUKXpqQ",
             "projectNodeId": "PVT_kwDOEYAWY84BiESo",

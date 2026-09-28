@@ -31,6 +31,11 @@ class AuthorizerTests(unittest.TestCase):
             "environment": "github-substrate-v2-sandbox", "workflowSha": self.executor_sha,
             "runId": self.run_id, "runAttempt": self.attempt, "candidateSha": self.candidate,
             "runNonce": self.nonce, "approvedArtifactSourceSha256": "c" * 64,
+            "sourceManifestSha256": "c" * 64,
+            "prestateSha256": "5" * 64,
+            "prestateSnapshotSha256": "6" * 64,
+            "prestateEvidenceSha256": "7" * 64,
+            "expectedRefAbsent": True,
             "sandboxRepositoryId": 1353050537, "sandboxRepositoryNodeId": "R_kgDOUKXpqQ",
             "projectNodeId": "PVT_kwDOEYAWY84BiESo", "appId": 4166418,
             "installationId": 143110413, "seedPlanSha256": "d" * 64,
@@ -47,7 +52,7 @@ class AuthorizerTests(unittest.TestCase):
                 "approvedArtifactSourceSha256", "sandboxRepositoryId",
                 "sandboxRepositoryNodeId", "projectNodeId", "appId", "installationId")
         }
-        self.prepare_subject.update({"sourceManifestSha256": "7" * 64,
+        self.prepare_subject.update({"sourceManifestSha256": "c" * 64,
                                      "operation": "prepare-only-no-effect"})
         self.executor_run = {
             "id": self.run_id, "run_attempt": self.attempt, "path": gate.EXECUTOR_WORKFLOW,
@@ -126,9 +131,17 @@ class AuthorizerTests(unittest.TestCase):
     def test_final_refuses_non_genesis_or_unbound_s1_s2_and_mint(self):
         for name, value in (("expectedOldOid", "4" * 40), ("operation", "seed-issue"),
                             ("s2DeclarationSha256", "bad"), ("blobOid", "bad"),
-                            ("mintProofSha256", "bad"), ("tokenSha256", "bad")):
+                            ("mintProofSha256", "bad"), ("tokenSha256", "bad"),
+                            ("prestateEvidenceSha256", "bad"),
+                            ("expectedRefAbsent", False),
+                            ("sourceManifestSha256", "f" * 64)):
             with self.subTest(name=name), self.assertRaises(gate.Refused):
                 self.authorize("final", {**self.final_subject, name: value})
+
+    def test_prepare_refuses_raw_manifest_approved_source_mismatch(self):
+        with self.assertRaisesRegex(gate.Refused, "prepare-credential-only"):
+            self.authorize("prepare", {**self.prepare_subject,
+                                       "approvedArtifactSourceSha256": "f" * 64})
 
     def test_request_artifact_and_executor_identity_are_exact(self):
         path, archive_digest, artifact = self.request("final", self.final_subject)

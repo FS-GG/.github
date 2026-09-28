@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import base64
 import hashlib
 import json
 import re
@@ -24,8 +25,10 @@ PROJECT_TITLE = "fsgg-sandbox-gs2-04-9"
 API = "https://api.github.com"
 API_VERSION = "2026-03-10"
 SCHEMA = "fsgg.gs2-09-7.sandbox-seed-prestate/1"
-SOURCE = "fresh-native-issue-and-project-pages"
+SOURCE = "fresh-native-issue-project-and-ref-pages"
 NONCE = re.compile(r"[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{40}\Z")
+HEX40 = re.compile(r"[0-9a-f]{40}\Z")
+MAX_EVIDENCE_BYTES = 64 * 1024 * 1024
 
 class Refused(ValueError):
     pass
@@ -103,10 +106,27 @@ def _header(headers: dict[str, str], name: str) -> str | None:
     return values[0] if values else None
 
 
+def _record(records: list | None, method: str, url: str, status: int,
+            headers: dict[str, str], raw: bytes) -> None:
+    if records is not None:
+        require(method == "GET" and url.startswith(API + "/") and body_safe(raw),
+                "evidence-record")
+        records.append({"method": method, "url": url, "status": status,
+                        "link": _header(headers, "link"),
+                        "bodyBase64": base64.b64encode(raw).decode("ascii")})
+        require(sum(len(row["bodyBase64"]) for row in records) <= MAX_EVIDENCE_BYTES,
+                "evidence-size")
+
+
+def body_safe(raw: bytes) -> bool:
+    return type(raw) is bytes and len(raw) <= 16 * 1024 * 1024
+
+
 def _request(method: str, url: str, token: str,
-             body: bytes | None = None) -> tuple[dict[str, str], bytes]:
+             body: bytes | None = None, records: list | None = None) -> tuple[dict[str, str], bytes]:
     status, headers, raw = HTTP_PORT(method, url, token, body)
     require(type(status) is int, "response-status")
+    _record(records, method, url, status, headers, raw)
     if status in (401, 403, 404):
         raise Refused(f"http-{status}")
     require(status == 200, "http-status")
@@ -114,8 +134,9 @@ def _request(method: str, url: str, token: str,
     return headers, raw
 
 
-def _repository(token: str) -> dict:
-    _, raw = _request("GET", f"{API}/repos/{OWNER}/{REPOSITORY}", token)
+def _repository(token: str, records: list) -> dict:
+    _, raw = _request("GET", f"{API}/repos/{OWNER}/{REPOSITORY}", token,
+                      records=records)
     value = strict_json(raw)
     require(type(value) is dict
             and type(value.get("id")) is int and not isinstance(value.get("id"), bool)
@@ -160,7 +181,7 @@ def _next_issue_url(link: str | None, page_size: int, seen: set[str]) -> str | N
     return target
 
 
-def _issues(token: str, nonce: str) -> tuple[dict, dict[str, tuple[int, bool]]]:
+def _issues(token: str, nonce: str, evidence_records: list) -> tuple[dict, dict[str, tuple[int, bool]]]:
     url = f"{API}/repos/{OWNER}/{REPOSITORY}/issues?state=all&per_page=100"
     seen_urls: set[str] = set()
     records = []
@@ -172,7 +193,7 @@ def _issues(token: str, nonce: str) -> tuple[dict, dict[str, tuple[int, bool]]]:
     while url is not None:
         require(url not in seen_urls and len(seen_urls) < 1000, "pagination-cycle")
         seen_urls.add(url)
-        headers, raw = _request("GET", url, token)
+        headers, raw = _request("GET", url, token, records=evidence_records)
         page_digests.append(digest(raw))
         page = strict_json(raw)
         require(type(page) is list and len(page) <= 100, "issue-page")
@@ -234,9 +255,9 @@ def _next_project_url(link: str | None, page_size: int, seen: set[str]) -> str |
 
 
 def _project(token: str, issue_identities: dict[str, tuple[int, bool]],
-             nonce_nodes: list[str]) -> dict:
+             nonce_nodes: list[str], evidence_records: list) -> dict:
     project_url = f"{API}/orgs/{OWNER}/projectsV2/{PROJECT_NUMBER}"
-    _, project_raw = _request("GET", project_url, token)
+    _, project_raw = _request("GET", project_url, token, records=evidence_records)
     project = strict_json(project_raw)
     require(type(project) is dict
             and project.get("node_id") == PROJECT_NODE_ID
@@ -258,7 +279,7 @@ def _project(token: str, issue_identities: dict[str, tuple[int, bool]],
         require(url not in seen_urls and len(seen_urls) < 1000,
                 "project-pagination-cycle")
         seen_urls.add(url)
-        headers, raw = _request("GET", url, token)
+        headers, raw = _request("GET", url, token, records=evidence_records)
         page_digests.append(digest(raw))
         nodes = strict_json(raw)
         require(type(nodes) is list and len(nodes) <= 100, "project-page")
@@ -293,11 +314,37 @@ def _project(token: str, issue_identities: dict[str, tuple[int, bool]],
             "nonceProjectItemNodeIds": nonce_items}
 
 
-def _capture(token: str, nonce: str) -> dict:
-    repository = _repository(token)
-    issues, identities = _issues(token, nonce)
-    project = _project(token, identities, issues["nonceIssueNodeIds"])
-    return {"repository": repository, "issues": issues, "project": project}
+def _ref_absence(token: str, nonce: str, records: list) -> dict:
+    base = f"{API}/repos/{OWNER}/{REPOSITORY}/git/ref/heads/"
+    _, main_raw = _request("GET", base + "main", token, records=records)
+    main = strict_json(main_raw)
+    require(type(main) is dict and main.get("ref") == "refs/heads/main"
+            and type(main.get("object")) is dict
+            and type(main["object"].get("sha")) is str
+            and HEX40.fullmatch(main["object"]["sha"]) is not None,
+            "main-ref-identity")
+    ref_name = f"refs/heads/gs2-09-7/{nonce}/seed-journal"
+    url = base + f"gs2-09-7/{nonce}/seed-journal"
+    status, headers, raw = HTTP_PORT("GET", url, token, None)
+    require(type(status) is int and type(headers) is dict and body_safe(raw),
+            "nonce-ref-response")
+    _record(records, "GET", url, status, headers, raw)
+    # Exact-ref 404 is absence only after this same pass proved repository
+    # identity and an accessible main Git ref with the same token.
+    require(status == 404, "nonce-ref-not-absent")
+    return {"refName": ref_name, "expectedAbsent": True,
+            "mainOid": main["object"]["sha"], "absenceStatus": status,
+            "absenceResponseSha256": digest(raw)}
+
+
+def _capture(token: str, nonce: str) -> tuple[dict, list]:
+    records: list = []
+    repository = _repository(token, records)
+    issues, identities = _issues(token, nonce, records)
+    project = _project(token, identities, issues["nonceIssueNodeIds"], records)
+    ref = _ref_absence(token, nonce, records)
+    return {"repository": repository, "issues": issues, "project": project,
+            "ref": ref}, records
 
 
 def describe() -> dict:
@@ -319,8 +366,8 @@ def produce(token: str, facts: dict) -> dict:
             and NONCE.fullmatch(facts["runNonce"]) is not None,
             "run-nonce")
     nonce = facts["runNonce"]
-    first = _capture(token, nonce)
-    second = _capture(token, nonce)
+    first, first_records = _capture(token, nonce)
+    second, second_records = _capture(token, nonce)
     require(first == second, "changed-population")
     snapshot_sha = digest(canonical(first))
     issue_count = len(first["issues"]["nonceIssueNodeIds"])
@@ -336,7 +383,18 @@ def produce(token: str, facts: dict) -> dict:
         "snapshotSha256": snapshot_sha,
     }
     now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-    capture_id = digest(canonical({"schema": "fsgg.gs2-09-7.sandbox-seed-prestate-capture/1",
-                                   "runNonce": nonce, "snapshotSha256": snapshot_sha}))
+    evidence_raw = canonical({
+        "schema": "fsgg.gs2-09-7.sandbox-seed-prestate-evidence/1",
+        "runNonce": nonce, "refName": first["ref"]["refName"],
+        "repositoryId": REPOSITORY_ID, "projectNodeId": PROJECT_NODE_ID,
+        "expectedRefAbsent": True, "snapshotSha256": snapshot_sha,
+        "summarySha256": digest(canonical(summary)), "observedAt": now,
+        "passes": [{"snapshot": first, "requests": first_records},
+                   {"snapshot": second, "requests": second_records}],
+        "complete": True,
+    })
+    require(len(evidence_raw) <= MAX_EVIDENCE_BYTES, "evidence-size")
+    require(token.encode() not in evidence_raw, "evidence-token-leak")
+    capture_id = digest(evidence_raw)
     return {"runNonce": nonce, "raw": canonical(summary), "captureId": capture_id,
-            "observedAt": now, "source": SOURCE}
+            "observedAt": now, "source": SOURCE, "evidenceRaw": evidence_raw}

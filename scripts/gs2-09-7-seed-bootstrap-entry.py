@@ -57,8 +57,8 @@ def digest(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def strict_json(raw: bytes) -> dict:
-    require(0 < len(raw) <= 1024 * 1024, "manifest-size")
+def strict_json(raw: bytes, limit: int = 1024 * 1024) -> dict:
+    require(type(raw) is bytes and 0 < len(raw) <= limit, "manifest-size")
     def unique(pairs):
         result = {}
         for key, value in pairs:
@@ -123,13 +123,6 @@ FILES = ["s2-declaration.json", "seed-plan.json", "corpus.json",
          "journal/state.json", "journal/tree.raw", "journal/commit.raw"]
 
 
-def approved_source(candidate: str, plan_sha: str, corpus_sha: str) -> str:
-    raw = ("fsgg.gs2-09-7.sandbox-seed-approved-source/1\n"
-           f"candidateSha={candidate}\nseed-plan.json={plan_sha}\n"
-           f"corpus.json={corpus_sha}\n").encode()
-    return digest(raw)
-
-
 def validate_source_artifacts(checkout: Path, facts: dict) -> tuple[dict, dict[str, bytes]]:
     try:
         path = regular_inside(checkout, SOURCE_MANIFEST)
@@ -139,7 +132,7 @@ def validate_source_artifacts(checkout: Path, facts: dict) -> tuple[dict, dict[s
     require(digest(raw) == facts["manifestSha256"], "source-manifest-digest")
     manifest = strict_json(raw)
     require(set(manifest) == {"schema", "status", "candidateSha",
-                              "approvedArtifactSourceSha256", "seedPlan", "corpus",
+                              "seedPlan", "corpus",
                               "postMintSealRequired", "bootstrapAuthority",
                               "providerEffectsAuthorized"}
             and manifest["schema"] == SOURCE_SCHEMA
@@ -149,6 +142,11 @@ def validate_source_artifacts(checkout: Path, facts: dict) -> tuple[dict, dict[s
             and manifest["bootstrapAuthority"] is False
             and manifest["providerEffectsAuthorized"] is False,
             "source-manifest-binding")
+    # The Coordination producer emits canonical bytes without a self-digest.
+    # The retained raw manifest is the approved source preimage read by S1.
+    require(raw == json.dumps(manifest, separators=(",", ":"),
+                             ensure_ascii=False, allow_nan=False).encode("utf-8"),
+            "source-manifest-noncanonical")
     retained = {}
     for label, expected in (("seedPlan", "seed-plan.json"), ("corpus", "corpus.json")):
         row = manifest[label]
@@ -165,9 +163,7 @@ def validate_source_artifacts(checkout: Path, facts: dict) -> tuple[dict, dict[s
         require(len(content) == row["byteLength"] and digest(content) == row["sha256"],
                 "source-file-drift")
         retained[expected] = content
-    require(manifest["approvedArtifactSourceSha256"] == approved_source(
-        facts["candidateSha"], manifest["seedPlan"]["sha256"],
-        manifest["corpus"]["sha256"]), "source-approved-digest")
+    manifest["approvedArtifactSourceSha256"] = digest(raw)
     return manifest, retained
 
 
@@ -302,7 +298,7 @@ def require_postmint_ready(host_checkout: Path, candidate_checkout: Path,
         "schema": "fsgg.gs2-09-7.sandbox-seed-prestate-producer/1",
         "repositoryId": 1353050537,
         "projectNodeId": "PVT_kwDOEYAWY84BiESo",
-        "source": "fresh-native-issue-and-project-pages",
+        "source": "fresh-native-issue-project-and-ref-pages",
         "credentialScope": "protected-host-only",
         "candidateCanWrite": False,
     }, "prestate-producer-identity")
@@ -340,7 +336,7 @@ def validate_prestate(raw: bytes, facts: dict) -> None:
             "fresh-prestate")
 
 
-def produce_prestate(token: str, facts: dict, producer_port=None) -> bytes:
+def produce_prestate_capture(token: str, facts: dict, producer_port=None) -> dict:
     selected = PRESTATE_PRODUCER_PORT if producer_port is None else producer_port
     require(selected is not None, "prestate-producer-uninstalled")
     try:
@@ -348,12 +344,15 @@ def produce_prestate(token: str, facts: dict, producer_port=None) -> bytes:
     except Exception as error:
         raise Refused("prestate-producer-readback") from error
     require(type(result) is dict and set(result) == {
-        "runNonce", "raw", "captureId", "observedAt", "source"}
+        "runNonce", "raw", "captureId", "observedAt", "source", "evidenceRaw"}
         and result["runNonce"] == facts["runNonce"]
         and type(result["raw"]) is bytes
         and type(result["captureId"]) is str
         and HEX64.fullmatch(result["captureId"]) is not None
-        and result["source"] == "fresh-native-issue-and-project-pages",
+        and type(result["evidenceRaw"]) is bytes
+        and 0 < len(result["evidenceRaw"]) <= 64 * 1024 * 1024
+        and digest(result["evidenceRaw"]) == result["captureId"]
+        and result["source"] == "fresh-native-issue-project-and-ref-pages",
         "prestate-producer-capture")
     try:
         observed = dt.datetime.fromisoformat(result["observedAt"].replace("Z", "+00:00"))
@@ -365,7 +364,72 @@ def produce_prestate(token: str, facts: dict, producer_port=None) -> bytes:
             and now - dt.timedelta(minutes=5) <= observed <= now,
             "prestate-capture-time")
     validate_prestate(result["raw"], facts)
-    return result["raw"]
+    evidence = strict_json(result["evidenceRaw"], 64 * 1024 * 1024)
+    summary = strict_json(result["raw"])
+    require(set(evidence) == {"schema", "runNonce", "refName", "repositoryId",
+                              "projectNodeId", "expectedRefAbsent", "snapshotSha256",
+                              "summarySha256", "observedAt", "passes", "complete"}
+            and evidence["schema"] == "fsgg.gs2-09-7.sandbox-seed-prestate-evidence/1"
+            and evidence["runNonce"] == facts["runNonce"]
+            and evidence["refName"] ==
+                f'refs/heads/gs2-09-7/{facts["runNonce"]}/seed-journal'
+            and evidence["repositoryId"] == 1353050537
+            and evidence["projectNodeId"] == "PVT_kwDOEYAWY84BiESo"
+            and evidence["expectedRefAbsent"] is True
+            and evidence["complete"] is True
+            and evidence["observedAt"] == result["observedAt"]
+            and evidence["summarySha256"] == digest(result["raw"])
+            and evidence["snapshotSha256"] == summary["snapshotSha256"]
+            and type(evidence["passes"]) is list and len(evidence["passes"]) == 2
+            and evidence["passes"][0]["snapshot"] == evidence["passes"][1]["snapshot"]
+            and all(type(item) is dict and set(item) == {"snapshot", "requests"}
+                    and type(item["requests"]) is list and len(item["requests"]) >= 6
+                    and item["snapshot"].get("ref", {}).get("expectedAbsent") is True
+                    and item["requests"][-1].get("status") == 404
+                    for item in evidence["passes"]), "prestate-evidence-binding")
+    return result
+
+
+def produce_prestate(token: str, facts: dict, producer_port=None) -> bytes:
+    return produce_prestate_capture(token, facts, producer_port)["raw"]
+
+
+def attach_final_prestate(subject: dict, root: Path, sealed: Path,
+                          facts: dict) -> dict:
+    """Bind the initial S1 prestate and private native capture to final admission."""
+    summary_raw = regular_inside(sealed, "prestate.json").read_bytes()
+    validate_prestate(summary_raw, facts)
+    evidence_raw = read_private(root / "prestate-evidence.private.json",
+                                64 * 1024 * 1024)
+    evidence = strict_json(evidence_raw, 64 * 1024 * 1024)
+    summary = strict_json(summary_raw)
+    require(evidence.get("schema") ==
+            "fsgg.gs2-09-7.sandbox-seed-prestate-evidence/1"
+            and evidence.get("runNonce") == facts["runNonce"]
+            and evidence.get("refName") == subject["refName"]
+            and evidence.get("repositoryId") == 1353050537
+            and evidence.get("projectNodeId") == "PVT_kwDOEYAWY84BiESo"
+            and evidence.get("expectedRefAbsent") is True
+            and evidence.get("complete") is True
+            and evidence.get("summarySha256") == digest(summary_raw)
+            and evidence.get("snapshotSha256") == summary["snapshotSha256"]
+            and type(evidence.get("passes")) is list
+            and len(evidence["passes"]) == 2
+            and evidence["passes"][0].get("snapshot") ==
+                evidence["passes"][1].get("snapshot")
+            and all(type(item) is dict and type(item.get("requests")) is list
+                    and len(item["requests"]) >= 6
+                    and item["requests"][-1].get("status") == 404
+                    for item in evidence["passes"]), "final-prestate-evidence")
+    require(summary_raw == read_private(root / "prestate.json"),
+            "final-prestate-summary-drift")
+    require(subject["approvedArtifactSourceSha256"] == facts["manifestSha256"],
+            "final-source-manifest-digest")
+    return {**subject, "sourceManifestSha256": facts["manifestSha256"],
+            "prestateSha256": digest(summary_raw),
+            "prestateSnapshotSha256": summary["snapshotSha256"],
+            "prestateEvidenceSha256": digest(evidence_raw),
+            "expectedRefAbsent": True}
 
 
 def mint_private(mint_module, environment: dict[str, str]) -> tuple[str, bytes]:
@@ -628,7 +692,12 @@ def stage_seal_input(host_checkout: Path, candidate_checkout: Path,
         write_private(proof_path, proof)
         write_private(plan_path, retained["seed-plan.json"])
         write_private(corpus_path, retained["corpus.json"])
-        write_private(prestate_path, produce_prestate(token, facts, prestate))
+        prestate_capture = produce_prestate_capture(token, facts, prestate)
+        write_private(prestate_path, prestate_capture["raw"])
+        # Raw issue/Project/ref response custody stays on the protected host.
+        # Candidate sealer receives only the typed seven-field summary.
+        write_private(root / "prestate-evidence.private.json",
+                      prestate_capture["evidenceRaw"])
         deadline_remaining(root, facts)
         with temporary_environment({
             "FSGG_SANDBOX_EVIDENCE_DIR": str(root),
@@ -693,6 +762,7 @@ def stage_consume_seal_and_final_request(host_checkout: Path,
         destination = sealed / name
         destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         write_private(destination, files[name])
+    write_private(sealed / "prestate.json", files["prestate.json"])
     validate_artifacts(sealed, facts)
     source, retained = validate_source_artifacts(candidate_checkout, facts)
     require_returned_seal_inputs(files, retained,
@@ -733,6 +803,7 @@ def stage_consume_seal_and_final_request(host_checkout: Path,
                                       input_files["mint-grants.json"], token,
                                       repository_raw, project_raw,
                                       dt.datetime.now(dt.timezone.utc))
+    subject = attach_final_prestate(subject, root, sealed, facts)
     bridge.require_protected_main(actions_read, facts["workflowSha"])
     deadline_remaining(root, facts)
     folder = root / "final"
@@ -815,8 +886,11 @@ def stage_final_apply(host_checkout: Path, candidate_checkout: Path,
         mint_module = load_sibling("gs2_seed_mint", "gs2-09-7-mint-sandbox-token.py")
         # Recheck the exact nonce census after final admission, immediately
         # before the journal operation. It remains GET-only and must be zero.
-        produce_prestate(token, facts,
-                         load_sibling("gs2_seed_prestate", "gs2-09-7-seed-prestate.py"))
+        fresh_prestate = produce_prestate_capture(token, facts,
+            load_sibling("gs2_seed_prestate", "gs2-09-7-seed-prestate.py"))
+        write_private(root / "final-prestate.private.json", fresh_prestate["raw"])
+        write_private(root / "final-prestate-evidence.private.json",
+                      fresh_prestate["evidenceRaw"])
         deadline_remaining(root, facts)
         proof = read_private(root / "mint-grants.json")
         repository_raw, project_raw = target_readbacks(mint_module, token)
@@ -825,6 +899,7 @@ def stage_final_apply(host_checkout: Path, candidate_checkout: Path,
         _, _, _, actual_subject = inspect_source(
             environment, candidate_checkout, sealed, proof, token,
             repository_raw, project_raw, dt.datetime.now(dt.timezone.utc))
+        actual_subject = attach_final_prestate(actual_subject, root, sealed, facts)
         require(actual_subject == subject, "final-request-drift")
         deadline_remaining(root, facts, reserve_seconds=5 * 60)
         with cas.authenticated_port(token) as git_port:
@@ -926,6 +1001,8 @@ def execute_source(environment: dict[str, str], candidate_checkout: Path,
     proposal, declaration_bytes, seed_plan_bytes, subject = inspect_source(
         environment, candidate_checkout, runtime_dir, mint_proof_bytes, token,
         repository_readback_bytes, project_readback_bytes, now)
+    subject = attach_final_prestate(subject, private_root(environment), runtime_dir,
+                                    context(environment))
     admission = load_sibling("gs2_seed_bootstrap_admission", "gs2-09-7-seed-bootstrap-admission.py")
     cas = load_sibling("gs2_seed_native_cas", "gs2-09-7-seed-native-cas.py")
     admission.require_admitted(admission_port, subject, now)

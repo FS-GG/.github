@@ -36,12 +36,9 @@ class EntryTests(unittest.TestCase):
             (self.source_path.parent / name).write_bytes(raw)
         candidate = "b" * 40
         nonce = "12345-2-" + candidate
-        self.approved = entry.approved_source(candidate, entry.digest(self.plan),
-                                              entry.digest(self.corpus))
         self.source = {
             "schema": entry.SOURCE_SCHEMA, "status": "source-only-no-authority",
             "candidateSha": candidate,
-            "approvedArtifactSourceSha256": self.approved,
             "seedPlan": {"path": "seed-plan.json", "byteLength": len(self.plan),
                          "sha256": entry.digest(self.plan)},
             "corpus": {"path": "corpus.json", "byteLength": len(self.corpus),
@@ -49,7 +46,8 @@ class EntryTests(unittest.TestCase):
             "postMintSealRequired": True, "bootstrapAuthority": False,
             "providerEffectsAuthorized": False,
         }
-        self.source_raw = (json.dumps(self.source, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        self.source_raw = json.dumps(self.source, separators=(",", ":")).encode()
+        self.approved = entry.digest(self.source_raw)
         self.env = {"GITHUB_ACTIONS": "true", "GITHUB_EVENT_NAME": "workflow_dispatch",
                     "GITHUB_REPOSITORY": entry.HOST, "GITHUB_REF": "refs/heads/main",
                     "GITHUB_WORKFLOW_REF": f"{entry.HOST}/{entry.WORKFLOW}@refs/heads/main",
@@ -104,6 +102,58 @@ class EntryTests(unittest.TestCase):
             with self.assertRaisesRegex(entry.Refused, "source-file-drift"):
                 entry.preflight(self.host, self.candidate, self.env)
 
+    def test_raw_manifest_digest_is_approved_source_and_noncanonical_bytes_refuse(self):
+        self.write_source()
+        facts = entry.context(self.env)
+        manifest, _ = entry.validate_source_artifacts(self.candidate, facts)
+        self.assertEqual(entry.digest(self.source_raw),
+                         manifest["approvedArtifactSourceSha256"])
+        self.assertNotIn(b"approvedArtifactSourceSha256", self.source_raw)
+        changed = self.source_raw + b"\n"
+        self.source_path.write_bytes(changed)
+        with self.assertRaisesRegex(entry.Refused, "source-manifest-noncanonical"):
+            entry.validate_source_artifacts(
+                self.candidate, {**facts, "manifestSha256": entry.digest(changed)})
+
+    def test_final_admission_binds_private_prestate_evidence_and_ref_absence(self):
+        facts = entry.context(self.env)
+        root = self.root / "private"
+        root.mkdir(mode=0o700)
+        summary = {"schema": entry.PRESTATE_SCHEMA, "complete": True,
+                   "repositoryId": 1353050537,
+                   "projectNodeId": "PVT_kwDOEYAWY84BiESo",
+                   "nonceIssueCount": 0, "nonceProjectItemCount": 0,
+                   "snapshotSha256": "c" * 64}
+        summary_raw = json.dumps(summary, separators=(",", ":")).encode()
+        entry.write_private(root / "prestate.json", summary_raw)
+        entry.write_private(self.runtime / "prestate.json", summary_raw)
+        ref = f'refs/heads/gs2-09-7/{facts["runNonce"]}/seed-journal'
+        snapshot = {"ref": {"expectedAbsent": True}}
+        pass_record = {"snapshot": snapshot,
+                       "requests": [{"status": 200}] * 5 + [{"status": 404}]}
+        evidence = {"schema": "fsgg.gs2-09-7.sandbox-seed-prestate-evidence/1",
+                    "runNonce": facts["runNonce"], "refName": ref,
+                    "repositoryId": 1353050537,
+                    "projectNodeId": "PVT_kwDOEYAWY84BiESo",
+                    "expectedRefAbsent": True,
+                    "snapshotSha256": summary["snapshotSha256"],
+                    "summarySha256": entry.digest(summary_raw),
+                    "observedAt": "2026-09-28T08:00:00Z",
+                    "passes": [pass_record, pass_record], "complete": True}
+        evidence_raw = json.dumps(evidence, separators=(",", ":")).encode()
+        entry.write_private(root / "prestate-evidence.private.json", evidence_raw)
+        subject = {"refName": ref,
+                   "approvedArtifactSourceSha256": facts["manifestSha256"]}
+        bound = entry.attach_final_prestate(subject, root, self.runtime, facts)
+        self.assertEqual(entry.digest(evidence_raw), bound["prestateEvidenceSha256"])
+        self.assertEqual(entry.digest(summary_raw), bound["prestateSha256"])
+        self.assertTrue(bound["expectedRefAbsent"])
+        evidence["expectedRefAbsent"] = False
+        (root / "prestate-evidence.private.json").write_bytes(
+            json.dumps(evidence, separators=(",", ":")).encode())
+        with self.assertRaisesRegex(entry.Refused, "final-prestate-evidence"):
+            entry.attach_final_prestate(subject, root, self.runtime, facts)
+
     def test_wrong_protected_context_and_symlink_refuse(self):
         for name, changed in (("GITHUB_REF", "refs/heads/feature"),
                               ("GITHUB_WORKFLOW_SHA", "c" * 40),
@@ -157,10 +207,22 @@ class EntryTests(unittest.TestCase):
                           "projectNodeId": "PVT_kwDOEYAWY84BiESo",
                           "nonceIssueCount": 0, "nonceProjectItemCount": 0,
                           "snapshotSha256": "c" * 64}).encode()
+        facts = entry.context(self.env)
+        snapshot = {"ref": {"expectedAbsent": True}}
+        record = {"snapshot": snapshot, "requests": [{"status": 200}] * 5 + [{"status": 404}]}
+        evidence = {"schema": "fsgg.gs2-09-7.sandbox-seed-prestate-evidence/1",
+                    "runNonce": facts["runNonce"],
+                    "refName": f'refs/heads/gs2-09-7/{facts["runNonce"]}/seed-journal',
+                    "repositoryId": 1353050537, "projectNodeId": "PVT_kwDOEYAWY84BiESo",
+                    "expectedRefAbsent": True, "snapshotSha256": "c" * 64,
+                    "summarySha256": entry.digest(raw),
+                    "observedAt": now.isoformat().replace("+00:00", "Z"),
+                    "passes": [record, record], "complete": True}
+        evidence_raw = json.dumps(evidence).encode()
         capture = {"runNonce": entry.context(self.env)["runNonce"], "raw": raw,
-                   "captureId": "d" * 64,
+                   "captureId": entry.digest(evidence_raw), "evidenceRaw": evidence_raw,
                    "observedAt": now.isoformat().replace("+00:00", "Z"),
-                   "source": "fresh-native-issue-and-project-pages"}
+                   "source": "fresh-native-issue-project-and-ref-pages"}
         with mock.patch.object(entry, "PRESTATE_PRODUCER_PORT",
                                SimpleNamespace(produce=lambda *_: capture)):
             self.assertEqual(raw, entry.produce_prestate("token", entry.context(self.env)))
@@ -277,7 +339,7 @@ class EntryTests(unittest.TestCase):
              mock.patch.object(entry, "deadline_remaining", return_value=30), \
              mock.patch.object(entry, "require_postmint_ready", return_value=(object(), object(), object())), \
              mock.patch.object(entry, "load_sibling", return_value=object()), \
-             mock.patch.object(entry, "produce_prestate", side_effect=entry.Refused("nonce-nonzero")), \
+             mock.patch.object(entry, "produce_prestate_capture", side_effect=entry.Refused("nonce-nonzero")), \
              mock.patch.object(entry, "revoke_private_token") as revoke, \
              mock.patch.object(entry, "execute_source", execute):
             with self.assertRaisesRegex(entry.Refused, "nonce-nonzero"):
@@ -337,6 +399,8 @@ class EntryTests(unittest.TestCase):
         repository = b'{"id":1353050537,"node_id":"R_kgDOUKXpqQ","full_name":"FS-GG/FS.GG.GitHub.Substrate.Sandbox","private":true,"fork":false}'
         project = b'{"id":"PVT_kwDOEYAWY84BiESo","title":"fsgg-sandbox-gs2-04-9","closed":false,"public":false}'
         with mock.patch.object(entry, "INSTALLATION_STATUS", "installed-protected-bootstrap"), \
+             mock.patch.object(entry, "private_root", return_value=self.root), \
+             mock.patch.object(entry, "attach_final_prestate", side_effect=lambda subject, *_: subject), \
              mock.patch.object(entry, "load_sibling", side_effect=lambda name, _: modules[name]):
             with self.assertRaisesRegex(RuntimeError, "no authority"):
                 entry.execute_source(self.env, self.candidate, self.runtime, b"mint", "token",

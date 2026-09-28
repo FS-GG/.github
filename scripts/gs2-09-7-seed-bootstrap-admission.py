@@ -31,6 +31,8 @@ HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 SUBJECT_FIELDS = {
     "workflowRepository", "workflowPath", "environment", "workflowSha",
     "runId", "runAttempt", "candidateSha", "runNonce", "approvedArtifactSourceSha256",
+    "sourceManifestSha256", "prestateSha256", "prestateSnapshotSha256",
+    "prestateEvidenceSha256", "expectedRefAbsent",
     "sandboxRepositoryId", "sandboxRepositoryNodeId", "projectNodeId", "appId",
     "installationId", "seedPlanSha256", "s2DeclarationSha256", "refName",
     "mintProofSha256", "tokenSha256", "blobOid", "treeOid", "commitOid",
@@ -70,10 +72,14 @@ def validate_subject(subject: dict) -> None:
             and subject["projectNodeId"] == "PVT_kwDOEYAWY84BiESo"
             and subject["appId"] == 4166418 and subject["installationId"] == 143110413
             and subject["expectedOldOid"] is None
+            and subject["expectedRefAbsent"] is True
+            and subject["sourceManifestSha256"] == subject["approvedArtifactSourceSha256"]
             and subject["operation"] == "genesis-nonce-seed-journal"
             and all(type(subject[name]) is str and HEX64.fullmatch(subject[name]) is not None
                     for name in ("approvedArtifactSourceSha256", "seedPlanSha256",
-                                 "s2DeclarationSha256", "mintProofSha256", "tokenSha256"))
+                                 "s2DeclarationSha256", "mintProofSha256", "tokenSha256",
+                                 "prestateSha256", "prestateSnapshotSha256",
+                                 "prestateEvidenceSha256"))
             and all(type(subject[name]) is str and HEX40.fullmatch(subject[name]) is not None
                     for name in ("blobOid", "treeOid", "commitOid")),
             "bootstrap-subject")
@@ -191,7 +197,8 @@ def require_prepare_admitted(port, context: dict, source_sha256: str,
             and now.utcoffset() is not None
             and type(source_sha256) is str and HEX64.fullmatch(source_sha256) is not None
             and type(approved_source_sha256) is str
-            and HEX64.fullmatch(approved_source_sha256) is not None,
+            and HEX64.fullmatch(approved_source_sha256) is not None
+            and source_sha256 == approved_source_sha256,
             "prepare-admission-input")
     subject = {
         "workflowRepository": "FS-GG/.github",

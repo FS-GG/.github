@@ -75,6 +75,7 @@ class Provider:
         self.project_missing = False
         self.project_escape = False
         self.capture = 0
+        self.ref_present = False
 
     def __call__(self, method, url, token, body=None):
         self.calls.append((method, url, token, body))
@@ -89,6 +90,11 @@ class Provider:
             if self.changed and self.capture == 2:
                 value["extra"] = "changed"
             return 200, {}, raw(value)
+        if url.endswith("/git/ref/heads/main"):
+            return 200, {}, raw({"ref": "refs/heads/main",
+                                 "object": {"sha": "a" * 40}})
+        if "/git/ref/heads/gs2-09-7/" in url:
+            return (200 if self.ref_present else 404), {}, raw({"message": "Not Found"})
         if "/issues?" in url:
             rows = self.issue_rows
             headers = {}
@@ -148,12 +154,17 @@ class SeedPrestateTests(unittest.TestCase):
         self.assertEqual(prestate.REPOSITORY_ID, value["repositoryId"])
         self.assertEqual(64, len(value["snapshotSha256"]))
         self.assertEqual(64, len(result["captureId"]))
-        self.assertEqual(8, len(provider.calls))
+        self.assertEqual(12, len(provider.calls))
         self.assertTrue(all(method == "GET" and body is None
                             for method, _, _, body in provider.calls))
         self.assertTrue(all(token == self.token for _, _, token, _ in provider.calls))
         self.assertNotIn(self.token.encode(), result["raw"])
         self.assertNotIn(b"fixture 1", result["raw"])
+        self.assertEqual(prestate.digest(result["evidenceRaw"]), result["captureId"])
+        evidence = json.loads(result["evidenceRaw"])
+        self.assertTrue(evidence["expectedRefAbsent"])
+        self.assertEqual(2, len(evidence["passes"]))
+        self.assertEqual(404, evidence["passes"][0]["requests"][-1]["status"])
 
     def test_nonce_issue_and_exact_project_item_are_counted(self):
         marker = f" [fsgg:gs2-09-7:{self.nonce}]"
@@ -169,7 +180,7 @@ class SeedPrestateTests(unittest.TestCase):
         provider = Provider(issues, items)
         value = json.loads(self.produce(provider)["raw"])
         self.assertEqual(0, value["nonceIssueCount"])
-        self.assertEqual(12, len(provider.calls))
+        self.assertEqual(16, len(provider.calls))
         project_pages = [url for method, url, _, _ in provider.calls
                          if method == "GET" and "/items?" in url]
         self.assertEqual(4, len(project_pages))
@@ -185,7 +196,7 @@ class SeedPrestateTests(unittest.TestCase):
             "schema": "fsgg.gs2-09-7.sandbox-seed-prestate-producer/1",
             "repositoryId": 1353050537,
             "projectNodeId": "PVT_kwDOEYAWY84BiESo",
-            "source": "fresh-native-issue-and-project-pages",
+            "source": "fresh-native-issue-project-and-ref-pages",
             "credentialScope": "protected-host-only",
             "candidateCanWrite": False,
         }, prestate.describe())
@@ -197,6 +208,13 @@ class SeedPrestateTests(unittest.TestCase):
             with self.subTest(status=status), self.assertRaisesRegex(
                     prestate.Refused, f"http-{status}"):
                 self.produce(provider)
+
+    def test_existing_nonce_ref_refuses_after_complete_census(self):
+        provider = Provider()
+        provider.ref_present = True
+        with self.assertRaisesRegex(prestate.Refused, "nonce-ref-not-absent"):
+            self.produce(provider)
+        self.assertEqual(6, len(provider.calls))
 
     def test_missing_and_escaped_rest_pagination_refuse(self):
         missing = Provider()
