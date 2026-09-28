@@ -5,6 +5,7 @@
 - **Decision owner:** FS-GG accountable programme owner
 - **Affects:** GitHub Substrate v2 activation and repository adoption
 - **Supersedes:** ADR-0090 and the GS2-09–GS2-14 migration sequence for the clean-start route
+- **Specific default adoption:** The Release D.5 rule below replaces ADR-0078's `OperatingV2` prerequisite only for the SVG workspace lifecycle default.
 
 ## Context
 
@@ -64,3 +65,36 @@ to observe `SettlementAlreadyComplete`. Retained-upgrade and old-client qualific
 receiver explicitly promises those capabilities. Other existing installations receive repair-forward
 treatment. Long-running efficiency readings and claims remain separate from repository adoption; missing
 measurements remain unknown.
+
+## Release D.5 workspace default under the clean-start epoch
+
+The accountable programme owner selects `typed-sdd` as the later omitted workspace lifecycle for the
+SVG product. This is a specific exception to the `OperatingV2` wait in [ADR-0078](0078-github-substrate-v2-new-only-coordination-authority.md)
+and the [Release D plan](../roadmaps/svg-release-d.md); it does not declare `OperatingV2` or authorize
+another default, repository or protected mutation. The shared generation 2
+[`OpenV2` append](https://github.com/FS-GG/FS.GG.Coordination.Authority/commit/26d1882af9293b264df17a1fa98515e108313fe5)
+and readback, with `.github` ordinary settlement and normal rerun, supply the clean-start epoch prerequisite. They do
+not supply the separate installed workspace proof or change the currently published scaffold default.
+The cancelled GS2-09–GS2-14 migration, Q10, retained-v1 and old-client gates cannot be reintroduced as
+implicit prerequisites for this clean-start default.
+
+Release D.5 may change the omission only after the SDD, Templates and wizard owners have delivered their
+own source and immutable public packages, and a fresh public-only receiver proves the proposed exact
+composition. The receiver must install an independently qualified SDD release (2.0.2 or later), Templates
+and wizard from public feeds with empty package caches and no sibling source. Verify their published
+payloads and pins. Run raw `dotnet new fs-gg-fable-game` to prove the omitted SVG Player product files;
+raw template creation does not prove a root SDD lifecycle. Separately create clean workspaces through
+installed `fsgg-sdd scaffold` and the wizard with lifecycle omitted, and observe one root `typed-sdd`
+lifecycle using the default `quint-specification-v1` backend in each. Exercise the installed lifecycle and its
+required checks, including an actual authored/verified path and failure or refusal behavior. Confirm
+explicit supported `none`, `sdd`, `typed-sdd` and frozen `spec-kit` choices still select their own tokens
+where promised, and that explicit SVG bundles keep their contents. Record the exact package hashes,
+commands and generated receiver result. Qualify retained-workspace upgrades separately only where the
+owning product promises them; publication does not rewrite an existing workspace.
+
+Source merge, public publication, candidate qualification, registry selection and activation are distinct
+observations. Native branch protection and current required checks govern every source change. After
+candidate qualification, select the exact public versions in the effective registry/default policy and
+repeat the clean receiver proof from those effective pins; independently read back the owning default
+change before claiming activation. A missing package, pin, clean receiver or required check holds only
+this default effect. No new authority-repository epoch append is required for Release D.5.
