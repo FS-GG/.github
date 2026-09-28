@@ -30,6 +30,8 @@ advances the pin to that CLI.
 
 ## Entries
 
+- **2026-09-28** — Reconcile publishing-and-deployment operator digest after the generated 0.94.0 release inventory update; no packaged skill content changes.
+
 <!-- Prepend new entries here, newest first:
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
