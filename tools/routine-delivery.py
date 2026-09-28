@@ -45,6 +45,10 @@ def _load_telemetry_defaults():
 
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+MAX_SELECTION_ARCHIVE_BYTES = 1_048_576
+MAX_SELECTION_UNCOMPRESSED_BYTES = 1_048_576
+MAX_SELECTION_ENTRIES = 128
+MAX_SELECTION_BYTES = 65_536
 
 
 class AmbiguousWrite(RuntimeError):
@@ -194,14 +198,34 @@ class GhApi:
         if len(matches) != 1:
             raise RuntimeError("GitHub returned duplicate qualification-selection artifacts")
         archive = self._run_bytes([matches[0]["archive_download_url"]])
-        if len(archive) > 1_048_576:
+        if len(archive) > MAX_SELECTION_ARCHIVE_BYTES:
             raise RuntimeError("qualification-selection artifact exceeds 1 MiB")
         try:
             with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
-                files = [entry for entry in bundle.infolist() if not entry.is_dir()]
-                if len(files) != 1 or files[0].filename != "selection.json" or files[0].file_size > 65_536:
+                entries = bundle.infolist()
+                if len(entries) > MAX_SELECTION_ENTRIES:
                     raise RuntimeError("qualification-selection archive has an unsafe shape")
-                return bundle.read(files[0])
+                paths: set[str] = set()
+                selections: list[zipfile.ZipInfo] = []
+                uncompressed = 0
+                for entry in entries:
+                    name = entry.filename[:-1] if entry.is_dir() and entry.filename.endswith("/") else entry.filename
+                    parts = name.split("/")
+                    if (not name or name.startswith("/") or "\\" in name or "\x00" in name
+                            or re.match(r"^[A-Za-z]:", name) or any(part in {"", ".", ".."} for part in parts)
+                            or name in paths):
+                        raise RuntimeError("qualification-selection archive has an unsafe shape")
+                    paths.add(name)
+                    if entry.is_dir():
+                        continue
+                    uncompressed += entry.file_size
+                    if uncompressed > MAX_SELECTION_UNCOMPRESSED_BYTES:
+                        raise RuntimeError("qualification-selection archive exceeds 1 MiB uncompressed")
+                    if name == "selection.json":
+                        selections.append(entry)
+                if len(selections) != 1 or selections[0].file_size > MAX_SELECTION_BYTES:
+                    raise RuntimeError("qualification-selection archive has an unsafe shape")
+                return bundle.read(selections[0])
         except zipfile.BadZipFile as error:
             raise RuntimeError("qualification-selection artifact is not a ZIP archive") from error
 
