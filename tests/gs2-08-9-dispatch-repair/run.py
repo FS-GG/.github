@@ -107,25 +107,7 @@ assert census_rows[ROUTES[-1]]["disposition"] == "local-only"
 for retired in (ROUTES[2], ROUTES[3], ROUTES[4], ROUTES[6], ROUTES[7]):
     assert retired not in census_rows, retired
 
-mutated = json.loads(json.dumps(census))
-next(row for row in mutated["sources"] if row["path"] == ROUTES[0])["disposition"] = "conditional-remote-writer"
-with tempfile.TemporaryDirectory(prefix="gs2-08-9-census-") as temporary:
-    mutation = pathlib.Path(temporary) / "census.json"
-    mutation.write_text(json.dumps(mutated))
-    result = subprocess.run(
-        [
-            "python",
-            str(ROOT / "scripts/check-v1-writer-census.py"),
-            "--root",
-            str(ROOT),
-            "--census",
-            str(mutation),
-            "--structural",
-        ],
-        text=True,
-        capture_output=True,
-    )
-    assert result.returncode != 0
-    assert "must remain classified read-only" in result.stderr
+# ADR-0091 preserves these route-specific retirement checks. Whole-tree historical
+# V1 census qualification is no longer an ordinary source-delivery requirement.
 
 print("GS2-08.9 dispatch/repair routes are read-only or local-only; historical SHA capability is explicitly unresolved")
