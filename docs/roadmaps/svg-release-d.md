@@ -102,7 +102,8 @@ activation and lifecycle-default activation are separate claims.
   The public SDD 2.0.2 receiver preparation merged in [Templates #641](https://github.com/FS-GG/FS.GG.Templates/pull/641)
   at `848fe5a1fb581707be67ecb6bda326ecd43a2fe8`. Its focused installed clean receiver and
   bounded promised retained-adoption check passed on the reviewed head, along with the native required
-  checks. This is receiver evidence only; the omitted lifecycle default and public successor packages
+  checks. The [exact-main public receiver run](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36454677283)
+  also passed at the protected merge. This is receiver evidence only; the omitted lifecycle default and public successor packages
   are still pending.
 
   The SDD, Templates and wizard owners must deliver and publish the exact package composition that makes

@@ -159,7 +159,7 @@ presentation, replay, network, scale and public Releases A–C are delivered at 
 [SVG-WORKSPACE-01.1–.6](https://github.com/FS-GG/FS.GG.Templates/blob/273c9218960215ee856de9e59a769a0e7b63da8f/docs/roadmaps/svg-workspace-01.md)
 is frozen; [Release D.1–.4](roadmaps/svg-release-d.md) publishes and activates the compatible SVG product
 default through Templates 0.14.0 and wizard 0.11.2. Release D.5's public SDD 2.0.2 receiver source
-merged in [Templates #641](https://github.com/FS-GG/FS.GG.Templates/pull/641) at `848fe5a1fb581707be67ecb6bda326ecd43a2fe8` after the focused public qualification and native required checks passed. Its later lifecycle
+merged in [Templates #641](https://github.com/FS-GG/FS.GG.Templates/pull/641) at `848fe5a1fb581707be67ecb6bda326ecd43a2fe8` after the focused public qualification and native required checks passed; its [exact-main public receiver run](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36454677283) also passed. Its later lifecycle
 default follows the selected generation-2 clean-start route and separate receiver/activation proof;
 the historical `OperatingV2` gate is superseded. Durable public hosting remains Templates #491.
 
