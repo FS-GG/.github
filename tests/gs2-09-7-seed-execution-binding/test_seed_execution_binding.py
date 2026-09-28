@@ -31,7 +31,9 @@ class SeedExecutionBindingTests(unittest.TestCase):
         self.now = dt.datetime(2026, 9, 28, 8, 0, tzinfo=dt.timezone.utc)
         self.workflow_sha = "a" * 40
         self.candidate_sha = "b" * 40
-        self.journal = "protected-journal:gs2-09-7-q4-seed-v1"
+        self.run_nonce = f"12345-2-{self.candidate_sha}"
+        self.journal_ref = f"refs/heads/gs2-09-7/{self.run_nonce}/seed-journal"
+        self.artifact_source_sha256 = "e" * 64
         self.mint.write_text(json.dumps({
             "schema": binding.MINT_SCHEMA,
             "appId": binding.APP_ID,
@@ -57,14 +59,17 @@ class SeedExecutionBindingTests(unittest.TestCase):
             "GITHUB_WORKFLOW_SHA": self.workflow_sha,
             "GITHUB_SHA": self.workflow_sha,
             "FSGG_PROTECTED_SHA": self.workflow_sha,
+            "FSGG_PROTECTED_ENVIRONMENT": binding.PROTECTED_ENVIRONMENT,
             "GITHUB_RUN_ID": "12345",
             "GITHUB_RUN_ATTEMPT": "2",
             "FSGG_CANDIDATE_SHA": self.candidate_sha,
-            "FSGG_SANDBOX_RUN_NONCE": f"12345-2-{self.candidate_sha}",
+            "FSGG_SANDBOX_RUN_NONCE": self.run_nonce,
             "FSGG_SANDBOX_REPOSITORY_ID": str(binding.SANDBOX_ID),
             "FSGG_SANDBOX_REPOSITORY_NODE_ID": binding.SANDBOX_NODE,
+            "FSGG_SANDBOX_PROJECT_NUMBER": str(binding.PROJECT_NUMBER),
             "FSGG_SANDBOX_PROJECT_NODE_ID": binding.PROJECT_NODE,
-            "FSGG_SEED_JOURNAL_IDENTITY": self.journal,
+            "FSGG_SEED_JOURNAL_REF": self.journal_ref,
+            "FSGG_APPROVED_ARTIFACT_SOURCE_SHA256": self.artifact_source_sha256,
             "FSGG_SANDBOX_EVIDENCE_DIR": str(self.evidence),
             "FSGG_SEED_PLAN_PATH": str(self.plan),
             "FSGG_SEED_CORPUS_PATH": str(self.corpus),
@@ -79,11 +84,8 @@ class SeedExecutionBindingTests(unittest.TestCase):
         }
 
     def installed(self):
-        return mock.patch.multiple(
-            binding,
-            INSTALLATION_STATUS="installed-fixed-main-workflow",
-            PINNED_JOURNAL_IDENTITY=self.journal,
-        )
+        return mock.patch.object(binding, "INSTALLATION_STATUS",
+                                 "installed-fixed-main-workflow")
 
     def protected_checkout(self):
         return mock.patch.object(binding, "checked_out_provenance",
@@ -100,8 +102,10 @@ class SeedExecutionBindingTests(unittest.TestCase):
             "schema": binding.STATUS_SCHEMA,
             "installation": "source-only-uninstalled",
             "protectedProvenance": "workflow-sha-event-sha-checkout-head-and-git-blobs",
-            "installationJoin": "set-installed-status-and-journal-pin-in-fixed-main-workflow",
-            "journalPinConfigured": False,
+            "installationJoin": "install-fixed-main-native-cas-and-independent-readback",
+            "seedRulesetPrerequisite": False,
+            "privateRulesetRead": "unsupported-403-do-not-infer",
+            "productionProtectionAuthority": "GS2-08.2-separate-evidence",
             "writesEnabled": False,
             "authority": "unavailable",
         }, binding.source_status())
@@ -116,24 +120,48 @@ class SeedExecutionBindingTests(unittest.TestCase):
         self.assertEqual("bound-no-write-authority", value["status"])
         self.assertEqual(self.workflow_sha, value["source"]["workflowSha"])
         self.assertEqual(self.candidate_sha, value["source"]["candidateSha"])
+        self.assertEqual(binding.PROTECTED_ENVIRONMENT,
+                         value["source"]["protectedEnvironment"])
+        self.assertEqual(self.journal_ref, value["source"]["seedJournalRef"])
+        self.assertEqual(self.artifact_source_sha256,
+                         value["provenanceInterface"]["approvedArtifactSourceSha256"])
         self.assertEqual(hashlib.sha256(self.plan.read_bytes()).hexdigest(),
                          value["artifacts"]["seedPlan"]["sha256"])
         self.assertEqual(hashlib.sha256(self.corpus.read_bytes()).hexdigest(),
                          value["artifacts"]["corpus"]["sha256"])
         self.assertEqual(hashlib.sha256(self.mint.read_bytes()).hexdigest(),
                          value["mint"]["proofSha256"])
+        self.assertEqual(binding.APP_ID, value["mint"]["appId"])
+        self.assertEqual(binding.INSTALLATION_ID, value["mint"]["installationId"])
+        self.assertEqual("selected", value["mint"]["repositorySelection"])
+        self.assertEqual(binding.REQUIRED_GRANTS, value["mint"]["permissions"])
         self.assertEqual(binding.ALLOWED_EFFECT_KINDS,
                          value["journal"]["allowedClosedEffectKinds"])
+        profile = value["journal"]["profile"]
+        self.assertEqual(self.journal_ref, profile["ref"])
+        self.assertEqual("expected-absent-or-exact-old-oid",
+                         profile["compareAndSwap"]["lease"])
+        self.assertEqual(["ref", "commit", "tree", "blob"],
+                         profile["nativeReadback"]["requiredObjects"])
+        self.assertFalse(profile["protectionEvidence"]["q4SeedRulesetPrerequisite"])
+        self.assertEqual("GS2-08.2-separate-evidence",
+                         profile["protectionEvidence"]["productionProtectionAuthority"])
         self.assertNotIn(self.token, raw.decode())
         self.assertEqual(raw, binding.canonical(value))
 
-    def test_context_spoof_wrong_project_candidate_and_nonce_refuse(self):
+    def test_context_spoof_wrong_run_ref_project_candidate_and_nonce_refuse(self):
         cases = [
             ("FSGG_WORKFLOW_SHA", self.workflow_sha, "caller-context-spoof"),
             ("GITHUB_WORKFLOW_SHA", "e" * 40, "protected-context"),
+            ("FSGG_PROTECTED_ENVIRONMENT", "unprotected", "protected-context"),
+            ("GITHUB_RUN_ID", "12346", "protected-context"),
+            ("GITHUB_RUN_ATTEMPT", "3", "protected-context"),
             ("FSGG_SANDBOX_PROJECT_NODE_ID", "PVT_wrong", "protected-context"),
-            ("FSGG_CANDIDATE_SHA", "C" * 40, "protected-context"),
+            ("FSGG_SANDBOX_PROJECT_NUMBER", "3", "protected-context"),
+            ("FSGG_CANDIDATE_SHA", "C" * 40, "seed-journal-run-nonce"),
             ("FSGG_SANDBOX_RUN_NONCE", "spoofed", "protected-context"),
+            ("FSGG_SEED_JOURNAL_REF", "refs/heads/main", "protected-context"),
+            ("FSGG_APPROVED_ARTIFACT_SOURCE_SHA256", "f" * 63, "protected-context"),
         ]
         for name, value, reason in cases:
             with self.subTest(name=name):
@@ -160,6 +188,11 @@ class SeedExecutionBindingTests(unittest.TestCase):
         with self.assertRaisesRegex(binding.Refused, "mint-proof-identity"):
             self.build()
         self.mint.write_bytes(original.replace(b'"metadata":"read",', b''))
+        with self.assertRaisesRegex(binding.Refused, "mint-proof-identity"):
+            self.build()
+        changed_grants = json.loads(original)
+        changed_grants["permissions"]["workflows"] = "write"
+        self.mint.write_text(json.dumps(changed_grants, sort_keys=True, separators=(",", ":")) + "\n")
         with self.assertRaisesRegex(binding.Refused, "mint-proof-identity"):
             self.build()
         self.mint.write_bytes(original.replace(b"2026-09-28T09:00:00Z", b"2026-09-28T07:00:00Z"))
@@ -191,7 +224,9 @@ class SeedExecutionBindingTests(unittest.TestCase):
                 binding.verify_document(self.output)
         self.plan.write_bytes(b'{"plan":"retained"}\n')
         changed = {**self.environment, "FSGG_CANDIDATE_SHA": "e" * 40,
-                   "FSGG_SANDBOX_RUN_NONCE": f'12345-2-{"e" * 40}'}
+                   "FSGG_SANDBOX_RUN_NONCE": f'12345-2-{"e" * 40}',
+                   "FSGG_SEED_JOURNAL_REF":
+                       f'refs/heads/gs2-09-7/12345-2-{"e" * 40}/seed-journal'}
         with mock.patch.dict(os.environ, changed, clear=True), self.installed(), \
                 self.protected_checkout(), \
                 mock.patch.object(binding, "utc_now", return_value=self.now):
@@ -237,6 +272,18 @@ class SeedExecutionBindingTests(unittest.TestCase):
                 mock.patch.object(binding, "utc_now", return_value=self.now):
             with self.assertRaisesRegex(binding.Refused, "execution-binding-mismatch"):
                 binding.verify_document(self.output)
+
+    def test_cas_profile_ref_and_generation_contract_fail_closed(self):
+        profile = binding.cas_profile(self.journal_ref)
+        self.assertEqual("strict-successor", profile["chain"]["journalGeneration"])
+        self.assertEqual("strict-successor", profile["chain"]["stateGeneration"])
+        self.assertEqual("pending-until-exact-readback",
+                         profile["nativeReadback"]["lostResponse"])
+        for bad in ("refs/heads/main",
+                    f"refs/heads/gs2-09-7/{self.run_nonce}/other",
+                    "refs/heads/gs2-09-7/1-1-" + "F" * 40 + "/seed-journal"):
+            with self.assertRaises(binding.Refused):
+                binding.cas_profile(bad)
 
 
 if __name__ == "__main__":

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Source-only Q4 S2 binding for a protected sandbox seed execution.
+"""Source-only Q4 S2 binding for isolated sandbox seed CAS and recovery.
 
-No workflow calls this helper. Its installation state and journal pin remain
-deliberately closed, so build and verify remain unavailable until a separate
-protected-main join installs both before any seed write. That join must export
+No workflow calls this helper. Its installation state remains deliberately
+closed, so build and verify remain unavailable until a separate protected-main
+join installs the native CAS/readback profile before any seed write. That join must export
 ``GITHUB_WORKFLOW_SHA`` from ``github.workflow_sha``; provenance is then proven
 against the checked-out commit and its exact workflow and helper Git blobs.
 """
@@ -21,17 +21,19 @@ import sys
 from pathlib import Path
 
 
-SCHEMA = "fsgg.github-substrate-v2.sandbox-seed-execution-binding/1"
-STATUS_SCHEMA = "fsgg.github-substrate-v2.sandbox-seed-execution-binding-source/1"
+SCHEMA = "fsgg.github-substrate-v2.sandbox-seed-execution-binding/2"
+STATUS_SCHEMA = "fsgg.github-substrate-v2.sandbox-seed-execution-binding-source/2"
 MINT_SCHEMA = "fsgg.github-substrate-v2.sandbox-mint-grants/1"
 HOST_REPOSITORY = "FS-GG/.github"
 WORKFLOW_PATH = ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
 WORKFLOW_REF = "refs/heads/main"
+PROTECTED_ENVIRONMENT = "github-substrate-v2-sandbox"
 BUILDER_PATH = "scripts/gs2-09-7-seed-execution-binding.py"
 SANDBOX_ID = 1353050537
 SANDBOX_NODE = "R_kgDOUKXpqQ"
 SANDBOX_NAME = "FS-GG/FS.GG.GitHub.Substrate.Sandbox"
 PROJECT_NODE = "PVT_kwDOEYAWY84BiESo"
+PROJECT_NUMBER = 2
 APP_ID = 4166418
 INSTALLATION_ID = 143110413
 APP_SLUG = "fs-gg-cross-repo-dispatch"
@@ -60,11 +62,10 @@ MAX_JSON_BYTES = 1024 * 1024
 MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
 GIT = "/usr/bin/git"
 
-# These values can only be installed by a later change to the fixed
-# protected-main workflow and its protected journal. No commit SHA is embedded:
-# such a pin would be self-referential when this source changes to installed.
+# This value can only be installed by a later change to the fixed protected-main
+# workflow and its independent native readback. No commit SHA is embedded: such
+# a pin would be self-referential when this source changes to installed.
 INSTALLATION_STATUS = "source-only-uninstalled"
-PINNED_JOURNAL_IDENTITY = ""
 
 FORBIDDEN_CONTEXT_ENV = {
     "FSGG_EXECUTION_BINDING_CONTEXT",
@@ -186,13 +187,60 @@ def retained_artifact(evidence_dir: Path, env_name: str, label: str) -> tuple[di
     }, raw
 
 
+def seed_ref(run_nonce: str) -> str:
+    require(re.fullmatch(r"[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{40}", run_nonce) is not None,
+            "seed-journal-run-nonce")
+    return f"refs/heads/gs2-09-7/{run_nonce}/seed-journal"
+
+
+def cas_profile(ref: str) -> dict:
+    match = re.fullmatch(
+        r"refs/heads/gs2-09-7/([1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{40})/seed-journal",
+        ref,
+    )
+    require(match is not None and ref == seed_ref(match.group(1)), "seed-journal-ref")
+    return {
+        "schema": "fsgg.github-substrate-v2.sandbox-seed-cas-profile/1",
+        "repository": {"id": SANDBOX_ID, "nodeId": SANDBOX_NODE,
+                       "fullName": SANDBOX_NAME, "visibility": "private"},
+        "ref": ref,
+        "object": {"path": "journal.json", "encoding": "canonical-json-utf8",
+                   "maxBytes": MAX_JSON_BYTES},
+        "compareAndSwap": {
+            "lease": "expected-absent-or-exact-old-oid",
+            "create": "old-oid-absent",
+            "update": "old-oid-exact",
+            "conflict": "refused-no-retry-as-create",
+        },
+        "chain": {"journalGeneration": "strict-successor",
+                  "stateGeneration": "strict-successor",
+                  "commitParent": "exact-previous-head-or-none"},
+        "outcomes": ["applied", "already-applied", "pending", "conflict", "refused"],
+        "nativeReadback": {
+            "source": "fresh-independent-github-api",
+            "requiredObjects": ["ref", "commit", "tree", "blob"],
+            "bind": ["repository", "ref", "oldOid", "newOid", "commitParent",
+                     "treeOid", "blobOid", "payloadSha256", "journalGeneration",
+                     "stateGeneration", "runNonce"],
+            "lostResponse": "pending-until-exact-readback",
+        },
+        "protectionEvidence": {
+            "q4SeedRulesetPrerequisite": False,
+            "privateRulesetRead403": "unsupported-do-not-infer",
+            "productionProtectionAuthority": "GS2-08.2-separate-evidence",
+        },
+    }
+
+
 def source_status() -> dict:
     return {
         "schema": STATUS_SCHEMA,
         "installation": INSTALLATION_STATUS,
         "protectedProvenance": "workflow-sha-event-sha-checkout-head-and-git-blobs",
-        "installationJoin": "set-installed-status-and-journal-pin-in-fixed-main-workflow",
-        "journalPinConfigured": bool(PINNED_JOURNAL_IDENTITY),
+        "installationJoin": "install-fixed-main-native-cas-and-independent-readback",
+        "seedRulesetPrerequisite": False,
+        "privateRulesetRead": "unsupported-403-do-not-infer",
+        "productionProtectionAuthority": "GS2-08.2-separate-evidence",
         "writesEnabled": False,
         "authority": "unavailable",
     }
@@ -200,34 +248,36 @@ def source_status() -> dict:
 
 def protected_context() -> dict:
     require(INSTALLATION_STATUS == "installed-fixed-main-workflow", "execution-binding-uninstalled")
-    require(bool(PINNED_JOURNAL_IDENTITY)
-            and PINNED_JOURNAL_IDENTITY.strip() == PINNED_JOURNAL_IDENTITY
-            and len(PINNED_JOURNAL_IDENTITY) <= 256, "journal-identity-pin")
     require(not any(name in os.environ for name in FORBIDDEN_CONTEXT_ENV), "caller-context-spoof")
     required = {
         "GITHUB_ACTIONS", "CI", "GITHUB_EVENT_NAME", "GITHUB_REPOSITORY", "GITHUB_REF",
         "GITHUB_WORKFLOW_REF", "GITHUB_WORKFLOW_SHA", "GITHUB_SHA", "FSGG_PROTECTED_SHA", "GITHUB_RUN_ID",
         "GITHUB_RUN_ATTEMPT", "FSGG_CANDIDATE_SHA", "FSGG_SANDBOX_RUN_NONCE",
+        "FSGG_PROTECTED_ENVIRONMENT",
         "FSGG_SANDBOX_REPOSITORY_ID", "FSGG_SANDBOX_REPOSITORY_NODE_ID",
-        "FSGG_SANDBOX_PROJECT_NODE_ID", "FSGG_SEED_JOURNAL_IDENTITY",
+        "FSGG_SANDBOX_PROJECT_NUMBER", "FSGG_SANDBOX_PROJECT_NODE_ID",
+        "FSGG_SEED_JOURNAL_REF", "FSGG_APPROVED_ARTIFACT_SOURCE_SHA256",
     }
     require(all(name in os.environ for name in required), "protected-context-missing")
     try:
         run_id = int(os.environ["GITHUB_RUN_ID"])
         run_attempt = int(os.environ["GITHUB_RUN_ATTEMPT"])
         repository_id = int(os.environ["FSGG_SANDBOX_REPOSITORY_ID"])
+        project_number = int(os.environ["FSGG_SANDBOX_PROJECT_NUMBER"])
     except ValueError as error:
         raise Refused("protected-context-number") from error
     workflow_sha = os.environ["GITHUB_SHA"]
     provider_workflow_sha = os.environ["GITHUB_WORKFLOW_SHA"]
     candidate_sha = os.environ["FSGG_CANDIDATE_SHA"]
     nonce = f"{run_id}-{run_attempt}-{candidate_sha}"
+    journal_ref = seed_ref(nonce)
     expected_workflow_ref = f"{HOST_REPOSITORY}/{WORKFLOW_PATH}@{WORKFLOW_REF}"
     require(os.environ["GITHUB_ACTIONS"] == "true" and os.environ["CI"] == "true"
             and os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch"
             and os.environ["GITHUB_REPOSITORY"] == HOST_REPOSITORY
             and os.environ["GITHUB_REF"] == WORKFLOW_REF
             and os.environ["GITHUB_WORKFLOW_REF"] == expected_workflow_ref
+            and os.environ["FSGG_PROTECTED_ENVIRONMENT"] == PROTECTED_ENVIRONMENT
             and HEX40.fullmatch(workflow_sha) is not None
             and provider_workflow_sha == workflow_sha
             and os.environ["FSGG_PROTECTED_SHA"] == workflow_sha
@@ -236,8 +286,10 @@ def protected_context() -> dict:
             and os.environ["FSGG_SANDBOX_RUN_NONCE"] == nonce
             and repository_id == SANDBOX_ID
             and os.environ["FSGG_SANDBOX_REPOSITORY_NODE_ID"] == SANDBOX_NODE
+            and project_number == PROJECT_NUMBER
             and os.environ["FSGG_SANDBOX_PROJECT_NODE_ID"] == PROJECT_NODE
-            and os.environ["FSGG_SEED_JOURNAL_IDENTITY"] == PINNED_JOURNAL_IDENTITY,
+            and os.environ["FSGG_SEED_JOURNAL_REF"] == journal_ref
+            and HEX64.fullmatch(os.environ["FSGG_APPROVED_ARTIFACT_SOURCE_SHA256"]) is not None,
             "protected-context")
     provenance = checked_out_provenance(workflow_sha)
     return {
@@ -245,12 +297,15 @@ def protected_context() -> dict:
         "workflowPath": WORKFLOW_PATH,
         "workflowRef": WORKFLOW_REF,
         "workflowRefPath": expected_workflow_ref,
+        "protectedEnvironment": PROTECTED_ENVIRONMENT,
         "workflowSha": workflow_sha,
         "providerWorkflowSha": provider_workflow_sha,
         "runId": run_id,
         "runAttempt": run_attempt,
         "candidateSha": candidate_sha,
         "runNonce": nonce,
+        "seedJournalRef": journal_ref,
+        "approvedArtifactSourceSha256": os.environ["FSGG_APPROVED_ARTIFACT_SOURCE_SHA256"],
         "protectedCheckout": provenance,
     }
 
@@ -294,7 +349,13 @@ def validate_mint(raw: bytes, token: str, now: dt.datetime) -> dict:
         "tokenSha256": token_digest,
         "expiresAt": expiry_text,
         "appId": APP_ID,
+        "appSlug": APP_SLUG,
+        "actor": ACTOR,
         "installationId": INSTALLATION_ID,
+        "repositorySelection": "selected",
+        "repository": {"id": SANDBOX_ID, "nodeId": SANDBOX_NODE,
+                       "fullName": SANDBOX_NAME},
+        "permissions": REQUIRED_GRANTS,
     }
 
 
@@ -333,16 +394,23 @@ def build_document() -> bytes:
         "sandbox": {
             "repositoryId": SANDBOX_ID,
             "repositoryNodeId": SANDBOX_NODE,
+            "projectNumber": PROJECT_NUMBER,
             "projectNodeId": PROJECT_NODE,
         },
         "mint": mint,
         "artifacts": {"seedPlan": plan, "corpus": corpus},
         "journal": {
-            "identity": PINNED_JOURNAL_IDENTITY,
+            "profile": cas_profile(context["seedJournalRef"]),
             "allowedClosedEffectKinds": ALLOWED_EFFECT_KINDS,
         },
-        "schemaJoin": "pending-coordination-s1-final",
-        "authority": "unavailable-without-protected-workflow-verification",
+        "schemaJoin": "coordination-s1-provenance-interface-v1",
+        "provenanceInterface": {
+            "workflowRunId": context["runId"],
+            "workflowRunAttempt": context["runAttempt"],
+            "workflowSha": context["workflowSha"],
+            "approvedArtifactSourceSha256": context["approvedArtifactSourceSha256"],
+        },
+        "authority": "unavailable-without-protected-host-install-and-native-readback",
     }
     binding["fingerprint"] = sha256(canonical(binding))
     return canonical(binding)
