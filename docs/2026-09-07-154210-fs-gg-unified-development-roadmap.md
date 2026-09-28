@@ -53,9 +53,9 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
-**Current frontier: ordinary V2 settlement is active in `.github`, Audio, Net, Governance and Game.**
-`.github` uses Coordination CLI 0.1.2, Audio uses 0.1.3, and the first combined Net/Governance/Game
-wave uses 0.1.5. Checked source delivery, the shared `OpenV2` epoch, real settlement and normal rerun
+**Current frontier: ordinary V2 settlement is active in `.github`, Audio, Net, Governance, Game and SDD.**
+`.github` uses Coordination CLI 0.1.2, Audio uses 0.1.3, the first combined Net/Governance/Game
+wave uses 0.1.5, and SDD uses 0.1.6. Checked source delivery, the shared `OpenV2` epoch, real settlement and normal rerun
 are observed for each selected receiver.
 The earlier callable, GS2-09 and OperatingV1 evidence remains valid at its recorded scope but no longer
 forms the active dependency chain. No clean-start step may relabel that evidence as migration completion,
@@ -221,13 +221,12 @@ start; these rows are not current prerequisites. The active C0–C3 results are 
    protected activation, one settlement, independent Authority readback and the normal already-complete
    rerun are observed. The owning [Audio plan](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md)
    retains the exact evidence.
-2. **Publish CLI 0.1.6, then activate the next explicit C3 wave.** Net, Governance and Game completed
-   their combined 0.1.5 wave. SDD and Templates have merged disabled receivers and independently
-   verified dedicated credential custody; the combined 0.1.6 source and preparation passed. Publish
-   that exact artifact to both feeds, verify immutable package identity, then activate each selected
-   receiver separately after its native checks and Authority binding. Observe each real settlement,
-   independent journal readback and normal rerun. Independent SKILL-FS, LEARN and product work continues
-   through its own boundaries.
+2. **Finish the Templates C3 receiver separately.** Net, Governance and Game completed their combined
+   0.1.5 wave. The protected CLI 0.1.6 publication and anonymous clean-install proof enabled both
+   receivers; SDD then merged at its checked head and completed its own settlement, independent Authority
+   readback and normal already-complete rerun. Templates has a separate activation PR and dedicated
+   custody; merge it only after its native checks, then prove its own settlement and normal rerun.
+   Independent SKILL-FS, LEARN and product work continues through its own boundaries.
 
 The [lane table](#91-dependencies-and-parallelism) names each owner, ready work and join condition.
 
@@ -1143,9 +1142,9 @@ ADR-0091 replaces the active V0–V6 cutover sequence with this bounded clean-st
 
 The first combined C3 wave used published [Coordination CLI 0.1.5](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.5) for Net, Governance and Game. Its [publisher run](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36437778484) passed anonymous installation and dual-feed readback at the pinned source. [Net #107](https://github.com/FS-GG/FS.GG.Net/pull/107), [Governance #439](https://github.com/FS-GG/FS.GG.Governance/pull/439) and [Game #670](https://github.com/FS-GG/FS.GG.Game/pull/670) each merged at its checked head and completed a real protected settlement, independent Authority readback and an unchanged `SettlementAlreadyComplete` rerun ([Net run](https://github.com/FS-GG/FS.GG.Net/actions/runs/36441643056), [Governance run](https://github.com/FS-GG/FS.GG.Governance/actions/runs/36444065570), [Game run](https://github.com/FS-GG/FS.GG.Game/actions/runs/36444699657)). All three selected receivers are adopted at that bounded clean-path boundary; this is not an efficiency or historical-upgrade claim.
 
-The next shared-release wave selects SDD and Templates. Their disabled receivers merged separately ([SDD #1080](https://github.com/FS-GG/FS.GG.SDD/pull/1080), [Templates #638](https://github.com/FS-GG/FS.GG.Templates/pull/638)); neither has a package pin or active settlement yet. [Coordination #877](https://github.com/FS-GG/FS.GG.Coordination/pull/877) combined both profiles at protected source `275cccb30a5c9ade4b3bba344ede13d7df446d13`; its exact-source [CLI 0.1.6 preparation](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36450952246) passed before immutable public publication. Sealed custody [PR #3944](https://github.com/FS-GG/.github/pull/3944) merged at `3ed9b4f8316a14c5e15bfb4c1e11554730b9ae3f`; its [SDD](https://github.com/FS-GG/.github/actions/runs/36450825631) and [Templates](https://github.com/FS-GG/.github/actions/runs/36450830306) bridge runs succeeded. Each receiver has independently read-back main-only environment policy and its three dedicated encrypted secret names. The prepared activation branches remain disabled until the immutable public CLI is verified. Each receiver then activates and proves settlement separately.
+The next shared-release wave selects SDD and Templates. Their disabled receivers merged separately ([SDD #1080](https://github.com/FS-GG/FS.GG.SDD/pull/1080), [Templates #638](https://github.com/FS-GG/FS.GG.Templates/pull/638)); neither has a package pin or active settlement yet. [Coordination #877](https://github.com/FS-GG/FS.GG.Coordination/pull/877) combined both profiles at protected source `275cccb30a5c9ade4b3bba344ede13d7df446d13`; its exact-source [CLI 0.1.6 preparation](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36450952246) and [protected publisher retry](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36457989575) passed. The protected `v0.1.6` tag points to that source, and the [public release](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.6) passed both-feed payload readback and anonymous clean installation. Sealed custody [PR #3944](https://github.com/FS-GG/.github/pull/3944) merged at `3ed9b4f8316a14c5e15bfb4c1e11554730b9ae3f`; its [SDD](https://github.com/FS-GG/.github/actions/runs/36450825631) and [Templates](https://github.com/FS-GG/.github/actions/runs/36450830306) bridge runs succeeded. Each receiver has independently read-back main-only environment policy and its three dedicated encrypted secret names. The public package is now verified. [SDD #1081](https://github.com/FS-GG/FS.GG.SDD/pull/1081) merged on protected main `1a081fdef954f08f8cacf44b26c80fac784e0c28`; [run 36460253176](https://github.com/FS-GG/FS.GG.SDD/actions/runs/36460253176) settled once and its normal rerun returned `SettlementAlreadyComplete`, with independent Authority shard `fd` readback unchanged. SDD is adopted at this clean-path boundary. [Templates #643](https://github.com/FS-GG/FS.GG.Templates/pull/643) remains a separate activation PR pending native checks and its own settlement proof.
 
-Independent source lanes also advanced: [LEARN collector PR #3940](https://github.com/FS-GG/.github/pull/3940) merged at `76ae9d3e` with native capture and same-host export tests, while installer provenance and installed collector acceptance remain open. [SKILL-FS Python retirement PR #3941](https://github.com/FS-GG/.github/pull/3941) merged at `f38a0ec1` with protected checks and detached installed-closure verification; coherent successor publication and wider receiver adoption remain separate. Neither source result establishes a live efficiency reading.
+Independent source lanes also advanced: [LEARN collector PR #3940](https://github.com/FS-GG/.github/pull/3940) merged at `76ae9d3e` with native capture and same-host export tests, while installer provenance and installed collector acceptance remain open. [SKILL-FS Python retirement PR #3941](https://github.com/FS-GG/.github/pull/3941) merged at `f38a0ec1` with protected checks and detached installed-closure verification; coherent [0.94 publication](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.94.0) now passed with dual-feed readback and a clean public CLI install; wider receiver adoption remains separate. Neither source result establishes a live efficiency reading.
 
 The V0–V6 table, dependency graph and migration lanes below are retained as historical design context.
 They no longer schedule work or constrain C0–C3. Accepted predecessor results keep their original scope;
@@ -1450,8 +1449,8 @@ does not activate the fleet.
 Rendering's CLI 0.1.4 remains a separate published candidate. The combined Net, Governance and Game
 CLI 0.1.5 release and all three protected receiver settlements are complete at the bounded clean-path
 boundary documented in [section 9.1](#91-dependencies-and-parallelism). SDD and Templates are the
-next selected wave: disabled source receivers and dedicated credential custody are ready, CLI 0.1.6
-preparation passed at its protected source, and publication plus separate activations remain. The
+next selected wave: CLI 0.1.6 is publicly published at its protected source; SDD has separately
+settled with an unchanged normal rerun, while Templates activation and readback remain. The
 historical migration parts below do not schedule these receivers.
 
 These are the default **parts for Astra planning**, named by deliverable. Select independent
