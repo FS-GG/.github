@@ -14,6 +14,9 @@ module HistoricalLossRegistry =
     let SchemaV2 = "fsgg.coord.historical-loss-registry/v2"
 
     [<Literal>]
+    let SchemaV3 = "fsgg.coord.historical-loss-registry/v3"
+
+    [<Literal>]
     let ApprovalEnvelopeSchemaV2 = "fsgg.coord.historical-loss-approval/v2"
 
     [<Literal>]
@@ -100,6 +103,85 @@ module HistoricalLossRegistry =
         }
 
     type RegistryV2 = { Schema: string; Entries: EntryV2 list }
+
+    type RecoverySourceRole =
+        | RecoveredWriterSource
+        | ProtocolAuthoringSource
+
+    type RecoverySource =
+        {
+            ProducerId: string
+            Revision: string
+            Path: string
+            BlobSha: string
+            BytesSha256: string
+            Role: RecoverySourceRole
+        }
+
+    type RetainedEnumerationKind =
+        | DirectRepositoryEnumeration
+        | SearchOnly
+        | AuditNotFoundInference
+
+    type RepositoryIdentityV3 =
+        {
+            FullName: string
+            DatabaseId: int64
+            NodeId: string
+        }
+
+    type RetainedSubjectV3 =
+        {
+            Repository: RepositoryIdentityV3
+            NativeId: string
+            Family: string
+            CreatedAt: string
+            PayloadBlobSha: string
+            SessionOperationId: string option
+            LiveClaim: bool
+        }
+
+    type RetainedPageV3 =
+        {
+            Repository: RepositoryIdentityV3
+            Index: int
+            ItemCount: int
+            RawSha256: string
+            Terminal: bool
+        }
+
+    type RetainedNativeCensusV3 =
+        {
+            SelectedRepositories: RepositoryIdentityV3 list
+            ObservationHorizon: string
+            Revision: string
+            Enumeration: RetainedEnumerationKind
+            Complete: bool
+            DeclaredCount: int
+            Pages: RetainedPageV3 list
+            Subjects: RetainedSubjectV3 list
+            HistoricalEmissions: string
+            HistoricalDeletions: string
+            LostCount: string
+            ProducerDeploymentEnd: string
+            Digest: string
+        }
+
+    type EntryV3 =
+        {
+            Family: string
+            Scope: string
+            ObservationHorizon: string
+            RecoverySources: RecoverySource list
+            KnownSurvivorIds: string list
+            CensusFirst: RetainedNativeCensusV3
+            CensusSecond: RetainedNativeCensusV3
+            ExclusionAppliesToLiveClaims: bool
+            Consequence: string
+            Approval: ApprovalBindingV2
+        }
+
+    type RegistryV3 = { Schema: string; Entries: EntryV3 list }
 
     type NativePullRequest =
         {
@@ -191,6 +273,18 @@ module HistoricalLossRegistry =
             Consequence: string
         }
 
+    type BoundLossV3 =
+        {
+            Family: string
+            Scope: string
+            ObservationHorizon: string
+            SelectedRepositories: RepositoryIdentityV3 list
+            RetainedCount: int
+            CensusDigest: string
+            ApprovalDigest: string
+            Consequence: string
+        }
+
     let private sha256 (bytes: byte array) =
         bytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
@@ -229,6 +323,43 @@ module HistoricalLossRegistry =
         |> String.concat ""
         |> shaText
 
+    let retainedCensusDigestV3 (census: RetainedNativeCensusV3) =
+        [
+            yield!
+                census.SelectedRepositories
+                |> List.collect (fun repository -> [ repository.FullName; string repository.DatabaseId; repository.NodeId ])
+            census.ObservationHorizon
+            census.Revision
+            string census.Enumeration
+            string census.Complete
+            string census.DeclaredCount
+            yield!
+                census.Pages
+                |> List.collect (fun page ->
+                    [ page.Repository.FullName; string page.Repository.DatabaseId; page.Repository.NodeId; string page.Index; string page.ItemCount; page.RawSha256; string page.Terminal ])
+            yield!
+                census.Subjects
+                |> List.collect (fun subject ->
+                    [
+                        subject.Repository.FullName
+                        string subject.Repository.DatabaseId
+                        subject.Repository.NodeId
+                        subject.NativeId
+                        subject.Family
+                        subject.CreatedAt
+                        subject.PayloadBlobSha
+                        defaultArg subject.SessionOperationId ""
+                        string subject.LiveClaim
+                    ])
+            census.HistoricalEmissions
+            census.HistoricalDeletions
+            census.LostCount
+            census.ProducerDeploymentEnd
+        ]
+        |> List.map frame
+        |> String.concat ""
+        |> shaText
+
     let private prop (name: string) (value: JsonElement) =
         let mutable found = Unchecked.defaultof<JsonElement>
 
@@ -259,6 +390,16 @@ module HistoricalLossRegistry =
             let mutable parsed = 0
 
             if item.ValueKind = JsonValueKind.Number && item.TryGetInt32(&parsed) then
+                Ok parsed
+            else
+                Error $"{name} must be an integer")
+
+    let private integer64 name value =
+        prop name value
+        |> Result.bind (fun item ->
+            let mutable parsed = 0L
+
+            if item.ValueKind = JsonValueKind.Number && item.TryGetInt64(&parsed) then
                 Ok parsed
             else
                 Error $"{name} must be an integer")
@@ -335,14 +476,14 @@ module HistoricalLossRegistry =
                 | [ Ok producer; Ok revision; Ok path; Ok blob; Ok bytes; Ok role ] ->
                     parseRole role
                     |> Result.map (fun parsed ->
-                        {
+                        ({
                             ProducerId = producer
                             Revision = revision
                             Path = path
                             BlobSha = blob
                             BytesSha256 = bytes
                             Role = parsed
-                        })
+                        }: AuditedSource))
                 | _ -> failwith "checked"))
 
     let private parseSurvivor value =
@@ -604,6 +745,196 @@ module HistoricalLossRegistry =
                             }
                     | _ -> failwith "checked"))
 
+    let private parseRecoveryRole =
+        function
+        | "recovered-writer-source" -> Ok RecoveredWriterSource
+        | "protocol-authoring-source" -> Ok ProtocolAuthoringSource
+        | _ -> Error "recovery source role is unknown"
+
+    let private parseRecoverySource value =
+        exactMembers [ "producerId"; "revision"; "path"; "blobSha"; "bytesSha256"; "role" ] value
+        |> Result.bind (fun value ->
+            let producer, revision, path, blob, bytes, role =
+                text "producerId" value,
+                text "revision" value,
+                text "path" value,
+                text "blobSha" value,
+                text "bytesSha256" value,
+                text "role" value
+
+            combine
+                [ producer; revision; path; blob; bytes; role ]
+                (fun () ->
+                    match producer, revision, path, blob, bytes, role with
+                    | Ok a, Ok b, Ok c, Ok d, Ok e, Ok f ->
+                        parseRecoveryRole f
+                        |> Result.map (fun parsed ->
+                            ({
+                                ProducerId = a
+                                Revision = b
+                                Path = c
+                                BlobSha = d
+                                BytesSha256 = e
+                                Role = parsed
+                            }: RecoverySource))
+                    | _ -> failwith "checked"))
+
+    let private parseEnumeration =
+        function
+        | "direct-repository-enumeration" -> Ok DirectRepositoryEnumeration
+        | "search-only" -> Ok SearchOnly
+        | "audit-not-found-inference" -> Ok AuditNotFoundInference
+        | _ -> Error "retained enumeration kind is unknown"
+
+    let private parseRepositoryIdentityV3 value =
+        exactMembers [ "fullName"; "databaseId"; "nodeId" ] value
+        |> Result.bind (fun value ->
+            let fullName, databaseId, nodeId =
+                text "fullName" value, integer64 "databaseId" value, text "nodeId" value
+
+            combine
+                [ fullName |> Result.map ignore; databaseId |> Result.map ignore; nodeId |> Result.map ignore ]
+                (fun () ->
+                    match fullName, databaseId, nodeId with
+                    | Ok a, Ok b, Ok c -> Ok { FullName = a; DatabaseId = b; NodeId = c }
+                    | _ -> failwith "checked"))
+
+    let private parseRetainedPageV3 value =
+        exactMembers [ "repository"; "index"; "itemCount"; "rawSha256"; "terminal" ] value
+        |> Result.bind (fun value ->
+            let repository, index, count, raw, terminal =
+                prop "repository" value |> Result.bind parseRepositoryIdentityV3,
+                integer "index" value,
+                integer "itemCount" value,
+                text "rawSha256" value,
+                boolean "terminal" value
+
+            combine
+                [ repository |> Result.map ignore; index |> Result.map ignore; count |> Result.map ignore; raw |> Result.map ignore; terminal |> Result.map ignore ]
+                (fun () ->
+                    match repository, index, count, raw, terminal with
+                    | Ok a, Ok b, Ok c, Ok d, Ok e ->
+                        Ok { Repository = a; Index = b; ItemCount = c; RawSha256 = d; Terminal = e }
+                    | _ -> failwith "checked"))
+
+    let private parseRetainedSubjectV3 value =
+        exactMembers [ "repository"; "nativeId"; "family"; "createdAt"; "payloadBlobSha"; "sessionOperationId"; "liveClaim" ] value
+        |> Result.bind (fun value ->
+            let repository, nativeId, family, createdAt, blob, operation, live =
+                prop "repository" value |> Result.bind parseRepositoryIdentityV3,
+                text "nativeId" value,
+                text "family" value,
+                text "createdAt" value,
+                text "payloadBlobSha" value,
+                optionalText "sessionOperationId" value,
+                boolean "liveClaim" value
+
+            combine
+                [ repository |> Result.map ignore; nativeId |> Result.map ignore; family |> Result.map ignore; createdAt |> Result.map ignore; blob |> Result.map ignore; operation |> Result.map ignore; live |> Result.map ignore ]
+                (fun () ->
+                    match repository, nativeId, family, createdAt, blob, operation, live with
+                    | Ok a, Ok b, Ok c, Ok d, Ok e, Ok f, Ok g ->
+                        Ok
+                            {
+                                Repository = a
+                                NativeId = b
+                                Family = c
+                                CreatedAt = d
+                                PayloadBlobSha = e
+                                SessionOperationId = f
+                                LiveClaim = g
+                            }
+                    | _ -> failwith "checked"))
+
+    let private parseStringArray name value =
+        array name value (fun item ->
+            if item.ValueKind = JsonValueKind.String then Ok(item.GetString()) else Error $"{name} entries must be strings")
+
+    let private parseRetainedCensusV3 value =
+        exactMembers
+            [
+                "selectedRepositories"; "observationHorizon"; "revision"; "enumeration"; "complete"
+                "declaredCount"; "pages"; "subjects"; "historicalEmissions"; "historicalDeletions"
+                "lostCount"; "producerDeploymentEnd"; "digest"
+            ]
+            value
+        |> Result.bind (fun value ->
+            let repositories = array "selectedRepositories" value parseRepositoryIdentityV3
+            let horizon = text "observationHorizon" value
+            let revision = text "revision" value
+            let enumeration = text "enumeration" value |> Result.bind parseEnumeration
+            let complete = boolean "complete" value
+            let count = integer "declaredCount" value
+            let pages = array "pages" value parseRetainedPageV3
+            let subjects = array "subjects" value parseRetainedSubjectV3
+            let emissions = text "historicalEmissions" value
+            let deletions = text "historicalDeletions" value
+            let lost = text "lostCount" value
+            let deployment = text "producerDeploymentEnd" value
+            let digest = text "digest" value
+
+            combine
+                [ repositories |> Result.map ignore; horizon |> Result.map ignore; revision |> Result.map ignore; enumeration |> Result.map ignore; complete |> Result.map ignore; count |> Result.map ignore; pages |> Result.map ignore; subjects |> Result.map ignore; emissions |> Result.map ignore; deletions |> Result.map ignore; lost |> Result.map ignore; deployment |> Result.map ignore; digest |> Result.map ignore ]
+                (fun () ->
+                    match repositories, horizon, revision, enumeration, complete, count, pages, subjects, emissions, deletions, lost, deployment, digest with
+                    | Ok a, Ok b, Ok c, Ok d, Ok e, Ok f, Ok g, Ok h, Ok i, Ok j, Ok k, Ok l, Ok m ->
+                        Ok
+                            {
+                                SelectedRepositories = a
+                                ObservationHorizon = b
+                                Revision = c
+                                Enumeration = d
+                                Complete = e
+                                DeclaredCount = f
+                                Pages = g
+                                Subjects = h
+                                HistoricalEmissions = i
+                                HistoricalDeletions = j
+                                LostCount = k
+                                ProducerDeploymentEnd = l
+                                Digest = m
+                            }
+                    | _ -> failwith "checked"))
+
+    let private parseEntryV3 value : Result<EntryV3, string> =
+        exactMembers
+            [
+                "family"; "scope"; "observationHorizon"; "recoverySources"; "knownSurvivorIds"
+                "censusFirst"; "censusSecond"; "exclusionAppliesToLiveClaims"; "consequence"; "approval"
+            ]
+            value
+        |> Result.bind (fun value ->
+            let family = text "family" value
+            let scope = text "scope" value
+            let horizon = text "observationHorizon" value
+            let sources = array "recoverySources" value parseRecoverySource
+            let known = parseStringArray "knownSurvivorIds" value
+            let first = prop "censusFirst" value |> Result.bind parseRetainedCensusV3
+            let second = prop "censusSecond" value |> Result.bind parseRetainedCensusV3
+            let live = boolean "exclusionAppliesToLiveClaims" value
+            let consequence = text "consequence" value
+            let approval = prop "approval" value |> Result.bind parseApprovalV2
+
+            combine
+                [ family |> Result.map ignore; scope |> Result.map ignore; horizon |> Result.map ignore; sources |> Result.map ignore; known |> Result.map ignore; first |> Result.map ignore; second |> Result.map ignore; live |> Result.map ignore; consequence |> Result.map ignore; approval |> Result.map ignore ]
+                (fun () ->
+                    match family, scope, horizon, sources, known, first, second, live, consequence, approval with
+                    | Ok a, Ok b, Ok c, Ok d, Ok e, Ok f, Ok g, Ok h, Ok i, Ok j ->
+                        Ok
+                            {
+                                Family = a
+                                Scope = b
+                                ObservationHorizon = c
+                                RecoverySources = d
+                                KnownSurvivorIds = e
+                                CensusFirst = f
+                                CensusSecond = g
+                                ExclusionAppliesToLiveClaims = h
+                                Consequence = i
+                                Approval = j
+                            }
+                    | _ -> failwith "checked"))
+
     let parse (raw: string) : Result<Registry, string list> =
         try
             use document =
@@ -657,6 +988,41 @@ module HistoricalLossRegistry =
                 | Ok actual, Ok values when actual = SchemaV2 ->
                     Ok({ Schema = actual; Entries = values } : RegistryV2)
                 | Ok _, Ok _ -> Error $"schema must be {SchemaV2}"
+                | _ ->
+                    Error(
+                        String.concat
+                            "; "
+                            [
+                                match schema with
+                                | Error e -> yield e
+                                | _ -> ()
+
+                                match entries with
+                                | Error e -> yield e
+                                | _ -> ()
+                            ]
+                    ))
+            |> Result.mapError (fun error -> [ error ])
+        with :? JsonException as error ->
+            Error [ $"invalid registry JSON: {error.Message}" ]
+
+    let parseV3 (raw: string) : Result<RegistryV3, string list> =
+        try
+            use document =
+                JsonDocument.Parse(
+                    raw,
+                    JsonDocumentOptions(AllowTrailingCommas = false, CommentHandling = JsonCommentHandling.Disallow)
+                )
+
+            exactMembers [ "schema"; "entries" ] document.RootElement
+            |> Result.bind (fun root ->
+                let schema = text "schema" root
+                let entries = array "entries" root parseEntryV3
+
+                match schema, entries with
+                | Ok actual, Ok values when actual = SchemaV3 ->
+                    Ok({ Schema = actual; Entries = values } : RegistryV3)
+                | Ok _, Ok _ -> Error $"schema must be {SchemaV3}"
                 | _ ->
                     Error(
                         String.concat
@@ -1224,6 +1590,261 @@ module HistoricalLossRegistry =
                     Family = entry.Family
                     Scope = entry.Scope
                     Cutoff = entry.Cutoff
+                    CensusDigest = entry.CensusFirst.Digest
+                    ApprovalDigest = native.ApprovalEnvelopeFirst.BodySha256
+                    Consequence = entry.Consequence
+                }
+
+    let bindV3
+        (expectedFamily: string)
+        (expectedScope: string)
+        (expectedObservationHorizon: string)
+        (expectedRepositories: RepositoryIdentityV3 list)
+        (registryBytes: byte array)
+        (entry: EntryV3)
+        (native: NativeApprovalReadbackV2)
+        =
+        let errors = ResizeArray<string>()
+        let refuse condition message = if condition then errors.Add message
+
+        try
+            let raw = UTF8Encoding(false, true).GetString registryBytes
+            match parseV3 raw with
+            | Error _ -> errors.Add "historical-loss-registry-v3-parse"
+            | Ok registry when registry.Entries |> List.filter ((=) entry) |> List.length <> 1 ->
+                errors.Add "historical-loss-registry-v3-entry-readback"
+            | Ok _ -> ()
+        with :? DecoderFallbackException ->
+            errors.Add "historical-loss-registry-v3-encoding"
+
+        refuse (entry.Family <> expectedFamily) "historical-loss-family-mismatch"
+        refuse (entry.Scope <> expectedScope) "historical-loss-scope-mismatch"
+        refuse (entry.ObservationHorizon <> expectedObservationHorizon) "historical-loss-observation-horizon-mismatch"
+        let mutable observationHorizon = DateTimeOffset.MinValue
+        let observationHorizonValid =
+            DateTimeOffset.TryParseExact(
+                entry.ObservationHorizon,
+                "O",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind,
+                &observationHorizon
+            )
+        refuse (not observationHorizonValid) "historical-loss-observation-horizon-invalid"
+        refuse (not (Set.contains entry.Family allowedFamilies)) "historical-loss-family-out-of-scope"
+        refuse (entry.Consequence <> RequiredConsequence) "historical-loss-consequence"
+        refuse entry.ExclusionAppliesToLiveClaims "historical-loss-live-claim-exclusion"
+
+        let sourceRoles = entry.RecoverySources |> List.map _.Role |> Set.ofList
+        let requiredSourceRoles =
+            match entry.Family with
+            | "intake-receipt" -> Set.singleton ProtocolAuthoringSource
+            | _ -> Set.ofList [ RecoveredWriterSource; ProtocolAuthoringSource ]
+        refuse
+            (not (Set.isSubset requiredSourceRoles sourceRoles))
+            "historical-loss-recovery-source-role"
+
+        refuse
+            (entry.RecoverySources.IsEmpty
+             || entry.RecoverySources
+                |> List.exists (fun source ->
+                    String.IsNullOrWhiteSpace source.ProducerId
+                    || String.IsNullOrWhiteSpace source.Path
+                    || not (oid 40 source.Revision)
+                    || not (oid 40 source.BlobSha)
+                    || not (oid 64 source.BytesSha256)))
+            "historical-loss-recovery-source-identity"
+
+        let sourceKeys =
+            entry.RecoverySources
+            |> List.map (fun source -> source.ProducerId, source.Revision, source.Path, source.BlobSha, source.BytesSha256)
+        refuse (sourceKeys.Length <> (sourceKeys |> Set.ofList |> Set.count)) "historical-loss-recovery-source-duplicate"
+
+        refuse
+            (expectedRepositories.IsEmpty
+             || expectedRepositories <> (expectedRepositories |> List.distinct |> List.sort)
+             || expectedRepositories
+                |> List.exists (fun repository ->
+                    not (repository.FullName.StartsWith("FS-GG/", StringComparison.Ordinal))
+                    || repository.DatabaseId <= 0L
+                    || String.IsNullOrWhiteSpace repository.NodeId))
+            "historical-loss-selected-repositories-invalid"
+
+        let censusValid (census: RetainedNativeCensusV3) =
+            let repositorySet = census.SelectedRepositories |> Set.ofList
+            let subjectIds = census.Subjects |> List.map (fun subject -> subject.Repository, subject.NativeId)
+            let nativeIds = census.Subjects |> List.map _.NativeId
+            let pagesSequential =
+                census.SelectedRepositories
+                |> List.forall (fun repository ->
+                    let pages = census.Pages |> List.filter (fun page -> page.Repository = repository)
+                    not pages.IsEmpty
+                    && pages
+                       |> List.mapi (fun index page ->
+                           page.Index = index + 1
+                           && page.ItemCount >= 0
+                           && oid 64 page.RawSha256
+                           && page.Terminal = (index = pages.Length - 1))
+                       |> List.forall id
+                    && (pages |> List.sumBy _.ItemCount)
+                       = (census.Subjects |> List.filter (fun subject -> subject.Repository = repository) |> List.length))
+
+            let subjectsValid =
+                census.Subjects
+                |> List.forall (fun subject ->
+                    Set.contains subject.Repository repositorySet
+                    && subject.Family = entry.Family
+                    && not (String.IsNullOrWhiteSpace subject.NativeId)
+                    && oid 40 subject.PayloadBlobSha
+                    && validInstant subject.CreatedAt
+                    && observationHorizonValid
+                    && DateTimeOffset.Parse(subject.CreatedAt, CultureInfo.InvariantCulture) <= observationHorizon
+                    && not subject.LiveClaim)
+
+            census.SelectedRepositories = expectedRepositories
+            && census.ObservationHorizon = entry.ObservationHorizon
+            && oid 40 census.Revision
+            && census.Enumeration = DirectRepositoryEnumeration
+            && census.Complete
+            && census.DeclaredCount = census.Subjects.Length
+            && not census.Pages.IsEmpty
+            && (census.Pages |> List.forall (fun page -> Set.contains page.Repository repositorySet))
+            && (census.Pages |> List.sumBy _.ItemCount) = census.Subjects.Length
+            && pagesSequential
+            && subjectsValid
+            && subjectIds.Length = (subjectIds |> Set.ofList |> Set.count)
+            && nativeIds.Length = (nativeIds |> Set.ofList |> Set.count)
+            && census.HistoricalEmissions = "unknown"
+            && census.HistoricalDeletions = "unknown"
+            && census.LostCount = "unknown"
+            && census.ProducerDeploymentEnd = "unknown"
+            && census.Digest = retainedCensusDigestV3 census
+
+        refuse
+            (not (censusValid entry.CensusFirst) || not (censusValid entry.CensusSecond))
+            "historical-loss-retained-census-incomplete"
+        refuse (entry.CensusFirst <> entry.CensusSecond) "historical-loss-retained-census-drift"
+        // V3 intentionally remains a proposal-only format until a production collector can
+        // derive every retained subject from fixed native endpoints and carry that proof here.
+        // Typed registry fields plus approval evidence cannot establish native completeness.
+        errors.Add "historical-loss-native-census-proof-unavailable"
+
+        let retainedIds = entry.CensusFirst.Subjects |> List.map _.NativeId |> Set.ofList
+        refuse
+            ((not entry.CensusFirst.Subjects.IsEmpty && entry.KnownSurvivorIds.IsEmpty)
+             || entry.KnownSurvivorIds.Length <> (entry.KnownSurvivorIds |> Set.ofList |> Set.count)
+             || entry.KnownSurvivorIds |> List.exists (fun nativeId -> not (Set.contains nativeId retainedIds)))
+            "historical-loss-known-survivor-missing"
+
+        let approval = entry.Approval
+        let expectedSubjectSuffix = $"/pr/{approval.PullRequest}"
+        refuse
+            (approval.PullRequest <= 0
+             || not (approval.Subject.StartsWith("FS-GG/.github#", StringComparison.Ordinal))
+             || not (approval.Subject.EndsWith(expectedSubjectSuffix, StringComparison.Ordinal))
+             || not (oid 40 approval.BaseSha)
+             || String.IsNullOrWhiteSpace approval.RegistryPath)
+            "historical-loss-approval-v3-binding"
+
+        refuse (native.PullRequestFirst <> native.PullRequestSecond) "historical-loss-pr-drift"
+        let nativePr = native.PullRequestFirst
+        let pr = nativePr.PullRequest
+        refuse
+            (pr.Repository <> "FS-GG/.github"
+             || pr.PullRequest <> approval.PullRequest
+             || pr.State <> "closed"
+             || not pr.Merged
+             || pr.BaseSha <> approval.BaseSha
+             || not (oid 40 pr.HeadSha)
+             || not (oid 40 pr.MergeCommitSha)
+             || not (validInstant nativePr.MergedAt))
+            "historical-loss-pr-readback"
+
+        refuse
+            (native.ReviewCommentsFirst <> native.ReviewCommentsSecond
+             || not native.ReviewCommentsComplete
+             || not native.ReviewCommentsTerminal
+             || native.ReviewCommentsFirst |> List.exists (commentValid >> not))
+            "historical-loss-review-readback"
+
+        let mutable acceptedReviewDigest = None
+        match reviewRecords native.ReviewCommentsFirst with
+        | Error _ -> errors.Add "historical-loss-review-ledger"
+        | Ok records ->
+            match StructuredDecision.validateReviewLedger approval.Subject records with
+            | Error _ -> errors.Add "historical-loss-review-ledger"
+            | Ok validated ->
+                match List.tryLast validated with
+                | Some accepted when
+                    accepted.Kind = StructuredDecision.Acceptance
+                    && accepted.Verdict = StructuredDecision.Accepted
+                    && accepted.HeadSha = pr.HeadSha
+                    && accepted.BaseSha = Some approval.BaseSha
+                    && accepted.ClaimGeneration |> Option.exists (String.IsNullOrWhiteSpace >> not)
+                    && List.contains ("registry-blob:" + native.File.BlobSha) accepted.DiffAuditReceipts ->
+                    acceptedReviewDigest <- Some accepted.Digest
+                | _ -> errors.Add "historical-loss-review-not-approved"
+
+        refuse
+            (native.ApprovalEnvelopeFirst <> native.ApprovalEnvelopeSecond
+             || not (approvalEnvelopeCommentValid approval.PullRequest native.ApprovalEnvelopeFirst))
+            "historical-loss-approval-envelope-readback"
+
+        let envelope =
+            match parseApprovalEnvelopeV2 native.ApprovalEnvelopeFirst.Body with
+            | Ok value -> Some value
+            | Error reason -> errors.Add reason; None
+
+        let file, blob = native.File, native.Blob
+        refuse
+            (file.Repository <> "FS-GG/.github"
+             || file.Path <> approval.RegistryPath
+             || not (oid 40 file.Revision)
+             || not (oid 40 file.BlobSha)
+             || file.BytesSha256 <> sha256 file.Bytes
+             || file.Bytes <> registryBytes)
+            "historical-loss-file-readback"
+        refuse
+            (blob.Repository <> "FS-GG/.github"
+             || blob.BlobSha <> file.BlobSha
+             || blob.BytesSha256 <> sha256 blob.Bytes
+             || blob.Bytes <> registryBytes
+             || blob.Bytes <> file.Bytes)
+            "historical-loss-blob-readback"
+
+        let gitBytes = Array.append (Encoding.ASCII.GetBytes($"blob {registryBytes.LongLength}\u0000")) registryBytes
+        let gitSha = gitBytes |> SHA1.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+        refuse (gitSha <> file.BlobSha) "historical-loss-registry-blob"
+
+        match envelope with
+        | Some value ->
+            refuse
+                (value.Subject <> approval.Subject
+                 || value.PullRequest <> approval.PullRequest
+                 || value.BaseSha <> approval.BaseSha
+                 || value.ReviewedHeadSha <> pr.HeadSha
+                 || value.MergeCommitSha <> pr.MergeCommitSha
+                 || value.MergeCommitSha <> file.Revision
+                 || value.RegistryPath <> approval.RegistryPath
+                 || value.RegistryBlobSha <> file.BlobSha
+                 || value.RegistryBytesSha256 <> sha256 registryBytes
+                 || Some value.AcceptedReviewDigest <> acceptedReviewDigest)
+                "historical-loss-approval-envelope-binding"
+
+            let mutable mergedAt, approvedAt = DateTimeOffset.MinValue, DateTimeOffset.MinValue
+            let mergedParsed = DateTimeOffset.TryParseExact(nativePr.MergedAt, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, &mergedAt)
+            let approvedParsed = DateTimeOffset.TryParseExact(native.ApprovalEnvelopeFirst.CreatedAt, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, &approvedAt)
+            refuse (not mergedParsed || not approvedParsed || approvedAt <= mergedAt) "historical-loss-approval-envelope-not-post-merge"
+        | None -> ()
+
+        if errors.Count > 0 then Error(List.ofSeq errors)
+        else
+            Ok
+                {
+                    Family = entry.Family
+                    Scope = entry.Scope
+                    ObservationHorizon = entry.ObservationHorizon
+                    SelectedRepositories = expectedRepositories
+                    RetainedCount = entry.CensusFirst.DeclaredCount
                     CensusDigest = entry.CensusFirst.Digest
                     ApprovalDigest = native.ApprovalEnvelopeFirst.BodySha256
                     Consequence = entry.Consequence

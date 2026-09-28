@@ -259,3 +259,159 @@ let ``v2 collector refuses raw or typed drift after a complete first pass`` () =
     match collect fake item.Bytes with
     | Error(Malformed(_, detail)) -> Assert.Contains("drifted", detail)
     | result -> failwithf "expected two-pass refusal, got %A" result
+
+let private v3Repository: HistoricalLossRegistry.RepositoryIdentityV3 =
+    { FullName = "FS-GG/FS.GG.Coordination"; DatabaseId = 1353050537L; NodeId = "R_fixture_coordination" }
+
+let private v3Census enumeration terminal rawDigest =
+    let retained: HistoricalLossRegistry.RetainedSubjectV3 =
+        {
+            Repository = v3Repository
+            NativeId = "retained-subject:fixture-1"
+            Family = "delivery-receipt"
+            CreatedAt = cutoff
+            PayloadBlobSha = hex '2' 40
+            SessionOperationId = Some "operation-1"
+            LiveClaim = false
+        }
+    let draft: HistoricalLossRegistry.RetainedNativeCensusV3 =
+        {
+            SelectedRepositories = [ v3Repository ]
+            ObservationHorizon = cutoff
+            Revision = hex '3' 40
+            Enumeration = enumeration
+            Complete = true
+            DeclaredCount = 1
+            Pages = [ { Repository = v3Repository; Index = 1; ItemCount = 1; RawSha256 = rawDigest; Terminal = terminal } ]
+            Subjects = [ retained ]
+            HistoricalEmissions = "unknown"
+            HistoricalDeletions = "unknown"
+            LostCount = "unknown"
+            ProducerDeploymentEnd = "unknown"
+            Digest = ""
+        }
+    { draft with Digest = HistoricalLossRegistry.retainedCensusDigestV3 draft }
+
+let private v3Raw (repository: HistoricalLossRegistry.RepositoryIdentityV3) index terminal body =
+    let parts = repository.FullName.Split('/', 2)
+    ({
+        Resource = $"retained-subjects:%s{repository.FullName}:%d{index}"
+        Path = $"repos/%s{parts[0]}/%s{parts[1]}/issues/comments"
+        Query = [ "sort", "created"; "direction", "asc"; "per_page", "100"; "page", string index ]
+        Status = 200
+        Body = body
+        BodySha256 = shaText body
+        NextLink = if terminal then None else Some "https://api.github.com/next"
+    }: HistoricalLossApprovalRead.RawResponse)
+
+let private expectV3Malformed detail capture =
+    match HistoricalLossApprovalRead.validateV3CensusCapture [ v3Repository ] capture with
+    | Error(Malformed(_, actual)) -> Assert.Contains(detail, actual)
+    | result -> failwithf "expected v3 census refusal containing %s, got %A" detail result
+
+[<Fact>]
+let ``v3 census capture stays unavailable without a raw-to-typed decoder`` () =
+    let raw = v3Raw v3Repository 1 true "[{\"id\":1}]"
+    let census = v3Census HistoricalLossRegistry.DirectRepositoryEnumeration true raw.BodySha256
+    let capture: HistoricalLossApprovalRead.V3CensusCapture =
+        { First = census; Second = census; FirstPass = [ raw ]; SecondPass = [ raw ] }
+    expectV3Malformed "raw-to-typed census proof is unavailable" capture
+
+[<Fact>]
+let ``v3 census capture refuses fabricated typed subjects over empty raw pages`` () =
+    let raw = v3Raw v3Repository 1 true "[]"
+    let census = v3Census HistoricalLossRegistry.DirectRepositoryEnumeration true raw.BodySha256
+    let capture: HistoricalLossApprovalRead.V3CensusCapture =
+        { First = census; Second = census; FirstPass = [ raw ]; SecondPass = [ raw ] }
+    expectV3Malformed "raw-to-typed census proof is unavailable" capture
+
+[<Fact>]
+let ``v3 census capture refuses foreign endpoints wrong page queries and resource drift`` () =
+    let raw = v3Raw v3Repository 1 true "[]"
+    let census = v3Census HistoricalLossRegistry.DirectRepositoryEnumeration true raw.BodySha256
+    let capture first second: HistoricalLossApprovalRead.V3CensusCapture =
+        { First = census; Second = census; FirstPass = [ first ]; SecondPass = [ second ] }
+
+    let foreign = { raw with Path = "repos/foreign-owner/foreign-repo/issues/comments" }
+    expectV3Malformed "unbound" (capture foreign foreign)
+
+    let wrongPage = { raw with Query = [ "sort", "created"; "direction", "asc"; "per_page", "100"; "page", "999" ] }
+    expectV3Malformed "unbound" (capture wrongPage wrongPage)
+
+    let driftedResource = { raw with Resource = raw.Resource + ":changed" }
+    expectV3Malformed "drifted" (capture raw driftedResource)
+
+[<Fact>]
+let ``v3 census capture refuses search and audit absence even when stable`` () =
+    let raw = v3Raw v3Repository 1 true "[]"
+    for kind in [ HistoricalLossRegistry.SearchOnly; HistoricalLossRegistry.AuditNotFoundInference ] do
+        let census = v3Census kind true raw.BodySha256
+        let capture: HistoricalLossApprovalRead.V3CensusCapture =
+            { First = census; Second = census; FirstPass = [ raw ]; SecondPass = [ raw ] }
+        match HistoricalLossApprovalRead.validateV3CensusCapture [ v3Repository ] capture with
+        | Error(Malformed(_, detail)) -> Assert.Contains("cannot establish", detail)
+        | result -> failwithf "expected source refusal, got %A" result
+
+[<Fact>]
+let ``v3 census capture refuses pagination loss and raw drift`` () =
+    let openRaw = v3Raw v3Repository 1 false "[{\"id\":1}]"
+    let census = v3Census HistoricalLossRegistry.DirectRepositoryEnumeration false openRaw.BodySha256
+    let incomplete: HistoricalLossApprovalRead.V3CensusCapture =
+        { First = census; Second = census; FirstPass = [ openRaw ]; SecondPass = [ openRaw ] }
+    match HistoricalLossApprovalRead.validateV3CensusCapture [ v3Repository ] incomplete with
+    | Error(Malformed(_, detail)) -> Assert.Contains("incomplete", detail)
+    | result -> failwithf "expected pagination refusal, got %A" result
+
+    let terminalRaw = v3Raw v3Repository 1 true "[{\"id\":1}]"
+    let terminal = v3Census HistoricalLossRegistry.DirectRepositoryEnumeration true terminalRaw.BodySha256
+    let changedRaw = v3Raw v3Repository 1 true "[{\"id\":2}]"
+    let drifted: HistoricalLossApprovalRead.V3CensusCapture =
+        { First = terminal; Second = terminal; FirstPass = [ terminalRaw ]; SecondPass = [ changedRaw ] }
+    match HistoricalLossApprovalRead.validateV3CensusCapture [ v3Repository ] drifted with
+    | Error(Malformed(_, detail)) -> Assert.Contains("drifted", detail)
+    | result -> failwithf "expected raw drift refusal, got %A" result
+
+[<Fact>]
+let ``v3 census capture checks page sequences per repository`` () =
+    let repositoryB: HistoricalLossRegistry.RepositoryIdentityV3 =
+        { FullName = "FS-GG/FS.GG.Tools"; DatabaseId = 1353050538L; NodeId = "R_fixture_tools" }
+    let bodies = [ "[]"; "[{\"id\":1}]"; "[]"; "[{\"id\":2}]" ]
+    let raws =
+        [
+            v3Raw v3Repository 1 false bodies[0]
+            v3Raw v3Repository 2 true bodies[1]
+            v3Raw repositoryB 1 false bodies[2]
+            v3Raw repositoryB 2 true bodies[3]
+        ]
+    let original = v3Census HistoricalLossRegistry.DirectRepositoryEnumeration true raws[0].BodySha256
+    let subjectA = original.Subjects.Head
+    let subjectB = { subjectA with Repository = repositoryB; NativeId = "retained-subject:fixture-2" }
+    let draft =
+        { original with
+            SelectedRepositories = [ v3Repository; repositoryB ]
+            DeclaredCount = 2
+            Pages =
+                [
+                    { Repository = v3Repository; Index = 1; ItemCount = 0; RawSha256 = raws[0].BodySha256; Terminal = false }
+                    { Repository = v3Repository; Index = 2; ItemCount = 1; RawSha256 = raws[1].BodySha256; Terminal = true }
+                    { Repository = repositoryB; Index = 1; ItemCount = 0; RawSha256 = raws[2].BodySha256; Terminal = false }
+                    { Repository = repositoryB; Index = 2; ItemCount = 1; RawSha256 = raws[3].BodySha256; Terminal = true }
+                ]
+            Subjects = [ subjectA; subjectB ]
+            Digest = "" }
+    let census = { draft with Digest = HistoricalLossRegistry.retainedCensusDigestV3 draft }
+    let capture: HistoricalLossApprovalRead.V3CensusCapture =
+        { First = census; Second = census; FirstPass = raws; SecondPass = raws }
+    match HistoricalLossApprovalRead.validateV3CensusCapture [ v3Repository; repositoryB ] capture with
+    | Error(Malformed(_, detail)) -> Assert.Contains("raw-to-typed census proof is unavailable", detail)
+    | result -> failwithf "expected proof refusal, got %A" result
+
+    let missing = { capture with FirstPass = raws |> List.removeAt 1; SecondPass = raws |> List.removeAt 1 }
+    match HistoricalLossApprovalRead.validateV3CensusCapture [ v3Repository; repositoryB ] missing with
+    | Error(Malformed(_, detail)) -> Assert.Contains("unbound", detail)
+    | result -> failwithf "expected missing-page refusal, got %A" result
+
+    let duplicate = { capture with FirstPass = raws.Head :: raws; SecondPass = raws.Head :: raws }
+    match HistoricalLossApprovalRead.validateV3CensusCapture [ v3Repository; repositoryB ] duplicate with
+    | Error(Malformed(_, detail)) -> Assert.Contains("unbound", detail)
+    | result -> failwithf "expected duplicate-page refusal, got %A" result

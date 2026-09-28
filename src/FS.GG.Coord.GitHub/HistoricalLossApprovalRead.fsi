@@ -24,6 +24,23 @@ module HistoricalLossApprovalRead =
             Fingerprint: string
         }
 
+    /// Raw provider evidence paired with a typed retained-subject census. Endpoint-specific
+    /// enumeration remains a separate source; this type cannot manufacture terminal pages.
+    type V3CensusCapture =
+        {
+            First: HistoricalLossRegistry.RetainedNativeCensusV3
+            Second: HistoricalLossRegistry.RetainedNativeCensusV3
+            FirstPass: RawResponse list
+            SecondPass: RawResponse list
+        }
+
+    /// Checks structural raw/typed stability for a direct v3 census, then refuses because
+    /// no production raw-to-typed decoder and exact endpoint/roster proof exists yet.
+    val validateV3CensusCapture:
+        expectedRepositories: HistoricalLossRegistry.RepositoryIdentityV3 list ->
+        capture: V3CensusCapture ->
+            Errors.IoResult<HistoricalLossRegistry.RetainedNativeCensusV3>
+
     /// Reads the merged pull request, its complete issue-comment population, and the exact
     /// registry contents and Git blob at the merge commit twice. It returns authority only
     /// after both raw and typed passes agree and the pure v2 binder accepts them.
