@@ -54,14 +54,37 @@ class NativeObservationTests(unittest.TestCase):
         self.merge_base = self.pull["base"]["sha"]
         self.merge_status = 0
         self.current_policy = MODULE.POLICY_PATH.read_bytes()
+        self.repository_identity = 1269292704
         self.live_checks = [{"context": name, "app_id": 15368}
                             for name in qualification["requiredGateChecks"]]
 
-    @staticmethod
-    def native_identity(check):
+    def native_identity(self, check):
         check["check_suite"] = {"id": 2000 + check["id"]}
         check["details_url"] = (
-            f"https://github.com/FS-GG/.github/actions/runs/{1000 + check['id']}/job/{check['id']}")
+            f"https://github.com/{self.env['GITHUB_REPOSITORY']}/actions/runs/"
+            f"{1000 + check['id']}/job/{check['id']}")
+
+    def select_audio(self):
+        self.env["FSGG_V2_SOURCE_PROFILE"] = "audio-v1"
+        self.env["GITHUB_REPOSITORY"] = "FS-GG/FS.GG.Audio"
+        self.env["GITHUB_WORKFLOW_REF"] = (
+            "FS-GG/FS.GG.Audio/.github/workflows/v2-ci-ordinary-settlement.yml@refs/heads/main")
+        self.pull["base"]["repo"]["full_name"] = "FS-GG/FS.GG.Audio"
+        self.repository_identity = 1292226968
+        profile = MODULE.QUALIFICATION.AUDIO_SOURCE_PROFILE
+        names = sorted(set(profile["requiredChecks"] + profile["requiredGateChecks"]))
+        self.checks = {
+            "total_count": len(names),
+            "check_runs": [
+                {"id": index + 1, "name": name, "status": "completed", "conclusion": "success",
+                 "started_at": "2026-09-24T15:00:00Z", "head_sha": HEAD, "app": {"id": 15368}}
+                for index, name in enumerate(names)
+            ],
+        }
+        for check in self.checks["check_runs"]:
+            self.native_identity(check)
+        self.live_checks = [{"context": name, "app_id": 15368}
+                            for name in profile["requiredGateChecks"]]
 
     def run_observation(self, rehearsal=False):
         def fake_run(args, **_kwargs):
@@ -72,7 +95,10 @@ class NativeObservationTests(unittest.TestCase):
             if args[:2] == ["git", "merge-tree"]:
                 return subprocess.CompletedProcess(args, self.merge_status, self.merged_tree + "\n", "")
             path = args[-1]
-            if path.endswith("/pulls?per_page=100"):
+            if path in ("repos/FS-GG/.github", "repos/FS-GG/FS.GG.Audio"):
+                body = {"id": self.repository_identity,
+                        "full_name": self.env["GITHUB_REPOSITORY"], "default_branch": "main"}
+            elif path.endswith("/pulls?per_page=100"):
                 body = [self.pull]
             elif path.endswith("/pulls/3662"):
                 body = self.pull
@@ -93,10 +119,14 @@ class NativeObservationTests(unittest.TestCase):
                 body = {"merge_base_commit": {"sha": self.merge_base}}
             elif match := re.search(r"/actions/runs/(\d+)$", path):
                 check = next(x for x in self.checks["check_runs"] if 1000 + x["id"] == int(match.group(1)))
-                producer = MODULE.QUALIFICATION.read_json(str(MODULE.POLICY_PATH))["qualification"]["checkProducers"][check["name"]]
+                policy = MODULE.QUALIFICATION.read_json(str(MODULE.POLICY_PATH))
+                profile = MODULE.QUALIFICATION.source_profile(
+                    policy, self.env.get("FSGG_V2_SOURCE_PROFILE", ""))
+                producer = profile["checkProducers"][check["name"]]
                 body = {"id": 1000 + check["id"], "workflow_id": producer["workflowId"],
                         "path": producer["path"], "event": producer["event"], "head_sha": HEAD,
-                        "check_suite_id": 2000 + check["id"], "repository": {"full_name": "FS-GG/.github"},
+                        "check_suite_id": 2000 + check["id"],
+                        "repository": {"full_name": self.env["GITHUB_REPOSITORY"]},
                         "run_attempt": 1}
                 body.update(self.run_overrides.get(1000 + check["id"], {}))
             elif match := re.search(r"/actions/jobs/(\d+)$", path):
@@ -104,7 +134,9 @@ class NativeObservationTests(unittest.TestCase):
                 body = {"id": check["id"], "run_id": 1000 + check["id"], "head_sha": HEAD,
                         "name": check["name"], "run_attempt": 1, "status": check["status"],
                         "conclusion": check["conclusion"],
-                        "check_run_url": f"https://api.github.com/repos/FS-GG/.github/check-runs/{check['id']}"}
+                        "check_run_url": (
+                            f"https://api.github.com/repos/{self.env['GITHUB_REPOSITORY']}"
+                            f"/check-runs/{check['id']}")}
             elif path.endswith("/git/commits/" + HEAD) or path.endswith("/git/commits/" + SOURCE):
                 body = {"tree": {"sha": self.tree if path.endswith(SOURCE) else getattr(self, "head_tree", self.tree)}}
                 if path.endswith(SOURCE):
@@ -118,6 +150,8 @@ class NativeObservationTests(unittest.TestCase):
     def test_native_success_is_run_and_pr_head_bound_and_active(self):
         receipt = self.run_observation()
         self.assertEqual(SOURCE, receipt["sourceSha"])
+        self.assertEqual("dotgithub-v1", receipt["sourceProfile"])
+        self.assertEqual(1269292704, receipt["sourceRepositoryId"])
         self.assertEqual(HEAD, receipt["qualificationSha"])
         self.assertEqual("PR_kwDOOrdinary3662", receipt["pullRequestNodeId"])
         self.assertEqual(123, receipt["runId"])
@@ -125,6 +159,46 @@ class NativeObservationTests(unittest.TestCase):
         self.assertEqual(self.tree, receipt["qualifiedTreeSha"])
         self.assertEqual(2, len(receipt["requiredChecks"]))
         self.assertEqual(8, len(receipt["requiredGateChecks"]))
+
+    def test_audio_profile_binds_fixed_repository_and_exact_native_check_policy(self):
+        self.select_audio()
+        receipt = self.run_observation()
+        self.assertEqual("audio-v1", receipt["sourceProfile"])
+        self.assertEqual("FS-GG/FS.GG.Audio", receipt["sourceRepository"])
+        self.assertEqual(1292226968, receipt["sourceRepositoryId"])
+        self.assertFalse(receipt["activation"])
+        self.assertEqual(
+            set(MODULE.QUALIFICATION.AUDIO_SOURCE_PROFILE["requiredChecks"]),
+            {check["name"] for check in receipt["requiredChecks"]},
+        )
+        self.assertEqual(
+            set(MODULE.QUALIFICATION.AUDIO_SOURCE_PROFILE["requiredGateChecks"]),
+            {check["name"] for check in receipt["requiredGateChecks"]},
+        )
+        self.assertEqual(
+            {
+                "Build + test (locked restore, net10.0, headless)": 308685627,
+                "lock-ranges / lock-ranges": 308685627,
+                "kit / coordination-kit": 310136059,
+                "materialize / receiver-validate": 316870238,
+                "routine-eligibility": 357682791,
+            },
+            {name: producer["workflowId"] for name, producer in
+             MODULE.QUALIFICATION.AUDIO_SOURCE_PROFILE["checkProducers"].items()},
+        )
+
+    def test_audio_profile_refuses_wrong_identity_unknown_selector_and_rehearsal(self):
+        self.select_audio()
+        self.repository_identity = 1269292704
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "repository identity differs"):
+            self.run_observation()
+        self.repository_identity = 1292226968
+        self.env["FSGG_V2_SOURCE_PROFILE"] = "caller-supplied"
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "unknown ordinary-v2 source profile"):
+            self.run_observation()
+        self.env["FSGG_V2_SOURCE_PROFILE"] = "audio-v1"
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "no rehearsal activation"):
+            self.run_observation(rehearsal=True)
 
     def test_no_request_event_or_stale_workflow_revision(self):
         self.env["GITHUB_EVENT_NAME"] = "pull_request"
