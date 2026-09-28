@@ -79,8 +79,6 @@ module HistoricalLossRegistry =
 
     type Registry = { Schema: string; Entries: Entry list }
 
-    /// Stable facts known before the content-bearing merge. Head, merge and
-    /// content identities are deliberately supplied by the native v2 envelope.
     type ApprovalBindingV2 =
         {
             Subject: string
