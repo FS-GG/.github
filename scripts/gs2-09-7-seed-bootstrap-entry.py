@@ -423,9 +423,41 @@ def private_root(environment: dict[str, str], *, create: bool = False) -> Path:
     return root
 
 
-def deadline_remaining(root: Path, now: dt.datetime | None = None) -> int:
+def native_host_start(port, facts: dict) -> tuple[int, dt.datetime]:
+    bridge = bridge_module()
+    listing = bridge.get_json(
+        port, f'{bridge.REPO}/actions/runs/{facts["runId"]}/attempts/'
+              f'{facts["runAttempt"]}/jobs?per_page=100')
+    require(type(listing) is dict and type(listing.get("total_count")) is int
+            and type(listing.get("jobs")) is list
+            and listing["total_count"] == len(listing["jobs"]), "host-jobs-page")
+    matches = [job for job in listing["jobs"] if type(job) is dict
+               and job.get("name") == "gs2-09-7-seed-bootstrap-admission"]
+    require(len(matches) == 1, "host-job-unique")
+    job = matches[0]
+    require(type(job.get("id")) is int and job["id"] > 0
+            and job.get("run_id") == facts["runId"]
+            and job.get("head_sha") == facts["workflowSha"]
+            and job.get("status") == "in_progress"
+            and job.get("conclusion") is None,
+            "host-job-binding")
+    raw = job.get("started_at")
+    require(type(raw) is str and raw.endswith("Z"), "host-job-start")
+    try:
+        started = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, OverflowError) as error:
+        raise Refused("host-job-start") from error
+    now = dt.datetime.now(dt.timezone.utc)
+    require(now >= started and now - started < dt.timedelta(minutes=35),
+            "host-job-start-expired")
+    return job["id"], started
+
+
+def deadline_remaining(root: Path, facts: dict, *, reserve_seconds: int = 0,
+                       now: dt.datetime | None = None) -> int:
     record = strict_json(read_private(root / "deadline.json", 4096))
-    require(set(record) == {"schema", "startedAt", "deadlineAt"}
+    require(set(record) == {"schema", "jobId", "runId", "runAttempt", "workflowSha",
+                            "startedAt", "deadlineAt"}
             and record["schema"] == "fsgg.gs2-09-7.seed-host-deadline/1",
             "host-deadline")
     try:
@@ -434,11 +466,18 @@ def deadline_remaining(root: Path, now: dt.datetime | None = None) -> int:
     except (TypeError, ValueError, OverflowError) as error:
         raise Refused("host-deadline") from error
     current = now or dt.datetime.now(dt.timezone.utc)
-    require(started.tzinfo is not None and deadline.tzinfo is not None
+    require(type(record["jobId"]) is int and record["jobId"] > 0
+            and record["runId"] == facts["runId"]
+            and record["runAttempt"] == facts["runAttempt"]
+            and record["workflowSha"] == facts["workflowSha"]
+            and type(reserve_seconds) is int and 0 <= reserve_seconds <= 10 * 60
+            and started.tzinfo is not None and deadline.tzinfo is not None
             and current.tzinfo is not None
             and started <= current < deadline
-            and deadline - started == dt.timedelta(minutes=35), "host-deadline-expired")
-    return max(1, int((deadline - current).total_seconds()))
+            and deadline - started == dt.timedelta(minutes=35)
+            and (deadline - current).total_seconds() > reserve_seconds,
+            "host-deadline-expired")
+    return max(1, int((deadline - current).total_seconds() - reserve_seconds))
 
 
 def exchange_module():
@@ -481,13 +520,17 @@ def stage_prepare_request(host_checkout: Path, candidate_checkout: Path,
     bridge = bridge_module()
     subject = prepare_subject(facts, source)
     root = private_root(environment, create=True)
-    started = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+    port = bridge.GitHubReadPort(environment["GH_TOKEN"])
+    job_id, started = native_host_start(port, facts)
     deadline = started + dt.timedelta(minutes=35)
     write_private(root / "deadline.json", (json.dumps({
         "schema": "fsgg.gs2-09-7.seed-host-deadline/1",
+        "jobId": job_id, "runId": facts["runId"],
+        "runAttempt": facts["runAttempt"], "workflowSha": facts["workflowSha"],
         "startedAt": started.isoformat().replace("+00:00", "Z"),
         "deadlineAt": deadline.isoformat().replace("+00:00", "Z")},
         sort_keys=True, separators=(",", ":")) + "\n").encode())
+    deadline_remaining(root, facts)
     folder = root / "prepare"
     folder.mkdir(mode=0o700)
     write_private(request_file(root, "prepare"), bridge.request_bytes("prepare", subject))
@@ -566,7 +609,8 @@ def stage_seal_input(host_checkout: Path, candidate_checkout: Path,
     actions_read = bridge.GitHubReadPort(environment["GH_TOKEN"])
     bridge.require_protected_main(actions_read, facts["workflowSha"])
     port = bridge.wait_decision(actions_read, "prepare", expected, facts["workflowSha"],
-                                max_seconds=min(13 * 60, deadline_remaining(root)))
+                                max_seconds=min(13 * 60, deadline_remaining(root, facts)))
+    deadline_remaining(root, facts)
     bridge.require_protected_main(actions_read, facts["workflowSha"])
     preflight(host_checkout, candidate_checkout, environment, port)
     mint_module = load_sibling("gs2_seed_mint", "gs2-09-7-mint-sandbox-token.py")
@@ -585,6 +629,7 @@ def stage_seal_input(host_checkout: Path, candidate_checkout: Path,
         write_private(plan_path, retained["seed-plan.json"])
         write_private(corpus_path, retained["corpus.json"])
         write_private(prestate_path, produce_prestate(token, facts, prestate))
+        deadline_remaining(root, facts)
         with temporary_environment({
             "FSGG_SANDBOX_EVIDENCE_DIR": str(root),
             "FSGG_SEED_PLAN_PATH": str(plan_path),
@@ -638,8 +683,9 @@ def stage_consume_seal_and_final_request(host_checkout: Path,
     bridge = bridge_module()
     exchange = exchange_module()
     actions_read = bridge.GitHubReadPort(environment["GH_TOKEN"])
-    files, _ = exchange.wait(actions_read, "output", facts, deadline_remaining(root),
+    files, _ = exchange.wait(actions_read, "output", facts, deadline_remaining(root, facts),
                              require_job=True)
+    deadline_remaining(root, facts)
     sealed = root / "sealed"
     require(not sealed.exists(), "seal-output-exists")
     sealed.mkdir(mode=0o700)
@@ -682,11 +728,13 @@ def stage_consume_seal_and_final_request(host_checkout: Path,
     token = read_private(root / "installation-token.private", 4096).decode("ascii")
     mint_module = load_sibling("gs2_seed_mint", "gs2-09-7-mint-sandbox-token.py")
     repository_raw, project_raw = target_readbacks(mint_module, token)
+    deadline_remaining(root, facts)
     _, _, _, subject = inspect_source(environment, candidate_checkout, sealed,
                                       input_files["mint-grants.json"], token,
                                       repository_raw, project_raw,
                                       dt.datetime.now(dt.timezone.utc))
     bridge.require_protected_main(actions_read, facts["workflowSha"])
+    deadline_remaining(root, facts)
     folder = root / "final"
     folder.mkdir(mode=0o700)
     write_private(request_file(root, "final"), bridge.request_bytes("final", subject))
@@ -707,6 +755,22 @@ def revoke_private_token(root: Path) -> bool:
     return True
 
 
+def write_revocation_pending(root: Path, report: dict,
+                             environment: dict[str, str]) -> None:
+    """Retain a sanitized nonauthorizing CAS observation before token revoke."""
+    sanitized = Path(environment["FSGG_SEED_SANITIZED_EVIDENCE_DIR"])
+    require(sanitized.is_absolute() and not sanitized.exists(), "sanitized-output-path")
+    sanitized.mkdir(mode=0o700)
+    cas = load_sibling("gs2_seed_native_cas", "gs2-09-7-seed-native-cas.py")
+    raw = cas.canonical({
+        "schema": "fsgg.gs2-09-7.sandbox-seed-revocation-pending/1",
+        "status": "revocation-pending", "activation": False,
+        "tokenRevocation": "unconfirmed", "nativeCasReadback": report,
+    })
+    require(len(raw) <= 1024 * 1024, "pending-readback-size")
+    write_private(sanitized / "revocation-pending.json", raw)
+
+
 def promote_readback(root: Path) -> None:
     pending_path = root / "cas-readback.private.json"
     if not pending_path.exists():
@@ -715,9 +779,13 @@ def promote_readback(root: Path) -> None:
             "readback-revocation-pending")
     report = read_private(pending_path)
     sanitized = Path(os.environ["FSGG_SEED_SANITIZED_EVIDENCE_DIR"])
-    require(sanitized.is_absolute() and not sanitized.exists(), "sanitized-output-path")
-    sanitized.mkdir(mode=0o700)
+    require(sanitized.is_absolute() and not sanitized.is_symlink(), "sanitized-output-path")
+    if not sanitized.exists():
+        sanitized.mkdir(mode=0o700)
+    require(sanitized.is_dir() and stat.S_IMODE(sanitized.stat().st_mode) == 0o700,
+            "sanitized-output-path")
     write_private(sanitized / "native-readback.json", report)
+    (sanitized / "revocation-pending.json").unlink(missing_ok=True)
     pending_path.unlink()
 
 
@@ -737,7 +805,8 @@ def stage_final_apply(host_checkout: Path, candidate_checkout: Path,
         bridge.require_protected_main(read_port, facts["workflowSha"])
         final_port = bridge.wait_decision(
             read_port, "final", subject, facts["workflowSha"],
-            max_seconds=min(13 * 60, deadline_remaining(root)))
+            max_seconds=min(13 * 60, deadline_remaining(root, facts)))
+        deadline_remaining(root, facts)
         bridge.require_protected_main(read_port, facts["workflowSha"])
         _, cas, _ = require_postmint_ready(
             host_checkout, candidate_checkout, facts["workflowSha"],
@@ -748,14 +817,16 @@ def stage_final_apply(host_checkout: Path, candidate_checkout: Path,
         # before the journal operation. It remains GET-only and must be zero.
         produce_prestate(token, facts,
                          load_sibling("gs2_seed_prestate", "gs2-09-7-seed-prestate.py"))
+        deadline_remaining(root, facts)
         proof = read_private(root / "mint-grants.json")
         repository_raw, project_raw = target_readbacks(mint_module, token)
+        deadline_remaining(root, facts)
         sealed = root / "sealed"
         _, _, _, actual_subject = inspect_source(
             environment, candidate_checkout, sealed, proof, token,
             repository_raw, project_raw, dt.datetime.now(dt.timezone.utc))
         require(actual_subject == subject, "final-request-drift")
-        deadline_remaining(root)
+        deadline_remaining(root, facts, reserve_seconds=5 * 60)
         with cas.authenticated_port(token) as git_port:
             report = execute_source(environment, candidate_checkout, sealed,
                                     proof, token, repository_raw, project_raw,
@@ -763,6 +834,7 @@ def stage_final_apply(host_checkout: Path, candidate_checkout: Path,
                                     dt.datetime.now(dt.timezone.utc))
         cas = load_sibling("gs2_seed_native_cas", "gs2-09-7-seed-native-cas.py")
         write_private(root / "cas-readback.private.json", cas.canonical(report))
+        write_revocation_pending(root, report, environment)
     finally:
         revoke_private_token(root)
     require(report is not None and report.get("complete") is True,

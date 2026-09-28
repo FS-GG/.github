@@ -147,7 +147,7 @@ class EntryTests(unittest.TestCase):
         self.assertLess(seed.index("seed-admission-request-final-"),
                         seed.index("gs2-09-7-seed-bootstrap-entry.py final-apply"))
         self.assertIn("gs2-09-7-seed-bootstrap-entry.py revoke-private", seed)
-        self.assertIn("native-readback.json", seed)
+        self.assertIn("FSGG_SEED_SANITIZED_EVIDENCE_DIR", seed)
         self.assertNotIn("gs2-09-7-mint-sandbox-token.py", seed)
 
     def test_prestate_capture_requires_exact_nonce_and_fresh_native_source(self):
@@ -180,8 +180,11 @@ class EntryTests(unittest.TestCase):
 
     def test_private_request_refuses_changed_bytes(self):
         self.write_source()
-        environment = {**self.env, "FSGG_SEED_PRIVATE_DIR": str(self.root / "private")}
-        with mock.patch.object(entry, "INSTALLATION_STATUS", "installed-protected-bootstrap"):
+        environment = {**self.env, "FSGG_SEED_PRIVATE_DIR": str(self.root / "private"),
+                       "GH_TOKEN": "g" * 30}
+        with mock.patch.object(entry, "INSTALLATION_STATUS", "installed-protected-bootstrap"), \
+             mock.patch.object(entry, "native_host_start",
+                               return_value=(7, dt.datetime.now(dt.timezone.utc))):
             subject = entry.stage_prepare_request(self.host, self.candidate, environment)
         root = self.root / "private"
         self.assertEqual(subject, entry.read_request(root, "prepare"))
@@ -206,18 +209,56 @@ class EntryTests(unittest.TestCase):
         entry.write_private(token_path, b"t" * 30)
         entry.write_private(root / "cas-readback.private.json", b'{"complete":false}\n')
         sanitized = self.root / "sanitized"
+        entry.write_revocation_pending(
+            root, {"complete": False},
+            {"FSGG_SEED_SANITIZED_EVIDENCE_DIR": str(sanitized)})
         revoke = mock.Mock(side_effect=ValueError("response-unknown"))
         with mock.patch.object(entry, "load_sibling", return_value=SimpleNamespace(revoke_token=revoke)), \
              mock.patch.dict(os.environ, {"FSGG_SEED_SANITIZED_EVIDENCE_DIR": str(sanitized)}):
             with self.assertRaisesRegex(ValueError, "response-unknown"):
                 entry.revoke_private_token(root)
             self.assertTrue(token_path.exists())
-            self.assertFalse(sanitized.exists())
+            pending = json.loads((sanitized / "revocation-pending.json").read_bytes())
+            self.assertEqual("revocation-pending", pending["status"])
+            self.assertFalse(pending["activation"])
+            self.assertFalse((sanitized / "native-readback.json").exists())
             revoke.side_effect = None
             self.assertTrue(entry.revoke_private_token(root))
         self.assertFalse(token_path.exists())
+        self.assertFalse((sanitized / "revocation-pending.json").exists())
         self.assertEqual(b'{"complete":false}\n',
                          (sanitized / "native-readback.json").read_bytes())
+
+    def test_native_host_start_and_effect_reserve_are_exact_run_bound(self):
+        facts = entry.context(self.env)
+        now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+        job = {"id": 77, "name": "gs2-09-7-seed-bootstrap-admission",
+               "run_id": facts["runId"], "head_sha": facts["workflowSha"],
+               "status": "in_progress", "conclusion": None,
+               "started_at": now.isoformat().replace("+00:00", "Z")}
+        bridge = SimpleNamespace(REPO="repos/FS-GG/.github",
+                                 get_json=lambda *_: {"total_count": 1, "jobs": [job]})
+        with mock.patch.object(entry, "bridge_module", return_value=bridge):
+            job_id, started = entry.native_host_start(object(), facts)
+            self.assertEqual(77, job_id)
+            self.assertEqual(now, started)
+            job["head_sha"] = "f" * 40
+            with self.assertRaisesRegex(entry.Refused, "host-job-binding"):
+                entry.native_host_start(object(), facts)
+        root = self.root / "deadline"
+        root.mkdir(mode=0o700)
+        record = {"schema": "fsgg.gs2-09-7.seed-host-deadline/1",
+                  "jobId": 77, "runId": facts["runId"],
+                  "runAttempt": facts["runAttempt"],
+                  "workflowSha": facts["workflowSha"],
+                  "startedAt": now.isoformat().replace("+00:00", "Z"),
+                  "deadlineAt": (now + dt.timedelta(minutes=35)).isoformat().replace("+00:00", "Z")}
+        entry.write_private(root / "deadline.json", json.dumps(record).encode())
+        self.assertGreater(entry.deadline_remaining(root, facts, reserve_seconds=300,
+                                                     now=now + dt.timedelta(minutes=10)), 0)
+        with self.assertRaisesRegex(entry.Refused, "host-deadline-expired"):
+            entry.deadline_remaining(root, facts, reserve_seconds=300,
+                                     now=now + dt.timedelta(minutes=31))
 
     def test_final_nonce_prestate_drift_refuses_before_cas(self):
         root = self.root / "private"

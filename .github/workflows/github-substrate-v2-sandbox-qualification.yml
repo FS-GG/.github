@@ -218,6 +218,8 @@ jobs:
           test "$(git -C coordination rev-parse HEAD)" = "$FSGG_CANDIDATE_SHA"
 
       - name: Prepare exact credential-only admission request
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py prepare-request
 
       - name: Publish sanitized prepare request for independent owner
@@ -280,7 +282,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: gs2-09-7-seed-journal-${{ inputs.candidate_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.FSGG_SEED_SANITIZED_EVIDENCE_DIR }}/native-readback.json
+          path: ${{ env.FSGG_SEED_SANITIZED_EVIDENCE_DIR }}/
           if-no-files-found: ignore
           retention-days: 90
 
