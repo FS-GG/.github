@@ -297,15 +297,15 @@ The repository-owned roadmap orchestrator cannot wrap or intercept the native `c
 It therefore records the population and attribution it does know around each native dispatch:
 
 ```console
-python3 tools/roadmap-telemetry.py begin \
+fsgg-coord-engine skill roadmap-telemetry begin \
   --feature GS2-08 --item GS2-08.3 --attempt gs2-08-3-worker-1 \
   --model gpt-5.6-sol --effort medium --original-item GS2-08
 # invoke collaboration.spawn_agent; bind the returned native id immediately
-python3 tools/roadmap-telemetry.py started --token <private-token> --native-id <agent-id>
+fsgg-coord-engine skill roadmap-telemetry started --token <private-token> --native-id <agent-id>
 # after the child becomes terminal
-python3 tools/roadmap-telemetry.py finish --token <private-token> --outcome completed
+fsgg-coord-engine skill roadmap-telemetry finish --token <private-token> --outcome completed
 # repeat after a late native usage update or a partial first observation
-python3 tools/roadmap-telemetry.py usage-reconcile --token <private-token>
+fsgg-coord-engine skill roadmap-telemetry usage-reconcile --token <private-token>
 ```
 
 For a child or follow-up, pass its parent's token with `--parent-token`, select `--relation child` or
@@ -356,10 +356,10 @@ model, effort, UTC time, evidence/population coverage, confidence, and bounded r
 The roadmap helper accepts private files no larger than 32 KiB:
 
 ```console
-python3 tools/roadmap-telemetry.py review --token <private-token> --scope attempt --input /private/review.json
-python3 tools/roadmap-telemetry.py activity --token <private-token> --input /private/activity.json
-python3 tools/roadmap-telemetry.py usage-attribution --token <private-token> --input /private/attribution.json
-python3 tools/roadmap-telemetry.py complication --token <private-token> --input /private/complication.json
+fsgg-coord-engine skill roadmap-telemetry review --token <private-token> --scope attempt --input /private/review.json
+fsgg-coord-engine skill roadmap-telemetry activity --token <private-token> --input /private/activity.json
+fsgg-coord-engine skill roadmap-telemetry usage-attribution --token <private-token> --input /private/attribution.json
+fsgg-coord-engine skill roadmap-telemetry complication --token <private-token> --input /private/complication.json
 ```
 
 The helper supplies the original item, attempt, and invocation identities from its private state. Activity spans

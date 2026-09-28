@@ -5,11 +5,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 from pathlib import Path
 import subprocess
 import sys
-import tempfile
 import unittest
 from unittest import mock
 
@@ -30,24 +28,22 @@ DASHBOARD = load("fsharp_skill_dashboard", ROOT / "tools/telemetry-dashboard.py"
 
 
 class FsharpSkillCallerTests(unittest.TestCase):
-    def test_roadmap_compatibility_launcher_execs_compiled_command(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            engine = root / "fsgg-coord-engine"
-            engine.write_text(
-                "#!/bin/sh\nprintf '%s\\n' \"$*\"\nprintf 'compiled-refusal\\n' >&2\nexit 7\n",
-                encoding="utf-8",
-            )
-            engine.chmod(0o700)
-            environment = dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"])
-            actual = subprocess.run(
-                [sys.executable, str(ROOT / "tools/roadmap-telemetry.py"), "finish",
-                 "--token", "abc", "--outcome", "blocked"],
-                env=environment, capture_output=True, text=True, check=False,
-            )
-        self.assertEqual(actual.returncode, 7)
-        self.assertEqual(actual.stdout, "skill roadmap-telemetry finish --token abc --outcome blocked\n")
-        self.assertEqual(actual.stderr, "compiled-refusal\n")
+    def test_retired_python_helpers_are_absent_from_live_roots_and_manifest(self):
+        retired = (
+            "work-roadmap/scripts/fsgg_telemetry_defaults.py",
+            "work-roadmap/scripts/native_collaboration_usage.py",
+            "work-roadmap/scripts/roadmap-telemetry.py",
+            "pipeline-preflight/scripts/preflight.py",
+        )
+        for relative in retired:
+            for root in (ROOT / ".agents/skills", ROOT / ".claude/skills"):
+                self.assertFalse((root / relative).exists(), f"retired helper returned: {root / relative}")
+        manifest = json.loads((ROOT / "registry/driver-skill-manifest.json").read_text(encoding="utf-8"))
+        paths = {row["path"] for skill in manifest["skills"] for row in skill.get("files", [])}
+        for path in ("scripts/fsgg_telemetry_defaults.py", "scripts/native_collaboration_usage.py",
+                     "scripts/roadmap-telemetry.py", "scripts/preflight.py"):
+            self.assertNotIn(path, paths)
+        self.assertFalse((ROOT / "tools/roadmap-telemetry.py").exists())
 
     def test_dashboard_uses_bounded_compiled_discovery_projection(self):
         projection = {

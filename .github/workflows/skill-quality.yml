@@ -41,7 +41,6 @@ on:
       - "tests/FS.GG.Coord.Cli.BoardOps.Tests/**"
       - "tests/skill-quality/**"
       - "tests/skill-fsharp/**"
-      - "tests/pipeline-preflight/**"
       - ".github/workflows/coord-engine.yml"
       - ".github/workflows/callable-isolated-operation-authorize.yml"
       - ".github/workflows/callable-isolated-operation-execute.yml"
@@ -95,7 +94,6 @@ on:
       - "tests/FS.GG.Coord.Cli.BoardOps.Tests/**"
       - "tests/skill-quality/**"
       - "tests/skill-fsharp/**"
-      - "tests/pipeline-preflight/**"
       - ".github/workflows/coord-engine.yml"
       - ".github/workflows/callable-isolated-operation-authorize.yml"
       - ".github/workflows/callable-isolated-operation-execute.yml"
@@ -132,8 +130,6 @@ jobs:
           cache-dependency-path: requirements-test.txt
       - name: Provision pinned test dependencies
         run: python3 -m pip install -r requirements-test.txt
-      - name: Check pipeline preflight helpers and actual dependency binding
-        run: python3 tests/pipeline-preflight/run.py
       - name: Check compiled skill conversion contracts and process behavior
         run: |
           set -euo pipefail
