@@ -99,6 +99,13 @@ activation and lifecycle-default activation are separate claims.
   and `.github` ordinary settlement/rerun satisfy the specific clean-start epoch prerequisite selected by
   [ADR-0091](../adr/0091-speed-first-clean-v2-start.md). No `OperatingV2` claim is made.
 
+  The public SDD 2.0.2 receiver preparation merged in [Templates #641](https://github.com/FS-GG/FS.GG.Templates/pull/641)
+  at `848fe5a1fb581707be67ecb6bda326ecd43a2fe8`. Its focused installed clean receiver and
+  bounded promised retained-adoption check passed on the reviewed head, along with the native required
+  checks. The [exact-main public receiver run](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36454677283)
+  also passed at the protected merge. This is receiver evidence only; the omitted lifecycle default and public successor packages
+  are still pending.
+
   The SDD, Templates and wizard owners must deliver and publish the exact package composition that makes
   omitted SVG creation select `typed-sdd` with its default `quint-specification-v1` backend. Qualify that
   public candidate before changing the effective registry/default policy. From empty caches and public
