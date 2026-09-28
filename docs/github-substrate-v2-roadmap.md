@@ -109,15 +109,23 @@ Audio is the first selected C3 repository. [Coordination PR #865](https://github
 merged at `a7ac52aa63b62fe192642b7f74006c6a0797a307`; [`.github` PR #3919](https://github.com/FS-GG/.github/pull/3919) merged
 at `4ac2224cbefa55387ab1273a09ef23daf462628c`, and
 [Audio PR #326](https://github.com/FS-GG/FS.GG.Audio/pull/326) merged at
-`08a46576320b0043d43a0ce4eeffb3cd2e736e56`; all three passed their native required checks. The durable
-[Audio receiver plan](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md)
-keeps the workflow disabled. [Coordination CLI 0.1.3](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.3)
+`08a46576320b0043d43a0ce4eeffb3cd2e736e56`; all three passed their native required checks. [Coordination CLI 0.1.3](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.3)
 is published from protected source `eb464f5215d8b1696842eecd367027724add6923`, with both-feed
 payload readback and anonymous installation in [publisher run 36407941780](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36407941780).
-Audio's `ordinary-v2` environment
-has been created and read back with an exact `main` branch policy, but it contains zero secrets, so
-credential enrollment is still absent. No installed Audio activation, settlement, historical migration
-completion or fleet result is established.
+Audio's `ordinary-v2` environment has an exact `main` branch policy and independently read-back
+dedicated three-secret custody. [Activation PR #327](https://github.com/FS-GG/FS.GG.Audio/pull/327)
+and repairs [#330](https://github.com/FS-GG/FS.GG.Audio/pull/330),
+[#331](https://github.com/FS-GG/FS.GG.Audio/pull/331) and
+[#332](https://github.com/FS-GG/FS.GG.Audio/pull/332) delivered the working receiver.
+[Run 36413290713](https://github.com/FS-GG/FS.GG.Audio/actions/runs/36413290713) at protected main
+`99207b52298352f16cd383b5d389b0dacb4b49ca` returned `SettlementSucceeded`, then
+`SettlementAlreadyComplete` on its normal whole-run rerun, both binding
+`9605af1e28ae79518018d03ca4fdfe5c33ab33c268153ec25d2220830fb9fc4e`.
+Independent Authority readback found one entry at operation/9a head
+`a51c567cb5f738402d3ee6c76eff96ecae8ac49a`, unchanged by the rerun.
+The [Audio receiver plan](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md),
+closed by [PR #333](https://github.com/FS-GG/FS.GG.Audio/pull/333), records this completed selected
+adoption. It establishes neither historical migration nor fleet-wide activation.
 
 ## 1. How work is executed
 
