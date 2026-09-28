@@ -3,7 +3,8 @@
 Backlink: [Unified Development Roadmap section 9.8](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index)
 
 Owner: `.github` tool and skill integrator, with selected receiver owners. Stage: independent source and
-receiver track beside V2. Status: planned; source conversion, publication and adoption remain pending.
+receiver track beside V2. Status: .1–.4 source complete; additive .5 discovery published in coherent
+0.92.0; the caller switch, changed Drivers release, wider receiver adoption and .6 retirement remain open.
 All milestones use the routine route through [work-roadmap](../../.agents/skills/work-roadmap/SKILL.md).
 This plan grants no publication, telemetry activation or production-write authority.
 
@@ -127,14 +128,23 @@ pass and .1 identifies receiver support. The `.github` integrator uses the exist
 and exact pinned installed-tool proof. Publication authorization is checked at that effect. An unavailable
 publication prerequisite blocks publication and dependent adoption, not earlier source qualification.
 
-The first bounded .5 source window is complete in the candidate that adds
+The first bounded .5 source window is complete in the source change that adds
 `skill telemetry-config discover [--config PATH]`. It reuses the typed reader and exposes only the bounded
 configuration-discovery projection frozen in the contract. Focused process tests cover host and workspace
 results, explicit/environment/default precedence, absent/default versus explicit-missing behavior, malformed,
 oversized, insecure and symlink configs, workspace binding refusal with secret-bearing child stderr, response
-bounds, and absence of state writes or credential-wrapper invocation. It changes no caller, package version,
-published artifact, installed receiver, skill root or retirement state. Publication and every dependent switch
-remain pending.
+bounds, and absence of state writes or credential-wrapper invocation. At that source boundary it changed
+no caller, package version, published artifact, installed receiver, skill root or retirement state.
+
+The additive discovery source subsequently merged in
+[PR #3918](https://github.com/FS-GG/.github/pull/3918). The coherent
+[0.92.0 release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.92.0) published Kit,
+Drivers and Coord.Cli from `eb0f7318` to GitHub Packages and nuget.org; the
+[registry update](https://github.com/FS-GG/.github/pull/3926) records exact public pins. The first
+[SDD receiver update](https://github.com/FS-GG/FS.GG.SDD/pull/1075) uses Coord.Cli 0.92.0 for clean
+scaffolds and preserves byte-level refusal for retained 0.91.5 manifests. Its Kit and Drivers pins remain
+0.91.5, so it does not yet execute replacement skill callers from a changed Drivers package. These are
+the current .5 boundaries, not .5 or .6 closure.
 
 Use an additive capability release before changing callers that would otherwise run against an old tool.
 Then land the skill/tool caller switch, publish the changed Drivers/coherent set, and qualify installed

@@ -11,7 +11,7 @@ Short name: **Unified Roadmap**. In FS-GG development discussions, **“the road
 and **“compacted roadmap”** refer to this document unless another roadmap is explicitly named.
 
 Authored: **2026-09-07 15:42:10 UTC**. Section 0 evidence reconciliation: **2026-09-28**.
-Status: **active programme; `.github` C0–C2 are complete and Audio C3 receiver source is delivered with cross-repository integration pending**.
+Status: **active programme; `.github` C0–C2 and the first selected Audio C3 ordinary-V2 adoption are complete**.
 
 **Start from completed development simplification and the existing v2 implementation. Keep the proven
 `.github` settlement active, then add explicitly selected repositories through checked source, dedicated
@@ -53,9 +53,9 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
-**Current frontier: continuous ordinary V2 settlement is active in `.github`, using published
-Coordination CLI 0.1.2 and the existing workflow.** Checked source delivery, the fresh shared `OpenV2`
-epoch, one real settlement, and its normal rerun are now observed.
+**Current frontier: ordinary V2 settlement is active in `.github` and the explicitly selected Audio
+receiver.** `.github` uses Coordination CLI 0.1.2; Audio uses published CLI 0.1.3. Checked source
+delivery, the shared `OpenV2` epoch, real settlement and normal rerun are observed for each receiver.
 The earlier callable, GS2-09 and OperatingV1 evidence remains valid at its recorded scope but no longer
 forms the active dependency chain. No clean-start step may relabel that evidence as migration completion,
 `VerifiedV2`, or a human-run receipt.
@@ -82,10 +82,26 @@ owns the remaining adoption boundaries. [Coordination CLI 0.1.3](https://github.
 was published from reviewed source `eb464f5215d8b1696842eecd367027724add6923`; its protected
 [publisher run](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36407941780) verified both feeds and
 an anonymous install of package payload `c505159023f0740c885696ebe24f8e066e197d9cf09cc3e64050d4210bcd0cdb`.
-Audio has no dedicated ordinary-v2 credential enrollment, and the receiver remains disabled. The Audio `ordinary-v2` environment
-has been created and read back with an exact `main` branch policy, but it contains zero secrets and therefore
-does not establish credential custody. These source merges and the empty environment establish no
-installed activation, settlement, migration completion or fleet result.
+The Audio `ordinary-v2` environment has an exact `main` branch policy and independently read-back
+dedicated three-secret custody. [Activation PR #327](https://github.com/FS-GG/FS.GG.Audio/pull/327)
+and source repairs [#330](https://github.com/FS-GG/FS.GG.Audio/pull/330),
+[#331](https://github.com/FS-GG/FS.GG.Audio/pull/331) and
+[#332](https://github.com/FS-GG/FS.GG.Audio/pull/332) passed native gates. The first three protected
+attempts stopped before Authority mutation on artifact-byte, policy-ID and selected-check mismatches.
+[Run `36413290713`](https://github.com/FS-GG/FS.GG.Audio/actions/runs/36413290713) on Audio main
+`99207b52298352f16cd383b5d389b0dacb4b49ca` then returned `SettlementSucceeded` with digest
+`9605af1e28ae79518018d03ca4fdfe5c33ab33c268153ec25d2220830fb9fc4e`. Independent Authority
+readback found one complete entry under `refs/heads/fsgg/v2/journal/operation/9a` at
+`a51c567cb5f738402d3ee6c76eff96ecae8ac49a`; the normal whole-run rerun returned
+`SettlementAlreadyComplete` with the same digest, and the journal head stayed unchanged. This closes
+the selected Audio adoption, not a fleet rollout or V1 migration. The owning
+[Audio readback plan PR #333](https://github.com/FS-GG/FS.GG.Audio/pull/333) is merged on protected main.
+
+[Templates PR #635](https://github.com/FS-GG/FS.GG.Templates/pull/635) merged at
+`f3a7cd6ab6f035d4ba335d03fdc367db6164793f` after public installed Xantham clean and retained
+receiver proof and green protected composition, kit and materialization gates. Public Templates 0.14.0
+already contained the 20-member payload; no republishing was required. FBX-05 is complete at this
+receiver boundary; the observed upstream assessment remains unqualified.
 
 The source and publication frontier was updated from protected evidence on **2026-09-27**. The broader
 [code audit](reports/2026-09-24-v2-roadmap-code-audit.md) records its 2026-09-24 revisions, implementation boundaries,
@@ -110,8 +126,8 @@ retain detailed milestone history in the owning plan. CI ticks and intermediate 
 ### 0.1 Stage progress
 
 The active profile is **C0–C3**: C0 checked source delivery; C1 fresh `.github` V2 pilot; C2 one real
-journey plus one normal rerun; C3 explicit-repository rollout with repair forward. `.github` is the only
-continuous activation target initially. Other repositories join only by explicit later selection, and
+journey plus one normal rerun; C3 explicit-repository rollout with repair forward. `.github` and Audio
+are now the two explicitly activated targets. Other repositories join only by later selection, and
 generated/scaffold defaults remain unchanged. The V0–V6 rows below preserve the superseded staged route
 for history and must not be used as clean-start prerequisites.
 
@@ -126,7 +142,7 @@ for history and must not be used as clean-start prerequisites.
 | **V5 — Open and ordinary use** | No fleet production `OpenV2` acceptance identified. The synthetic callable target is not the fleet. | GS2-13 owns irreversible open, permanent v1 fence, real ordinary journeys and `ObservingV2`. |
 | **V6 — Observation and retirement** | No accepted post-open window identified. | GS2-14 owns baseline plus 15 distinct completed-work readings, contraction and `OperatingV2`; R5's independent cohort/30-day follow-up remains separate. |
 | **E0/E1 and O0–O3** | Selected single-host O0–O3 is accepted; Choreo C0–C6 is source/formal-qualified. | Reuse these foundations. Exact installed inclusion of later Choreo fixes and comparative-value claims require their own evidence; neither blocks migration source work. |
-| **F0–F5 / LEARN-01** | LEARN-01.1's baseline is source-delivered through [PR #3845](https://github.com/FS-GG/.github/pull/3845). LEARN-01.2's durable collector provenance and analysis source merged in [PR #3916](https://github.com/FS-GG/.github/pull/3916) at `d795006243d315a03f6c83ad148e8eb8da24a5d7`. No protected collector installation, trusted snapshot, shared-cost completeness, comparative result or live experiment is established; F0–F5 remain conditional. | Complete LEARN-01.2's collector custody/source and snapshot-origin work; .3 remains source work. .4–.5 and production canaries retain their installed-artifact, operating-epoch and effect-authority gates. |
+| **F0–F5 / LEARN-01** | LEARN-01.1's baseline is source-delivered through [PR #3845](https://github.com/FS-GG/.github/pull/3845). LEARN-01.2's analysis and durable-fact source merged in [PR #3916](https://github.com/FS-GG/.github/pull/3916), followed by protected credential-role and receiver-authored admission provenance source in [PR #3927](https://github.com/FS-GG/.github/pull/3927) at `09dd7c6b619c7df73b9b3a4e09309e6fe020b277`. Native-source verification, trusted snapshot origin, protected collector installation, shared-cost completeness, comparative result and live experiment remain unestablished; F0–F5 are conditional. | Complete LEARN-01.2's collector custody/source and snapshot-origin work; .3 remains source work. .4–.5 and production canaries retain their installed-artifact, operating-epoch and effect-authority gates. |
 
 #### Product source milestone projection
 
@@ -165,8 +181,13 @@ verified GitHub Packages and nuget.org readback. Publication does not establish 
 installed version. [Cross-repository `verify-paths` #3894](https://github.com/FS-GG/.github/pull/3894)
 merged on protected main at `b583fa65`; [SKILL-FS-01 #3893](https://github.com/FS-GG/.github/pull/3893)
 merged on protected main at `0cc2082dd3fa6636f232d59fc1e6d849a989051c`. Its .1–.4 source
-window is delivered. The additive configuration-discovery capability, F# caller switch, Python retirement
-and installed receiver adoption remain separate work.
+window is delivered. [PR #3918](https://github.com/FS-GG/.github/pull/3918) delivered additive
+configuration discovery. The coherent [0.92.0 release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.92.0)
+published Kit, Drivers and Coord.Cli from `eb0f7318` to both feeds; [registry PR #3926](https://github.com/FS-GG/.github/pull/3926)
+and [SDD PR #1075](https://github.com/FS-GG/FS.GG.SDD/pull/1075) then bound clean SDD scaffolds to
+Coord.Cli 0.92.0. Retained 0.91.5 manifests still refuse without mutation, and Kit/Drivers remain
+at 0.91.5 in SDD. The F# caller switch, Python retirement and wider installed receiver adoption remain
+separate work.
 
 Prospective telemetry can join native usage only where the configured runtime exposes a verifiable record.
 Missing parent/child population, terminal usage, CI attribution or Host acknowledgment remains an explicit
@@ -189,14 +210,13 @@ This audit neither requalified a live Host nor measured an efficiency cohort.
 
 ### 0.4 Active work and immediate critical path
 
-1. **Complete Audio credential custody and activate separately.** The Audio-capable Coordination CLI 0.1.3
-   is published and anonymously installable. The `ordinary-v2` environment exists with
-   an exact `main` branch policy and zero secrets. Enroll dedicated credentials, bind the immutable CLI, and
-   review the source change that removes the Audio receiver's false guard and adds its bounded credential
-   job. The current receiver remains disabled.
-2. **Observe bounded Audio use.** After activation, observe one protected-main settlement and its normal
-   already-complete rerun. Repair forward on failure. Only that repository-specific evidence can complete
-   Audio's C3 adoption; it does not imply fleet-wide activation.
+1. **Audio C3 is closed at the selected receiver.** CLI 0.1.3 publication, dedicated custody,
+   protected activation, one settlement, independent Authority readback and the normal already-complete
+   rerun are observed. The owning [Audio plan](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md)
+   retains the exact evidence.
+2. **Choose the next explicit C3 receiver only when its native profile and custody are ready.** No
+   other repository inherits Audio activation. Independent SKILL-FS, LEARN and product receiver work
+   continues through their own source and installation boundaries.
 
 The [lane table](#91-dependencies-and-parallelism) names each owner, ready work and join condition.
 
@@ -1395,9 +1415,9 @@ delivered its source profile, `.github` #3919 delivered Audio observation at
 `4ac2224cbefa55387ab1273a09ef23daf462628c`, and Audio #326 delivered the disabled receiver at
 `08a46576320b0043d43a0ce4eeffb3cd2e736e56`. Its
 [receiver plan is durable on `main`](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md).
-CLI 0.1.3 is published; dedicated Audio credential enrollment, activation and observed settlement remain
-later boundaries. The
-`ordinary-v2` environment has an exact `main` branch policy but zero secrets.
+CLI 0.1.3 is published. Dedicated Audio credential custody, protected activation, one settlement and
+its normal already-complete replay are complete, with independent Authority journal readback. This
+does not activate the fleet.
 
 These are the default **parts for Astra planning**, named by deliverable. Select independent
 dependency-ready parts concurrently when programme advancement is requested; use a fresh Astra-high
@@ -1414,7 +1434,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 
 | Part Astra plans | Stage and bounded outcome | Accountable planning owner and entry | Feature subroadmap |
 |---|---|---|---|
-| **Audio explicit ordinary V2 adoption — C3-AUDIO-01** | C3: publish immutable Coordination CLI 0.1.3, enroll dedicated Audio credentials, activate the receiver separately, then observe one settlement and one normal rerun | Coordination, `.github` and Audio owners; [Coordination #865](https://github.com/FS-GG/FS.GG.Coordination/pull/865), [`.github` #3919](https://github.com/FS-GG/.github/pull/3919) and [Audio #326](https://github.com/FS-GG/FS.GG.Audio/pull/326) delivered the three-repository source profile. [CLI 0.1.3](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.3) is published. The receiver is disabled; its `ordinary-v2` environment has an exact `main` branch policy but zero secrets | [Audio receiver plan on `main`](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md). No credential enrollment, installed Audio activation, settlement or fleet result is claimed |
+| **Audio explicit ordinary V2 adoption — C3-AUDIO-01** | C3: publish immutable Coordination CLI 0.1.3, enroll dedicated Audio credentials, activate the receiver separately, then observe one settlement and one normal rerun | Coordination, `.github` and Audio owners; source profiles [Coordination #865](https://github.com/FS-GG/FS.GG.Coordination/pull/865), [`.github` #3919](https://github.com/FS-GG/.github/pull/3919), [Audio #326](https://github.com/FS-GG/FS.GG.Audio/pull/326), [CLI 0.1.3](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.3), dedicated custody and activated Audio main are delivered. [Run `36413290713`](https://github.com/FS-GG/FS.GG.Audio/actions/runs/36413290713) settled once and its normal rerun was already complete; the Authority journal head remained unchanged. | [Audio receiver plan on `main`](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md). Selected Audio adoption complete; no fleet-wide result or V1 migration is claimed. |
 | **Simplified baseline and v2 policy binding** | V0: bind adopted routine policy, actual enforcement/receiver wiring and R5 population; keep current merge-writer availability explicit | `.github`, Coordination, Governance and receivers; source qualification can proceed while the existing operation owner restores admitted effect readiness | [R0–R5 source plan](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md), [UTEL correctness](roadmaps/utel-01-telemetry-correctness.md), [local store](roadmaps/utel-local-telemetry-store.md), [operational completeness](roadmaps/utel-operational-completeness.md), [dashboard](roadmaps/utel-telemetry-dashboard.md), [release successor](roadmaps/utel-release-successor.md) and [current audit](reports/2026-09-24-v2-roadmap-code-audit.md). Reuse delivered source; verify the selected published/installed versions and prospective coverage without inferring complete native usage or efficiency |
 | **Skill Python to F# conversion — SKILL-FS-01** | Independent source and receiver track: replace the four current distinct Python implementation files across both tracked skill roots with packaged F# commands; preserve telemetry and preflight refusal behavior, then remove Python skill executables | `.github` tool and skill owner, with selected receivers; can proceed beside V2 source work, while the skill flip and deletion require coherent publication and installed parity | [SKILL-FS-01 subroadmap](roadmaps/skill-python-fsharp-conversion.md). The four legacy helpers in the September telemetry design are already absent; this part covers the different Python code that remains in the current skill trees and does not reopen removed routine obligations |
 | **Event and queue qualification** | V1, GS2-07.6–07.7: qualify the queue and measure narrow reconciliation, coalescing and audit repair | Coordination; preserve accepted native units and resume only unfinished scope | [GS2-07.7 event-benefit subroadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-07-7-event-benefit.md), scoped to 07.7; native acceptance is recorded in [PR #329](https://github.com/FS-GG/FS.GG.Coordination/pull/329) |
@@ -1427,7 +1447,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Controlled cutover and first ordinary use** | V4–V5, GS2-11–13: freeze and drain, switch while closed, verify rollback, then separately authorize OpenV2 and observe real journeys | `.github` cutover owner with Coordination and receiver owners; qualified candidate and staffed operation window | No subroadmap linked yet; one plan retains the closed-switch and irreversible-open boundaries |
 | **Observation, receiver carryover and v1 retirement** | V6, GS2-14/R5: immediate baseline and 15 distinct completed-work readings, contraction, clean-install/upgrade proof and separately qualified routine efficiency | `.github` migration owner with Coordination and receivers; OpenV2 and the actual receiving populations | No subroadmap linked yet |
 | **One residual execution experiment** | E0: one additional measured unmet need and a bounded comparison against the supported baseline | Coordination, with `.github` policy owner; measured residual need and the section 8.1 investment decision | Conditional additional scope; use the selected [standalone O0–O3](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md) implementation/evidence as a baseline, not a second actor-runtime selection |
-| **Stable-policy orchestration and statistical learning — LEARN-01** | V0 measurement, E0 controlled comparison and selected E1 context/allocation extensions: broad fixed profiles, whole-issue context/token efficiency and robust evidence before finer or adaptive routing | `.github` telemetry/policy/analysis owner with Coordination execution integration; SystemAdmin owns installed Main/runner and later isolated community intake. .1–.2 source is delivered, while .2 collector custody, trusted native source and snapshot-origin work remain open; .3 is the next source window. Live .4–.5 require published/adopted artifacts, actual usage support and applicable O2/O3/operation authority | [LEARN-01 design and roadmap](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md), design delivered in [PR #3449](https://github.com/FS-GG/.github/pull/3449) and .1 source contract in [PR #3845](https://github.com/FS-GG/.github/pull/3845). Reuse UTEL and O0–O3; no experiment or live operation has started. Later .6 enables consented community reports through Main and reviewed GitHub aggregate releases, independently of the core comparison. Adaptive extensions remain conditional |
+| **Stable-policy orchestration and statistical learning — LEARN-01** | V0 measurement, E0 controlled comparison and selected E1 context/allocation extensions: broad fixed profiles, whole-issue context/token efficiency and robust evidence before finer or adaptive routing | `.github` telemetry/policy/analysis owner with Coordination execution integration; SystemAdmin owns installed Main/runner and later isolated community intake. .1 and partial .2 source are delivered; .2 native collector custody, trusted source and snapshot-origin work remain open; .3 is the next source window. Live .4–.5 require published/adopted artifacts, actual usage support and applicable O2/O3/operation authority | [LEARN-01 design and roadmap](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md), design delivered in [PR #3449](https://github.com/FS-GG/.github/pull/3449) and .1 source contract in [PR #3845](https://github.com/FS-GG/.github/pull/3845). Reuse UTEL and O0–O3; no experiment or live operation has started. Later .6 enables consented community reports through Main and reviewed GitHub aggregate releases, independently of the core comparison. Adaptive extensions remain conditional |
 | **Shared bounded execution** | E1: finite attempts, atomic reservations, effect settlement and qualified CLI/runtime correspondence | Coordination; selected trusted single-host scope is already owned by O0–O3; E0 selects only additional gaps | [Standalone telemetry and orchestration](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md#o3--controlled-adoption-and-later-options) and the [O3 controlled-adoption evidence](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/o3-controlled-adoption.md) complete the selected shared Akka session core, PostgreSQL journal, capacity-1 subscription budget, provider-neutral executor/Host composition and installed two-project serial qualification. Reuse accepted source; wider execution profiles remain conditional |
 | **Authenticated hosting and recovery** | E1, relevant H2–H5: one selected host with sessions, durable recovery and a usable CLI fallback | Coordination; selected O0–O3 is complete, then qualify only additional hosting/cooperative requirements | [Standalone telemetry and orchestration](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md) owns the completed selected O0–O3 single-host scope. The accepted pilot, physical-reboot same-attempt recovery and non-dispatching installed adoption establish this bounded profile. Akka.NET is selected for this scope; Codex subscription execution is first, while Claude, OpenCode and DeepSeek share the intended adapter contract. Automatic postboot-helper requalification and other hosting scope remain conditional. |
 | **Hosted-writer Choreo correspondence and fix adoption** | E1 foundation: C0–C6 source/formal qualification complete; installed inclusion of the two production fixes requires exact artifact evidence | Coordination source/qualification owner and SystemAdmin installed operator; section 9.6 owns targeted publication/adoption disposition without reopening historical O3 acceptance | [Completed Choreo roadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/8135bb68bac07e941897ec556568c52ade6a492c/docs/roadmaps/choreo-akka-fsharp-trace-correspondence.md) and [maintenance guide](https://github.com/FS-GG/FS.GG.Coordination/blob/8135bb68bac07e941897ec556568c52ade6a492c/docs/architecture/choreo-correspondence.md). Reuse existing machinery; callable-v2 coverage remains its own qualification, and federation remains conditional |
@@ -1436,7 +1456,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Cooperative contribution and verification** | F2–F3: bounded sandbox assignments, local agents, quarantined submissions and owner-controlled verification through recovery | Coordination; the applicable bounded execution, session and verification foundations from section 9.7 | No subroadmap linked yet; conditional |
 | **Cooperative canary and adoption** | F4–F5: one enrolled peer and work class reaches independently verified delivery, then a measured adoption decision | Coordination with project/receiver owners; F3 evidence, OperatingV2 under the existing default and separate canary authority | No subroadmap linked yet; conditional |
 | **SVG game engine and Fable workspace completion** | Section 15 independent producer/product track: complete C01–C20, M0–M11, section 13 and Releases A–D through the accepted ordered feature sequence; no V0–V6 completion prerequisite for independent source/qualification work | `.github` planning owner with SDD, Rendering, Game, Audio, Net and Templates implementation owners. S.I.R. is strictly read-only and supplies only an audited disclosed compatibility baseline. Releases A–C and SVG-WORKSPACE-01.1–.6 are complete. Release D is selected for exact public publication, installed qualification and activation; durable hosting is deferred, while the single-lifecycle default keeps its OperatingV2/SDD authority | [accepted complete programme](2026-09-07-064259-svg-game-engine-template-design-roadmap.md), [SVG-FOUND-01 foundation](roadmaps/svg-game-engine-foundation.md), [SVG-QUAL-01 installed model qualification](roadmaps/svg-game-engine-installed-model-qualification.md), [SVG-SCENE-02 scene/renderer](roadmaps/svg-game-engine-scene-renderer.md), [SVG-PREVIEW-A publication](roadmaps/svg-preview-a.md), [SVG-PREVIEW-B release plan](roadmaps/svg-preview-b.md), [replay](roadmaps/svg-replay-01.md), [network](roadmaps/svg-network-01.md), [scale](roadmaps/svg-scale-01.md), [SVG-PREVIEW-C release plan](roadmaps/svg-preview-c.md), [SVG-WORKSPACE-01](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md), [SVG-RELEASE-D](roadmaps/svg-release-d.md), and [revision rationale](2026-09-07-121207-svg-game-engine-roadmap-revision-proposal.md) |
-| **Fable bindings candidate generation and upstream integration assessment** | Section 15 producer track: optional Xantham candidates, exact tool qualification and skill-load upstream assessment; independent of v2 prerequisites | Templates; accepted Xantham evaluation and existing bindings workflow | [Xantham candidate subroadmap](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/fable-bindings-xantham-candidates.md) |
+| **Fable bindings candidate generation and upstream integration assessment** | Section 15 producer track: optional Xantham candidates, exact tool qualification and skill-load upstream assessment; independent of v2 prerequisites | Templates 0.14.0 contains the public Xantham payload; [PR #635](https://github.com/FS-GG/FS.GG.Templates/pull/635) merged at `f3a7cd6ab6f035d4ba335d03fdc367db6164793f` after clean installed and retained-adoption proof, with the protected composition, kit and materialization gates green. Current live assessment remains `updates-found` / `unqualified` / `investigate`; no upstream update is accepted by that observation. | [Xantham candidate subroadmap](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/fable-bindings-xantham-candidates.md). FBX-05 is complete at its public installed receiver boundary; no republishing is needed. |
 | **Fable SC2 client and custom WASM control** | Section 15 product track: browser tactical client, native SC2 gateway and portable module contract; independent of v2 prerequisites | `FS.GG.SC2.Client`; .1–.2 and scripted .3a–.3b source are delivered. .3b is the injected-owner paired gateway core; executable launcher/lifecycle composition and the browser journey (.3c), real SC2/data/map qualification (.3d) and installed operation remain open | [SC2C-01 design and feature roadmap](2026-09-08-132131-fable-sc2-wasm-client-design-roadmap.md), [bounded SC2C-01.3 plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/819e1bb535324fcd3fb5c352ad625267d06af932/docs/SC2C-01.3-plan.md), source [PR #5](https://github.com/FS-GG/FS.GG.SC2.Client/pull/5) at exact head `118f2ab1ce1234877a49cac4aa4133bbecbaf3a1`, merged at `819e1bb535324fcd3fb5c352ad625267d06af932` with [exact-main verification](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36316009310); parent .3 and its live/installed gates remain open |
 | **Fable BAR client and custom WASM control** | Section 15 product track: browser tactical client over FSBarV2/HighBarV3, including the FS.GG Fable game target; independent of v2 prerequisites | Proposed product owner: EHotwagner/FSBarV2; HighBarV3 owns native adapter changes; design delivery does not start implementation or deployment | [BARC-01 repository research, design and feature roadmap](2026-09-08-134900-fable-bar-wasm-client-design-roadmap.md) |
 | **Reusable Unity shim and full Fable replacement client** | Section 15 product track: native Unity dedicated-server bridge, title adapters, complete browser gameplay and custom WASM control; independent of v2 prerequisites | Proposed Unity product owner/workspace; design delivery does not implement, publish or activate | [UNITYC-01 research, design and feature roadmap](2026-09-08-144823-unity-native-shim-fable-client-design-roadmap.md) |
