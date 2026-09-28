@@ -53,10 +53,9 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
-**Current frontier: the accepted clean-start route uses the existing published Coordination CLI 0.1.2
-and workflow to pilot V2 in `.github`.** Its next steps are conventional checked and head-conditioned
-source delivery, a fresh shared `OpenV2` epoch with `.github` policy activated first, one real working
-journey, and one normal rerun smoke.
+**Current frontier: continuous ordinary V2 settlement is active in `.github`, using published
+Coordination CLI 0.1.2 and the existing workflow.** Checked source delivery, the fresh shared `OpenV2`
+epoch, one real settlement, and its normal rerun are now observed.
 The earlier callable, GS2-09 and OperatingV1 evidence remains valid at its recorded scope but no longer
 forms the active dependency chain. No clean-start step may relabel that evidence as migration completion,
 `VerifiedV2`, or a human-run receipt.
