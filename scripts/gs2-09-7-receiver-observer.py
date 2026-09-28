@@ -17,6 +17,14 @@ REF_PREFIX = 'refs/heads/gs2-09-7/'
 API = 'https://api.github.com'
 VERSION = '2026-03-10'
 MAX_BYTES = 1024 * 1024
+VALIDATION_STAGES = frozenset({
+    'mint-proof',
+    'pass-1-repository-roster', 'pass-1-repository-identity',
+    'pass-1-receiver-refs', 'pass-1-repository-repeat',
+    'pass-2-repository-roster', 'pass-2-repository-identity',
+    'pass-2-receiver-refs', 'pass-2-repository-repeat',
+    'cross-pass', 'observation-validation',
+})
 
 
 class ProbeRefusal(ValueError):
@@ -30,6 +38,16 @@ class ProbeRefusal(ValueError):
 def require(ok, reason):
     if not ok:
         raise ValueError(reason)
+
+
+def at_stage(stage, action):
+    require(stage in VALIDATION_STAGES, 'unknown validation stage')
+    try:
+        return action()
+    except ProbeRefusal:
+        raise
+    except (ValueError, TypeError, KeyError, OverflowError, json.JSONDecodeError):
+        raise ProbeRefusal('validation-error', stage) from None
 
 
 def pairs_unique(pairs):
@@ -104,18 +122,14 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def one_pass(api):
-    # Installation identity is established by the credential host with its App JWT.
-    # This isolated process receives only the minted installation bearer and uses
-    # endpoints that GitHub supports for that authentication mode.
-    repositories, repositories_raw = api.get('/installation/repositories?per_page=100')
+def check_roster(repositories):
     require(isinstance(repositories, dict) and repositories.get('total_count') == 1
             and isinstance(repositories.get('repositories'), list)
             and len(repositories['repositories']) == 1, 'visible repository count drift')
     check_repo(repositories['repositories'][0])
-    repo, repo_raw = api.get('/repos/' + FULL_NAME)
-    check_repo(repo)
-    refs, refs_raw = api.get('/repos/' + FULL_NAME + '/git/matching-refs/heads/gs2-09-7/')
+
+
+def check_refs(refs):
     require(isinstance(refs, list), 'receiver refs are not an array')
     names = []
     for ref in refs:
@@ -126,9 +140,32 @@ def one_pass(api):
                 'receiver ref namespace drift')
         names.append(ref['ref'])
     require(names == sorted(set(names)), 'receiver refs duplicate or unordered')
-    repo_repeat, repo_repeat_raw = api.get('/repos/' + FULL_NAME)
+
+
+def check_repeat(repo, repo_repeat):
     check_repo(repo_repeat)
     require(repo == repo_repeat, 'repository metadata changed within pass')
+
+
+def one_pass(api, pass_number=1):
+    # Installation identity is established by the credential host with its App JWT.
+    # This isolated process receives only the minted installation bearer and uses
+    # endpoints that GitHub supports for that authentication mode.
+    require(pass_number in (1, 2), 'unsupported pass number')
+    prefix = 'pass-' + str(pass_number) + '-'
+    repositories, repositories_raw = at_stage(
+        prefix + 'repository-roster',
+        lambda: api.get('/installation/repositories?per_page=100'))
+    at_stage(prefix + 'repository-roster', lambda: check_roster(repositories))
+    repo, repo_raw = at_stage(prefix + 'repository-identity',
+                             lambda: api.get('/repos/' + FULL_NAME))
+    at_stage(prefix + 'repository-identity', lambda: check_repo(repo))
+    refs, refs_raw = at_stage(prefix + 'receiver-refs',
+        lambda: api.get('/repos/' + FULL_NAME + '/git/matching-refs/heads/gs2-09-7/'))
+    at_stage(prefix + 'receiver-refs', lambda: check_refs(refs))
+    repo_repeat, repo_repeat_raw = at_stage(
+        prefix + 'repository-repeat', lambda: api.get('/repos/' + FULL_NAME))
+    at_stage(prefix + 'repository-repeat', lambda: check_repeat(repo, repo_repeat))
     return {'repositoriesSha256': digest(repositories_raw),
             'repositorySha256': digest(repo_raw),
             'repositoryRepeatSha256': digest(repo_repeat_raw),
@@ -136,11 +173,12 @@ def one_pass(api):
 
 
 def probe(raw, api_factory=Api):
-    token, proof = validate_mint(raw)
+    token, proof = at_stage('mint-proof', lambda: validate_mint(raw))
     api = api_factory(token)
-    first = one_pass(api)
-    second = one_pass(api)
-    require(first == second, 'receiver observations drifted across passes')
+    first = one_pass(api, 1)
+    second = one_pass(api, 2)
+    at_stage('cross-pass', lambda: require(first == second,
+                                         'receiver observations drifted across passes'))
     return {'schema': 'fsgg.gs2-09-7.receiver-observer-probe/1',
             'status': 'observed-no-authority', 'complete': True,
             'repositoryId': REPO_ID, 'installationId': INSTALLATION_ID,
@@ -155,7 +193,13 @@ def main():
     except (ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
         # Refusals expose only a bounded classification. Raw provider bytes, paths,
         # exception text, stderr, and bearer material never cross this boundary.
-        if isinstance(error, ProbeRefusal):
+        if isinstance(error, ProbeRefusal) and (error.code == 'github-http-error'
+                and error.stage == 'bearer-read'
+                and type(error.http_status) is int
+                and 400 <= error.http_status <= 599
+                or error.code == 'validation-error'
+                and error.stage in VALIDATION_STAGES
+                and error.http_status is None):
             code, stage, http_status = error.code, error.stage, error.http_status
         else:
             code, stage, http_status = 'validation-error', 'observation-validation', None
