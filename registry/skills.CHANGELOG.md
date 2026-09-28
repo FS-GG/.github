@@ -30,6 +30,8 @@ advances the pin to that CLI.
 
 ## Entries
 
+- **2026-09-28** — Regenerate the publishing operator release inventory after SVG D.5 activates public Templates 0.15.0 and wizard 0.12.0. Reconcile the mirrored operator skill digest; no materialized driver bytes or coherent package release changes.
+
 - **2026-09-28** — Reconcile publishing-and-deployment operator digest after the generated 0.94.0 release inventory update; no packaged skill content changes.
 
 <!-- Prepend new entries here, newest first:

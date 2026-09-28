@@ -963,8 +963,8 @@ contracts:
     surface: "optional Linux x64 FS.GG.Telemetry.Host dotnet tool — authenticated workspace-scoped ingestion and private dashboard, independently versioned from the github coordination coherent set"
     consumers: []        # DELIBERATELY EMPTY: operators install this optional service; no repository in the contract graph restores it.
   - id: new-sdd-workspace
-    version: "0.11.2"          # SOURCE SemVer 0.11.2: PATCH; adds the fable-game player/studio/tactical/arcade/complete bundle selector while keeping omitted/default player and forwarding lifecycle independently. SOURCE/PUBLISHED from 3935b6bb81dc242635bbb8b400537d07de3b954b; annotated tag new-sdd-workspace/v0.11.2 peels to that exact source. PRIOR 0.11.1 restored the creation-time template question and fable-bindings closure.
-    package-version: "0.11.2"  # FEED newest after release run 34972041225. Independent GitHub Packages/nuget.org readback verified all 25 normalized payload entries byte-identical and both nuspecs bind repository commit 3935b6bb81dc242635bbb8b400537d07de3b954b. Org archive SHA-256 1670be8529416c08af0c22e948de37c4b772d673a7ee0176902f852d65aeda5b; public signed archive SHA-256 c3f6d1333c34511dfef2c1ce3518191749f622689ee57d822a4f083fee35118d. Publish-before-flip is satisfied.
+    version: "0.12.0"          # SOURCE: omitted SVG workspace lifecycle selects typed-sdd; explicit lifecycle tokens are retained. Immutable source/tag: 4889c446de0a431d1168a61a89ab660fc2062314, new-sdd-workspace/v0.12.0.
+    package-version: "0.12.0"  # FEED: protected recovery 36471023672 promoted the original candidate after dual-feed verification. Original/release/org archive SHA-256 5e3ce81bddeb7771aed8133af553f4c6d2a377f8749c1ae970760b166da29433; nuget.org signed archive 22ebcedbff41e42ee98cadbe44cb65808e4de52ce7c2d95b2f0f453653967589; normalized 26-entry payload SHA-256 f5d4ab9f97b43e9fc325c462fdddd95a90ef8f06c3b0a30aacd401d2c57678f5. Public D.5 receiver run 36472328832 passed before this activation.
     owner: github             # Registry.fs resolves owner against repoIds + the literal `github`. `.github` owns the scaffolder: ADR-0016 retired FS.GG.Templates' local `new-fullstack` for this single org CLI, and its release workflow lives here because the tool does (mirrors coord-engine).
     # ADR-0016's single org scaffolder (renamed new-sdd-fullstack → new-sdd-workspace, package
     # FS.GG.NewSddFullstack → FS.GG.NewSddWorkspace). A `dotnet new`-style CLI humans install
@@ -993,9 +993,9 @@ contracts:
     # The remaining P4 provider implementation ships in FS.GG.Workspace.Template; this wizard identity
     # is published and selectable, not a pending rollout phase.
   - id: fs-gg-workspace-template
-    version: "0.14.0"   # SOURCE: frozen SVG-WORKSPACE-01 complete bundle and local Caddy deployment boundary at Templates commit 2d8802d527e01afe4755ae7015a5627be88e318f; package version was already frozen there before later roadmap-only merges.
-    package-version: "0.14.0"   # FEED: run 34969670370 published/read back all 402 normalized payload entries exactly on both feeds. Original candidate SHA-256 340250f942efef30702bf8c3f1f9a9096ca246c1bb4b244a2c5806ac49398380; GitHub Packages archive bca6ed8ce679f34204245bfba5f44340e91e225155b054dfc3a2297bf351c829; public signed archive a5f218d10bbac42b11afcfb401806c8f0f56261cf79876cc76710471d3666563.
-    package-tag: "fs-gg-templates/v0.14.0"   # Immutable tag peels to exact frozen source 2d8802d527e01afe4755ae7015a5627be88e318f.
+    version: "0.15.0"   # SOURCE: SVG-RELEASE-D.5 omitted provider lifecycle selects typed-sdd/quint-specification-v1; explicit tokens and bundle choices retained. Immutable source b86c841a1c4c4bf7f157a3ae4dc61b0356d6576d.
+    package-version: "0.15.0"   # FEED: protected release 36465599265 verified 403 equal normalized payload entries on both feeds. Original/release/org archive SHA-256 6ebd2b19fd972c3d2dddaf9074e1f31e1f495ebe0e1070d6e5daea416bafcdc6; nuget.org signed archive b822e77d4046a81c453d983a78cc6f319c67a2d3cbd3ec354d7038687416ec3e. Public D.5 receiver run 36472328832 passed before this activation.
+    package-tag: "fs-gg-templates/v0.15.0"   # Immutable tag peels to the exact frozen source above.
     owner: templates
     # ADR-0071 (two web workspace providers, one template package) amended by ADR-0072 (console and
     # fable-bindings are separate workspace providers; renames the package) amended by ADR-0073 (plain

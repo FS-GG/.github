@@ -616,21 +616,21 @@ new_sdd_registry_block="$(sed -n '/^  - id: new-sdd-workspace$/,/^  - id: fs-gg-
 workspace_registry_block="$(sed -n '/^  - id: fs-gg-workspace-template$/,/^  - id: game-skills$/p' "$REPO_ROOT/registry/dependencies.yml")"
 architecture_template_comparator_is_current() {
   local subject="$1"
-  grep -qF "registry's newest-tracking 0.14.0 pin above" "$subject" \
+  grep -qF "registry's newest-tracking 0.15.0 pin above" "$subject" \
     && ! grep -qF "registry's newest-tracking 0.13.0 pin above" "$subject"
 }
 if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \
-  && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.14.0'* ]] \
-  && [[ "$arch_templates_rows" == *'`new-sdd-workspace` 0.11.2'* ]] \
+  && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.15.0'* ]] \
+  && [[ "$arch_templates_rows" == *'`new-sdd-workspace` 0.12.0'* ]] \
   && [ "$(grep -Fc '| [**FS.GG.Templates**]' "$COMPONENTS")" -eq 1 ] \
-  && [[ "$component_templates_rows" == *'| `0.14.0` |'* ]] \
+  && [[ "$component_templates_rows" == *'| `0.15.0` |'* ]] \
   && [ "$(grep -Fc '| `fs-gg-workspace-template` | FS.GG.Templates |' "$ARCH")" -eq 1 ] \
-  && [[ "$workspace_contract_rows" == *'| `0.14.0` | `0.14.0` |'* ]] \
+  && [[ "$workspace_contract_rows" == *'| `0.15.0` | `0.15.0` |'* ]] \
   && [ "$(grep -Fc '| `game-skills` | FS.GG.Game |' "$ARCH")" -eq 1 ] \
   && [[ "$game_skills_contract_rows" == *'| `0.9.0` | `0.9.0` |'* ]] \
   && [ "$(grep -Fc '| `fs-gg-workspace-template` | Templates |' "$ARCH")" -eq 1 ] \
   && [[ "$workspace_contract_map_rows" == *'fable-game exposes Player, Studio, Tactical, Arcade and Complete bundles'* ]] \
-  && [[ "$workspace_contract_map_rows" == *'| `.github` wizard 0.11.2, scaffold-provider@SDD |'* ]] \
+  && [[ "$workspace_contract_map_rows" == *'| `.github` wizard 0.12.0, scaffold-provider@SDD |'* ]] \
   && [[ "$workspace_contract_map_rows" != *'registry-active .github#2070; wizard `--template` selection pending its own release'* ]] \
   && [[ "$workspace_contract_map_rows" != *'| `.github` wizard (pending release) |'* ]] \
   && [[ "$new_sdd_registry_block" == *'release 0.10.0 introduced the'* ]] \
@@ -655,9 +655,9 @@ fi
 
 STALE_ARCH="$WORK/architecture-stale-template-comparator.md"
 cp "$ARCH" "$STALE_ARCH"
-sed -i "s/registry's newest-tracking 0.14.0 pin above/registry's newest-tracking 0.13.0 pin above/" "$STALE_ARCH"
+sed -i "s/registry's newest-tracking 0.15.0 pin above/registry's newest-tracking 0.13.0 pin above/" "$STALE_ARCH"
 if cmp -s "$ARCH" "$STALE_ARCH"; then
-  bad "stale Templates comparator mutation is non-vacuous" "the 0.14.0 comparator was absent"
+  bad "stale Templates comparator mutation is non-vacuous" "the 0.15.0 comparator was absent"
 elif ! architecture_template_comparator_is_current "$STALE_ARCH"; then
   ok "reverting the current Templates comparator to 0.13.0 makes the prose guard red"
 else

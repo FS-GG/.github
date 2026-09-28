@@ -114,9 +114,24 @@ activation and lifecycle-default activation are separate claims.
   refusal path; check retained explicit lifecycle tokens and SVG bundles separately. Then update the effective
   public pins under current required checks and repeat clean creation from those pins. Bind both proofs
   to package hashes and independently read back the activated default. Treat promised retained-workspace
-  upgrades as a separate qualification. The existing
-  Templates 0.14.0 and wizard 0.11.2 product defaults stay in force until this later change passes.
-  Until then, .1–.4 remain the published compatible complete SVG workspace, not full Release D closure.
+  upgrades as a separate qualification.
+
+  Templates 0.15.0 was published from `b86c841a1c4c4bf7f157a3ae4dc61b0356d6576d` by
+  [run 36465599265](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36465599265). Wizard 0.12.0
+  was published from `4889c446de0a431d1168a61a89ab660fc2062314`; its journal-aware
+  [recovery 36471023672](https://github.com/FS-GG/.github/actions/runs/36471023672) verified all eight effects.
+  The separate public receiver [Templates #644](https://github.com/FS-GG/FS.GG.Templates/pull/644)
+  merged at `59d0c521446a3d9d362d81a978b25434ce4d2d6f`.
+  [Public-only run 36472328832](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36472328832)
+  passed the omitted and explicit lifecycle routes, named bundles, 18 locked builds, authored authority,
+  wrong-profile refusal and six sampled Quint invariants. Receipt SHA-256 is
+  `fd89d991f1966517ae56aebdc4b2e5000ee94e6f8ce7eb6aa6c85b932cd16c64`; all 63 evidence hashes and
+  the identical direct/wizard authority hash were independently verified.
+
+  The effective registry now selects these published Templates 0.15.0 and wizard 0.12.0 packages.
+  Milestone .5 remains open until this source activation is merged, fresh clean creation repeats from
+  those effective protected pins, and independent default readback passes. Retained-workspace upgrades
+  remain separate from this fresh-creation boundary.
 
 ## Completion boundary
 
@@ -125,7 +140,7 @@ choices. Release D is fully complete only when .5 also establishes the authorize
 public game hosting is deliberately outside this release boundary and may be resumed through issue #491 without
 changing the frozen package contents.
 
-Current state: the compatible complete SVG workspace is published and active through .4. SDD 2.0.2 and
-shared generation 2 `OpenV2` are public/observed at their own boundaries. Full Release D remains open for
-the separately published and qualified receiver/default activation; neither producer publication nor the
-clean epoch alone changes an omitted workspace lifecycle.
+Current state: the compatible complete SVG workspace is active through .4. SDD 2.0.2, Templates 0.15.0
+and wizard 0.12.0 are public, and the exact public-only .5 receiver proof passed. The effective pin
+activation is prepared here; full Release D remains open for merged-pin clean creation and independent
+default readback. The shared generation 2 `OpenV2` remains observed at its separate operating boundary.
