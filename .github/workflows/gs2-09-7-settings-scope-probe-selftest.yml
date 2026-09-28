@@ -5,12 +5,14 @@ on:
     paths:
       - "scripts/gs2-09-7-settings-scope-probe.py"
       - "tests/gs2-09-7-settings-scope-probe/**"
+      - ".github/workflows/github-substrate-v2-settings-scope-probe.yml"
       - ".github/workflows/gs2-09-7-settings-scope-probe-selftest.yml"
   push:
     branches: [main]
     paths:
       - "scripts/gs2-09-7-settings-scope-probe.py"
       - "tests/gs2-09-7-settings-scope-probe/**"
+      - ".github/workflows/github-substrate-v2-settings-scope-probe.yml"
       - ".github/workflows/gs2-09-7-settings-scope-probe-selftest.yml"
   workflow_dispatch:
 

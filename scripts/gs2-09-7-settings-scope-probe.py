@@ -35,7 +35,6 @@ EXPECTED_WRITES = {
 }
 EXPECTED_READS = {
     "metadata": "read",
-    "organization_custom_properties": "read",
 }
 
 STATIC_PROBES = (
@@ -193,6 +192,18 @@ def disposition(status: int) -> dict[str, str]:
         "feature": "unknown",
         "inheritance": "unknown",
     }
+
+
+def refusal_reason(statuses: list[int]) -> str | None:
+    if 401 in statuses:
+        return "authentication-or-token-grant"
+    if 403 in statuses:
+        return "permission-or-plan"
+    if 404 in statuses:
+        return "resource-feature-plan-or-installation-selection"
+    if any(status != 200 for status in statuses):
+        return "provider-status"
+    return None
 
 
 def decode_json(raw: bytes, label: str) -> object:
@@ -540,7 +551,7 @@ def load_mint_proof(path: Path, token: str) -> dict:
     require(isinstance(grants, dict) and all(grants.get(key) == level for key, level in EXPECTED_WRITES.items()),
             "mint proof omits the current sandbox grant")
     require(all(grants.get(key) == level for key, level in EXPECTED_READS.items()),
-            "mint proof omits the settings read grant")
+            "mint proof omits the observed repository read grant")
     require(all(re.fullmatch(r"[a-z][a-z0-9_]*", key) and level in ("read", "write")
                 for key, level in grants.items()), "mint proof contains a malformed grant")
     require(all(level != "write" or key in EXPECTED_WRITES for key, level in grants.items()),
@@ -776,8 +787,15 @@ def build_report(token: str, mint_path: Path, workspace: Path, revision: str, op
             property_verdict = "unknown-not-found"
         else:
             property_verdict = "refused-provider-status"
+    custom_property_grant = mint["permissions"].get("organization_custom_properties")
+    expected_statuses = {200, 401, 403, 404}
+    observed_statuses = [
+        page["status"]
+        for item in probes
+        for page in item["pages"]
+    ]
     report = {
-        "schema": "fsgg.github-substrate-v2.settings-scope-probe/1",
+        "schema": "fsgg.github-substrate-v2.settings-scope-probe/2",
         "activation": False,
         "source": source_binding(workspace, revision),
         "sandbox": {
@@ -793,7 +811,14 @@ def build_report(token: str, mint_path: Path, workspace: Path, revision: str, op
         "customProperties": {
             "schemaStatus": custom_statuses[0],
             "repositoryValuesStatus": custom_statuses[1],
+            "permissionEvidence": {
+                "required": "organization_custom_properties:read",
+                "observedMintGrant": custom_property_grant,
+                "disposition": ("observed-read" if custom_property_grant == "read"
+                                else "missing-from-mint-proof"),
+            },
             "verdict": property_verdict,
+            "refusalReason": refusal_reason(custom_statuses),
             "summary": property_summary,
             "provenanceRule": "equal-default-and-omitted-values-remain-unknown",
         },
@@ -809,11 +834,19 @@ def build_report(token: str, mint_path: Path, workspace: Path, revision: str, op
             },
             "privatePlan": plan.get("name") if qualifying_plan else "unknown",
             "verdict": ruleset_verdict,
+            "refusalReason": refusal_reason(ruleset_statuses),
         },
         "authority": {
             "installedAppGrant": "unknown",
             "settingsAuthority": "unavailable",
-            "reason": "current-token-probe-only",
+            "qualified": False,
+            "reason": "source-only-diagnostic-current-token-read-does-not-install-authority",
+        },
+        "diagnostic": {
+            "collected": True,
+            "verdict": "collected",
+            "expectedStatusSet": all(status in expected_statuses for status in observed_statuses),
+            "canonicalAuthorityQualified": False,
         },
     }
     report["fingerprint"] = sha256(canonical(report))

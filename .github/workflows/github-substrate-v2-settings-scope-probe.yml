@@ -102,16 +102,18 @@ jobs:
           test '${{ steps.revoke.outcome }}' = success
           report="$FSGG_SANDBOX_EVIDENCE_DIR/settings-scope-probe.json"
           test -s "$report"
+          test "$(jq -r .schema "$report")" = fsgg.github-substrate-v2.settings-scope-probe/2
           test "$(jq -r .activation "$report")" = false
           test "$(jq -r .source.headSha "$report")" = "$FSGG_PROTECTED_SHA"
           test "$(jq -r .sandbox.repository.id "$report")" = 1353050537
           test "$(jq -r .sandbox.repository.nodeId "$report")" = R_kgDOUKXpqQ
           test "$(jq -r .sandbox.project.nodeId "$report")" = PVT_kwDOEYAWY84BiESo
           test "$(jq -r .app.permissions.metadata "$report")" = read
-          test "$(jq -r .app.permissions.organization_custom_properties "$report")" = read
-          test "$(jq -r .customProperties.verdict "$report")" = qualified-current-token-read
-          test "$(jq -r .customProperties.schemaStatus "$report")" = 200
-          test "$(jq -r .customProperties.repositoryValuesStatus "$report")" = 200
+          test "$(jq -r .diagnostic.collected "$report")" = true
+          test "$(jq -r .diagnostic.verdict "$report")" = collected
+          test "$(jq -r .diagnostic.expectedStatusSet "$report")" = true
+          test "$(jq -r .diagnostic.canonicalAuthorityQualified "$report")" = false
+          test "$(jq -r .authority.qualified "$report")" = false
+          test "$(jq -r .authority.settingsAuthority "$report")" = unavailable
           test "$(jq -r .repositoryRulesets.permissionEvidence.metadata "$report")" = read
           test "$(jq -r .repositoryRulesets.permissionEvidence.administration "$report")" = write
-          test "$(jq -r .repositoryRulesets.verdict "$report")" = qualified-current-token-read
