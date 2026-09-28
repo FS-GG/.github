@@ -115,10 +115,15 @@ complete; efficiency measurements and historical-upgrade claims remain separate.
 
 The next shared release selects SDD and Templates. Their disabled receivers merged at
 [SDD #1080](https://github.com/FS-GG/FS.GG.SDD/pull/1080) and
-[Templates #638](https://github.com/FS-GG/FS.GG.Templates/pull/638), with no package pin, credentials or
-activation. [Coordination #877](https://github.com/FS-GG/FS.GG.Coordination/pull/877) prepares both
-profiles for one proposed CLI 0.1.6; protected qualification, publication and dedicated credential
-custody remain. Each receiver then activates and proves settlement separately within the bounded wave.
+[Templates #638](https://github.com/FS-GG/FS.GG.Templates/pull/638); neither has a package pin or
+active settlement. [Coordination #877](https://github.com/FS-GG/FS.GG.Coordination/pull/877) merged both
+profiles at protected source `275cccb30a5c9ade4b3bba344ede13d7df446d13`. Its exact-source
+[CLI 0.1.6 preparation](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36450952246)
+passed; immutable public publication remains. The sealed [custody bridge #3944](https://github.com/FS-GG/.github/pull/3944)
+merged, both dedicated bridge runs succeeded, and each main-only receiver environment independently
+read back its three dedicated secret names. The separate SDD and Templates activation branches remain
+hard-disabled until public package pins are verified. Each receiver then activates and proves
+settlement separately within the bounded wave.
 
 Coordination self-adoption is a later receiver. Its current main protection is supplied by applicable
 rulesets rather than the classic branch-protection check list, and its Bootstrap qualification can
