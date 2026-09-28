@@ -8101,3 +8101,7 @@ The Unified Roadmap LEARN lane resumed from protected `.github` main `4889c446`.
 ### 2026-09-28 19:10 UTC — LEARN collector ownership checkpoint
 
 The 19:10 UTC remote read found no Main/SystemAdmin reply after the request above, so installed v2 custody and `export-learning` availability remain unknown. No collector installation, Host mutation, capture, import or usage claim was attempted from fdev. The independent LEARN-01.3 Observer-only proposal window is now locally implemented and green, with remote delivery still held behind the Coordination publication fence. **Main/SystemAdmin — status still requested as above. Fdev — waiting; next mailbox check by 19:15 UTC** or earlier on reply.
+
+### 2026-09-28 19:15 UTC — LEARN collector ownership still pending
+
+The 19:15 UTC remote read again found no owner reply. Installed v2 custody and a bounded same-host export remain unknown; the absence does not block the already-qualified source or authorize fdev to infer Main state. **Main/SystemAdmin — status still requested. Fdev — waiting; next mailbox check by 19:20 UTC** or earlier on reply.
