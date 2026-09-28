@@ -130,13 +130,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.93.0 — switch supported skill workflows to packaged F# telemetry and preflight commands.
+    <PackageReleaseNotes>0.94.0 — remove the retired Python skill-helper implementations from FS.GG.Drivers.
 
-Roadmap telemetry, routine delivery, dashboards, and pipeline preflight now invoke the installed
-coordination tool for bounded discovery and command execution. Clean Drivers installations no
-longer need the Python telemetry-defaults module. This cut also carries protected native telemetry
-collection provenance accumulated since 0.92.0. Kit and Drivers advance with the CLI under the
-coherent-set version contract.
+Supported skill workflows already invoke the packaged F# telemetry, preflight, adapter, and
+dashboard commands. Drivers now omits the superseded Python helpers from both mirrored skill roots
+and the compatibility wrapper, and its installed-package verification rejects their reintroduction.
+This cut also carries protected native learning capture and export accumulated since 0.93.0. Kit
+and Drivers advance with the CLI under the coherent-set version contract.
 
 $(FsggStandingAdvisories)
 
