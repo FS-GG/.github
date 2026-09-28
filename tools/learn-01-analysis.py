@@ -799,14 +799,8 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
             actual_allocations = {row["originalItemId"]: row["tokens"] for row in allocations}
             if actual_allocations != expected_allocations:
                 raise Refusal(cost + ": allocations disagree with frozen equal allocation rule")
-            source_owner = admitted[0]
-            if totals[source_owner] < source_total:
-                raise Refusal(cost + ": shared source total exceeds its retained direct total")
-            totals[source_owner] -= source_total
-            for original, tokens in actual_allocations.items():
-                totals[original] += tokens
-                if observed_providers[original] and observed_providers[original] != {provider}:
-                    incomplete[original].add("shared-provider-mismatch:" + cost)
+            for original in seen_originals:
+                incomplete[original].add("independent-shared-cost-authority-unavailable")
 
         for cost in shared_authority_by_cost.keys() - shared_by_cost.keys():
             raise Refusal("shared cost authority has no matching cost: " + cost)

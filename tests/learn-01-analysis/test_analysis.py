@@ -215,7 +215,7 @@ class Learn01ContractTests(unittest.TestCase):
         reopened_result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(reopened, version=3))
         self.assertIn("expected-dispatch-roster-mismatch", reopened_result["incompleteTokenReasons"]["I-001"])
 
-    def test_native_and_frozen_shared_cost_authority_qualify_exact_total(self):
+    def test_native_and_frozen_shared_cost_evidence_remains_unqualified_without_authenticated_producer(self):
         content = self.complete_v3_content()
         source = self.native_source_event()
         content["learningObservations"].append({
@@ -237,11 +237,13 @@ class Learn01ContractTests(unittest.TestCase):
         for row in content["learningObservations"]:
             if json.loads(row["canonical"])["kind"] == "learn-shared-cost/1":
                 row["ingest_order"] = 302
-        qualified = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content, version=3))
-        self.assertTrue(qualified["tokenComparisonQualified"])
-        self.assertEqual([], qualified["incompleteTokenOriginalItems"])
-        self.assertEqual({"I-001": 100}, qualified["providerTotalTokensByOriginalItem"])
-        self.assertEqual({"current": 100, "focused": 0}, qualified["providerTotalTokensByArm"])
+        unqualified = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content, version=3))
+        self.assertFalse(unqualified["tokenComparisonQualified"])
+        self.assertEqual(
+            ["independent-shared-cost-authority-unavailable"],
+            unqualified["incompleteTokenReasons"]["I-001"],
+        )
+        self.assertEqual({}, unqualified["providerTotalTokensByOriginalItem"])
 
         for field, changed in (("rootInvocationId", "foreign-root"),
                                ("orderedTurnIds", ["foreign-turn"]),
@@ -379,9 +381,14 @@ class Learn01ContractTests(unittest.TestCase):
         content["terminals"].append({"item_id": "I-002", "invocation_id": "inv-I-002"})
 
         report = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content, version=3))
-        self.assertTrue(report["tokenComparisonQualified"])
-        self.assertEqual({"I-001": 50, "I-002": 100}, report["providerTotalTokensByOriginalItem"])
-        self.assertEqual({"current": 50, "focused": 100}, report["providerTotalTokensByArm"])
+        self.assertFalse(report["tokenComparisonQualified"])
+        self.assertEqual({}, report["providerTotalTokensByOriginalItem"])
+        self.assertEqual({"current": 0, "focused": 0}, report["providerTotalTokensByArm"])
+        for original in ("I-001", "I-002"):
+            self.assertIn(
+                "independent-shared-cost-authority-unavailable",
+                report["incompleteTokenReasons"][original],
+            )
 
         missing_shared_turn = copy.deepcopy(content)
         missing_shared_turn["usage"] = [

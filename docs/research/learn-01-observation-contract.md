@@ -54,11 +54,13 @@ bytes and producer identity. The roadmap native collector now retains a canonica
 binding beside the exact App Server and rollout bytes. Those bound bytes name the producer, root invocation,
 invocation, native parent/thread, ordered turn roster and immutable inventory revision; the roadmap adapter
 recomputes their digest and checks them against durable dispatch state. It publishes the inventory and a distinct
-`runtime-native-inventory-source/1` authority in one applied schema-11 batch. The store validates canonical binding
+`runtime-native-inventory-source/1` candidate authority in one applied schema-11 batch. The store validates canonical binding
 bytes and digest, keeps the fact immutable, includes it only in the bounded private read, and excludes it from
 public fact counts. Analysis joins it to exact inventory revision/source digest, root lineage, native thread and
 ordered turn suffix after the declared follow-up baseline. Missing authority remains visibly incomplete; mismatch
-or substitution refuses the analysis.
+or substitution refuses the analysis. The receipt store currently authenticates only a caller-selected enrolled
+producer scope; it does not retain a protected collector role with each fact. The embedded producer label and its
+self-computed hash therefore cannot independently authenticate the collector.
 
 Shared allocation uses one fixed rule, `equal-largest-remainder-v1`. Its sorted original-item roster, policy,
 window and freeze time are immutable and must agree with every member's prospective accounting inventory and
@@ -70,15 +72,19 @@ integer remainders go to the lexically first roster members. This makes the allo
 post-outcome choice.
 
 After execution, the separate authority names one existing native invocation and inventory rather than supplying
-another total. Its durable order must follow the native source and precede the cost fact. Analysis requires that
+another total. Its durable order must follow the native source and precede the cost fact. Analysis validates that
 invocation's validated `runtime-native-inventory-source/1`, exact source digest, provider and observed turn total.
-It propagates incomplete native evidence to every allocated recipient and removes a complete invocation once from
-its recording original before applying the frozen allocation, so
-the shared work cannot also remain a direct cost. One native invocation can authorize only one shared cost.
+It propagates incomplete native evidence to every allocated recipient and proves the proposed allocation would
+consume one native invocation at most once. One native invocation can appear in only one shared-cost candidate.
 Self-consistent caller hashes, an asserted total, a late or foreign roster, a second allocation of the invocation,
-or a binding without the retained native authority cannot qualify. Missing authority remains visibly incomplete as
-`independent-shared-cost-authority-unavailable`; mismatched authority refuses the analysis. An invocation without a
-validated source authority similarly reports `independent-inventory-source-unavailable`.
+or a binding without independently authenticated producer provenance cannot qualify. Every otherwise complete
+shared-cost candidate therefore remains visibly incomplete as `independent-shared-cost-authority-unavailable`;
+mismatched evidence refuses the analysis. An invocation without a validated source candidate similarly reports
+`independent-inventory-source-unavailable`.
+
+Qualification requires one further prospective authority boundary: a protected enrollment role bound to the
+collector credential, retained with both the native-source and shared-cost-authority facts, and exposed through the
+private snapshot for exact analysis. The current arbitrary producer-name enrollment cannot supply that proof.
 
 The private snapshot counts learning rows before it emits `selection.complete`. More than 10,000 matching rows are
 refused rather than truncated or described as complete.

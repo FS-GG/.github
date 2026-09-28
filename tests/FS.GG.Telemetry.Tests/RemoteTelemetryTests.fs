@@ -436,7 +436,7 @@ module RemoteTelemetryTests =
             if File.Exists directExport then File.Delete directExport
 
     [<Fact>]
-    let ``LEARN private analysis requires chronological retained native authority`` () =
+    let ``LEARN private analysis retains chronology but refuses generic producer authority`` () =
         let root = Path.Combine(Path.GetTempPath(), "learn-v3-e2e-" + Guid.NewGuid().ToString("N"))
         let authorityRoot = Path.Combine(Path.GetTempPath(), "learn-v3-authority-" + Guid.NewGuid().ToString("N"))
         let foreignRoot = Path.Combine(Path.GetTempPath(), "learn-v3-foreign-" + Guid.NewGuid().ToString("N"))
@@ -527,8 +527,13 @@ module RemoteTelemetryTests =
             authorityProcess.WaitForExit()
             Assert.True(authorityProcess.ExitCode = 0, authorityErrors)
             use authorityReport = JsonDocument.Parse authorityOutput
-            Assert.True(authorityReport.RootElement.GetProperty("tokenComparisonQualified").GetBoolean())
-            Assert.Equal(100L, authorityReport.RootElement.GetProperty("providerTotalTokensByArm").GetProperty("current").GetInt64())
+            Assert.False(authorityReport.RootElement.GetProperty("tokenComparisonQualified").GetBoolean())
+            Assert.Equal(0L, authorityReport.RootElement.GetProperty("providerTotalTokensByArm").GetProperty("current").GetInt64())
+            let authorityReasons =
+                authorityReport.RootElement.GetProperty("incompleteTokenReasons").GetProperty("I-001").EnumerateArray()
+                |> Seq.map _.GetString()
+                |> Set.ofSeq
+            Assert.Contains("independent-shared-cost-authority-unavailable", authorityReasons)
 
             let foreignTerminal =
                 Encoding.UTF8.GetString(bytes)
