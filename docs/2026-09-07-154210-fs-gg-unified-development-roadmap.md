@@ -194,9 +194,13 @@ Missing parent/child population, terminal usage, CI attribution or Host acknowle
 gap. Private stores and credentials remain private; public projection keeps its closed allowlist.
 This audit neither requalified a live Host nor measured an efficiency cohort.
 
-### 0.3 GS2 progress at the current frontier
+### 0.3 Historical GS2 evidence and superseded work
 
-| Evidence | Scope established | Scope still open |
+This table preserves the earlier staged route's evidence and uncompleted scope. ADR-0091 supersedes
+its unfinished migration, archive, rollback and mandatory V1-admission requirements for the clean
+start; these rows are not current prerequisites. The active C0–C3 results are recorded above.
+
+| Evidence | Historical scope established | Historical scope not established |
 |---|---|---|
 | [GS2-07 and GS2-08 accepted receipts](https://github.com/FS-GG/FS.GG.Coordination/tree/e96f4821a40c595ebe960e6cf126ace748852f30/evidence/github-substrate-v2/accepted) | Event/queue qualification, bridge, receiver adoption and residual-writer disposition. | Preserve validity across later changes; no Q4 or production open inferred. |
 | [OperatingV1 admission installation and typed readback](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5814570932) | The protected genesis operation ref exists at the exact planned parentless commit; independent exact-object replay restores generation 1 `AdmissionsOpen`. The [governing issuer design](https://github.com/FS-GG/.github/pull/3877) is merged. | The [held public-key verifier](https://github.com/FS-GG/FS.GG.Coordination/pull/533) is one inactive prerequisite. Native job/PR identity reading, durable one-shot consume, full plan codec, dedicated key custody, provider reconciliation, installed post-genesis append and copy-specific effect authority still require qualification. |
