@@ -30,9 +30,14 @@ Use this four-step clean-start route:
    human-run receipt or proof that old data was transformed.
 3. Run one real working journey through the installed v2 path, then run the same ordinary path again
    as a normal rerun smoke test. Repair defects found by either journey before expanding adoption.
-4. Add repositories explicitly, one at a time, and repair forward. `.github` is the only continuously
-   activated repository initially. Generated and scaffolded defaults remain unchanged until a later
-   repository-specific adoption decision.
+4. Add explicitly selected repositories in bounded waves and repair forward. Several ready repository
+   profiles may share one immutable Coordination CLI release. Prepare receivers and dedicated credentials
+   concurrently, then activate each repository separately after its published profile, credential custody,
+   exact current required checks and Authority binding are verified. Keep at most three activations in
+   flight in the first combined Net, Governance and Game wave. Each retains native protections, an
+   exact-head source merge and independent settlement readback. Pause outstanding activations affected
+   by a shared-runtime defect. `.github` was the only continuously activated repository at the initial
+   cutover; generated and scaffolded defaults remain unchanged until a later specific adoption decision.
 
 The owner authorizes the repository administrator to append the clean epoch using a narrow temporary
 writer grant for the exact cutover ref in the authority repository and to restore that ref's rules
@@ -52,3 +57,10 @@ Activation is deliberately narrow. A successful `.github` pilot does not activat
 change a template default, or prove fleet compatibility. Failures after opening are repaired forward.
 Repository-specific protections and required checks continue to decide whether each later source change
 may merge.
+
+C3 acceptance is per selected receiver: install the pinned published package on a clean path, observe one
+real ordinary settlement, independently read back its Authority entry and run the same ordinary path again
+to observe `SettlementAlreadyComplete`. Retained-upgrade and old-client qualification apply only where that
+receiver explicitly promises those capabilities. Other existing installations receive repair-forward
+treatment. Long-running efficiency readings and claims remain separate from repository adoption; missing
+measurements remain unknown.
