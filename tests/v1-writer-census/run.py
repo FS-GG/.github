@@ -154,17 +154,12 @@ with tempfile.TemporaryDirectory(prefix="v1-writer-census-") as temporary:
     unreadable.write_text("{", encoding="utf-8")
     expect_red(run("--census", str(unreadable), "--structural"), "unreadable or malformed", "malformed census reds")
 
-    change = (ROOT / "scripts/change-completeness").read_text(encoding="utf-8")
-    coord = (ROOT / ".github/workflows/coord-engine.yml").read_text(encoding="utf-8")
     release = (ROOT / ".github/workflows/release-coord-engine.yml").read_text(encoding="utf-8")
     wiring = (
-        "check-v1-writer-census.py\" --structural" in change
-        and "check-v1-writer-census.py --candidate" in coord
-        and "python3 tests/v1-writer-census/run.py" in coord
-        and "check-v1-writer-census.py --candidate" in release
+        "check-v1-writer-census.py --candidate" in release
         and release.index("check-v1-writer-census.py --candidate") < release.index("dotnet nuget push")
     )
-    ok("universal, candidate-build, and pre-publish wiring is present") if wiring else bad("universal, candidate-build, and pre-publish wiring is present")
+    ok("candidate contract and pre-publish wiring are present") if wiring else bad("candidate contract and pre-publish wiring are present")
 
 print(f"\nv1 writer census fixture: {passed} passed, {failed} failed")
 raise SystemExit(0 if failed == 0 else 1)

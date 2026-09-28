@@ -21,7 +21,7 @@ Keep Contracts, Client, Local and Dashboard below the optional Hosting/Host depe
 | SystemAdmin design and hardening consequences | `c688224bf42fce812ede35eee82679dcc53e8bd8`; `docs/main-telemetry-actor-service-design-2026-09-09T160851Z.md` and `docs/fsharp-dev-hardening-consequences-2026-09-09T155613Z.md` |
 | Observation contract | `src/FS.GG.Coord.Core/TelemetryStore.fs` / `.fsi`, closed `fsgg.telemetry.ingest/1`; 64 KiB, 64 facts, native identity/revision and canonical digest |
 | Persistence | `src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs`; migrations 1–8, SQLite WAL/FULL, Linux file/directory sync and writer lock; Microsoft.Data.Sqlite `10.0.11`, SQLitePCLRaw bundle `3.0.5` |
-| Runtime and CI | Core `TelemetryRuntime`, `TelemetryCi`, application adapters and `tools/roadmap-telemetry.py`; preserve prospective activation, expected population, unsupported native usage and clock provenance |
+| Runtime and CI | Core `TelemetryRuntime`, `TelemetryCi`, application adapters and `fsgg-coord-engine skill roadmap-telemetry`; preserve prospective activation, expected population, unsupported native usage and clock provenance |
 | Projection | `tools/telemetry-dashboard.py`, existing dashboard assets/tests and typed item-detail queries; port/package the private UI path with parity fixtures, leaving the approved publisher intact |
 | Qualification | ADR-0084 and `tools/routine-delivery.py`; exact-head required checks and native merge readback remain the source boundary |
 

@@ -153,6 +153,9 @@ while IFS=$'\t' read -r id rel; do
   grep -qx "drivers/skills/$id/$rel" <<<"$entries" || fail "nupkg is missing drivers/skills/$id/$rel"
 done < <(jq -r '.skills[] | select(.scope == "driver" and (.files | type) == "array")
   | .id as $id | .files[] | [$id, .path] | @tsv' "$MANIFEST")
+if grep -Eq '^drivers/skills/(work-roadmap|pipeline-preflight)/scripts/.*\.py$' <<<"$entries"; then
+  fail "nupkg retained a retired Python skill helper"
+fi
 echo "   nupkg carries the manifest + every driver SKILL.md + the consumer handle + README"
 
 # The workspace manifest is computed directly from the bounded owner inventory. Assert its exact shape,
@@ -187,7 +190,14 @@ echo "   workspace manifest is sorted, closed, content-addressed, and derived fr
 # (step 5). Asserting the digest merely "changed" would be tautological (any appended byte changes a
 # sha256); asserting this function's VERDICT flips is what proves the verify.
 content_addressed_ok() {
-  local dir="$1" id rel want executable got got_exec
+  local dir="$1" id rel want executable got got_exec declared actual
+  declared="$(jq -r '.skills[] | select(.scope == "driver") | .id as $id
+    | (.files // [{path:"SKILL.md"}])[] | $id + "/" + .path' "$dir/driver-skill-manifest.json" | sort)"
+  actual="$(find "$dir/skills" -type f -printf '%P\n' | sort)"
+  [ "$actual" = "$declared" ] || {
+    echo "      content-address mismatch: driver file set differs from manifest" >&2
+    return 1
+  }
   while IFS=$'\t' read -r id rel want executable; do
     [ -f "$dir/skills/$id/$rel" ] || return 1
     got="$(sha256sum "$dir/skills/$id/$rel" | cut -d' ' -f1)" || return 1
@@ -336,6 +346,14 @@ if content_addressed_ok "$WORK/tampered"; then
   fail "the content-addressed verify PASSED against a tampered '$first_id' — it is not firing"
 fi
 echo "   tampered driver '$first_id' rejected by the content-addressed verify, as required"
+cp -r "$WORK/unpacked/drivers" "$WORK/injected-python"
+mkdir -p "$WORK/injected-python/skills/work-roadmap/scripts"
+printf '%s\n' 'raise RuntimeError("retired helper")' \
+  > "$WORK/injected-python/skills/work-roadmap/scripts/retired.py"
+if content_addressed_ok "$WORK/injected-python"; then
+  fail "the content-addressed verify accepted an injected Python skill helper"
+fi
+echo "   injected Python skill helper rejected by the closed manifest verification"
 first_workspace_path="$(jq -r '.files[0].path' "$WORK/installed-package/workspace/workspace-files.json")"
 echo CORRUPT >> "$WORK/installed-package/workspace/files/$first_workspace_path"
 if workspace_content_addressed_ok "$WORK/installed-package/workspace"; then

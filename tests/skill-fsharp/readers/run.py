@@ -5,13 +5,11 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 import tempfile
 from unittest import mock
 
@@ -23,7 +21,6 @@ DLL = HERE / "bin/Release/net10.0/ReadersProbe.dll"
 FAKE_CODEX = HERE / "fixtures/fake-codex.py"
 FAKE_ENGINE = HERE / "fixtures/fake-engine.py"
 FAKE_CREDENTIAL_CLIENT = HERE / "fixtures/fdev-telemetry"
-PYTHON_READERS = ROOT / ".agents/skills/work-roadmap/scripts"
 PARENT = "11111111-1111-1111-1111-111111111111"
 TURN_1 = "33333333-3333-3333-3333-333333333333"
 TURN_2 = "44444444-4444-4444-4444-444444444444"
@@ -32,14 +29,6 @@ TURN_2 = "44444444-4444-4444-4444-444444444444"
 def require(condition, message):
     if not condition:
         raise AssertionError(message)
-
-
-def load(name, path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
 
 
 def probe(*arguments, environment=None):
@@ -76,56 +65,34 @@ def write_rollout(path, invalid=False):
     path.write_text("".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows))
 
 
-def python_projection(value):
-    return {
-        "threadId": value["threadId"],
-        "allTurnIds": value["allTurnIds"],
-        "inventory": [{"turnId": row["turnId"], "sequence": row["turnSequence"],
-                       "status": row["status"], "terminal": row["terminal"],
-                       "usageAvailable": row["usageAvailable"]} for row in value["turnInventory"]],
-        "turns": [{"turnId": row["turnId"], "sequence": row["turnSequence"],
-                   "provider": value["provider"] or "", "model": value["model"] or "",
-                   "effort": value["effort"] or "", "input": row["usage"]["input_tokens"],
-                   "cachedInput": row["usage"]["cached_input_tokens"],
-                   "output": row["usage"]["output_tokens"],
-                   "reasoning": row["usage"]["reasoning_output_tokens"],
-                   "total": row["usage"]["total_tokens"]} for row in value["turns"]],
-        "complete": value["complete"], "provider": value["provider"],
-        "model": value["model"], "effort": value["effort"],
+def test_canonical():
+    cases = {
+        "git@github.com:FS-GG/.github.git": {"ok": True, "value": "FS-GG/.github"},
+        "https://github.com/FS-GG/.github": {"ok": True, "value": "FS-GG/.github"},
+        "ssh://git@github.com/FS-GG/.github.git": {"ok": True, "value": "FS-GG/.github"},
+        "https://credential@github.com/FS-GG/.github": {
+            "ok": False, "error": "git origin is not a canonical GitHub repository URL"},
+        "https://gitlab.com/FS-GG/.github": {
+            "ok": False, "error": "git origin is not a canonical GitHub repository URL"},
+        "https://github.com/FS-GG/.github/extra": {
+            "ok": False, "error": "git origin is not a canonical GitHub repository URL"},
     }
-
-
-def test_canonical(defaults):
-    cases = [
-        "git@github.com:FS-GG/.github.git",
-        "https://github.com/FS-GG/.github",
-        "ssh://git@github.com/FS-GG/.github.git",
-        "https://credential@github.com/FS-GG/.github",
-        "https://gitlab.com/FS-GG/.github",
-        "https://github.com/FS-GG/.github/extra",
-    ]
-    for value in cases:
-        try:
-            expected = {"ok": True, "value": defaults.canonical_github_repository(value)}
-        except defaults.ConfigurationError as error:
-            expected = {"ok": False, "error": str(error)}
+    for value, expected in cases.items():
         actual = probe("canonical", value)
         require(actual == expected, f"canonical differential mismatch for {value!r}: {actual} != {expected}")
         if not actual["ok"]:
             require("credential" not in actual["error"], "credential-bearing origin leaked")
 
 
-def test_repository_precedence(defaults):
+def test_repository_precedence():
     with tempfile.TemporaryDirectory() as directory:
         environment = dict(os.environ)
         environment.update(FSGG_TELEMETRY_REPOSITORY="Owner/Repo", GITHUB_REPOSITORY="Ignored/Repo")
-        with mock.patch.dict(os.environ, environment, clear=True):
-            expected = defaults.workspace_repository()
         actual = probe("discover-repository", directory, environment=environment)
-        require(actual == {"ok": True, "value": expected}, "repository environment precedence changed")
+        require(actual == {"ok": True, "value": "Owner/Repo"}, "repository environment precedence changed")
 
 
-def test_config_precedence(defaults):
+def test_config_precedence():
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         explicit = root / "explicit.json"
@@ -146,9 +113,9 @@ def test_config_precedence(defaults):
         environment.pop("FSGG_TELEMETRY_CONFIG")
         actual_default = probe("discover", "-", environment=environment)
         require(actual_default["storeRoot"] == str(root / "default-store"), "XDG default config changed")
-        python = defaults.discover_config(str(explicit))
         require((actual_explicit["path"], actual_explicit["storeRoot"], actual_explicit["engine"], actual_explicit["workspace"]) ==
-                (str(python.path), str(python.store_root), python.engine, python.workspace), "host config differential mismatch")
+                (str(explicit), str(root / "explicit-store"), "fixture-engine", False),
+                "host config contract mismatch")
 
         duplicate = root / "duplicate.json"
         duplicate.write_text('{"schema":"fsgg.telemetry.host-config/1","storeRoot":"/tmp/a","engine":"a","engine":"b"}')
@@ -263,7 +230,7 @@ def test_workspace_credentials_and_assignment():
                 "ambiguous credential association did not refuse")
 
 
-def test_native(native):
+def test_native():
     require(probe("coverage", "none") == {"ok": True, "coverage": "Unsupported"},
             "missing parent did not remain explicitly unsupported")
     require(probe("coverage", PARENT) == {"ok": True, "coverage": "Unknown"},
@@ -276,15 +243,21 @@ def test_native(native):
         write_rollout(rollout)
         environment = dict(os.environ)
         environment.update(SKILL_FS_01_ROLLOUT=str(rollout), SKILL_FS_01_MODE="complete")
-        with mock.patch.dict(os.environ, environment, clear=True):
-            expected = native.collect(PARENT, "child_1", root_invocation_id="root-1",
-                                      invocation_id="invocation-1", revision=0,
-                                      command=str(FAKE_CODEX), codex_home=home)
         actual = probe("native", FAKE_CODEX, home, PARENT, "child_1", "root-1", "invocation-1", 0,
                        environment=environment)
-        projection = python_projection(expected)
-        comparable = {key: actual[key] for key in projection}
-        require(comparable == projection, f"native differential mismatch: {comparable} != {projection}")
+        require(actual["ok"] and actual["complete"] and actual["threadId"] ==
+                "22222222-2222-2222-2222-222222222222", "native identity contract changed")
+        require(actual["allTurnIds"] == [TURN_1, TURN_2], "native turn inventory changed")
+        require([(row["turnId"], row["sequence"], row["status"], row["terminal"], row["usageAvailable"])
+                 for row in actual["inventory"]] ==
+                [(TURN_1, 1, "completed", True, True), (TURN_2, 2, "failed", True, True)],
+                "native inventory projection changed")
+        require([(row["turnId"], row["input"], row["cachedInput"], row["output"], row["reasoning"], row["total"])
+                 for row in actual["turns"]] ==
+                [(TURN_1, 12, 2, 6, 1, 18), (TURN_2, 7, 1, 3, 1, 10)],
+                "native usage projection changed")
+        require((actual["provider"], actual["model"], actual["effort"]) ==
+                ("openai", "fixture-model", "medium"), "native profile projection changed")
         require(actual["turns"][0]["total"] == 18, "duplicate response correction was added instead of replaced")
 
         unrelated = sessions / "unrelated-label.jsonl"
@@ -418,14 +391,11 @@ def test_native(native):
 
 def main():
     subprocess.run(["dotnet", "build", str(PROJECT), "-c", "Release", "--nologo"], check=True)
-    sys.path.insert(0, str(PYTHON_READERS))
-    defaults = load("fsgg_telemetry_defaults", PYTHON_READERS / "fsgg_telemetry_defaults.py")
-    native = load("native_collaboration_usage", PYTHON_READERS / "native_collaboration_usage.py")
-    test_canonical(defaults)
-    test_repository_precedence(defaults)
-    test_config_precedence(defaults)
+    test_canonical()
+    test_repository_precedence()
+    test_config_precedence()
     test_workspace_credentials_and_assignment()
-    test_native(native)
+    test_native()
     print("SKILL-FS-01.2 readers: PASS")
 
 
