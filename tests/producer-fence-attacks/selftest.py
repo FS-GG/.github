@@ -51,6 +51,13 @@ def main() -> None:
     source = (validator.ROOT / historical["path"]).read_bytes()
     validator.validate_kit_read_only_successor(historical, successor, source)
 
+    retired_delivery = next(row for row in json.loads(validator.EXTERNAL_PATH.read_text())["routes"]
+                            if row["path"] == "tools/routine-delivery.py")
+    if not validator.validate_historical_only_source(retired_delivery):
+        raise SystemExit("producer-fence-validator-selftest: retired delivery route was not historical-only")
+    must_fail(lambda: validator.validate_historical_only_source(
+        {**retired_delivery, "sha256": "0" * 64}), "a rewritten accepted historical route identity")
+
     def successor_for(candidate: bytes) -> dict:
         return {**successor, "sha256": hashlib.sha256(candidate).hexdigest()}
 

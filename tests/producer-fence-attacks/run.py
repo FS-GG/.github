@@ -24,6 +24,13 @@ CLIENT_PATH = ROOT / "src/FS.GG.Coord.Cli/Client.fs"
 WRITE_FIXTURE_PATH = ROOT / "tests/coord-engine-e2e/writes.sh"
 GLOBAL_JSON = ROOT / "global.json"
 
+# ADR-0091 selected a clean V2 start and explicitly removed V1 backward validity from
+# ordinary source delivery. Keep the accepted GS2-08.6 row intact as history, but do not
+# bind current routine-delivery development to the retired V1 writer's source bytes.
+HISTORICAL_ONLY_SOURCE_HASHES = {
+    "tools/routine-delivery.py": "32f7a973bd502137dd6bfecbb4fc092dacaae2dc03d6d2117cbacaa4387065d6",
+}
+
 
 def fail(message: str) -> None:
     raise SystemExit(f"producer-fence-attacks: {message}")
@@ -31,6 +38,15 @@ def fail(message: str) -> None:
 
 def file_sha(path: pathlib.Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def validate_historical_only_source(row: dict[str, object]) -> bool:
+    expected = HISTORICAL_ONLY_SOURCE_HASHES.get(str(row.get("path")))
+    if expected is None:
+        return False
+    if row.get("sha256") != expected:
+        fail(f"accepted historical route identity changed: {row['path']}")
+    return True
 
 
 def validate_kit_read_only_successor(historical: dict[str, object], successor: dict[str, object], source: bytes) -> None:
@@ -191,6 +207,11 @@ def validate_external_and_legacy(oracle: dict[str, object]) -> tuple[dict[str, o
     if removed != declared_removed:
         fail("GS2-08.9 successor does not account for every removed accepted writer")
     for row in external["routes"]:
+        if (row["gs2089"] not in {"unresolved", "resolved"}
+                or row["status"] in {"pass", "refusal-observed"}):
+            fail(f"unexecuted external route was overstated: {row['path']}")
+        if validate_historical_only_source(row):
+            continue
         current = file_sha(ROOT / row["path"])
         if row["sha256"] != current:
             if row["path"] == kit_path:
@@ -201,9 +222,6 @@ def validate_external_and_legacy(oracle: dict[str, object]) -> tuple[dict[str, o
                 validate_kit_read_only_successor(row, kit_successor, (ROOT / kit_path).read_bytes())
             elif successor_routes.get(row["path"], {}).get("sha256") != current:
                 fail(f"external route source hash drifted without GS2-08.9 successor: {row['path']}")
-        if row["gs2089"] not in {"unresolved", "resolved"} or row["status"] in {"pass", "refusal-observed"}:
-            fail(f"unexecuted external route was overstated: {row['path']}")
-
     installed = {row["id"]: row["installedCoordCliVersion"] for row in receivers["receivers"]}
     expected_legacy = {
         "0.58.0": sorted(name for name, version in installed.items() if version == "0.58.0"),
