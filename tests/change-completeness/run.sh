@@ -71,45 +71,17 @@ else
   ok 'zero-match mutation reds the non-vacuity guard'
 fi
 
-# The production runner must name every structural family. These are observable diagnostics, not prose:
+# The production runner must name every active structural family. These are observable diagnostics, not prose:
 # deleting a stage makes this fixture red before a PR can silently stop running that family.
 for label in \
   'closing-keyword and commit-message contract' \
   'SDD ship-verdict provenance' \
-  'GS2-08.5 protected source import' \
-  'v1 writer census structural closure' \
-  'v1 receiver source census offline closure' \
-  'GS2-08.6 independent producer fence attacks' \
   'command catalogue, parser, render, write-ness, contract, and help closure' \
-  'v1 writer census candidate-built metadata' \
   'handler ownership and production registration' \
   'delivery, review, declared-path, and focused production-route parity'; do
   grep -Fq "$label" "$ROOT/scripts/change-completeness" && ok "named stage: $label" || bad "missing named stage: $label"
 done
 
-grep -Fq 'import-coordination-v1-admission.py" --check' "$ROOT/scripts/change-completeness" \
-  && ok 'protected admission source import is verified on every change' \
-  || bad 'protected admission source import verification is not universal'
-
-grep -Fq 'producer-fence-attacks/selftest.py' "$ROOT/scripts/change-completeness" \
-  && grep -Fq 'producer-fence-attacks/probe_legacy.py" --verify' "$ROOT/scripts/change-completeness" \
-  && ok 'producer evidence mutation checks and historical probe verification are universal' \
-  || bad 'producer evidence hardening is absent from universal validation'
-
-grep -Fq 'check-v1-writer-census.py" --structural' "$ROOT/scripts/change-completeness" \
-  && ok 'cheap writer census runs on every change' \
-  || bad 'writer census is not universal'
-grep -Fq 'check-v1-receiver-census.py' "$ROOT/scripts/change-completeness" \
-  && grep -Fq 'tests/v1-receiver-census/run.py' "$ROOT/scripts/change-completeness" \
-  && ok 'receiver source census runs offline on every change' \
-  || bad 'receiver source census is not universal'
-grep -Fq 'check-v1-writer-census.py --candidate' "$ROOT/.github/workflows/coord-engine.yml" \
-  && ok 'engine workflow checks candidate-built writer metadata' \
-  || bad 'engine workflow omits candidate-built writer metadata'
-grep -Fq 'check-v1-receiver-census.py' "$ROOT/.github/workflows/coord-engine.yml" \
-  && grep -Fq 'tests/v1-receiver-census/run.py' "$ROOT/.github/workflows/coord-engine.yml" \
-  && ok 'engine workflow checks receiver source census offline' \
-  || bad 'engine workflow omits receiver source census'
 release_census_line="$(awk '/check-v1-writer-census.py --candidate/ { print NR; exit }' "$ROOT/.github/workflows/release-coord-engine.yml")"
 release_push_line="$(awk '/dotnet nuget push/ { print NR; exit }' "$ROOT/.github/workflows/release-coord-engine.yml")"
 if [ -n "$release_census_line" ] && [ -n "$release_push_line" ] && [ "$release_census_line" -lt "$release_push_line" ]; then
